@@ -2,21 +2,28 @@
 
 namespace Bitrix\ImMobile\Controller;
 
+use Bitrix\Call\Call;
 use Bitrix\Im\Department;
 use Bitrix\Im\Promotion;
+use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\TariffLimit\Limit;
 use Bitrix\ImMobile\NavigationTab\Tab\AvailableMethodList;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
 use CIMMessenger;
+use CUserCounter;
 
 abstract class Tab extends BaseController
 {
 	protected const PROMO_TYPE ='mobile';
 	protected const OFFSET = 0;
 	protected const LIMIT = 50;
+
+	protected array $options;
+	protected CurrentUser $currentUser;
 
 	public function getPrimaryAutoWiredParameter()
 	{
@@ -29,8 +36,11 @@ abstract class Tab extends BaseController
 		);
 	}
 
-	public function loadAction(array $methodList, CurrentUser $currentUser): array
+	public function loadAction(array $methodList, CurrentUser $currentUser, $options = []): array
 	{
+		$this->options = $options;
+		$this->currentUser = $currentUser;
+
 		$data = [];
 		foreach ($methodList as $method)
 		{
@@ -40,13 +50,16 @@ abstract class Tab extends BaseController
 					$data[$method] = $this->getRecentList();
 					break;
 				case (AvailableMethodList::USER_DATA->value):
-					$data[$method] = $this->getUserData($currentUser);
+					$data[$method] = $this->getUserData();
 					break;
 				case (AvailableMethodList::PORTAL_COUNTERS->value):
-					$data[$method] = $this->getPortalCounters($currentUser);
+					$data[$method] = $this->getPortalCounters();
 					break;
 				case (AvailableMethodList::IM_COUNTERS->value):
 					$data[$method] = $this->getImCounters();
+					break;
+				case (AvailableMethodList::ANCHORS->value):
+					$data[$method] = $this->getAnchors();
 					break;
 				case (AvailableMethodList::MOBILE_REVISION->value):
 					$data[$method] = $this->getRevision();
@@ -61,10 +74,18 @@ abstract class Tab extends BaseController
 					$data[$method] = Promotion::getActive(self::PROMO_TYPE);
 					break;
 				case (AvailableMethodList::DEPARTMENT_COLLEAGUES->value):
-					$data[$method] = $this->getDepartmentColleagues($currentUser);
+					$data[$method] = $this->getDepartmentColleagues();
 					break;
 				case (AvailableMethodList::TARIFF_RESTRICTION->value):
 					$data[$method] = $this->getTariffRestriction();
+					break;
+				case (AvailableMethodList::ACTIVE_CALLS->value):
+					$data[$method] = [];
+					if (Loader::includeModule('call'))
+					{
+						$data[$method] = Call::getActiveCalls();
+					}
+
 					break;
 			}
 		}
@@ -82,12 +103,13 @@ abstract class Tab extends BaseController
 		return date('c');
 	}
 
-	protected function getPortalCounters(CurrentUser $user): array
+	protected function getPortalCounters(): array
 	{
 		$time = microtime(true);
+		$siteId = $this->options['siteId'] ?? SITE_ID;
 
-		$counters = \CUserCounter::GetAllValues($user->getId());
-		$counters = \CUserCounter::getGroupedCounters($counters);
+		$counters = [$siteId => CUserCounter::GetValues($this->currentUser->getId(), $siteId)];
+		$counters = CUserCounter::getGroupedCounters($counters);
 
 		return [
 			'result' => $counters,
@@ -103,11 +125,11 @@ abstract class Tab extends BaseController
 		];
 	}
 
-	protected function getUserData(CurrentUser $currentUser): array
+	protected function getUserData(): array
 	{
-		$userData = \Bitrix\Im\User::getInstance($currentUser->getId())->getArray(['JSON' => 'Y']);
+		$userData = \Bitrix\Im\User::getInstance($this->currentUser->getId())->getArray(['JSON' => 'Y']);
 
-		$userData['desktop_last_date'] = \CIMMessenger::GetDesktopStatusOnline($currentUser->getId());
+		$userData['desktop_last_date'] = \CIMMessenger::GetDesktopStatusOnline($this->currentUser->getId());
 		$userData['desktop_last_date'] = $userData['desktop_last_date']
 			? date('c', $userData['desktop_last_date'])
 			: false
@@ -116,9 +138,9 @@ abstract class Tab extends BaseController
 		return $userData;
 	}
 
-	protected function getDepartmentColleagues(CurrentUser $currentUser): array
+	protected function getDepartmentColleagues(): array
 	{
-		$user = User::getInstance($currentUser->getId());
+		$user = User::getInstance($this->currentUser->getId());
 
 		if (!$user->isExist() || $user->isExtranet() || $user->isBot())
 		{
@@ -145,6 +167,15 @@ abstract class Tab extends BaseController
 	protected function getImCounters(): array
 	{
 		return $this->convertKeysToCamelCase((new CounterService())->get());
+	}
+
+	protected function getAnchors(): array
+	{
+		$anchorProvider = AnchorContainer::getInstance()
+			->getAnchorProvider()
+			->setContextUser($this->getCurrentUser()?->getId());
+
+		return $anchorProvider->getUserAnchors();
 	}
 
 	protected function getTariffRestriction(): array

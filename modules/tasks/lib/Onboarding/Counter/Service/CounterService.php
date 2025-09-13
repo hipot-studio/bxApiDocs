@@ -12,6 +12,7 @@ use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Onboarding\Counter\CounterServiceInterface;
 use Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable;
 use Bitrix\Tasks\Onboarding\Transfer\JobCode;
+use Bitrix\Tasks\Onboarding\Transfer\JobCodes;
 use Throwable;
 
 class CounterService implements CounterServiceInterface

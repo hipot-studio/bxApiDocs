@@ -59,7 +59,7 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 	public static function GetDocument($documentId)
 	{
 		$args = func_get_args();
-		$select = $args[2] ?? [];
+		$select = $args[2] ?? ['*'];
 		$documentInfo = static::GetDocumentInfo($documentId);
 
 		return new Crm\Integration\BizProc\Document\ValueCollection\Deal(

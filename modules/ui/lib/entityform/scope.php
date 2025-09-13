@@ -6,7 +6,7 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\Application;
-use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
@@ -14,10 +14,12 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\Result;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\UI\AccessRights\DataProvider;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\UI\Form\EntityEditorConfigScope;
+use CAccess;
 use CUserOptions;
 
 /**
@@ -34,20 +36,29 @@ class Scope
 	protected const TYPE_PROJECT = 'project';
 	protected const TYPE_DEPARTMENT = 'department';
 
-	protected $user;
-	protected static $instance = null;
+	protected static array $instances = [];
+	private static array $userScopeIdsCache = [];
 
-	/**
-	 * @return Scope
-	 */
-	public static function getInstance(): Scope
+	public function __construct(
+		private readonly int $userId,
+	)
 	{
-		if (self::$instance === null)
+	}
+
+	public static function getInstance(?int $userId = null): static
+	{
+		if ($userId === null || $userId <= 0)
+		{
+			$userId = (int)CurrentUser::get()->getId();
+		}
+
+		if (!isset(static::$instances[$userId]))
 		{
 			Loader::includeModule('ui');
-			self::$instance = ServiceLocator::getInstance()->get('ui.entityform.scope');
+			static::$instances[$userId] = new static($userId);
 		}
-		return self::$instance;
+
+		return static::$instances[$userId];
 	}
 
 	/**
@@ -80,7 +91,7 @@ class Scope
 			$result = [];
 			$isAdminForEntity = $moduleId
 				&& (
-					($scopeAccess = ScopeAccess::getInstance($moduleId))
+					($scopeAccess = ScopeAccess::getInstance($moduleId, $this->userId))
 					&& $scopeAccess->isAdminForEntityTypeId($entityTypeId)
 				);
 
@@ -155,22 +166,19 @@ class Scope
 		return in_array($scopeId, $this->getScopesIdByUser());
 	}
 
-	/**
-	 * @return \CUser
-	 */
-	protected function getUser()
+	protected function getUserId(): int
 	{
-		if ($this->user === null)
-		{
-			global $USER;
-			$this->user = $USER;
-		}
-		return $this->user;
+		return $this->userId;
 	}
 
 	private function getScopesIdByUser(): array
 	{
-		$accessCodes = $this->getUser()->GetAccessCodes();
+		if (isset(self::$userScopeIdsCache[$this->getUserId()]))
+		{
+			return self::$userScopeIdsCache[$this->getUserId()];
+		}
+
+		$accessCodes = $this->getCurrentUserAccessCodes();
 		$this->prepareAccessCodes($accessCodes);
 
 		$params = [
@@ -183,17 +191,11 @@ class Scope
 		];
 
 		$scopes = EntityFormConfigAcTable::getList($params)->fetchAll();
+		$scopesIds = array_unique(array_column($scopes, 'CONFIG_ID'));
 
-		$result = [];
-		if (count($scopes))
-		{
-			foreach ($scopes as $scope)
-			{
-				$result[] = $scope['CONFIG_ID'];
-			}
-		}
+		self::$userScopeIdsCache[$this->getUserId()] = $scopesIds;
 
-		return array_unique($result);
+		return self::$userScopeIdsCache[$this->getUserId()];
 	}
 
 	protected function prepareAccessCodes(array &$accessCodes): void
@@ -258,9 +260,9 @@ class Scope
 	 * @param string $scope
 	 * @param int $userScopeId
 	 */
-	public function setScope(string $categoryName, string $guid, string $scope, int $userScopeId = 0): void
+	public function setScope(string $categoryName, string $guid, string $scope, int $userScopeId = 0, ?int $userId = null): void
 	{
-		$this->setScopeToUser($categoryName, $guid, $scope, $userScopeId);
+		$this->setScopeToUser($categoryName, $guid, $scope, $userScopeId, $userId);
 	}
 
 	public function setScopeConfig(
@@ -439,16 +441,24 @@ class Scope
 	public function updateScopeAccessCodes(int $configId, array $accessCodes = []): array
 	{
 		$this->removeScopeMembers($configId);
-
-		foreach ($accessCodes as $ac => $type)
-		{
-			EntityFormConfigAcTable::add([
-				'ACCESS_CODE' => $ac,
-				'CONFIG_ID' => $configId,
-			]);
-		}
+		$this->addAccessCodes($configId, $accessCodes);
 
 		return $this->getScopeMembers($configId);
+	}
+
+	public function addAccessCodes(int $configId, array $accessCodes): Result
+	{
+		$accessCodeCollection = EntityFormConfigAcTable::createCollection();
+		foreach ($accessCodes as $accessCode => $type)
+		{
+			$accessCodeItem = EntityFormConfigAcTable::createObject()
+				->setAccessCode($accessCode)
+				->setConfigId($configId);
+
+			$accessCodeCollection->add($accessCodeItem);
+		}
+
+		return $accessCodeCollection->save(true);
 	}
 
 	/**
@@ -674,7 +684,7 @@ class Scope
 		);
 	}
 
-	private function getScopeAccessCodesByScopeId(int $scopeId): array
+	public function getScopeAccessCodesByScopeId(int $scopeId): array
 	{
 		$accessCodes = EntityFormConfigAcTable::query()
 			->setSelect(['ACCESS_CODE'])
@@ -788,5 +798,10 @@ class Scope
 		}
 
 		return $userIds;
+	}
+
+	private function getCurrentUserAccessCodes(): array
+	{
+		return CAccess::GetUserCodesArray($this->userId);
 	}
 }

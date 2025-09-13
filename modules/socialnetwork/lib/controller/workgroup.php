@@ -70,8 +70,8 @@ class Workgroup extends Base
 			return null;
 		}
 
-		$select = ($params['select'] ?? []);
-		$filter = ($params['filter'] ?? []);
+		$select = (array)($params['select'] ?? []);
+		$filter = (array)($params['filter'] ?? []);
 		$filter['ID'] = $groupId;
 
 		if (!\CSocNetUser::isCurrentUserModuleAdmin(SITE_ID, false))

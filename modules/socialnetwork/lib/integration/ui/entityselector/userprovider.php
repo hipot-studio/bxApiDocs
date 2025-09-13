@@ -1108,6 +1108,9 @@ class UserProvider extends BaseProvider
 		return $users->count() ? $users->getAll()[0] : null;
 	}
 
+	/**
+	 * @return list<Item>
+	 */
 	public static function makeItems(EO_User_Collection $users, array $options = []): array
 	{
 		$result = [];
@@ -1336,7 +1339,8 @@ class UserProvider extends BaseProvider
 		$userPage = Option::get('socialnetwork', 'user_page', false, SITE_ID);
 		if (!$userPage)
 		{
-			$userPage = SITE_DIR.'company/personal/';
+			$siteDir = (defined('SITE_DIR') && !empty(SITE_DIR)) ? SITE_DIR : '/';
+			$userPage = $siteDir . 'company/personal/';
 		}
 
 		return $userPage.'user/' . ($userId !== null ? $userId : '#id#') . '/';

@@ -97,6 +97,19 @@ final class StageProvider
 
 	public function getProjectStages(int $projectId, ?int $taskId): Result
 	{
+		if ($taskId)
+		{
+			$scrumProvider = new ScrumProvider();
+
+			if (!$scrumProvider->shouldShowKanbanStages($taskId, $projectId))
+			{
+				$result = new Result();
+				$result->setData([]);
+
+				return $result;
+			}
+		}
+
 		$this->workMode = StagesTable::WORK_MODE_GROUP;
 		$this->projectId = $projectId;
 		$this->taskId = $taskId;

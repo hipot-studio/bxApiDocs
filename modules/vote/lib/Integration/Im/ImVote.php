@@ -40,7 +40,12 @@ class ImVote
 		return 10;
 	}
 
-	public static function sendVote(int $chatId, int $ownerUserId, array $voteFields): ImVoteSendResult|Result
+	public static function sendVote(
+		int $chatId,
+		int $ownerUserId,
+		array $voteFields,
+		?string $templateId = null,
+	): ImVoteSendResult|Result
 	{
 		if (!static::isAvailable())
 		{
@@ -85,6 +90,7 @@ class ImVote
 			'TO_CHAT_ID' => $chatId,
 			'FROM_USER_ID' => $ownerUserId,
 			'MESSAGE' => self::getFallbackText($savedVoteData),
+			'TEMPLATE_ID' => $templateId,
 			'PARAMS' => [
 				'COMPONENT_ID' => self::MESSAGE_COMPONENT_ID,
 				'COMPONENT_PARAMS' => [
@@ -101,7 +107,7 @@ class ImVote
 
 		(new VoteChangesSender())->addUserWatch($ownerUserId, $voteId);
 
-		return new ImVoteSendResult($messageId);
+		return new ImVoteSendResult($messageId, $voteId);
 	}
 
 	public static function getOrCreateImMessageChannel(): int

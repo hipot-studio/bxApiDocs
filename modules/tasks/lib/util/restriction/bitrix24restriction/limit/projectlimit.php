@@ -51,6 +51,11 @@ class ProjectLimit extends Limit
 
 	public static function getFeatureId(): string
 	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return '';
+		}
+
 		return Feature::PROJECTS_GROUPS;
 	}
 

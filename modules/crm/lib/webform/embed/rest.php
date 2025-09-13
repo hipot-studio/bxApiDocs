@@ -57,12 +57,6 @@ class Rest
 		$signString = empty($query['security_sign']) ? null : $query['security_sign'];
 		//$entities = empty($query['entities']) ? null : $query['entities'];
 
-		$timeZoneOffset = isset($query['timeZoneOffset']) ? (int)$query['timeZoneOffset'] : null;
-		if (!\CTimeZone::GetCookieValue() && $timeZoneOffset)
-		{
-			\CTimeZone::SetCookieValue($timeZoneOffset);
-		}
-
 		$form = null;
 
 		try

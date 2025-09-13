@@ -290,6 +290,8 @@ final class ProviderDecorator implements ReturnsEditorFields
 				$field['data'] = [];
 			}
 
+            $field['required'] = $field['data']['isRequiredByAttribute'];
+
 			if ($fieldItem = $fieldsCollection->getField($fieldName))
 			{
 				if ($fieldItem->isHidden() || !$fieldItem->isDisplayed())
@@ -369,10 +371,6 @@ final class ProviderDecorator implements ReturnsEditorFields
 				elseif ($fieldItem->isUserField())
 				{
 					$field['required'] = $fieldItem->isRequired();
-				}
-				else
-				{
-					$field['required'] = !empty($field['data']['isRequiredByAttribute']);
 				}
 
 				if ($fieldItem->getType() === Field\EnumerationField::TYPE)
@@ -482,7 +480,7 @@ final class ProviderDecorator implements ReturnsEditorFields
 
 					if ($entityTypeId === \CCrmOwnerType::Company && \CCrmCompany::isMyCompany($this->getEntityId()))
 					{
-						$myCompanyUserPermissions = $serviceUserPermissions->getMyCompanyPermissions();
+						$myCompanyUserPermissions = $serviceUserPermissions->myCompany();
 
 						$permissions[$entityTypeName] = [
 							'read' => $myCompanyUserPermissions->canReadBaseFields(),
@@ -493,9 +491,9 @@ final class ProviderDecorator implements ReturnsEditorFields
 					else
 					{
 						$permissions[$entityTypeName] = [
-							'read' => $serviceUserPermissions->checkReadPermissions($entityTypeId),
-							'update' => $serviceUserPermissions->checkUpdatePermissions($entityTypeId, 0),
-							'add' => $serviceUserPermissions->checkAddPermissions($entityTypeId, 0),
+							'read' => $serviceUserPermissions->entityType()->canReadItems($entityTypeId),
+							'update' => $serviceUserPermissions->entityType()->canUpdateItems($entityTypeId),
+							'add' => $serviceUserPermissions->entityType()->canAddItems($entityTypeId),
 						];
 					}
 				}

@@ -13,7 +13,7 @@ final class GigaChat extends CloudEngine implements IContext, IQueueOptional
 	use GigachatCommonTrait;
 
 	protected const CATEGORY_CODE = Engine::CATEGORIES['text'];
-	protected const ENGINE_NAME = 'GigaChat 3.0+';
+	protected const ENGINE_NAME = 'GigaChat 2.0';
 	public const ENGINE_CODE = 'GigaChat';
 
 	protected const URL_COMPLETIONS = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions';

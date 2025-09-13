@@ -6,10 +6,8 @@ use Bitrix\Crm\Agent\AgentBase;
 use Bitrix\Crm\Agent\Security\Service\PermissionExtender\ConfigExtender;
 use Bitrix\Crm\Agent\Security\Service\RoleCollectionSeparator;
 use Bitrix\Crm\Agent\Security\Service\RoleSeparator;
-use Bitrix\Crm\Feature\PermissionsLayoutV2;
 use Bitrix\Crm\Security\Role\GroupCodeGenerator;
 use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionConfig;
-use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionList;
 use Bitrix\Crm\Security\Role\Manage\Entity\ButtonConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebFormConfig;
 use Bitrix\Crm\Security\Role\Model\EO_Role;
@@ -27,11 +25,11 @@ use Bitrix\Main\ORM\Objectify\Values;
 
 final class SeparateRolesAgent extends AgentBase
 {
-	public static function activateNewPermissionsInterface(): bool
+	public static function activateNewPermissionsInterface(): string
 	{
-		(new PermissionsLayoutV2())->enableWithoutAgent();
+		self::doRun();
 
-		return self::doRun();
+		return '';
 	}
 
 	public static function doRun(): bool

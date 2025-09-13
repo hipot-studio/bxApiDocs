@@ -58,6 +58,23 @@ class Host extends Main\Engine\Controller
 		});
 	}
 
+	public function getPurchaseReportAction(
+		string $packageCode,
+		$purchaseCode,
+		string $serviceCode,
+	): Main\Engine\Response\Json
+	{
+		return $this->fullFill(function() use ($packageCode, $purchaseCode, $serviceCode) {
+			$result = $this->billingService->getPurchasedPackageReport(
+				(string) $packageCode,
+				(string) $purchaseCode,
+				(string) $serviceCode,
+			);
+
+			return (new Main\Result())->setData($result->getData());
+		});
+	}
+
 	private function fullFill(callable $callback): Main\Engine\Response\Json
 	{
 		try

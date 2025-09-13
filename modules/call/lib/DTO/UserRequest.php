@@ -5,6 +5,7 @@ namespace Bitrix\Call\DTO;
 class UserRequest extends Hydrator
 {
 	public string $callUuid = '';
+	public string $roomId = '';
 	public int $callId = 0;
 	public string $video = 'N';
 	public string $show = 'N';

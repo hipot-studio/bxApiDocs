@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Integration\AI\Operation;
 
+use Bitrix\AI\Engine;
+use Bitrix\AI\Quality;
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\Dto\Dto;
@@ -15,6 +17,8 @@ use Bitrix\Crm\Integration\Analytics\Builder\AI\SummaryEvent;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
+use CCrmActivity;
+use CCrmOwnerType;
 
 class SummarizeCallTranscription extends AbstractOperation
 {
@@ -22,7 +26,7 @@ class SummarizeCallTranscription extends AbstractOperation
 	public const CONTEXT_ID = 'summarize_call_transcription';
 
 	public const SUPPORTED_TARGET_ENTITY_TYPE_IDS = [
-		\CCrmOwnerType::Activity,
+		CCrmOwnerType::Activity,
 	];
 
 	protected const PAYLOAD_CLASS = SummarizeCallTranscriptionPayload::class;
@@ -37,9 +41,19 @@ class SummarizeCallTranscription extends AbstractOperation
 		parent::__construct($target, $userId, $parentJobId);
 	}
 
+	public static function isAccessGranted(int $userId, ItemIdentifier $target): bool
+	{
+		return parent::isAccessGranted($userId, $target)
+			&& CCrmActivity::CheckItemUpdatePermission(
+				['ID' => $target->getEntityId()],
+				Container::getInstance()->getUserPermissions($userId)->getCrmPermissions(),
+			)
+		;
+	}
+
 	public static function isSuitableTarget(ItemIdentifier $target): bool
 	{
-		if ($target->getEntityTypeId() === \CCrmOwnerType::Activity)
+		if ($target->getEntityTypeId() === CCrmOwnerType::Activity)
 		{
 			$activity = Container::getInstance()->getActivityBroker()->getById($target->getEntityId());
 			if (
@@ -62,11 +76,6 @@ class SummarizeCallTranscription extends AbstractOperation
 				'original_message' => $this->transcription,
 			])->getResult()
 		;
-	}
-
-	protected function getStubPayload(): string
-	{
-		return 'Stub call summary';
 	}
 
 	final protected function getContextLanguageId(): string
@@ -130,7 +139,7 @@ class SummarizeCallTranscription extends AbstractOperation
 					[
 						'OPERATION_TYPE_ID' => self::TYPE_ID,
 						'ENGINE_ID' => self::$engineId,
-						'ERRORS' => $result->getErrorMessages(),
+						'ERRORS' => array_unique($result->getErrorMessages()),
 					],
 					$result->getUserId(),
 				);
@@ -160,5 +169,13 @@ class SummarizeCallTranscription extends AbstractOperation
 	protected static function getJobFinishEventBuilder(): AIBaseEvent
 	{
 		return new SummaryEvent();
+	}
+
+	protected static function setQuality(Engine $engine): void
+	{
+		if (isset(Quality::QUALITIES['summarize']) && method_exists($engine->getIEngine(), 'setQuality'))
+		{
+			$engine->getIEngine()->setQuality(Quality::QUALITIES['summarize']);
+		}
 	}
 }

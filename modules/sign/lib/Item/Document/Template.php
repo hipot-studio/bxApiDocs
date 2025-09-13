@@ -22,6 +22,8 @@ class Template implements Contract\Item, Contract\Item\ItemWithOwner, Contract\I
 		public ?Type\DateTime $dateModify = null,
 		public ?int $modifiedById = null,
 		public Type\Template\Visibility $visibility = Type\Template\Visibility::VISIBLE,
+		#[Copyable]
+		public ?int $folderId = null,
 	)
 	{
 		$this->initOriginal();

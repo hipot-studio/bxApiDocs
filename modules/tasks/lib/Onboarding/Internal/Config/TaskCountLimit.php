@@ -13,6 +13,7 @@ final class TaskCountLimit
 		return match ($type)
 		{
 			Type::TooManyTasks => 10,
+			Type::InviteToMobile => 3,
 			default => null,
 		};
 	}

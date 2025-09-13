@@ -14,6 +14,7 @@ use Bitrix\Crm\Format\AddressFormatter;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UtmTable;
@@ -2041,10 +2042,12 @@ class CAllCrmQuote
 			);
 
 			// add utm fields
-			self::$FIELD_INFOS = self::$FIELD_INFOS + UtmTable::getUtmFieldsInfo();
+			self::$FIELD_INFOS += UtmTable::getUtmFieldsInfo();
 
 			self::$FIELD_INFOS += Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsInfo(\CCrmOwnerType::Quote);
 			self::$FIELD_INFOS += self::getLastActivityAdapter()->getFieldsInfo();
+
+			self::$FIELD_INFOS += LastCommunicationTable::getLastStateFieldInfo();
 		}
 
 		return self::$FIELD_INFOS;
@@ -2181,7 +2184,8 @@ class CAllCrmQuote
 			Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsSqlInfo(
 				CCrmOwnerType::Quote,
 				static::TABLE_ALIAS
-			)
+			),
+			LastCommunicationTable::getFieldsByEntityTypeId(CCrmOwnerType::Quote, true, static::TABLE_ALIAS),
 		);
 
 		$result += self::getLastActivityAdapter()->getFields();

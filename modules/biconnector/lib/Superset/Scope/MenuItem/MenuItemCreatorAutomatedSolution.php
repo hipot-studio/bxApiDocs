@@ -26,6 +26,15 @@ final class MenuItemCreatorAutomatedSolution extends BaseMenuItemCreator
 			];
 		}
 
+		if (!empty($items))
+		{
+			$items[] = [
+				'IS_DELIMITER' => true,
+			];
+
+			$items = [...$items, ...$this->getAdditionalItems()];
+		}
+
 		return [
 			'ID' => 'BIC_DASHBOARDS',
 			'TEXT' => $this->getMenuItemTitle(),

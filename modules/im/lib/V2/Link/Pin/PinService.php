@@ -46,7 +46,7 @@ class PinService
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::PIN_MESSAGE_ENTITY, $pin->getId()),
 			fn () => $chat->getRelations()->getUserIds(),
-			$chat->getType()
+			$chat
 		);
 
 		$this->sendMessageAboutPin($pin);
@@ -88,7 +88,7 @@ class PinService
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::DELETE_EVENT, Sync\Event::PIN_MESSAGE_ENTITY, $pin->getId()),
 			fn () => $chat->getRelations()->getUserIds(),
-			$chat->getType()
+			$chat
 		);
 
 		Push::getInstance()
@@ -129,7 +129,6 @@ class PinService
 
 
 		$chat = Chat::getInstance($pinCollection->getRelatedChatId());
-		$chatType = $chat->getType();
 
 		/** @var PinItem $pin */
 		foreach ($pinCollection as $pin)
@@ -137,7 +136,7 @@ class PinService
 			Sync\Logger::getInstance()->add(
 				new Sync\Event(Sync\Event::DELETE_EVENT, Sync\Event::PIN_MESSAGE_ENTITY, $pin->getId()),
 				fn () => $chat->getRelations()->getUserIds(),
-				$chatType
+				$chat
 			);
 
 			Push::getInstance()

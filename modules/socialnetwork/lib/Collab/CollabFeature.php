@@ -28,8 +28,6 @@ class CollabFeature
 
 	public static function isFeatureEnabledInPortalSettings(): bool
 	{
-		// TODO: Collab Disable: remove when changes in intranet
-		return true;
 		return (new Settings())->isToolAvailable(Settings::SONET_TOOLS['collab']);
 	}
 

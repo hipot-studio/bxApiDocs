@@ -9,6 +9,7 @@ use Bitrix\Catalog;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Crm;
+use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
@@ -16,6 +17,7 @@ use Bitrix\Crm\Component\EntityDetails\Traits;
 use Bitrix\Crm\Conversion\LeadConversionWizard;
 use Bitrix\Crm\Conversion\QuoteConversionWizard;
 use Bitrix\Crm\Integration\Catalog\WarehouseOnboarding;
+use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\DealDefaultEntityConfig;
 use Bitrix\Crm\Recurring;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
@@ -25,9 +27,8 @@ use Bitrix\Crm\Settings\LayoutSettings;
 use Bitrix\Crm\Tracking;
 use Bitrix\Currency;
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UserField\Types\BooleanType;
-use Bitrix\Main\UserField\Types\FileType;
 use Bitrix\SalesCenter\Integration\LandingManager;
 
 if (!Main\Loader::includeModule('crm'))
@@ -209,63 +210,9 @@ class CCrmDealDetailsComponent
 			return $this->arResult['ENTITY_CONFIG'];
 		}
 
-		$userFieldConfigElements = array();
-		foreach(array_keys($this->userFieldInfos) as $fieldName)
-		{
-			$userFieldConfigElements[] = array('name' => $fieldName);
-		}
+		$userFieldNames = array_keys($this->userFieldInfos);
 
-		$this->arResult['ENTITY_CONFIG'] = array(
-			array(
-				'name' => 'main',
-				'title' => Loc::getMessage('CRM_DEAL_SECTION_MAIN'),
-				'type' => 'section',
-				'elements' => array(
-					array('name' => 'TITLE'),
-					array('name' => 'STAGE_ID'),
-					array('name' => 'OPPORTUNITY_WITH_CURRENCY'),
-					array('name' => 'CLOSEDATE'),
-					array('name' => 'CLIENT'),
-				)
-			),
-			array(
-				'name' => 'additional',
-				'title' => Loc::getMessage('CRM_DEAL_SECTION_ADDITIONAL'),
-				'type' => 'section',
-				'elements' =>
-					array_merge(
-						array(
-							array('name' => 'TYPE_ID'),
-							array('name' => 'SOURCE_ID'),
-							array('name' => 'SOURCE_DESCRIPTION'),
-							array('name' => 'BEGINDATE'),
-							//array('name' => 'LOCATION_ID'),
-							array('name' => 'OPENED'),
-							array('name' => 'ASSIGNED_BY_ID'),
-							array('name' => 'OBSERVER'),
-							array('name' => 'COMMENTS'),
-							array('name' => 'UTM'),
-						),
-						$userFieldConfigElements
-					)
-			),
-			array(
-				'name' => 'products',
-				'title' => Loc::getMessage('CRM_DEAL_SECTION_PRODUCTS'),
-				'type' => 'section',
-				'elements' => array(
-					array('name' => "PRODUCT_ROW_SUMMARY")
-				)
-			),
-			array(
-				'name' => 'recurring',
-				'title' => Loc::getMessage('CRM_DEAL_SECTION_RECURRING'),
-				'type' => 'section',
-				'elements' => array(
-					array('name' => 'RECURRING')
-				)
-			)
-		);
+		$this->arResult['ENTITY_CONFIG'] = (new DealDefaultEntityConfig($userFieldNames))->get();
 
 		return $this->arResult['ENTITY_CONFIG'];
 	}
@@ -1041,10 +988,7 @@ class CCrmDealDetailsComponent
 		}
 		//endregion
 
-		//region LEGEND
-		$categoryID = (int)($this->entityData['CATEGORY_ID'] ?? 0);
-		$this->arResult['LEGEND'] = \Bitrix\Crm\Category\DealCategory::getName($categoryID);
-
+		//region CATEGORY LABEL
 		if ($this->arResult['ENTITY_ID'] > 0)
 		{
 			if (
@@ -1052,14 +996,14 @@ class CCrmDealDetailsComponent
 				&& $this->entityData['IS_RETURN_CUSTOMER'] === 'Y'
 			)
 			{
-				$this->arResult['LEGEND'] .= ' ('.Loc::getMessage('CRM_DEAL_RETURNING').')';
+				$this->arResult['CATEGORY_LABEL'] = '#CATEGORY# ('.Loc::getMessage('CRM_DEAL_RETURNING').')';
 			}
 			elseif(
 				isset($this->entityData['IS_REPEATED_APPROACH'])
 				&& $this->entityData['IS_REPEATED_APPROACH'] === 'Y'
 			)
 			{
-				$this->arResult['LEGEND'] .= ' ('.Loc::getMessage('CRM_DEAL_REPEATED_APPROACH').')';
+				$this->arResult['CATEGORY_LABEL'] = '#CATEGORY# ('.Loc::getMessage('CRM_DEAL_REPEATED_APPROACH').')';
 			}
 		}
 		//endregion
@@ -1558,7 +1502,7 @@ class CCrmDealDetailsComponent
 			),
 			array(
 				"name" => "RECURRING",
-				"title" => Loc::getMessage("CRM_DEAL_SECTION_RECURRING"),
+				"title" => DealDefaultEntityConfig::getRecurringSectionTitle(),
 				"type" => "recurring",
 				"editable" => isset($this->arResult['CREATE_CATEGORY_LIST'])
 								&& is_array($this->arResult['CREATE_CATEGORY_LIST'])
@@ -1583,6 +1527,27 @@ class CCrmDealDetailsComponent
 					"restrictScript" => (!$this->isEnableRecurring && !empty($dealRecurringRestriction)) ? $dealRecurringRestriction->prepareInfoHelperScript() : ""
 				)
 			),
+			[
+				'name' => 'MOVED_BY_ID',
+				'title' => Loc::getMessage('CRM_DEAL_FIELD_MOVED_BY_ID'),
+				'type' => 'user',
+				'editable' => false,
+				'data' => [
+					'enableEditInView' => false,
+					'formated' => 'MOVED_BY_FORMATTED_NAME',
+					'position' => 'MOVED_BY_WORK_POSITION',
+					'photoUrl' => 'MOVED_BY_PHOTO_URL',
+					'showUrl' => 'PATH_TO_MOVED_BY_USER',
+					'pathToProfile' => $this->arResult['PATH_TO_USER_PROFILE'] ?? null
+				],
+				'enableAttributes' => false
+			],
+			[
+				'name' => 'MOVED_TIME',
+				'title' => Loc::getMessage('CRM_DEAL_FIELD_MOVED_TIME'),
+				'type' => 'datetime',
+				'editable' => false,
+			],
 		);
 
 		Tracking\UI\Details::appendEntityFields($this->entityFieldInfos);
@@ -1622,6 +1587,8 @@ class CCrmDealDetailsComponent
 			$this->entityFieldInfos,
 			array_values($this->prepareParentFieldInfos())
 		);
+
+		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationFieldInfo($this->entityFieldInfos);
 
 		$this->arResult['ENTITY_FIELDS'] = $this->entityFieldInfos;
 
@@ -2140,18 +2107,8 @@ class CCrmDealDetailsComponent
 		//region Responsible
 		if(isset($this->entityData['ASSIGNED_BY_ID']) && $this->entityData['ASSIGNED_BY_ID'] > 0)
 		{
-			$dbUsers = \CUser::GetList(
-				'ID',
-				'ASC',
-				array('ID' => $this->entityData['ASSIGNED_BY_ID']),
-				array(
-					'FIELDS' => array(
-						'ID',  'LOGIN', 'PERSONAL_PHOTO',
-						'NAME', 'SECOND_NAME', 'LAST_NAME'
-					)
-				)
-			);
-			$user = is_object($dbUsers) ? $dbUsers->Fetch() : null;
+			$user = Container::getInstance()->getUserBroker()->getById($this->entityData['ASSIGNED_BY_ID']);
+
 			if(is_array($user))
 			{
 				$this->entityData['ASSIGNED_BY_LOGIN'] = $user['LOGIN'];
@@ -2171,37 +2128,34 @@ class CCrmDealDetailsComponent
 		//region User Fields
 		foreach ($this->userFields as $fieldName => $userField)
 		{
+			$fieldValue = $userField['VALUE'] ?? '';
 			$fieldData = $this->userFieldInfos[$fieldName] ?? null;
 			if (!is_array($fieldData))
 			{
 				continue;
 			}
-			
-			$fieldValue = isset($userField['VALUE_EXISTS']) && $userField['VALUE_EXISTS'] // for boolean field
-				? $userField['VALUE']
-				: ($userField['VALUE'] ?? '')
-			;
-			$isEmptyField = (is_string($fieldValue) && $fieldValue === '')
-				|| (is_array($fieldValue) && empty($fieldValue))
-			;
-			
-			$fieldParams = $fieldData['data']['fieldInfo'] ?? [];
-			if (!$isEmptyField)
-			{
-				if (is_array($fieldValue))
-				{
-					$fieldValue = array_values($fieldValue);
-				}
-				elseif ($fieldParams['USER_TYPE_ID'] === BooleanType::USER_TYPE_ID)
-				{
-					$fieldValue = $fieldValue ? '1' : '0';
-				}
 
+			$isEmptyField = true;
+			$fieldParams = $fieldData['data']['fieldInfo'];
+
+			if (
+				$this->entityID <= 0
+				&& $fieldParams['USER_TYPE_ID'] === 'boolean'
+			)
+			{
+				$fieldValue = (string)$fieldParams['SETTINGS']['DEFAULT_VALUE'];
+			}
+
+			if (
+				(is_string($fieldValue) && $fieldValue !== '')
+				|| (is_array($fieldValue) && !empty($fieldValue))
+			)
+			{
 				$fieldParams['VALUE'] = $fieldValue;
+				$isEmptyField = false;
 			}
 
 			$fieldSignature = $this->userFieldDispatcher->getSignature($fieldParams);
-
 			if ($isEmptyField)
 			{
 				$this->entityData[$fieldName] = [
@@ -2216,11 +2170,10 @@ class CCrmDealDetailsComponent
 					'SIGNATURE' => $fieldSignature,
 					'IS_EMPTY' => false,
 				];
-				
-				if ($fieldParams['USER_TYPE_ID'] === FileType::USER_TYPE_ID)
+
+				if($fieldData['data']['fieldInfo']['USER_TYPE_ID'] === 'file')
 				{
 					$values = is_array($fieldValue) ? $fieldValue : [$fieldValue];
-
 					$this->entityData[$fieldName]['EXTRAS'] = [
 						'OWNER_TOKEN' => \CCrmFileProxy::PrepareOwnerToken(array_fill_keys($values, $this->entityID))
 					];
@@ -2285,6 +2238,54 @@ class CCrmDealDetailsComponent
 			);
 		}
 		//endregion
+		$movedByID = isset($this->entityData['MOVED_BY_ID']) ? (int)$this->entityData['MOVED_BY_ID'] : 0;
+		if($movedByID > 0)
+		{
+			$user = Container::getInstance()->getUserBroker()->getById($movedByID);
+			if(is_array($user))
+			{
+				$this->entityData['MOVED_BY_LOGIN'] = $user['LOGIN'];
+				$this->entityData['MOVED_BY_NAME'] = isset($user['NAME']) ? $user['NAME'] : '';
+				$this->entityData['MOVED_BY_SECOND_NAME'] = isset($user['SECOND_NAME']) ? $user['SECOND_NAME'] : '';
+				$this->entityData['MOVED_BY_LAST_NAME'] = isset($user['LAST_NAME']) ? $user['LAST_NAME'] : '';
+				$this->entityData['MOVED_BY_PERSONAL_PHOTO'] = isset($user['PERSONAL_PHOTO']) ? $user['PERSONAL_PHOTO'] : '';
+			}
+
+			$this->entityData['MOVED_BY_FORMATTED_NAME'] =
+				\CUser::FormatName(
+					$this->arResult['NAME_TEMPLATE'],
+					[
+						'LOGIN' => $this->entityData['MOVED_BY_LOGIN'],
+						'NAME' => $this->entityData['MOVED_BY_NAME'],
+						'LAST_NAME' => $this->entityData['MOVED_BY_LAST_NAME'],
+						'SECOND_NAME' => $this->entityData['MOVED_BY_SECOND_NAME']
+					],
+					true,
+					false
+				);
+
+			$movedByPhotoID = isset($this->entityData['MOVED_BY_PERSONAL_PHOTO'])
+				? (int)$this->entityData['MOVED_BY_PERSONAL_PHOTO'] : 0;
+
+			if($movedByPhotoID > 0)
+			{
+				$file = new CFile();
+				$fileInfo = $file->ResizeImageGet(
+					$movedByPhotoID,
+					['width' => 60, 'height'=> 60],
+					BX_RESIZE_IMAGE_EXACT
+				);
+				if(is_array($fileInfo) && isset($fileInfo['src']))
+				{
+					$this->entityData['MOVED_BY_PHOTO_URL'] = $fileInfo['src'];
+				}
+			}
+
+			$this->entityData['PATH_TO_MOVED_BY_USER'] = CComponentEngine::MakePathFromTemplate(
+				$this->arResult['PATH_TO_USER_PROFILE'] ?? null,
+				['user_id' => $movedByID]
+			);
+		}
 		//region Observers
 		if(isset($this->entityData['OBSERVER_IDS']) && !empty($this->entityData['OBSERVER_IDS']))
 		{
@@ -2638,6 +2639,8 @@ class CCrmDealDetailsComponent
 			}
 		}
 
+		(new LastCommunicationTimeFormatter())->formatDetailDate($this->entityData);
+
 		$this->arResult['ENTITY_DATA'] = $this->entityData;
 
 		return $this->entityData;
@@ -2662,7 +2665,7 @@ class CCrmDealDetailsComponent
 			}
 			else if($entityId > 0)
 			{
-				$item = $this->factory->getItem($entityId);
+				$item = $this->factory->getItem($entityId, $this->editorAdapter->getProductRowSummaryItemFieldsToSelect());
 			}
 
 			if(!$item)

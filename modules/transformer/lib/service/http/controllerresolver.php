@@ -2,7 +2,6 @@
 
 namespace Bitrix\Transformer\Service\Http;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Transformer\Http;
@@ -101,12 +100,19 @@ final class ControllerResolver
 
 	public function getDefaultCloudControllerUrl(): string
 	{
-		$region = Application::getInstance()->getLicense()->getRegion();
+		$domain = (new \Bitrix\Main\License\UrlProvider())->getTechDomain();
 
-		return match ($region) {
-			'ru' => 'https://transformer-ru-boxes.bitrix.info/bitrix/tools/transformercontroller/add_queue.php',
-			default => Http::CLOUD_CONVERTER_URL,
-		};
+		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
+		if (in_array($region, ['ru', 'by', 'kz'], true))
+		{
+			$domain = 'transformer-ru-boxes.' . $domain;
+		}
+		else
+		{
+			$domain = 'transformer-de.' . $domain;
+		}
+
+		return 'https://' . $domain . '/bitrix/tools/transformercontroller/add_queue.php';
 	}
 
 	public function getBaasDedicatedControllerUrl(): ?string

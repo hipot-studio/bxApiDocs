@@ -836,6 +836,11 @@ class CRestServer
 		}
 		return $res;
 	}
+
+	public function finalize(): void
+	{
+		self::$instance = null;
+	}
 }
 
 class CRestServerBatchItem extends \CRestServer

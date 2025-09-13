@@ -25,6 +25,7 @@ class Quality
 		'give_advice' => 'give_advice',
 		// support meeting processing in video and audio calls
 		'meeting_processing' => 'meeting_processing',
+		'scoring' => 'scoring',
 	];
 
 	private array|string $qualities;

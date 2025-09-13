@@ -199,7 +199,7 @@ final class CrmEventViewComponent extends \Bitrix\Crm\Component\Base
 				}
 			}
 
-			$singleEvent['EVENT_TEXT_1'] = $boundItemInfo['ENTITY_TYPE_CAPTION'] ?? '';
+			$singleEvent['EVENT_TEXT_1'] = htmlspecialcharsbx($boundItemInfo['ENTITY_TYPE_CAPTION'] ?? '');
 			$isMyCompany = $boundItemInfo['IS_MY_COMPANY'] ?? false;
 			if ($isMyCompany)
 			{

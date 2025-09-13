@@ -1482,7 +1482,7 @@ HTML;
 			 * @var \Bitrix\Main\Type\Dictionary $eventResult
 			 */
 			$eventFields = array(
-				"VOTE_USER_ID"		=> \Bitrix\Vote\User::getCurrent()->setVotedUserId(true),
+				"VOTE_USER_ID"		=> $user->setVotedUserId(true),
 				"DATE_VOTE"			=> (new DateTime()),
 				"STAT_SESSION_ID"	=> $_SESSION["SESS_SESSION_ID"] ?? null,
 				"IP"				=> \Bitrix\Main\Context::getCurrent()->getServer()->get("REMOTE_ADDR"),
@@ -1869,7 +1869,33 @@ HTML;
 		throw new \Bitrix\Main\NotSupportedException("Model provide ArrayAccess only for reading");
 	}
 
-	public function deleteEvents(
+	public function recall(int $userId): \Bitrix\Main\Result
+	{
+		$user = \Bitrix\Vote\User::loadFromId($userId);
+		if ($user->lock($this->getId()) !== true)
+		{
+			return (new \Bitrix\Main\Result())
+				->addError(new Error(Loc::getMessage("VOTE_IS_OCCUPIED")))
+			;
+		}
+
+		$canRevoteResult = $this->canRevote($userId);
+		if (!$canRevoteResult->isSuccess())
+		{
+			$user->unlock($this->getId());
+
+			return $canRevoteResult;
+		}
+
+		$eventIdsToDelete = array_column($canRevoteResult->getData(), 'ID');
+		$this->deleteEvents($eventIdsToDelete, $userId);
+
+		$user->unlock($this->getId());
+
+		return new \Bitrix\Main\Result();
+	}
+
+	private function deleteEvents(
 		array $eventIdsToDelete,
 		int $userId,
 	): void

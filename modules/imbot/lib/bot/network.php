@@ -2123,16 +2123,14 @@ class Network extends Base implements NetworkBot
 		$chatId = -1;
 		if (Im\Common::isChatId($params['DIALOG_ID']))
 		{
-			$chatCheckRes = Im\Model\BotChatTable::getList([
-				'select' => ['CHAT_ID'],
-				'filter' => [
-					'=BOT_ID' => (int)$params['BOT_ID'],
-					'=CHAT_ID' => (int)Im\Dialog::getChatId($params['DIALOG_ID']),
-				]
-			]);
-			if ($chatCheck = $chatCheckRes->fetch())
+			$chatToCheckId = (int)Im\Dialog::getChatId($params['DIALOG_ID']);
+			if (
+				Im\V2\Chat::getInstance($chatToCheckId)
+					->checkAccess((int)$params['BOT_ID'])
+					->isSuccess()
+			)
 			{
-				$chatId = (int)$chatCheck['CHAT_ID'];
+				$chatId = $chatToCheckId;
 			}
 		}
 		else
@@ -2925,16 +2923,14 @@ class Network extends Base implements NetworkBot
 		$chatId = -1;
 		if (Im\Common::isChatId($dialogId))
 		{
-			$chatCheckRes = \Bitrix\Im\Model\BotChatTable::getList([
-				'select' => ['CHAT_ID'],
-				'filter' => [
-					'=BOT_ID' => (int)static::getBotId(),
-					'=CHAT_ID' => (int)Im\Dialog::getChatId($dialogId),
-				]
-			]);
-			if ($chatCheck = $chatCheckRes->fetch())
+			$chatToCheckId = (int)Im\Dialog::getChatId($dialogId);
+			if (
+				Im\V2\Chat::getInstance($chatToCheckId)
+					->checkAccess(static::getBotId())
+					->isSuccess()
+			)
 			{
-				$chatId = (int)$chatCheck['CHAT_ID'];
+				$chatId = $chatToCheckId;
 			}
 		}
 		else
@@ -3374,7 +3370,7 @@ class Network extends Base implements NetworkBot
 		$botChat = static::getChatWithBot($botId);
 
 		$counterService = new CounterService(static::getCurrentUser()->getId());
-		$counter = $counterService->getByChat((int)$botChat['ID']);
+		$counter = $counterService->getByChatWithOverflow((int)$botChat['ID']);
 
 		if ($counter > 0)
 		{

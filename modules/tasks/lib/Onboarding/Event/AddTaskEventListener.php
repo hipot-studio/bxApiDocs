@@ -20,45 +20,62 @@ final class AddTaskEventListener extends AbstractEventListener
 		$createdBy = (int)$fields['CREATED_BY'];
 		$responsibleId = (int)$fields['RESPONSIBLE_ID'];
 
-		if ($this->isOnePersonTask($fields))
+		$commandModels = new CommandModelCollection();
+
+		$counterRepository = $this->container->getCounterRepository();
+		if (!$counterRepository->isLimitReachedByType(Type::InviteToMobile, $createdBy))
 		{
-			return $eventResult;
+			$commandModels->merge($this->getCommandsForInvitationToMobile($taskId, $createdBy));
 		}
 
 		$status = (int)($fields['STATUS'] ?? 0);
-		if ($status !== Status::PENDING)
+		if (
+			$status !== Status::PENDING
+			|| $this->isOnePersonTask($fields)
+		)
 		{
+			$this->saveCommandModels($commandModels);
+
 			return $eventResult;
 		}
 
 		if ($this->isInvitedUser($responsibleId))
 		{
-			$this->addCommandsForInvitedResponsible($taskId, $responsibleId);
+			$commandModels->merge($this->getCommandsForInvitedResponsible($taskId, $responsibleId));
 		}
 		elseif (OnboardingFeature::isNewPortal())
 		{
-			$this->addCommandsForExistingResponsible($taskId, $responsibleId, $createdBy);
+			$commandModels->merge($this->getCommandsForExistingResponsible($taskId, $responsibleId, $createdBy));
 		}
+
+		$this->saveCommandModels($commandModels);
 
 		return $eventResult;
 	}
 
-	private function addCommandsForInvitedResponsible(int $taskId, int $responsibleId): void
+	private function getCommandsForInvitationToMobile(int $taskId, int $creatorId): CommandModelCollection
 	{
-		$commandModels = new CommandModelCollection(
-			CommandModelFactory::create(Type::ResponsibleInvitationNotAcceptedOneDay, $taskId, $responsibleId),
+		return new CommandModelCollection(
+			CommandModelFactory::create(Type::InviteToMobile, $taskId, $creatorId, true),
 		);
-
-		$this->saveCommandModels($commandModels);
 	}
 
-	private function addCommandsForExistingResponsible(int $taskId, int $responsibleId, int $createdBy): void
+	private function getCommandsForInvitedResponsible(int $taskId, int $responsibleId): CommandModelCollection
 	{
-		$commandModels = new CommandModelCollection(
-			CommandModelFactory::create(Type::OneDayNotViewed, $taskId, $responsibleId, true),
-			CommandModelFactory::create(Type::TwoDaysNotViewed, $taskId, $createdBy, true)
+		return new CommandModelCollection(
+			CommandModelFactory::create(Type::ResponsibleInvitationNotAcceptedOneDay, $taskId, $responsibleId),
 		);
+	}
 
-		$this->saveCommandModels($commandModels);
+	private function getCommandsForExistingResponsible(
+		int $taskId,
+		int $responsibleId,
+		int $createdBy,
+	): CommandModelCollection
+	{
+		return new CommandModelCollection(
+			CommandModelFactory::create(Type::OneDayNotViewed, $taskId, $responsibleId, true),
+			CommandModelFactory::create(Type::TwoDaysNotViewed, $taskId, $createdBy, true),
+		);
 	}
 }

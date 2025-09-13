@@ -24,6 +24,15 @@ final class MenuItemCreatorCrm extends BaseMenuItemCreator
 			];
 		}
 
+		if (!empty($menuItems))
+		{
+			$menuItems[] = [
+				'IS_DELIMITER' => true,
+			];
+
+			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
+		}
+
 		return [
 			'ID' => 'BIC_DASHBOARDS',
 			'MENU_ID' => 'menu_bic_dashboards',

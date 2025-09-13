@@ -6,6 +6,9 @@ use Bitrix\Crm;
 
 class Lead extends Base
 {
+	protected array $contactFields;
+	protected array $companyFields;
+
 	protected function processField(string $fieldId): bool
 	{
 		if ($fieldId === 'CONTACT_IDS')
@@ -32,6 +35,14 @@ class Lead extends Base
 			return;
 		}
 
+		$this->prepareFieldGroups();
+		$this->addContactCompanyFields();
+
+		if (in_array('CONTACT_IDS', $this->select, true))
+		{
+			$this->document['CONTACT_IDS'] = Crm\Binding\LeadContactTable::getLeadContactIDs($this->id);
+		}
+
 		$result = \CCrmLead::GetListEx(
 			[],
 			[
@@ -43,16 +54,36 @@ class Lead extends Base
 			$this->select
 		);
 
-
 		$this->document = array_merge($this->document, $result->fetch() ?: []);
+		$this->loadAdditionalValues();
+		$this->document = Crm\Entity\CommentsHelper::prepareFieldsFromBizProc($this->typeId, $this->id, $this->document);
+	}
+
+	protected function loadAdditionalValues(): void
+	{
+		$this->loadAddressValues();
+		$customerFields = \CCrmLead::getCustomerFields();
+		if (!empty(array_intersect($this->select, $customerFields)))
+		{
+			$this->select = array_merge($this->select, ['CONTACT_ID']);
+		}
+
+		if (in_array('COMPANY_TITLE', $this->select, true))
+		{
+			$this->loadCompanyTitle();
+		}
 
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 		$this->appendDefaultUserPrefixes();
-		$this->appendCustomerFields();
+
+		if (!empty(array_intersect($this->select, $customerFields)))
+		{
+			$this->appendCustomerFields();
+		}
 
 		if ($this->document['COMPANY_ID'] > 0)
 		{
-			unset($this->document['COMPANY_TITLE']);
+			//unset($this->document['COMPANY_TITLE']);
 		}
 
 		$addressFields = Crm\LeadAddress::mapEntityFields($this->document);
@@ -72,11 +103,8 @@ class Lead extends Base
 
 		$this->loadFmValues();
 		$this->loadUserFieldValues();
-
-		$this->document = Crm\Entity\CommentsHelper::prepareFieldsFromBizProc($this->typeId, $this->id, $this->document);
+		$this->loadCommonFieldValues();
 	}
-
-
 
 	protected function loadCompanyTitle(): void
 	{

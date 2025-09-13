@@ -31,7 +31,7 @@ final class Calendar extends Base
 			return $result;
 		}
 
-		$eventData = \Bitrix\Crm\Integration\Calendar::getEvent($calendarEventId);
+		$eventData = \Bitrix\Crm\Integration\Calendar::getEvent($calendarEventId, true);
 		if (is_array($eventData))
 		{
 			$tzFrom = empty($eventData['TZ_FROM']) ? null : $eventData['TZ_FROM'];

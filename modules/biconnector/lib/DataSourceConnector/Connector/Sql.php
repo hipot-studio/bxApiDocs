@@ -299,16 +299,26 @@ class Sql extends Base
 		foreach ($unions as $union)
 		{
 			$formattedFields = [];
+			$join = [];
 			foreach ($union['FIELDS'] as $unionFieldKey => $unionField)
 			{
 				if (in_array($unionFieldKey, $selectFieldNames, true))
 				{
 					$formattedFields[] = $unionField['FIELD_NAME'] . ' AS ' . $unionFieldKey;
+					if (!empty($unionField['LEFT_JOIN']))
+					{
+						$join[] = $unionField['LEFT_JOIN'];
+					}
+					elseif (!empty($unionField['JOIN']))
+					{
+						$join[] = $unionField['JOIN'];
+					}
 				}
 			}
 			$sqlFields = implode("\n  ,", $formattedFields);
 			$unionQuery .= "UNION SELECT\n  " . $sqlFields
 				. "\nfrom\n  " . $union['TABLE_NAME'] . ' AS ' . $union['TABLE_ALIAS']
+				. "\n" . (!empty($join) ? implode("\n ", $join) : '')
 				. "\n"
 			;
 		}

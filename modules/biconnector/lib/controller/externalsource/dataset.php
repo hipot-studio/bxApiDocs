@@ -5,9 +5,6 @@ namespace Bitrix\BIConnector\Controller\ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Validation\ImportDataValidator;
-use Bitrix\BIConnector\ExternalSource\Validation\Rules\DateIsCorrectFormatRule;
-use Bitrix\BIConnector\ExternalSource\Validation\Rules\DoubleIsNumericRule;
-use Bitrix\BIConnector\ExternalSource\Validation\Rules\IntegerIsNumericRule;
 use Bitrix\BIConnector\ExternalSource\Validation\Rules\RulesProvider;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Localization\Loc;
@@ -802,6 +799,24 @@ class Dataset extends Controller
 			];
 		}
 
+		if ($settings === [] && Type::tryFrom($dataset->getType()) === Type::Rest)
+		{
+			$settings = [
+				[
+					'TYPE' => FieldType::Date->value,
+					'FORMAT' => \Bitrix\BIConnector\ExternalSource\Const\Date::Ymd_dash->value,
+				],
+				[
+					'TYPE' => FieldType::DateTime->value,
+					'FORMAT' => \Bitrix\BIConnector\ExternalSource\Const\DateTime::Ymd_dash_His_colon->value,
+				],
+				[
+					'TYPE' => FieldType::Double->value,
+					'FORMAT' => \Bitrix\BIConnector\ExternalSource\Const\DoubleDelimiter::DOT->value,
+				],
+			];
+		}
+
 		$externalTableData = [
 			'NAME' => $dataset->getName(),
 			'DESCRIPTION' => $dataset->getDescription(),
@@ -844,6 +859,42 @@ class Dataset extends Controller
 		$viewResponce->setData($data);
 
 		return $viewResponce;
+	}
+
+	public function exportAction(ExternalSource\Internal\ExternalDataset $dataset, string $exportFormat): ?string
+	{
+		if (!$dataset || $dataset->getEnumType() !== Type::Csv)
+		{
+			$this->addError(new Error('Invalid dataset specified'));
+
+			return null;
+		}
+
+		$exportType = ExternalSource\Exporter\ExportType::tryFrom($exportFormat);
+		if (!$exportType)
+		{
+			$this->addError(new Error('Invalid export format'));
+
+			return null;
+		}
+
+		$writer = ExternalSource\Exporter\WriterFactory::getWriter($exportType);
+		$dataProvider = ExternalSource\Exporter\DataProviderFactory::getDataProvider($dataset);
+		$settings = new ExternalSource\Exporter\Settings($dataset, $writer, $dataProvider);
+		$exporter = new ExternalSource\Exporter\Exporter($settings);
+
+		$result = $exporter->export();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		/** @var IO\File $file */
+		$file = $result->getData()['file'];
+
+		return $file->getContents();
 	}
 
 	private function prepareFields(array $fields): Result
@@ -952,8 +1003,8 @@ class Dataset extends Controller
 					if (empty($value))
 					{
 						$value = match ($fieldType) {
-							FieldType::Date => ExternalSource\Const\Date::Ymd_dot->value,
-							FieldType::DateTime => ExternalSource\Const\DateTime::Ymd_dot_His_colon->value,
+							FieldType::Date => ExternalSource\Const\Date::Ymd_dash->value,
+							FieldType::DateTime => ExternalSource\Const\DateTime::Ymd_dash_His_colon->value,
 							FieldType::Double => ExternalSource\Const\DoubleDelimiter::DOT->value,
 							FieldType::Money => ExternalSource\Const\MoneyDelimiter::DOT->value,
 						};

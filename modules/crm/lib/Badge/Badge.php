@@ -26,6 +26,7 @@ abstract class Badge
 	public const WORKFLOW_COMMENT_STATUS_TYPE = 'workflow_comment_status';
 	public const COPILOT_CALL_ASSESSMENT_STATUS_TYPE = 'copilot_call_assessment_status';
 	public const AI_CALL_SCORING_STATUS = 'ai_call_scoring_status';
+	public const BOOKING_STATUS_TYPE = 'booking_status';
 
 	public static function createByType(string $type, string $value): Badge
 	{

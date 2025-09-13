@@ -6,6 +6,8 @@ use Bitrix\AI\BaseRepository;
 use Bitrix\AI\Container;
 use Bitrix\AI\Integration\Socialnetwork\GroupService;
 use Bitrix\AI\ShareRole\Service\ShareService;
+use Bitrix\Extranet\Contract\Service\CollaberService;
+use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\UserAccessTable;
 
@@ -104,6 +106,11 @@ class UserAccessRepository extends BaseRepository
 			return [];
 		}
 
+		if (!$this->getCollaberService()->isCollaberById($userId))
+		{
+			$groups[] = self::CODE_ALL_USER;
+		}
+
 		$this->accessGroupsByUserId[$userId] = $groups;
 
 		return $groups;
@@ -117,5 +124,10 @@ class UserAccessRepository extends BaseRepository
 	protected function getShareService(): ShareService
 	{
 		return Container::init()->getItem(ShareService::class);
+	}
+
+	protected function getCollaberService(): CollaberService
+	{
+		return ServiceContainer::getInstance()->getCollaberService();
 	}
 }

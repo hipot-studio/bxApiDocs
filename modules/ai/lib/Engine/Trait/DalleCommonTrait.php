@@ -6,6 +6,8 @@ use Bitrix\AI\Facade\File;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\AI\Services\ImageService;
 
 trait DalleCommonTrait
 {
@@ -72,9 +74,12 @@ trait DalleCommonTrait
 		if ($imageUri !== null)
 		{
 			$fileId = File::saveImageByURL($imageUri, 'ai');
-			if ($fileId && ($fileArray = \CFile::GetFileArray($fileId)) && !empty($fileArray['SRC']))
+			if ($fileId && ($fileArray = \CFile::GetFileArray($fileId)) && !empty($fileArray['EXTERNAL_ID']))
 			{
-				$image = [File::getAbsoluteUri($fileArray['SRC'])];
+				$image = [
+					ServiceLocator::getInstance()->get(ImageService::class)
+						->getUrlOnImgFile($fileId, $fileArray['EXTERNAL_ID'])
+				];
 			}
 		}
 

@@ -62,7 +62,7 @@ class Manager
 		$event = new Event('ai', 'onTuningLoad');
 		$event->send();
 
-		$storage = json_decode(Config::getValue(self::CONFIG_EXTERNAL_CODE) ?? "", true) ?: [];
+		$storage = self::getTuningStorage();
 		foreach ($event->getResults() as $result)
 		{
 			if (!$result instanceof Orm\EventResult)
@@ -117,39 +117,78 @@ class Manager
 	 */
 	private function onAfterLoad(): void
 	{
-		// hide BitrixGPT from all items, except...
-		$option = Config::getValue('bitrixgpt_options');
-		if (is_null($option))
-		{
-			return;
-		}
+		$engineConfigurations = [
+			[
+				'configKey' => 'bitrixgpt_options',
+				'engineCode' => Engine\Cloud\Bitrix24::ENGINE_CODE,
+			],
+			[
+				'configKey' => 'bitrixaudio_availableIn',
+				'engineCode' => Engine\Cloud\BitrixAudio::ENGINE_CODE,
+			],
+			[
+				'configKey' => 'bitrixaudio_availableIn',
+				'engineCode' => 'BitrixAudioCall',
+			]
+		];
 
-		$bitrixGPTAvailableInItems = Json::decode($option)['availableIn'] ?? [];
+		foreach ($engineConfigurations as $config)
+		{
+			$optionValue = Config::getValue($config['configKey']);
+			if ($optionValue === null)
+			{
+				continue;
+			}
+
+			$availableInItems = [];
+			$decodedValue = json_decode($optionValue, true);
+			if (isset($decodedValue['availableIn']) && $config['configKey'] === 'bitrixgpt_options')
+			{
+				$availableInItems = $decodedValue['availableIn'];
+			}
+			elseif (is_array($decodedValue) && $config['configKey'] === 'bitrixaudio_availableIn')
+			{
+				$availableInItems = $decodedValue;
+			}
+
+			if (empty($availableInItems))
+			{
+				return;
+			}
+
+			$this->removeEngineFromGroups($availableInItems, $config['engineCode']);
+		}
+	}
+
+	private function removeEngineFromGroups(array $availableInItems, string $engineCode): void
+	{
 		foreach ($this->groups as $group)
 		{
-			/**
-			 * @var Group $group
-			 */
+			/** @var Group $group */
 			foreach ($group->getItems() as $item)
 			{
-				if (!$item->isList())
+				if (!$this->shouldProcessItem($item, $availableInItems))
 				{
 					continue;
 				}
 
-				if (in_array($item->getCode(), $bitrixGPTAvailableInItems, true))
-				{
-					continue;
-				}
-
-				$options = $item->getOptions();
-				$options = array_filter($options, static function ($code)
-				{
-					return $code !== Engine\Cloud\Bitrix24::ENGINE_CODE;
-				}, ARRAY_FILTER_USE_KEY);
-				$item->setOptions($options);
+				$this->removeEngineFromItem($item, $engineCode);
 			}
 		}
+	}
+
+	private function shouldProcessItem($item, array $availableInItems): bool
+	{
+		return $item->isList() && !in_array($item->getCode(), $availableInItems, true);
+	}
+
+	private function removeEngineFromItem($item, string $engineCode): void
+	{
+		$item->setOptions(array_filter(
+			$item->getOptions(),
+			static fn($code) => $code !== $engineCode,
+			ARRAY_FILTER_USE_KEY
+		));
 	}
 
 	/**
@@ -254,5 +293,12 @@ class Manager
 		{
 			Config::setOptionsValue(self::CONFIG_EXTERNAL_CODE, json_encode($externalConfig->toArray()));
 		}
+	}
+
+	public static function getTuningStorage(): array
+	{
+		$config = json_decode(Config::getValue(self::CONFIG_EXTERNAL_CODE) ?? "", true) ?: [];
+
+		return is_array($config) ? $config : [];
 	}
 }

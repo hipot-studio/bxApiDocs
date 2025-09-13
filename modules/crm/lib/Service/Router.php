@@ -587,12 +587,7 @@ class Router
 	 */
 	public function getPermissionsUrl(): ?Uri
 	{
-		if (Feature::enabled(Feature\PermissionsLayoutV2::class))
-		{
-			return (new AllSelection())->getUrl();
-		}
-
-		return new Uri('/crm/configs/perms/');
+		return (new AllSelection())->getUrl();
 	}
 
 	/**
@@ -774,7 +769,7 @@ class Router
 			return null;
 		}
 
-		if ($entityTypeId === \CCrmOwnerType::Deal)
+		if ($entityTypeId === \CCrmOwnerType::Deal && !is_null($categoryId))
 		{
 			$template = Option::get(self::MODULE_ID, 'path_to_deal_category_activity');
 

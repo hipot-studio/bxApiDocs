@@ -176,7 +176,7 @@ final class SupersetIntegration
 
 			return $result;
 		}
-		
+
 		$result->setData($response->getData());
 
 		return $result;

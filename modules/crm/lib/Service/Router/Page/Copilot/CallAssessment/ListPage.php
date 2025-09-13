@@ -12,7 +12,7 @@ final class ListPage extends AbstractPage
 {
 	private const COMPONENT_NAME = 'bitrix:crm.copilot.call.assessment.list';
 
-	protected function component(): Contract\Component
+	public function component(): Contract\Component
 	{
 		return new Component(self::COMPONENT_NAME);
 	}

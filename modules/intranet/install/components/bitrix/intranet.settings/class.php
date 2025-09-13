@@ -49,8 +49,6 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 		$providerClasses = [
 			ToolsSettings::class,
 			PortalSettings::class,
-			// todo: remove after open Vibe for all
-			// MainPageSettings::class,
 			CommunicationSettings::class,
 			EmployeeSettings::class,
 			RequisiteSettings::class,
@@ -60,12 +58,8 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 			ConfigurationSettings::class,
 		];
 
-		// todo: remove after open Vibe for all
 		$access = new MainPage\Access;
-		if (
-			$access->canView()
-			&& $access->canEdit()
-		)
+ 		if ($access->canView())
 		{
 			array_splice($providerClasses, 2, 0, MainPageSettings::class);
 		}

@@ -101,10 +101,9 @@ final class UpdateCommand extends AbstractCommand
 	#[DistributionType]
 	public ?string $distributionType = null;
 
-	#[Required]
+	#[Nullable]
 	#[AccessCodes]
-	#[NotEmpty]
-	public array $responsibleList;
+	public ?array $responsibleList = null;
 
 	#[Nullable]
 	#[User]

@@ -20,6 +20,7 @@ class Department
 		private ?bool $isGlobalActive = true,
 		private ?int $depth = null,
 		private ?string $accessCode = null,
+		private bool $isIblockSource = true,
 	)
 	{}
 
@@ -149,6 +150,11 @@ class Department
 		$this->accessCode = $accessCode;
 	}
 
+	public function isIblockSource(): bool
+	{
+		return $this->isIblockSource;
+	}
+
 	/**
 	 * TODO: remove after remove UF_DEPARTMENT
 	 * Only for migrated structures
@@ -156,7 +162,7 @@ class Department
 	 */
 	public function getIblockSectionId(): ?int
 	{
-		return (new \Bitrix\Intranet\Service\IntranetOption)->get('humanresources_enabled') === 'Y'
+		return !$this->isIblockSource()
 			? DepartmentBackwardAccessCode::extractIdFromCode($this->accessCode)
 			: $this->getId();
 	}

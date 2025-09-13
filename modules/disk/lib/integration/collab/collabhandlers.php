@@ -36,15 +36,19 @@ class CollabHandlers
 				if ($storage !== null)
 				{
 					$isPersonalFolderForUploadedFiles = false;
+					$isPersonalFolderForCreatedFiles = false;
 					if ($storage->getEntityType() === User::class && (int)$storage->getEntityId() === $userId)
 					{
 						$uploaded = $storage->getFolderForUploadedFiles();
 						$isPersonalFolderForUploadedFiles = (int)$uploaded?->getId() === $objectId;
+
+						$created = $storage->getFolderForCreatedFiles();
+						$isPersonalFolderForCreatedFiles = (int)$created?->getId() === $objectId;
 					}
 
 					$isStorageForIm = $storage->getEntityType() === Im::class;
 
-					if (!$isPersonalFolderForUploadedFiles && !$isStorageForIm && !$collabService->isCollabStorage($storage))
+					if (!$isPersonalFolderForUploadedFiles && !$isPersonalFolderForCreatedFiles && !$isStorageForIm && !$collabService->isCollabStorage($storage))
 					{
 						$rights = $event->getParameter('rights');
 

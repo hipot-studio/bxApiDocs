@@ -9,5 +9,5 @@ interface UserDefinedPage extends Page
 {
 	public function route(): Route;
 
-	public function setParameters(array $parameters = []): self;
+	public function setParameters(array $parameters = []): static;
 }

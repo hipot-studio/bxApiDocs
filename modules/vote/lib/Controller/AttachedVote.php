@@ -109,12 +109,17 @@ class AttachedVote extends Controller
 		];
 	}
 
-	public function voteAction(AttachedVotePayload $attachPayload, array $ballot): array
+	public function voteAction(
+		AttachedVotePayload $attachPayload,
+		array $ballot,
+		string $actionUuid = '',
+	): array
 	{
 		$attach = $attachPayload->attach;
-		$voted = $attach->voteFor([
-			\Bitrix\Vote\Event::EVENT_FIELD_NAME => [$attach->getAttachId() => ['BALLOT' => $ballot]],
-		]);
+		$voted = $attach->voteFor(
+			[\Bitrix\Vote\Event::EVENT_FIELD_NAME => [$attach->getAttachId() => ['BALLOT' => $ballot]]],
+			$actionUuid,
+		);
 		if ($voted)
 		{
 			return [
@@ -131,20 +136,20 @@ class AttachedVote extends Controller
 		return [];
 	}
 
-	public function stopAction(AttachedVotePayload $attachPayload): array
+	public function stopAction(AttachedVotePayload $attachPayload, string $actionUuid = ''): array
 	{
 		$attach = $attachPayload->attach;
 		$this->throwAccessDeniedIfNotAbleToEdit($attach);
-		$attach->stop();
+		$attach->stop($actionUuid);
 
 		return [];
 	}
 
-	public function resumeAction(AttachedVotePayload $attachPayload): array
+	public function resumeAction(AttachedVotePayload $attachPayload, string $actionUuid = ''): array
 	{
 		$attach = $attachPayload->attach;
 		$this->throwAccessDeniedIfNotAbleToEdit($attach);
-		$attach->resume();
+		$attach->resume($actionUuid);
 
 		return [];
 	}
@@ -165,7 +170,7 @@ class AttachedVote extends Controller
 		return new Page('items', $votedUserPage->items, $votedUserPage->totalCount);
 	}
 
-	public function recallAction(AttachedVotePayload $attachPayload): array
+	public function recallAction(AttachedVotePayload $attachPayload, string $actionUuid = ''): array
 	{
 		$attach = $attachPayload->attach;
 		if (!$attach->canRead($this->getUserId()))
@@ -175,7 +180,7 @@ class AttachedVote extends Controller
 			return [];
 		}
 
-		$result = $attach->recall($this->getUserId());
+		$result = $attach->recall($this->getUserId(), $actionUuid);
 		if ($result->isSuccess())
 		{
 			return [

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Onboarding\Command;
 
+use Bitrix\Tasks\Onboarding\Command\Type\InviteToMobile;
 use Bitrix\Tasks\Onboarding\Command\Type\InvitedResponsibleNotViewTaskTwoDaysCommand;
 use Bitrix\Tasks\Onboarding\Command\Type\ResponsibleInvitationAcceptedCommand;
 use Bitrix\Tasks\Onboarding\Command\Type\ResponsibleInvitationNotAcceptedOneDay;
@@ -44,6 +45,11 @@ final class CommandFactory
 		if ($type === Type::ResponsibleInvitationAccepted->value)
 		{
 			return new ResponsibleInvitationAcceptedCommand($id, $taskId, $userId, Type::ResponsibleInvitationAccepted, $code);
+		}
+
+		if ($type === Type::InviteToMobile->value)
+		{
+			return new InviteToMobile($id, $taskId, $userId, Type::InviteToMobile, $code);
 		}
 
 		return null;

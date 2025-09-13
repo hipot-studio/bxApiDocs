@@ -1415,30 +1415,43 @@ class Order extends Base
 
 	protected function prepareItemsBeforeSync(array $changedBasketItems, array $formItems) : array
 	{
-		$result = [];
-
-		$id2XmlIdMap = $this->getBasketId2XmlIdMap($changedBasketItems);
-
+		$basketXmlIdsExistingInForm = [];
 		/** @var Crm\Order\BasketItem $basketItem */
 		foreach ($changedBasketItems as $basketItem)
 		{
-			foreach ($formItems as $formItem)
+			foreach ($formItems as $formItemKey => $formItem)
 			{
-				if ($basketItem->getProductId() !== (int)$formItem['skuId'])
+				if ((string)$basketItem->getField('XML_ID') === (string)$formItem['innerId'])
 				{
-					continue;
+					$formItems[$formItemKey]['basePrice'] = $basketItem->getBasePrice();
+					$basketXmlIdsExistingInForm[] = $basketItem->getField('XML_ID');
+
+					break;
 				}
-
-				$formItem['innerId'] = $id2XmlIdMap[$basketItem->getId()] ?? '';
-				$formItem['code'] = $basketItem->getBasketCode();
-
-				$result[] = $formItem;
-
-				break;
 			}
 		}
 
-		return $result;
+		foreach ($changedBasketItems as $basketItem)
+		{
+			foreach ($formItems as $formItemKey => $formItem)
+			{
+				if (
+					!in_array($basketItem->getField('XML_ID'), $basketXmlIdsExistingInForm, true)
+					&& !in_array($formItem['innerId'], $basketXmlIdsExistingInForm, true)
+					&& $basketItem->getProductId() === (int)$formItem['skuId']
+				)
+				{
+					$formItems[$formItemKey]['innerId'] = $basketItem->getField('XML_ID');
+					$formItems[$formItemKey]['code'] = $basketItem->getBasketCode();
+					$formItems[$formItemKey]['basePrice'] = $basketItem->getBasePrice();
+					$basketXmlIdsExistingInForm[] = $basketItem->getField('XML_ID');
+
+					break;
+				}
+			}
+		}
+
+		return $formItems;
 	}
 
 	protected function getBasketId2XmlIdMap(array $basketItems)

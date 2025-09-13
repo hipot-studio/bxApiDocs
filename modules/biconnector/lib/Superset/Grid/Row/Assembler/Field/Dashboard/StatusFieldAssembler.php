@@ -16,6 +16,7 @@ class StatusFieldAssembler extends FieldAssembler
 {
 	private const DASHBOARD_STATUS_COMPUTED_NOT_FOUND = 'NOT_FOUND';
 	private const DASHBOARD_STATUS_COMPUTED_NOT_LOAD = 'NOT_LOAD';
+	private const DASHBOARD_STATUS_COMPUTED_PROHIBITED = 'PROHIBITED';
 
 	protected function prepareColumn($value): string
 	{
@@ -32,6 +33,11 @@ class StatusFieldAssembler extends FieldAssembler
 		if ($value['EDIT_URL'] === '' && in_array($value['STATUS'], SupersetDashboard::getActiveDashboardStatuses(), true))
 		{
 			return self::getStatusLabelByStatusType(self::DASHBOARD_STATUS_COMPUTED_NOT_FOUND);
+		}
+
+		if (!$value['IS_ACCESS_ALLOWED'])
+		{
+			return self::getStatusLabelByStatusType(self::DASHBOARD_STATUS_COMPUTED_PROHIBITED);
 		}
 
 		return self::getStatusLabelByStatusType($value['STATUS'], $value['ID']);
@@ -96,23 +102,24 @@ class StatusFieldAssembler extends FieldAssembler
 				</div>
 				HTML;
 
-			case self::DASHBOARD_STATUS_COMPUTED_NOT_FOUND:
-				$status = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_NOT_FOUND');
+			case self::DASHBOARD_STATUS_COMPUTED_PROHIBITED:
+				$status = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_PROHIBITED");
 
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-fill dashboard-status-label dashboard-status-label-error ui-label-danger">
+					<span class="ui-label dashboard-status-label dashboard-status-label-error ui-label-light">
 						<span class="ui-label-inner">$status</span>
 					</span>
 				</div>
 				HTML;
 
+			case self::DASHBOARD_STATUS_COMPUTED_NOT_FOUND:
 			case self::DASHBOARD_STATUS_COMPUTED_NOT_LOAD:
-				$status = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_NOT_LOAD');
+				$status = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_{$status}");
 
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-fill dashboard-status-label dashboard-status-label-error ui-label-danger">
+					<span class="ui-label ui-label-fill dashboard-status-label ui-label-danger">
 						<span class="ui-label-inner">$status</span>
 					</span>
 				</div>
@@ -139,13 +146,15 @@ class StatusFieldAssembler extends FieldAssembler
 					'STATUS' => $row['data']['STATUS'],
 					'EDIT_URL' => $row['data']['EDIT_URL'],
 					'ID' => $row['data']['ID'],
+					'IS_ACCESS_ALLOWED' => $row['data']['IS_ACCESS_ALLOWED'],
 				];
+
+				$row['columns'][$columnId] = $this->prepareColumn($value);
 			}
 			else
 			{
-				$value = [];
+				$row['columns'][$columnId] = '';
 			}
-			$row['columns'][$columnId] = $this->prepareColumn($value);
 		}
 
 		return $row;

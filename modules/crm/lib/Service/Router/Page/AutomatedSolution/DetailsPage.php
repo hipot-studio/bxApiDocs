@@ -27,7 +27,7 @@ final class DetailsPage extends AbstractPage
 		parent::__construct($request, $currentScope);
 	}
 
-	protected function component(): Contract\Component
+	public function component(): Contract\Component
 	{
 		return new Component(
 			name: self::COMPONENT_NAME,

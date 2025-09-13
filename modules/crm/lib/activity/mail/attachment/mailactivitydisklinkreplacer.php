@@ -36,6 +36,7 @@ class MailActivityDiskLinkReplacer
 		StorageAttachmentIdCollection $storageAttachmentIds,
 	): string
 	{
+		\Bitrix\Main\Config\Ini::adjustPcreBacktrackLimit(strlen($description) * 2);
 		$updatedDescription = null;
 		foreach ($storageAttachmentIds as $diskAttachmentId)
 		{

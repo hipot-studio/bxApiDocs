@@ -954,13 +954,10 @@ class BizProcDocument
 			if(ModuleManager::isModuleInstalled('bitrix24'))
 			{
 				$siteId = \CSite::getDefSite();
-				$employeeGroup = \CGroup::getList('', '', array(
-					'STRING_ID' => 'EMPLOYEES_' . $siteId,
-					'STRING_ID_EXACT_MATCH' => 'Y'
-				))->fetch();
+				$employeeGroup = \CGroup::GetIDByCode('EMPLOYEES_' . $siteId);
 				if($employeeGroup)
 				{
-					$employeeGroupId = (int)$employeeGroup['ID'];
+					$employeeGroupId = (int)$employeeGroup;
 					if(!in_array($employeeGroupId, $groupIds, true))
 					{
 						$groupIds[] = $employeeGroupId;
@@ -1910,7 +1907,7 @@ class BizProcDocument
 						$customType = $USER_FIELD_MANAGER->getUserType($customTypeID);
 						if(is_bool($customType))
 							$customType = array();
-						
+
 						if ($value !== null && array_key_exists("CheckFields", $customType))
 						{
 							$errorsTmp1 = call_user_func_array(

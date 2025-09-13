@@ -166,7 +166,7 @@ class Epic extends BaseController
 		$inputEpic->setModifiedBy($post['modifiedBy'] ?? $this->userId);
 		$inputEpic->setColor($post['color']);
 
-		$files = (is_array($post['files']) ? $post['files'] : []);
+		$files = (is_array($post['files'] ?? null) ? $post['files'] : []);
 
 		$epicService->updateEpic($epic->getId(), $inputEpic, $pushService);
 		if ($epicService->getErrors())

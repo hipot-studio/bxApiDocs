@@ -225,7 +225,7 @@ class OpenLineManager
 	public static function getChatUnReadMessages(?string $userCode, ?int $userId): int
 	{
 		if (
-			!isset($userCode)
+			!$userCode
 			|| !Loader::includeModule('im')
 			|| !Loader::includeModule('imopenlines')
 		)
@@ -234,14 +234,24 @@ class OpenLineManager
 		}
 
 		$chatId = Chat::getChatIdByUserCode($userCode);
-		if ($chatId > 0)
+		if ($chatId <= 0)
+		{
+			return 0;
+		}
+
+		if (!method_exists('\Bitrix\ImOpenLines\Recent', 'isNonAnsweredChat'))
 		{
 			$counters = Counter::get($userId);
-
 			return isset($counters['LINES'][$chatId]) ? (int)$counters['LINES'][$chatId] : 0;
 		}
 
-		return 0;
+		$counter = (new \Bitrix\Im\V2\Message\CounterService($userId))->getByChat($chatId);
+		if ($counter === 0)
+		{
+			return (int)\Bitrix\ImOpenLines\Recent::isNonAnsweredChat($chatId, $userId);
+		}
+
+		return $counter;
 	}
 
 	public static function closeDialog(?string $userCode, ?int $userId = null): ?Result

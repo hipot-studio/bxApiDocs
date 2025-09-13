@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Calendar\Controller;
 
+use Bitrix\Bitrix24\Feature;
 use Bitrix\Calendar\Access\EventAccessController;
 use Bitrix\Calendar\Access\Model\SectionModel;
 use Bitrix\Calendar\Access\Model\TypeModel;
@@ -323,7 +324,10 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 			if (Loader::includeModule('socialnetwork'))
 			{
-				$sections = \CCalendarSect::getSuperposedList(['GROUPS' => $groupIds]);
+				if (!empty($groupIds))
+				{
+					$sections = \CCalendarSect::getSuperposedList(['GROUPS' => $groupIds]);
+				}
 
 				foreach ($groupIds as $groupId)
 				{
@@ -447,6 +451,10 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$responseParams['entry'] = $entry;
 			$responseParams['timezoneHint'] = !empty($entry) ? Util::getTimezoneHint($userId, $entry) : '';
 			$responseParams['timezoneList'] = \CCalendar::GetTimezoneList();
+			$responseParams['absenceAvailable'] = (!\CCalendar::IsBitrix24()
+				|| \COption::GetOptionString("bitrix24",  "absence_limits_enabled", "") !== "Y"
+				|| Feature::isFeatureEnabled("absence"))
+			;
 			$responseParams['formSettings'] = UserSettings::getFormSettings($formType);
 			$isOpenEvent = $type === Dictionary::CALENDAR_TYPE['open_event'];
 			$isCollabUser = Util::isCollabUser($userId);

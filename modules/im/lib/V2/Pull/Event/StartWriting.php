@@ -46,9 +46,4 @@ class StartWriting extends BaseChatEvent
 	{
 		return [$this->getContext()->getUserId()];
 	}
-
-	protected function getBaseDialogId(): string
-	{
-		return 'chat' . $this->chat->getId();
-	}
 }

@@ -45,14 +45,14 @@ class PartGridRoleService extends GridRoleService
 
 		$result = [];
 		$userIdList = [];
-		foreach ($codesData as $codeDate)
+		foreach ($codesData as $codeData)
 		{
-			if (empty($codeDate['ACCESS_CODE']))
+			if (empty($codeData['ACCESS_CODE']))
 			{
 				continue;
 			}
 
-			$code = $codeDate['ACCESS_CODE'];
+			$code = $codeData['ACCESS_CODE'];
 			if (UserAccessRepository::CODE_ALL_USER === $code)
 			{
 				$result = [

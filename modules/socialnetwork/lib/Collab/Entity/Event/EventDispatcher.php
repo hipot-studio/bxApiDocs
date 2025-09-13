@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\Collab\Entity\Event;
 
-use Bitrix\Im\V2\Integration\Socialnetwork\Collab;
+use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
@@ -367,12 +367,6 @@ final class EventDispatcher
 			->getActionMessage(ActionType::RegenerateLink, $collabId, $userId)
 			->send()
 		;
-	}
-
-	public static function onCollabToolSettingUpdate(Event $event): void
-	{
-		global $CACHE_MANAGER;
-		$CACHE_MANAGER->ClearByTag(ComponentHelper::MAIN_SELECTOR_GROUPS_CACHE_TAG);
 	}
 
 	private static function sendAddEvent(CollabEntity $entity): void

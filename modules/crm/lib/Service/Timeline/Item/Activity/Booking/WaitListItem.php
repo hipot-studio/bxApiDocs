@@ -1,7 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Booking;
 
+use Bitrix\Crm\Dto\Booking\Client;
+use Bitrix\Crm\Dto\Booking\WaitListItem\WaitListItemFields;
+use Bitrix\Crm\Dto\Booking\WaitListItem\WaitListItemFieldsMapper;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Service\Timeline\Item\Mixin\CalendarSharing\ContactTrait;
 use Bitrix\Crm\Service\Timeline\Layout;
@@ -9,11 +14,14 @@ use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
+use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
 use Bitrix\Main\Localization\Loc;
 
 class WaitListItem extends Activity
 {
 	use ContactTrait;
+
+	private WaitListItemFields|null $waitListItemModel = null;
 
 	protected function getActivityTypeId(): string
 	{
@@ -50,10 +58,15 @@ class WaitListItem extends Activity
 	{
 		$result = [];
 
-		$clientBlock = $this->createClientBlock($this->getAssociatedEntityModelFields()['clients']);
+		$clientBlock = $this->createClientBlock($this->getAssociatedEntityModelFields()->clients);
 		if ($clientBlock)
 		{
 			$result['clientBlock'] = $clientBlock;
+		}
+
+		if ($noteBlock = $this->buildNoteBlock())
+		{
+			$result['noteBlock'] = $noteBlock;
 		}
 
 		return $result;
@@ -61,13 +74,13 @@ class WaitListItem extends Activity
 
 	public function getButtons(): array
 	{
-		if ($this->isWaitListItemDeleted())
+		if (!$this->isScheduled())
 		{
 			return [];
 		}
 
 		$openButton = new Button(
-			title: Loc::getMessage('CRM_TIMELINE_WAIT_LIST_ITEM_BTN_OPEN'),
+			title: Loc::getMessage('CRM_TIMELINE_WAIT_LIST_ITEM_BTN_OPEN') ?? '',
 			type: Button::TYPE_PRIMARY,
 		);
 		$openButton->setScopeWeb();
@@ -77,7 +90,7 @@ class WaitListItem extends Activity
 		];
 
 		$deleteButton = new Button(
-			title: Loc::getMessage('CRM_TIMELINE_WAIT_LIST_ITEM_BTN_DELETE'),
+			title: Loc::getMessage('CRM_TIMELINE_WAIT_LIST_ITEM_BTN_DELETE') ?? '',
 			type: Button::TYPE_SECONDARY,
 		);
 		$deleteButton->setAction($this->getDeleteWaitListItemAction());
@@ -97,9 +110,39 @@ class WaitListItem extends Activity
 
 		unset($items['edit'], $items['view']);
 
-		return $items;
+		$menuItems = [
+			(new MenuItem(Loc::getMessage('CRM_TIMELINE_WAIT_LIST_ITEM_MENU_ITEM_CYCLE')))
+				->setAction(
+					(new Action\JsEvent($this->getType() . ':ShowCyclePopup'))
+						->addActionParamString('status', 'waitlist')
+					,
+				)
+			,
+		];
+
+		return array_merge($items, $menuItems);
 	}
 
+	private function buildNoteBlock(): ContentBlock|null
+	{
+		$note = $this->getAssociatedEntityModelFields()->note;
+		if (!$note)
+		{
+			return null;
+		}
+
+		return (new Layout\Body\ContentBlock\EditableDescription())
+			->setText($note)
+			->setEditable(false)
+			->setCopied(true)
+			->setHeight(Layout\Body\ContentBlock\EditableDescription::HEIGHT_SHORT)
+		;
+	}
+
+	/**
+	 * @param Client[]|null $clients
+	 * @return ContentBlock|null
+	 */
 	private function createClientBlock(array|null $clients): ContentBlock|null
 	{
 		if (empty($clients))
@@ -109,19 +152,19 @@ class WaitListItem extends Activity
 
 		$client = $clients[0];
 
-		if ($client['type']['module'] !== 'crm')
+		if ($client->typeModule !== 'crm')
 		{
 			return null;
 		}
 
-		$contactTypeName = $client['type']['code'] ?? null;
+		$contactTypeName = $client->typeCode ?? null;
 		if (!in_array($contactTypeName, [\CCrmOwnerType::ContactName, \CCrmOwnerType::CompanyName], true))
 		{
 			return null;
 		}
 		$contactTypeId = \CCrmOwnerType::ResolveID($contactTypeName);
 
-		$contactId = $client['data']['id'] ?? null;
+		$contactId = $client->id ?? null;
 		if (!$contactId)
 		{
 			return null;
@@ -169,16 +212,27 @@ class WaitListItem extends Activity
 		return (int)$associatedEntityId;
 	}
 
-	private function getAssociatedEntityModelFields(): array
+	private function getAssociatedEntityModelFields(): WaitListItemFields|null
 	{
-		$settings = $this->getAssociatedEntityModel()?->get('SETTINGS');
-		$settings = is_array($settings) ? $settings : [];
+		if ($this->waitListItemModel)
+		{
+			return $this->waitListItemModel;
+		}
 
-		return isset($settings['FIELDS']) && is_array($settings['FIELDS']) ? $settings['FIELDS'] : [];
-	}
+		$settings = $this->getAssociatedEntityModel()->get('SETTINGS');
+		$fields = isset($settings['FIELDS']) && is_array($settings['FIELDS']) ? $settings['FIELDS'] : null;
+		if (!$fields)
+		{
+			return null;
+		}
 
-	private function isWaitListItemDeleted(): bool
-	{
-		return $this->getAssociatedEntityModelFields()['isDeleted'] ?? false;
+		// new wait list item structure not have updatedAt field, but older has
+		$this->waitListItemModel = isset($fields['updatedAt'])
+			// bc for old format
+			? WaitListItemFieldsMapper::mapFromWaitListItemArray($fields)
+			: WaitListItemFields::mapFromArray($fields)
+		;
+
+		return $this->waitListItemModel;
 	}
 }

@@ -5,9 +5,9 @@ namespace Bitrix\Im\Configuration;
 use Bitrix\Im\Call\VideoStrategyType;
 use Bitrix\Im\Model\OptionStateTable;
 use Bitrix\Im\Model\OptionUserTable;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -431,7 +431,15 @@ class General extends Base
 
 		$settings = static::decodeSettings($settings);
 
-		return self::filterGroupSettingsByDefault($settings);
+		return self::prepareRawGroupSettings($settings);
+	}
+
+	public static function prepareRawGroupSettings(array $settings): array
+	{
+		$settings = self::filterGroupSettingsByDefault($settings);
+		$redefinedSettings = self::getRedefinedSettings();
+
+		return array_replace($settings, $redefinedSettings);
 	}
 
 	public static function filterGroupSettingsByDefault(array $settings): array
@@ -442,6 +450,18 @@ class General extends Base
 		foreach ($defaultSettings as $name => $value)
 		{
 			$result[$name] = $settings[$name] ?? $value;
+		}
+
+		return $result;
+	}
+
+	protected static function getRedefinedSettings(): array
+	{
+		$result = [];
+
+		if (!Features::isDesktopRedirectAvailable())
+		{
+			$result['openDesktopFromPanel'] = false;
 		}
 
 		return $result;

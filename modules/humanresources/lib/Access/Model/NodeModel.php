@@ -2,7 +2,10 @@
 
 namespace Bitrix\HumanResources\Access\Model;
 
+use Bitrix\HumanResources\Config\Feature;
+use Bitrix\HumanResources\Controller\Structure\Node;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\HumanResources\Item;
 
@@ -18,6 +21,14 @@ final class NodeModel implements AccessibleItem
 		if ($itemId !== null)
 		{
 			$nodeRepository = Container::getNodeRepository();
+			if (Feature::instance()->isCrossFunctionalTeamsAvailable())
+			{
+				$nodeRepository->setSelectableNodeEntityTypes([
+					NodeEntityType::DEPARTMENT,
+					NodeEntityType::TEAM,
+				]);
+			}
+
 			$model->node = $nodeRepository->getById($itemId);
 		}
 
@@ -27,6 +38,11 @@ final class NodeModel implements AccessibleItem
 	public function getId(): int
 	{
 		return $this->node?->id ?? 0;
+	}
+
+	public function getNode(): ?Item\Node
+	{
+		return $this->node;
 	}
 
 	public function getParentId(): ?int
@@ -42,6 +58,14 @@ final class NodeModel implements AccessibleItem
 	public function setTargetNodeId(int $itemId): void
 	{
 		$nodeRepository = Container::getNodeRepository();
+		if (Feature::instance()->isCrossFunctionalTeamsAvailable())
+		{
+			$nodeRepository->setSelectableNodeEntityTypes([
+				NodeEntityType::DEPARTMENT,
+			 	NodeEntityType::TEAM,
+			]);
+		}
+
 		$this->targetNodeId =  $nodeRepository->getById($itemId)?->id ?? null;
 	}
 }

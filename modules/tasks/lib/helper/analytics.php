@@ -6,6 +6,7 @@ use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Tasks\Integration\Intranet\User;
 use Bitrix\Tasks\Ui\Filter;
+use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 
 class Analytics extends Common
 {
@@ -41,6 +42,9 @@ class Analytics extends Common
 		'flows_view' => 'flows_view',
 		'lead_view' => 'lead_view',
 		'tasks_projects_view' => 'tasks_projects_view',
+		'add_viewer' => 'add_viewer',
+		'add_coexecutor' => 'add_coexecutor',
+		'task_update' => 'task_update',
 	];
 
 	public const SECTION = [
@@ -102,6 +106,8 @@ class Analytics extends Common
 		'my_tasks_column' => 'my_tasks_column',
 		'create_demo_button' => 'create_demo_button',
 		'guide_button' => 'guide_button',
+		'viewer_button' => 'viewer_button',
+		'coexecutor_button' => 'coexecutor_button',
 	];
 
 	/**
@@ -225,6 +231,75 @@ class Analytics extends Common
 			self::TASK_TYPE,
 			$params,
 		);
+	}
+
+	public function onTaskUpdate(
+		string $event,
+		?string $section = null,
+		?string $element = null,
+		?string $subSection = null,
+		array $params = [],
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			$event,
+			self::TOOL,
+			self::TASK_CATEGORY,
+		);
+
+		$status = isset($params['status']) && $params['status'] === self::STATUS_SUCCESS;
+
+		$this->sendAnalytics(
+			$analyticsEvent,
+			$section,
+			$element,
+			$subSection,
+			true,
+			self::TASK_TYPE,
+			$params,
+		);
+	}
+
+	public function getTaskContext(int $taskId): string
+	{
+		$task = TaskRegistry::getInstance()->getObject($taskId);
+
+		if (!$task)
+		{
+			return self::SECTION['tasks'];
+		}
+
+		if ($task->getFlowId() > 0)
+		{
+			return self::SECTION['flows'];
+		}
+
+		if ($task->isScrum())
+		{
+			return self::SECTION['scrum'];
+		}
+
+		if ($task->isInGroup())
+		{
+			return self::SECTION['project'];
+		}
+
+		if ($task->isCrm())
+		{
+			return self::SECTION['crm'];
+		}
+
+		if ($task->isCollab())
+		{
+			return self::SECTION['collab'];
+		}
+
+		if ($task->isDescriptionInBbcodeFilled())
+		{
+			return self::SECTION['chat'];
+		}
+
+		return self::SECTION['tasks'];
 	}
 
 	public function onFlowCreate(

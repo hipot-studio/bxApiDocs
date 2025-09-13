@@ -19,16 +19,19 @@ class InviteLinkGenerator
 
 	public static function createByPayload(array $payload): ?self
 	{
-		if (Option::get("socialservices", "new_user_registration_secret", null) === null)
-		{
-			return null;
-		}
-		$inviteToken = ServiceContainer::getInstance()->inviteTokenService()->create($payload);
+		$inviteToken = self::createInviteToken($payload);
 
 		return new self(AttachJwtTokenToUrlCommand::createDefaultInstance($inviteToken));
 	}
 
-	public static function createByCollabId(int $collabId): ?self
+	public static function createByPayloadWithUserLang(array $payload, string $userLang = LANGUAGE_ID): ?self
+	{
+		$inviteToken = self::createInviteToken($payload);
+
+		return new self(AttachJwtTokenToUrlCommand::createInstanceWithUserLang($inviteToken, $userLang));
+	}
+
+	public static function createByCollabId(int $collabId, string $userLang = LANGUAGE_ID): ?self
 	{
 		if (!Loader::includeModule('socialnetwork'))
 		{
@@ -40,7 +43,9 @@ class InviteLinkGenerator
 		{
 			return null;
 		}
+
 		$linkCodeGenerator = LinkCodeGenerator::createByCollabId($collabId);
+
 		$payload = [
 			'collab_id' => $collabId,
 			'collab_name' => $entity->getName(),
@@ -48,7 +53,7 @@ class InviteLinkGenerator
 			'link_code' => $linkCodeGenerator->getOrGenerate()->getCode(),
 		];
 
-		return self::createByPayload($payload);
+		return self::createByPayloadWithUserLang($payload, $userLang);
 	}
 
 	public static function createByDepartmentsIds(array $departmentsIds): ?self
@@ -58,12 +63,20 @@ class InviteLinkGenerator
 			return null;
 		}
 
+		$linkCodeGenerator = LinkCodeGenerator::createByUserId(CurrentUser::get()?->getId());
+
 		$payload = [
 			'departments_ids' => $departmentsIds,
 			'inviting_user_id' => CurrentUser::get()?->getId() ?? null,
+			'link_code' => $linkCodeGenerator->getOrGenerate()->getCode(),
 		];
 
 		return self::createByPayload($payload);
+	}
+
+	private static function createInviteToken($payload): string
+	{
+		return ServiceContainer::getInstance()->inviteTokenService()->create($payload);
 	}
 
 	private function create(): Uri
@@ -73,12 +86,22 @@ class InviteLinkGenerator
 
 	public function getCollabLink(): string
 	{
+		return $this->getLink();
+	}
+
+	public function getShortCollabLink(): string
+	{
+		return $this->getShortLink();
+	}
+
+	public function getLink(): string
+	{
 		$uri = $this->create();
 
 		return $uri->getUri();
 	}
 
-	public function getShortCollabLink(): string
+	public function getShortLink(): string
 	{
 		$uri = $this->create();
 

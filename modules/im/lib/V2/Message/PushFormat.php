@@ -34,6 +34,7 @@ class PushFormat
 		$chat = $this->message->getChat();
 		$chatLegacyFormat = $chat->toPullFormat();
 		$users = $this->getUsers();
+		$notify = !empty($chat->getRecentSections());
 
 		return [
 			'chatId' => $chat->getChatId(),
@@ -52,7 +53,7 @@ class PushFormat
 				'templateFileId' => $message->getFileUuid(),
 				'prevId' => $message->getPrevId(),
 				'chatId' => $chat->getChatId(),
-				'senderId' => $message->getAuthorId(),
+				'senderId' => $message->getContext()->getUserId(),
 				'recipientId' => $chat->getDialogId(),
 				'system' => ($message->isSystem() ? 'Y': 'N'),
 				'date' => DateTime::createFromTimestamp(time()), // DATE_CREATE
@@ -66,8 +67,10 @@ class PushFormat
 				'forward' => $message->getForwardInfo(),
 			],
 			'counterType' => $chat->getCounterType()->value,
+			'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 			'files' => $message->getFiles()->toRestFormat(['IDS_AS_KEY' => true]),
-			'notify' => $chat instanceof Chat\CommentChat ? false : true,
+			'notify' => $notify,
+			'messagesAutoDeleteConfigs' => $chat->getMessageAutoDeleteConfigs()->toRestFormat(),
 		];
 	}
 

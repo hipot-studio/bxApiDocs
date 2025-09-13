@@ -22,7 +22,7 @@ class OnUserFiredListener extends AbstractEventListener
 
 		if ($isHired)
 		{
-			$this->deleteJobs(userId: $userId);
+			$this->deleteByPair(userId: $userId);
 		}
 
 		return $eventResult;
@@ -37,7 +37,7 @@ class OnUserFiredListener extends AbstractEventListener
 			return $eventResult;
 		}
 
-		$this->deleteJobs(userId: $userId);
+		$this->deleteByPair(userId: $userId);
 
 		return $eventResult;
 	}

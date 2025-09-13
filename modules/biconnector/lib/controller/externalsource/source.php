@@ -3,18 +3,18 @@
 namespace Bitrix\BIConnector\Controller\ExternalSource;
 
 use Bitrix\BIConnector;
-use Bitrix\BIConnector\Access\AccessController;
-use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
-use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\ActionFilter;
 use Bitrix\Crm;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
-use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Result;
 
 class Source extends Controller
@@ -22,7 +22,8 @@ class Source extends Controller
 	protected function getDefaultPreFilters(): array
 	{
 		$additionalFilters = [
-			new BIConstructorAccess(),
+			new ActionFilter\BIConstructorAccess(),
+			new ActionFilter\WorkspaceAnalyticAccess(),
 		];
 
 		if (Loader::includeModule('intranet'))
@@ -34,25 +35,6 @@ class Source extends Controller
 			...parent::getDefaultPreFilters(),
 			...$additionalFilters,
 		];
-	}
-
-	protected function processBeforeAction(Action $action): bool
-	{
-		if (!BIConnector\Configuration\Feature::isExternalEntitiesEnabled())
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FEATURE')));
-
-			return false;
-		}
-
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_ACCESS')));
-
-			return false;
-		}
-
-		return parent::processBeforeAction($action);
 	}
 
 	public function changeActivityAction(int $id, string $moduleId): ?bool
@@ -87,7 +69,7 @@ class Source extends Controller
 		return true;
 	}
 
-	public function deleteAction(int $id, string $moduleId): ?bool
+	public function validateBeforeDeleteAction(int $id, string $moduleId): ?bool
 	{
 		if ($moduleId !== 'BI')
 		{
@@ -104,7 +86,27 @@ class Source extends Controller
 			return null;
 		}
 
-		$deleteResult = $source->delete();
+		$validateError = ExternalSource\Internal\ExternalSourceTable::validateSourceBeforeDelete($id);
+		if (!$validateError->isSuccess())
+		{
+			$this->addErrors($validateError->getErrors());
+
+			return null;
+		}
+
+		return true;
+	}
+
+	public function deleteAction(int $id, string $moduleId): ?bool
+	{
+		if ($moduleId !== 'BI')
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE')));
+
+			return null;
+		}
+
+		$deleteResult = SourceManager::deleteSource($id);
 		if (!$deleteResult->isSuccess())
 		{
 			$this->addErrors($deleteResult->getErrors());
@@ -149,7 +151,8 @@ class Source extends Controller
 			return null;
 		}
 
-		$requiredFields = ExternalSource\SourceManager::getFieldsConfig()[$data['type']];
+		$configKey = $data['code'];
+		$requiredFields = ExternalSource\SourceManager::getFieldsConfig()[$configKey];
 		$settings = ExternalSource\Internal\ExternalSourceSettingsTable::createCollection();
 		foreach ($requiredFields as $requiredField)
 		{
@@ -181,6 +184,20 @@ class Source extends Controller
 		}
 
 		$source = ExternalSource\Source\Factory::getSource($type, 0);
+		if ($source instanceof ExternalSource\Source\Rest)
+		{
+			$connectorId = (int)str_replace('rest_', '', $data['code']);
+			$connector = ExternalSourceRestConnectorTable::getByPrimary($connectorId)->fetchObject();
+
+			if (!$connector)
+			{
+				$this->errorCollection[] = new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND'));
+
+				return null;
+			}
+
+			$source->setConnector($connector);
+		}
 		$connectionResult = $source->connect($settings);
 		if (!$connectionResult->isSuccess())
 		{
@@ -216,7 +233,12 @@ class Source extends Controller
 			return null;
 		}
 
-		return $saveResult->getData();
+		$supersetIsReady = !(SupersetInitializer::isSupersetLoading() || SupersetInitializer::isSupersetUnavailable());
+
+		return [
+			'connection' => $saveResult->getData()['connection'],
+			'supersetIsReady' => $supersetIsReady,
+		];
 	}
 
 	public function updateCommentAction(string $id, string $value): ?bool

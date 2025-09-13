@@ -13,7 +13,6 @@ use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\StoreDocumentTable;
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
-use Bitrix\Crm\Integration\Catalog\Contractor\Provider;
 use Bitrix\Main;
 use Bitrix\Crm\Order;
 use Bitrix\Crm\Service\EditorAdapter;
@@ -23,8 +22,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
 use Bitrix\Catalog;
-use Bitrix\Sale\Tax\VatCalculator;
-use Bitrix\UI;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\ShipmentDocumentRealization;
 use Bitrix\Crm\Integration\Catalog\WarehouseOnboarding;
@@ -137,8 +134,6 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 	{
 		/** @global \CMain $APPLICATION */
 		global $APPLICATION;
-
-		UI\Toolbar\Facade\Toolbar::deleteFavoriteStar();
 
 		$this->init();
 		if (!$this->checkDocumentReadRight())
@@ -285,7 +280,8 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 		$this->arResult['FOCUSED_TAB'] = $this->request->get('focusedTab');
 
 		//region GUID
-		$this->guid = $this->arResult['GUID'] = "realization_document_{$this->entityID}_details";
+		$this->guid = "realization_document_{$this->entityID}_details";
+		$this->arResult['GUID'] = $this->guid;
 
 		if ($this->needDeliveryBlock())
 		{
@@ -296,7 +292,6 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 			$this->arResult['EDITOR_CONFIG_ID'] = 'realization_document_shipment_details';
 		}
 
-		$this->arResult['TOOLBAR_ID'] = "toolbar_realization_document_{$this->entityID}";
 		//endregion
 
 		//region Entity Info
@@ -379,7 +374,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 		$this->arResult['UI_ENTITY_CARD_SETTINGS_EDITABLE'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_STORE_DOCUMENT_CARD_EDIT);
 		$this->arResult['IS_TOOL_PANEL_ALWAYS_VISIBLE'] = $this->checkDocumentCancelRight()	|| $this->checkDocumentConductRight();
 
-		$this->arResult['BUTTONS'] = $this->getToolbarButtons();
+		$this->arResult['CRM_DOCUMENT_BUTTON_CONFIG'] = $this->getDocumentButtonConfig();
 		$this->arResult['COMPONENT_PRODUCTS'] = $this->getDocumentProducts();
 
 		$this->arResult['INVENTORY_MANAGEMENT_SOURCE'] =
@@ -390,23 +385,23 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 		$this->includeComponentTemplate();
 	}
 
-	/**
-	 * @return array
-	 */
-	private function getToolbarButtons(): array
+	private function getDocumentButtonConfig(): ?array
 	{
-		$result = [];
+		$result = null;
 
-		if (DocumentGeneratorManager::getInstance()->isDocumentButtonAvailable())
+		if (
+			DocumentGeneratorManager::getInstance()->isDocumentButtonAvailable()
+			&& $this->getEntityID() > 0
+		)
 		{
-			$result[] = [
-				'TEXT' => Loc::getMessage('CRM_STORE_DOCUMENT_SHIPMENT_DOCUMENT_BUTTON'),
-				'TYPE' => 'crm-document-button',
-				'PARAMS' => DocumentGeneratorManager::getInstance()->getDocumentButtonParameters(
-					ShipmentDocumentRealization::class,
-					$this->entityID
-				),
-			];
+			$result = DocumentGeneratorManager::getInstance()->getDocumentButtonParameters(
+				ShipmentDocumentRealization::class,
+				$this->getEntityID()
+			);
+			if (empty($result))
+			{
+				$result = null;
+			}
 		}
 
 		return $result;

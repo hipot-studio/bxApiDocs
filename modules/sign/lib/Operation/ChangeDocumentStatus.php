@@ -37,6 +37,8 @@ final class ChangeDocumentStatus implements Contract\Operation
 	private readonly UserService $userService;
 	private readonly AnalyticService $analyticService;
 
+	private ?int $initiatorUserId = null;
+
 	public function __construct(
 		private Item\Document $document,
 		private readonly string $status,
@@ -64,6 +66,11 @@ final class ChangeDocumentStatus implements Contract\Operation
 		if ($this->document->id === null)
 		{
 			return $result->addError(new Main\Error('Empty document ID.'));
+		}
+
+		if ($this->document->isTemplated())
+		{
+			return $result->addError(new Main\Error('Can not change status of templated document.'));
 		}
 
 		// status may be changed asynchronously
@@ -101,11 +108,14 @@ final class ChangeDocumentStatus implements Contract\Operation
 			$sendMessageResult = $this->hrBotMessageService->handleDocumentStatusChangedMessage(
 				$this->document,
 				$this->status,
-				$this->initiatorMember,
+				$this->getInitiatorUser(),
 			);
 			$result->addErrors($sendMessageResult->getErrors());
 
-			$this->eventHandlerService->handleCurrentDocumentStatus($this->document, $this->initiatorMember);
+			$this->eventHandlerService->handleCurrentDocumentStatus(
+				$this->document,
+					$this->getInitiatorUser() ?? $this->document->stoppedById
+			);
 
 			$members = $this->memberRepository->listByDocumentId($this->document->id);
 
@@ -133,13 +143,12 @@ final class ChangeDocumentStatus implements Contract\Operation
 					return $updateMyDocumentsCounterResult;
 				}
 
-				if ($this->initiatorMember)
+				$setDocumentStoppedByResult = $this->setDocumentStoppedBy(
+					$this->getInitiatorUser() ?? $this->document->stoppedById ?? $this->getResponsibleUserFromCompanySide()
+				);
+				if (!$setDocumentStoppedByResult->isSuccess())
 				{
-					$setDocumentStoppedByResult = $this->setDocumentStoppedBy();
-					if (!$setDocumentStoppedByResult->isSuccess())
-					{
-						return $setDocumentStoppedByResult;
-					}
+					return $setDocumentStoppedByResult;
 				}
 
 				$kanbanPullEventOperation = new Operation\Kanban\B2e\SendDeleteEntityPullEvent($this->document);
@@ -247,26 +256,16 @@ final class ChangeDocumentStatus implements Contract\Operation
 		return new Main\Result();
 	}
 
-	private function setDocumentStoppedBy(): Main\Result
+	private function setDocumentStoppedBy(?int $initiatorUserId): Main\Result
 	{
 		$result = new Main\Result();
 
-		if ($this->initiatorMember === null)
-		{
-			return $result->addError(new Main\Error('Empty member'));
-		}
-
-		$userId = $this->memberService->getUserIdForMember(
-			$this->initiatorMember,
-			$this->document,
-		);
-
-		if ($userId === null)
+		if ($initiatorUserId === null)
 		{
 			return $result->addError(new Main\Error('Can not find user'));
 		}
 
-		$this->document->stoppedById = $userId;
+		$this->document->stoppedById = $initiatorUserId;
 		$updateResult = $this->documentRepository->update($this->document);
 		if (!$updateResult->isSuccess())
 		{
@@ -296,5 +295,42 @@ final class ChangeDocumentStatus implements Contract\Operation
 				$member,
 			);
 		}
+	}
+
+	private function getResponsibleUserFromCompanySide(): ?int
+	{
+		if ($this->document->isInitiatedByEmployee())
+		{
+			return
+				$this->document->representativeId
+				?? $this->getAssigneeUserId()
+			;
+		}
+
+		return
+			$this->document->createdById
+			?? $this->document->representativeId
+			?? $this->getAssigneeUserId()
+		;
+	}
+
+	private function getInitiatorUser(): ?int
+	{
+		if ($this->initiatorUserId === null && $this->initiatorMember !== null)
+		{
+			$this->initiatorUserId = $this->memberService->getUserIdForMember($this->initiatorMember, $this->document);
+		}
+
+		return $this->initiatorUserId;
+	}
+
+	private function getAssigneeUserId(): ?int
+	{
+		$assignee = $this->memberService->getAssignee($this->document);
+
+		return $assignee
+			? $this->memberService->getUserIdForMember($assignee)
+			: null
+		;
 	}
 }

@@ -20,4 +20,14 @@ final class CommandModel
 	{
 
 	}
+
+	public function isEqual(CommandModel $commandModel): bool
+	{
+		return
+			$this->type === $commandModel->type
+			&& $this->taskId === $commandModel->taskId
+			&& $this->userId === $commandModel->userId
+			&& $this->isCountable === $commandModel->isCountable
+		;
+	}
 }

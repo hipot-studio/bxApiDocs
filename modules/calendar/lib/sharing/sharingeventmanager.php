@@ -15,9 +15,11 @@ use Bitrix\Crm;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\PhoneNumber;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use CUser;
 
@@ -320,8 +322,8 @@ class SharingEventManager
 	 * @param array $fields
 	 * @return void
 	 * @throws ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
 	public static function onSharingEventEdit(array $fields): void
 	{
@@ -337,8 +339,8 @@ class SharingEventManager
 	 * @param int $eventId
 	 * @return void
 	 * @throws ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
 	public static function setCanceledTimeOnSharedLink(int $eventId): void
 	{
@@ -354,11 +356,14 @@ class SharingEventManager
 	 * @param int $userId
 	 * @param string $currentMeetingStatus
 	 * @param array $userEventBeforeChange
-	 * @param bool|null $isAutoAccept
+	 * @param bool $isAutoAccept
+	 *
 	 * @return void
+	 *
 	 * @throws ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
 	public static function onSharingEventMeetingStatusChange(
 		int $userId,
@@ -383,7 +388,7 @@ class SharingEventManager
 		}
 		else if ($userEventBeforeChange['EVENT_TYPE'] === Dictionary::EVENT_TYPE['shared'])
 		{
-			self::onSharingCommonEventMeetingStatusChange($eventLink);
+			self::onSharingCommonEventMeetingStatusChange($eventLink, $userId);
 		}
 		else if ($userEventBeforeChange['EVENT_TYPE'] === Dictionary::EVENT_TYPE['shared_crm'])
 		{
@@ -411,7 +416,15 @@ class SharingEventManager
 		]);
 	}
 
-	private static function onSharingCommonEventMeetingStatusChange(Sharing\Link\EventLink $eventLink): void
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private static function onSharingCommonEventMeetingStatusChange(
+		Sharing\Link\EventLink $eventLink,
+		?int $initiatorId = null,
+	): void
 	{
 		/** @var Event $event */
 		$event = (new Mappers\Event())->getById($eventLink->getEventId());
@@ -424,15 +437,23 @@ class SharingEventManager
 		$notificationService = null;
 		if ($userContact && self::isEmailCorrect($userContact))
 		{
-			$notificationService = (new Sharing\Notification\Mail())
-				->setEventLink($eventLink)
-				->setEvent($event)
+			$notificationService =
+				(new Sharing\Notification\Mail())
+					->setEventLink($eventLink)
+					->setEvent($event)
+					->setInitiatorId($initiatorId)
 			;
 		}
 
 		$notificationService?->notifyAboutMeetingStatus($userContact);
 	}
 
+	/**
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
 	private static function onSharingCrmEventStatusChange(
 		string $currentMeetingStatus,
 		array $userEventBeforeChange,
@@ -468,7 +489,7 @@ class SharingEventManager
 			)
 		)
 		{
-			self::onSharingCrmEventDeclined((int)$userEventBeforeChange['PARENT_ID']);
+			self::onSharingCrmEventDeclined((int)$userEventBeforeChange['PARENT_ID'], $userId);
 		}
 	}
 
@@ -497,7 +518,12 @@ class SharingEventManager
 		}
 	}
 
-	private static function onSharingCrmEventDeclined(int $eventId): void
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private static function onSharingCrmEventDeclined(int $eventId, ?int $initiatorId = null): void
 	{
 		$sharingFactory = new Sharing\Link\Factory();
 
@@ -524,12 +550,19 @@ class SharingEventManager
 		self::setCanceledTimeOnSharedLink($eventId);
 		if ($crmDealLink->getContactId() > 0)
 		{
-			Crm\Integration\Calendar\Notification\Manager::getSenderInstance($crmDealLink)
-				->setCrmDealLink($crmDealLink)
-				->setEventLink($eventLink)
-				->setEvent($event)
-				->sendCrmSharingCancelled()
+			$notificationService =
+				Crm\Integration\Calendar\Notification\Manager::getSenderInstance($crmDealLink)
+					->setCrmDealLink($crmDealLink)
+					->setEventLink($eventLink)
+					->setEvent($event)
 			;
+
+			if (method_exists($notificationService, 'setInitiatorId'))
+			{
+				$notificationService->setInitiatorId($initiatorId);
+			}
+
+			$notificationService->sendCrmSharingCancelled();
 		}
 		else
 		{
@@ -540,9 +573,11 @@ class SharingEventManager
 			}
 
 			$eventLink->setCanceledTimestamp(time());
+
 			(new Sharing\Notification\Mail())
 				->setEventLink($eventLink)
 				->setEvent($event)
+				->setInitiatorId($initiatorId)
 				->notifyAboutMeetingCancelled($email)
 			;
 		}
@@ -550,27 +585,50 @@ class SharingEventManager
 		self::reSaveEventWithoutAttendeesExceptHostAndSharingLinkOwner($eventLink);
 	}
 
-	public static function onSharingEventDeleted(int $eventId, string $eventType): void
+	/**
+	 * @param int $eventId
+	 * @param string $eventType
+	 * @param int|null $initiatorId
+	 * @return void
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function onSharingEventDeleted(int $eventId, string $eventType, ?int $initiatorId = null): void
 	{
+		$linkFactory = (new Sharing\Link\Factory());
+
 		/**@var Sharing\Link\EventLink $eventLink */
-		$eventLink = (new Sharing\Link\Factory())->getEventLinkByEventId($eventId);
+		$eventLink = $linkFactory->getEventLinkByEventId($eventId);
+
 		if ($eventLink)
 		{
 			self::setDeclinedStatusOnLinkOwnerEvent($eventLink);
 
 			if ($eventType === Dictionary::EVENT_TYPE['shared'])
 			{
-				self::onSharingCommonEventDeclined($eventLink);
+				self::onSharingCommonEventDeclined($eventLink, $initiatorId);
 			}
 			else if ($eventType === Dictionary::EVENT_TYPE['shared_crm'])
 			{
-				self::onSharingCrmEventDeclined($eventId);
+				self::onSharingCrmEventDeclined($eventId, $initiatorId);
 			}
 
 		}
 	}
 
-	public static function onSharingCommonEventDeclined(Sharing\Link\EventLink $eventLink)
+	/**
+	 * @param Link\EventLink $eventLink
+	 * @param int|null $initiatorId
+	 * @return void
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function onSharingCommonEventDeclined(
+		Sharing\Link\EventLink $eventLink,
+		?int $initiatorId = null,
+	): void
 	{
 		self::setCanceledTimeOnSharedLink($eventLink->getEventId());
 		/** @var Event $event */
@@ -584,16 +642,15 @@ class SharingEventManager
 		$notificationService = null;
 		if ($userContact && self::isEmailCorrect($userContact))
 		{
-			$notificationService = (new Sharing\Notification\Mail())
-				->setEventLink($eventLink)
-				->setEvent($event)
+			$notificationService =
+				(new Sharing\Notification\Mail())
+					->setEventLink($eventLink)
+					->setEvent($event)
+					->setInitiatorId($initiatorId)
 			;
 		}
 
-		if ($notificationService !== null)
-		{
-			$notificationService->notifyAboutMeetingCancelled($userContact);
-		}
+		$notificationService?->notifyAboutMeetingCancelled($userContact);
 	}
 
 	public static function setDeclinedStatusOnLinkOwnerEvent(Sharing\Link\EventLink $eventLink)

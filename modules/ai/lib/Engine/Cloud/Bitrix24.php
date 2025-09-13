@@ -7,14 +7,13 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IContext;
 use Bitrix\AI\Engine\IQueueOptional;
 use Bitrix\AI\Quality;
-use phpDocumentor\Reflection\Types\Self_;
 
 final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 {
 	use Engine\Trait\BitrixGPTCommonTrait;
 
 	protected const CATEGORY_CODE = Engine::CATEGORIES['text'];
-	protected const ENGINE_NAME = 'BitrixGPT 4x';
+	protected const ENGINE_NAME = 'BitrixGPT 4.5';
 
 	public const ENGINE_CODE = 'b24ai';
 

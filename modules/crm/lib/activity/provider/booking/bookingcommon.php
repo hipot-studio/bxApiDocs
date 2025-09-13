@@ -1,20 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\Activity\Provider\Booking;
 
+use Bitrix\Crm\Dto\Booking\EntityFieldsInterface;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Timeline;
 
 class BookingCommon
 {
-	public static function makeBindings(array $entity): array
+	public static function makeBindings(EntityFieldsInterface $entity): array
 	{
 		$bindings = [];
 
-		foreach ($entity['clients'] as $client)
+		foreach ($entity->getClients() as $client)
 		{
-			$clientTypeModule = $client['type']['module'] ?? '';
-			$clientTypeCode = $client['type']['code'] ?? '';
+			$clientTypeModule = $client->typeModule;
+			$clientTypeCode = $client->typeCode;
 
 			if ($clientTypeModule !== 'crm')
 			{
@@ -27,23 +30,23 @@ class BookingCommon
 				continue;
 			}
 
-			$ownerId = isset($client['id']) ? (int)$client['id'] : 0;
+			$ownerId = $client->id;
 			if (!$ownerId)
 			{
 				continue;
 			}
 
 			$bindings[] = [
-				'OWNER_TYPE_ID' => $ownerTypeId,
-				'OWNER_ID' => $ownerId,
+				'OWNER_TYPE_ID' => (int)$ownerTypeId,
+				'OWNER_ID' => (int)$ownerId,
 			];
 		}
 
-		foreach ($entity['externalData'] as $externalData)
+		foreach ($entity->getExternalData() as $externalData)
 		{
-			$isCrm = isset($externalData['moduleId']) && $externalData['moduleId'] === 'crm';
-			$ownerTypeId = \CCrmOwnerType::ResolveID($externalData['entityTypeId']);
-			$ownerId = isset($externalData['value']) ? (int)$externalData['value'] : 0;
+			$isCrm = $externalData->moduleId === 'crm';
+			$ownerTypeId = \CCrmOwnerType::ResolveID($externalData->entityTypeId);
+			$ownerId = $externalData->value;
 
 			if (
 				$isCrm
@@ -55,8 +58,8 @@ class BookingCommon
 			)
 			{
 				$bindings[] = [
-					'OWNER_TYPE_ID' => $ownerTypeId,
-					'OWNER_ID' => $ownerId,
+					'OWNER_TYPE_ID' => (int)$ownerTypeId,
+					'OWNER_ID' => (int)$ownerId,
 				];
 			}
 		}
@@ -75,7 +78,7 @@ class BookingCommon
 
 		foreach ($activity['BINDINGS'] as $binding)
 		{
-			$identifier = new ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']);
+			$identifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
 
 			$activityController->sendPullEventOnAddScheduled($identifier, $activity);
 		}
@@ -87,7 +90,7 @@ class BookingCommon
 
 		foreach ($activity['BINDINGS'] as $binding)
 		{
-			$identifier = new ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']);
+			$identifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
 
 			$activityController->sendPullEventOnUpdateScheduled($identifier, $activity);
 		}
@@ -99,63 +102,28 @@ class BookingCommon
 
 		foreach ($activity['BINDINGS'] as $binding)
 		{
-			$identifier = new ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']);
+			$identifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
 
-			$activityController->sendPullEventOnDelete($identifier, $activity['ID']);
+			$activityController->sendPullEventOnDelete($identifier, (int)$activity['ID']);
 		}
-	}
-
-	public static function updateActivity(
-		string $providerId,
-		string $typeId,
-		array $entity,
-		array $bindings,
-	): int|null
-	{
-		$existingActivity = \CCrmActivity::getList(
-			[],
-			[
-				'=PROVIDER_ID' => $providerId,
-				'=PROVIDER_TYPE_ID' => $typeId,
-				'=ASSOCIATED_ENTITY_ID' => $entity['id'],
-				'=COMPLETED' => 'N',
-				'CHECK_PERMISSIONS' => 'N',
-			]
-		)?->fetch();
-
-		if (!$existingActivity)
-		{
-			return null;
-		}
-
-		$existingActivity['BINDINGS'] = $bindings;
-		$existingActivity['SETTINGS']['FIELDS'] = $entity;
-
-		$updated = \CCrmActivity::update($existingActivity['ID'], $existingActivity, false);
-
-		if ($updated)
-		{
-			self::sendPullEventOnUpdate($existingActivity);
-		}
-
-		return $existingActivity['ID'];
 	}
 
 	public static function createActivity(
 		string $providerId,
 		string $typeId,
-		array $entity,
+		EntityFieldsInterface $entity,
 		array $bindings,
 		string $subject,
+		array $settings
 	): int|null
 	{
-		$authorId = $entity['createdBy'];
+		$authorId = $entity->getCreatedBy();
 
 		$fields = [
 			'TYPE_ID' => \CCrmActivityType::Provider,
 			'PROVIDER_ID' => $providerId,
 			'PROVIDER_TYPE_ID' => $typeId,
-			'ASSOCIATED_ENTITY_ID' => $entity['id'],
+			'ASSOCIATED_ENTITY_ID' => $entity->getId(),
 			'SUBJECT' => $subject,
 			'IS_HANDLEABLE' => 'Y',
 			'IS_INCOMING_CHANNEL' => 'N',
@@ -165,9 +133,7 @@ class BookingCommon
 			'PRIORITY' => \CCrmActivityPriority::Medium,
 			'AUTHOR_ID' => $authorId,
 			'BINDINGS' => $bindings,
-			'SETTINGS' => [
-				'FIELDS' => $entity,
-			],
+			'SETTINGS' => $settings,
 		];
 
 		$activityId = (int)\CCrmActivity::add($fields, false);

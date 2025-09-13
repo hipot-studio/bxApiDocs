@@ -2,15 +2,12 @@
 
 namespace Bitrix\Im\V2\Entity\File;
 
-use Bitrix\Disk;
-use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Document\Flipchart\Configuration;
 use Bitrix\Disk\Document\OnlyOffice\Templates\CreateDocumentByCallTemplateScenario;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Security\ParameterSigner;
-use Bitrix\Disk\Storage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\UI\Viewer\Renderer\Board;
@@ -24,6 +21,7 @@ use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -32,7 +30,8 @@ class FileItem implements RestEntity, PopupDataAggregatable
 {
 	use ContextCustomer;
 
-	private const MAX_PREVIEW_IMAGE_SIZE = 1280;
+	private const QUICK_ACCESS_SCOPE_PREFIX = 'chat_';
+	public const MAX_PREVIEW_IMAGE_SIZE = 1280;
 	private const ANIMATED_IMAGE_EXTENSIONS = ['gif', 'webp'];
 
 	protected ?int $chatId = null;
@@ -88,6 +87,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	public static function removeDiskBbCodesFromText(string $text): string
 	{
 		return preg_replace("/\[DISK\=([0-9]+)\]/i", '', $text);
+	}
+
+	public static function getQuickAccessScope(int $chatId): string
+	{
+		return self::QUICK_ACCESS_SCOPE_PREFIX . $chatId;
 	}
 
 	public function setDiskFile(File $diskFile): self
@@ -245,6 +249,16 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'urlShow' => $this->getShowLink(),
 			'urlDownload' => $this->getDownloadLink(),
 			'viewerAttrs' => $this->getViewerAttributes(),
+			'mediaUrl' => $this->getMediaUrl(),
+		];
+	}
+
+	private function getMediaUrl(): array
+	{
+		return [
+			'preview' => [
+				250 => $this->getPreviewLinkBySize(250, true),
+			],
 		];
 	}
 
@@ -315,62 +329,75 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	private function getPreviewLink(): string
 	{
 		$diskFile = $this->getDiskFile();
-		if (!$diskFile)
+		if (!isset($diskFile))
 		{
 			return '';
 		}
 
-		if ($this->isAnimatedImage())
+		return match (true)
 		{
-			return $this->getDownloadLink();
-		}
-
-		if (TypeFile::isImage($diskFile))
-		{
-			return $this->isOversized()
-				? $this->getShowLink()
-				: $this->getDownloadLink()
-			;
-		}
-
-		if ($diskFile->getView()->getPreviewData())
-		{
-			return $this->getLink('disk.api.file.showPreview', true, 'preview.jpg');
-		}
-
-		return '';
+			$this->isAnimatedImage() => $this->getDownloadLink(),
+			TypeFile::isImage($diskFile) => $this->isOversized() ? $this->getShowLink() : $this->getDownloadLink(),
+			$diskFile->getView()->getPreviewData() !== null => $this->getFilePreviewLink(),
+			default => '',
+		};
 	}
 
-	private function isOversized(): bool
+	private function isOversized(?int $maxSize = null): bool
 	{
+		$maxSize ??= self::MAX_PREVIEW_IMAGE_SIZE;
+
 		$fileData = $this->getDiskFile()?->getFile() ?? [];
 		$sourceImageWidth = $fileData['WIDTH'] ?? 0;
 		$sourceImageHeight = $fileData['HEIGHT'] ?? 0;
 
-		return $sourceImageHeight > self::MAX_PREVIEW_IMAGE_SIZE || $sourceImageWidth > self::MAX_PREVIEW_IMAGE_SIZE;
+		return $sourceImageHeight > $maxSize || $sourceImageWidth > $maxSize;
 	}
 
-	private function isAnimatedImage(): bool
+	private function getPreviewLinkBySize(int $size, bool $exact = false): string
 	{
-		return in_array($this->getDiskFile()?->getExtension(), self::ANIMATED_IMAGE_EXTENSIONS, true);
+		$diskFile = $this->getDiskFile();
+		if (!isset($diskFile))
+		{
+			return '';
+		}
+
+		$previewData = $diskFile->getView()->getPreviewData();
+
+		return match (true)
+		{
+			$this->isAnimatedImage() , $previewData !== null => $this->getFilePreviewLink($size, $exact),
+			TypeFile::isImage($diskFile) => $this->isOversized($size)
+				? $this->getShowLink($size, $exact)
+				: $this->getDownloadLink()
+			,
+			default => '',
+		};
 	}
 
-	private function getShowLink(): string
+	private function getShowLink(?int $size = self::MAX_PREVIEW_IMAGE_SIZE, $exact = false): string
 	{
 		if (TypeFile::isImage($this->getDiskFile() ?? ''))
 		{
-			return $this->getLink('disk.api.file.showImage', true);
+			return $this->getLink(new FileLinkConfig('disk.api.file.showImage', $size, $exact));
 		}
 
-		return $this->getLink('disk.api.file.download', false);
+		return $this->getDownloadLink();
 	}
 
 	private function getDownloadLink(): string
 	{
-		return $this->getLink('disk.api.file.download', false);
+		return $this->getLink(new FileLinkConfig('disk.api.file.download'));
 	}
 
-	private function getLink(string $action, bool $shouldResize, ?string $forceFileName = null): string
+	private function getFilePreviewLink(?int $size = self::MAX_PREVIEW_IMAGE_SIZE, $exact = false): string
+	{
+		$linkConfig = new FileLinkConfig('disk.api.file.showPreview', $size, $exact, 'preview.jpg');
+
+		return $this->getLink($linkConfig);
+	}
+
+	private function getLink(FileLinkConfig $linkConfig): string
 	{
 		$diskFile = $this->getDiskFile();
 		if (!$diskFile)
@@ -378,29 +405,87 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			return '';
 		}
 
+		$params = $this->getLinkParams($linkConfig);
 		$urlManager = UrlManager::getInstance();
+
+		return Common::getPublicDomain() . $urlManager->create($linkConfig->action, $params)->getUri();
+	}
+
+	private function getLinkParams(FileLinkConfig $linkConfig): array
+	{
+		$diskFile = $this->getDiskFile();
+		if (!$diskFile)
+		{
+			return [];
+		}
+
 		$params = [
 			'humanRE' => 1,
 			'fileId' => $diskFile->getId(),
 		];
 
-		if ($shouldResize)
+		$size = $linkConfig->size;
+		if (isset($size))
 		{
-			$params['width'] = self::MAX_PREVIEW_IMAGE_SIZE;
-			$params['height'] = self::MAX_PREVIEW_IMAGE_SIZE;
-			$params['signature'] = ParameterSigner::getImageSignature(
-				$diskFile->getId(),
-				self::MAX_PREVIEW_IMAGE_SIZE,
-				self::MAX_PREVIEW_IMAGE_SIZE
-			);
+			$params['width'] = $size;
+			$params['height'] = $size;
+			$params['signature'] = ParameterSigner::getImageSignature($diskFile->getId(), $size, $size);
+		}
+
+		$params['exact'] = $linkConfig->exact ? 'Y' : 'N';
+
+		$quickAccessToken = $this->getQuickAccessToken();
+		if ($quickAccessToken !== null)
+		{
+			$params['_esd'] = $quickAccessToken;
 		}
 
 		// Adding the file extension to the end of the URL to ensure that various parsers and clients
 		// can correctly identify the type of resource (e.g., .jpg, .png, .pdf).
 		// This helps avoid issues where the absence of an extension might cause incorrect handling of the link.
-		$params['fileName'] = $forceFileName ?? $diskFile->getName();
+		$params['fileName'] = $linkConfig->forceFileName ?? $diskFile->getName();
 
-		return Common::getPublicDomain() . $urlManager->create($action, $params)->getUri();
+		return $params;
+	}
+
+	private function isAnimatedImage(): bool
+	{
+		return in_array($this->getDiskFile()?->getExtension(), self::ANIMATED_IMAGE_EXTENSIONS, true);
+	}
+
+	private function getQuickAccessSupportedFileTypes(): array
+	{
+		return [TypeFile::IMAGE, TypeFile::VIDEO];
+	}
+
+	private function isQuickAccessSupported(): bool
+	{
+		$diskFile = $this->getDiskFile();
+		$diskFileType = $diskFile ? (int)$diskFile->getTypeFile() : null;
+		$supportedTypes = $this->getQuickAccessSupportedFileTypes();
+
+		return in_array($diskFileType, $supportedTypes, true);
+	}
+
+	private function getQuickAccessToken(): ?string
+	{
+		$file = $this->getDiskFile();
+		$chatId = $this->getChatId();
+		if (
+			$file === null
+			|| $chatId === null
+			|| !$this->isQuickAccessSupported()
+			|| !ServiceLocator::getInstance()->has('disk.scopeTokenService')
+		)
+		{
+			return null;
+		}
+
+		$scope = self::getQuickAccessScope($chatId);
+		$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
+
+		return $scopeTokenService?->getEncryptedScopeForObject($file, $scope);
+
 	}
 
 	private function getViewerAttributes(): ?array

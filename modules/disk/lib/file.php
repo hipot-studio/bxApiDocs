@@ -28,6 +28,7 @@ use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectException;
+use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
 use CFile;
 
@@ -1109,8 +1110,9 @@ class File extends BaseObject
 
 	/**
 	 * Returns version of file by version id.
+	 *
 	 * @param int $versionId Id of version.
-	 * @return static
+	 * @return Version
 	 */
 	public function getVersion($versionId)
 	{
@@ -1248,7 +1250,31 @@ class File extends BaseObject
 			return true;
 		}
 
-		$nameService = new ObjectNameService($this->name, $realFolderId, $this->getType());
+		$originalName = $this->name;
+
+		$tmpName = $this->generateUniqueTmpName();
+		$successUpdate = $this->update([
+			'NAME' => $tmpName, // we need to make the file name unique before moving it
+		]);
+		if(!$successUpdate)
+		{
+			return false;
+		}
+
+		/** @var FileTable $tableClassName */
+		$tableClassName = self::getTableClassName();
+
+		$moveResult = $tableClassName::move($this->id, $realFolderId);
+		if (!$moveResult->isSuccess())
+		{
+			$this->errorCollection->addFromResult($moveResult);
+
+			return false;
+		}
+		$this->setAttributesFromResult($moveResult);
+
+		//<editor-fold desc="Rename moved file back">
+		$nameService = new ObjectNameService($originalName, $realFolderId, $this->getType());
 		if ($generateUniqueName)
 		{
 			$nameService->requireUniqueName();
@@ -1262,39 +1288,21 @@ class File extends BaseObject
 			return false;
 		}
 
-		$possibleNewName = $result->getName();
-		$needToRename = $possibleNewName != $this->name;
-
-		$this->name = $possibleNewName;
-
-		if($needToRename)
+		$successUpdate = $this->update([
+			'NAME' => $result->getName()
+		]);
+		if (!$successUpdate)
 		{
-			$successUpdate = $this->update(array(
-				'NAME' => $possibleNewName
-			));
-			if(!$successUpdate)
-			{
-				return false;
-			}
-		}
-
-		/** @var FileTable $tableClassName */
-		$tableClassName = $this->getTableClassName();
-
-		$moveResult = $tableClassName::move($this->id, $realFolderId);
-		if(!$moveResult->isSuccess())
-		{
-			$this->errorCollection->addFromResult($moveResult);
 			return false;
 		}
-		$this->setAttributesFromResult($moveResult);
+		//</editor-fold>
 
 		Driver::getInstance()->getRightsManager()->setAfterMove($this);
 
 		$subscribersAfterMove = Driver::getInstance()->collectSubscribers($this);
 		Driver::getInstance()->sendChangeStatus($subscribersAfterMove);
 
-		if($folder->getRealObject()->getStorageId() != $this->storageId)
+		if ($folder->getRealObject()->getStorageId() != $this->storageId)
 		{
 			$changeStorageIdResult = $tableClassName::changeStorageId($this->id, $folder->getRealObject()->getStorageId());
 			if(!$changeStorageIdResult->isSuccess())
@@ -1307,11 +1315,11 @@ class File extends BaseObject
 			$this->storageId = $folder->getRealObject()->getStorageId();
 		}
 
-		$success = $this->update(array(
+		$success = $this->update([
 			'UPDATE_TIME' => new DateTime(),
 			'UPDATED_BY' => $movedBy,
-		));
-		if(!$success)
+		]);
+		if (!$success)
 		{
 			return null;
 		}
@@ -1331,6 +1339,22 @@ class File extends BaseObject
 		$event->sendToUser();
 
 		return $this;
+	}
+
+	private function generateUniqueTmpName(): string
+	{
+		$uniqueTmpName = $this->name;
+
+		$uniquePart = '_' . Random::getString(32);
+		$maxAllowedLength = 255 - mb_strlen($uniquePart);
+
+		if (mb_strlen($this->name) > $maxAllowedLength)
+		{
+			$uniqueTmpName = mb_substr($this->name, 0, $maxAllowedLength);
+		}
+		$uniqueTmpName .= $uniquePart;
+
+		return $uniqueTmpName;
 	}
 
 	/**

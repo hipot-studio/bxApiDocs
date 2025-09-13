@@ -5,11 +5,26 @@ use Bitrix\AI\Context;
 use Bitrix\AI\Engine\Cloud\CloudEngine;
 use Bitrix\AI\Engine\Models\GigaChatModel;
 use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 
 trait GigachatCommonTrait
 {
+	public function hasQuality(Quality $quality): bool
+	{
+		foreach($quality->getRequired() as $qualityName)
+		{
+			if (!in_array($qualityName, $this->getQualities(), true))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -60,8 +75,14 @@ trait GigachatCommonTrait
 	 */
 	protected function getSystemParameters(): array
 	{
+		$model = $this->getModel();
+		if (!empty($model) && !is_string($model))
+		{
+			$model = $model->value;
+		}
+
 		return [
-			'model' => $this->getModel()->value,
+			'model' => $model,
 			'temperature' => self::TEMPERATURE,
 			'n' => self::VARIANTS,
 		];
@@ -149,6 +170,19 @@ trait GigachatCommonTrait
 	public function getResultFromRaw(mixed $rawResult, bool $cached = false): Result
 	{
 		$text = $rawResult['choices'][0]['message']['content'] ?? null;
+		if (
+			$this->isJsonContext()
+			|| $this->isJsonResponseMode()
+		)
+		{
+			$startJsonFrame = '```json';
+			$endJsonFrame = '```';
+			if (str_starts_with($text, $startJsonFrame) && str_ends_with($text, $endJsonFrame))
+			{
+				$text = trim(substr($text, mb_strlen($startJsonFrame), -mb_strlen($endJsonFrame)));
+			}
+		}
+
 		$text = $this->restoreReplacements($text);
 		$rawResult['choices'][0]['message']['content'] = $text;
 
@@ -170,4 +204,36 @@ trait GigachatCommonTrait
 		return $postParams;
 	}
 
+	protected function getQualities(): array
+	{
+		return [
+			Quality::QUALITIES['fields_highlight'],
+			Quality::QUALITIES['translate'],
+		];
+	}
+
+	protected function isJsonResponseMode(): bool
+	{
+		return in_array(
+			$this->getQuality(),
+			[
+				Quality::QUALITIES['fields_highlight'],
+				Quality::QUALITIES['translate'],
+			],
+			true
+		);
+	}
+
+	protected function isJsonContext(): bool
+	{
+		$jsonContextIds = [
+			'fill_item_fields_from_call_transcription'
+		];
+
+		return in_array(
+			$this->getContext()->getContextId(),
+			$jsonContextIds,
+			true
+		);
+	}
 }

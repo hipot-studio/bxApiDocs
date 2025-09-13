@@ -235,6 +235,7 @@ class LocalDocumentController extends Internals\Controller
 			$fileData = new BlankFileData($type);
 		}
 
+		$calledFromDisk = false;
 		if($this->request->getPost('targetFolderId'))
 		{
 			$folder = Folder::loadById((int)$this->request->getPost('targetFolderId'), array('STORAGE'));
@@ -243,6 +244,7 @@ class LocalDocumentController extends Internals\Controller
 				$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_FIND_FOLDER'), self::ERROR_COULD_NOT_FIND_FOLDER)));
 				$this->sendJsonErrorResponse();
 			}
+			$calledFromDisk = true;
 		}
 		else
 		{
@@ -321,7 +323,7 @@ class LocalDocumentController extends Internals\Controller
 		$openUrl = null;
 		if ($type === 'board')
 		{
-			$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($newFile->getId());
+			$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($newFile->getId(), false, $calledFromDisk ? 'disk_page' : 'docs_attach');
 		}
 
 		$this->sendJsonSuccessResponse(array(

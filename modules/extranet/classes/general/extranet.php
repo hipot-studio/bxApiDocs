@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Extranet\Service\ServiceContainer;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Loader;
@@ -252,13 +253,6 @@ class CExtranet
 			&& !$USER->IsAdmin()
 			&& !self::IsIntranetUser()
 			&& self::isExtranetUser()
-			&& !($USER->CanDoFileOperation(
-				'fm_view_file',
-				[
-					SITE_ID,
-					$scriptFile
-				]
-			) && ($scriptFile !== '/desktop_app/router.php'))
 		)
 		{
 			$rsSites = CSite::GetByID(self::GetExtranetSiteID());
@@ -267,95 +261,168 @@ class CExtranet
 				&& ($arExtranetSite["ACTIVE"] !== "N")
 			)
 			{
-				$URLToRedirect = false;
-				$userId = (int)$USER->GetID();
-				$isCollaber = ServiceContainer::getInstance()->getCollaberService()->isCollaberById($userId);
-
-				$userSEFFolder = COption::GetOptionString("socialnetwork", "user_page", SITE_DIR . 'company/personal/', SITE_ID);
-				$workgroupSEFFolder = COption::GetOptionString("socialnetwork", "workgroups_page", SITE_DIR . 'workgroups/', SITE_ID);
-
-				if ($userSEFFolder && str_starts_with($curPage, $userSEFFolder))
-				{
-					$userSEFFolderExtranet = COption::GetOptionString("socialnetwork", "user_page", $arExtranetSite["DIR"] . "contacts/personal/", $arExtranetSite['LID']);
-					if ($userSEFFolderExtranet)
-					{
-						$URLToRedirect = $userSEFFolderExtranet.mb_substr($curPage, mb_strlen($userSEFFolder));
-					}
-				}
-				elseif ($workgroupSEFFolder && str_starts_with($curPage, $workgroupSEFFolder))
-				{
-					$workgroupSEFFolderExtranet = COption::GetOptionString("socialnetwork", "workgroups_page", $arExtranetSite["DIR"] . "workgroups/", $arExtranetSite['LID']);
-					if ($workgroupSEFFolderExtranet)
-					{
-						$URLToRedirect = $workgroupSEFFolderExtranet.mb_substr($curPage, mb_strlen($workgroupSEFFolder));
-					}
-				}
-
-
-				if (self::isVoteResultUrl($curPage))
-				{
-					$URLToRedirect = self::replaceVoteResultUrl($curPage, $arExtranetSite['DIR'] ?? '');
-				}
-
-				if (!$URLToRedirect)
-				{
-					$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
-
-					if ($isCollaber && str_ends_with($URLToRedirect, '/'))
-					{
-						$uri = (new Uri($URLToRedirect . 'online/'));
-
-						if (preg_match("/^\\/online\\/([\\.\\-0-9a-zA-Z]+)(\\/?)([^\\/]*)$/i", $curPage, $matches))
-						{
-							$alias = $matches[1] ?? null;
-
-							if ($alias)
-							{
-								$uri->addParams(['alias' => $alias]);
-							}
-						}
-
-						if (preg_match('/^\/call\/(?:\?callId=|detail\/)(\d+)/', $curPage, $matches))
-						{
-							$uri = (new Uri($URLToRedirect . 'call/detail/' . $matches[1]));
-						}
-
-						if (preg_match('/^\/video\/([a-zA-Z0-9]+)/', $curPage, $matches))
-						{
-							$uri = (new Uri($URLToRedirect . 'video/' . $matches[1]));
-						}
-
-						$URLToRedirect = $uri->getLocator();
-					}
-				}
-
-				$urlParams = array();
-
 				if (
-					($urlParts = parse_url($curPage))
-					&& !empty($urlParts['query'])
+					!($USER->CanDoFileOperation(
+							'fm_view_file',
+							[
+								SITE_ID,
+								$scriptFile
+							]
+						) && ($scriptFile !== '/desktop_app/router.php'))
 				)
 				{
-					$keyWhiteList = [ 'IM_SETTINGS' ];
+					self::calculateExtranetRedirect($curPage, $arExtranetSite, $USER->GetID());
+				}
+				else if ( // redirect for collab on /extranet/online/ if you entered /ffff instead of /extranet/...
+					(mb_strpos($curPage, "/extranet/") !== 0)
+					&& ServiceContainer::getInstance()->getCollaberService()->isCollaberById($USER->GetID())
+					&& ToolsManager::getInstance()->checkAvailabilityByToolId('collab')
+				)
+				{
+					self::redirectCollabToHomePage($arExtranetSite);
+				}
+			}
+		}
 
-					$pairsList = explode('&', $urlParts['query']);
-					foreach ($pairsList as $pair)
+		if ( // redirect for collab to /extranet/collab/403/ if they are disabled
+			(mb_strpos($curPage, "/mobile/") !== 0)
+			&& self::GetExtranetSiteID() <> ''
+			&& $USER->IsAuthorized()
+			&& !$USER->IsAdmin()
+			&& !self::IsIntranetUser()
+			&& self::isExtranetUser()
+			&& $curPage !== '/extranet/collab/403/'
+		)
+		{
+			self::redirectCollabToBlockPage($USER->GetID());
+		}
+	}
+
+	private static function calculateExtranetRedirect(string $curPage, array $arExtranetSite, int $userId): void
+	{
+		$URLToRedirect = false;
+
+		$isCollaber = ServiceContainer::getInstance()->getCollaberService()->isCollaberById($userId);
+		$userSEFFolder = COption::GetOptionString("socialnetwork", "user_page", SITE_DIR . 'company/personal/', SITE_ID);
+		$workgroupSEFFolder = COption::GetOptionString("socialnetwork", "workgroups_page", SITE_DIR . 'workgroups/', SITE_ID);
+
+		if (
+			!ToolsManager::getInstance()->checkAvailabilityByToolId('collab')
+			&& $isCollaber
+		)
+		{
+			$URLToRedirect = '/extranet/collab/403/';
+		}
+
+		if ($userSEFFolder && str_starts_with($curPage, $userSEFFolder))
+		{
+			$userSEFFolderExtranet = COption::GetOptionString("socialnetwork", "user_page", $arExtranetSite["DIR"] . "contacts/personal/", $arExtranetSite['LID']);
+			if ($userSEFFolderExtranet)
+			{
+				$URLToRedirect = $userSEFFolderExtranet.mb_substr($curPage, mb_strlen($userSEFFolder));
+			}
+		}
+		elseif ($workgroupSEFFolder && str_starts_with($curPage, $workgroupSEFFolder))
+		{
+			$workgroupSEFFolderExtranet = COption::GetOptionString("socialnetwork", "workgroups_page", $arExtranetSite["DIR"] . "workgroups/", $arExtranetSite['LID']);
+			if ($workgroupSEFFolderExtranet)
+			{
+				$URLToRedirect = $workgroupSEFFolderExtranet.mb_substr($curPage, mb_strlen($workgroupSEFFolder));
+			}
+		}
+
+
+		if (self::isVoteResultUrl($curPage))
+		{
+			$URLToRedirect = self::replaceVoteResultUrl($curPage, $arExtranetSite['DIR'] ?? '');
+		}
+
+		if (!$URLToRedirect)
+		{
+			$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
+
+			if ($isCollaber && str_ends_with($URLToRedirect, '/'))
+			{
+				$uri = (new Uri($URLToRedirect . 'online/'));
+
+				if (preg_match("/^\\/online\\/([\\.\\-0-9a-zA-Z]+)(\\/?)([^\\/]*)$/i", $curPage, $matches))
+				{
+					$alias = $matches[1] ?? null;
+
+					if ($alias)
 					{
-						[ $key, $value ] = explode('=', $pair);
-						if (in_array($key, $keyWhiteList, true))
-						{
-							$urlParams[$key] = $value;
-						}
+						$uri->addParams(['alias' => $alias]);
 					}
 				}
 
-				if (!empty($urlParams))
+				if (preg_match('/^\/call\/(?:\?callId=|detail\/)(\d+)/', $curPage, $matches))
 				{
-					$URLToRedirect = CHTTP::urlAddParams($URLToRedirect, $urlParams);
+					$uri = (new Uri($URLToRedirect . 'call/detail/' . $matches[1]));
 				}
 
-				LocalRedirect($URLToRedirect, true, '307 Temporary Redirect');
+				if (preg_match('/^\/video\/([a-zA-Z0-9]+)/', $curPage, $matches))
+				{
+					$uri = (new Uri($URLToRedirect . 'video/' . $matches[1]));
+				}
+
+				$URLToRedirect = $uri->getLocator();
 			}
+		}
+
+		$urlParams = array();
+
+		if (
+			($urlParts = parse_url($curPage))
+			&& !empty($urlParts['query'])
+		)
+		{
+			$keyWhiteList = [ 'IM_SETTINGS' ];
+
+			$pairsList = explode('&', $urlParts['query']);
+			foreach ($pairsList as $pair)
+			{
+				[ $key, $value ] = explode('=', $pair);
+				if (in_array($key, $keyWhiteList, true))
+				{
+					$urlParams[$key] = $value;
+				}
+			}
+		}
+
+		if (!empty($urlParams))
+		{
+			$URLToRedirect = CHTTP::urlAddParams($URLToRedirect, $urlParams);
+		}
+
+		LocalRedirect($URLToRedirect, true, '307 Temporary Redirect');
+	}
+
+	private static function redirectCollabToHomePage($arExtranetSite)
+	{
+		$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
+		$uri = (new Uri($URLToRedirect . 'online/'));
+		LocalRedirect($uri->getLocator(), true, '307 Temporary Redirect');
+	}
+
+	private static function redirectCollabToBlockPage(int $userId)
+	{
+		$isCollaber = ServiceContainer::getInstance()->getCollaberService()->isCollaberById($userId);
+		$availableCollab = ToolsManager::getInstance()->checkAvailabilityByToolId('collab');
+
+		if (!$isCollaber || $availableCollab)
+		{
+			return;
+		}
+
+		$rsSites = CSite::GetByID(self::GetExtranetSiteID());
+		if (
+			($arExtranetSite = $rsSites->Fetch())
+			&& ($arExtranetSite["ACTIVE"] !== "N")
+		)
+		{
+			$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
+			$uri = (new Uri($URLToRedirect . 'collab/403/'));
+			LocalRedirect($uri->getLocator(), true, '307 Temporary Redirect');
 		}
 	}
 

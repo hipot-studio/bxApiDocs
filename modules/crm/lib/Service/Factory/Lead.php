@@ -413,6 +413,10 @@ final class Lead extends Service\Factory
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
 				'CLASS' => Field\Multifield::class,
 			],
+			Item::FIELD_LAST_COMMUNICATION_TIME => [
+				'TYPE' => Field::TYPE_STRING,
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::ReadOnly],
+			],
 		];
 	}
 

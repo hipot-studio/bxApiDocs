@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Onboarding\Internal\Queue;
 
+use Bitrix\Tasks\Onboarding\Internal\Type;
 use Bitrix\Tasks\Onboarding\Transfer;
 
 interface QueueInterface
@@ -14,5 +15,9 @@ interface QueueInterface
 	public function clearById(int ...$ids): void;
 	public function clearByCode(string ...$codes): void;
 	public function clearByTaskAndUserId(int $taskId = 0, int $userId = 0): void;
-	public function clearByTypeAndUserId(string $type, int $userId): void;
+
+	/**
+	 * @param Type[] $types
+	 */
+	public function clearByUserJobParams(array $types, int $userId, int $taskId = 0): void;
 }

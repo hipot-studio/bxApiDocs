@@ -162,7 +162,7 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 
 		$this->getFields();
 
-		if ($this->data['TITLE'] === '')
+		if (isset($this->data['TITLE']) && $this->data['TITLE'] === '')
 		{
 			unset($this->data['TITLE']);
 		}

@@ -29,10 +29,12 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Disk\Internals\Grid;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Engine\Response\Redirect;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
+use JetBrains\PhpStorm\NoReturn;
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
 
@@ -77,10 +79,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$this->findLink();
 		$this->defaultHandlerForView = $this->getHandlerForView();
 
+		$isBoardsHandler = $this->isBoardsHandler();
 		if(
-			($this->externalLink->isAutomatic() && !Configuration::isEnabledAutoExternalLink()) ||
-			(!$this->externalLink->isAutomatic() && !Configuration::isEnabledManualExternalLink()) ||
-			(($this->defaultHandlerForView instanceof BoardsHandler) && !Configuration::isEnabledManualExternalLink())
+			($isBoardsHandler && !Configuration::isEnabledBoardExternalLink()) ||
+			(!$isBoardsHandler && $this->externalLink->isAutomatic() && !Configuration::isEnabledAutoExternalLink()) ||
+			(!$isBoardsHandler && !$this->externalLink->isAutomatic() && !Configuration::isEnabledManualExternalLink())
 		)
 		{
 			$this->arResult = array(
@@ -94,6 +97,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 		{
 			$this->downloadToken = Random::getString(12);
 			$this->storeDownloadToken($this->downloadToken);
+
+			if ($isBoardsHandler && $actionName === 'default' && $this->externalLink->allowEdit())
+			{
+				$this->redirectToAction('goToEdit');
+			}
 		}
 		else
 		{
@@ -104,14 +112,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				!$this->checkDownloadToken($this->request->getQuery('token'))
 			)
 			{
-				$link = \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlExternalLink([
-					'hash' => $this->externalLink->getHash(),
-					'action' => 'default',
-					'session' => 'expired',
-				]);
-
-				$redirect = new \Bitrix\Main\Engine\Response\Redirect($link);
-				Application::getInstance()->end(0, $redirect);
+				$this->redirectToAction('default', ['session' => 'expired']);
 			}
 
 			if ($this->externalLink->hasPassword() && !$this->checkPassword())
@@ -130,6 +131,30 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		return true;
+	}
+
+	#[NoReturn]
+	private function redirectToAction(string $action, array $uriParams = []): void
+	{
+		$uriParams = [
+			...$uriParams,
+			'hash' => $this->externalLink->getHash(),
+			'action' => $action,
+		];
+		$link = Driver::getInstance()->getUrlManager()->getUrlExternalLink($uriParams);
+
+		$redirect = new Redirect($link);
+		Application::getInstance()->end(0, $redirect);
+	}
+
+	private function isBoardsHandler(): bool
+	{
+		return $this->defaultHandlerForView instanceof BoardsHandler;
+	}
+
+	private function isOnlyOfficeHandler(): bool
+	{
+		return $this->defaultHandlerForView instanceof OnlyOffice\OnlyOfficeHandler;
 	}
 
 	protected function listActions()
@@ -212,7 +237,9 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$isDocument = $this->isViewableDocument($this->externalLink->getFile()->getExtension());
-		if ($this->defaultHandlerForView instanceof OnlyOffice\OnlyOfficeHandler && $isDocument)
+		$isOnlyOfficeDocument = $this->isOnlyOfficeHandler() && $isDocument;
+		$isBoard = $this->isBoardsHandler();
+		if ($isOnlyOfficeDocument || $isBoard)
 		{
 			$documentSession = $this->generateDocumentSession($this->externalLink->getFile());
 			if ($documentSession->canTransformUserToEdit(CurrentUser::get()))
@@ -237,7 +264,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
 			}
 
-			$this->showFileViewer(self::ONLYOFFICE_FILE_VIEWER);
+			if ($isBoard)
+			{
+				$this->setParamsForBoard($documentSession, $this->externalLink->getFile());
+			}
+
+			$this->showFileViewer($isOnlyOfficeDocument ? self::ONLYOFFICE_FILE_VIEWER : self::BOARD_FILE_VIEWER);
 		}
 		else
 		{
@@ -273,7 +305,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$passwordPassed = !$this->arResult['PROTECTED_BY_PASSWORD'] || $this->arResult['VALID_PASSWORD'];
 			$isDocument = $this->isViewableDocument($this->externalLink->getFile()?->getExtension());
 
-			if (($this->defaultHandlerForView instanceof BoardsHandler) && $passwordPassed && $isDocument)
+			if ($this->isBoardsHandler() && $passwordPassed && $isDocument)
 			{
 				$documentSession = $this->generateDocumentSession($this->externalLink->getFile());
 
@@ -290,7 +322,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				return;
 			}
 
-			if (($this->defaultHandlerForView instanceof OnlyOffice\OnlyOfficeHandler) && $passwordPassed && $isDocument)
+			if ($this->isOnlyOfficeHandler() && $passwordPassed && $isDocument)
 			{
 				$this->arResult['DOCUMENT_SESSION'] = $this->generateDocumentSession($this->externalLink->getFile());
 
@@ -314,6 +346,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 		if($isFolder)
 		{
 			$rootFolder = $this->externalLink->getFolder();
+
+			if (!$rootFolder)
+			{
+				return;
+			}
+
 			[$targetFolder, $relativeItems] = $this->getTargetFolderData($rootFolder, $path);
 			if(!$targetFolder)
 			{
@@ -339,6 +377,16 @@ class CDiskExternalLinkComponent extends DiskComponent
 				), true),
 				'ID' => $this->externalLink->getObjectId(),
 			);
+
+			$securityContext = $rootFolder->getStorage()?->getSecurityContext($this->externalLink->getCreatedBy());
+			if ($securityContext !== null)
+			{
+				$this->arResult['FILE_LIMIT_EXCEEDED'] = ZipNginx\Archive::isFileLimitExceededByFolder($rootFolder, $securityContext);
+			}
+			else
+			{
+				$this->arResult['FILE_LIMIT_EXCEEDED'] = true;
+			}
 		}
 
 		$this->includeComponentTemplate($isFile? 'template' : 'folder');
@@ -350,13 +398,30 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$sessionManager = new OnlyOffice\DocumentSessionManager();
 		$sessionManager
 			->setUserId($this->getUser()->getId() ?: GuestUser::GUEST_USER_ID)
-			->setSessionType(DocumentSession::TYPE_VIEW)
+			->setSessionType($this->getSessionType())
 			->setSessionContext($documentSessionContext)
 			->setService($this->getSessionServiceByFile($file))
 			->setFile($file)
 		;
 
 		return $sessionManager->findOrCreateSession();
+	}
+
+	private function getSessionType(): int
+	{
+		if ($this->isBoardsHandler())
+		{
+			$file = $this->externalLink->getFile();
+
+			$securityContext = $file?->getStorage()?->getCurrentUserSecurityContext();
+
+			if ($file?->canUpdate($securityContext))
+			{
+				return DocumentSession::TYPE_EDIT;
+			}
+		}
+
+		return DocumentSession::TYPE_VIEW;
 	}
 
 	private function getTargetFolderData(Folder $rootFolder, $path)
@@ -968,7 +1033,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$passwordPassed = !$this->arResult['PROTECTED_BY_PASSWORD'] || $this->arResult['VALID_PASSWORD'];
 		$isDocument = $this->isViewableDocument($file->getExtension());
-		if (!$passwordPassed || !$isDocument || !($this->defaultHandlerForView instanceof OnlyOffice\OnlyOfficeHandler))
+		if (!$passwordPassed || !$isDocument || !$this->isOnlyOfficeHandler())
 		{
 			$this->sendJsonErrorResponse();
 		}
@@ -1213,9 +1278,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$securityContext = $storage->getSecurityContext($createdBy);
-
 		$zipArchive = ZipNginx\Archive::createFromFolder($folder, $securityContext);
-
 		$this->restartBuffer();
 		$zipArchive->send();
 		$this->end();

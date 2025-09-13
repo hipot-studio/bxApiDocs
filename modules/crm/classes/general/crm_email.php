@@ -438,8 +438,16 @@ class CCrmEMail
 
 		$error = null;
 
-		if (!\CModule::includeModule('crm'))
+		//Do not add recovered message to CRM to avoid duplicates
+		if (!empty($msgFields['IS_RECOVERED']))
+		{
 			return false;
+		}
+
+		if (!\CModule::includeModule('crm'))
+		{
+			return false;
+		}
 
 		$eventTag = sprintf('%x%x', time(), rand(0, 0xffffffff));
 

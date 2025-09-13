@@ -268,6 +268,25 @@ final class CCalendarRestService extends IRestService
 		return CCalendar::GetEventList($params, $arAttendees);
 	}
 
+	/**
+	 * Check if date string contains timezone.
+	 */
+	private static function isDateStringContainsTimezone(string $dateString): bool
+	{
+		// Checking of timeshift in ISO 8601 format
+		if (preg_match('/([+-]\d{2}:\d{2}|[+-]\d{4}|Z)$/', $dateString))
+		{
+			return true;
+		}
+
+		// Checking timezone name (example: Europe/Moscow)
+		if (preg_match('/[A-Za-z_]+\/[A-Za-z_]+/', $dateString))
+		{
+			return true;
+		}
+
+		return false;
+	}
 
 	/*
 	 * Returns event by it id
@@ -310,13 +329,13 @@ final class CCalendarRestService extends IRestService
 	/*
 	 * Add new event
 	 *
-	 * @param array $params - incomoning params:
+	 * @param array $params - incoming params:
 	 * $params['type'] - (required), number, calendar type
 	 * $params['ownerId'] - (required), number, owner id
 	 * $params['from'] - (required) datetime, "from" limit
 	 * $params['to'] - (required) datetime, "to" limit
-	 * $params['timezone_from'] - string, timezone, dafault value - timezone of current user
-	 * $params['timezone_to'] - string, timezone, dafault value - timezone of current user
+	 * $params['timezone_from'] - string, timezone, default value - timezone of current user
+	 * $params['timezone_to'] - string, timezone, default value - timezone of current user
 	 * $params['from_ts'] - timestamp, "from" limit, can be set instead of $params['from']
 	 * $params['to_ts'] - timestamp, "to" limit, can be set instead of $params['to']
 	 * $params['section'] - (required if $params['auto_detect_section'] is not "Y"), number, id of the section
@@ -329,7 +348,7 @@ final class CCalendarRestService extends IRestService
 	 * $params['accessibility'] - 'busy'|'quest'|'free'|'absent' - accessibility for user
 	 * $params['importance'] - 'high' | 'normal' | 'low' - importance for the event
 	 * $params['private_event'] - "Y" | "N"
-	 * $params['rrule'] - array of the recurence Rule
+	 * $params['rrule'] - array of the recurrence Rule
 	 * $params['is_meeting'] - "Y" | "N"
 	 * $params['location'] - location
 	 * $params['remind'] - array(
@@ -389,14 +408,62 @@ final class CCalendarRestService extends IRestService
 		$userId = CCalendar::GetCurUserId();
 		$methodName = "calendar.event.add";
 
+		$skipTime = false;
+
+		if (isset($params['skip_time']))
+		{
+			$skipTime = $params['skip_time'] === 'Y';
+		}
+
+		if (isset($params['skipTime']))
+		{
+			$skipTime = $params['skipTime'] === 'Y';
+		}
+
+		if ($skipTime)
+		{
+			unset($params['timezone_from']);
+			unset($params['timezone_to']);
+		}
+
 		if (isset($params['from']))
 		{
-			$params['from'] = CRestUtil::unConvertDateTime($params['from'], true);
+			$enableOffset = true;
+
+			if (!$skipTime)
+			{
+				if (self::isDateStringContainsTimezone($params['from']))
+				{
+					unset($params['timezone_from']);
+				}
+				// If the user directly set timezone or set date without timezone (example: 2025-08-05 10:00:00)
+				else
+				{
+					$enableOffset = false;
+				}
+			}
+
+			$params['from'] = CRestUtil::unConvertDateTime($params['from'], $enableOffset);
 		}
 
 		if (isset($params['to']))
 		{
-			$params['to'] = CRestUtil::unConvertDateTime($params['to'], true);
+			$enableOffset = true;
+
+			if (!$skipTime)
+			{
+				if (self::isDateStringContainsTimezone($params['to']))
+				{
+					unset($params['timezone_to']);
+				}
+				// If the user directly set timezone or set date without timezone (example: 2025-08-05 10:00:00)
+				else
+				{
+					$enableOffset = false;
+				}
+			}
+
+			$params['to'] = CRestUtil::unConvertDateTime($params['to'], $enableOffset);
 		}
 
 		if (isset($params['from_ts']) && !isset($params['from']))
@@ -486,22 +553,12 @@ final class CCalendarRestService extends IRestService
 			"DATE_FROM" => $params['from'],
 			"DATE_TO" => $params['to'],
 			"SECTIONS" => $sectionId,
+			'SKIP_TIME' => $skipTime,
 		];
 
-		if (isset($params['skip_time']))
+		if (!$arFields['SKIP_TIME'])
 		{
-			$arFields["SKIP_TIME"] = $params['skip_time'] === 'Y';
-		}
-
-		if (isset($params['skipTime']))
-		{
-			$arFields["SKIP_TIME"] = $params['skipTime'] === 'Y';
-		}
-
-		if (isset($arFields["SKIP_TIME"], $params['timezone_from']) && !$arFields["SKIP_TIME"])
-		{
-			$arFields['TZ_FROM'] = $params['timezone_from'];
-			$arFields['TZ_TO'] = $params['timezone_to'] ?? $params['timezone_from'];
+			$arFields = self::processTimezone($params, $arFields);
 		}
 
 		if (isset($params['description']))
@@ -673,14 +730,14 @@ final class CCalendarRestService extends IRestService
 	/*
 	 * Edit existent event
 	 *
-	 * @param array $params - incomoning params:
+	 * @param array $params - incoming params:
 	 * $params['id'] - (required) event id,
 	 * $params['type'] - number, (required) calendar type
 	 * $params['ownerId'] - number, owner id
 	 * $params['from'] - datetime, "from" limit
 	 * $params['to'] - datetime, "to" limit
-	 * $params['timezone_from'] - string, timezone, dafault value - timezone of current user
-	 * $params['timezone_to'] - string, timezone, dafault value - timezone of current user
+	 * $params['timezone_from'] - string, timezone, default value - timezone of current user
+	 * $params['timezone_to'] - string, timezone, default value - timezone of current user
 	 * $params['from_ts'] - timestamp, "from" limit,
 	 * $params['to_ts'] - timestamp, "to" limit
 	 * $params['section'] - number,(required) id of the section
@@ -692,7 +749,7 @@ final class CCalendarRestService extends IRestService
 	 * $params['accessibility'] - 'busy'|'quest'|'free'|'absent' - accessibility for user
 	 * $params['importance'] - 'high' | 'normal' | 'low' - importance for the event
 	 * $params['private_event'] - "Y" | "N"
-	 * $params['rrule'] - array of the recurence Rule
+	 * $params['rrule'] - array of the recurrence Rule
 	 * $params['is_meeting'] - "Y" | "N"
 	 * $params['location'] - location
 	 * $params['remind'] - array(
@@ -785,14 +842,62 @@ final class CCalendarRestService extends IRestService
 		$type = $params['type'];
 		$ownerId = (int)$params['ownerId'];
 
+		$skipTime = false;
+
+		if (isset($params['skip_time']))
+		{
+			$skipTime = $params['skip_time'] === 'Y';
+		}
+
+		if (isset($params['skipTime']))
+		{
+			$skipTime = $params['skipTime'] === 'Y';
+		}
+
+		if ($skipTime)
+		{
+			unset($params['timezone_from']);
+			unset($params['timezone_to']);
+		}
+
 		if (isset($params['from']))
 		{
-			$params['from'] = CRestUtil::unConvertDateTime($params['from'], true);
+			$enableOffset = true;
+
+			if (!$skipTime)
+			{
+				if (self::isDateStringContainsTimezone($params['from']))
+				{
+					unset($params['timezone_from']);
+				}
+				// If the user directly set timezone or set date without timezone (example: 2025-08-05 10:00:00)
+				else
+				{
+					$enableOffset = false;
+				}
+			}
+
+			$params['from'] = CRestUtil::unConvertDateTime($params['from'], $enableOffset);
 		}
 
 		if (isset($params['to']))
 		{
-			$params['to'] = CRestUtil::unConvertDateTime($params['to'], true);
+			$enableOffset = true;
+
+			if (!$skipTime)
+			{
+				if (self::isDateStringContainsTimezone($params['to']))
+				{
+					unset($params['timezone_to']);
+				}
+				// If the user directly set timezone or set date without timezone (example: 2025-08-05 10:00:00)
+				else
+				{
+					$enableOffset = false;
+				}
+			}
+
+			$params['to'] = CRestUtil::unConvertDateTime($params['to'], $enableOffset);
 		}
 
 		if (isset($params['from_ts']) && !isset($params['from']))
@@ -819,22 +924,11 @@ final class CCalendarRestService extends IRestService
 			$arFields['DATE_TO'] = $params['to'];
 		}
 
-		if (isset($params['skipTime']))
-		{
-			$arFields["SKIP_TIME"] = $params['skipTime'] === 'Y';
-		}
-		if (isset($params['skip_time']))
-		{
-			$arFields["SKIP_TIME"] = $params['skip_time'] === 'Y';
-		}
+		$arFields['SKIP_TIME'] = $skipTime;
 
-		if (
-			isset($arFields["SKIP_TIME"], $params['timezone_from'])
-			&& !$arFields["SKIP_TIME"]
-		)
+		if (!$arFields['SKIP_TIME'])
 		{
-			$arFields['TZ_FROM'] = $params['timezone_from'];
-			$arFields['TZ_TO'] = $params['timezone_to'] ?? $params['timezone_from'];
+			$arFields = self::processTimezone($params, $arFields);
 		}
 
 		if (isset($params['name']))
@@ -2600,5 +2694,40 @@ final class CCalendarRestService extends IRestService
 	public static function PrepareOnCalendarRoomEvent($params)
 	{
 		return ['id' => $params[0]];
+	}
+
+	private static function processTimezone(array $params, array $arFields): array
+	{
+		if (isset($params['timezone_to']))
+		{
+			$arFields['TZ_TO'] = $params['timezone_to'];
+		}
+
+		if (isset($params['timezone_from']))
+		{
+			$arFields['TZ_FROM'] = $params['timezone_from'];
+
+			if (!isset($params['timezone_to']))
+			{
+				$arFields['TZ_TO'] = $params['timezone_from'];
+			}
+		}
+
+		if (!isset($arFields['TZ_FROM']) || !isset($arFields['TZ_TO']))
+		{
+			$userTimezoneName = CCalendar::GetUserTimezoneName(CCalendar::GetCurUserId());
+
+			if (!isset($arFields['TZ_FROM']))
+			{
+				$arFields['TZ_FROM'] = $userTimezoneName;
+			}
+
+			if (!isset($arFields['TZ_TO']))
+			{
+				$arFields['TZ_TO'] = $userTimezoneName;
+			}
+		}
+
+		return $arFields;
 	}
 }

@@ -167,7 +167,7 @@ class QueueService implements QueueServiceInterface
 		return $result;
 	}
 
-	public function deleteUserJob(UserJob $userJob): Result
+	public function deleteByUserJob(UserJob $userJob): Result
 	{
 		$validationResult = $this->container->getValidationService()->validate($userJob);
 		if (!$validationResult->isSuccess())
@@ -179,7 +179,7 @@ class QueueService implements QueueServiceInterface
 
 		try
 		{
-			$this->queue->clearByTypeAndUserId($userJob->type->value, $userJob->userId);
+			$this->queue->clearByUserJobParams($userJob->types, $userJob->userId, $userJob->taskId);
 		}
 		catch (Throwable $t)
 		{
@@ -249,12 +249,17 @@ class QueueService implements QueueServiceInterface
 
 		$offset = JobOffset::get($commandModel->type);
 
-		return Calendar::createFromPortalSchedule()->getClosestDate(
-			(new DateTime())->add(CTimeZone::GetOffset($commandModel->userId) . ' seconds'),
+		$closestDate =  Calendar::createFromPortalSchedule()->getClosestDate(
+			(new DateTime())->toUserTime(),
 			$offset,
 			false,
 			true,
 		);
+
+		$userTimeOffset = CTimeZone::GetOffset($commandModel->userId);
+		$closestDate->add("-{$userTimeOffset} seconds");
+
+		return $closestDate;
 	}
 
 	protected function init(): void

@@ -2,10 +2,8 @@
 
 namespace Bitrix\Tasks\Control;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
-use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Control\Exception\TaskNotFoundException;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
@@ -31,116 +29,22 @@ class Member
 	private const FIELD_ACCOMPLICES = 'ACCOMPLICES';
 	private const FIELD_AUDITORS = 'AUDITORS';
 
-	/**
-	 * @throws TaskNotFoundException
-	 * @throws ArgumentException
-	 * @throws SqlQueryException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
+	public function add(array $fields): void
+	{
+		$this->saveMembers($fields);
+	}
+
 	public function set(array $data, array $changes = []): void
 	{
 		$this->loadTaskMembers();
-		$members = $this->getCurrentMembers();
+		$members = $this->formatCurrentMembers();
 		$this->deleteByTask();
 
-		if (
-			array_key_exists(self::FIELD_RESPONSIBLE_ID, $data)
-			&& (int)$data[self::FIELD_RESPONSIBLE_ID] > 0
-		)
-		{
-			$members[MemberTable::MEMBER_TYPE_RESPONSIBLE] = [];
-			$members[MemberTable::MEMBER_TYPE_RESPONSIBLE][] = [
-				'USER_ID' => (int)$data[self::FIELD_RESPONSIBLE_ID],
-				'TYPE' => MemberTable::MEMBER_TYPE_RESPONSIBLE,
-			];
-		}
-
-		if (
-			array_key_exists(self::FIELD_CREATED_BY, $data)
-			&& (int)$data[self::FIELD_CREATED_BY] > 0
-		)
-		{
-			$members[MemberTable::MEMBER_TYPE_ORIGINATOR] = [];
-			$members[MemberTable::MEMBER_TYPE_ORIGINATOR][] = [
-				'USER_ID' => (int)$data[self::FIELD_CREATED_BY],
-				'TYPE' => MemberTable::MEMBER_TYPE_ORIGINATOR,
-			];
-		}
-
-		if (array_key_exists(self::FIELD_ACCOMPLICES, $data))
-		{
-			$members[MemberTable::MEMBER_TYPE_ACCOMPLICE] = [];
-			foreach ($data[self::FIELD_ACCOMPLICES] as $userId)
-			{
-				$userId = (int)$userId;
-				if ($userId < 1)
-				{
-					continue;
-				}
-				$members[MemberTable::MEMBER_TYPE_ACCOMPLICE][] = [
-					'USER_ID' => $userId,
-					'TYPE' => MemberTable::MEMBER_TYPE_ACCOMPLICE,
-				];
-			}
-		}
-
-		if (array_key_exists(self::FIELD_AUDITORS, $data))
-		{
-			$members[MemberTable::MEMBER_TYPE_AUDITOR] = [];
-			foreach ($data[self::FIELD_AUDITORS] as $userId)
-			{
-				$userId = (int)$userId;
-				if ($userId < 1)
-				{
-					continue;
-				}
-				$members[MemberTable::MEMBER_TYPE_AUDITOR][] = [
-					'USER_ID' => $userId,
-					'TYPE' => MemberTable::MEMBER_TYPE_AUDITOR,
-				];
-			}
-		}
-
-		if (empty($members))
-		{
-			return;
-		}
-
-		$connection = Application::getConnection();
-		$sqlHelper = $connection->getSqlHelper();
-
-		$insertRows = [];
-		foreach ($members as $type => $list)
-		{
-			$insertRows = array_merge(
-				$insertRows,
-				array_map(function ($el) use ($sqlHelper) {
-					$implode = (int)$el['USER_ID'];
-					$implode .= ',' . $this->taskId;
-					$implode .= ',\'' . $sqlHelper->forSql($el['TYPE']) . '\'';
-					return $implode;
-				}, $list)
-			);
-		}
-
-		$sql = $sqlHelper->getInsertIgnore(
-			MemberTable::getTableName(),
-			' (USER_ID, TASK_ID, TYPE)',
-			' VALUES (' . implode("),(", $insertRows) . ')'
-		);
-
-		Application::getConnection()->query($sql);
+		$this->saveMembers($data, $members);
 
 		$this->unsubscribeExcludedUsers($changes, $members);
 	}
 
-	/**
-	 * @throws TaskNotFoundException
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
 	private function loadTaskMembers(): void
 	{
 		if ($this->task)
@@ -219,7 +123,7 @@ class Member
 		}
 	}
 
-	private function getCurrentMembers(): array
+	private function formatCurrentMembers(): array
 	{
 		$members = [];
 		$memberList = $this->task->getMemberList();
@@ -287,5 +191,90 @@ class Member
 		}
 
 		return false;
+	}
+
+	private function saveMembers(array $data, array $members = []): void
+	{
+		if (
+			array_key_exists(self::FIELD_RESPONSIBLE_ID, $data)
+			&& (int)$data[self::FIELD_RESPONSIBLE_ID] > 0
+		)
+		{
+			$members[MemberTable::MEMBER_TYPE_RESPONSIBLE] = [];
+			$members[MemberTable::MEMBER_TYPE_RESPONSIBLE][] = [
+				'USER_ID' => (int)$data[self::FIELD_RESPONSIBLE_ID],
+				'TYPE' => MemberTable::MEMBER_TYPE_RESPONSIBLE,
+			];
+		}
+
+		if (
+			array_key_exists(self::FIELD_CREATED_BY, $data)
+			&& (int)$data[self::FIELD_CREATED_BY] > 0
+		)
+		{
+			$members[MemberTable::MEMBER_TYPE_ORIGINATOR] = [];
+			$members[MemberTable::MEMBER_TYPE_ORIGINATOR][] = [
+				'USER_ID' => (int)$data[self::FIELD_CREATED_BY],
+				'TYPE' => MemberTable::MEMBER_TYPE_ORIGINATOR,
+			];
+		}
+
+		if (array_key_exists(self::FIELD_ACCOMPLICES, $data))
+		{
+			$members[MemberTable::MEMBER_TYPE_ACCOMPLICE] = [];
+			foreach ($data[self::FIELD_ACCOMPLICES] as $userId)
+			{
+				$userId = (int)$userId;
+				if ($userId < 1)
+				{
+					continue;
+				}
+				$members[MemberTable::MEMBER_TYPE_ACCOMPLICE][] = [
+					'USER_ID' => $userId,
+					'TYPE' => MemberTable::MEMBER_TYPE_ACCOMPLICE,
+				];
+			}
+		}
+
+		if (array_key_exists(self::FIELD_AUDITORS, $data))
+		{
+			$members[MemberTable::MEMBER_TYPE_AUDITOR] = [];
+			foreach ($data[self::FIELD_AUDITORS] as $userId)
+			{
+				$userId = (int)$userId;
+				if ($userId < 1)
+				{
+					continue;
+				}
+				$members[MemberTable::MEMBER_TYPE_AUDITOR][] = [
+					'USER_ID' => $userId,
+					'TYPE' => MemberTable::MEMBER_TYPE_AUDITOR,
+				];
+			}
+		}
+
+		if (empty($members))
+		{
+			return;
+		}
+
+		$insertRows = [];
+		foreach ($members as $type => $list)
+		{
+			foreach ($list as $member)
+			{
+				$insertRows[] = [
+					'USER_ID' => (int)$member['USER_ID'],
+					'TYPE' => $type,
+					'TASK_ID' => $this->taskId,
+				];
+			}
+		}
+
+		$result = MemberTable::addInsertIgnoreMulti($insertRows);
+		if (!$result->isSuccess())
+		{
+			throw new SqlQueryException($result->getError()?->getMessage());
+		}
 	}
 }

@@ -76,9 +76,9 @@ class SourceExpensesConnector extends Base
 		foreach ($expenses as $expense)
 		{
 			$expense['TIMESTAMP'] = 0;
-			if ($expense['DATE'] instanceof Date)
+			if ($expense['DATE'])
 			{
-				$expense['TIMESTAMP'] = $expense['DATE']->getTimestamp();
+				$expense['TIMESTAMP'] = (new Date($expense['DATE'], 'Y-m-d H:i:s'))->getTimestamp();
 			}
 
 			$summaryExpenses[] = $expense;
@@ -100,11 +100,6 @@ class SourceExpensesConnector extends Base
 			{
 				if (isset($expense[$code]))
 				{
-					if ($expense[$code] instanceof Date)
-					{
-						$expense[$code] = $expense[$code]->format('Y-m-d H:i:s');
-					}
-
 					$item[$code] = $expense[$code];
 				}
 				else

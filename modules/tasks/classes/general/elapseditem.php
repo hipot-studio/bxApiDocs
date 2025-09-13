@@ -25,10 +25,9 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 
 
 	/**
-	 * @param CTaskItemInterface $task
-	 * @param array $fields with mandatory elements MINUTES, COMMENT_TEXT
-	 * @return CTaskElapsedItem
-	 * @throws TasksException
+	 * @deprecated
+	 * @TasksV2
+	 * @use \Bitrix\Tasks\V2\Public\Command\Task\Tracking\AddElapsedTimeCommand
 	 */
 	public static function add(CTaskItemInterface $task, array $fields)
 	{
@@ -46,7 +45,6 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 		$fields['MINUTES'] = (isset($fields['MINUTES']) ? (int)$fields['MINUTES'] : null);
 		$fields['SECONDS'] = (isset($fields['SECONDS']) ? (int)$fields['SECONDS'] : null);
 
-		/** @noinspection PhpDeprecationInspection */
 		$id = (new CTaskElapsedTime())->Add($fields);
 
 		// Reset tagged system cache by tag 'tasks_user_' . $userId for each task member

@@ -130,6 +130,21 @@ class BillingService
 		});
 	}
 
+	public function getPurchasedPackageReport(
+		string $packageCode,
+		string $purchaseCode,
+		string $serviceCode,
+	): Baas\UseCase\External\Response\GetPurchaseReportResult
+	{
+		return $this->fulfill(function() use ($packageCode, $purchaseCode, $serviceCode) {
+			return $this->useCaseFactory->createGetPurchasedPackageReport(
+				(string) $packageCode,
+				(string) $purchaseCode,
+				(string) $serviceCode,
+			)();
+		});
+	}
+
 	public function verifyAckDomain(string $ack, string $syn): Baas\UseCase\External\Response\VerifyAckDomainResult|Main\Result
 	{
 		/**

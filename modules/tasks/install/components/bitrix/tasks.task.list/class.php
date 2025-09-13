@@ -34,6 +34,7 @@ use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\Manager;
 use Bitrix\Tasks\Grid\Task;
+use Bitrix\Tasks\Onboarding\DI\OnboardingContainer;
 use Bitrix\Tasks\TourGuide;
 use Bitrix\Tasks\Ui\Controls\Column;
 use Bitrix\Tasks\Util\Error\Collection;
@@ -74,6 +75,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 	);
 	protected $listParameters = array();
 
+	/** @var \Bitrix\Tasks\Util\Error\Collection */
 	protected $errorCollection;
 
 	public function configureActions()
@@ -131,7 +133,22 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 
 		$this->setUserId();
+		$this->setPromoParams();
+
 		$this->errorCollection = new \Bitrix\Tasks\Util\Error\Collection();
+	}
+
+	private function setPromoParams(): void
+	{
+		$inviteToMobileService = OnboardingContainer::getInstance()->getInviteToMobileService();
+
+		$needToShowInviteToMobile = $inviteToMobileService->needToShow((int)$this->userId);
+		$this->arResult['needToShowInviteToMobile'] = $needToShowInviteToMobile;
+
+		if ($needToShowInviteToMobile)
+		{
+			$this->arResult['inviteToMobileLink'] = $inviteToMobileService->getInviteLink((int)$this->userId);
+		}
 	}
 
 		public function executeComponent()
@@ -278,7 +295,31 @@ class TasksTaskListComponent extends TasksBaseComponent
 			}
 		}
 
-		(new \Bitrix\Tasks\Control\Grid($this->userId))->sortTask($data);
+		try
+		{
+			(new \Bitrix\Tasks\Control\Grid($this->userId))->sortTask($data);
+		}
+		catch (\Exception $e)
+		{
+			if (
+				$e instanceof TasksException
+				&& $e->isSerialized()
+			)
+			{
+				$errors = unserialize($e->getMessage(), ['allowed_classes' => false]);
+				$error = $errors[0];
+				$this->errorCollection->add(
+					codeOrInstance: 'ACTION_ERROR.UNEXPECTED_ERROR',
+					message: $error['text'] ?? 'Unexpected error',
+				);
+			}
+			else
+			{
+				$this->errorCollection->add(Main\Error::createFromThrowable($e));
+			}
+
+			return null;
+		}
 
 		return $result;
 	}
@@ -1447,6 +1488,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 			return;
 		}
 
+		// probably dead code here, because now getGlobalLimit never returns "null"
 		if (Counter::getGlobalLimit() !== null)
 		{
 			return;

@@ -1,7 +1,9 @@
 <?php
+
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Security;
+use Bitrix\Rest\Public;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -549,23 +551,10 @@ class CRestUtil
 
 	public static function makeAuth($res, $application_id = null)
 	{
-		global $USER;
-
-		if($res['user_id'] > 0)
-		{
-			if($USER->Authorize($res['user_id'], false, false, $application_id))
-			{
-				setSessionExpired(true);
-				return true;
-			}
-		}
-		elseif($res['user_id'] === 0)
-		{
-			setSessionExpired(true);
-			return true;
-		}
-
-		return false;
+		return (new Public\Command\Auth\AuthorizeUserCommand((int)($res['user_id'] ?? 0), $application_id))
+			->run()
+			->isSuccess()
+		;
 	}
 
 	public static function checkAppAccess($appId, $appInfo = null)

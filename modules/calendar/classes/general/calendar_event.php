@@ -732,11 +732,20 @@ class CCalendarEvent
 
 				$entryFields = self::calculateUserOffset($pullUserId, $entryFields);
 
-				$attendeeListResult = $dbFields['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['open_event']
-					? self::getAttendeeList([], [$parentEventId])
-					: self::getAttendeeList([$parentEventId])
-				;
-				$attendeeList = $attendeeListResult['attendeeList'][$parentEventId] ?? [];
+				if (isset($params['attendeeStatuses']))
+				{
+					$attendeeList = $params['attendeeStatuses'];
+				}
+				else
+				{
+					// TODO: open event handle later
+					$attendeeListResult = $dbFields['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['open_event']
+						? self::getAttendeeList([], [$parentEventId])
+						: self::getAttendeeList([$parentEventId])
+					;
+					$attendeeList = $attendeeListResult['attendeeList'][$parentEventId] ?? [];
+				}
+
 				$entryFields  = self::PreHandleEvent($entryFields);
 				$skipTime = $entryFields['DT_SKIP_TIME'] === 'Y';
 				$dateFromFormatted = self::getDateInJsFormat(
@@ -3272,7 +3281,9 @@ class CCalendarEvent
 			}
 		}
 
-		if (is_array($newFields['ATTENDEES_CODES']) && is_array($currentFields['ATTENDEES_CODES'])
+		if (
+			is_array($newFields['ATTENDEES_CODES'] ?? null)
+			&& is_array($currentFields['ATTENDEES_CODES'] ?? null)
 			&& (count(array_diff($newFields['ATTENDEES_CODES'], $currentFields['ATTENDEES_CODES']))
 				|| count(array_diff($currentFields['ATTENDEES_CODES'], $newFields['ATTENDEES_CODES'])))
 		)
@@ -3369,7 +3380,16 @@ class CCalendarEvent
 		$involvedAttendees = array_unique($involvedAttendees);
 		$userIndex = self::generateUserIndex($involvedAttendees, $arFields['MEETING_HOST']);
 
-		foreach($attendees as $userKey)
+		$attendeeStatuses = self::getAttendeeStatuses(
+			$attendees,
+			$arFields,
+			$params,
+			$currentAttendeesIndex,
+			$isNewEvent
+		);
+		$params['attendeeStatuses'] = $attendeeStatuses;
+
+		foreach ($attendees as $userKey)
 		{
 			$clonedParams = $params;
 			$attendeeId = (int)$userKey;
@@ -3395,37 +3415,9 @@ class CCalendarEvent
 				$childParams['arFields']['ACCESSIBILITY'] = $arFields['ACCESSIBILITY'] ?? null;
 				$childParams['arFields']['MEETING'] = $arFields['~MEETING'] ?? null;
 				$childParams['arFields']['TEXT_LOCATION'] = CCalendar::GetTextLocation($arFields["LOCATION"] ?? null);
-				$childParams['arFields']['MEETING_STATUS'] = 'Q';
+				$childParams['arFields']['MEETING_STATUS'] = $attendeeStatuses[$attendeeId]['status'];
 				$childParams['arFields']['EVENT_TYPE'] = $arFields['EVENT_TYPE'] ?? null;
 				$childParams['sendInvitations'] = $clonedParams['sendInvitations'] ?? null;
-
-				if ((int)$arFields['CREATED_BY'] === $attendeeId)
-				{
-					$childParams['arFields']['MEETING_STATUS'] = 'Y';
-				}
-				elseif ($isNewEvent && (int)($arFields['~MEETING']['MEETING_CREATOR'] ?? null) === $attendeeId)
-				{
-					$childParams['arFields']['MEETING_STATUS'] = 'Y';
-				}
-				elseif (
-					!empty($clonedParams['saveAttendeesStatus'])
-					&& !empty($clonedParams['currentEvent']['ATTENDEE_LIST'])
-					&& is_array($clonedParams['currentEvent']['ATTENDEE_LIST'])
-				)
-				{
-					foreach($clonedParams['currentEvent']['ATTENDEE_LIST'] as $currentAttendee)
-					{
-						if ((int)$currentAttendee['id'] === $attendeeId)
-						{
-							$childParams['arFields']['MEETING_STATUS'] = $currentAttendee['status'];
-							break;
-						}
-					}
-				}
-				else
-				{
-					$childParams['arFields']['MEETING_STATUS'] = 'Q';
-				}
 
 				unset(
 					$childParams['arFields']['SECTIONS'],
@@ -3463,12 +3455,8 @@ class CCalendarEvent
 						$childParams['sendInvitations'] = $childParams['sendInvitations'] &&  $currentAttendeesIndex[$attendeeId]['STATUS'] !== 'Q';
 					}
 
-					if (
-						$clonedParams['sendInvitesToDeclined']
-						&& $childParams['arFields']['MEETING_STATUS'] === 'N'
-					)
+					if ($attendeeStatuses[$attendeeId]['sendInvitations'])
 					{
-						$childParams['arFields']['MEETING_STATUS'] = 'Q';
 						$childParams['sendInvitations'] = true;
 					}
 
@@ -4053,11 +4041,26 @@ class CCalendarEvent
 
 				$sharingOwnerId = -1;
 				$eventLink = null;
-				if (in_array($entry['EVENT_TYPE'] ?? '', Sharing\SharingEventManager::getSharingEventTypes(), true))
+				$eventType = $entry['EVENT_TYPE'] ?? '';
+
+				if (in_array($eventType, Sharing\SharingEventManager::getSharingEventTypes(), true))
 				{
-					Sharing\SharingEventManager::onSharingEventDeleted((int)($entry['ID'] ?? 0), $entry['EVENT_TYPE']);
+					$eventId = (int)($entry['ID'] ?? 0);
+					$initiatorId = CCalendar::GetCurUserId() !== 0
+						? CCalendar::GetCurUserId()
+						: $userId
+					;
+
+					Sharing\SharingEventManager::onSharingEventDeleted(
+						$eventId,
+						$eventType,
+						$initiatorId,
+					);
+
+					$linkFactory = (new Sharing\Link\Factory());
+
 					/** @var Sharing\Link\EventLink $eventLink */
-					$eventLink = (new Sharing\Link\Factory())->getEventLinkByEventId((int)($entry['PARENT_ID'] ?? $entry['ID'] ?? 0));
+					$eventLink = $linkFactory->getEventLinkByEventId((int)($entry['PARENT_ID'] ?? $eventId));
 					if ($eventLink)
 					{
 						$sharingOwnerId = $eventLink->getOwnerId();
@@ -4810,8 +4813,13 @@ class CCalendarEvent
 
 			CCalendar::UpdateCounter([$userId], [$eventId]);
 
-			$CACHE_MANAGER->ClearByTag('calendar_user_'.$userId);
-			$CACHE_MANAGER->ClearByTag('calendar_user_'.$event['CREATED_BY']);
+			$CACHE_MANAGER->ClearByTag('calendar_user_' . $userId);
+
+			$createdBy = (int)$event['CREATED_BY'];
+			if ($createdBy !== $userId)
+			{
+				$CACHE_MANAGER->ClearByTag('calendar_user_' . $createdBy);
+			}
 
 			if (($event['ACCESSIBILITY'] ?? '') === 'absent')
 			{
@@ -7239,22 +7247,22 @@ class CCalendarEvent
 		$parentIds = [];
 		foreach ($eventList as $event)
 		{
-			if (
+			$collabEventTypes = [
+				Dictionary::EVENT_TYPE['collab'],
+				Dictionary::EVENT_TYPE['shared_collab'],
+			];
+
+			$isCollabEvent = (
 				!empty($event['EVENT_TYPE'])
-				&& !in_array(
-					$event['EVENT_TYPE'],
-					[Dictionary::EVENT_TYPE['collab'], Dictionary::EVENT_TYPE['shared_collab']],
-					true
-				)
-			)
+				&& in_array($event['EVENT_TYPE'], $collabEventTypes, true)
+			);
+
+			if (!$isCollabEvent || $event['ID'] === $event['PARENT_ID'])
 			{
 				continue;
 			}
 
-			if ($event['ID'] !== $event['PARENT_ID'])
-			{
-				$parentIds[$event['PARENT_ID']] = (int)$event['PARENT_ID'];
-			}
+			$parentIds[$event['PARENT_ID']] = (int)$event['PARENT_ID'];
 		}
 
 		if (empty($parentIds))
@@ -7262,14 +7270,32 @@ class CCalendarEvent
 			return $parentIds;
 		}
 
-		$collection = Internals\EventTable::query()
-			->whereIn('ID', $parentIds)
-			->where('CAL_TYPE', Dictionary::CALENDAR_TYPE['group'])
-			->setSelect(['ID', 'PARENT_ID', 'OWNER_ID'])
-			->fetchCollection()
+		$cachedCollabIdsByParent = array_intersect_key(self::$collabIdByParent, $parentIds);
+		$cachedParentIds = array_keys($cachedCollabIdsByParent);
+
+		$nonCachedParentIds = array_diff($parentIds, $cachedParentIds);
+
+		if (empty($nonCachedParentIds))
+		{
+			return $cachedCollabIdsByParent;
+		}
+
+		$eventCollection =
+			Internals\EventTable::query()
+				->whereIn('ID', $nonCachedParentIds)
+				->where('CAL_TYPE', Dictionary::CALENDAR_TYPE['group'])
+				->setSelect(['ID', 'PARENT_ID', 'OWNER_ID'])
+				->fetchCollection()
 		;
 
-		return array_combine($collection->getParentIdList(), $collection->getOwnerIdList());
+		$nonCachedCollabIdsByParent = array_combine(
+			$eventCollection->getParentIdList(),
+			$eventCollection->getOwnerIdList(),
+		);
+
+		self::$collabIdByParent += $nonCachedCollabIdsByParent;
+
+		return $cachedCollabIdsByParent + $nonCachedCollabIdsByParent;
 	}
 
 	private static function getCollabIdByEvent(array $event, array $parentCollabConnections): ?int
@@ -7356,5 +7382,68 @@ class CCalendarEvent
 		self::$getListAccessCheck[$sectionId] = $accessController->batchCheck($request, $eventModel);
 
 		return self::$getListAccessCheck[$sectionId];
+	}
+
+	private static function getAttendeeStatuses(
+		$attendees,
+		$fields,
+		$params,
+		$currentAttendeesIndex,
+		$isNewEvent
+	): array
+	{
+		$result = [];
+
+		foreach ($attendees as $attendee)
+		{
+			$attendeeId = (int)$attendee;
+			$meetingStatus = 'Q';
+			$sendInvitations = false;
+
+			if (
+				(int)$fields['OWNER_ID'] === $attendeeId
+				|| (int)$fields['CREATED_BY'] === $attendeeId
+			)
+			{
+				$meetingStatus = 'H';
+			}
+			elseif ($isNewEvent && (int)($fields['~MEETING']['MEETING_CREATOR'] ?? null) === $attendeeId)
+			{
+				$meetingStatus = 'Y';
+			}
+			elseif (
+				!empty($params['saveAttendeesStatus'])
+				&& !empty($params['currentEvent']['ATTENDEE_LIST'])
+				&& is_array($params['currentEvent']['ATTENDEE_LIST'])
+			)
+			{
+				foreach($params['currentEvent']['ATTENDEE_LIST'] as $currentAttendee)
+				{
+					if ((int)$currentAttendee['id'] === $attendeeId)
+					{
+						$meetingStatus = $currentAttendee['status'];
+						break;
+					}
+				}
+			}
+
+			if (
+				!empty($currentAttendeesIndex[$attendeeId])
+				&& $params['sendInvitesToDeclined']
+				&& $meetingStatus === 'N'
+			)
+			{
+				$meetingStatus = 'Q';
+				$sendInvitations = true;
+			}
+
+			$result[$attendeeId] = [
+				'id' => $attendeeId,
+				'status' => $meetingStatus,
+				'sendInvitations' => $sendInvitations
+			];
+		}
+
+		return $result;
 	}
 }

@@ -2,6 +2,8 @@
 namespace Bitrix\Crm\Recycling;
 
 use Bitrix\Crm;
+use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\RepeatSale\Log\LogRecyclebinHelper;
 use Bitrix\Main;
 
 Main\Localization\Loc::loadMessages(__FILE__);
@@ -177,6 +179,14 @@ class DealController extends BaseController
 		}
 
 		$slots = array_merge($slots, $this->prepareActivityData($entityID, $params));
+
+		$logSlots = LogRecyclebinHelper::getInstance()->getSlots(
+			new ItemIdentifier(\CCrmOwnerType::Deal, $entityID)
+		);
+		if (!empty($logSlots))
+		{
+			$slots = array_merge($slots, $logSlots);
+		}
 
 		return array(
 			'TITLE' => \CCrmOwnerType::GetCaption(
@@ -371,6 +381,12 @@ class DealController extends BaseController
 				$newEntityID,
 				$invoiceIDs
 			);
+		}
+
+		$repeatSaleLog = $slots['REPEAT_SALE_LOG'] ?? null;
+		if (is_array($repeatSaleLog))
+		{
+			LogRecyclebinHelper::getInstance()->restore($newEntityID, $repeatSaleLog);
 		}
 
 		$this->eraseSuspendedUserFields($recyclingEntityID);

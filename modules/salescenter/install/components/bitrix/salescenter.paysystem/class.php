@@ -868,14 +868,6 @@ class SalesCenterPaySystemComponent extends CBitrixComponent implements Main\Eng
 			\Sale\Handlers\PaySystem\TBankBusinessHandler::class => '24689844',
 		];
 
-		if (
-			$className === \Sale\Handlers\PaySystem\YandexCheckoutHandler::class
-			&& $psMode === \Sale\Handlers\PaySystem\YandexCheckoutHandler::MODE_INSTALLMENTS
-		)
-		{
-			$helpdeskHandlerCodeMap[$className] = '17229912';
-		}
-
 		return $helpdeskHandlerCodeMap[$className] ?? $defaultCode;
 	}
 

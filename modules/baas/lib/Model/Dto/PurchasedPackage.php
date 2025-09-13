@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Baas\Model\Dto;
 
+use Bitrix\Baas;
 use Bitrix\Main;
 use Bitrix\Main\Context;
 use Bitrix\Main\Type\Date;
 
-class PurchasedPackage implements \Bitrix\Baas\Contract\PurchasedPackage
+class PurchasedPackage implements Baas\Contract\PurchasedPackage
 {
 	public function __construct(
 		private string $code,
@@ -87,8 +88,12 @@ class PurchasedPackage implements \Bitrix\Baas\Contract\PurchasedPackage
 		return [
 			'code' => $this->getCode(),
 			'purchaseCode' => $this->getPurchaseCode(),
-			'startDate' => $this->getStartDate()->format('Y-m-d'),
-			'expirationDate' => $this->getExpirationDate()->format('Y-m-d'),
+			'startDate' => $this->getStartDate()->format(
+				Baas\Contract\DateTimeFormat::LOCAL_DATE->value
+			),
+			'expirationDate' => $this->getExpirationDate()->format(
+				Baas\Contract\DateTimeFormat::LOCAL_DATE->value
+			),
 			'actual' => $this->isActual() ? 'Y' : 'N',
 			/** @var  $purchasedService */
 			'services' => array_values(array_map(

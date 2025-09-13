@@ -2,7 +2,9 @@
 
 namespace Bitrix\Intranet\Service;
 
-class EmailMessage
+use Bitrix\Intranet\Contract\SendableContract;
+
+class EmailMessage implements SendableContract
 {
 	public function __construct(
 		private string $eventName,
@@ -10,12 +12,13 @@ class EmailMessage
 		private array $templateParams,
 		private ?int $messageId,
 		private ?bool $isDuplicate = null,
+		private string $userLang = LANGUAGE_ID,
 	)
 	{
 
 	}
 
-	public function sendImmediately()
+	public function sendImmediately(): void
 	{
 		\CEvent::SendImmediate(
 			$this->eventName,
@@ -23,10 +26,12 @@ class EmailMessage
 			$this->templateParams,
 			$this->isDuplicate,
 			$this->messageId,
+			[],
+			$this->userLang,
 		);
 	}
 
-	public function send()
+	public function send(): void
 	{
 		\CEvent::Send(
 			$this->eventName,
@@ -34,6 +39,8 @@ class EmailMessage
 			$this->templateParams,
 			$this->isDuplicate,
 			$this->messageId,
+			[],
+			$this->userLang
 		);
 	}
 }

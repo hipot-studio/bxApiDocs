@@ -1,6 +1,9 @@
 <?php
 namespace Bitrix\Intranet\Binding;
 
+use Bitrix\Bitrix24\License;
+use Bitrix\Intranet\Integration\Market\Label;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Intranet\Binding\Map\MapItem;
 use Bitrix\Intranet\Binding\Map\MapSection;
@@ -725,7 +728,7 @@ class Menu
 					self::getMenuItemsIds($item['items'])
 				);
 			}
-			else if ($item['id'])
+			else if (!empty($item['id']))
 			{
 				$ids[] = $item['id'];
 			}
@@ -892,9 +895,14 @@ class Menu
 							'delimiter' => true
 						];
 					}
+					$message = Loc::getMessage('INTRANET_BIND_MENU_APPS_2');
+					if (Label::isRenamedMarket())
+					{
+						$message = Loc::getMessage('INTRANET_BIND_MENU_APPS_2_MSGVER_1');
+					}
 					$returnItems[] = [
 						'href' => static::getMarketRef($sectionCode, $placementMap, $marketCode),
-						'text' => Loc::getMessage('INTRANET_BIND_MENU_APPS_2'),
+						'text' => $message,
 					];
 				}
 				if ($inline)

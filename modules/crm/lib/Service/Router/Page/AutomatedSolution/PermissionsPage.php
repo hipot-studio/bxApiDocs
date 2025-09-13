@@ -15,7 +15,7 @@ use Bitrix\Crm\Service\Router\Route;
 
 final class PermissionsPage extends AbstractPage
 {
-	protected function component(): Contract\Component
+	public function component(): Contract\Component
 	{
 		return new Component(
 			name: 'bitrix:crm.config.perms.wrapper',

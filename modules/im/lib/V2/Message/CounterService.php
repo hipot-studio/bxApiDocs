@@ -6,6 +6,7 @@ use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\NotifyChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
@@ -35,7 +36,7 @@ class CounterService
 	protected const CACHE_TTL = 86400; // 1 month
 	protected const CACHE_NAME = 'counter_v5';
 	protected const CACHE_CHATS_COUNTERS_NAME = 'chats_counter_v6';
-	protected const CACHE_PATH = '/bx/im/v4/counter/';
+	protected const CACHE_PATH = '/bx/im/counter/v5/';
 
 	protected const DEFAULT_COUNTERS = [
 		'TYPE' => [
@@ -45,12 +46,14 @@ class CounterService
 			'LINES' => 0,
 			'COPILOT' => 0,
 			'COLLAB' => 0,
+			'MESSENGER' => 0,
 		],
 		'CHAT' => [],
 		'COLLAB' => [],
 		'CHAT_MUTED' => [],
 		'CHAT_UNREAD' => [],
 		'COLLAB_UNREAD' => [],
+		'COPILOT_UNREAD' => [],
 		'LINES' => [],
 		'COPILOT' => [],
 		'CHANNEL_COMMENT' => [],
@@ -116,6 +119,23 @@ class CounterService
 	public function getByChat(int $chatId): int
 	{
 		return $this->getCountUnreadMessagesByChatId($chatId);
+	}
+
+	public function getByChatWithOverflow(int $chatId): int
+	{
+		$currentUser = $this->getContext()->getUserId();
+		$overflowService = new CounterOverflowService($chatId);
+		$overflowInfo = $overflowService->getOverflowInfo([$currentUser]);
+
+		if (!empty($overflowInfo->getUsersWithoutOverflow()))
+		{
+			$count = $this->getCountUnreadMessagesByChatId($chatId);
+			$overflowService->insertOverflowed([$currentUser => $count]);
+
+			return $count;
+		}
+
+		return CounterOverflowService::getOverflowValue();
 	}
 
 	public function get(): array
@@ -197,7 +217,7 @@ class CounterService
 
 		$chatId = (int)$findResult->getResult()['ID'];
 
-		return $this->getByChat($chatId);
+		return $this->getByChatWithOverflow($chatId);
 	}
 
 	public function getForNotifyChats(array $chatIds): array
@@ -622,14 +642,15 @@ class CounterService
 
 		foreach ($unreadChats as $unreadChat)
 		{
-			if ($unreadChat['CHAT_TYPE'] === Chat::IM_TYPE_COLLAB)
+			$chatId = (int)$unreadChat['CHAT_ID'];
+			$isMuted = $unreadChat['IS_MUTED'] === 'Y';
+
+			match ($unreadChat['CHAT_TYPE'])
 			{
-				$this->setUnreadCollab((int)$unreadChat['CHAT_ID'], $unreadChat['IS_MUTED'] === 'Y');
-			}
-			else
-			{
-				$this->setUnreadChat((int)$unreadChat['CHAT_ID'], $unreadChat['IS_MUTED'] === 'Y');
-			}
+				Chat::IM_TYPE_COLLAB => $this->setUnreadCollab($chatId, $isMuted),
+				Chat::IM_TYPE_COPILOT => $this->setUnreadCopilot($chatId, $isMuted),
+				default => $this->setUnreadChat($chatId, $isMuted),
+			};
 		}
 	}
 
@@ -680,6 +701,7 @@ class CounterService
 		{
 			$this->counters['TYPE']['ALL']++;
 			$this->counters['TYPE']['CHAT']++;
+			$this->counters['TYPE']['MESSENGER']++;
 		}
 
 		$this->counters['CHAT_UNREAD'][] = $id;
@@ -692,9 +714,25 @@ class CounterService
 			$this->counters['TYPE']['ALL']++;
 			$this->counters['TYPE']['CHAT']++;
 			$this->counters['TYPE']['COLLAB']++;
+			$this->counters['TYPE']['MESSENGER']++;
 		}
 
+		$this->counters['CHAT_UNREAD'][] = $id;
 		$this->counters['COLLAB_UNREAD'][] = $id;
+	}
+
+	protected function setUnreadCopilot(int $id, bool $isMuted): void
+	{
+		if (!$isMuted && !isset($this->counters['COPILOT'][$id]))
+		{
+			$this->counters['TYPE']['ALL']++;
+			$this->counters['TYPE']['CHAT']++;
+			$this->counters['TYPE']['COPILOT']++;
+			$this->counters['TYPE']['MESSENGER']++;
+			$this->counters['CHAT_UNREAD'][] = $id;
+		}
+
+		$this->counters['COPILOT_UNREAD'][] = $id;
 	}
 
 	protected function setFromMutedChat(int $id, int $count): void
@@ -712,18 +750,27 @@ class CounterService
 	{
 		$this->counters['TYPE']['ALL'] += $count;
 		$this->counters['TYPE']['LINES'] += $count;
+		$this->counters['TYPE']['MESSENGER'] += $count;
 		$this->counters['LINES'][$id] = $count;
 	}
 
 	protected function setFromCopilot(int $id, int $count): void
 	{
+		$this->counters['TYPE']['ALL'] += $count;
+		$this->counters['TYPE']['CHAT'] += $count;
+		$this->counters['TYPE']['MESSENGER'] += $count;
 		$this->counters['TYPE']['COPILOT'] += $count;
 		$this->counters['COPILOT'][$id] = $count;
+		$this->counters['CHAT'][$id] = $count;
 	}
 
 	protected function setFromCollab(int $id, int $count): void
 	{
+		$this->counters['TYPE']['ALL'] += $count;
+		$this->counters['TYPE']['CHAT'] += $count;
+		$this->counters['TYPE']['MESSENGER'] += $count;
 		$this->counters['TYPE']['COLLAB'] += $count;
+		$this->counters['CHAT'][$id] = $count;
 		$this->counters['COLLAB'][$id] = $count;
 	}
 
@@ -735,6 +782,7 @@ class CounterService
 		}
 
 		$this->counters['TYPE']['ALL'] += $count;
+		$this->counters['TYPE']['MESSENGER'] += $count;
 		$this->counters['CHANNEL_COMMENT'][$parentId][$id] = $count;
 	}
 
@@ -742,6 +790,7 @@ class CounterService
 	{
 		$this->counters['TYPE']['ALL'] += $count;
 		$this->counters['TYPE']['CHAT'] += $count;
+		$this->counters['TYPE']['MESSENGER'] += $count;
 		$this->counters['CHAT'][$id] = $count;
 	}
 

@@ -323,7 +323,7 @@ class ApacheSupersetSettingComponent
 			return null;
 		}
 
-		$key = KeyTable::getList([
+		$activeKeys = KeyTable::getList([
 				'select' => [
 					'ID',
 				],
@@ -332,9 +332,8 @@ class ApacheSupersetSettingComponent
 					'=ACTIVE' => 'Y',
 					'=APP_ID' => false,
 				],
-				'limit' => 1,
 			])
-			->fetchObject()
+			->fetchCollection()
 		;
 
 		$result = KeyManager::createAccessKey($user);
@@ -354,14 +353,19 @@ class ApacheSupersetSettingComponent
 
 		if ($response->hasErrors())
 		{
+			KeyManager::deleteKey($accessKey);
+
 			return null;
 		}
 
 		$proxyIntegrator->refreshDomainConnection();
 
-		if ($key)
+		if (!$activeKeys->isEmpty())
 		{
-			$key->delete();
+			foreach ($activeKeys as $key)
+			{
+				$key->delete();
+			}
 		}
 		else
 		{

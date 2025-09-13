@@ -9,6 +9,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
@@ -83,8 +84,8 @@ class DatasetImportComponent extends CBitrixComponent
 					'firstLineHeader' => true,
 				],
 				'dataFormats' => [
-					FieldType::Date->value => Const\Date::Ymd_dot->value,
-					FieldType::DateTime->value => Const\DateTime::Ymd_dot_His_colon->value,
+					FieldType::Date->value => Const\Date::Ymd_dash->value,
+					FieldType::DateTime->value => Const\DateTime::Ymd_dash_His_colon->value,
 					FieldType::Double->value => Const\DoubleDelimiter::DOT->value,
 					FieldType::Money->value => Const\MoneyDelimiter::DOT->value,
 				],
@@ -243,25 +244,11 @@ class DatasetImportComponent extends CBitrixComponent
 		$type = $dataset->getEnumType();
 
 		$dataSource = Source\Factory::getSource($type, $dataset->getSourceId() ?? 0, $dataset->getId());
-		if ($type === ExternalSource\Type::Csv)
-		{
-			$data = $dataSource->getFirstNData($dataset->getName(), self::FIRST_N_ROW);
-		}
-		else
-		{
-			$data = $dataSource->getFirstNData($dataset->getExternalCode(), self::FIRST_N_ROW);
-		}
+		$data = $dataSource->getFirstNData($dataset->getName(), self::FIRST_N_ROW);
 
 		$result = [];
 		$fields = DatasetManager::getDatasetFieldsById($dataset->getId());
-		if ($type === ExternalSource\Type::Csv)
-		{
-			$codeList = $fields->getNameList();
-		}
-		else
-		{
-			$codeList = $fields->getExternalCodeList();
-		}
+		$codeList = $fields->getNameList();
 
 		foreach ($data as $row)
 		{
@@ -401,9 +388,51 @@ class DatasetImportComponent extends CBitrixComponent
 
 	private function getExternalConnections(): array
 	{
-		return ExternalSourceTable::getList([
+		$preparedSources= [];
+
+		$restIcons = $this->loadRestAvatars();
+
+		$externalSources = ExternalSourceTable::getList([
 			'select' => ['ID', 'TYPE', 'TITLE'],
 			'filter' => ['ACTIVE' => 'Y'],
-		])->fetchAll();
+		]);
+
+		while ($source = $externalSources->fetch())
+		{
+			$source['AVATAR'] = '';
+			if ($source['TYPE'] === ExternalSource\Type::Rest->value)
+			{
+				if (!empty($restIcons[$source['ID']]))
+				{
+					$source['AVATAR'] = $restIcons[$source['ID']];
+				}
+			}
+			else
+			{
+				$source['AVATAR'] = "/bitrix/images/biconnector/database-connections/{$source['TYPE']}.svg";
+			}
+
+			$preparedSources[] = $source;
+		}
+
+		return $preparedSources;
+	}
+
+	private function loadRestAvatars(): array
+	{
+		$icons = [];
+		$sources = ExternalSourceRestTable::getList([
+			'select' => [
+				'SOURCE_ID',
+				'AVATAR' => 'CONNECTOR.LOGO'
+			],
+		]);
+
+		while ($source = $sources->fetch())
+		{
+			$icons[$source['SOURCE_ID']] = $source['AVATAR'];
+		}
+
+		return $icons;
 	}
 }

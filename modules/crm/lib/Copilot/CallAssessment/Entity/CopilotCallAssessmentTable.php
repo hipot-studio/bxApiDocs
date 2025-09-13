@@ -12,6 +12,7 @@ use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\Validators\RangeValidator;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Text\Emoji;
 use Psr\Container\NotFoundExceptionInterface;
 
 /**
@@ -60,6 +61,8 @@ class CopilotCallAssessmentTable extends Main\ORM\Data\DataManager
 			,
 			(new Main\ORM\Fields\StringField('PROMPT'))
 				->addValidator(new PromptLengthValidator())
+				->addSaveDataModifier([Emoji::class, 'encode'])
+				->addFetchDataModifier([Emoji::class, 'decode'])
 				->configureRequired()
 			,
 			(new Main\ORM\Fields\StringField('GIST')),

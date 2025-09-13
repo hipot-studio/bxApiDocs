@@ -26,7 +26,7 @@ class ExternalSourceDataProvider extends EntityDataProvider
 
 	public function prepareFields(): array
 	{
-		return [
+		$result = [
 			'TYPE' => $this->createField('TYPE', [
 				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_FILTER_TITLE_TYPE'),
 				'default' => true,
@@ -60,6 +60,8 @@ class ExternalSourceDataProvider extends EntityDataProvider
 				'partial' => true,
 			]),
 		];
+
+		return $result;
 	}
 
 	public function prepareFieldData($fieldID): ?array
@@ -71,6 +73,7 @@ class ExternalSourceDataProvider extends EntityDataProvider
 			{
 				$filterItemsList[$source['CODE']] = $source['NAME'];
 			}
+
 			return [
 				'params' => [
 					'multiple' => 'N',

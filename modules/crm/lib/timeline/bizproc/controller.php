@@ -404,7 +404,6 @@ final class Controller extends Timeline\Controller
 		$trackable = [
 			\CBPDocumentEventType::Manual,
 			\CBPDocumentEventType::Create,
-			\CBPDocumentEventType::Edit,
 		];
 
 		if (!in_array($changedWorkflowStatus->documentEventType, $trackable, true))

@@ -219,7 +219,7 @@ class CCrmOwnerType
 			return $typeId % 2 === 0;
 		}
 
-		return ($typeId >= static::DynamicTypeStart && $typeId < static::DynamicTypeEnd);;
+		return ($typeId >= static::DynamicTypeStart && $typeId < static::DynamicTypeEnd);
 	}
 
 	public static function isPossibleSuspendedDynamicTypeId(int $typeId): bool
@@ -3764,6 +3764,7 @@ class CCrmOwnerTypeAbbr
 			case CCrmOwnerType::SuspendedLeadName:
 				return self::SuspendedLead;
 			case CCrmOwnerType::DealName:
+			case CCrmOwnerType::DealRecurringName:
 				return self::Deal;
 			case CCrmOwnerType::SuspendedDealName:
 				return self::SuspendedDeal;

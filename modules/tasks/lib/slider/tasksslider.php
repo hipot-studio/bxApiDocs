@@ -42,6 +42,7 @@ class TasksSlider implements TasksSliderInterface
 					BX.SidePanel.Instance.open(
 						'{$this->openUrl}',
 						{
+							printable: true,
 							{$this->getWidth()}
 						},
 					);
@@ -56,6 +57,7 @@ class TasksSlider implements TasksSliderInterface
 						'{$this->openUrl}',
 						{
 							{$this->getWidth()}
+							printable: true,
 							events: {
 								onClose: function() {
 									location.href = '{$this->closeUrl}';

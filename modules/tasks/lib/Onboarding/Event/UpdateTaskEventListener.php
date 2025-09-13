@@ -31,7 +31,7 @@ final class UpdateTaskEventListener extends AbstractEventListener
 			return $eventResult;
 		}
 
-		$deleteResult = $this->deleteJobs($taskId);
+		$deleteResult = $this->deleteByPair($taskId);
 		if (!$deleteResult->isSuccess())
 		{
 			return $eventResult;

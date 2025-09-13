@@ -6,12 +6,14 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm;
+use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
 use Bitrix\Crm\Component\EntityDetails\Traits;
 use Bitrix\Crm\Conversion\LeadConversionDispatcher;
 use Bitrix\Crm\Conversion\LeadConversionScheme;
 use Bitrix\Crm\CustomerType;
+use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\LeadDefaultEntityConfig;
 use Bitrix\Crm\Integrity\DuplicateControl;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
@@ -21,6 +23,7 @@ use Bitrix\Crm\Tracking;
 use Bitrix\Currency;
 use Bitrix\Location\Entity\Address\AddressLinkCollection;
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 
 if (!Main\Loader::includeModule('crm'))
@@ -942,6 +945,27 @@ class CCrmLeadDetailsComponent
 				Loc::getMessage('CRM_LEAD_FIELD_PRODUCTS'),
 				'PRODUCT_ROW_SUMMARY'
 			),
+			[
+				'name' => 'MOVED_BY_ID',
+				'title' => Loc::getMessage('CRM_LEAD_FIELD_MOVED_BY_ID'),
+				'type' => 'user',
+				'editable' => false,
+				'data' => [
+					'enableEditInView' => false,
+					'formated' => 'MOVED_BY_FORMATTED_NAME',
+					'position' => 'MOVED_BY_WORK_POSITION',
+					'photoUrl' => 'MOVED_BY_PHOTO_URL',
+					'showUrl' => 'PATH_TO_MOVED_BY_USER',
+					'pathToProfile' => $this->arResult['PATH_TO_USER_PROFILE'] ?? null
+				],
+				'enableAttributes' => false
+			],
+			[
+				'name' => 'MOVED_TIME',
+				'title' => Loc::getMessage('CRM_LEAD_FIELD_MOVED_TIME'),
+				'type' => 'datetime',
+				'editable' => false,
+			],
 		);
 
 		if($this->customerType === CustomerType::GENERAL)
@@ -1166,6 +1190,8 @@ class CCrmLeadDetailsComponent
 			);
 		}
 
+		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationFieldInfo($this->entityFieldInfos);
+
 		$this->arResult['ENTITY_FIELDS'] = $this->entityFieldInfos;
 
 		return $this->entityFieldInfos;
@@ -1378,104 +1404,24 @@ class CCrmLeadDetailsComponent
 
 		return $result;
 	}
+
 	public function prepareConfiguration()
 	{
-		if(isset($this->arResult['ENTITY_CONFIG']))
+		if (isset($this->arResult['ENTITY_CONFIG']))
 		{
 			return $this->arResult['ENTITY_CONFIG'];
 		}
 
-		$userFieldConfigElements = [];
-		foreach(array_keys($this->userFieldInfos) as $fieldName)
-		{
-			$userFieldConfigElements[] = array('name' => $fieldName);
-		}
+		$userFieldNames = array_keys($this->userFieldInfos);
+		$multiFieldNames = array_keys($this->multiFieldInfos);
 
-		$sectionMain = array(
-			'name' => 'main',
-			'title' => Loc::getMessage('CRM_LEAD_SECTION_MAIN'),
-			'type' => 'section',
-			'elements' => []
-		);
-		$sectionAdditional = array(
-			'name' => 'additional',
-			'title' => Loc::getMessage('CRM_LEAD_SECTION_ADDITIONAL'),
-			'type' => 'section',
-			'elements' => []
-		);
-		$sectionProductRow = array(
-			'name' => 'products',
-			'title' => Loc::getMessage('CRM_LEAD_SECTION_PRODUCTS'),
-			'type' => 'section',
-			'elements' => array(
-				array('name' => 'PRODUCT_ROW_SUMMARY')
-			)
-		);
+		$defaultConfig = new LeadDefaultEntityConfig($userFieldNames, $multiFieldNames, $this->customerType);
 
-		if($this->customerType === CustomerType::GENERAL)
-		{
-			$multiFieldConfigElements = [];
-			foreach(array_keys($this->multiFieldInfos) as $fieldName)
-			{
-				$multiFieldConfigElements[] = array('name' => $fieldName);
-			}
+		$this->arResult['ENTITY_CONFIG'] = $defaultConfig->get();
 
-			$sectionMain['elements'] = array_merge(
-				array(
-					array('name' => 'TITLE'),
-					array('name' => 'STATUS_ID'),
-					array('name' => 'OPPORTUNITY_WITH_CURRENCY'),
-					array('name' => 'CLIENT'),
-					array('name' => 'HONORIFIC'),
-					array('name' => 'LAST_NAME'),
-					array('name' => 'NAME'),
-					array('name' => 'SECOND_NAME'),
-					array('name' => 'BIRTHDATE'),
-					array('name' => 'POST'),
-					array('name' => 'COMPANY_TITLE')
-				),
-				$multiFieldConfigElements
-			);
-
-			$sectionAdditional['elements'] = array_merge(
-				array(
-					array('name' => 'SOURCE_ID'),
-					array('name' => 'SOURCE_DESCRIPTION'),
-					array('name' => 'OPENED'),
-					array('name' => 'ASSIGNED_BY_ID'),
-					array('name' => 'OBSERVER'),
-					array('name' => 'COMMENTS'),
-					array('name' => 'ADDRESS'),
-					array('name' => 'UTM'),
-				),
-				$userFieldConfigElements
-			);
-		}
-		elseif($this->customerType === CustomerType::RETURNING)
-		{
-			$sectionMain['elements'] = array(
-				array('name' => 'TITLE'),
-				array('name' => 'STATUS_ID'),
-				array('name' => 'OPPORTUNITY_WITH_CURRENCY'),
-				array('name' => 'CLIENT')
-			);
-
-			$sectionAdditional['elements'] = array_merge(
-				array(
-					array('name' => 'SOURCE_ID'),
-					array('name' => 'SOURCE_DESCRIPTION'),
-					array('name' => 'OPENED'),
-					array('name' => 'ASSIGNED_BY_ID'),
-					array('name' => 'COMMENTS'),
-					array('name' => 'UTM'),
-				),
-				$userFieldConfigElements
-			);
-		}
-
-		$this->arResult['ENTITY_CONFIG'] = array($sectionMain, $sectionAdditional, $sectionProductRow);
 		return $this->arResult['ENTITY_CONFIG'];
 	}
+
 	public function prepareEntityUserFields()
 	{
 		if($this->userFields === null)
@@ -1854,6 +1800,54 @@ class CCrmLeadDetailsComponent
 		}
 		//endregion
 
+		$movedByID = isset($this->entityData['MOVED_BY_ID']) ? (int)$this->entityData['MOVED_BY_ID'] : 0;
+		if($movedByID > 0)
+		{
+			$user = Container::getInstance()->getUserBroker()->getById($movedByID);
+			if(is_array($user))
+			{
+				$this->entityData['MOVED_BY_LOGIN'] = $user['LOGIN'];
+				$this->entityData['MOVED_BY_NAME'] = isset($user['NAME']) ? $user['NAME'] : '';
+				$this->entityData['MOVED_BY_SECOND_NAME'] = isset($user['SECOND_NAME']) ? $user['SECOND_NAME'] : '';
+				$this->entityData['MOVED_BY_LAST_NAME'] = isset($user['LAST_NAME']) ? $user['LAST_NAME'] : '';
+				$this->entityData['MOVED_BY_PERSONAL_PHOTO'] = isset($user['PERSONAL_PHOTO']) ? $user['PERSONAL_PHOTO'] : '';
+			}
+
+			$this->entityData['MOVED_BY_FORMATTED_NAME'] =
+				\CUser::FormatName(
+					$this->arResult['NAME_TEMPLATE'],
+					[
+						'LOGIN' => $this->entityData['MOVED_BY_LOGIN'],
+						'NAME' => $this->entityData['MOVED_BY_NAME'],
+						'LAST_NAME' => $this->entityData['MOVED_BY_LAST_NAME'],
+						'SECOND_NAME' => $this->entityData['MOVED_BY_SECOND_NAME']
+					],
+					true,
+					false
+				);
+
+			$movedByPhotoID = isset($this->entityData['MOVED_BY_PERSONAL_PHOTO'])
+				? (int)$this->entityData['MOVED_BY_PERSONAL_PHOTO'] : 0;
+
+			if($movedByPhotoID > 0)
+			{
+				$file = new CFile();
+				$fileInfo = $file->ResizeImageGet(
+					$movedByPhotoID,
+					['width' => 60, 'height'=> 60],
+					BX_RESIZE_IMAGE_EXACT
+				);
+				if(is_array($fileInfo) && isset($fileInfo['src']))
+				{
+					$this->entityData['MOVED_BY_PHOTO_URL'] = $fileInfo['src'];
+				}
+			}
+
+			$this->entityData['PATH_TO_MOVED_BY_USER'] = CComponentEngine::MakePathFromTemplate(
+				$this->arResult['PATH_TO_USER_PROFILE'] ?? null,
+				['user_id' => $movedByID]
+			);
+		}
 		//region Observers
 		if(isset($this->entityData['OBSERVER_IDS']) && !empty($this->entityData['OBSERVER_IDS']))
 		{
@@ -1876,50 +1870,58 @@ class CCrmLeadDetailsComponent
 		//endregion
 
 		//region User Fields
-		foreach($this->userFields as $userField)
+		foreach ($this->userFields as $userField)
 		{
 			$fieldName = $userField['FIELD_NAME'];
-			$fieldValue = isset($userField['VALUE']) ? $userField['VALUE'] : '';
-
-			$fieldData = isset($this->userFieldInfos[$fieldName])
-				? $this->userFieldInfos[$fieldName] : null;
-			if(!is_array($fieldData))
+			$fieldValue = $userField['VALUE'] ?? '';
+			$fieldData = $this->userFieldInfos[$fieldName] ?? null;
+			if (!is_array($fieldData))
 			{
 				continue;
 			}
 
 			$isEmptyField = true;
 			$fieldParams = $fieldData['data']['fieldInfo'];
-			if((is_string($fieldValue) && $fieldValue !== '')
+
+			if (
+				$this->entityID <= 0
+				&& $fieldParams['USER_TYPE_ID'] === 'boolean'
+			)
+			{
+				$fieldValue = (string)$fieldParams['SETTINGS']['DEFAULT_VALUE'];
+			}
+
+			if (
+				(is_string($fieldValue) && $fieldValue !== '')
 				|| (is_array($fieldValue) && !empty($fieldValue))
 			)
 			{
 				$fieldParams['VALUE'] = $fieldValue;
 				$isEmptyField = false;
 			}
-
+			
 			$fieldSignature = $this->userFieldDispatcher->getSignature($fieldParams);
-			if($isEmptyField)
+			if ($isEmptyField)
 			{
-				$this->entityData[$fieldName] = array(
+				$this->entityData[$fieldName] = [
 					'SIGNATURE' => $fieldSignature,
-					'IS_EMPTY' => true
-				);
+					'IS_EMPTY' => true,
+				];
 			}
 			else
 			{
-				$this->entityData[$fieldName] = array(
+				$this->entityData[$fieldName] = [
 					'VALUE' => $fieldValue,
 					'SIGNATURE' => $fieldSignature,
-					'IS_EMPTY' => false
-				);
-
-				if($fieldData['data']['fieldInfo']['USER_TYPE_ID'] === 'file')
+					'IS_EMPTY' => false,
+				];
+				
+				if ($fieldData['data']['fieldInfo']['USER_TYPE_ID'] === 'file')
 				{
-					$values = is_array($fieldValue) ? $fieldValue : array($fieldValue);
-					$this->entityData[$fieldName]['EXTRAS'] = array(
+					$values = is_array($fieldValue) ? $fieldValue : [$fieldValue];
+					$this->entityData[$fieldName]['EXTRAS'] = [
 						'OWNER_TOKEN' => \CCrmFileProxy::PrepareOwnerToken(array_fill_keys($values, $this->entityID))
-					);
+					];
 				}
 			}
 		}
@@ -2155,6 +2157,8 @@ class CCrmLeadDetailsComponent
 				);
 			}
 		}
+
+		(new LastCommunicationTimeFormatter())->formatDetailDate($this->entityData);
 
 		$this->arResult['ENTITY_DATA'] = $this->entityData;
 

@@ -2725,16 +2725,13 @@ class CTasks
 				if (in_array('SCENARIO_NAME', $select) || in_array('*', $select))
 				{
 					$task['SCENARIO_NAME'] = [];
-					$scenarios = \Bitrix\Tasks\Internals\Task\ScenarioTable::getList([
-						'select' => ['SCENARIO'],
-						'filter' => [
-							'=TASK_ID' => $ID,
-						],
-					])->fetchAll();
+					$scenarios = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+					                                                   ->getScenarioRepository()
+					                                                   ->getById($ID);
 
-					foreach ($scenarios as $row)
+					foreach ($scenarios as $name)
 					{
-						$task['SCENARIO_NAME'][] = $row['SCENARIO'];
+						$task['SCENARIO_NAME'][] = $name;
 					}
 				}
 
@@ -2771,6 +2768,25 @@ class CTasks
 					while ($arDependsOn = $rsDependsOn->Fetch())
 					{
 						$task["DEPENDS_ON"][] = $arDependsOn["DEPENDS_ON_ID"];
+					}
+				}
+
+				if ((in_array('CHAT_ID', $select) || in_array('*', $select))
+					&& \Bitrix\Tasks\V2\FormV2Feature::isOn()
+				)
+				{
+					$task['CHAT_ID'] = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+						->getChatRepository()
+						->getChatIdByTaskId((int)$ID);
+
+					if ($task['CHAT_ID'] === null)
+					{
+						// special case, chat doesn't exist yet
+						$updatedTaskEntity = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+							->getTaskReadRepository()
+							->getById((int)$ID, new \Bitrix\Tasks\V2\Internal\Repository\Task\Select(chat: true));
+
+						$task['CHAT_ID'] = $updatedTaskEntity?->chatId;
 					}
 				}
 			}
@@ -5951,7 +5967,7 @@ class CTasks
 		$templateEntityType = Integration\Recyclebin\Manager::TASKS_TEMPLATE_RECYCLEBIN_ENTITY;
 		$templatesFromRecycleBin = static::getEntitiesFromRecycleBin($userId, $templateEntityType);
 
-		$activeTemplatesResult = \Bitrix\Tasks\TemplateTable::getList([
+		$activeTemplatesResult = \Bitrix\Tasks\Internals\Task\TemplateTable::getList([
 			'select' => ['ID'],
 			'filter' => [
 				'LOGIC' => 'OR',

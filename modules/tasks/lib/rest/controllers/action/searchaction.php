@@ -8,6 +8,7 @@ use Bitrix\Main\Search;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\Internals\SearchIndex;
 use Bitrix\Tasks\Internals\Task\SearchIndexTable;
 use Bitrix\Tasks\Provider\Exception\InvalidGroupByException;

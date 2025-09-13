@@ -465,7 +465,11 @@ class DealTable extends Main\ORM\Data\DataManager
 			$fieldRepository->getObservers('DEAL', 'OBSERVER_IDS'),
 		];
 
-		return array_merge($map, $fieldRepository->getUtm(\CCrmOwnerType::Deal));
+		return array_merge(
+			$map,
+			$fieldRepository->getUtm(\CCrmOwnerType::Deal),
+			$fieldRepository->getLastCommunications(\CCrmOwnerType::Deal),
+		);
 	}
 
 	public static function disableUserFieldsCheck(): void

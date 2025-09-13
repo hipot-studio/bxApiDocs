@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -23,7 +24,8 @@ class SupersetDashboardProvider extends BaseProvider
 	{
 		parent::__construct();
 
-		$this->options = $options;
+		$this->options['loadProxyData'] = (bool)($options['loadProxyData'] ?? true);
+		$this->options['checkAccessRights'] = (bool)($options['checkAccessRights'] ?? true);
 	}
 
 	public function isAvailable(): bool
@@ -73,24 +75,34 @@ class SupersetDashboardProvider extends BaseProvider
 		$integrator = Integrator::getInstance();
 		$superset = new SupersetController($integrator);
 
-		$accessFilter = AccessController::getCurrent()->getEntityFilter(
-			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
-			SupersetDashboardTable::class
-		);
-		$ormParams['filter'] = [
-			$accessFilter,
-			$ormParams['filter'],
-		];
+		if ($this->options['checkAccessRights'])
+		{
+			$accessFilter = AccessController::getCurrent()->getEntityFilter(
+				ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
+				SupersetDashboardTable::class
+			);
+			$ormParams['filter'] = [
+				$accessFilter,
+				$ormParams['filter'],
+			];
+		}
 
-		$elements = $superset->getDashboardRepository()->getList($ormParams, true);
+		$elements = $superset->getDashboardRepository()->getList($ormParams, $this->options['loadProxyData']);
 		foreach ($elements as $element)
 		{
-			if (
-				$element->isSupersetDashboardDataLoaded()
-				&& DashboardTariffConfigurator::isAvailableDashboard($element->getAppId())
-			)
+			if (DashboardTariffConfigurator::isAvailableDashboard($element->getAppId()))
 			{
-				$result[] = $this->makeItem($element);
+				if ($this->options['loadProxyData'])
+				{
+					if ($element->isSupersetDashboardDataLoaded())
+					{
+						$result[] = $this->makeItem($element);
+					}
+				}
+				else
+				{
+					$result[] = $this->makeItem($element);
+				}
 			}
 		}
 
@@ -99,6 +111,15 @@ class SupersetDashboardProvider extends BaseProvider
 
 	private function makeItem(Dashboard $dashboard): Item
 	{
+		$scopes = [];
+		$scopeCodes = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
+		foreach ($scopeCodes as $scopeCode)
+		{
+			$scopes[] = [
+				'code' => $scopeCode,
+				'name' => ScopeService::getInstance()->getScopeName($scopeCode),
+			];
+		}
 		$itemParams = [
 			'id' => $dashboard->getId(),
 			'entityId' => self::ENTITY_ID,
@@ -107,6 +128,10 @@ class SupersetDashboardProvider extends BaseProvider
 			'avatar' => $this->getDashboardIcon($dashboard),
 			'avatarOptions' => [
 				'borderRadius' => '4px',
+			],
+			'customData' => [
+				'scopes' => $scopes,
+				'type' => $dashboard->getType(),
 			],
 		];
 
@@ -119,7 +144,7 @@ class SupersetDashboardProvider extends BaseProvider
 		{
 			SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-system.png',
 			SupersetDashboardTable::DASHBOARD_TYPE_MARKET => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-market.png',
-			SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM => '',
+			SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-custom.png',
 			default => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-system.png',
 		};
 	}

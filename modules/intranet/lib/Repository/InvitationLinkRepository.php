@@ -6,7 +6,7 @@ use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\InvitationLink;
 use Bitrix\Intranet\Enum\LinkEntityType;
 use Bitrix\Intranet\Exception\CreationFailedException;
-use Bitrix\Intranet\Model\InvitationLink as InvitationLinkModel;
+use Bitrix\Intranet\Internal\Model\InvitationLink as InvitationLinkModel;
 use Bitrix\Intranet\Contract\Repository\InvitationLinkRepository as InvitationLinkRepositoryContract;
 use Bitrix\Intranet\Table\InvitationLinkTable;
 use Bitrix\Main\DB\DuplicateEntryException;

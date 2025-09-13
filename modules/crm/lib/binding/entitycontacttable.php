@@ -10,6 +10,7 @@ use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Data\AddStrategy;
 
 /**
  * Class EntityContactTable
@@ -29,7 +30,7 @@ use Bitrix\Main\ORM\Query\Join;
  */
 class EntityContactTable extends DataManager
 {
-//	use AddStrategy\Trait\MergeByDefaultTrait;
+	use AddStrategy\Trait\MergeByDefaultTrait;
 
 	public static function getTableName(): string
 	{

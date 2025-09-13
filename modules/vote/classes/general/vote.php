@@ -284,8 +284,10 @@ class CAllVote
 	{
 		\Bitrix\Vote\Event::resetStatistic($ID);
 		unset($GLOBALS["VOTE_CACHE_VOTING"][$ID]);
-		if (array_key_exists("VOTE", $_SESSION) && array_key_exists("VOTES", $_SESSION["VOTE"]))
+		if (isset($_SESSION['VOTE']['VOTES'][$ID]))
+		{
 			unset($_SESSION["VOTE"]["VOTES"][$ID]);
+		}
 		return true;
 	}
 
@@ -397,7 +399,7 @@ class CAllVote
 			return false;
 
 		//One session
-		if (($UNIQUE_TYPE & 1) && IsModuleInstalled('statistic') && array_key_exists($voteId, $_SESSION["VOTE"]["VOTES"]))
+		if (($UNIQUE_TYPE & 1) && IsModuleInstalled('statistic') && isset($_SESSION["VOTE"]["VOTES"][$voteId]))
 			return 1;
 
 

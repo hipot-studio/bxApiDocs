@@ -9,6 +9,7 @@ use Bitrix\AI\Facade\User;
 use Bitrix\AI\Helper;
 use Bitrix\AI\Integration\Intranet\DepartmentService;
 use Bitrix\AI\Integration\Socialnetwork\GroupService;
+use Bitrix\AI\Role\RoleManager;
 use Bitrix\AI\SharePrompt\Service\PromptService;
 use Bitrix\AI\ShareRole\Dto\CreateDto;
 use Bitrix\AI\ShareRole\Dto\RoleForUpdateDto;
@@ -77,14 +78,23 @@ class RoleService
 			],
 		];
 
+		$needToResetAvatarCache = false;
 		if (!empty($createDto->roleAvatarFile) && is_null(CFile::CheckImageFile($createDto->roleAvatarFile)))
 		{
 			$fileIds = $this->resizeAndSaveAvatar($createDto->roleAvatarFile);
 			$createDto->roleAvatar = ['fileIds' => $fileIds];
 			$roleData['avatar'] = $createDto->roleAvatar;
+			$needToResetAvatarCache = true;
 		}
 
-		return (new RoleSync())->updateRoleByFields($roleData, $createDto->userCreatorId);
+		$result = (new RoleSync())->updateRoleByFields($roleData, $createDto->userCreatorId);
+
+		if ($needToResetAvatarCache && $result->isSuccess())
+		{
+			RoleManager::resetRolesWithAvatarsCache();
+		}
+
+		return $result;
 	}
 
 	public function addCreationActions(int $roleId): void
@@ -159,7 +169,7 @@ class RoleService
 			$codeType = $accessCode->getEntityType();
 			$codeId = $accessCode->getEntityId();
 
-			if ($codeType === AccessCode::TYPE_USER)
+			if ($codeType === AccessCode::TYPE_USER || $code === 'UA')
 			{
 				$result[] = $code;
 				continue;

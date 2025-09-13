@@ -941,68 +941,28 @@ class CCrmSaleHelper
 			return;
 		}
 
-		$connection = Bitrix\Main\Application::getConnection();
-		if ($connection->isTableExists("b_user_group"))
+		if (!$shopGroupIds)
 		{
+			$shopGroupIds = [
+				self::getShopGroupIdByType("admin"),
+				self::getShopGroupIdByType("manager")
+			];
+			$shopGroupIds = array_filter($shopGroupIds);
+
 			if (!$shopGroupIds)
 			{
-				$shopGroupIds = [
-					self::getShopGroupIdByType("admin"),
-					self::getShopGroupIdByType("manager")
-				];
-				$shopGroupIds = array_filter($shopGroupIds);
-
-				if (!$shopGroupIds)
-				{
-					return;
-				}
-			}
-
-			$result = array_search(1, $currentUserIds);
-			if ($result !== false)
-			{
-				unset($currentUserIds[$result]);
-			}
-			if ($currentUserIds)
-			{
-				$strSql = "DELETE FROM b_user_group WHERE GROUP_ID IN (".
-					implode(',', $shopGroupIds).") and USER_ID IN (" .implode(',', $currentUserIds) . ")";
-				$connection->queryExecute($strSql);
+				return;
 			}
 		}
-	}
 
-	/**
-	 * @throws SqlQueryException
-	 * @deprecated
-	 */
-	public static function deleteUserFromShopGroup(): void
-	{
-		if (IsModuleInstalled("bitrix24"))
+		$result = array_search(1, $currentUserIds);
+		if ($result !== false)
 		{
-			$listGroupId = array(self::getShopGroupIdByType("admin"), self::getShopGroupIdByType("manager"));
-			$connection = Bitrix\Main\Application::getConnection();
-			if ($connection->isTableExists("b_user_group"))
-			{
-				foreach ($listGroupId as $groupId)
-				{
-					$groupId = (int)$groupId;
-					if ($groupId)
-					{
-						$listUserId = array();
-						foreach (CGroup::getGroupUser($groupId) as $userId)
-						{
-							$listUserId[] = $userId;
-						}
-						if ($listUserId)
-						{
-							$strSql = "DELETE FROM b_user_group WHERE GROUP_ID = $groupId and USER_ID IN (" .
-								implode(',', $listUserId) . ")";
-							$connection->queryExecute($strSql);
-						}
-					}
-				}
-			}
+			unset($currentUserIds[$result]);
+		}
+		foreach ($currentUserIds as $userId)
+		{
+			CUser::RemoveUserGroup($userId, $shopGroupIds);
 		}
 	}
 

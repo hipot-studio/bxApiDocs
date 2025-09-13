@@ -421,6 +421,7 @@ class TaskFieldHandler
 		{
 			return $this;
 		}
+
 		$this->fields['STATUS'] = (int) $this->fields['STATUS'];
 
 		if ($this->fields['STATUS'] === Status::NEW)

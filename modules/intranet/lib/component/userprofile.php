@@ -5,6 +5,7 @@ namespace Bitrix\Intranet\Component;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\Intranet\Internal\Repository\UserProfileRepository;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Event;
@@ -271,27 +272,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			return $this->userData;
 		}
 
-		$filter = [
-			"ID_EQUAL_EXACT" => $this->arParams["ID"]
-		];
-
-		$params = [
-			"FIELDS" => [
-				'ID', 'ACTIVE', 'CONFIRM_CODE', 'EXTERNAL_AUTH_ID', 'LAST_ACTIVITY_DATE', 'DATE_REGISTER',
-				'LOGIN', 'EMAIL', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'WORK_POSITION',
-				'PERSONAL_PHOTO', 'PERSONAL_BIRTHDAY', 'PERSONAL_GENDER',
-				'PERSONAL_WWW', 'PERSONAL_MOBILE', 'WORK_PHONE', 'PERSONAL_CITY',
-				'TIME_ZONE', 'AUTO_TIME_ZONE', 'TIME_ZONE_OFFSET',
-				'PERSONAL_COUNTRY', 'PERSONAL_FAX', 'PERSONAL_MAILBOX',
-				'PERSONAL_PHONE', 'PERSONAL_STATE', 'PERSONAL_STREET', 'PERSONAL_ZIP',
-				'WORK_CITY', 'WORK_COUNTRY', 'WORK_COMPANY', 'WORK_DEPARTMENT',
-				'PERSONAL_PROFESSION', 'WORK_NOTES', 'WORK_PROFILE', 'LANGUAGE_ID',
-			],
-			'SELECT' => [ 'UF_DEPARTMENT', 'UF_PHONE_INNER', 'UF_SKYPE', 'UF_SKYPE_LINK', 'UF_ZOOM', 'UF_PUBLIC' ]
-		];
-
-		$dbUser = \CUser::GetList("id", "asc", $filter, $params);
-		$user = $dbUser->fetch();
+		$user = (new UserProfileRepository())->getUserDataById($this->arParams['ID']);
 
 		foreach ($user as $field => $value)
 		{
@@ -340,7 +321,10 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		if (
 			$this->arParams["ID"] == $USER->GetID()
 			&& Loader::includeModule("socialnetwork")
-			&& \CSocNetUser::IsCurrentUserModuleAdmin(SITE_ID, false)
+			&& (
+				$USER->isAdmin()
+				|| \CSocNetUser::IsCurrentUserModuleAdmin(SITE_ID, false)
+			)
 		)
 		{
 			$user["SHOW_SONET_ADMIN"] = true;
@@ -592,6 +576,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 						->isCollaberById((int)$user["ID"]);
 					$user["STATUS"] = $isCollaber ? "collaber" : "extranet";
 					$user["IS_EXTRANET"] = true;
+					$user["IS_COLLABER"] = $isCollaber;
 				}
 				else
 				{

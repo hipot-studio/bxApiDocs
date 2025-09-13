@@ -35,6 +35,8 @@ final class Store extends Controller
 			return null;
 		}
 
+		$storeInfo = $this->get($id);
+
 		if (!$this->checkSpecificStoreReadRight($id))
 		{
 			$this->addError($this->getErrorReadAccessDenied());
@@ -43,7 +45,7 @@ final class Store extends Controller
 		}
 
 		return [
-			$this->getServiceItemName() => $this->get($id),
+			$this->getServiceItemName() => $storeInfo,
 		];
 	}
 
@@ -76,7 +78,8 @@ final class Store extends Controller
 			return null;
 		}
 
-		if (!$this->checkSpecificStoreModifyRights($id))
+		if (!$this->checkSpecificStoreModifyRights($id)
+		)
 		{
 			$this->addError($this->getErrorModifyAccessDenied());
 
@@ -176,13 +179,25 @@ final class Store extends Controller
 			ActionDictionary::ACTION_STORE_VIEW,
 			get_class($this->getEntityTable())
 		);
+
+		$innerFilter = [
+			'LOGIC' => 'OR',
+		];
+
 		if ($accessFilter)
 		{
-			$params['filter'] = [
-				$accessFilter,
-				$params['filter'],
-			];
+			$innerFilter[] = $accessFilter;
+
+			if ($this->checkModifyPermissionEntity()->isSuccess())
+			{
+				$innerFilter[] = ['=USER_ID' => $this->accessController->getUser()->getUserId()];
+			}
 		}
+
+		$params['filter'] = [
+			$innerFilter,
+			$params['filter'],
+		];
 
 		return $params;
 	}
@@ -194,7 +209,15 @@ final class Store extends Controller
 
 	protected function checkSpecificStoreReadRight(int $storeId): bool
 	{
-		return $this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, (string)$storeId);
+		$creatorId = StoreTable::getStoreCreatorId($storeId);
+
+		return
+			$this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, (string)$storeId)
+			|| (
+				$this->accessController->check(ActionDictionary::ACTION_STORE_MODIFY)
+				&& $creatorId === $this->accessController->getUser()->getUserId()
+			)
+		;
 	}
 
 	protected function checkSpecificStoreModifyRights(int $storeId): bool

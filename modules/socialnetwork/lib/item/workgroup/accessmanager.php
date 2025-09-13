@@ -10,6 +10,7 @@ namespace Bitrix\Socialnetwork\Item\Workgroup;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\Collab\Converter\ConverterFeature;
 use Bitrix\Socialnetwork\EO_UserToGroup;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_WorkgroupFavorites;
@@ -659,6 +660,16 @@ class AccessManager
 		}
 
 		return true;
+	}
+
+	public function canConvertToCollab(): bool
+	{
+		return
+			ConverterFeature::isOn()
+			&& $this->currentUserRelation
+			&& $this->group->getType() === Type::Group->value
+			&& $this->checkOwner($this->currentUserRelation)
+		;
 	}
 
 	protected function checkGroupEntityFields(array $fieldsList = []): void

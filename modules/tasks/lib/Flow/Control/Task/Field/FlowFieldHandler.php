@@ -33,7 +33,7 @@ class FlowFieldHandler
 	 * @throws FlowNotFoundException
 	 * @throws FlowTaskException
 	 */
-	public function modify(array &$fields, array $taskData): array
+	public function modify(array &$fields, array $taskData = []): array
 	{
 		$flow = $this->provider->getFlow($this->flowId, ['*', 'OPTIONS']);
 

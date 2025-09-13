@@ -164,12 +164,7 @@ class CalendarService
 		}
 		else
 		{
-			$userIds = RelationCollection::find(
-				['ACTIVE' => true, 'ONLY_INTERNAL_TYPE' => true, 'CHAT_ID' => $chat->getId()],
-				limit: 50,
-				select: ['ID', 'USER_ID', 'CHAT_ID']
-			)->getUsers()->filterExtranet()->getIds();
-			$userIds[$currentUserId] = $currentUserId;
+			$userIds = $this->getParticipants($chat);
 			$users = array_values(array_map(static fn($item) => ['id' => (int)$item, 'entityId' => 'user'], $userIds));
 			$data['params']['participantsEntityList'] = $users;
 			$data['params']['type'] = 'user';
@@ -189,6 +184,25 @@ class CalendarService
 		}
 
 		return $result->setResult($data);
+	}
+
+	protected function getParticipants(Chat $chat): array
+	{
+		$participants = RelationCollection::find(
+			[
+				'ACTIVE' => true,
+				'ONLY_INTERNAL_TYPE' => true,
+				'CHAT_ID' => $chat->getId(),
+				'IS_HIDDEN' => false,
+				'ONLY_INTRANET' => true,
+			],
+			limit: 50,
+			select: ['ID', 'USER_ID', 'CHAT_ID']
+		)->getUserIds();
+		$currentUserId = $this->getContext()->getUserId();
+		$participants[$currentUserId] = $currentUserId;
+
+		return $participants;
 	}
 
 	protected function sendMessageAboutCalendar(CalendarItem $calendarLink, int $chatId): Result

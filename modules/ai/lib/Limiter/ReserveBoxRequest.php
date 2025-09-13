@@ -49,6 +49,12 @@ final class ReserveBoxRequest
 			return ErrorLimit::BAAS_LIMIT;
 		}
 
+		/** @see  \Bitrix\AiProxy\Limiter\Enums\ErrorLimit::RateLimit */
+		if ($this->errorLimitType === 'RATE_LIMIT')
+		{
+			return ErrorLimit::RATE_LIMIT;
+		}
+
 		return null;
 	}
 

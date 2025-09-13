@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Analytics;
 
 use Bitrix\Im\V2\Analytics\Event\MessageEvent;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Message;
 
 class MessageAnalytics extends ChatAnalytics
@@ -57,14 +59,21 @@ class MessageAnalytics extends ChatAnalytics
 		});
 	}
 
-	public function addShareMessage(): void
+	public function addShareMessage(Chat $targetChat): void
 	{
-		$this->async(function () {
-			$this
-				->createMessageEvent(self::SHARE_MESSAGE)
-				?->setType((new MessageContent($this->message))->getComponentName())
-				?->send()
+		$this->async(function () use ($targetChat) {
+			$event =
+				$this
+					->createMessageEvent(self::SHARE_MESSAGE)
+					?->setType((new MessageContent($this->message))->getComponentName())
 			;
+
+			if ($targetChat instanceof FavoriteChat)
+			{
+				$event?->setSection('notes');
+			}
+
+			$event?->send();
 		});
 	}
 

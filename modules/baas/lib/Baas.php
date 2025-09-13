@@ -52,15 +52,22 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 	\Bitrix\Baas\Baas::getInstance()->sync();
 }
 	 */
-	public function sync(): Main\Result
+	public function sync(bool $force = true): Main\Result
 	{
 		if ($this->isAvailable())
 		{
-			return Service\BillingSynchronizationService::getInstance()->sync();
+			if ($force === true)
+			{
+				return Service\BillingSynchronizationService::getInstance()->sync();
+			}
+
+			return Service\BillingSynchronizationService::getInstance()->syncIfNeeded();
 		}
 
 		return (new Main\Result())->addError(new Main\Error('Baas is not available'));
 	}
+
+
 
 	/**
 	 * @return array<Contract\Purchase>

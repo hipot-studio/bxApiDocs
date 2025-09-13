@@ -83,7 +83,7 @@ class General extends BaseSettings
 		if (is_array($source) && !empty($source))
 		{
 			$this->settings =
-				\Bitrix\Im\Configuration\General::filterGroupSettingsByDefault($source)
+				\Bitrix\Im\Configuration\General::prepareRawGroupSettings($source)
 			;
 			$this->isLoad = true;
 		}

@@ -25,6 +25,7 @@ use \Bitrix\Tasks\Internals\Task\SortingTable;
 use \Bitrix\Tasks\Integration\SocialNetwork;
 use \Bitrix\Tasks\Integration\Bizproc;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
 
 Loc::loadMessages(__FILE__);
 
@@ -362,9 +363,10 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 				));
 				while ($rowStg = $resStg->fetch())
 				{
-					TaskStageTable::update($rowStg['ID'], array(
-						'STAGE_ID' => $stageId
-					));
+					(new MoveTaskCommand(
+						relationId: (int)$rowStg['ID'],
+						stageId: (int)$stageId
+					))->run();
 
 					if ($stageId !== (int)$rowStg['STAGE_ID'])
 					{
@@ -650,9 +652,10 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 		]);
 		if ($taskStage = $queryObject->fetch())
 		{
-			TaskStageTable::update($taskStage['ID'], [
-				'STAGE_ID' => $stage['ID'],
-			]);
+			(new MoveTaskCommand(
+				relationId: (int)$taskStage['ID'],
+				stageId: (int)$stage['ID']
+			))->run();
 
 			$taskObject->update($taskId, ['STAGE_ID' => $stage['ID']]);
 		}

@@ -116,6 +116,15 @@ class AutomationSection
 			],
 		];
 
+		$menu[] = [
+			Loc::getMessage('MENU_START_PROCESS'),
+			SITE_DIR . 'bizproc/start/',
+			[],
+			[
+				'menu_item_id' => 'menu_process_start',
+			],
+		];
+
 		if (Loader::includeModule('lists') && \CLists::isFeatureEnabled())
 		{
 			$menu[] = [
@@ -199,67 +208,6 @@ class AutomationSection
 		];
 	}
 
-	private static function getSmartProcessesMenuSubItems(
-		Router $router,
-		Crm\Service\UserPermissions $userPermissions,
-	): array
-	{
-		$menuDefaultItems = [];
-		$menuCustomSections = [];
-
-		$customSections = Crm\Integration\IntranetManager::getCustomSections() ?? [];
-		foreach ($customSections as $customSection)
-		{
-			$pageItems = [];
-
-			$pages = $customSection->getPages();
-			foreach ($pages as $page)
-			{
-				$pageSettings = $page->getSettings();
-				$entityTypeId = Crm\Integration\IntranetManager::getEntityTypeIdByPageSettings($pageSettings);
-				if (!$userPermissions->canReadType($entityTypeId))
-				{
-					continue;
-				}
-
-				$pageUrl = $router->getItemListUrlInCurrentView($entityTypeId);
-				$pageItems[] = [
-					'TEXT' => $page->getTitle(),
-					'URL' => $pageUrl,
-				];
-			}
-			if (!empty($pageItems))
-			{
-				$menuCustomSections[] = [
-					'TEXT' => $customSection->getTitle(),
-					'ITEMS' => $pageItems,
-				];
-			}
-		}
-
-		if ($userPermissions->canWriteConfig())
-		{
-			if (!empty($menuCustomSections))
-			{
-				$menuDefaultItems[] = [
-					'IS_DELIMITER' => true,
-				];
-			}
-
-			$externalTypeUrl = method_exists(Router::class, 'getExternalTypeListUrl')
-				? $router->getExternalTypeListUrl()
-				: $router->getTypeListUrl()
-			;
-
-			$menuDefaultItems[] = [
-				'TEXT' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_DEFAULT_SUBTITLE'),
-				'URL' => $externalTypeUrl,
-			];
-		}
-
-		return array_merge($menuCustomSections, $menuDefaultItems);
-	}
-
 	private static function getAutomatedSolutionsMenuSubItems(
 		Router $router,
 		Crm\Service\UserPermissions $userPermissions,
@@ -270,11 +218,7 @@ class AutomationSection
 
 		$menuItems = [];
 
-		$canEditAutomatedSolutions =
-			method_exists($userPermissions, 'canEditAutomatedSolutions')
-			? $userPermissions->canEditAutomatedSolutions()
-			: $userPermissions->canWriteConfig()
-		;
+		$canEditAutomatedSolutions = $userPermissions->automatedSolution()->canEdit();
 
 		foreach ($automatedSolutionManager->getExistingAutomatedSolutions() as $automatedSolution)
 		{
@@ -282,7 +226,7 @@ class AutomationSection
 			foreach ($automatedSolution['TYPE_IDS'] as $typeId)
 			{
 				$type = $container->getType($typeId);
-				if ($userPermissions->canReadType($type->getEntityTypeId()))
+				if ($userPermissions->entityType()->canReadItems($type->getEntityTypeId()))
 				{
 					$automatedSolutionSubItems[] = [
 						'TEXT' => $type->getTitle(),
@@ -402,7 +346,7 @@ class AutomationSection
 		foreach ($typesMap->getTypes() as $type)
 		{
 			if (
-				$userPermissions->canReadType($type->getEntityTypeId())
+				$userPermissions->entityType()->canReadItems($type->getEntityTypeId())
 				&& $type->getIsAutomationEnabled()
 				&& Crm\Integration\IntranetManager::isEntityTypeInCustomSection($type->getEntityTypeId())
 			)

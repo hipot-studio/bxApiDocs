@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
-use Bitrix\Main\ObjectException;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Socialnetwork\Collab\Collab;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\ShowHistoryOption;
 use Bitrix\Socialnetwork\Collab\Integration\Intranet\ServiceContainer;
 use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
+use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
+use Bitrix\Socialnetwork\Item\Workgroup;
 use CAllSocNetUser;
 use CIMChat;
 use CUser;
@@ -22,10 +24,21 @@ trait MessageTrait
 		$collab = CollabRegistry::getInstance()->get($collabId);
 		if ($collab === null)
 		{
-			throw new ObjectException('Collab not found');
+			throw new ObjectNotFoundException('Collab not found');
 		}
 
 		return $collab;
+	}
+
+	protected function getWorkgroup(int $groupId): Workgroup
+	{
+		$workgroup = GroupRegistry::getInstance()->get($groupId);
+		if ($workgroup === null)
+		{
+			throw new ObjectNotFoundException('Workgroup not found');
+		}
+
+		return $workgroup;
 	}
 
 	protected function getChat(): CIMChat
@@ -40,9 +53,9 @@ trait MessageTrait
 			return "[USER={$recipientId}][/USER]";
 		}
 
-		$collab = $this->getCollab($collabId);
+		$workgroup = $this->getWorkgroup($collabId);
 
-		foreach ($collab->getSiteIds() as $siteId)
+		foreach ($workgroup->getSiteIds() as $siteId)
 		{
 			if (CAllSocNetUser::CanProfileView($this->senderId, $recipientId, $siteId))
 			{
@@ -50,7 +63,7 @@ trait MessageTrait
 			}
 		}
 
-		$inviteService = ServiceContainer::getInstance()?->inviteService();
+		$inviteService = ServiceContainer::getInstance()?->getUserService();
 
 		$names = $inviteService?->getFormattedInvitationNameByIds([$recipientId]);
 
@@ -104,7 +117,7 @@ trait MessageTrait
 		}
 	}
 
-	protected function sendMessage(string $message, int $senderId, int $collabId): int
+	protected function sendMessage(string $message, int $senderId, int $groupId, ?string $componentId = null): int
 	{
 		$fields = [
 			'MESSAGE' => $message,
@@ -112,11 +125,16 @@ trait MessageTrait
 			'PUSH' => 'N',
 			'FROM_USER_ID' => $senderId,
 			'SKIP_USER_CHECK' => 'Y',
-			'TO_CHAT_ID' => $this->getCollab($collabId)->getChatId(),
+			'TO_CHAT_ID' => $this->getWorkgroup($groupId)->getChatId(),
 			'PARAMS' => [
 				'NOTIFY' => 'N',
 			],
 		];
+
+		if ($componentId)
+		{
+			$fields['PARAMS']['COMPONENT_ID'] = $componentId;
+		}
 
 		$chat = $this->getChat();
 

@@ -176,7 +176,20 @@ final class FileAttributes extends ItemAttributes
 			}
 		}
 
+		if (self::isBoardType($fileArray))
+		{
+			$type = Disk\UI\Viewer\Renderer\Board::getJsType();
+		}
+
 		return $type;
+	}
+
+	protected static function isBoardType(array $fileData): bool
+	{
+		return !empty($fileData['CONTENT_TYPE'])
+			&& $fileData['CONTENT_TYPE'] === 'application/octet-stream'
+			&& GetFileExtension($fileData['ORIGINAL_NAME'] ?? '') === 'board'
+		;
 	}
 
 	protected static function isSetViewDocumentInClouds()

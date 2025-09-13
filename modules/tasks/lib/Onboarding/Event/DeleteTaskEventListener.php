@@ -12,7 +12,7 @@ final class DeleteTaskEventListener extends AbstractEventListener
 	{
 		$eventResult = new EventResult(EventResult::SUCCESS);
 
-		$this->deleteJobs($taskId);
+		$this->deleteByPair($taskId);
 
 		return $eventResult;
 	}

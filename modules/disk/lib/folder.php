@@ -523,9 +523,9 @@ class Folder extends BaseObject
 	{
 		$this->errorCollection->clear();
 
-		static::checkRequiredInputParams($data, array(
-			'NAME'
-		));
+		static::checkRequiredInputParams($data, [
+			'NAME',
+		]);
 
 		$nameService = new ObjectNameService($data['NAME'], $this->id, ObjectTable::TYPE_FOLDER);
 		if ($generateUniqueName)

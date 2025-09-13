@@ -161,7 +161,16 @@ final class MessageBox
 			->retryStrategy
 		;
 
-		$this->retry(intval($retryStrategy->getWaitingTime($retryStrategy->getMaxRetryCount() - $this->ttl) / 1000));
+		$retry = $retryStrategy->getMaxRetryCount() - $this->ttl;
+
+		$availableAt = new DateTime();
+
+		$this->availableAt = $availableAt->add(
+			sprintf(
+				'+%s seconds',
+				intval($retryStrategy->getWaitingTime($retry) / 1000)
+			)
+		);
 	}
 
 	public function kill(): self
@@ -173,7 +182,7 @@ final class MessageBox
 		return $this;
 	}
 
-	public function retry(?int $retryDelay): self
+	public function requeue(?int $retryDelay): self
 	{
 		$this->ttl++;
 

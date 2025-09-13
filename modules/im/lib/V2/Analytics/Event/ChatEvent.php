@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Chat\CopilotChat;
+use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Chat\GeneralChannel;
 use Bitrix\Im\V2\Chat\GeneralChat;
 use Bitrix\Im\V2\Chat\GroupChat;
@@ -16,6 +17,7 @@ use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\VideoConfChat;
 use Bitrix\Im\V2\Entity\User\UserCollaber;
 use Bitrix\Im\V2\Entity\User\UserExternal;
+use Bitrix\Im\V2\Integration\AI\RoleManager;
 
 class ChatEvent extends Event
 {
@@ -67,6 +69,7 @@ class ChatEvent extends Event
 		'chatType_copilot' => ['instanceof' => CopilotChat::class],
 		'chatType_chat' => ['instanceof' => GroupChat::class],
 
+		'chatType_notes' => ['instanceof' => FavoriteChat::class],
 		'chatType_user' => ['instanceof' => PrivateChat::class],
 	];
 
@@ -163,6 +166,14 @@ class ChatEvent extends Event
 		if ($this->chat instanceof CollabChat)
 		{
 			$this->p4 = 'collabId_' . ($this->chat->getEntityId() ?? 0);
+
+			return $this;
+		}
+
+		if ($this->chat instanceof CopilotChat)
+		{
+			$role = (new RoleManager())->getMainRole($this->chat->getChatId()) ?? '';
+			$this->p4 = 'role_' . self::convertUnderscore($role);
 
 			return $this;
 		}

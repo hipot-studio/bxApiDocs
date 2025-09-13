@@ -312,7 +312,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 
 		$this->arParams['CRM_AVAILABLE'] = false;
-		if (Main\Loader::includeModule('crm') && \CCrmPerms::isAccessEnabled())
+		if (\Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm())
 		{
 			$this->arParams['CRM_AVAILABLE'] = $USER->isAdmin() || $USER->canDoOperation('bitrix24_config')
 				|| \COption::getOptionString('intranet', 'allow_external_mail_crm', 'Y', SITE_ID) == 'Y';
@@ -414,7 +414,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		{
 			$mailboxSyncManager = new Mail\Helper\Mailbox\MailboxSyncManager($mailbox['USER_ID']);
 			$this->arResult['LAST_MAIL_CHECK_DATE'] = $mailboxSyncManager->getLastMailboxSyncTime($mailbox['ID']);
-			$this->arResult['LAST_MAIL_CHECK_STATUS'] = $mailboxSyncManager->getLastMailboxSyncIsSuccessStatus($mailbox['ID']);
+			$this->arResult['LAST_MAIL_CHECK_STATUS'] = $mailboxSyncManager->getCachedConnectionStatus($mailbox['ID']);
 		}
 
 		$this->arResult['MICROSOFT_SERVICE_NAMES'] = $this->getMicrosoftServiceNames();
@@ -936,7 +936,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		if ($fields['use_crm'] == 'Y')
 		{
 			$crmAvailable = false;
-			if (Main\Loader::includeModule('crm') && \CCrmPerms::isAccessEnabled())
+			if (\Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm())
 			{
 				$crmAvailable = $USER->isAdmin() || $USER->canDoOperation('bitrix24_config')
 					|| \COption::getOptionString('intranet', 'allow_external_mail_crm', 'Y', SITE_ID) == 'Y';

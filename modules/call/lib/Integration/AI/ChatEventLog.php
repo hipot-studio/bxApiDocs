@@ -5,6 +5,8 @@ namespace Bitrix\Call\Integration\AI;
 use Bitrix\Main\Config\Option;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Params;
+use Bitrix\Call\NotifyService;
 
 class ChatEventLog
 {
@@ -97,6 +99,10 @@ class ChatEventLog
 				$message->setMessage(
 					"[b]Got track file[/b] for call #[url={$url}]{$track->getCallId()}[/url]"
 				);
+				$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
+					'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_INFO,
+					'CALL_ID' => $track->getCallId(),
+				]);
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage(
@@ -134,6 +140,10 @@ class ChatEventLog
 				$message->setMessage(
 					"[b]Got error with track[/b] for call #[url={$url}]{$track->getCallId()}[/url]"
 				);
+				$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
+					'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_INFO,
+					'CALL_ID' => $track->getCallId(),
+				]);
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage(
@@ -173,6 +183,10 @@ class ChatEventLog
 				$message->setMessage(
 					"[b]Got AI outcome[/b] for call #[url={$url}]{$outcome->getCallId()}[/url]"
 				);
+				$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
+					'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_INFO,
+					'CALL_ID' => $outcome->getCallId(),
+				]);
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage("Outcome type: {$outcome->getType()}");
@@ -215,6 +229,10 @@ class ChatEventLog
 				$message->setMessage(
 					"[b]Got error from AI[/b] for call #[url={$url}]{$task->getCallId()}[/url]"
 				);
+				$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
+					'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_INFO,
+					'CALL_ID' => $task->getCallId(),
+				]);
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage(
@@ -259,6 +277,10 @@ class ChatEventLog
 				$message->setMessage(
 					"[b]Launch AI task[/b] for call #[url={$url}]{$task->getCallId()}[/url]"
 				);
+				$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
+					'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_INFO,
+					'CALL_ID' => $task->getCallId(),
+				]);
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage(

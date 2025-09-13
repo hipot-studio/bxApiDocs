@@ -398,7 +398,7 @@ final class WorkflowFacesService
 			(new Step(WorkflowFacesStep::Done))
 				->setAvatars($doneTaskId ? $data->getTaskUserIds($doneTaskId) : [])
 				->setDuration((int)($duration?->getRoundedDoneDuration()))
-				->setSuccess($data->isDoneTaskStatusSuccess())
+				->setSuccess(!$doneTask || $data->isDoneTaskStatusSuccess())
 				->setTaskId($doneTaskId ?: 0)
 		);
 	}

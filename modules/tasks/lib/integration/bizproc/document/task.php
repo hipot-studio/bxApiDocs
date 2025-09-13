@@ -438,6 +438,28 @@ class Task implements \IBPWorkflowDocument
 		//$fields = $task->getData();
 		$args = func_get_args();
 		$select = $args[2] ?? [];
+
+		$select = array_merge(
+			...array_map(
+				static function($selectField)
+				{
+					$mapFields = [
+						'STATUS' => 'REAL_STATUS',
+						'IS_IMPORTANT' => 'PRIORITY',
+						'IS_EXPIRED' => ['DEADLINE', 'REAL_STATUS', 'CLOSED_DATE'],
+						'GROUP_ID_PRINTABLE' => 'GROUP_ID',
+						'MEMBER_ROLE' => ['CREATED_BY', 'RESPONSIBLE_ID', 'ACCOMPLICES', 'AUDITORS'],
+					];
+
+					$field = $mapFields[$selectField] ?? $selectField;
+
+					return is_array($field) ? $field : [$field];
+				},
+				$select
+			)
+		);
+
+
 		if (empty($select))
 		{
 			$res = \CTasks::GetByID($documentId, false);
@@ -490,17 +512,17 @@ class Task implements \IBPWorkflowDocument
 
 	private static function getMemberRole($memberId, array $fields)
 	{
-		if ($memberId === (int)$fields['CREATED_BY'])
+		if ($memberId === (int)($fields['CREATED_BY'] ?? null))
 		{
 			return 'O';
 		}
 
-		if ($memberId === (int)$fields['RESPONSIBLE_ID'])
+		if ($memberId === (int)($fields['RESPONSIBLE_ID'] ?? null))
 		{
 			return 'R';
 		}
 
-		foreach ($fields['ACCOMPLICES'] as $accomplice)
+		foreach (($fields['ACCOMPLICES'] ?? []) as $accomplice)
 		{
 			if ($memberId === (int)$accomplice)
 			{
@@ -508,7 +530,7 @@ class Task implements \IBPWorkflowDocument
 			}
 		}
 
-		foreach ($fields['AUDITORS'] as $auditor)
+		foreach (($fields['AUDITORS'] ?? []) as $auditor)
 		{
 			if ($memberId === (int)$auditor)
 			{
@@ -869,7 +891,7 @@ class Task implements \IBPWorkflowDocument
 
 	public static function convertFieldsToDocument(array &$fields, array $required = []): void
 	{
-		$fields['IS_IMPORTANT'] = ($fields['PRIORITY'] > Priority::AVERAGE) ? 'Y' : 'N';
+		$fields['IS_IMPORTANT'] = (($fields['PRIORITY'] ?? null) > Priority::AVERAGE) ? 'Y' : 'N';
 
 		$documentFields = self::getDocumentFields(null);
 		foreach ($fields as $fieldName => $fieldValue)
@@ -883,19 +905,19 @@ class Task implements \IBPWorkflowDocument
 		//users
 		foreach (['RESPONSIBLE_ID', 'CREATED_BY', 'CHANGED_BY', 'CLOSED_BY'] as $userKey)
 		{
-			$fields[$userKey] = $fields[$userKey] > 0 ?sprintf('user_%d', $fields[$userKey]) : null;
+			$fields[$userKey] = ($fields[$userKey] ?? null) > 0 ?sprintf('user_%d', $fields[$userKey]) : null;
 		}
-		foreach ($fields['ACCOMPLICES'] as $i => $userId)
+		foreach (($fields['ACCOMPLICES'] ?? []) as $i => $userId)
 		{
 			$fields['ACCOMPLICES'][$i] = sprintf('user_%d', $userId);
 		}
-		foreach ($fields['AUDITORS'] as $i => $userId)
+		foreach (($fields['AUDITORS'] ?? []) as $i => $userId)
 		{
 			$fields['AUDITORS'][$i] = sprintf('user_%d', $userId);
 		}
 		//$fields['TAGS'] - nothing to do.
 
-		$fields['STATUS'] = $fields['REAL_STATUS'];
+		$fields['STATUS'] = $fields['REAL_STATUS'] ?? null;
 		$fields['IS_EXPIRED'] = 'N';
 		if (!empty($fields['DEADLINE']))
 		{
@@ -913,7 +935,7 @@ class Task implements \IBPWorkflowDocument
 		}
 
 		$fields['GROUP_ID_PRINTABLE'] = Loc::getMessage('TASKS_BP_DOCUMENT_GROUP_ID_PRINTABLE_DEFAULT');
-		if (($fields['GROUP_ID'] > 0) && (isset($required['GROUP_ID_PRINTABLE']) || empty($required)))
+		if ((($fields['GROUP_ID'] ?? null) > 0) && (isset($required['GROUP_ID_PRINTABLE']) || empty($required)))
 		{
 			$fields['GROUP_ID_PRINTABLE'] = $fields['GROUP_ID'];
 			if (Main\Loader::includeModule('socialnetwork'))
@@ -938,7 +960,7 @@ class Task implements \IBPWorkflowDocument
 			$fields['FLOW_OWNER'] =  'user_' . $flowOwnerId;
 		}
 
-		if ((int)$fields['PARENT_ID'] <= 0) // issue: 0155930
+		if ((int)($fields['PARENT_ID'] ?? null) <= 0) // issue: 0155930
 		{
 			$fields['PARENT_ID'] = null;
 		}

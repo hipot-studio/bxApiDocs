@@ -54,6 +54,34 @@ class Manager
 		return MobileApp\Mobile::getApiVersion() >= 41;
 	}
 
+	private function getTabs(): array
+	{
+		return [
+			$this->messenger,
+			$this->copilot,
+			$this->openLines,
+			$this->channel,
+			$this->collab,
+		];
+	}
+
+	private function getCacheId(): string
+	{
+		$enabledIds = [];
+		$tabs = $this->getTabs();
+
+		foreach ($tabs as $tab)
+		{
+			if ($tab->isAvailable())
+			{
+				$enabledIds[] = $tab->getId();
+			}
+		}
+
+		sort($enabledIds);
+		return 'chat_tabs_' . hash('sha256', implode('_', $enabledIds));
+	}
+
 	public function getMessengerComponent(): array
 	{
 		/**
@@ -67,9 +95,9 @@ class Manager
 		$sharedParams = $this->getSharedParams($items);
 		foreach ($items as $item)
 		{
-			if ($item->isNeedMergeSharedParams())
+			if ($item->getId() === 'openlines')
 			{
-				$item->mergeParams($sharedParams);
+				$item->mergeParams($sharedParams['SHARED_PARAMS']);
 			}
 
 			$itemsData[] = $item->getComponentData();
@@ -78,6 +106,7 @@ class Manager
 		return [
 			'sort' => 100,
 			'imageName' => 'chat',
+			'cacheId' => $this->getCacheId(),
 			'badgeCode' => 'messages',
 			'component' => [
 				'name' => 'JSStackComponent',
@@ -85,6 +114,7 @@ class Manager
 				'componentCode' => 'im.navigation',
 				'scriptPath' => MobileApp\Janative\Manager::getComponentPath('im:im.navigation'),
 				'params' => array_merge([
+					'COMPONENT_CODE' => 'im.navigation',
 					'firstTabId' => $items[0]->getId(),
 				], $sharedParams),
 				'rootWidget' => [
@@ -247,59 +277,69 @@ class Manager
 
 		return array_merge(
 			[
-				'USER_ID' => $this->context->userId,
-				'SITE_ID' => $this->context->siteId,
-				'SITE_DIR' => $this->context->siteDir,
-				'LANGUAGE_ID' => LANGUAGE_ID,
-				'LIMIT_ONLINE' => CUser::GetSecondsForLimitOnline(),
-				'IM_GENERAL_CHAT_ID' => GeneralChat::getGeneralChatId(),
-				'SEARCH_MIN_SIZE' => Helper::getMinTokenSize()?: 3,
-				'OPENLINES_USER_IS_OPERATOR' => $this->openLines->isAvailable(),
+				'SHARED_PARAMS' => [
+					'USER_ID' => $this->context->userId,
+					'SITE_ID' => $this->context->siteId,
+					'SITE_DIR' => $this->context->siteDir,
+					'LANGUAGE_ID' => LANGUAGE_ID,
+					'LIMIT_ONLINE' => CUser::GetSecondsForLimitOnline(),
+					'IM_GENERAL_CHAT_ID' => GeneralChat::getGeneralChatId(),
+					'SEARCH_MIN_SIZE' => Helper::getMinTokenSize()?: 3,
+					'OPENLINES_USER_IS_OPERATOR' => $this->openLines->isAvailable(),
 
-				'WIDGET_CHAT_CREATE_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.create'),
-				'WIDGET_CHAT_USERS_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.user.list'),
-				'WIDGET_CHAT_RECIPIENTS_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.user.selector'),
-				'WIDGET_CHAT_TRANSFER_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.transfer.selector'),
-				'WIDGET_BACKDROP_MENU_VERSION' => MobileApp\Janative\Manager::getComponentVersion('backdrop.menu'),
-				'COMPONENT_CHAT_DIALOG_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog'),
-				'COMPONENT_CHAT_DIALOG_VUE_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog.vue'),
+					'WIDGET_CHAT_CREATE_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.create'),
+					'WIDGET_CHAT_USERS_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.user.list'),
+					'WIDGET_CHAT_RECIPIENTS_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.user.selector'),
+					'WIDGET_CHAT_TRANSFER_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.transfer.selector'),
+					'WIDGET_BACKDROP_MENU_VERSION' => MobileApp\Janative\Manager::getComponentVersion('backdrop.menu'),
+					'COMPONENT_CHAT_DIALOG_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog'),
+					'COMPONENT_CHAT_DIALOG_VUE_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog.vue'),
 
-				'IS_NETWORK_SEARCH_AVAILABLE' => $this->isNetworkSearchAvailable(),
-				'IS_DEVELOPMENT_ENVIRONMENT' => $this->isDevelopmentEnvironment(),
+					'IS_NETWORK_SEARCH_AVAILABLE' => $this->isNetworkSearchAvailable(),
+					'IS_DEVELOPMENT_ENVIRONMENT' => $this->isDevelopmentEnvironment(),
 
-				'MESSAGES' => [
-					'IMOL_CHAT_ANSWER_M' => Localize::get(Localize::FILE_LIB_CHAT, "IMOL_CHAT_ANSWER_M"),
-					'IMOL_CHAT_ANSWER_F' => Localize::get(Localize::FILE_LIB_CHAT, "IMOL_CHAT_ANSWER_F"),
-				],
+					'MESSAGES' => [
+						'IMOL_CHAT_ANSWER_M' => Localize::get(Localize::FILE_LIB_CHAT, "IMOL_CHAT_ANSWER_M"),
+						'IMOL_CHAT_ANSWER_F' => Localize::get(Localize::FILE_LIB_CHAT, "IMOL_CHAT_ANSWER_F"),
+					],
 
-				'NEXT_NOTIFICATIONS' => $this->isNextNotifications() ? 'Y': 'N',
-				'NEXT_NAVIGATION' => $this->isNextNavigation() ? 'Y': 'N',
+					'NEXT_NOTIFICATIONS' => $this->isNextNotifications() ? 'Y': 'N',
+					'NEXT_NAVIGATION' => $this->isNextNavigation() ? 'Y': 'N',
 
-				'IS_CLOUD' => $isCloud,
-				'HAS_ACTIVE_CLOUD_STORAGE_BUCKET' => $hasActiveBucket,
-				'IS_BETA_AVAILABLE' => Settings::isBetaAvailable(),
-				'IS_CHAT_M1_ENABLED' => Settings::isChatM1Enabled(),
-				'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
-				'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
-				'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),
-				'CAN_USE_TELEPHONY' => Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
-				'FIRST_TAB_ID' => $firstTabId,
-				'HUMAN_RESOURCES_STRUCTURE_AVAILABLE' => $humanResourcesStructureAvailable ? 'Y' : 'N',
-				'ENABLE_DEV_WORKSPACE' => $enableDevWorkspace ? 'Y' : 'N',
-				'PLAN_LIMITS' => Settings::planLimits(),
-				'IM_FEATURES' => Settings::getImFeatures(),
-				'USER_INFO' => [
-					'id' => User::getCurrent()?->getId() ?? 0,
-					'type' => User::getCurrent()?->getType()?->value ?? 'user',
-				],
-				'INSTALLED_MODULES' => ModuleManager::getInstalledModules(),
-				'PERMISSIONS' => $permissions,
-				'MULTIPLE_ACTION_MESSAGE_LIMIT' => Settings::getMultipleActionMessageLimit(),
-				'AVAILABLE_MESSENGER_COMPONENTS' => [
-					$this->messenger->getComponentCode() => $this->messenger->isAvailable(),
-					$this->copilot->getComponentCode() => $this->copilot->isAvailable(),
-					$this->channel->getComponentCode() => $this->channel->isAvailable(),
-					$this->openLines->getComponentCode() => $this->openLines->isAvailable(),
+					'IS_CLOUD' => $isCloud,
+					'HAS_ACTIVE_CLOUD_STORAGE_BUCKET' => $hasActiveBucket,
+					'IS_BETA_AVAILABLE' => Settings::isBetaAvailable(),
+					'IS_CHAT_M1_ENABLED' => Settings::isChatM1Enabled(),
+					'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
+					'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
+					'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),
+					'CAN_USE_TELEPHONY' => Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
+					'FIRST_TAB_ID' => $firstTabId,
+					'HUMAN_RESOURCES_STRUCTURE_AVAILABLE' => $humanResourcesStructureAvailable ? 'Y' : 'N',
+					'ENABLE_DEV_WORKSPACE' => $enableDevWorkspace ? 'Y' : 'N',
+					'PLAN_LIMITS' => Settings::planLimits(),
+					'IM_FEATURES' => Settings::getImFeatures(),
+					'USER_INFO' => [
+						'id' => User::getCurrent()?->getId() ?? 0,
+						'type' => User::getCurrent()?->getType()?->value ?? 'user',
+					],
+					'PERMISSIONS' => $permissions,
+					'MULTIPLE_ACTION_MESSAGE_LIMIT' => Settings::getMultipleActionMessageLimit(),
+					'AVAILABLE_MESSENGER_COMPONENTS' => [
+						$this->messenger->getComponentCode() => $this->messenger->isAvailable(),
+						$this->copilot->getComponentCode() => $this->copilot->isAvailable(),
+						$this->channel->getComponentCode() => $this->channel->isAvailable(),
+						$this->collab->getComponentCode() => $this->collab->isAvailable(),
+						$this->openLines->getComponentCode() => $this->openLines->isAvailable(),
+					],
+					'PRELOADED_MESSENGER_COMPONENTS' => [
+						$this->messenger->getComponentCode() => $this->messenger->isPreload(),
+						$this->copilot->getComponentCode() => $this->copilot->isPreload(),
+						$this->channel->getComponentCode() => $this->channel->isPreload(),
+						$this->collab->getComponentCode() => $this->collab->isPreload(),
+						$this->openLines->getComponentCode() => $this->openLines->isPreload(),
+					],
+					'CALL_SERVER_MAX_USERS' => $this->getCallServerMaxUsers(),
 				],
 			],
 			$this->getInvitationParams(),
@@ -377,5 +417,14 @@ class Manager
 		}
 
 		return Imopenlines\User::isOperator();
+	}
+
+	private function getCallServerMaxUsers(): int
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			return (int)\Bitrix\Bitrix24\Feature::getVariable('im_max_call_participants');
+		}
+		return (int)Option::get('im', 'call_server_max_users');
 	}
 }

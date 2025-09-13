@@ -6,7 +6,6 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -21,7 +20,6 @@ use Bitrix\Recyclebin\Internals\Models\RecyclebinTable;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Control\Log\ActionDictionary;
 use Bitrix\Tasks\Control\Log\Command\AddCommand;
-use Bitrix\Tasks\Control\Log\TaskLogService;
 use Bitrix\Tasks\Control\Tag;
 use Bitrix\Tasks\Flow\Internal\FlowTaskTable;
 use Bitrix\Tasks\Integration;
@@ -49,9 +47,9 @@ use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Replication\Task\Regularity\Time\Service\RegularityService;
 use Bitrix\Tasks\Replication\Repository\TaskRepository;
 use Bitrix\Tasks\Scrum\Internal\ItemTable;
-use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use CCrmActivity;
 use CCrmActivityType;
 use CModule;
@@ -513,7 +511,9 @@ class Task implements Recyclebinable
 					break;
 
 				case 'SCENARIO':
-					ScenarioTable::insertIgnore($taskId, $data);
+					$scenarioService = Container::getInstance()->getScenarioService();
+					$scenarioService->save($taskId, $data);
+
 					break;
 
 				case 'SUBTASK_IDS':
@@ -606,7 +606,7 @@ class Task implements Recyclebinable
 			FavoriteTable::deleteByTaskId($taskId, ['LOW_LEVEL' => true]);
 			SortingTable::deleteByTaskId($taskId);
 			UserOption::deleteByTaskId($taskId);
-			TaskStageTable::clearTask($taskId);
+			Container::getInstance()->getTaskStageRepository()->deleteByTaskId($taskId);
 			TaskCheckListFacade::deleteByEntityIdOnLowLevel($taskId);
 
 			foreach ($tablesToClear as $table => $select)

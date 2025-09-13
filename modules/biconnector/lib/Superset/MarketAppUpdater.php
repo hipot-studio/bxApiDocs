@@ -2,6 +2,8 @@
 
 namespace Bitrix\BIConnector\Superset;
 
+use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Result;
@@ -19,7 +21,7 @@ class MarketAppUpdater
 
 	private function needToCheckUpdates(): bool
 	{
-		if (Option::get('biconnector', MarketDashboardManager::DASHBOARD_INSTALLING_IN_PROGRESS_OPTION_NAME, 'N') === 'Y')
+		if (MarketDashboardManager::getInstance()->areInitialDashboardsInstalling())
 		{
 			return false;
 		}
@@ -171,6 +173,11 @@ class MarketAppUpdater
 	public function updateApplications(): Result
 	{
 		$result = new Result();
+
+		if (!Feature::isCheckPermissionsByGroup())
+		{
+			Converter::updateToGroup(true);
+		}
 
 		if (!$this->needToCheckUpdates())
 		{

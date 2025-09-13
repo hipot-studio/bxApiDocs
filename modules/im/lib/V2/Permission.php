@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2;
 
+use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\GeneralChannel;
 use Bitrix\Im\V2\Chat\GeneralChat;
 use Bitrix\Im\V2\Chat\Type;
@@ -11,10 +12,6 @@ use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Permission\ActionGroup;
 use Bitrix\Im\V2\Permission\GlobalAction;
 use Bitrix\Main\Engine\Response\Converter;
-use Bitrix\Main\Entity\BooleanField;
-use Bitrix\Main\ORM\Fields\ExpressionField;
-use Bitrix\Main\ORM\Fields\IntegerField;
-use Bitrix\Main\ORM\Query\Query;
 
 class Permission
 {
@@ -35,16 +32,33 @@ class Permission
 
 	public function getByChatTypes(): array
 	{
-		if (isset(self::$permissionsByChatTypes))
+		if (!isset(self::$permissionsByChatTypes))
 		{
-			if ($this->jsonFormat)
-			{
-				return $this->converter->process(self::$permissionsByChatTypes);
-			}
-
-			return self::$permissionsByChatTypes;
+			$this->loadByChatTypes();
 		}
 
+		if ($this->jsonFormat)
+		{
+			return $this->converter->process(self::$permissionsByChatTypes);
+		}
+
+		return self::$permissionsByChatTypes;
+	}
+
+	private function loadByChatTypes(): void
+	{
+		$this->loadByChatTypesInternal();
+		$this->loadByChatTypesExternal();
+		$default = self::$permissionsByChatTypes[self::TYPE_DEFAULT];
+
+		foreach (self::$permissionsByChatTypes as $code => $value)
+		{
+			self::$permissionsByChatTypes[$code] = array_merge($default, $value);
+		}
+	}
+
+	private function loadByChatTypesInternal(): void
+	{
 		$generalChat = GeneralChat::get();
 		$roleForPostToGeneral = Chat::ROLE_MEMBER;
 		if ($generalChat !== null)
@@ -59,26 +73,7 @@ class Permission
 			$roleForPostToGeneralChannel = $generalChannel->getManageMessages();
 		}
 
-		$default = [
-			Action::ChangeAvatar->value => Chat::ROLE_MEMBER,
-			Action::Rename->value => Chat::ROLE_MEMBER,
-			Action::Extend->value => Chat::ROLE_MEMBER,
-			Action::Call->value => Chat::ROLE_MEMBER,
-			Action::Mute->value => Chat::ROLE_MEMBER,
-			Action::Leave->value => Chat::ROLE_MEMBER,
-			Action::LeaveOwner->value => Chat::ROLE_MEMBER,
-			Action::Send->value => Chat::ROLE_MEMBER,
-			Action::UserList->value => Chat::ROLE_MEMBER,
-			Action::CreateTask->value => Chat::ROLE_MEMBER,
-			Action::CreateMeeting->value => Chat::ROLE_MEMBER,
-			Action::DeleteOthersMessage->value => Chat::ROLE_NONE,
-			Action::Update->value => Chat::ROLE_NONE,
-			Action::Delete->value => Chat::ROLE_NONE,
-			Action::UpdateInviteLink->value => Chat::ROLE_NONE,
-			Action::CreateDocumentSign->value => Chat::ROLE_NONE,
-			Action::CreateCalendarSlots->value => Chat::ROLE_NONE,
-			Action::ChangeMessageDisappearing->value => Chat::ROLE_NONE,
-		];
+		$default = $this->getDefaultByChatTypes();
 
 		self::$permissionsByChatTypes[self::TYPE_DEFAULT] = $default;
 
@@ -88,8 +83,12 @@ class Permission
 			Action::Mute->value => Chat::ROLE_NONE,
 			Action::Leave->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
+			Action::Kick->value => Chat::ROLE_NONE,
 			Action::UserList->value => Chat::ROLE_NONE,
-			Action::ChangeMessageDisappearing->value => Chat::ROLE_MEMBER,
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MEMBER,
+			Action::ChangeRight->value => Chat::ROLE_NONE,
+			Action::ChangeOwner->value => Chat::ROLE_NONE,
+			Action::ChangeManagers->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[Type::General->value] = [
@@ -118,6 +117,7 @@ class Permission
 		self::$permissionsByChatTypes[Type::Copilot->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::LeaveOwner->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[Type::Announcement->value] = [
@@ -148,6 +148,8 @@ class Permission
 			Action::Extend->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::PinChat->value => Chat::ROLE_NONE,
+			Action::HideChat->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[Type::Support24Notifier->value] = [
@@ -176,6 +178,7 @@ class Permission
 			Action::Extend->value => Chat::ROLE_NONE,
 			Action::Leave->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[Type::Collab->value] = [
@@ -187,12 +190,16 @@ class Permission
 			Action::UpdateInviteLink->value => Chat::ROLE_OWNER,
 			Action::CreateDocumentSign->value => Chat::ROLE_MEMBER,
 			Action::CreateCalendarSlots->value => Chat::ROLE_MEMBER,
-			Action::ChangeMessageDisappearing->value => Chat::ROLE_MANAGER,
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Tasks->value] = $default;
+		self::$permissionsByChatTypes[Type::Tasks->value] = [
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+		];
 
-		self::$permissionsByChatTypes[Type::Calendar->value] = $default;
+		self::$permissionsByChatTypes[Type::Calendar->value] = [
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+		];
 
 		self::$permissionsByChatTypes[Type::Crm->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
@@ -211,13 +218,13 @@ class Permission
 		self::$permissionsByChatTypes[Type::Chat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
-			Action::ChangeMessageDisappearing->value => Chat::ROLE_MANAGER,
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[Type::OpenChat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
-			Action::ChangeMessageDisappearing->value => Chat::ROLE_MANAGER,
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[Type::Videoconference->value] = [
@@ -231,19 +238,51 @@ class Permission
 			Action::ChangeOwner->value => Chat::ROLE_NONE,
 			Action::ChangeManagers->value => Chat::ROLE_NONE,
 			Action::Mute->value => Chat::ROLE_NONE,
+			Action::PinChat->value => Chat::ROLE_NONE,
+			Action::HideChat->value => Chat::ROLE_NONE,
 		];
+	}
 
-		foreach (self::$permissionsByChatTypes as $code => $value)
+	private function getDefaultByChatTypes(): array
+	{
+		return [
+			Action::ChangeAvatar->value => Chat::ROLE_MEMBER,
+			Action::Rename->value => Chat::ROLE_MEMBER,
+			Action::Extend->value => Chat::ROLE_MEMBER,
+			Action::Call->value => Chat::ROLE_MEMBER,
+			Action::Mute->value => Chat::ROLE_MEMBER,
+			Action::Leave->value => Chat::ROLE_MEMBER,
+			Action::LeaveOwner->value => Chat::ROLE_MEMBER,
+			Action::Kick->value => Chat::ROLE_GUEST,
+			Action::Send->value => Chat::ROLE_MEMBER,
+			Action::UserList->value => Chat::ROLE_MEMBER,
+			Action::CreateTask->value => Chat::ROLE_MEMBER,
+			Action::CreateMeeting->value => Chat::ROLE_MEMBER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_NONE,
+			Action::Update->value => Chat::ROLE_NONE,
+			Action::Delete->value => Chat::ROLE_NONE,
+			Action::UpdateInviteLink->value => Chat::ROLE_NONE,
+			Action::CreateDocumentSign->value => Chat::ROLE_NONE,
+			Action::CreateCalendarSlots->value => Chat::ROLE_NONE,
+			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_NONE,
+			Action::PinChat->value => Chat::ROLE_MEMBER,
+			Action::HideChat->value => Chat::ROLE_MEMBER,
+			Action::ChangeRight->value => Chat::ROLE_GUEST,
+			Action::ChangeOwner->value => Chat::ROLE_GUEST,
+			Action::ChangeManagers->value => Chat::ROLE_GUEST,
+		];
+	}
+
+	private function loadByChatTypesExternal(): void
+	{
+		$externalTypes = ExternalTypeRegistry::getInstance()->getConfigs();
+		foreach ($externalTypes as $externalType => $config)
 		{
-			self::$permissionsByChatTypes[$code] = array_merge($default, $value);
+			if (!empty($config->permissions))
+			{
+				self::$permissionsByChatTypes[$externalType] = $config->permissions;
+			}
 		}
-
-		if ($this->jsonFormat)
-		{
-			return $this->converter->process(self::$permissionsByChatTypes);
-		}
-
-		return self::$permissionsByChatTypes;
 	}
 
 	public function getByUserTypes(): array
@@ -269,6 +308,7 @@ class Permission
 				GlobalAction::GetOpenlines->value => true,
 				GlobalAction::CreateCollab->value => true,
 				GlobalAction::LeaveCollab->value => true,
+				GlobalAction::ChangeMessagesAutoDeleteDelay->value => true,
 			],
 			UserType::EXTRANET->value => [
 				GlobalAction::GetChannels->value => false,
@@ -276,10 +316,11 @@ class Permission
 				GlobalAction::CreateConference->value => false,
 				GlobalAction::CreateCopilot->value => false,
 				GlobalAction::CreateChat->value => false,
-				GlobalAction::GetMarket->value => true,
-				GlobalAction::GetOpenlines->value => true,
+				GlobalAction::GetMarket->value => false,
+				GlobalAction::GetOpenlines->value => false,
 				GlobalAction::CreateCollab->value => false,
 				GlobalAction::LeaveCollab->value => false,
+				GlobalAction::ChangeMessagesAutoDeleteDelay->value => false,
 			],
 			UserType::COLLABER->value => [
 				GlobalAction::GetChannels->value => false,
@@ -291,6 +332,7 @@ class Permission
 				GlobalAction::GetOpenlines->value => false,
 				GlobalAction::CreateCollab->value => false,
 				GlobalAction::LeaveCollab->value => false,
+				GlobalAction::ChangeMessagesAutoDeleteDelay->value => false,
 			],
 		];
 
@@ -353,6 +395,18 @@ class Permission
 		$permissionsByType = $permissions[$type] ?? $permissions[self::TYPE_DEFAULT];
 
 		return $permissionsByType[$action->value] ?? Chat::ROLE_GUEST;
+	}
+
+	public static function canDoActionByUserType(int $userId, Action $action, mixed $target): bool
+	{
+		$globalAction = $action->getRelatedGlobalAction();
+
+		if (!isset($globalAction))
+		{
+			return true;
+		}
+
+		return self::canDoGlobalAction($userId, $globalAction, $target);
 	}
 
 	public function getActionGroupDefinitions(): array
@@ -441,94 +495,5 @@ class Permission
 		}
 
 		return $userRolePos >= $needRolePos;
-	}
-
-	public static function getRoleOrmFilter(Query $query, ActionGroup $action, string $relationTableAlias, string $chatTableAlias): void
-	{
-		$actionName = $action->value;
-		if ($action === ActionGroup::ManageMessages)
-		{
-			$actionName = 'CAN_POST';
-		}
-
-		$query
-			->registerRuntimeField('ROLE', static::getUserRoleExpressionField($relationTableAlias, $chatTableAlias))
-			->registerRuntimeField('NEED_ROLE', static::getNeedRoleExpressionField($actionName, $chatTableAlias))
-			->where(static::getHasAccessByRoleExpressionField(), 'expr', true)
-		;
-	}
-
-	public static function getRoleGetListFilter(array $ormParams, ActionGroup $action, string $relationTableAlias, string $chatTableAlias): array
-	{
-		$actionName = $action->value;
-		if ($action === ActionGroup::ManageMessages)
-		{
-			$actionName = 'CAN_POST';
-		}
-
-		$ormParams['runtime'][] = static::getUserRoleExpressionField($relationTableAlias, $chatTableAlias);
-		$ormParams['runtime'][] = static::getNeedRoleExpressionField($actionName, $chatTableAlias);
-		$ormParams['runtime'][] = static::getHasAccessByRoleExpressionField();
-		$ormParams['filter']['==HAS_ACCESS_BY_ROLE'] = true;
-
-		return $ormParams;
-	}
-
-	protected static function getUserRoleExpressionField(string $relationTableAlias, string $chatTableAlias): ExpressionField
-	{
-		return (new ExpressionField(
-			'ROLE',
-			"CASE
-				WHEN %s = %s THEN 2
-				WHEN %s = 'Y' THEN 1
-				WHEN %s IS NULL THEN -1
-				ELSE 0
-			END",
-			[
-				static::prepareFieldWithAlias('AUTHOR_ID', $chatTableAlias),
-				static::prepareFieldWithAlias('USER_ID', $relationTableAlias),
-				static::prepareFieldWithAlias('MANAGER', $relationTableAlias),
-				static::prepareFieldWithAlias('ID', $relationTableAlias),
-			]
-		))->configureValueType(IntegerField::class);
-	}
-
-	protected static function prepareFieldWithAlias(string $fieldName, string $alias): string
-	{
-		if ($alias === '')
-		{
-			return $fieldName;
-		}
-
-		return "{$alias}.{$fieldName}";
-	}
-
-	protected static function getNeedRoleExpressionField(string $action, string $chatTableAlias): ExpressionField
-	{
-		$noneRole = Chat::ROLE_NONE;
-		$ownerRole = Chat::ROLE_OWNER;
-		$managerRole = Chat::ROLE_MANAGER;
-		$actionField = static::prepareFieldWithAlias($action, $chatTableAlias);
-
-		return (new ExpressionField(
-			'NEED_ROLE',
-			"CASE
-				WHEN %s = '{$noneRole}' THEN 10
-				WHEN %s = '{$ownerRole}' THEN 2
-				WHEN %s = '{$managerRole}' THEN 1
-				WHEN %s IS NULL THEN -1
-				ELSE 0
-			END",
-			[$actionField, $actionField, $actionField, $actionField]
-		))->configureValueType(IntegerField::class);
-	}
-
-	protected static function getHasAccessByRoleExpressionField(): ExpressionField
-	{
-		return (new ExpressionField(
-			'HAS_ACCESS_BY_ROLE',
-			'%s >= %s',
-			['ROLE', 'NEED_ROLE']
-		))->configureValueType(BooleanField::class);
 	}
 }

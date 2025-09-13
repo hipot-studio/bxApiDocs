@@ -27,11 +27,6 @@ class AutomatedSolution
 	 */
 	public function isAllAutomatedSolutionsAdmin(): bool
 	{
-		if (!Feature::enabled(Feature\PermissionsLayoutV2::class))
-		{
-			return $this->admin->isCrmAdmin();
-		}
-
 		if ($this->admin->isAdmin())
 		{
 			return true;
@@ -51,11 +46,6 @@ class AutomatedSolution
 	 */
 	public function isAutomatedSolutionAdmin(int $automatedSolutionId): bool
 	{
-		if (!Feature::enabled(Feature\PermissionsLayoutV2::class))
-		{
-			return $this->admin->isCrmAdmin();
-		}
-
 		if ($this->isAllAutomatedSolutionsAdmin())
 		{
 			return true;
@@ -81,11 +71,6 @@ class AutomatedSolution
 	 */
 	public function canEdit(): bool
 	{
-		if (!Feature::enabled(Feature\PermissionsLayoutV2::class))
-		{
-			return $this->admin->isCrmAdmin();
-		}
-
 		if ($this->admin->isAdmin())
 		{
 			return true;

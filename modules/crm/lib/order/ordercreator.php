@@ -24,6 +24,7 @@ class OrderCreator
 	 * @var array
 	 */
 	private static array $createdOrders = [];
+	private static array $entityFields = [];
 
 	/**
 	 * @var int
@@ -192,24 +193,29 @@ class OrderCreator
 	 */
 	private function getEntityFields(): ?array
 	{
-		$result = [];
-
-		$factory = Container::getInstance()->getFactory($this->ownerTypeId);
-		if ($factory)
+		if (!isset(self::$entityFields[$this->ownerTypeId][$this->ownerId]))
 		{
-			$item = $factory->getItem($this->ownerId, ['ASSIGNED_BY_ID', 'CURRENCY_ID']);
-			if ($item && $item->hasField('ASSIGNED_BY_ID'))
+			$result = [];
+
+			$factory = Container::getInstance()->getFactory($this->ownerTypeId);
+			if ($factory)
 			{
-				$result['ASSIGNED_BY_ID'] = (int)$item->getAssignedById();
+				$item = $factory->getItem($this->ownerId, ['ASSIGNED_BY_ID', 'CURRENCY_ID']);
+				if ($item && $item->hasField('ASSIGNED_BY_ID'))
+				{
+					$result['ASSIGNED_BY_ID'] = (int)$item->getAssignedById();
+				}
+
+				if ($item && $item->hasField('CURRENCY_ID'))
+				{
+					$result['CURRENCY_ID'] = $item->getCurrencyId();
+				}
 			}
 
-			if ($item && $item->hasField('CURRENCY_ID'))
-			{
-				$result['CURRENCY_ID'] = $item->getCurrencyId();
-			}
+			self::$entityFields[$this->ownerTypeId][$this->ownerId] = $result;
 		}
 
-		return $result;
+		return self::$entityFields[$this->ownerTypeId][$this->ownerId];
 	}
 
 	/**

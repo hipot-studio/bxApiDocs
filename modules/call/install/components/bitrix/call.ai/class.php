@@ -3,6 +3,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Im\Call\Call;
 use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Call\Integration\AI;
@@ -33,7 +34,7 @@ class CallAiComponent extends \CBitrixComponent
 			$APPLICATION->SetTitle(Loc::getMessage('CALL_COMPONENT_COPILOT_DETAIL_V2', [
 				'#DATE#' => $this->arResult['CALL_DATE']
 			]));
-			$this->includeComponentTemplate();
+			$this->includeComponentTemplate('template.v2');
 		}
 	}
 
@@ -59,7 +60,12 @@ class CallAiComponent extends \CBitrixComponent
 	protected function prepareResult(): bool
 	{
 		$this->arResult['CALL_ID'] = $this->callId;
-		$this->arResult['CURRENT_USER_ID'] = \Bitrix\Main\Engine\CurrentUser::get()->getId();
+
+		$currentUserId = \Bitrix\Main\Engine\CurrentUser::get()->getId();
+		$this->arResult['CURRENT_USER_ID'] = $currentUserId;
+
+		$roles = $this->call->getUserRoles([$currentUserId]);
+		$this->arResult['CAN_DELETE'] = isset($roles[$currentUserId]) && in_array($roles[$currentUserId], ['ADMIN', 'MANAGER']);
 
 		$mentionService = MentionService::getInstance();
 		$mentionService->loadMentionsForCall($this->callId);
@@ -73,7 +79,7 @@ class CallAiComponent extends \CBitrixComponent
 				continue;// take only one
 			}
 
-			$isEmpty = true;
+			/** @var AI\Outcome\Transcription|AI\Outcome\Summary|AI\Outcome\Overview|AI\Outcome\Insights $content */
 			$content = $outcome->getSenseContent();
 			switch ($outcome->getType())
 			{
@@ -163,10 +169,10 @@ class CallAiComponent extends \CBitrixComponent
 					{
 						foreach ($content->actionItems as &$row)
 						{
-							if ($row?->action_item)
+							if ($row?->actionItem)
 							{
-								$actionItem = $row->action_item;
-								$row->action_item = $mentionService->replaceBbMentions($actionItem);
+								$actionItem = $row->actionItem;
+								$row->actionItem = $mentionService->replaceBbMentions($actionItem);
 								$row->actionItemMentionLess = $mentionService->removeBbMentions($actionItem);
 								$isEmpty = false;
 								if ($row?->quote)
@@ -196,15 +202,30 @@ class CallAiComponent extends \CBitrixComponent
 					break;
 
 				case SenseType::INSIGHTS->value:
-					if ($content?->insights)
+					$fields = [
+						'insights' => 'detailedInsight',
+						'meetingStrengths' => 'strength_explanation',
+						'meetingWeaknesses' => 'weakness_explanation',
+					];
+					foreach ($fields as $field => $subField)
 					{
-						foreach ($content->insights as &$row)
+						if ($content?->{$field})
 						{
-							if ($row?->detailed_insight)
+							foreach ($content->{$field} as &$row)
 							{
-								$row->detailed_insight = $mentionService->replaceBbMentions($row->detailed_insight);
-								$isEmpty = false;
+								if ($row?->{$subField})
+								{
+									$row->{$subField} = $mentionService->replaceBbMentions($row->{$subField});
+									$isEmpty = false;
+								}
 							}
+						}
+					}
+					foreach (['speechStyleInfluence', 'engagementLevel', 'areasOfResponsibility', 'finalRecommendations'] as $field)
+					{
+						if ($content?->{$field})
+						{
+							$content->{$field} = $mentionService->replaceBbMentions($content->{$field});
 						}
 					}
 					break;
@@ -241,7 +262,24 @@ class CallAiComponent extends \CBitrixComponent
 			$this->arResult['FEEDBACK_URL'] = $feedbackLink;
 		}
 
-		$this->arResult['CALL_DATE'] = $this->formatDate($this->call->getStartDate());
+		$startTime = null;
+		$endTime = null;
+		if ($this->call->getStartDate())
+		{
+			$startTime = $this->call->getStartDate()->toUserTime();
+			$this->arResult['CALL_DATE'] = $this->formatDate($startTime);
+			$this->arResult['CALL_START_TIME'] = $this->formatTime($startTime);
+		}
+		if ($this->call->getEndDate())
+		{
+			$endTime = $this->call->getEndDate()->toUserTime();
+			$this->arResult['CALL_END_TIME'] = $this->formatTime($endTime);
+		}
+		if ($startTime && $endTime)
+		{
+			$this->arResult['CALL_DURATION'] = $this->formatDuration($startTime, $endTime);
+		}
+
 		$this->arResult['USER_COUNT'] = $this->getUserCount();
 
 		return true;
@@ -262,7 +300,7 @@ class CallAiComponent extends \CBitrixComponent
 		return $cnt;
 	}
 
-	protected function formatDate(\Bitrix\Main\Type\DateTime $dateTime): string
+	protected function formatDate(DateTime $dateTime): string
 	{
 		$timestamp = $dateTime->getTimestamp();
 		$userCulture = \Bitrix\Main\Context::getCurrent()?->getCulture();
@@ -271,7 +309,48 @@ class CallAiComponent extends \CBitrixComponent
 		$dateFormat = $isCurrentYear ? $userCulture?->getDayMonthFormat() : $userCulture?->getLongDateFormat();
 		$dateFormat .= ', '. $userCulture->getShortTimeFormat();
 
-		return formatDate($dateFormat, $timestamp);
+		return \FormatDate($dateFormat, $timestamp);
+	}
+
+	protected function formatTime(DateTime $dateTime): string
+	{
+		$timestamp = $dateTime->getTimestamp();
+		$timeFormat = \Bitrix\Main\Context::getCurrent()?->getCulture()?->getShortTimeFormat() ?? 'H:i';
+
+		return \FormatDate($timeFormat, $timestamp);
+	}
+
+	protected function formatDuration(DateTime $startTime, DateTime $endTime): string
+	{
+		Loc::loadMessages($_SERVER["DOCUMENT_ROOT"].'/bitrix/modules/im/lib/call/integration/chat.php');
+
+		$interval = $startTime->getDiff($endTime);
+
+		[$hours, $minutes, $seconds] = explode(' ', $interval->format('%H %I %S'));
+		$result = [];
+
+		if ((int)$hours > 0)
+		{
+			$result[] = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_DURATION_HOURS", [
+				"#HOURS#" => (int)$hours
+			]);
+		}
+
+		if ((int)$minutes > 0)
+		{
+			$result[] = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_DURATION_MINUTES", [
+				"#MINUTES#" => (int)$minutes
+			]);
+		}
+
+		if ((int)$seconds > 0 && !((int)$hours > 0))
+		{
+			$result[] = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_DURATION_SECONDS", [
+				"#SECONDS#" => (int)$seconds
+			]);
+		}
+
+		return implode(" ", $result);
 	}
 
 	protected function checkAccess(): bool

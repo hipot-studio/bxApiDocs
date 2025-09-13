@@ -52,7 +52,7 @@ final class EntityEditor
 			->getCategoryByCode('SMART_DOCUMENT_CONTACT')
 			?->getId();
 
-		if (\CCrmOwnerType::Contact && $contactCategoryId === $categoryId)
+		if ($entityTypeId === \CCrmOwnerType::Contact && $contactCategoryId === $categoryId)
 		{
 			return true;
 		}

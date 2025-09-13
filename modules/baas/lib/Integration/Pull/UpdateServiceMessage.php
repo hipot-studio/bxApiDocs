@@ -46,8 +46,12 @@ class UpdateServiceMessage
 								return [
 									'code' => $purchasedPackage->getCode(),
 									'purchaseCode' => $purchasedPackage->getPurchaseCode(),
-									'startDate' => $purchasedPackage->getStartDate()->format('Y-m-d'),
-									'expirationDate' => $purchasedPackage->getExpirationDate()->format('Y-m-d'),
+									'startDate' => $purchasedPackage->getStartDate()->format(
+										Baas\Contract\DateTimeFormat::LOCAL_DATE->value
+									),
+									'expirationDate' => $purchasedPackage->getExpirationDate()->format(
+										Baas\Contract\DateTimeFormat::LOCAL_DATE->value
+									),
 									'actual' => $purchasedPackage->isActual() ? 'Y' : 'N',
 									'services' => array_map(static function($purchasedService) {
 										return [

@@ -301,6 +301,8 @@ class TasksWidgetCheckListNewComponent extends TasksBaseComponent
 			'CAN_ADD_ACCOMPLICE' => $this->arResult['CAN_ADD_ACCOMPLICE'],
 		];
 
+		$this->arResult['NEW_FILE_IDS'] = [];
+
 		if (!$checkListItems)
 		{
 			$this->arResult['UF_CHECKLIST_FILES'] = [];
@@ -324,6 +326,7 @@ class TasksWidgetCheckListNewComponent extends TasksBaseComponent
 			$checkListItems[$id] = $this->prepareItemActions($item);
 
 			$this->arResult['UF_CHECKLIST_FILES'][$id] = (($item['UF_CHECKLIST_FILES'] ?? null) ?: []);
+			$this->arResult['NEW_FILE_IDS'][$id] = (($item['NEW_FILE_IDS'] ?? null) ?: []);
 		}
 
 		$this->arResult['UF_CHECKLIST_FILES'] = array_filter(

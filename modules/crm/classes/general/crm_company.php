@@ -21,6 +21,7 @@ use Bitrix\Crm\Integrity\DuplicateIndexMismatch;
 use Bitrix\Crm\Integrity\DuplicateManager;
 use Bitrix\Crm\Integrity\DuplicateRequisiteCriterion;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tracking;
@@ -51,7 +52,10 @@ class CAllCrmCompany
 	private static $FIELD_INFOS = null;
 	const DEFAULT_FORM_ID = 'CRM_COMPANY_SHOW_V12';
 
-	private static ?\Bitrix\Crm\Entity\Compatibility\Adapter $lastActivityAdapter = null;
+	/**
+	 * @var \Bitrix\Crm\Entity\Compatibility\Adapter[]
+	 */
+	private static array $lastActivityAdapter = [];
 
 	private ?Crm\Entity\Compatibility\Adapter $compatibilityAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter $commentsAdapter = null;
@@ -137,16 +141,16 @@ class CAllCrmCompany
 		return $compatibilityAdapter;
 	}
 
-	private static function getLastActivityAdapter(): Crm\Entity\Compatibility\Adapter
+	private static function getLastActivityAdapter(string $tableAlias = self::TABLE_ALIAS): Crm\Entity\Compatibility\Adapter
 	{
-		if (!self::$lastActivityAdapter)
+		if (!isset(self::$lastActivityAdapter[$tableAlias]))
 		{
 			$factory = Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Company);
-			self::$lastActivityAdapter = new Crm\Entity\Compatibility\Adapter\LastActivity($factory);
-			self::$lastActivityAdapter->setTableAlias(self::TABLE_ALIAS);
+			self::$lastActivityAdapter[$tableAlias] = new Crm\Entity\Compatibility\Adapter\LastActivity($factory);
+			self::$lastActivityAdapter[$tableAlias]->setTableAlias($tableAlias);
 		}
 
-		return self::$lastActivityAdapter;
+		return self::$lastActivityAdapter[$tableAlias];
 	}
 
 	private static function getCommentsAdapter(): Crm\Entity\Compatibility\Adapter\Comments
@@ -376,10 +380,12 @@ class CAllCrmCompany
 		);
 
 		// add utm fields
-		self::$FIELD_INFOS = self::$FIELD_INFOS + UtmTable::getUtmFieldsInfo();
+		self::$FIELD_INFOS += UtmTable::getUtmFieldsInfo();
 		self::$FIELD_INFOS += Container::getInstance()->getParentFieldManager()->getParentFieldsInfo(CCrmOwnerType::Company);
 
 		self::$FIELD_INFOS += self::getLastActivityAdapter()->getFieldsInfo();
+
+		self::$FIELD_INFOS += LastCommunicationTable::getLastStateFieldInfo();
 
 		return self::$FIELD_INFOS;
 	}
@@ -388,7 +394,8 @@ class CAllCrmCompany
 		$tableAliasName =
 			(isset($arOptions['TABLE_ALIAS']) && is_string($arOptions['TABLE_ALIAS']) && $arOptions['TABLE_ALIAS'] !== '')
 				? $arOptions['TABLE_ALIAS']
-				: 'L';
+				: self::TABLE_ALIAS
+		;
 
 		$assignedByJoin = 'LEFT JOIN b_user U ON ' . $tableAliasName . '.ASSIGNED_BY_ID = U.ID';
 		$createdByJoin = 'LEFT JOIN b_user U2 ON ' . $tableAliasName . '.CREATED_BY_ID = U2.ID';
@@ -444,7 +451,6 @@ class CAllCrmCompany
 			'ORIGIN_VERSION' => ['FIELD' => $tableAliasName . '.ORIGIN_VERSION', 'TYPE' => 'string'], //ITEM VERSION IN EXTERNAL SYSTEM
 
 			'CATEGORY_ID' => ['FIELD' => $tableAliasName . '.CATEGORY_ID', 'TYPE' => 'int'],
-			'LAST_ACTIVITY_TIME' => ['FIELD' => $tableAliasName . '.LAST_ACTIVITY_TIME', 'TYPE' => 'datetime'],
 		];
 
 		if (!(is_array($arOptions) && isset($arOptions['DISABLE_ADDRESS']) && $arOptions['DISABLE_ADDRESS']))
@@ -542,10 +548,10 @@ class CAllCrmCompany
 			Container::getInstance()->getParentFieldManager()->getParentFieldsSqlInfo(
 				CCrmOwnerType::Company,
 				$tableAliasName
-			)
+			),
+			self::getLastActivityAdapter($tableAliasName)->getFields(),
+			LastCommunicationTable::getFieldsByEntityTypeId(CCrmOwnerType::Company, true),
 		);
-
-		$result += self::getLastActivityAdapter()->getFields();
 
 		return $result;
 	}

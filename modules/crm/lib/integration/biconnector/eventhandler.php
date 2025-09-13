@@ -26,6 +26,67 @@ class EventHandler
 		$connection = $params[0]->getDatabaseConnection();
 		$helper = $connection->getSqlHelper();
 
+		$eventTableName = $params[3];
+		if (!empty($eventTableName))
+		{
+			if (str_starts_with($eventTableName, 'crm_automated_solution_'))
+			{
+				$result = AutomatedSolutionMapping::getMapping($languageId, $eventTableName);
+
+				return;
+			}
+
+			if (str_starts_with($eventTableName, 'crm_dynamic_items_prod_'))
+			{
+				$result = DynamicItemsProductMapping::getMapping($helper, $languageId, $eventTableName);
+
+				return;
+			}
+
+			if ($eventTableName === 'crm_quote_uf')
+			{
+				$crmQuoteUf = QuoteUserFieldsMapping::getMapping($languageId);
+				if ($crmQuoteUf)
+				{
+					$result['crm_quote_uf'] = $crmQuoteUf;
+				}
+
+				return;
+			}
+
+			$tableNames = [
+				'crm_smart_proc',
+				'crm_stages',
+				'crm_entity_relation',
+				'crm_quote',
+				'crm_quote_product_row',
+				'crm_activity_relation',
+				'crm_ai_quality_assessment',
+			];
+
+			if (!in_array($eventTableName, $tableNames, true))
+			{
+				return;
+			}
+
+			$result[$eventTableName] = match($eventTableName)
+			{
+				'crm_smart_proc' => DynamicTypeMapping::getMapping(),
+				'crm_stages' => StagesMapping::getMapping($helper, $languageId),
+				'crm_entity_relation' => EntityRelationMapping::getMapping(),
+				'crm_quote' => QuoteMapping::getMapping(),
+				'crm_quote_product_row' => QuoteProductMapping::getMapping($helper),
+				'crm_activity_relation' => ActivityRelationMapping::getMapping(),
+				'crm_ai_quality_assessment' => AiQualityAssessmentMapping::getMapping(),
+			};
+
+			self::addDescriptions([
+				$eventTableName,
+			], $result, $languageId);
+
+			return;
+		}
+
 		$result['crm_smart_proc'] = DynamicTypeMapping::getMapping();
 		$result['crm_stages'] = StagesMapping::getMapping($helper, $languageId);
 		$result['crm_entity_relation'] = EntityRelationMapping::getMapping();

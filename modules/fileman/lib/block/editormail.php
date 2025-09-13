@@ -511,6 +511,7 @@ class EditorMail
 										</table>
 										' : '') . '
 
+										' . (Editor::isNotAvailableInRussian() ? '
 										<table align="left" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate !important; margin-right: 10px;">
 										<tbody>
 											<tr>
@@ -540,6 +541,7 @@ class EditorMail
 											</tr>
 										</tbody>
 										</table>
+										' : '') . '
 
 										' . (!Editor::isAvailableRussian() ? '
 										<table align="left" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate !important; margin-right: 10px;">

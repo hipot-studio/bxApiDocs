@@ -2,10 +2,14 @@
 
 namespace Bitrix\BIConnector\Superset;
 
+use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
@@ -79,16 +83,26 @@ final class MarketDashboardManager
 			'select' => ['ID', 'CODE'],
 			'filter' => ['=ID' => $appId],
 		]);
-		$appCode = $appRow['CODE'];
+		$appCode = $appRow['CODE'] ?? null;
 
 		$result = new Result();
+		if (!$appCode)
+		{
+			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY')));
+			MarketDashboardLogger::logErrors($result->getErrors(), [
+				'message' => 'Empty app code',
+			]);
+
+			return $result;
+		}
+
 		$response = $this->integrator->importDashboard($filePath, $appCode);
 
 		if ($response->hasErrors())
 		{
 			if (self::isSystemAppByAppCode($appCode))
 			{
-				MarketDashboardLogger::logErrors($response->getErrors(),[
+				MarketDashboardLogger::logErrors($response->getErrors(), [
 					'message' => 'System dashboard installation error',
 					'app_code' => $appCode,
 				]);
@@ -183,8 +197,10 @@ final class MarketDashboardManager
 	 */
 	public function applyDashboardSettings(Model\SupersetDashboard $dashboard, array $dashboardSettings = []): void
 	{
-		if (!$dashboardSettings)
+		if (!$dashboardSettings && Feature::isCheckPermissionsByGroup())
 		{
+			$this->saveDashboardGroupByScope($dashboard->getId(), self::getDefaultDashboardGroupScope());
+
 			return;
 		}
 
@@ -240,6 +256,64 @@ final class MarketDashboardManager
 						$scopesToSave
 					)
 				;
+			}
+		}
+
+		if (Feature::isCheckPermissionsByGroup())
+		{
+
+			if (
+				isset($dashboardSettings['groupCode'])
+				&& is_string($dashboardSettings['groupCode'])
+				&& in_array($dashboardSettings['groupCode'], ScopeService::getSystemGroupCode())
+			)
+			{
+				$groupScopeCode = $dashboardSettings['groupCode'];
+			}
+			elseif (isset($scopesToSave))
+			{
+				$groupScopeCodeList = array_intersect(ScopeService::getSystemGroupCode(), $scopesToSave);
+
+				$additionalScopeMap = [];
+				foreach (DashboardGroupService::getAdditionalScopeMap() as $mainScope => $scopeMap)
+				{
+					foreach ($scopeMap as $scope)
+					{
+						$additionalScopeMap[$scope] = $mainScope;
+					}
+				}
+
+				foreach ($scopesToSave as $dashboardScope)
+				{
+					if (
+						isset($additionalScopeMap[$dashboardScope])
+						&& !in_array($additionalScopeMap[$dashboardScope], $groupScopeCodeList, true)
+					)
+					{
+						$groupScopeCodeList[] = $additionalScopeMap[$dashboardScope];
+					}
+				}
+
+				if (empty($groupScopeCodeList))
+				{
+					$groupScopeCode = self::getDefaultDashboardGroupScope();
+				}
+			}
+			else
+			{
+				$groupScopeCode = self::getDefaultDashboardGroupScope();
+			}
+
+			if (!empty($groupScopeCodeList))
+			{
+				foreach ($groupScopeCodeList as $scopeCode)
+				{
+					$this->saveDashboardGroupByScope($dashboard->getId(), $scopeCode);
+				}
+			}
+			else
+			{
+				$this->saveDashboardGroupByScope($dashboard->getId(), $groupScopeCode);
 			}
 		}
 	}
@@ -531,11 +605,60 @@ final class MarketDashboardManager
 			return true;
 		}
 
-		if (!Feature::isBiBuilderExportEnabled())
-		{
-			return false;
-		}
+		return Feature::isBiBuilderExportEnabled();
+	}
 
-		return BIConnector\Manager::isAdmin();
+	public function areInitialDashboardsInstalling(): bool
+	{
+		return Option::get('biconnector', self::DASHBOARD_INSTALLING_IN_PROGRESS_OPTION_NAME, 'N') === 'Y';
+	}
+
+	private function saveDashboardGroupByScope(int $dashboardId, string $groupScopeCode)
+	{
+		$group = SupersetDashboardGroupScopeTable::getList([
+			'select' => ['GROUP_ID'],
+			'filter' => [
+				'SCOPE_CODE' => $groupScopeCode,
+				'GROUP.TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM,
+			],
+			'limit' => 1,
+		])
+			->fetch()
+		;
+		$groupId = $group['GROUP_ID'] ?? null;
+
+		if ($groupId !== null)
+		{
+			$existGroupRelation = SupersetDashboardGroupBindingTable::getList([
+				'select' => ['GROUP'],
+				'filter' => [
+					'GROUP.ID' => $groupId,
+					'DASHBOARD_ID' => $dashboardId,
+				],
+				'limit' => 1,
+			])
+				->fetchObject()
+			;
+
+			if (is_null($existGroupRelation))
+			{
+				$groupRelation = SupersetDashboardGroupBindingTable::createObject();
+				$groupRelation->setGroupId((int)$groupId);
+				$groupRelation->setDashboardId($dashboardId);
+				$groupRelation->save();
+
+				$scopes = ScopeService::getInstance()->getDashboardScopes($dashboardId);
+				if (!in_array($groupScopeCode, $scopes, true))
+				{
+					$scopes[] = $groupScopeCode;
+					ScopeService::getInstance()->saveDashboardScopes($dashboardId, $scopes);
+				}
+			}
+		}
+	}
+
+	public static function getDefaultDashboardGroupScope(): string
+	{
+		return ScopeService::BIC_SCOPE_CRM;
 	}
 }

@@ -1475,7 +1475,7 @@ class CAllIMContactList
 			Sync\Logger::getInstance()->add(
 				new Sync\Event(Sync\Event::DELETE_EVENT, Sync\Event::CHAT_ENTITY, $chat->getChatId()),
 				$userId,
-				$chat->getType()
+				$chat
 			);
 		}
 
@@ -1944,27 +1944,19 @@ class CAllIMContactList
 			return false;
 		}
 
-		if (array_key_exists('UF_DEPARTMENT', $arUser))
+		if (!\Bitrix\Main\Loader::includeModule('humanresources'))
 		{
-			if ($arUser['UF_DEPARTMENT'] == "")
-			{
-				$result = true;
-			}
-			else if (is_array($arUser['UF_DEPARTMENT']) && empty($arUser['UF_DEPARTMENT']))
-			{
-				$result = true;
-			}
-			else if (is_array($arUser['UF_DEPARTMENT']) && count($arUser['UF_DEPARTMENT']) == 1 && $arUser['UF_DEPARTMENT'][0] == 0)
-			{
-				$result = true;
-			}
-		}
-		else
-		{
-			$result = true;
+			return false;
 		}
 
-		return $result;
+		try
+		{
+			return !\Bitrix\HumanResources\Service\Container::getUserService()->isEmployee((int)$arUser['ID']);
+		}
+		catch (\Exception $exception)
+		{
+			return false;
+		}
 	}
 
 	public static function GetUserPath($userId = false)

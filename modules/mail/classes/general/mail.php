@@ -1949,6 +1949,7 @@ class CAllMailMessage
 				$arFields['IS_TRASH'] = !empty($params['trash']);
 				$arFields['IS_SPAM'] = !empty($params['spam']);
 				$arFields['IS_SEEN'] = !empty($params['seen']);
+				$arFields['IS_RECOVERED'] = !empty($params['recovered']);
 				$arFields['MSG_HASH'] = $params['hash'];
 
 				if (!empty($params['excerpt']) && is_array($params['excerpt']))

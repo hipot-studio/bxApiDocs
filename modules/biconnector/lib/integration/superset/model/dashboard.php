@@ -104,6 +104,34 @@ final class Dashboard
 		return $this->ormObject;
 	}
 
+	public function reloadOrmObject(): self
+	{
+		$oldOrmObject = $this->ormObject;
+		$this->ormObject = SupersetDashboardTable::getById($this->ormObject->getId())->fetchObject();
+
+		if ($oldOrmObject->isSourceFilled())
+		{
+			$this->ormObject->fillSource();
+		}
+
+		if ($oldOrmObject->isScopeFilled())
+		{
+			$this->ormObject->fillScope();
+		}
+
+		if ($oldOrmObject->isUrlParamsFilled())
+		{
+			$this->ormObject->fillUrlParams();
+		}
+
+		if ($oldOrmObject->isTagsFilled())
+		{
+			$this->ormObject->fillTags();
+		}
+
+		return $this;
+	}
+
 	public function getEmbeddedCredentials(): ?Dto\DashboardEmbeddedCredentials
 	{
 		return $this->embeddedCredentials;

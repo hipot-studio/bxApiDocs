@@ -48,7 +48,7 @@ final class DateTimeConverter
 		$useServerTimeInRecyclebin = Option::get('crm', 'useServerTimeInRecyclebin', null);
 		if (!$useServerTimeInRecyclebin)
 		{
-			$this->isNeedConvert = false;
+			$this->isNeedConvert = true;
 
 			return $this->isNeedConvert;
 		}

@@ -20,7 +20,6 @@ class MainPageSettings extends AbstractSettings
 		$mainPageUrl = new MainPage\Url();
 		$integrationManager = new Integration\Landing\MainPage\Manager();
 		$publisher = new MainPage\Publisher();
-		$isMainpageEnable = (new MainPage\Access)->canView();
 
 		$componentClass = \CBitrixComponent::includeComponentClass('bitrix:landing.base');
 		if ($componentClass)
@@ -28,7 +27,7 @@ class MainPageSettings extends AbstractSettings
 			$component = new $componentClass;
 			$feedbackParams =
 				$component
-					? $component->getFeedbackParameters('mainpage')
+					? $component->getFeedbackParameters('general')
 					: []
 			;
 			$feedbackParams = [
@@ -50,7 +49,7 @@ class MainPageSettings extends AbstractSettings
 			'isSiteExists' => $integrationManager->isSiteExists(),
 			'isPageExists' => $integrationManager->isPageExists(),
 			'isPublished' => $publisher->isPublished(),
-			'isEnable' => $isMainpageEnable,
+			'canEdit' => (new MainPage\Access)->canEdit(),
 			'feedbackParams' => $feedbackParams ?? [],
 			'title' => $integrationManager->getTitle(),
 		];

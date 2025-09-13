@@ -25,11 +25,6 @@ class QueueConfig
 	{
 	}
 
-	private static function isValidHandler(string $className): bool
-	{
-		return class_exists($className) && is_subclass_of($className, ReceiverInterface::class);
-	}
-
 	/**
 	 * @throws ConfigurationException
 	 * @throws LoaderException
@@ -39,9 +34,18 @@ class QueueConfig
 	{
 		Loader::requireModule($this->moduleId);
 
-		if (!static::isValidHandler($this->handler))
+		if (!class_exists($this->handler))
 		{
-			throw new ConfigurationException(sprintf('The class "%s" is not valid handler', $this->handler));
+			throw new ConfigurationException(
+				sprintf('The class "%s" does not exist', $this->handler)
+			);
+		}
+
+		if (!is_subclass_of($this->handler, ReceiverInterface::class))
+		{
+			throw new ConfigurationException(
+				sprintf('The class "%s" does not implement "%s"', $this->handler, ReceiverInterface::class)
+			);
 		}
 
 		$brokerManager = ServiceLocator::getInstance()->get(BrokerManager::class);

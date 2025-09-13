@@ -4,6 +4,8 @@ namespace Bitrix\Im\V2\Message\Reaction;
 
 use Bitrix\Im\Model\ReactionTable;
 use Bitrix\Im\V2\Analytics\MessageAnalytics;
+use Bitrix\Im\V2\Anchor\AnchorFeature;
+use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
@@ -69,6 +71,8 @@ class ReactionService
 
 		(new MessageAnalytics($this->message))->addAddReaction($reaction);
 
+		$this->addAnchors($reaction);
+
 		return $result;
 	}
 
@@ -100,6 +104,8 @@ class ReactionService
 		}
 
 		(new PushService())->delete($reactionItem);
+
+		$this->deleteAnchor();
 
 		return $result;
 	}
@@ -258,5 +264,28 @@ class ReactionService
 		{
 			\CIMMessenger::Like($this->message->getMessageId(), 'minus', $this->getContext()->getUserId(), false, false);
 		}
+	}
+
+	private function addAnchors(string $reaction): void
+	{
+		if (!AnchorFeature::isOn())
+		{
+			return;
+		}
+
+		$anchorService = AnchorContainer::getInstance()
+			->getAnchorService($this->message)
+			->setContext($this->getContext());
+
+		$anchorService->addReactionAnchor($reaction);
+	}
+
+	private function deleteAnchor(): void
+	{
+		$anchorService = AnchorContainer::getInstance()
+			->getAnchorService($this->message)
+			->setContext($this->getContext());
+
+		$anchorService->deleteReactionAnchors();
 	}
 }

@@ -237,6 +237,11 @@ class Template
 		$this->templateId = $id;
 		$template = $this->getTemplateData();
 
+		if ($template === null)
+		{
+			throw new TemplateUpdateException('No such template');
+		}
+
 		$isReplicateParamsChanged = $this->isReplicateParametersChanged($template, $fields);
 
 		if ((int)($template['BASE_TEMPLATE_ID'] ?? null) > 0)
@@ -403,7 +408,7 @@ class Template
 		{
 			DependenceTable::link($this->templateId, intval($fields['BASE_TEMPLATE_ID']));
 		}
-		catch(\Bitrix\Tasks\DB\Tree\LinkExistsException $e)
+		catch(\Bitrix\Tasks\Internals\DataBase\Tree\LinkExistsException $e)
 		{
 		}
 	}
@@ -667,7 +672,7 @@ class Template
 		{
 			DependenceTable::createLink($this->templateId, intval($fields['BASE_TEMPLATE_ID']));
 		}
-		catch(\Bitrix\Tasks\DB\Tree\LinkExistsException $e)
+		catch(\Bitrix\Tasks\Internals\DataBase\Tree\LinkExistsException $e)
 		{
 		}
 	}
@@ -841,7 +846,7 @@ class Template
 			return false;
 		}
 
-		if (isset($fields['REPLICATE']) && $template['REPLICATE'] !== $fields['REPLICATE'])
+		if (isset($fields['REPLICATE']) && ($template['REPLICATE'] ?? null) !== $fields['REPLICATE'])
 		{
 			return true;
 		}
@@ -851,7 +856,7 @@ class Template
 			return false;
 		}
 
-		$before = $template['REPLICATE_PARAMS'];
+		$before = $template['REPLICATE_PARAMS'] ?? null;
 		$before = is_string($before) ? unserialize($before, ['allowed_classes' => false]) : $before;
 
 		$after = $fields['REPLICATE_PARAMS'];

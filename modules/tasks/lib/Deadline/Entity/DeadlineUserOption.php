@@ -10,8 +10,9 @@ use Bitrix\Main\Validation\Rule\Min;
 use Bitrix\Tasks\Deadline\Configuration;
 use Bitrix\Tasks\Deadline\SkipNotificationPeriod;
 use Bitrix\Tasks\Integration\Calendar\Calendar;
+use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
 
-class DeadlineUserOption implements EntityInterface
+class DeadlineUserOption extends AbstractEntity
 {
 	private const SECONDS_IN_DAY = 60 * 60 * 24;
 	private const SECONDS_IN_WEEK = self::SECONDS_IN_DAY * 7;
@@ -104,6 +105,8 @@ class DeadlineUserOption implements EntityInterface
 
 	public function toArray(): array
 	{
+		$matchWorkTime = true; // by default true, todo: will be replaced by the special option
+
 		return [
 			'id' => $this->id,
 			'userId' => $this->userId,
@@ -111,10 +114,12 @@ class DeadlineUserOption implements EntityInterface
 			'isExactDeadlineTime' => $this->isExactDeadlineTime,
 			'skipNotificationPeriod' => $this->skipNotificationPeriod->value,
 			'skipNotificationStartDate' => $this->skipNotificationStartDate,
+			'defaultDeadlineDate' => $this->getDefaultDeadlineDate($matchWorkTime)
+				?->format('Y-m-d H:i'),
 		];
 	}
 
-	public static function mapFromArray(array $props): self
+	public static function mapFromArray(array $props): static
 	{
 		$deadlineUserOption = new self(
 			(int)($props['userId'] ?? 0),

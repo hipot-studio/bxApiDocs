@@ -6,7 +6,10 @@ Loc::loadMessages(__FILE__);
 
 if (!defined("BITRIX_CLOUD_ADV_URL"))
 {
-	define("BITRIX_CLOUD_ADV_URL", 'https://cloud-adv.bitrix.info');
+	$domain = (new \Bitrix\Main\License\UrlProvider())->getTechDomain();
+	$cloudAdvUrl = 'https://cloud-adv.' . $domain;
+
+	define("BITRIX_CLOUD_ADV_URL", $cloudAdvUrl);
 }
 
 if (!defined('BITRIXSEO_URL'))
@@ -19,6 +22,8 @@ class CBitrixSeoOAuthInterface extends CBitrixServiceOAuthInterface
 	const SERVICE_ID = "bitrixseo";
 
 	const URL = BITRIXSEO_URL;
+
+	protected string $proxyUrl = BITRIXSEO_URL;
 
 	/** @var CBitrixSeoTransport */
 	protected $transport = null;
@@ -49,7 +54,7 @@ class CBitrixSeoOAuthInterface extends CBitrixServiceOAuthInterface
 	{
 		if($this->transport === null)
 		{
-			$this->transport = new CBitrixSeoTransport($this->getAppID(), $this->getAppSecret());
+			$this->transport = new CBitrixSeoTransport($this->getAppID(), $this->getAppSecret(), $this->getProxyUrl());
 		}
 
 		return $this->transport;
@@ -752,6 +757,23 @@ class CBitrixSeoOAuthInterface extends CBitrixServiceOAuthInterface
 
 		return false;
 	}
+
+	private function getProxyUrl(): string
+	{
+		return $this->proxyUrl ?: BITRIXSEO_URL;
+	}
+
+	/**
+	 * @param string $proxyUrl
+	 *
+	 * @return CBitrixSeoOAuthInterface
+	 */
+	public function setProxyUrl(string $proxyUrl): CBitrixSeoOAuthInterface
+	{
+		$this->proxyUrl = $proxyUrl;
+
+		return $this;
+	}
 }
 
 class CBitrixSeoTransport extends CBitrixServiceTransport
@@ -795,9 +817,10 @@ class CBitrixSeoTransport extends CBitrixServiceTransport
 
 	const METHOD_STAT_GET = 'seo.stat.get';
 
-	public function __construct($clientId, $clientSecret)
+	public function __construct($clientId, $clientSecret, $serviceUrl = '')
 	{
-		$this->setSeviceHost(CBitrixSeoOAuthInterface::URL);
+		$serviceUrl = $serviceUrl ?: CBitrixSeoOAuthInterface::URL;
+		$this->setSeviceHost($serviceUrl);
 		return parent::__construct($clientId, $clientSecret);
 	}
 

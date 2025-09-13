@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Service;
 
+use Bitrix\Im\V2\Application;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\GroupChat;
 use Bitrix\Im\V2\Chat\PrivateChat;
@@ -29,6 +30,8 @@ class Messenger
 
 	private const INTRANET_MENU_ID = 'menu_im_messenger';
 
+	private Application $application;
+
 	/**
 	 * Returns current instance of the Messenger.
 	 * @return self
@@ -55,6 +58,13 @@ class Messenger
 		return $result;
 	}
 
+	public function getApplication(): Application
+	{
+		$this->application ??= new Application();
+
+		return $this->application;
+	}
+
 	//region Chats
 
 	/**
@@ -78,35 +88,9 @@ class Messenger
 		return $chat;
 	}
 
-	/**
-	 * @param string $entityType
-	 * @param int|string $entityId
-	 * @return EntityChat|GroupChat|NullChat
-	 */
 	public function getEntityChat(string $entityType, string $entityId): Chat
 	{
-		$chatFactory = ChatFactory::getInstance();
-		$chat = $chatFactory
-			->setContext($this->context)
-			->getEntityChat($entityType, $entityId)
-		;
-
-		if (!$chat)
-		{
-			return (new NullChat())
-				->setPreparedParams([
-					'TYPE' => Chat::IM_TYPE_CHAT,
-					'ENTITY_TYPE' => $entityType,
-					'ENTITY_ID' => $entityId,
-				]);
-		}
-
-		if (!$chat->checkAccess()->isSuccess())
-		{
-			return new NullChat();
-		}
-
-		return $chat;
+		return ChatFactory::getInstance()->getEntityChat($entityType, $entityId);
 	}
 
 	public function getGeneralChat(): Chat
@@ -121,6 +105,33 @@ class Messenger
 	public function getChat(int $chatId): Chat
 	{
 		return Chat\ChatFactory::getInstance()->getChatById($chatId);
+	}
+
+	/**
+	 * @param array<int> $chatIds
+	 * @param bool $checkAccess
+	 * @return array<Chat>
+	 */
+	public function getChats(array $chatIds, bool $checkAccess = false): array
+	{
+		$chats = [];
+		foreach ($chatIds as $chatId)
+		{
+			$chats[$chatId] = Chat::getInstance($chatId);
+		}
+
+		if (empty($chats) || !$checkAccess)
+		{
+			return $chats;
+		}
+
+		$currentUserId = $this->getContext()->getUserId();
+		if (!$currentUserId)
+		{
+			return [];
+		}
+
+		return array_filter($chats, static fn (Chat $chat) => $chat->checkAccess($currentUserId)->isSuccess());
 	}
 
 	//endregion

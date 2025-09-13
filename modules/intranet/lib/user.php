@@ -56,7 +56,7 @@ class User
 			return true;
 		}
 
-		return $this->hasDepartment();
+		return (new \Bitrix\Intranet\Entity\User($this->getId()))->isIntranet();
 	}
 
 	public function isEmail(): bool
@@ -87,38 +87,6 @@ class User
 	{
 		return Loader::includeModule('extranet')
 			&& in_array(\CExtranet::GetExtranetUserGroupID(), $this->getGroups());
-	}
-
-	private function hasDepartment(): bool
-	{
-		$fields = $this->getFields();
-
-		return isset($fields["UF_DEPARTMENT"])
-			&& (
-				(
-					is_array($fields["UF_DEPARTMENT"])
-					&& (int)($fields["UF_DEPARTMENT"][0] ?? null) > 0
-				)
-				|| (
-					!is_array($fields["UF_DEPARTMENT"])
-					&& (int)$fields["UF_DEPARTMENT"] > 0
-				)
-			);
-	}
-
-	public function hasAccessToDepartment(): bool
-	{
-		$accessManager = new \CAccess;
-		$accessManager->UpdateCodes(['USER_ID' => $this->userId]);
-
-		$accessResult = UserAccessTable::query()
-			->where('USER_ID', $this->userId)
-			->whereLike('ACCESS_CODE', 'D%')
-			->whereNotLike('ACCESS_CODE', 'DR%')
-			->setLimit(1)
-			->fetch();
-
-		return !($accessResult === false);
 	}
 
 	public function isAdmin(): bool
@@ -167,110 +135,85 @@ class User
 	{
 		$result = [];
 		if (
-			Loader::includeModule('extranet')
-			&& !$this->isExtranetAdmin()
-			&& Loader::includeModule('socialnetwork')
+			!Loader::includeModule('extranet')
+			|| $this->isExtranetAdmin()
+			|| !Loader::includeModule('socialnetwork')
+			|| $this->isIntranet()
 		)
 		{
-			$workgroupIdList = [];
-			$res = UserToGroupTable::getList([
+			return $result;
+		}
+
+		$workgroupIdList = [];
+		$res = UserToGroupTable::getList([
+			'filter' => [
+				'=USER_ID' => $this->getId(),
+				'@ROLE' => UserToGroupTable::getRolesMember(),
+				'=GROUP.ACTIVE' => 'Y',
+			],
+			'select' => ['GROUP_ID'],
+		]);
+
+		while ($userToGroupFields = $res->fetch())
+		{
+			$workgroupIdList[] = $userToGroupFields['GROUP_ID'];
+		}
+		$workgroupIdList = array_unique($workgroupIdList);
+
+		$publicUserIdList = [];
+		$userTypeFilter = [
+			'ENTITY_ID' => \Bitrix\Main\UserTable::getUfId(),
+			'FIELD_NAME' => 'UF_PUBLIC',
+		];
+
+		$userTypeResult = \CUserTypeEntity::GetList([], $userTypeFilter);
+		if ($userTypeResult->Fetch())
+		{
+			$res = \Bitrix\Main\UserTable::getList([
 				'filter' => [
-					'=USER_ID' => $this->getId(),
-					'@ROLE' => UserToGroupTable::getRolesMember(),
-					'=GROUP.ACTIVE' => 'Y'
+					'!UF_DEPARTMENT' => false,
+					'=UF_PUBLIC' => true,
 				],
-				'select' => [ 'GROUP_ID' ]
+				'select' => ['ID'],
 			]);
 
-			while ($userToGroupFields = $res->fetch())
+			while ($userFields = $res->fetch())
 			{
-				$workgroupIdList[] = $userToGroupFields['GROUP_ID'];
+				$publicUserIdList[] = (int)$userFields['ID'];
 			}
-			$workgroupIdList = array_unique($workgroupIdList);
+		}
 
-			if ($this->isIntranet())
+		if (
+			empty($workgroupIdList)
+			&& empty($publicUserIdList)
+		)
+		{
+			$result[] = ['ID' => $this->getId()];
+		}
+		else if (!empty($workgroupIdList))
+		{
+			if (!empty($publicUserIdList))
 			{
-				if (!empty($workgroupIdList))
-				{
-					$subQuery = new \Bitrix\Main\Entity\Query(UserToGroupTable::getEntity());
-					$subQuery->addSelect('USER_ID');
-					$subQuery->addFilter('@ROLE', [UserToGroupTable::ROLE_REQUEST, UserToGroupTable::ROLE_USER]);
-					$subQuery->addFilter('@GROUP_ID', $workgroupIdList);
-					$subQuery->addGroup('USER_ID');
-
-					$result[] = [
-						'LOGIC' => 'OR',
-						[
-							'!UF_DEPARTMENT' => false
-						],
-						[
-							'@ID' => new SqlExpression($subQuery->getQuery())
-						],
-					];
-				}
-				else
-				{
-					$result[] = ['!UF_DEPARTMENT' => false];
-				}
+				$result[] = [
+					'LOGIC' => 'OR',
+					[
+						'<=UG.ROLE' => UserToGroupTable::ROLE_USER,
+						'@UG.GROUP_ID' => $workgroupIdList
+					],
+					[
+						'@ID' => $publicUserIdList
+					],
+				];
 			}
 			else
 			{
-				$publicUserIdList = [];
-				$userTypeFilter = [
-					'ENTITY_ID' => \Bitrix\Main\UserTable::getUfId(),
-					'FIELD_NAME' => 'UF_PUBLIC'
-				];
-
-				$userTypeResult = \CUserTypeEntity::GetList([], $userTypeFilter);
-				if ($userTypeResult->Fetch())
-				{
-					$res = \Bitrix\Main\UserTable::getList([
-						'filter' => [
-							'!UF_DEPARTMENT' => false,
-							'=UF_PUBLIC' => true,
-						],
-						'select' => [ 'ID' ]
-					]);
-
-					while($userFields = $res->fetch())
-					{
-						$publicUserIdList[] = (int)$userFields['ID'];
-					}
-				}
-
-				if (
-					empty($workgroupIdList)
-					&& empty($publicUserIdList)
-				)
-				{
-					$result[] = ['ID' => $this->getId()];
-				}
-				else if (!empty($workgroupIdList))
-				{
-					if (!empty($publicUserIdList))
-					{
-						$result[] = [
-							'LOGIC' => 'OR',
-							[
-								'<=UG.ROLE' => UserToGroupTable::ROLE_USER,
-								'@UG.GROUP_ID' => $workgroupIdList
-							],
-							[
-								'@ID' => $publicUserIdList
-							],
-						];
-					}
-					else
-					{
-						$result[] = ['<=UG.ROLE' => UserToGroupTable::ROLE_USER];
-						$result[] = ['@UG.GROUP_ID' => $workgroupIdList];
-					}
-				}
-				else
-				{
-					$result[] = ['@ID' => $publicUserIdList];
-				}
+				$result[] = ['<=UG.ROLE' => UserToGroupTable::ROLE_USER];
+				$result[] = ['@UG.GROUP_ID' => $workgroupIdList];
 			}
+		}
+		else
+		{
+			$result[] = ['@ID' => $publicUserIdList];
 		}
 
 		return $result;
@@ -326,6 +269,7 @@ class User
 			->where('ID', $this->userId)
 			->setSelect(['ID', 'OWN_USER_ID' => 'INVITATION.ORIGINATOR_ID'])
 			->setLimit(1)
+			->setCacheTtl(604800)
 			->fetch();
 
 		if (isset($user['OWN_USER_ID']) && (int)$user['OWN_USER_ID'] > 0)
@@ -422,10 +366,7 @@ class User
 
 	public function getUserRole(): UserRole
 	{
-		if (
-			Loader::includeModule('bitrix24')
-			&& \Bitrix\Bitrix24\Integrator::isIntegrator($this->userId)
-		)
+		if ($this->isIntegrator())
 		{
 			return UserRole::INTEGRATOR;
 		}
@@ -442,7 +383,9 @@ class User
 
 		if (
 			Loader::includeModule('socialnetwork')
+			&& Loader::includeModule('extranet')
 			&& CollabFeature::isOn()
+			&& Loader::includeModule('extranet')
 			&& ServiceContainer::getInstance()->getCollaberService()->isCollaberById($this->userId)
 		)
 		{
@@ -470,6 +413,11 @@ class User
 		}
 
 		return UserRole::VISITOR;
+	}
+
+	public function isIntegrator(): bool
+	{
+		return Loader::includeModule('bitrix24') && \Bitrix\Bitrix24\Integrator::isIntegrator($this->userId);
 	}
 
 	private function getGroups(): array

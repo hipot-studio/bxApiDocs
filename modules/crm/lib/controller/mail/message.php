@@ -943,7 +943,6 @@ class Message extends Controller
 			'PARENT_ID' => $parentId,
 		];
 
-		$arFileIDs = [];
 		$storageTypeID = \CCrmActivityStorageType::Disk;
 		$arFields['STORAGE_TYPE_ID'] = $storageTypeID;
 		$fileTokens = isset($data['fileTokens']) && is_array($data['fileTokens']) ? $data['fileTokens'] : [];
@@ -992,34 +991,34 @@ class Message extends Controller
 
 		$pendingFiles = $fileController->getPendingFiles($pendingFilesIds);
 
+		$currentStorageElementIds = [];
 		foreach ($currentFilesIds as $id)
 		{
 			$copyFileId = \CFile::CloneFile($id);
 			$fileData = \CFile::getFileArray($copyFileId);
 
-			if($fileData)
+			if ($fileData)
 			{
 				$diskFileId = \Bitrix\Crm\Integration\DiskManager::saveFile($fileData);
-
-				if($diskFileId)
+				if ($diskFileId)
 				{
-					$arFileIDs[] = $diskFileId;
+					$currentStorageElementIds[] = $diskFileId;
 				}
 			}
 		}
 
+		$newStorageElementIds = [];
 		foreach ($pendingFiles as $pendingFile)
 		{
 			$fileData = \CFile::getFileArray($pendingFile->getFileId());
 
-			if($fileData)
+			if ($fileData)
 			{
 				$diskFileId = \Bitrix\Crm\Integration\DiskManager::saveFile($fileData);
-
-				if($diskFileId)
+				if ($diskFileId)
 				{
 					$pendingFile->makePersistent();
-					$arFileIDs[] = $diskFileId;
+					$newStorageElementIds[] = $diskFileId;
 				}
 				else
 				{
@@ -1033,61 +1032,29 @@ class Message extends Controller
 			}
 		}
 
-		$arFileIDs = array_filter($arFileIDs);
-		if(!empty($arFileIDs) || !$isNew)
-		{
-			$arFields['STORAGE_ELEMENT_IDS'] = \Bitrix\Crm\Integration\StorageManager::filterFiles($arFileIDs, $storageTypeID, $userID);
-
-			if (!is_array($arFileIDs) || !is_array($arFields['STORAGE_ELEMENT_IDS']))
-			{
-				addMessage2Log(
-					sprintf(
-						"crm.activity.editor\ajax.php: Invalid email attachments list\r\n(%s) -> (%s)",
-						$arFileIDs,
-						$arFields['STORAGE_ELEMENT_IDS']
-					),
-					'crm',
-					0
-				);
-			}
-			else if (count($arFileIDs) > count($arFields['STORAGE_ELEMENT_IDS']))
-			{
-				addMessage2Log(
-					sprintf(
-						"crm.activity.editor\ajax.php: Email attachments list had been filtered\r\n(%s) -> (%s)",
-						join(',', $arFileIDs),
-						join(',', $arFields['STORAGE_ELEMENT_IDS'])
-					),
-					'crm',
-					0
-				);
-			}
-		}
+		$arFields['STORAGE_ELEMENT_IDS'] = array_filter(array_unique(array_merge($currentStorageElementIds, $newStorageElementIds)));
 
 		$totalSize = 0;
 
 		$arRawFiles = array();
-		if (isset($arFields['STORAGE_ELEMENT_IDS']) && !empty($arFields['STORAGE_ELEMENT_IDS']))
+		foreach ($arFields['STORAGE_ELEMENT_IDS'] as $item)
 		{
-			foreach ((array) $arFields['STORAGE_ELEMENT_IDS'] as $item)
+			$arRawFiles[$item] = \Bitrix\Crm\Integration\StorageManager::makeFileArray($item, $storageTypeID);
+
+			$totalSize += $arRawFiles[$item]['size'];
+
+			if (\CCrmContentType::Html == $contentType)
 			{
-				$arRawFiles[$item] = \Bitrix\Crm\Integration\StorageManager::makeFileArray($item, $storageTypeID);
+				$fileInfo = \Bitrix\Crm\Integration\StorageManager::getFileInfo(
+					$item, $storageTypeID, false,
+					array('OWNER_TYPE_ID' => \CCrmOwnerType::Activity, 'OWNER_ID' => $ID)
+				);
 
-				$totalSize += $arRawFiles[$item]['size'];
-
-				if (\CCrmContentType::Html == $contentType)
-				{
-					$fileInfo = \Bitrix\Crm\Integration\StorageManager::getFileInfo(
-						$item, $storageTypeID, false,
-						array('OWNER_TYPE_ID' => \CCrmOwnerType::Activity, 'OWNER_ID' => $ID)
-					);
-
-					$description = preg_replace(
-						sprintf('/(https?:\/\/)?bxacid:n?%u/i', $item),
-						htmlspecialcharsbx($fileInfo['VIEW_URL']),
-						$description
-					);
-				}
+				$description = preg_replace(
+					sprintf('/(https?:\/\/)?bxacid:n?%u/i', $item),
+					htmlspecialcharsbx($fileInfo['VIEW_URL']),
+					$description
+				);
 			}
 		}
 

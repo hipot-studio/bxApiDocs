@@ -70,7 +70,7 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 			}
 
 			$this->arResult['data']['users'] = Container::getInstance()->getUserBroker()->getBunchByIds($userIds);
-			
+
 			$availabilityData = $this->arResult['data']['availabilityData'] ?? [];
 			array_walk($availabilityData,
 				static function (&$row) {
@@ -133,5 +133,16 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 			'hasPackage' => AIManager::isBaasServiceHasPackage(),
 			'aiPackagesEmptySliderCode' => AIManager::AI_PACKAGES_EMPTY_SLIDER_CODE,
 		];
+	}
+
+	protected function getToolbarParameters(): array
+	{
+		$parameters = parent::getToolbarParameters();
+
+		$parameters['isWithFavoriteStar'] = false;
+		$parameters['underTitleHtml'] = '<div class="copilot-call-assessment-pagetitle-description">' . Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_DETAILS_SUBTITLE') . '</div>';
+		$parameters['isEditableTitle'] = true;
+
+		return $parameters;
 	}
 }

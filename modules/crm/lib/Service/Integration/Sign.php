@@ -72,7 +72,7 @@ class Sign
 	 * @param int $documentId
 	 * @return Result
 	 */
-	public function convertDealDocumentToSmartDocument(int $documentId, bool $usePrevious = false): Result
+	public function convertDealDocumentToSmartDocument(int $documentId, int $createdById, bool $usePrevious = false): Result
 	{
 		if (!self::isAvailable())
 		{
@@ -111,7 +111,7 @@ class Sign
 			{
 				if ($usePrevious)
 				{
-					return $this->checkSignInitiation($document, $dealId, $fileId);
+					return $this->checkSignInitiation($document, $dealId, $fileId, $createdById);
 				}
 
 				$result = $this->convertDealToSmartDocument($dealId);
@@ -124,14 +124,17 @@ class Sign
 				$data = $result->getData();
 				try
 				{
+					/**	@var DocumentService $signIntegrationService */
+					$signIntegrationService = ServiceLocator::getInstance()->get('sign.service.integration.crm.document');
+
 					/** @var \Bitrix\Main\Result $createDocResult */
-					$createDocResult = ServiceLocator::getInstance()
-						->get('sign.service.integration.crm.document')
+					$createDocResult = $signIntegrationService
 						->createSignDocumentFromDealDocument(
 							$fileId,
 							$document,
 							$data['SMART_DOCUMENT'],
-							true
+							$createdById,
+							true,
 						);
 
 					if ($createDocResult && !$createDocResult->isSuccess())
@@ -160,7 +163,7 @@ class Sign
 		return (new Result())->addError(new Error('Failed to create document'));
 	}
 
-	private function checkSignInitiation(Document $document, int $dealId, int $fileId): Result
+	private function checkSignInitiation(Document $document, int $dealId, int $fileId, int $createdById): Result
 	{
 		$linkedBlank = $this
 			->crmSignDocumentService
@@ -168,13 +171,13 @@ class Sign
 
 		if ($linkedBlank)
 		{
-			return $this->initiateSign($linkedBlank, $dealId, $document, $fileId);
+			return $this->initiateSign($linkedBlank, $dealId, $document, $createdById, $fileId);
 		}
 		
 		return new Result();
 	}
 
-	private function initiateSign(array $linkedBlank, int $dealId, Document $document, $fileId): Result
+	private function initiateSign(array $linkedBlank, int $dealId, Document $document, int $createdById, $fileId): Result
 	{
 		$blank = \Bitrix\Sign\Blank::getById((int)$linkedBlank['BLANK_ID']);
 		$result = new Result();
@@ -200,7 +203,8 @@ class Sign
 				$fileId,
 				$blank->getId(),
 				$document,
-				$smartDocId
+				$smartDocId,
+				$createdById,
 			);
 
 		$data = $result->getData();

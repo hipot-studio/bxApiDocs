@@ -78,11 +78,7 @@ class DefaultCategoryPermissions extends Service\Scenario
 			'categoryId' => $this->categoryId,
 		]);
 
-		$strictByRoleGroupCode =
-			Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class)
-				? (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($this->entityTypeId)
-				: null
-		;
+		$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($this->entityTypeId);
 
 		while($roleFields = $roleDbResult->Fetch())
 		{
@@ -112,7 +108,7 @@ class DefaultCategoryPermissions extends Service\Scenario
 				);
 			}
 
-			$fields = ['RELATION' => $roleRelation];
+			$fields = ['PERMISSIONS' => $roleRelation];
 			$role->Update($roleID, $fields);
 		}
 

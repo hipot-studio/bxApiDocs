@@ -29,7 +29,7 @@ use Bitrix\Main\ORM\Query\Join;
  */
 class ObserverTable extends DataManager
 {
-//	use Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
+	use Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 
 	/**
 	 * Returns DB table name for entity

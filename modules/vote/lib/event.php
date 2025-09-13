@@ -339,6 +339,7 @@ SQL
 	 */
 	public static function resetStatistic($voteId)
 	{
+		$voteId = (int)$voteId;
 		$connection = Application::getInstance()->getConnection();
 		$helper = $connection->getSqlHelper();
 

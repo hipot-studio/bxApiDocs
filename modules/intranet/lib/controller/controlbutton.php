@@ -278,7 +278,10 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		$userId = $USER->GetId();
 		$calendarData = $this->getCalendarData($entityId, $entityData);
 
-		if (!in_array($userId, $calendarData['USER_IDS']))
+		if (
+			!is_array($calendarData['USER_IDS'])
+			|| !in_array($userId, $calendarData['USER_IDS'])
+		)
 		{
 			return $chatId;
 		}

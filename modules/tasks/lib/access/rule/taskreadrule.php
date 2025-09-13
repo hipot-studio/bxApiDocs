@@ -9,21 +9,15 @@
 namespace Bitrix\Tasks\Access\Rule;
 
 use Bitrix\Main\Loader;
-use Bitrix\Tasks\Access\Permission\PermissionDictionary;
+use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Main\Access\AccessibleItem;
-use Bitrix\Tasks\Access\Role\RoleDictionary;
-use Bitrix\Tasks\Access\Rule\Traits\SubordinateTrait;
 
 /**
  * Class TaskReadRule
  * @package Bitrix\Tasks\Access\Rule
  */
-
-
 class TaskReadRule extends \Bitrix\Main\Access\Rule\AbstractRule
 {
-	use SubordinateTrait;
-
 	public function execute(AccessibleItem $task = null, $params = null): bool
 	{
 		if (!$task)
@@ -56,31 +50,6 @@ class TaskReadRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
-		// can read subordinate's task
-		if ($this->isSubordinateTask($task, false))
-		{
-			return true;
-		}
-
-		$isInDepartment = $task->isInDepartment($this->user->getUserId(), false, [RoleDictionary::ROLE_RESPONSIBLE, RoleDictionary::ROLE_DIRECTOR, RoleDictionary::ROLE_ACCOMPLICE]);
-
-		if (
-			$this->user->getPermission(PermissionDictionary::TASK_DEPARTMENT_VIEW)
-			&& $isInDepartment
-		)
-		{
-			return true;
-		}
-
-		if (
-			$this->user->getPermission(PermissionDictionary::TASK_NON_DEPARTMENT_VIEW)
-			&& !$isInDepartment
-		)
-		{
-			return true;
-		}
-
-		$this->controller->addError(static::class, 'Access to read task denied');
-		return false;
+		return $this->controller->check(ActionDictionary::ACTION_TASK_DEPARTMENT, $task, $params);
 	}
 }

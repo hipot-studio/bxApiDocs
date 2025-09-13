@@ -46,4 +46,39 @@ class KeyManager extends BIConnector\KeyManager
 
 		return static::createKeyInner($keyParameters);
 	}
+
+	public static function deleteKey(string $key): void
+	{
+		$key = BIConnector\KeyTable::getList([
+			'select' => [
+				'ID',
+			],
+			'filter' => [
+				'=SERVICE_ID' => ApacheSuperset::getServiceId(),
+				'=ACTIVE' => 'Y',
+				'=APP_ID' => false,
+				'=ACCESS_KEY' => $key,
+			],
+			'limit' => 1,
+		])
+			->fetchObject()
+		;
+
+		if ($key)
+		{
+			$key->delete();
+		}
+	}
+
+	public static function isActiveKey(string $key): bool
+	{
+		$keysCount = BIConnector\KeyTable::getCount([
+			'=SERVICE_ID' => ApacheSuperset::getServiceId(),
+			'=ACTIVE' => 'Y',
+			'=APP_ID' => false,
+			'=ACCESS_KEY' => $key,
+		]);
+
+		return $keysCount > 0;
+	}
 }

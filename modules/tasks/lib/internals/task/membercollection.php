@@ -12,7 +12,7 @@ class MemberCollection extends EO_Member_Collection
 		return $this;
 	}
 
-	public function getAuditors(): array
+	public function getAuditorIds(): array
 	{
 		$auditors = [];
 
@@ -40,7 +40,7 @@ class MemberCollection extends EO_Member_Collection
 		return null;
 	}
 
-	public function getAccomplices(): array
+	public function getAccompliceIds(): array
 	{
 		$accomplices = [];
 

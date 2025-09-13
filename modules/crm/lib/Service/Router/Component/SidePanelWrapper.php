@@ -51,7 +51,7 @@ final class SidePanelWrapper extends Component
 		];
 	}
 
-	public function setParameter(string $name, mixed $value): self
+	public function setParameter(string $name, mixed $value): static
 	{
 		$this->targetComponent->setParameter($name, $value);
 

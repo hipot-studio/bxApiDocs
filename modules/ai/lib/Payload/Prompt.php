@@ -36,10 +36,7 @@ class Prompt extends Text implements IPayload
 	{
 		parent::__construct($payload);
 
-		if (
-			array_key_exists($payload, self::PROMPTS_WITH_REASONING)
-			&& Config::getValue('should_use_reasoning') === 'Y'
-		)
+		if (array_key_exists($payload, self::PROMPTS_WITH_REASONING))
 		{
 			$payload = self::PROMPTS_WITH_REASONING[$payload];
 			$this->payload = $payload;

@@ -14,6 +14,11 @@ class Messenger extends BaseRecent
 		return true;
 	}
 
+	public function isPreload(): bool
+	{
+		return true;
+	}
+
 	public function getId(): string
 	{
 		return 'chats';
@@ -49,7 +54,7 @@ class Messenger extends BaseRecent
 	{
 		return [
 			'useSearch' => true,
-			'preload' => true,
+			'preload' => $this->isPreload(),
 			'titleParams' => [
 				'useLargeTitleMode' => true,
 				'text' => $this->getTitle(),

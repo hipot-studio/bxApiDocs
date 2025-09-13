@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\Factory;
 
+use Bitrix\Crm\Activity\Provider\Bizproc;
 use Bitrix\Crm\Activity\Provider\Booking\Booking;
 use Bitrix\Crm\Activity\Provider\Booking\WaitListItem;
 use Bitrix\Crm\Activity\Provider\CalendarSharing;
@@ -10,6 +11,7 @@ use Bitrix\Crm\Activity\Provider\Delivery;
 use Bitrix\Crm\Activity\Provider\Document;
 use Bitrix\Crm\Activity\Provider\Notification;
 use Bitrix\Crm\Activity\Provider\Payment;
+use Bitrix\Crm\Activity\Provider\RepeatSale;
 use Bitrix\Crm\Activity\Provider\SignB2eDocument;
 use Bitrix\Crm\Activity\Provider\SignDocument;
 use Bitrix\Crm\Activity\Provider\Sms;
@@ -19,7 +21,6 @@ use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Activity\Provider\Visit;
 use Bitrix\Crm\Activity\Provider\WhatsApp;
 use Bitrix\Crm\Activity\Provider\Zoom;
-use Bitrix\Crm\Activity\Provider\Bizproc;
 use Bitrix\Crm\Activity\ProviderId;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item;
@@ -198,6 +199,11 @@ class ConfigurableActivity
 			if ($providerId === Bizproc\Task::getId())
 			{
 				return new Item\Activity\Bizproc\Task($context, $model);
+			}
+			
+			if ($providerId === RepeatSale::getId())
+			{
+				return new Item\Activity\RepeatSale($context, $model);
 			}
 		}
 

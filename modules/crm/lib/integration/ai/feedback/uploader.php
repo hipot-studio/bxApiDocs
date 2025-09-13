@@ -9,6 +9,7 @@ use Bitrix\Crm\Integration\AI\Dto\SummarizeCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\TranscribeCallRecordingPayload;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Context;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Http;
@@ -21,7 +22,9 @@ use Psr\Log\LoggerInterface;
 
 final class Uploader
 {
-	private const ENDPOINT = 'https://product-feedback.bitrix24.com/bitrix/services/main/ajax.php';
+	private const ENDPOINT_GLOBAL = 'https://product-feedback.bitrix24.com/bitrix/services/main/ajax.php';
+	private const ENDPOINT_RU = 'https://product-feedback.bitrix24.ru/bitrix/services/main/ajax.php';
+
 	private const FORM_ID = 654;
 	private const SECURITY_CODE = 'so05ig';
 
@@ -120,7 +123,7 @@ final class Uploader
 
 		return new Http\Request(
 			Http\Method::POST,
-			(new Uri(self::ENDPOINT))->addParams([
+			(new Uri($this->getRequestEndPoint()))->addParams([
 				'action' => 'crm.site.form.fill',
 			]),
 			null,
@@ -178,5 +181,15 @@ final class Uploader
  		}
 
 		return implode('|', $result);
+	}
+
+	private function getRequestEndPoint(): string
+	{
+		$region = Application::getInstance()->getLicense()->getRegion();
+		
+		return in_array($region, ['ru', 'by', 'kz'], true)
+			? self::ENDPOINT_RU
+			: self::ENDPOINT_GLOBAL
+		;
 	}
 }

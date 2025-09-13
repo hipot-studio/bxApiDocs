@@ -13,6 +13,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Data\AddStrategy;
 
 /**
  * Class ContactCompanyTable
@@ -32,7 +33,7 @@ use Bitrix\Main\ORM\Query\Join;
  */
 class ContactCompanyTable extends Main\ORM\Data\DataManager
 {
-//	use AddStrategy\Trait\MergeByDefaultTrait;
+	use AddStrategy\Trait\MergeByDefaultTrait;
 
 	/**
 	 * Get table name.

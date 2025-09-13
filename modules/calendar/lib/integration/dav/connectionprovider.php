@@ -3,11 +3,24 @@
 namespace Bitrix\Calendar\Integration\Dav;
 
 use Bitrix\Calendar\Sync\Builders\BuilderConnectionFromDM;
+use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Dav\Internals\DavConnectionTable;
 use Bitrix\Main\Loader;
 
 class ConnectionProvider
 {
+	/**
+	 * @param int $userId
+	 * @param string $type
+	 * @param array $providers
+	 *
+	 * @return Connection[]
+	 *
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	public function getSyncConnections(int $userId, string $type, array $providers): array
 	{
 		if (!Loader::includeModule('dav'))

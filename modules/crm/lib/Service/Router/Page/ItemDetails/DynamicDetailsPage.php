@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Service\Router\Page\ItemDetails;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router\AbstractPage;
 use Bitrix\Crm\Service\Router\Component\Component;
+use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
 use Bitrix\Crm\Service\Router\Contract;
 use Bitrix\Crm\Service\Router\DetailsFrameScriptTarget;
 use Bitrix\Crm\Service\Router\Enum\Scope;
@@ -22,8 +23,6 @@ class DynamicDetailsPage extends AbstractPage
 	protected int $entityTypeId;
 	protected int $entityId;
 
-	protected bool $isPlainView = true;
-
 	public function __construct(
 		HttpRequest $request,
 		?Scope $currentScope,
@@ -38,7 +37,7 @@ class DynamicDetailsPage extends AbstractPage
 		$this->entityId = is_numeric($ENTITY_ID) ? (int)$ENTITY_ID : static::DEFAULT_ENTITY_ID;
 	}
 
-	protected function component(): Contract\Component
+	public function component(): Contract\Component
 	{
 		return new Component(
 			name: $this->getRenderComponentName(),
@@ -86,5 +85,10 @@ class DynamicDetailsPage extends AbstractPage
 		// find the required component at the Page: crm.item.details, crm.document.details have the same template url
 		return Container::getInstance()->getRouter()->getItemDetailComponentName($this->entityTypeId)
 			?? static::COMPONENT_NAME;
+	}
+
+	protected function configureSidePanel(SidePanelWrapper $sidePanel): void
+	{
+		$sidePanel->isUsePadding = false;
 	}
 }

@@ -26,7 +26,7 @@ class Feature
 	public function isImIntegrationEnabled(): bool
 	{
 		// disabled by default in development period
-		return Option::get('vote', 'is_im_integration_enabled', 'N') === 'Y';
+		return Option::get('vote', 'is_im_integration_enabled', 'Y') === 'Y';
 	}
 
 }

@@ -1,9 +1,13 @@
 <?php
 
-use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Intranet\Enum\InvitationMessageType;
+use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
+use Bitrix\Intranet\Internal\Factory\Message\CollabJoinMessageFactory;
+use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Event;
 use Bitrix\Intranet\Internals\InvitationTable;
+use Bitrix\Main\UserTable;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -21,7 +25,7 @@ class CIntranetEventHandlers
 			return;
 		}
 
-		if (!self::$fieldsCache[$arFields['IBLOCK_ID']])
+		if (!isset(self::$fieldsCache[$arFields['IBLOCK_ID']]))
 		{
 			$dbRes = CIntranetSharepoint::GetByID($arFields['IBLOCK_ID']);
 			if ($arRes = $dbRes->Fetch())
@@ -30,7 +34,7 @@ class CIntranetEventHandlers
 			}
 		}
 
-		if (self::$fieldsCache[$arFields['IBLOCK_ID']])
+		if (isset(self::$fieldsCache[$arFields['IBLOCK_ID']]))
 		{
 			CIntranetSharepoint::AddToUpdateLog(self::$fieldsCache[$arFields['IBLOCK_ID']]);
 		}
@@ -1028,10 +1032,30 @@ class CIntranetEventHandlers
 			]);
 		}
 
+		$user = (new UserRepository())->getUserById($userId);
+		if ($user->isCollaber())
+		{
+			static::sendCollabMail($user);
+		}
+
 		(new \Bitrix\Main\Event('intranet', 'onUserFirstInitialization', [
 			'invitationFields' => $invitationFields,
 			'userId' => $userId
 		]))->send();
+	}
+
+	private static function sendCollabMail(Bitrix\Intranet\Entity\User $user): void
+	{
+		$userCollab = (new CollabProviderData())->getUserCollabCollection($user);
+		foreach ($userCollab as $collab)
+		{
+			(new CollabJoinMessageFactory(
+				$user,
+				$collab
+			))
+				->createEmailEvent()
+				->sendImmediately();
+		}
 	}
 
 	public static function OnAfterUserAdd($arUser)
@@ -1168,12 +1192,12 @@ class CIntranetEventHandlers
 	{
 		if(array_key_exists('UF_DEPARTMENT', $fields))
 		{
+			$ufDepartment = is_array($fields['UF_DEPARTMENT']) ? $fields['UF_DEPARTMENT'] : [];
+			$cacheDepartment = is_array(self::$userDepartmentCache[$fields['ID']]) ? self::$userDepartmentCache[$fields['ID']] : [];
+
 			if(
-				is_array(self::$userDepartmentCache[$fields['ID']])
-				&& (
-					array_diff($fields['UF_DEPARTMENT'], self::$userDepartmentCache[$fields['ID']])
-					|| count($fields['UF_DEPARTMENT']) !== count(self::$userDepartmentCache[$fields['ID']])
-				)
+					array_diff($ufDepartment, $cacheDepartment)
+					|| count($ufDepartment) !== count($cacheDepartment)
 			)
 			{
 				$event = new Event("intranet", "onEmployeeDepartmentsChanged", array(
@@ -1218,7 +1242,11 @@ class CIntranetEventHandlers
 
 	public static function OnFillSocNetAllowedSubscribeEntityTypes(&$arSocNetAllowedSubscribeEntityTypes)
 	{
-		define("SONET_SUBSCRIBE_ENTITY_NEWS", "N");
+		if (!defined('SONET_SUBSCRIBE_ENTITY_NEWS'))
+		{
+			define('SONET_SUBSCRIBE_ENTITY_NEWS', 'N');
+		}
+
 		$arSocNetAllowedSubscribeEntityTypes[] = SONET_SUBSCRIBE_ENTITY_NEWS;
 
 		global $arSocNetAllowedSubscribeEntityTypesDesc;
@@ -1461,6 +1489,15 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 
 		if(defined("ADMIN_SECTION") && ADMIN_SECTION == true)
 			return;
+
+		if (
+			!defined('AIR_SITE_TEMPLATE')
+			&& defined('SITE_TEMPLATE_ID')
+			&& SITE_TEMPLATE_ID === 'bitrix24'
+		)
+		{
+			define('AIR_SITE_TEMPLATE', true);
+		}
 
 		if (self::isSkipWizardButton())
 		{
@@ -1889,6 +1926,10 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 			\Bitrix\Intranet\Service\ServiceContainer::getInstance()
 				->getUserService()
 				->logAuthTimeForNonMobile($userId)
+			;
+			\Bitrix\Intranet\Service\ServiceContainer::getInstance()
+				->getUserService()
+				->logFirstTimeAuthForMobile($userId)
 			;
 		}
 	}

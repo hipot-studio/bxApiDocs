@@ -181,7 +181,7 @@ class FavoriteChat extends PrivateChat
 			$chat = new static($params);
 			$chat
 				->setTitle(Loc::getMessage('IM_CHAT_FAVORITE_TITLE_V3'))
-				->setDescription(Loc::getMessage('IM_CHAT_FAVORITE_DESCRIPTION_V2'))
+				->setDescription(Loc::getMessage('IM_CHAT_FAVORITE_DESCRIPTION_MSGVER_1'))
 				->save()
 			;
 
@@ -219,7 +219,7 @@ class FavoriteChat extends PrivateChat
 
 	protected function sendBanner(): void
 	{
-		$messageText = Loc::getMessage('IM_CHAT_FAVORITE_CREATE_WELCOME');
+		$messageText = Loc::getMessage('IM_CHAT_FAVORITE_CREATE_WELCOME_MSGVER_1');
 		\CIMMessage::Add([
 			'MESSAGE_TYPE' => $this->getType(),
 			'TO_CHAT_ID' => $this->getChatId(),

@@ -99,6 +99,11 @@ final class Fields
 				$options['editing'] = $this->getFieldEditing($field, $data);
 			}
 
+			if (is_array($field['SETTINGS_DATA']['settingsData'] ?? null))
+			{
+				$options['settingsData'] = $field['SETTINGS_DATA']['settingsData'];
+			}
+
 			$gotoNextField = false;
 			$type = $field['TYPE'];
 			switch ($type)
@@ -696,6 +701,11 @@ final class Fields
 			'VALUE_TYPE' => $options['editing']['editable']['valueType'],
 			'VALUE' => $options['value']
 		);
+
+		if (is_array($options['settingsData'] ?? null))
+		{
+			$data['SETTINGS_DATA']['settingsData'] = $options['settingsData'];
+		}
 
 		$multipleOriginal = $field['MULTIPLE_ORIGINAL'] ?? false;
 		if($data['TYPE'] == 'product')

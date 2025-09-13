@@ -261,47 +261,44 @@ class CCrmRole
 		}
 		else
 		{
-			if (!isset($arFields['RELATION']) || !is_array($arFields['RELATION']))
-				$arFields['RELATION'] = array();
+			$arFields['PERMISSIONS'] = $arFields['PERMISSIONS'] ?? $arFields['RELATION'] ?? []; // RELATION key for backward compatibility only!
+			$arFields['PERMISSIONS'] = (array)$arFields['PERMISSIONS'];
 
 			$ID = (int)$DB->Add('b_crm_role', $arFields, array(), 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 			\Bitrix\Crm\Service\Container::getInstance()->getLogger('Permissions')->info(
-				"Created role #{roleId} ({roleName})\nPermissions:\n".print_r($arFields['RELATION'], true),
+				"Created role #{roleId} ({roleName})\nPermissions:\n".print_r($arFields['PERMISSIONS'], true),
 				RolePermissionLogContext::getInstance()->appendTo([
 					'roleId' => $ID,
 					'roleName' => $arFields['NAME'],
 				])
 			);
-			$this->SetRoleRelation($ID, $arFields['RELATION']);
+			$this->setRolePermissions($ID, $arFields['PERMISSIONS']);
 			$result = $arFields['ID'] = $ID;
 		}
 		return $result;
 	}
 
-	protected function SetRoleRelation($ID, $arRelation)
+	protected function setRolePermissions(int $roleId, array $permissions): void
 	{
-		global $DB;
-		$ID = (int)$ID;
-
-		$existedRelations = RolePermissionTable::query()->where('ROLE_ID', $ID)->setSelect(['*'])->exec()->fetchAll();
-		$relationComparer = new \Bitrix\Crm\Security\Role\RolePermissionComparer($existedRelations, $arRelation);
+		$existedPermissions = RolePermissionTable::query()->where('ROLE_ID', $roleId)->setSelect(['*'])->exec()->fetchAll();
+		$permissionsComparer = new \Bitrix\Crm\Security\Role\RolePermissionComparer($existedPermissions, $permissions);
 
 		RolePermissionLogContext::getInstance()->disableOrmEventsLog();
 
 		\Bitrix\Crm\Security\Role\Repositories\PermissionRepository::getInstance()->applyRolePermissionData(
-			$ID,
-			$relationComparer->getValuesToDelete(),
-			$relationComparer->getValuesToAdd()
+			$roleId,
+			$permissionsComparer->getValuesToDelete(),
+			$permissionsComparer->getValuesToAdd()
 		);
 		RolePermissionLogContext::getInstance()->enableOrmEventsLog();
 
 		$this->logRolePermissionsChange(
-			$ID,
-			$relationComparer->getValuesToDelete(),
-			$relationComparer->getValuesToAdd()
+			$roleId,
+			$permissionsComparer->getValuesToDelete(),
+			$permissionsComparer->getValuesToAdd()
 		);
 
-		$this->log('SetRoleRelation', ['ID' => $ID, 'RELATION' => $arRelation]);
+		$this->log('SetRolePermissions', ['ID' => $roleId, 'PERMISSIONS' => $permissions]);
 
 		self::ClearCache();
 	}
@@ -320,8 +317,6 @@ class CCrmRole
 		}
 		else
 		{
-			if (!isset($arFields['RELATION']) || !is_array($arFields['RELATION']))
-				$arFields['RELATION'] = array();
 			$sUpdate = $DB->PrepareUpdate('b_crm_role', $arFields, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 			if ($sUpdate <> '')
 			{
@@ -329,6 +324,7 @@ class CCrmRole
 
 				$fieldsToLog = $arFields;
 				unset($fieldsToLog['RELATION']);
+				unset($fieldsToLog['PERMISSIONS']);
 				$fieldsToLog['ID'] = $ID;
 				\Bitrix\Crm\Service\Container::getInstance()->getLogger('Permissions')->info(
 					"Updated role #{ID}",
@@ -336,7 +332,10 @@ class CCrmRole
 				);
 			}
 
-			$this->SetRoleRelation($ID, $arFields['RELATION']);
+			$arFields['PERMISSIONS'] = $arFields['PERMISSIONS'] ?? $arFields['RELATION'] ?? []; // RELATION key for backward compatibility only!
+			$arFields['PERMISSIONS'] = (array)$arFields['PERMISSIONS'];
+
+			$this->setRolePermissions($ID, $arFields['PERMISSIONS']);
 			$arFields['ID'] = $ID;
 		}
 
@@ -397,15 +396,8 @@ class CCrmRole
 
 	public static function EraseEntityPermissionsForNotAdminRoles(string $entity): void
 	{
-		if (Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class))
-		{
-			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($entity)?->getEntityTypeId();
-			$adminRoleIds = \Bitrix\Crm\Security\Role\RolePermission::getAdminRolesIds($entityTypeId);
-		}
-		else
-		{
-			$adminRoleIds = \Bitrix\Crm\Security\Role\RolePermission::getAdminRolesIds();
-		}
+		$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($entity)?->getEntityTypeId();
+		$adminRoleIds = \Bitrix\Crm\Security\Role\RolePermission::getAdminRolesIds($entityTypeId);
 
 		if (empty($adminRoleIds))
 		{

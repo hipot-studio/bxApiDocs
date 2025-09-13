@@ -753,6 +753,10 @@ final class CCrmEntityProductListComponent
 		);
 		$this->currency['TEMPLATE'] = \CCrmCurrency::GetCurrencyFormatString($this->currency['ID']);
 		$this->currency['TEXT'] = \CCrmCurrency::getCurrencyText($this->currency['ID']);
+		if ($this->currency['TEXT'] === '?')
+		{
+			$this->currency['TEXT'] = $this->currency['ID'];
+		}
 		$format = \CCrmCurrency::GetCurrencyFormatParams($this->currency['ID']);
 		$this->currency['FORMAT'] = [
 			'TEMPLATE' => $format['TEMPLATE'],

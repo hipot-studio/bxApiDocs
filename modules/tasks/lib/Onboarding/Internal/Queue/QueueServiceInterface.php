@@ -19,5 +19,5 @@ interface QueueServiceInterface
 	public function deleteByIds(JobIds $jobIds): Result;
 	public function deleteByCodes(JobCodes $jobCodes): Result;
 	public function deleteByPair(Pair $pair): Result;
-	public function deleteUserJob(UserJob $userJob): Result;
+	public function deleteByUserJob(UserJob $userJob): Result;
 }

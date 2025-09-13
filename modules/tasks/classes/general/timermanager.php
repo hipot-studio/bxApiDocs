@@ -173,8 +173,53 @@ final class CTaskTimerManager
 			return (false);
 	}
 
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use \Bitrix\Tasks\V2\Public\Command\Task\Tracking\StartTimerCommand
+	 */
 	public function start($taskId)
 	{
+		$currentUserId = User::getId();
+
+		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('timer'))
+		{
+			$accessController = \Bitrix\Tasks\Access\TaskAccessController::getInstance($this->userId);
+
+			if (!$accessController->checkByItemId(ActionDictionary::ACTION_TASK_READ, $taskId))
+			{
+				return false;
+			}
+
+			if (!$accessController->checkByItemId(ActionDictionary::ACTION_TASK_TIME_TRACKING, $taskId))
+			{
+				return false;
+			}
+
+			$result = (new \Bitrix\Tasks\V2\Public\Command\Task\Tracking\StartTimerCommand(
+				userId: $this->userId,
+				taskId: (int)$taskId,
+				syncPlan: $currentUserId === $this->userId,
+				canStart: $accessController->checkByItemId(ActionDictionary::ACTION_TASK_START, $taskId),
+				canRenew: $accessController->checkByItemId(ActionDictionary::ACTION_TASK_RENEW, $taskId),
+			))->run();
+
+			if (!$result->isSuccess())
+			{
+				return false;
+			}
+
+			/** @var \Bitrix\Tasks\V2\Internal\Entity\Task\Timer $timer */
+			$timer = $result->getObject();
+
+			return [
+				'TASK_ID' => $timer->taskId,
+				'USER_ID' => $timer->userId,
+				'TIMER_STARTED_AT' => $timer->startedAtTs,
+				'TIMER_ACCUMULATOR' => $timer->seconds,
+			];
+		}
+
 		global $CACHE_MANAGER;
 
 		// Stop timer of user (if it is run)
@@ -255,9 +300,47 @@ final class CTaskTimerManager
 		return $timer;
 	}
 
-
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use \Bitrix\Tasks\V2\Public\Command\Task\Tracking\StopTimerCommand
+	 */
 	public function stop($taskId = 0)
 	{
+		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('timer'))
+		{
+			if ($taskId > 0)
+			{
+				$accessController = \Bitrix\Tasks\Access\TaskAccessController::getInstance($this->userId);
+				if (
+					!$accessController->checkByItemId(ActionDictionary::ACTION_TASK_READ, $taskId)
+					&& !$accessController->checkByItemId(ActionDictionary::ACTION_TASK_TIME_TRACKING, $taskId)
+				)
+				{
+					return false;
+				}
+			}
+
+			$result = (new \Bitrix\Tasks\V2\Public\Command\Task\Tracking\StopTimerCommand(
+				userId: $this->userId,
+				taskId: $taskId,
+			))->run();
+
+			if (!$result->isSuccess())
+			{
+				return false;
+			}
+
+			/** @var \Bitrix\Tasks\V2\Internal\Entity\Task\Timer $timer */
+			$timer = $result->getObject();
+
+			return [
+				'TASK_ID' => $timer->taskId,
+				'USER_ID' => $timer->userId,
+				'TIMER_STARTED_AT' => $timer->startedAtTs,
+				'TIMER_ACCUMULATOR' => $timer->seconds,
+			];
+		}
 		global $CACHE_MANAGER;
 
 		if ($taskId)

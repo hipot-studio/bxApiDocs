@@ -129,6 +129,7 @@ class CashboxOrangeData
 					'taxationSystem' => $this->getValueFromSettings('TAX', 'SNO'),
 				],
 				'customerContact' => $this->getCustomerContact($checkData),
+				'isInternetStore' => $this->getField('USE_OFFLINE') === 'N',
 			],
 			'meta' => self::PARTNER_CODE_BITRIX
 		];

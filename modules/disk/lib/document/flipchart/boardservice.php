@@ -27,8 +27,13 @@ class BoardService
 		return $this->session->setAsNonActive();
 	}
 
-	public static function convertDocumentIdToExternal(int | string $documentId): string
+	public static function convertDocumentIdToExternal(int | string $documentId, int | string | null $versionId = null): string
 	{
+		if ($versionId)
+		{
+			$documentId .= '.' . $versionId;
+		}
+
 		$id = [
 			Configuration::getDocumentIdSalt(),
 			SITE_ID,
@@ -41,8 +46,14 @@ class BoardService
 
 	public static function getDocumentIdFromExternal($documentId): string
 	{
+		return self::getDocumentIdAndVersionFromExternal($documentId)[0];
+	}
+
+	public static function getDocumentIdAndVersionFromExternal($documentId): array
+	{
 		$documentId = explode('-', $documentId);
-		return array_pop($documentId);
+		$documentId = array_pop($documentId);
+		return [$documentId, $versionId] = explode('.', $documentId);
 	}
 
 	public static function getSiteIdFromExternal($documentId): string

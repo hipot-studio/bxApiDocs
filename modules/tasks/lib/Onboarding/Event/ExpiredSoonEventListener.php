@@ -41,7 +41,7 @@ final class ExpiredSoonEventListener extends AbstractEventListener
 		$limit = TaskCountLimit::get(Type::TooManyTasks);
 
 		$taskRepository = $this->container->getTaskRepository();
-		$count = $taskRepository->getCount($createdBy);
+		$count = $taskRepository->getOnePersonTasksCount($createdBy);
 		if ($count < $limit)
 		{
 			return $eventResult;

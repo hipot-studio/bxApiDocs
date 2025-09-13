@@ -1605,11 +1605,6 @@ class CSocServAuth
 					}
 				}
 
-				if(isset($socservUserFields["TIME_ZONE_OFFSET"]) && $socservUserFields["TIME_ZONE_OFFSET"] !== null)
-				{
-					CTimeZone::SetCookieValue($socservUserFields["TIME_ZONE_OFFSET"]);
-				}
-
 				$USER->AuthorizeWithOtp($USER_ID, $bSave);
 
 				if($USER->IsJustAuthorized())

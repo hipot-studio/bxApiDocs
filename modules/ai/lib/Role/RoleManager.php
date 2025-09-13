@@ -6,6 +6,7 @@ namespace Bitrix\AI\Role;
 
 use Bitrix\AI\Container;
 use Bitrix\AI\Entity\TranslateTrait;
+use Bitrix\AI\Facade\Cache;
 use Bitrix\AI\Model\EO_Role_Query;
 use Bitrix\AI\Model\RoleTranslateDescriptionTable;
 use Bitrix\AI\Model\RoleTranslateNameTable;
@@ -18,14 +19,19 @@ use Bitrix\AI\Model\RoleFavoriteTable;
 use Bitrix\AI\Model\RecentRoleTable;
 use Bitrix\AI\Model\RoleTable;
 use Bitrix\AI\Repository\PromptRepository;
+use Bitrix\AI\Repository\RoleRepository;
 use Bitrix\AI\Services\AvailableRuleService;
 use Bitrix\AI\ShareRole\Model\OwnerTable;
 use Bitrix\AI\ShareRole\Repository\UserAccessRepository;
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserAccessTable;
 
@@ -38,6 +44,7 @@ class RoleManager
 	private const RECENT_ROLE_LIMIT = 10;
 	private const FLAG_IS_NOT_SYSTEM = 'N';
 	private const FLAG_IS_ACTIVE = 1;
+	private const ROLES_AVATARS_CACHE_KEY = 'roleCodesWithAvatars';
 	private int $userId;
 	private string $languageCode;
 
@@ -84,6 +91,39 @@ class RoleManager
 		$query = $this->addTranslateReferenceFields($query);
 
 		return $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
+	}
+
+	/**
+	 * Get cached avatars of roles
+	 *
+	 * @param string[] $roleCodes Array of role codes to be returned by the method, returns all roles if this param is empty
+	 * @return array<string, array{
+	 *     small: string,
+	 *     medium: string,
+	 *     large: string
+	 * }>
+ */
+	public function getRolesAvatarsFromCache(array $roleCodes = []): array
+	{
+		$cache = new Cache(self::ROLES_AVATARS_CACHE_KEY);
+		$existingCache = $cache->getExists();
+
+		if (!empty($existingCache))
+		{
+			$roles = $existingCache;
+		}
+		else
+		{
+			$roles = $this->getRoleRepository()->getRoleAvatars();
+			$cache->store($roles);
+		}
+
+		if (empty($roleCodes))
+		{
+			return $roles;
+		}
+
+		return array_intersect_key($roles, array_flip($roleCodes));
 	}
 
 	/**
@@ -534,10 +574,59 @@ class RoleManager
 
 		$prompts = $this->getPromptRepository()->getPromptsByRoleCodes(
 			$category,
-			$roleCode,
+			[$roleCode],
 			$this->languageCode
 		);
 
+		return $this->getPromptDTOs($prompts);
+	}
+
+	/**
+	 * Get list prompts by category and roleCodes
+	 *
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
+	public function getPromptsByCategoryAndRoleCodes(string $category, array $roleCodes): array
+	{
+		$prompts = [];
+		$roles = RoleTable::query()
+			->setSelect(['RULES', 'CODE'])
+			->whereIn('CODE', $roleCodes)
+			->fetchCollection()
+		;
+
+		if ($roles->isEmpty())
+		{
+			return [];
+		}
+
+		$roleCodesForSearch = [];
+		foreach ($roles as $role)
+		{
+			if ($this->getAvailableRuleService()->isAvailableRules($role->getRules(), $this->languageCode))
+			{
+				$roleCodesForSearch[] = $role->getCode();
+			}
+		}
+
+		if (empty($roleCodesForSearch))
+		{
+			return $prompts;
+		}
+
+		$prompts = $this->getPromptRepository()->getPromptsByRoleCodes(
+			$category,
+			$roleCodesForSearch,
+			$this->languageCode
+		);
+
+		return $this->getPromptListWithGroupByRoleCode($prompts, $roleCodesForSearch);
+	}
+
+	protected function getPromptDTOs(array $prompts): array
+	{
 		if (empty($prompts))
 		{
 			return [];
@@ -566,7 +655,7 @@ class RoleManager
 				$promptType,
 				$prompt['TITLE'],
 				$prompt['TRANSLATE'],
-				$prompt['IS_NEW'] == 1,
+				$prompt['IS_NEW'] === 1,
 			);
 		}
 
@@ -628,7 +717,6 @@ class RoleManager
 		$userAccessRepository = $this->getUserAccessRepository();
 
 		$accessCodes = $userAccessRepository->getCodesForUserGroup($this->userId);
-		$accessCodes[] = UserAccessRepository::CODE_ALL_USER;
 
 		$userAccessSubQuery = UserAccessTable::query()
 			->setSelect(['ACCESS_CODE'])
@@ -679,6 +767,99 @@ class RoleManager
 		return $result;
 	}
 
+	private function getPromptListWithGroupByRoleCode(array $promptList, array $roleCodes): array
+	{
+		$promptsGroupByRoleCodes = $this->getPromptsGroupByRoleCodes($promptList, $roleCodes);
+
+		if (empty($promptsGroupByRoleCodes))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($promptsGroupByRoleCodes as $roleCode => $prompts)
+		{
+			$result[$roleCode] = $this->getPromptDTOs($prompts);
+		}
+
+		return $result;
+	}
+
+	private function getArrayWithPromptIdsInKey(array $prompts): array
+	{
+		if (empty($prompts))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($prompts as $prompt)
+		{
+			if (empty($prompt['ID']))
+			{
+				continue;
+			}
+
+			$result[$prompt['ID']] = $prompt;
+		}
+
+		return $result;
+	}
+
+	private function getPromptsGroupByRoleCodes(array $prompts, array $roleCodes): array
+	{
+		$promptList = $this->getArrayWithPromptIdsInKey($prompts);
+		if (empty($promptList))
+		{
+			return [];
+		}
+
+		$rolesForPrompts = $this->getPromptRepository()->getRoleCodesForPromptIds(array_keys($promptList));
+		if ($rolesForPrompts->isEmpty())
+		{
+			return [];
+		}
+
+		$promptsGroupByRoleCodes = [];
+		foreach ($rolesForPrompts as $promptData)
+		{
+			$promptId = $promptData->getId();
+			if (!array_key_exists($promptId, $promptList))
+			{
+				continue;
+			}
+
+			$rolesCollection = $promptData->getRoles();
+			if ($rolesCollection->isEmpty())
+			{
+				continue;
+			}
+
+			foreach ($rolesCollection as $role)
+			{
+				$roleCode = $role->getCode();
+				if (!in_array($roleCode, $roleCodes, true))
+				{
+					continue;
+				}
+
+				if (!array_key_exists($roleCode, $promptsGroupByRoleCodes))
+				{
+					$promptsGroupByRoleCodes[$roleCode] = [];
+				}
+
+				$promptsGroupByRoleCodes[$roleCode][] = $promptList[$promptId];
+			}
+		}
+
+		return $promptsGroupByRoleCodes;
+	}
+
+	public static function resetRolesWithAvatarsCache(): void
+	{
+		Cache::remove(self::ROLES_AVATARS_CACHE_KEY);
+	}
+
 	private function getPromptRepository(): PromptRepository
 	{
 		return Container::init()->getItem(PromptRepository::class);
@@ -692,5 +873,10 @@ class RoleManager
 	private function getUserAccessRepository(): UserAccessRepository
 	{
 		return Container::init()->getItem(UserAccessRepository::class);
+	}
+
+	private function getRoleRepository(): RoleRepository
+	{
+		return ServiceLocator::getInstance()->get(RoleRepository::class);
 	}
 }

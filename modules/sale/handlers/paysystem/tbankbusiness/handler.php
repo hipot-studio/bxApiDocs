@@ -25,7 +25,6 @@ use Bitrix\Sale\Services\PaySystem\Restrictions\RestrictionPersonTypeTrait;
 class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements RestrictableServiceHandler
 {
 	use RestrictionCurrencyTrait;
-	use RestrictionPersonTypeTrait;
 
 	protected const SANDBOX_URL = 'https://business.tbank.ru/openapi/sandbox/';
 	protected const PRODUCTION_URL = 'https://business.tbank.ru/openapi/';
@@ -128,7 +127,6 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 		$collection = new RestrictionInfoCollection();
 
 		$this->getRestrictionCurrency($collection);
-		$this->getRestrictionEntityPersonType($collection);
 
 		return $collection;
 	}
@@ -255,7 +253,11 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 
 				if (isset($invoiceState['response']['pdfUrl']))
 				{
-					$result['INVOICE_URL'] = $invoiceState['response']['pdfUrl'];
+					$result['INVOICE_PDF_URL'] = $invoiceState['response']['pdfUrl'];
+				}
+				if (isset($invoiceState['response']['incomingInvoiceUrl']))
+				{
+					$result['INVOICE_PERSONAL_ACCOUNT_URL'] = $invoiceState['response']['incomingInvoiceUrl'];
 				}
 
 				if (isset($invoiceState['params']['dueDate']))
@@ -438,7 +440,6 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 	{
 		$result = [
 			'invoiceNumber' => (string)$payment->getId(), // digital identifier
-			'payer' => $this->getPayerData($payment),
 			'items' => $this->getProductsForInvoice($payment),
 			'contactPhone' => $this->getContactPhone($payment),
 		];
@@ -465,12 +466,19 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 			$result['dueDate'] = $dueDate;
 		}
 
+		$payer = $this->getPayerData($payment);
+		if (!empty($payer))
+		{
+			$result['payer'] = $payer;
+		}
+
 		return $result;
 	}
 
 	protected function checkInvoiceQueryParams(array $invoiceQueryParams): PaySystem\ServiceResult
 	{
 		$result = new PaySystem\ServiceResult();
+
 
 		if (empty($invoiceQueryParams['payer']))
 		{
@@ -479,6 +487,7 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 				self::ERROR_CODE_BAD_INVOICE_PARAMS
 			));
 		}
+
 		if (empty($invoiceQueryParams['items']))
 		{
 			$result->addError(new Main\Error(
@@ -503,6 +512,32 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 	}
 
 	protected function getPayerData(Payment $payment): ?array
+	{
+		$payerData = $this->getCompanyPayerData($payment);
+
+		if (empty($payerData))
+		{
+			$payerData = $this->getContactPayerData($payment);
+		}
+
+		return !empty($payerData) ? $payerData : null;
+	}
+
+	protected function getContactPayerData(Payment $payment): ?array
+	{
+		$result = [];
+
+		$contactFullName = $this->getContactFullName($payment);
+
+		if (!empty($contactFullName))
+		{
+			$result['name'] = $contactFullName;
+		}
+
+		return !empty($result) ? $result : null;
+	}
+
+	protected function getCompanyPayerData(Payment $payment): ?array
 	{
 		/** @var PaymentCollection $collection */
 		$collection = $payment->getCollection();
@@ -662,6 +697,32 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 				? $this->normalizePhoneNumber($phoneNumber)
 				: ''
 		;
+	}
+
+	protected function getContactFullName(Payment $payment): ?string
+	{
+		/** @var PaymentCollection $collection */
+		$collection = $payment->getCollection();
+		$order = $collection->getOrder();
+
+		$clientCollection = $this->getClientCollection($order);
+		if (!$clientCollection)
+		{
+			return null;
+		}
+
+		$clientFullName = null;
+
+		$clientId = $this->getPrimaryContactId($clientCollection);
+
+		$factory = Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Contact);
+		if ($factory)
+		{
+			$contactItem = $factory->getItem($clientId, ['FULL_NAME']);
+			$clientFullName = $contactItem->getFullName();
+		}
+
+		return $clientFullName;
 	}
 
 	/**

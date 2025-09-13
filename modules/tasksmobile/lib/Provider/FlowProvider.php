@@ -685,7 +685,8 @@ final class FlowProvider
 		$availablePresets = $filterInstance->getAvailablePresets();
 
 		foreach ($availablePresets as $key => $name) {
-			$presets[$key] = [
+			$presets[] = [
+				'id' => $key,
 				'name' => $name,
 				'default' => false,
 			];

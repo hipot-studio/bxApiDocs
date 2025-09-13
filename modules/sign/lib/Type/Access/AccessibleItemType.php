@@ -6,6 +6,7 @@ final class AccessibleItemType
 {
 	public const DOCUMENT = 'document';
 	public const TEMPLATE = 'template';
+	public const TEMPLATE_FOLDER = 'templateFolder';
 
 	/**
 	 * @return array<self::*>
@@ -15,6 +16,7 @@ final class AccessibleItemType
 		return [
 			self::DOCUMENT,
 			self::TEMPLATE,
+			self::TEMPLATE_FOLDER,
 		];
 	}
 }

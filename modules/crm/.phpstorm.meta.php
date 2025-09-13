@@ -88,6 +88,7 @@ namespace PHPSTORM_META
 		'crm.model.fieldRepository',
 		'crm.integration.sign',
 		'crm.summary.summaryFactory',
+		'crm.repeatSale.availabilityChecker',
 	);
 
 	expectedArguments(\Bitrix\Main\DI\ServiceLocator::get(), 0, argumentsSet('bitrix_crm_serviceLocator_codes'));
@@ -181,5 +182,6 @@ namespace PHPSTORM_META
 		'crm.binding.clientBinder' => \Bitrix\Crm\Binding\ClientBinder::class,
 		'crm.service.communication.rankingFactory' => \Bitrix\Crm\Service\Communication\Search\Ranking\RankingFactory::class,
 		'crm.service.integration.im' => \Bitrix\Crm\Integration\Im\ImService::class,
+		'crm.repeatSale.availabilityChecker' => \Bitrix\Crm\RepeatSale\AvailabilityChecker::class,
 	]));
 }

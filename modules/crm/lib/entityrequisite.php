@@ -4657,7 +4657,7 @@ class EntityRequisite
 							],
 							4 => [
 								'ID' => 5,
-								'FIELD_NAME' => 'RQ_INN',
+								'FIELD_NAME' => 'RQ_IIN',
 								'FIELD_TITLE' => '',
 								'IN_SHORT_LIST' => 'Y',
 								'SORT' => 550
@@ -4867,7 +4867,7 @@ class EntityRequisite
 							],
 							1 => [
 								'ID' => 2,
-								'FIELD_NAME' => 'RQ_INN',
+								'FIELD_NAME' => 'RQ_IIN',
 								'FIELD_TITLE' => '',
 								'IN_SHORT_LIST' => 'Y',
 								'SORT' => 520

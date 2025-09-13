@@ -902,9 +902,27 @@ final class CatalogStoreDocumentProductListComponent
 			}
 
 			$realValues = null;
+
+			if ($notHasAccessToPurchasingPrice)
+			{
+				$realValues ??= [];
+
+				if (isset($row['PURCHASING_PRICE']))
+				{
+					$realValues['PURCHASING_PRICE'] = $row['PURCHASING_PRICE'];
+					$row['PURCHASING_PRICE'] = null;
+				}
+
+				if (isset($row['PURCHASING_PRICE_FORMATTED']))
+				{
+					$realValues['PURCHASING_PRICE_FORMATTED'] = $row['PURCHASING_PRICE_FORMATTED'];
+					$row['PURCHASING_PRICE_FORMATTED'] = null;
+				}
+			}
+
 			if (!$hasAccess)
 			{
-				$realValues = [];
+				$realValues ??= [];
 				foreach ($hiddenFields as $fieldName)
 				{
 					if (isset($row[$fieldName]))
@@ -913,7 +931,10 @@ final class CatalogStoreDocumentProductListComponent
 						$row[$fieldName] = null;
 					}
 				}
+			}
 
+			if (!empty($realValues))
+			{
 				$row['REAL_VALUES'] = base64_encode(Json::encode($realValues));
 			}
 
@@ -945,6 +966,7 @@ final class CatalogStoreDocumentProductListComponent
 			'STORE_FROM_RESERVED',
 			'STORE_FROM_AVAILABLE_AMOUNT',
 			'PURCHASING_PRICE',
+			'PURCHASING_PRICE_FORMATTED',
 			'BASE_PRICE',
 			'TOTAL_PRICE',
 			'AMOUNT',
@@ -2727,11 +2749,26 @@ final class CatalogStoreDocumentProductListComponent
 		{
 			$fields = $product['fields'] ?? [];
 
-			\CCurrencyRates::ConvertCurrency(
-				(float)$fields['BASE_PRICE'],
-				$oldCurrencyId,
-				$currencyId
-			);
+			if (isset($fields['REAL_VALUES']))
+			{
+				$realValues = $fields['REAL_VALUES'];
+
+				unset($fields['REAL_VALUES']);
+
+				try
+				{
+					$realValues =  Json::decode(base64_decode($realValues));
+				}
+				catch (\Exception $e)
+				{
+					$realValues = [];
+				}
+
+				foreach ($realValues as $realValueName => $realValue)
+				{
+					$fields[$realValueName] = $realValue;
+				}
+			}
 
 			$basePrice = null;
 			if ($fields['BASE_PRICE'] !== null)
@@ -2745,19 +2782,27 @@ final class CatalogStoreDocumentProductListComponent
 				);
 			}
 
-			$response[$product['id']] = [
-				'BASE_PRICE' => $basePrice,
-				'PURCHASING_PRICE' => $this->formatPrices(
+			$purchasingPrice = null;
+			if ($fields['PURCHASING_PRICE'] !== null)
+			{
+				$purchasingPrice = $this->formatPrices(
 					\CCurrencyRates::ConvertCurrency(
 						(float)$fields['PURCHASING_PRICE'],
 						$oldCurrencyId,
 						$currencyId
 					)
-				),
+				);
+			}
+
+			$response[$product['id']] = [
+				'BASE_PRICE' => $basePrice,
+				'PURCHASING_PRICE' => $purchasingPrice,
+				'STORE_FROM' => $fields['STORE_FROM'] ?? null,
+				'STORE_TO' => $fields['STORE_TO'] ?? null,
 			];
 		}
 
-		return $response;
+		return $this->prepareRowsForAccessRights($response);
 	}
 
 	/**

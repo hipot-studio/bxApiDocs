@@ -122,6 +122,16 @@ class CommentChat extends GroupChat
 		return $createResult;
 	}
 
+	public function isAutoJoinEnabled(): bool
+	{
+		return true;
+	}
+
+	public function canUserAutoJoin(?int $userId = null): bool
+	{
+		return parent::canUserAutoJoin($userId) && $this->getParentChat()->getSelfRelation() !== null;
+	}
+
 	public function join(bool $withMessage = true): Chat
 	{
 		$this->getParentChat()->join();
@@ -148,6 +158,16 @@ class CommentChat extends GroupChat
 		return $role;
 	}
 
+	public function isCounterIncrementAllowed(): bool
+	{
+		return true;
+	}
+
+	public function onAfterMessageUpdate(Message $message): Result
+	{
+		return $this->subscribeUsers(true, $message->getUserIdsFromMention(), $message->getPrevId());
+	}
+
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
 	{
 		$this->subscribe(true, $message->getAuthorId());
@@ -160,11 +180,6 @@ class CommentChat extends GroupChat
 		}
 
 		parent::onAfterMessageSend($message, $sendingService);
-	}
-
-	protected function updateRecentAfterMessageSend(\Bitrix\Im\V2\Message $message, SendingConfig $config): Result
-	{
-		return new Result();
 	}
 
 	public function filterUsersToMention(array $userIds): array
@@ -529,5 +544,10 @@ class CommentChat extends GroupChat
 		}
 
 		\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $this->getParentChatId(), $pushMessage);
+	}
+
+	protected function needToSendMessageUserDelete(): bool
+	{
+		return false;
 	}
 }

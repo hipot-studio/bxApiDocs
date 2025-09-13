@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Analytics;
 
+use Bitrix\Im\V2\Analytics\Event\ChatEvent;
 use Bitrix\Im\V2\Analytics\Event\CopilotEvent;
+use Bitrix\Im\V2\Analytics\Event\Event;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Main\Result;
 
@@ -14,6 +16,7 @@ class CopilotAnalytics extends AbstractAnalytics
 	protected const RECEIVED_RESULT = 'received_result';
 	protected const ADD_USER = 'add_user';
 	protected const DELETE_USER = 'delete_user';
+	protected const CHANGE_ROLE = 'change_role';
 
 	public function addGenerate(Result $result, ?string $promptCode = null): void
 	{
@@ -26,6 +29,19 @@ class CopilotAnalytics extends AbstractAnalytics
 				->createCopilotEvent(self::RECEIVED_RESULT, $promptCode)
 				?->setCopilotStatus($result)
 				?->send()
+			;
+		});
+	}
+
+	public function addChangeRole(string $oldRole): void
+	{
+		$this->async(function () use ($oldRole) {
+
+			(new ChatEvent(self::CHANGE_ROLE, $this->chat))
+				->setP1(null)
+				->setP2(null)
+				->setP3('oldRole_' . Event::convertUnderscore($oldRole))
+				->send()
 			;
 		});
 	}

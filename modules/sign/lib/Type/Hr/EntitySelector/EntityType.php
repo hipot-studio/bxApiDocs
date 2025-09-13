@@ -13,13 +13,15 @@ enum EntityType: int
 	case User = 1;
 	case Department = 2;
 	case FlatDepartment = 3;
+	case Document = 4;
 
 	public static function fromEntityIdAndType(string $entityId, string $entityType): EntityType
 	{
 		return match ($entityType)
 		{
 			'user' => self::User,
-			'department' => str_ends_with($entityId, ':F') ? self::FlatDepartment : self::Department,
+			'structure-node' => str_ends_with($entityId, ':F') ? self::FlatDepartment : self::Department,
+			'sign-document' => self::Document,
 			default => self::Unknown,
 		};
 	}
@@ -31,6 +33,7 @@ enum EntityType: int
 			\Bitrix\Sign\Type\Member\EntityType::USER => self::User,
 			\Bitrix\Sign\Type\Member\EntityType::DEPARTMENT => self::Department,
 			\Bitrix\Sign\Type\Member\EntityType::DEPARTMENT_FLAT => self::FlatDepartment,
+			\Bitrix\Sign\Type\Member\EntityType::DOCUMENT => self::Document,
 			default => self::Unknown,
 		};
 	}
@@ -43,5 +46,32 @@ enum EntityType: int
 	public function isUser(): bool
 	{
 		return $this === self::User;
+	}
+
+	public function isDocument(): bool
+	{
+		return $this === self::Document;
+	}
+
+	public function getMemberEntityType(string $initialEntityType): string
+	{
+		return match ($this)
+		{
+			self::FlatDepartment => \Bitrix\Sign\Type\Member\EntityType::DEPARTMENT_FLAT,
+			self::Department => \Bitrix\Sign\Type\Member\EntityType::DEPARTMENT,
+			self::User => \Bitrix\Sign\Type\Member\EntityType::USER,
+			self::Document => \Bitrix\Sign\Type\Member\EntityType::DOCUMENT,
+			default => $initialEntityType,
+		};
+	}
+	
+	public static function getAll(): array
+	{
+		return [
+			self::User->value => 'user',
+			self::Department->value => 'structure-node',
+			self::FlatDepartment->value => 'structure-node',
+			self::Document->value => 'sign-document',
+		];
 	}
 }

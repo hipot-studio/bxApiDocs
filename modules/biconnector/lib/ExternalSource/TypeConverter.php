@@ -52,6 +52,29 @@ final class TypeConverter
 	}
 
 	/**
+	 * Formats a double string using a given delimiter
+	 *
+	 * @param string $value
+	 * @param int|null $precision
+	 * @param string $delimiter
+	 * @return string
+	 */
+	public static function formatDoubleString(?string $value, string $delimiter = '.'): string
+	{
+		if (is_null($value))
+		{
+			return '';
+		}
+
+		if ($delimiter === '.')
+		{
+			return $value;
+		}
+
+		return str_replace('.', $delimiter, $value);
+	}
+
+	/**
 	 * Converts value to string
 	 *
 	 * @param mixed $value
@@ -92,6 +115,23 @@ final class TypeConverter
 	}
 
 	/**
+	 * Formats a DateTime object into a string with a given format
+	 *
+	 * @param Main\Type\DateTime|null $dateTime
+	 * @param string $format
+	 * @return string
+	 */
+	public static function convertDateTimeToString(?Main\Type\DateTime $dateTime, string $format): string
+	{
+		if (!$dateTime)
+		{
+			return '';
+		}
+
+		return $dateTime->format($format);
+	}
+
+	/**
 	 * Converts value to Date
 	 *
 	 * @example '08/18/1960 (m/d/Y)
@@ -117,6 +157,23 @@ final class TypeConverter
 		}
 
 		return $date;
+	}
+
+	/**
+	 * Formats a Date object into a string with a given format
+	 *
+	 * @param Main\Type\DateTime|null $dateTime
+	 * @param string $format
+	 * @return string
+	 */
+	public static function convertDateToString(?Main\Type\Date $date, string $format): string
+	{
+		if (!$date)
+		{
+			return '';
+		}
+
+		return $date->format($format);
 	}
 
 	/**

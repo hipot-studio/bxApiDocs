@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Operation\Document\Template;
 
 use Bitrix\Main;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Sign\Contract\Operation;
 use Bitrix\Sign\Operation\Document\UnserializePortableBlank;
 use Bitrix\Sign\Result\Operation\Document\Template\InstallPresetTemplatesResult;
@@ -21,6 +22,7 @@ class InstallPresetTemplates implements Operation
 	private readonly PresetTemplatesService $presetTemplatesService;
 
 	public function __construct(
+		private readonly int $createdById,
 		?B2eTariffRestrictionService $b2ETariffRestrictionService = null,
 		?PresetTemplatesService $presetTemplatesService = null,
 	)
@@ -120,7 +122,7 @@ class InstallPresetTemplates implements Operation
 			return $result;
 		}
 
-		return (new ImportTemplate($result->blank))->launch();
+		return (new ImportTemplate($result->blank, $this->createdById))->launch();
 	}
 
 	private function getLock(): bool

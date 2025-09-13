@@ -13,7 +13,7 @@ final class ListPage extends AbstractPage
 {
 	private const COMPONENT_NAME = 'bitrix:crm.automated_solution.list';
 
-	protected function component(): Contract\Component
+	public function component(): Contract\Component
 	{
 		return new Component(
 			name: self::COMPONENT_NAME,

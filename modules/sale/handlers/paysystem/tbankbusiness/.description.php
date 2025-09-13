@@ -27,7 +27,7 @@ $description = [
 ];
 
 $data = [
-	'NAME' => Loc::getMessage('SALE_HPS_TBANK_BUSINESS_NAME'),
+	'NAME' => Loc::getMessage('SALE_HPS_TBANK_BUSINESS_NAME_MSGVER_1'),
 	'DESCRIPTION' => Loc::getMessage('SALE_HPS_TBANK_BUSINESS_DESCRIPTION_MAIN'),
 	'PUBLIC_DESCRIPTION' => Loc::getMessage('SALE_HPS_TBANK_BUSINESS_DESCRIPTION_PUBLIC'),
 	'SORT' => 1500,

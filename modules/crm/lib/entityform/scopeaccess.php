@@ -7,6 +7,14 @@ use Bitrix\Ui\EntityForm\Scope;
 
 class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 {
+	protected Scope $scope;
+
+	public function __construct(string $moduleId = null, int $userId = null)
+	{
+		parent::__construct($moduleId, $userId);
+
+		$this->scope = Scope::getInstance($this->userId);
+	}
 
 	/**
 	 * @param int $scopeId
@@ -14,10 +22,11 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 	 */
 	public function canRead(int $scopeId): bool
 	{
-		$scope = Scope::getInstance()->getById($scopeId);
+		$scope = $this->scope->getById($scopeId);
+
 		return (
-			isset($scope) && $this->canAddByEntityTypeId($scope['ENTITY_TYPE_ID'])
-			|| Scope::getInstance()->isHasScope($scopeId)
+			(isset($scope) && $this->canAddByEntityTypeId($scope['ENTITY_TYPE_ID']))
+			|| $this->scope->isHasScope($scopeId)
 		);
 	}
 
@@ -41,7 +50,7 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 	 */
 	public function canUpdate(int $scopeId): bool
 	{
-		$scope = Scope::getInstance()->getById($scopeId);
+		$scope = $this->scope->getById($scopeId);
 		return (isset($scope) && $this->canAddByEntityTypeId($scope['ENTITY_TYPE_ID']) && $scope['CATEGORY'] === $this->moduleId);
 	}
 

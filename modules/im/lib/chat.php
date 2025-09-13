@@ -2,12 +2,15 @@
 namespace Bitrix\Im;
 
 use Bitrix\Im\Model\BlockUserTable;
+use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\GeneralChannel;
+use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Message\Counter\CounterType;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
@@ -69,11 +72,22 @@ class Chat
 		{
 			$result = 'COLLAB';
 		}
+		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_AI_ASSISTANT)
+		{
+			$result = 'AI_ASSISTANT';
+		}
+		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_AI_ASSISTANT_ENTITY)
+		{
+			$result = 'AI_ASSISTANT_ENTITY';
+		}
 		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL)
 		{
 			$result = 'CHANNEL';
 		}
-		else if (isset($chatId) && $chatId === GeneralChannel::getGeneralChannelId())
+		else if (
+			($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL && $entityType === \Bitrix\Im\V2\Chat::ENTITY_TYPE_GENERAL_CHANNEL)
+			|| (isset($chatId) && $chatId === GeneralChannel::getGeneralChannelId())
+		)
 		{
 			$result = 'GENERAL_CHANNEL';
 		}
@@ -89,7 +103,10 @@ class Chat
 		{
 			$result = $entityType;
 		}
-		else if ($chatId && $chatId === (int)\CIMChat::GetGeneralChatId())
+		else if (
+			($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN && $entityType === \Bitrix\Im\V2\Chat::ENTITY_TYPE_GENERAL)
+			|| ($chatId && $chatId === (int)\CIMChat::GetGeneralChatId())
+		)
 		{
 			$result = 'GENERAL';
 		}
@@ -215,49 +232,6 @@ class Chat
 			}
 		}
 
-		/*$skipUnmodifiedRecords = false;
-		if (isset($params['SKIP_RELATION_WITH_UNMODIFIED_COUNTERS']) && $params['SKIP_RELATION_WITH_UNMODIFIED_COUNTERS'] == 'Y')
-		{
-			$skipUnmodifiedRecords = true;
-		}*/
-
-		/*$sqlSelectCounter = 'R.LAST_ID, R.COUNTER, R.COUNTER PREVIOUS_COUNTER';
-
-		$customCounter = false;
-		$customMaxId = 0;
-		$customMinId = 0;
-		$counters = [];
-
-		if (isset($params['REAL_COUNTERS']) && $params['REAL_COUNTERS'] != 'N' || $skipUnmodifiedRecords)
-		{
-			if (is_array($params['REAL_COUNTERS']) && isset($params['REAL_COUNTERS']['LAST_ID']))
-			{
-				$sqlSelectCounter = "R.COUNTER PREVIOUS_COUNTER, (
-					SELECT COUNT(1) FROM b_im_message M WHERE M.CHAT_ID = R.CHAT_ID AND M.ID > ".intval($params['REAL_COUNTERS']['LAST_ID'])."
-				) COUNTER";
-			}
-			else
-			{
-				$customCounter = true;
-				$query = $connection->query("
-					SELECT ID FROM b_im_message
-					WHERE CHAT_ID = {$chatId}
-					ORDER BY DATE_CREATE DESC, ID DESC
-					LIMIT 100
-				");
-				$messageCounter = 0;
-				while ($row = $query->fetch())
-				{
-					if (!$customMaxId)
-					{
-						$customMaxId = $row['ID'];
-					}
-					$counters[$row['ID']] = $messageCounter++;
-					$customMinId = $row['ID'];
-				}
-			}
-		}*/
-
 		$limit = '';
 		if (isset($params['LIMIT']))
 		{
@@ -293,33 +267,6 @@ class Chat
 		$query = $connection->query($sql);
 		while ($row = $query->fetch())
 		{
-			/*if ($customCounter)
-			{
-				if (isset($counters[$row['LAST_ID']]))
-				{
-					$row['COUNTER'] = $counters[$row['LAST_ID']];
-				}
-				else if ($row['LAST_ID'] < $customMinId)
-				{
-					$row['COUNTER'] = count($counters);
-				}
-				else if ($row['LAST_ID'] > $customMaxId)
-				{
-					$row['COUNTER'] = 0;
-				}
-			}
-			else
-			{
-				$row['COUNTER'] = $row['COUNTER'] > 99? 100: (int)$row['COUNTER'];
-			}
-
-			$row['PREVIOUS_COUNTER'] = (int)$row['PREVIOUS_COUNTER'];
-
-			if ($skipUnmodifiedRecords && $row['COUNTER'] == $row['PREVIOUS_COUNTER'])
-			{
-				continue;
-			}*/
-
 			foreach ($row as $key => $value)
 			{
 				if (mb_strpos($key, 'USER_DATA_') === 0)
@@ -332,11 +279,18 @@ class Chat
 			$relations[$row['USER_ID']] = $row;
 		}
 
+		$userIds = array_keys($relations);
+
+		if (($params['RAW_RELATIONS'] ?? 'N') === 'N')
+		{
+			$relations = self::filterRelationsByAccess($chatId, $relations);
+		}
+
 		// region New counter
 		// todo: select counter only if it's need
 		if (!isset($params['WITHOUT_COUNTERS']) || $params['WITHOUT_COUNTERS'] !== 'Y')
 		{
-			$userIds = array_keys($relations);
+
 			$readService = new ReadService();
 			$counters = $readService->getCounterService()->getByChatForEachUsers($chatId, $userIds);
 			$lastIdInChat = $readService->getLastMessageIdInChat($chatId);
@@ -391,6 +345,7 @@ class Chat
 		\Bitrix\Im\Model\RelationTable::update($relation[$userId]['ID'], array('NOTIFY_BLOCK' => $action));
 
 		Recent::clearCache($userId);
+		$chat = \Bitrix\Im\Chat::getById($chatId);
 		//Counter::clearCache($userId);
 
 		if (\Bitrix\Main\Loader::includeModule('pull'))
@@ -405,7 +360,7 @@ class Chat
 			])->fetch();
 
 			$counter = $relation[$userId]['COUNTER'];
-			$counterType = CounterType::tryFromType($relation[$userId]['MESSAGE_TYPE'] ?? \Bitrix\Im\V2\Chat::IM_TYPE_CHAT)->value;
+			$chatObject = \Bitrix\Im\V2\Chat::getInstance($chatId);
 
 			\Bitrix\Pull\Event::add($userId, Array(
 				'module_id' => 'im',
@@ -418,13 +373,13 @@ class Chat
 					'counter' => $counter,
 					'lines' => $element['ITEM_TYPE'] === self::TYPE_OPEN_LINE,
 					'unread' => ($element['UNREAD'] ?? 'N') === 'Y',
-					'counterType' => $counterType,
+					'counterType' => $chatObject->getCounterType()->value,
+					'recentConfig' => $chatObject->getRecentConfig()->toPullFormat(),
 				),
 				'extra' => \Bitrix\Im\Common::getPullExtra()
 			));
 		}
 
-		$chat = \Bitrix\Im\Chat::getById($chatId);
 		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "OnAfterChatMuteNotify") as $event)
 		{
 			ExecuteModuleEventEx($event, [[
@@ -1089,10 +1044,11 @@ class Chat
 			'MUTE_LIST' => $muteList,
 			'DATE_CREATE' => $chat['DATE_CREATE'],
 			'MESSAGE_TYPE' => $chat["TYPE"],
-			'DISAPPEARING_TIME' => (int)$chat['DISAPPEARING_TIME'],
 			'PUBLIC' => $publicOption,
 			'ROLE' => mb_strtolower(self::getRole($chat)),
 			'ENTITY_LINK' => EntityLink::getInstance(\CIMChat::initChatByArray($chat))->toArray(),
+			'TEXT_FIELD_ENABLED' => (new TextFieldEnabled((int)$chat['ID']))->get(),
+			'BACKGROUND_ID' => (new Background((int)$chat['ID']))->get(),
 			'PERMISSIONS' => [
 				'MANAGE_USERS_ADD' => mb_strtolower((string)$chat['MANAGE_USERS_ADD']),
 				'MANAGE_USERS_DELETE' => mb_strtolower((string)$chat['MANAGE_USERS_DELETE']),
@@ -1464,6 +1420,22 @@ class Chat
 		}
 
 		return $chats;
+	}
+
+	public static function filterRelationsByAccess(int $chatId, array $relations): array
+	{
+		$userIds = array_keys($relations);
+		$usersWithAccess = \Bitrix\Im\V2\Chat::getInstance($chatId)
+			->getRelationFacade()
+			?->filterUserIdsByAccess($userIds)
+			?? []
+		;
+
+		return array_filter(
+			$relations,
+			static fn ($userId) => in_array($userId, $usersWithAccess, true),
+			ARRAY_FILTER_USE_KEY
+		);
 	}
 
 	private static function getRole(array $chat): string

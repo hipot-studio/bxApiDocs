@@ -8,6 +8,8 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetTagTable;
@@ -58,6 +60,18 @@ class Dashboard extends Controller
 			...parent::getDefaultPreFilters(),
 			...$additionalFilters,
 		];
+	}
+
+	public function configureActions(): array
+	{
+		$configureActions = parent::configureActions();
+		$configureActions['getDashboardEmbeddedData'] = [
+			'-prefilters' => [
+				BIConstructorAccess::class
+			],
+		];
+
+		return $configureActions;
 	}
 
 	public function getPrimaryAutoWiredParameter(): ExactParameter
@@ -166,9 +180,13 @@ class Dashboard extends Controller
 					'TAG_ID' => $tag->getId(),
 					'DASHBOARD_ID' => $newDashboard->getId(),
 				]);
+
+				$newDashboard->getOrmObject()->unsetTags();
 			}
 			$scopes = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
 			ScopeService::getInstance()->saveDashboardScopes($copiedDashboardId, $scopes);
+
+			$newDashboard->getOrmObject()->unsetScope();
 
 			if (!$dashboard->getOrmObject()->isUrlParamsFilled())
 			{
@@ -180,7 +198,24 @@ class Dashboard extends Controller
 				->saveDashboardParams($paramCodes, $scopes)
 			;
 
-			$gridRow = DashboardGrid::prepareRowData($newDashboard);
+			$newDashboard->getOrmObject()->unsetUrlParams();
+
+			if (!$dashboard->getOrmObject()->isGroupsFilled())
+			{
+				$dashboard->getOrmObject()->fillGroups();
+			}
+
+			foreach ($dashboard->getOrmObject()->getGroups() as $group)
+			{
+				Model\SupersetDashboardGroupBindingTable::add([
+					'GROUP_ID' => $group->getId(),
+					'DASHBOARD_ID' => $newDashboard->getId(),
+				]);
+
+				$newDashboard->getOrmObject()->unsetGroups();
+			}
+
+			$gridRow = DashboardGrid::prepareDashboardRowData($newDashboard, ['IS_ACCESS_ALLOWED' => true]);
 			$data['id'] = $copiedDashboardId;
 			$data['detail_url'] = "/bi/dashboard/detail/{$copiedDashboardId}/";
 			$data['columns'] = $gridRow['columns'];
@@ -192,7 +227,7 @@ class Dashboard extends Controller
 		return null;
 	}
 
-	public function exportAction(Model\Dashboard $dashboard, bool $withSettings): ?array
+	public function exportAction(Model\Dashboard $dashboard, int $groupId): ?array
 	{
 		if (!MarketDashboardManager::getInstance()->isExportEnabled())
 		{
@@ -217,38 +252,47 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$dashboardSettings = [];
-		if ($withSettings)
+		$filterPeriod = $dashboard->getOrmObject()->getFilterPeriod();
+		if (!$filterPeriod)
 		{
-			$filterPeriod = $dashboard->getOrmObject()->getFilterPeriod();
-			if (!$filterPeriod)
-			{
-				$filterPeriod = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
-			}
-			$dashboardSettings = [
-				'period' => [
-					'FILTER_PERIOD' => $filterPeriod,
-					'DATE_FILTER_START' => $dashboard->getOrmObject()->getDateFilterStart(),
-					'DATE_FILTER_END' => $dashboard->getOrmObject()->getDateFilterEnd(),
-					'INCLUDE_LAST_FILTER_DATE' => $dashboard->getOrmObject()->getIncludeLastFilterDate(),
-				],
-			];
-			$dashboardScopes = Model\SupersetScopeTable::getList([
-				'filter' => [
-					'=DASHBOARD_ID' => $dashboard->getId(),
-					'!%=SCOPE_CODE' => ScopeService::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . '%',
-				],
-			])
-				->fetchCollection()
-				->getScopeCodeList()
-			;
-			$dashboardSettings['scope'] = $dashboardScopes;
-			if (!$dashboard->getOrmObject()->isUrlParamsFilled())
-			{
-				$dashboard->getOrmObject()->fillUrlParams();
-			}
+			$filterPeriod = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
+		}
+		$dashboardSettings = [
+			'period' => [
+				'FILTER_PERIOD' => $filterPeriod,
+				'DATE_FILTER_START' => $dashboard->getOrmObject()->getDateFilterStart(),
+				'DATE_FILTER_END' => $dashboard->getOrmObject()->getDateFilterEnd(),
+				'INCLUDE_LAST_FILTER_DATE' => $dashboard->getOrmObject()->getIncludeLastFilterDate(),
+			],
+		];
+		$dashboardScopes = Model\SupersetScopeTable::getList([
+			'filter' => [
+				'=DASHBOARD_ID' => $dashboard->getId(),
+				'!%=SCOPE_CODE' => ScopeService::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . '%',
+			],
+		])
+			->fetchCollection()
+			->getScopeCodeList()
+		;
+		$dashboardSettings['scope'] = $dashboardScopes;
+		if (!$dashboard->getOrmObject()->isUrlParamsFilled())
+		{
+			$dashboard->getOrmObject()->fillUrlParams();
+		}
 
-			$dashboardSettings['urlParameters'] = $dashboard->getOrmObject()->getUrlParams()->getCodeList();
+		$dashboardSettings['urlParameters'] = $dashboard->getOrmObject()->getUrlParams()->getCodeList();
+
+		$groupCode = SupersetDashboardGroupTable::getById($groupId)
+			->fetchObject()
+			->getCode()
+		;
+		if ($groupCode && in_array($groupCode, ScopeService::getSystemGroupCode()))
+		{
+			$dashboardSettings['groupCode'] = $groupCode;
+		}
+		else
+		{
+			$dashboardSettings['groupCode'] = ScopeService::BIC_SCOPE_CRM;
 		}
 
 		$response = $integrator->exportDashboard($externalDashboardId, $dashboardSettings);
@@ -393,15 +437,14 @@ class Dashboard extends Controller
 
 		$paramsService = new UrlParameter\Service($dashboard->getOrmObject());
 		$dashboardParamCodes = array_map(static fn($param) => $param->code(), $paramsService->getUrlParameters());
-		$paramsCompatible = true;
 		if ($paramsService->isExistScopeParams())
 		{
 			$incomingParams = array_keys($urlParams);
-			foreach ($dashboardParamCodes as $dashboardParamCode)
+			foreach ($incomingParams as $incomingParamCode)
 			{
-				if (!in_array($dashboardParamCode, $incomingParams, true))
+				if (!in_array($incomingParamCode, $dashboardParamCodes, true))
 				{
-					$paramsCompatible = false;
+					unset($urlParams[$incomingParamCode]);
 				}
 			}
 		}
@@ -425,7 +468,6 @@ class Dashboard extends Controller
 				'nativeFilters' => $dashboard->getNativeFilter(),
 				'canExport' => $canExport,
 				'canEdit' => $canEdit,
-				'paramsCompatible' => $paramsCompatible,
 				'urlParams' => $urlParams,
 			],
 		];
@@ -788,88 +830,46 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$filterPeriod = $dashboard->getNativeFilterFields();
-		if (!$dashboard->getOrmObject()->getFilterPeriod())
+		$scopesNotToExport = Model\SupersetScopeTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=DASHBOARD_ID' => $dashboard->getId(),
+				'%=SCOPE_CODE' => 'automated_solution_%',
+			],
+			'limit' => 1,
+		])
+			->fetch()
+		;
+		$issetScopeNotToExport = !empty($scopesNotToExport);
+
+		$currentGroup = SupersetDashboardGroupBindingTable::getList([
+			'select' => ['GROUP.ID', 'GROUP.NAME'],
+			'filter' => [
+				'DASHBOARD_ID' => $dashboard->getId(),
+				'GROUP.TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM,
+			],
+			'limit' => 1,
+		])
+			->fetchObject()
+			?->getGroup()
+			?->collectValues()
+		;
+
+		if (empty($currentGroup))
 		{
-			$period = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_DATA_PERIOD_DEFAULT');
-		}
-		else if ($filterPeriod['FILTER_PERIOD'] !== EmbeddedFilter\DateTime::PERIOD_RANGE)
-		{
-			$period = EmbeddedFilter\DateTime::getPeriodName($filterPeriod['FILTER_PERIOD']) ?? '';
+			$currentGroup = null;
 		}
 		else
 		{
-			$dateStart = $filterPeriod['DATE_FILTER_START'];
-			if ($dateStart instanceof Date)
-			{
-				$dateStart = $dateStart->toString();
-			}
-			$dateEnd = $filterPeriod['DATE_FILTER_END'];
-			if ($dateEnd instanceof Date)
-			{
-				$dateEnd = $dateEnd->toString();
-			}
-
-			$langCode = 'BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_DATA_PERIOD';
-			if ($dashboard->getOrmObject()->getIncludeLastFilterDate() === 'Y')
-			{
-				$langCode = 'BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_DATA_PERIOD_INCLUDE_LAST_FILTER_DATE';
-			}
-
-			$period = Loc::getMessage(
-				$langCode,
-				[
-					'#DATE_FROM#' => $dateStart,
-					'#DATE_TO#' => $dateEnd,
-				]
-			);
-		}
-
-		$scopeCodes = Model\SupersetScopeTable::getList([
-			'select' => ['*', 'IS_AUTOMATED_SOLUTION'],
-			'filter' => [
-				'=DASHBOARD_ID' => $dashboard->getId(),
-			],
-			'runtime' => [
-				new ExpressionField(
-					'IS_AUTOMATED_SOLUTION',
-					"CASE WHEN %s LIKE 'automated_solution_%%' THEN 1 ELSE 0 END",
-					['SCOPE_CODE'],
-					['data_type' => 'integer']
-				),
-			],
-		])
-			->fetchAll()
-		;
-		$scopesToExport = array_filter($scopeCodes, static fn ($scope) => !$scope['IS_AUTOMATED_SOLUTION']);
-		$scopesNotToExport = array_filter($scopeCodes, static fn ($scope) => $scope['IS_AUTOMATED_SOLUTION']);
-
-		$scopeNamesToExport = ScopeService::getInstance()->getScopeNameList(array_column($scopesToExport, 'SCOPE_CODE'));
-		$scopeNamesNotToExport = ScopeService::getInstance()->getScopeNameList(array_column($scopesNotToExport, 'SCOPE_CODE'));
-
-		if (!$dashboard->getOrmObject()->isUrlParamsFilled())
-		{
-			$dashboard->getOrmObject()->fillUrlParams();
-		}
-
-		$urlParams = [];
-		foreach ($dashboard->getOrmObject()->getUrlParams()->getCodeList() as $code)
-		{
-			$parameter = UrlParameter\Parameter::tryFrom($code);
-			if ($parameter)
-			{
-				$urlParams[] = $parameter->title();
-			}
+			$currentGroup = \Bitrix\Main\Engine\Response\Converter::toJson()->process($currentGroup);
 		}
 
 		return [
 			'title' => htmlspecialcharsbx($dashboard->getTitle()),
-			'period' => $period,
-			'scopesToExport' => htmlspecialcharsbx(implode(', ', $scopeNamesToExport)),
-			'scopesNotToExport' => htmlspecialcharsbx(implode(', ', $scopeNamesNotToExport)),
-			'urlParams' => htmlspecialcharsbx(implode(', ', $urlParams)),
 			'type' => $dashboard->getType(),
 			'appId' => $dashboard->getAppId(),
+			'group' => $currentGroup ?? null,
+			'issetScopeNotToExport' => $issetScopeNotToExport,
 		];
 	}
 

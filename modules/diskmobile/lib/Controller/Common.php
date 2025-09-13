@@ -3,6 +3,8 @@
 namespace Bitrix\DiskMobile\Controller;
 
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Disk;
+use Bitrix\Main\Engine\CurrentUser;
 
 class Common extends Base
 {
@@ -10,6 +12,16 @@ class Common extends Base
 	{
 		return [
 			'getByIdsWithRights' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
+			'getTrackedByIdWithRights' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
+			'getFolderByPath' => [
 				'+prefilters' => [
 					new CloseSession(),
 				],
@@ -58,6 +70,22 @@ class Common extends Base
 		}
 
 		$diskObject['links']['external'] = $externalLinkResult['externalLink'];
+
+		return [
+			'diskObject'=> $diskObject,
+		];
+	}
+
+	public function getTrackedByIdWithRightsAction(int $id, bool $showRights = true): array
+	{
+		$trackedDiskObject = $this->forward(
+			\Bitrix\Disk\Controller\TrackedObject::class,
+			'get',
+			['id' => $id, 'showRights' => $showRights],
+		);
+
+		$diskObject = $this->trackedToItem($trackedDiskObject);
+
 
 		return [
 			'diskObject'=> $diskObject,

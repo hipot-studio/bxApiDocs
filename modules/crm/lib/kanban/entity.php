@@ -2184,6 +2184,8 @@ abstract class Entity
 
 		$visibleFields = $this->getAdditionalSelectFields();
 		$baseFields = $this->getBaseFields();
+		$this->prepareBaseFields($baseFields);
+
 		$userFields = $this->getUserFields();
 		$extraFields = $this->getExtraDisplayedFields();
 		$dateFormat = $this->dateFormatter->getDateFormat('full');
@@ -2232,6 +2234,37 @@ abstract class Entity
 		}
 
 		return $this->displayedFields;
+	}
+
+	/*
+	 * If the field name in the entity differs from the field name in the base Bitrix\Crm\Item,
+	 * but the field needs to be processed according to its type in the getDisplayedFieldsList method,
+	 * then add the field to $baseFields with its real name from the current entity
+	 */
+	private function prepareBaseFields(array &$baseFields): void
+	{
+		$additionalFieldNames = $this->getAdditionalBaseFieldNames();
+
+		$map = $this->factory?->getFieldsMap() ?? [];
+
+		foreach ($map as $entityFieldName => $entityTypeFieldName)
+		{
+			if (
+				!in_array($entityFieldName, $additionalFieldNames, true)
+				|| !isset($baseFields[$entityFieldName])
+			)
+			{
+				continue;
+			}
+
+			$baseFields[$entityTypeFieldName] = $baseFields[$entityFieldName];
+			unset($baseFields[$entityFieldName]);
+		}
+	}
+
+	protected function getAdditionalBaseFieldNames(): array
+	{
+		return [Item::FIELD_NAME_MOVED_BY];
 	}
 
 	/**

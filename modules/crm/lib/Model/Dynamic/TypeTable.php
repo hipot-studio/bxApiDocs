@@ -14,6 +14,7 @@ use Bitrix\Crm\Integration\Recyclebin;
 use Bitrix\Crm\Model\AssignedTable;
 use Bitrix\Crm\Model\FieldContentTypeTable;
 use Bitrix\Crm\Model\ItemCategoryTable;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\Recycling\DynamicController;
@@ -733,7 +734,6 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			array_key_exists('CUSTOM_SECTION_ID', $oldData)
 			&& array_key_exists('CUSTOM_SECTION_ID', $data)
 			&& $oldAutomatedSolutionId !== $newAutomatedSolutionId
-			&& Feature::enabled(Feature\PermissionsLayoutV2::class)
 		)
 		{
 			$entityTypeId = Container::getInstance()->getType($id)?->getEntityTypeId();
@@ -981,12 +981,17 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			}
 		}
 
+		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 		if (LastActivityFields::wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate((int)$type['ENTITY_TYPE_ID']))
 		{
-			$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
-
 			$entity->addField($fieldRepository->getLastActivityBy());
 			$entity->addField($fieldRepository->getLastActivityTime());
+		}
+
+		/** @var ORM\Fields\Relations\Reference $communication */
+		foreach ($fieldRepository->getLastCommunications((int)$type['ENTITY_TYPE_ID']) as $communication)
+		{
+			$entity->addField($communication);
 		}
 
 		return $entity;
@@ -1075,6 +1080,16 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->configureCascadeDeletePolicy(ORM\Fields\Relations\CascadePolicy::FOLLOW)
 			->configureTitle(Loc::getMessage('CRM_TYPE_ITEM_FIELD_OBSERVERS'));
 		$localEntity->addField($oneToManyObservers);
+
+		if (!LastCommunicationTable::getEntity()->hasField($localFieldName))
+		{
+			LastCommunicationTable::getEntity()->addField((new ORM\Fields\Relations\Reference(
+				$localFieldName,
+				$localEntity,
+				Join::on('this.ENTITY_ID', 'ref.ID')
+					->where('this.ENTITY_TYPE_ID', new SqlExpression('?i', $factory->getEntityTypeId()))
+			)));
+		}
 	}
 
 	protected static function clearBindingMenuCache(): void

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Main\Messenger\Receiver;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\Diag\EventLogger;
+use Bitrix\Main\Diag\ExceptionHandlerLog;
 use Bitrix\Main\Messenger\Broker\BrokerInterface;
 use Bitrix\Main\Messenger\Entity\MessageBox;
 use Bitrix\Main\Messenger\Entity\MessageInterface;
@@ -14,7 +17,6 @@ use Bitrix\Main\Messenger\Internals\Exception\Receiver\ProcessingException;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\RecoverableMessageException;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\UnprocessableMessageException;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\UnrecoverableMessageException;
-use Bitrix\Main\Messenger\Internals\Exception\ReceiverException;
 use Exception;
 
 /**
@@ -91,12 +93,38 @@ abstract class AbstractReceiver implements ReceiverInterface
 
 	/**
 	 * @throws BrokerReadException
-	 * @throws ReceiverException
 	 * @throws RejectFailedException
 	 */
 	public function run(): void
 	{
-		$exceptions = [];
+		$logger = new EventLogger(
+			'main',
+			'MESSENGER_QUEUE',
+			static function (array $context, string $message)
+			{
+				$messageBox = $context['message'] ?? null;
+
+				if ($messageBox instanceof MessageBox)
+				{
+					return [
+						'ITEM_ID' => $messageBox->getItemId(),
+						'DESCRIPTION' => sprintf(
+							'%s. Message: "%s" (%s). Queue: "%s". ItemId: "%s"',
+							$message,
+							$messageBox->getClassName(),
+							$messageBox->getId(),
+							$messageBox->getQueueId(),
+							$messageBox->getItemId()
+						)
+					];
+				}
+
+				return [
+					'ITEM_ID' => null,
+				];
+			}
+		);
+
 		$messageBoxes = $this->getMessages();
 
 		/** @var MessageBox $messageBox */
@@ -110,46 +138,63 @@ abstract class AbstractReceiver implements ReceiverInterface
 			}
 			catch (UnprocessableMessageException $e)
 			{
-				$exceptions[] = $e;
-
 				$this->reject($messageBox);
+
+				Application::getInstance()->getExceptionHandler()->writeToLog(
+					$e,
+					ExceptionHandlerLog::CAUGHT_EXCEPTION
+				);
 			}
 			catch (UnrecoverableMessageException $e)
 			{
-				$exceptions[] = $e;
-
 				$messageBox->kill();
 
 				$this->reject($messageBox);
+
+				$logger->notice(
+					sprintf(
+						'Message has unrecoverable case: "%s"',
+						$e->getMessage(),
+					),
+					[
+						'message' => $messageBox,
+						'exception' => $e
+					]
+				);
 			}
 			catch (RecoverableMessageException $e)
 			{
-				$exceptions[] = $e;
-
-				$messageBox->retry($e->getRetryDelay());
+				$messageBox->requeue($e->getRetryDelay());
 
 				$this->reject($messageBox);
+
+				$logger->notice(
+					sprintf(
+						'Message has recoverable case: "%s"',
+						$e->getMessage(),
+					),
+					[
+						'message' => $messageBox,
+						'exception' => $e
+					]
+				);
 			}
 			catch (Exception $e)
 			{
-				$exceptions[] = new ProcessingException(
+				$e = new ProcessingException(
 					$messageBox,
-					$e->getMessage(),
+					$e->getMessage() . ' Message: ' . $messageBox->getId(),
 					$e->getCode(),
 					$e
 				);
 
 				$this->reject($messageBox);
-			}
-		}
 
-		if (!empty($exceptions))
-		{
-			throw new ReceiverException(
-				'Some messages could not be processed',
-				0,
-				exceptions: $exceptions
-			);
+				Application::getInstance()->getExceptionHandler()->writeToLog(
+					$e,
+					ExceptionHandlerLog::CAUGHT_EXCEPTION
+				);
+			}
 		}
 	}
 }

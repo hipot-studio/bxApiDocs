@@ -808,6 +808,38 @@ class Form extends Main\Engine\JsonController
 				continue;
 			}
 
+			if ($field['type'] === 'booking')
+			{
+				$resourceError = Main\Localization\Loc::getMessage(
+					'CRM_WEBFORM_FIELD_SYNCHRONIZER_RESOURCES_NOT_SPECIFIED_ERROR',
+					[
+						'%fieldCaption%' => $field['label'],
+					]
+				);
+
+				$settingsData = isset($field['settingsData']) ? (array)$field['settingsData'] : [];
+				if (empty($settingsData))
+				{
+					$syncErrors[] = $resourceError;
+
+					continue;
+				}
+
+				$isAutoSelectionOn = isset($settingsData['isAutoSelectionOn']) && $settingsData['isAutoSelectionOn'];
+				$scenarioSettings =
+					$isAutoSelectionOn
+						? $settingsData['autoSelection']
+						: $settingsData['default']
+				;
+				$resourceIds = isset($scenarioSettings['resourceIds']) ? (array)$scenarioSettings['resourceIds'] : [];
+				if (empty($resourceIds))
+				{
+					$syncErrors[] = $resourceError;
+
+					continue;
+				}
+			}
+
 			if (!is_array($field) || empty($field['name']) || !in_array($field['name'], $fieldNames))
 			{
 				continue;

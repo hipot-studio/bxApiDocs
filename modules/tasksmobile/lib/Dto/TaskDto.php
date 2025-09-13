@@ -90,6 +90,7 @@ final class TaskDto extends Dto
 	/** @var UserFieldDto[] */
 	public array $userFields;
 	public array $userFieldNames;
+	public bool $shouldShowKanbanStages = false;
 
 	public function getCasts(): array
 	{

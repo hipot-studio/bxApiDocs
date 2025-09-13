@@ -96,18 +96,7 @@ class CCrmEntityCounterPanelComponent extends CBitrixComponent
 
 		$this->arResult['USER_ID'] = $this->userID;
 
-		$dbUsers = CUser::GetList(
-			'last_name',
-			'asc',
-			['ID' => $this->userID],
-			['FIELDS' => ['ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'LOGIN', 'TITLE']]
-		);
-
-		$userFields = $dbUsers->Fetch();
-
-		$this->arResult['USER_NAME'] =  is_array($userFields)
-			? CUser::FormatName(CSite::GetNameFormat(false), $userFields)
-			: "[{$this->userID}]";
+		$this->arResult['USER_NAME'] =  Container::getInstance()->getUserBroker()->getName($this->userID) ?? "[{$this->userID}]";
 
 		$this->guid = $this->arResult['GUID'] = $this->arParams['GUID'] ?? 'counter_panel';
 		if (isset($this->arParams['ENTITY_TYPE_NAME']))
@@ -205,13 +194,13 @@ class CCrmEntityCounterPanelComponent extends CBitrixComponent
 			$counter = EntityCounterFactory::create($this->entityTypeID, $typeId, $this->userID, $extras);
 			$code = $counter->getCode();
 			$value = $counter->getValue($this->recalculate);
-			$data[$code] = array(
+			$data[$code] = [
 				'TYPE_ID' => $typeId,
 				'TYPE_NAME' => EntityCounterType::resolveName($typeId),
 				'CODE' => $code,
 				'VALUE' => $value,
 				'URL' => $counter->prepareDetailsPageUrl($this->entityListUrl)
-			);
+			];
 
 			$total += $value;
 

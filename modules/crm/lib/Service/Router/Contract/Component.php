@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Service\Router\Contract;
 
+use CBitrixComponent;
+
 interface Component
 {
 	public function name(): string;
@@ -12,9 +14,11 @@ interface Component
 
 	public function parameter(string $name): mixed;
 
-	public function parent(): ?\CBitrixComponent;
+	public function setParameter(string $name, mixed $value): static;
 
-	public function setParameter(string $name, mixed $value): self;
+	public function parent(): ?CBitrixComponent;
+
+	public function setParent(?CBitrixComponent $parent): static;
 
 	public function render(): void;
 }

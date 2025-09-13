@@ -8,6 +8,7 @@ use Bitrix\Sign\Item;
 class UrlGeneratorService
 {
 	private const AJAX_ENDPOINT = "/bitrix/services/main/ajax.php";
+	private const B2E_WIZARD_URL = '/sign/b2e/doc/0/';
 	public const B2E_KANBAN_URL = '/sign/b2e/';
 	public const B2E_LIST_URL = '/sign/b2e/list/';
 
@@ -43,11 +44,24 @@ class UrlGeneratorService
 		return $uri->getUri();
 	}
 
-	public function makeEditTemplateLink(int $templateId): string
+	public function makeCreateTemplateLink(bool $isFolderIdProvided, int $folderId = 0): string
 	{
-		$uri = new Uri('/sign/b2e/doc/0/');
+		$uri = new Uri(self::B2E_WIZARD_URL);
+		$uri->addParams([
+			'folderId' => $folderId,
+			'isOpenedAsFolder' => $isFolderIdProvided ? 'Y' : 'N',
+			'mode' => 'template',
+		]);
+
+		return $uri->getUri();
+	}
+
+	public function makeEditTemplateLink(int $templateId,  int $folderId = 0): string
+	{
+		$uri = new Uri(self::B2E_WIZARD_URL);
 		$uri->addParams([
 			'templateId' => $templateId,
+			'folderId' => $folderId,
 			'stepId' => 'changePartner',
 			'noRedirect' => 'Y',
 			'mode' => 'template',

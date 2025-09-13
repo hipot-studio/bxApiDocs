@@ -2,26 +2,23 @@
 
 namespace Bitrix\Im\V2\Message\Delete\Strategy;
 
-use Bitrix\Disk\SystemUser;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\CommentChat;
-use Bitrix\Im\V2\Entity\File\FileCollection;
-use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Link\Calendar\CalendarCollection;
 use Bitrix\Im\V2\Link\Calendar\CalendarService;
 use Bitrix\Im\V2\Link\Task\TaskCollection;
 use Bitrix\Im\V2\Link\Task\TaskService;
 use Bitrix\Im\V2\Result;
+use Bitrix\Im\V2\Sync\Event;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 
 class CompleteDeletionStrategy extends DeletionStrategy
 {
-	protected ?FileCollection $files = null;
 	protected ?array $chatLastMessage = null;
 	protected ?array $chatPrevMessage = null;
 	protected ?array $previousMessageIds = null;
@@ -31,14 +28,14 @@ class CompleteDeletionStrategy extends DeletionStrategy
 	 */
 	protected function onBeforeDelete(): void
 	{
-		if (!isset($this->chat))
+		if ($this->chat instanceof Chat\NullChat)
 		{
 			throw new InterruptedExecutionException(
 				(new Result())->addError(new ChatError(ChatError::NOT_FOUND))
 			);
 		}
 
-		$this->files = $this->messages->getFiles();
+		$this->messages->fillFiles();
 
 		$this->fillChatPreviousMessages();
 		if ($this->messages->count() !== 0)
@@ -104,7 +101,7 @@ class CompleteDeletionStrategy extends DeletionStrategy
 		(new \Bitrix\Im\V2\Link\Favorite\FavoriteService())->unmarkMessagesAsFavoriteForAll($this->messages);
 		(new \Bitrix\Im\V2\Message\ReadService())->deleteByMessages(
 			$this->messages,
-			$this->chat?->getRelations()->getUserIds()
+			$this->chat->getRelations()->getUserIds()
 		);
 
 		$this->messages->unpin(clearParams: false);
@@ -307,20 +304,9 @@ class CompleteDeletionStrategy extends DeletionStrategy
 		return $result;
 	}
 
-
 	protected function onAfterDelete(): void
 	{
-		if (!isset($this->files))
-		{
-			return;
-		}
-
-		foreach ($this->files as $file)
-		{
-			/**
-			 * @var FileItem $file
-			 */
-			$file->getDiskFile()?->delete(SystemUser::SYSTEM_USER_ID);
-		}
+		$this->logToSync(Event::COMPLETE_DELETE_EVENT);
+		$this->deleteFiles();
 	}
 }

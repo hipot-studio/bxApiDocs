@@ -23,6 +23,8 @@ class BillingDataGet extends BaseClientAction
 		$data = [
 			'hostKey' => $this->hostKey,
 			'languageId' => $this->languageId,
+			'portalZone' => $this->server->getRegionId(),
+			'billingCurrency' => $this->server->getBillingCurrency(),
 		];
 
 		$result = $this

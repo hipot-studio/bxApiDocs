@@ -4,9 +4,18 @@ namespace Bitrix\Tasks\Internals;
 use Bitrix\Main;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 use Bitrix\Tasks\Integration\Pull\PushService;
+use Bitrix\Tasks\Internals\Notification\UserRepositoryInterface;
 use Bitrix\Tasks\Internals\Task\UserOptionTable;
 use Bitrix\Tasks\Internals\UserOption\Option;
 use Bitrix\Tasks\Util\Result;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\MuteTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\PinInGroupTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\PinTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\UnmuteTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\UnpinInGroupTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\UnpinTaskCommand;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Exception;
 use ReflectionClass;
 
@@ -70,29 +79,32 @@ class UserOption
 	}
 
 	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @param int $option
-	 * @return bool
-	 * @throws Main\ArgumentException
-	 * @throws Main\ObjectPropertyException
-	 * @throws Main\SystemException
+	 * @deprecated
+	 * @TasksV2
+	 * @use UserRepositoryInterface
 	 */
 	public static function isOptionSet(int $taskId, int $userId, int $option): bool
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			return Container::getInstance()->getUserOptionRepository()->isSet($option, $taskId, $userId);
+		}
+
 		return static::isOption($option) && in_array($option, static::getOptions($taskId, $userId), true);
 	}
 
 	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @return array
-	 * @throws Main\ArgumentException
-	 * @throws Main\ObjectPropertyException
-	 * @throws Main\SystemException
+	 * @deprecated
+	 * @TasksV2
+	 * @use UserRepositoryInterface
 	 */
 	public static function getOptions(int $taskId, int $userId): array
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			return Container::getInstance()->getUserOptionRepository()->get($taskId, $userId)->getCodeList();
+		}
+
 		if (
 			array_key_exists($userId, self::$cache)
 			&& is_array(self::$cache[$userId])
@@ -122,17 +134,37 @@ class UserOption
 	}
 
 	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @param int $option
-	 * @return Result
-	 * @throws Main\ArgumentException
-	 * @throws Main\ObjectPropertyException
-	 * @throws Main\SystemException
-	 * @throws Exception
+	 * @deprecated
+	 * @TasksV2
+	 * @use MuteTaskCommand
+	 * @use PinTaskCommand
+	 * @use PinInGroupTaskCommand
 	 */
 	public static function add(int $taskId, int $userId, int $option): Result
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			$result = new \Bitrix\Tasks\V2\Internal\Result\Result();
+
+			if ($option === Option::MUTED)
+			{
+				$result = (new MuteTaskCommand($taskId, $userId))->run();
+			}
+			elseif ($option === Option::PINNED)
+			{
+				$result = (new PinTaskCommand($taskId, $userId))->run();
+			}
+			elseif ($option === Option::PINNED_IN_GROUP)
+			{
+				$result = (new PinInGroupTaskCommand($taskId, $userId))->run();
+			}
+
+			$legacyResult = new Result();
+			$legacyResult->addError($result->getError(), 'Adding to table failed.');
+
+			return $legacyResult;
+		}
+
 		static::onBeforeOptionChanged($taskId, $userId, $option);
 
 		$addResult = new Result();
@@ -174,17 +206,40 @@ class UserOption
 	}
 
 	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @param int $option
-	 * @return Result
-	 * @throws Main\ArgumentException
-	 * @throws Main\ObjectPropertyException
-	 * @throws Main\SystemException
-	 * @throws Exception
+	 * @deprecated
+	 * @TasksV2
+	 * @use UnmuteTaskCommand
+	 * @use UnpinTaskCommand
+	 * @use UnpinInGroupTaskCommand
 	 */
 	public static function delete(int $taskId, int $userId, int $option): Result
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			$result = new \Bitrix\Tasks\V2\Internal\Result\Result();
+
+			if ($option === Option::MUTED)
+			{
+				$result = (new UnmuteTaskCommand($taskId, $userId))->run();
+			}
+			elseif ($option === Option::PINNED)
+			{
+				$result = (new UnpinTaskCommand($taskId, $userId))->run();
+			}
+			elseif ($option === Option::PINNED_IN_GROUP)
+			{
+				$result = (new UnpinInGroupTaskCommand($taskId, $userId))->run();
+			}
+
+			$legacyResult = new Result();
+			if (!$result->isSuccess())
+			{
+				$legacyResult->addError($result->getError(), 'Adding to table failed.');
+			}
+
+			return $legacyResult;
+		}
+
 		static::onBeforeOptionChanged($taskId, $userId, $option);
 
 		$deleteResult = new Result();
@@ -219,11 +274,19 @@ class UserOption
 	}
 
 	/**
-	 * @param int $taskId
-	 * @throws Main\Db\SqlQueryException
+	 * @deprecated
+	 * @TasksV2
+	 * @use UserRepositoryInterface
 	 */
 	public static function deleteByTaskId(int $taskId): void
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			Container::getInstance()->getUserOptionRepository()->delete(taskId: $taskId);
+
+			return;
+		}
+
 		if ($taskId > 0)
 		{
 			UserOptionTable::deleteByTaskId($taskId);
@@ -231,27 +294,20 @@ class UserOption
 		}
 	}
 
-
 	/**
-	 * @param int $userId
-	 * @throws Main\Db\SqlQueryException
-	 */
-	public static function deleteByUserId(int $userId): void
-	{
-		if ($userId > 0)
-		{
-			UserOptionTable::deleteByUserId($userId);
-			static::invalidate($userId);
-		}
-	}
-
-	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @throws Main\Db\SqlQueryException
+	 * @deprecated
+	 * @TasksV2
+	 * @use UserRepositoryInterface
 	 */
 	public static function deleteByTaskIdAndUserId(int $taskId, int $userId): void
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			Container::getInstance()->getUserOptionRepository()->delete(taskId: $taskId, userId: $userId);
+
+			return;
+		}
+
 		if ($taskId > 0 && $userId > 0)
 		{
 			UserOptionTable::deleteByTaskIdAndUserId($taskId, $userId);
@@ -345,10 +401,25 @@ class UserOption
 	}
 
 	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use UserRepositoryInterface
+	 *
 	 * Removes necessary options when changing the user's role in a task
 	 */
 	public static function deleteOnUserRoleChanged(int $taskId, int $userId): void
 	{
+		if (FormV2Feature::isOn('option'))
+		{
+			Container::getInstance()->getUserOptionRepository()->delete(
+				codes: static::REMOVE_ON_USER_ROLE_CHANGED,
+				taskId: $taskId,
+				userId: $userId,
+			);
+
+			return;
+		}
+
 		if ($taskId <= 0 || $userId <= 0)
 		{
 			return;

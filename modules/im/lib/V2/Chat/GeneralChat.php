@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation;
@@ -14,6 +15,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use CAllSite;
 
 class GeneralChat extends GroupChat
@@ -77,7 +79,7 @@ class GeneralChat extends GroupChat
 		return Option::get('im', self::DISABLE_GENERAL_CHAT_OPTION, 'N') === 'N';
 	}
 
-	public function getManagerList(): array
+	public function getManagerList(bool $fullList = true): array
 	{
 		$cache = static::getCache(self::MANAGERS_CACHE_ID);
 
@@ -93,7 +95,7 @@ class GeneralChat extends GroupChat
 		$cache->startDataCache();
 		$cache->endDataCache($managerList);
 
-		return $this->getRelationFacade()->getManagerOnly()->getUserIds();
+		return $managerList;
 	}
 
 	protected function changeManagers(array $userIds, bool $isManager, bool $sendPush = true): self
@@ -236,8 +238,6 @@ class GeneralChat extends GroupChat
 			return $result->addError(new ChatError(ChatError::CREATION_ERROR));
 		}
 
-		$chat->sendBanner();
-
 		$adminIds = [];
 		if (Loader::includeModule('bitrix24'))
 		{
@@ -255,6 +255,7 @@ class GeneralChat extends GroupChat
 			$relation->save();
 		}
 
+		$chat->sendBanner();
 		$chat->addIndex();
 
 		self::linkGeneralChat($chat->getChatId());
@@ -540,7 +541,7 @@ class GeneralChat extends GroupChat
 			"MESSAGE" => $messageText,
 			"FROM_USER_ID" => $this->getContext(),
 			"SYSTEM" => 'Y',
-			"RECENT_ADD" => $config->skipRecent() ? 'N' : 'Y',
+			"RECENT_ADD" => $config->skipRecent ? 'N' : 'Y',
 			"PARAMS" => [
 				"CODE" => 'CHAT_JOIN',
 				"NOTIFY" => $this->getEntityType() === self::ENTITY_TYPE_LINE? 'Y': 'N',
@@ -548,11 +549,6 @@ class GeneralChat extends GroupChat
 			"PUSH" => 'N',
 			"SKIP_USER_CHECK" => 'Y',
 		]);
-	}
-
-	protected function needToSendMessageUserDelete(): bool
-	{
-		return true;
 	}
 
 	protected function sendMessageUserDelete(int $userId, Relation\DeleteUserConfig $config): void
@@ -565,11 +561,14 @@ class GeneralChat extends GroupChat
 		parent::sendMessageUserDelete($userId, $config);
 	}
 
-	protected function getMessageUserDeleteText(int $userId): string
+	protected function getMessageUserDeleteText(int $deletedUserId): string
 	{
-		$user = User::getInstance($userId);
+		$user = User::getInstance($deletedUserId);
 
-		return Loc::getMessage("IM_CHAT_GENERAL_LEAVE_{$user->getGender()}", Array('#USER_NAME#' => htmlspecialcharsback($user->getName())));
+		return Loc::getMessage(
+			"IM_CHAT_GENERAL_LEAVE_{$user->getGender()}",
+			['#USER_NAME#' => htmlspecialcharsback($user->getName())]
+		);
 	}
 
 	public static function changeLangAgent(): string
@@ -593,6 +592,19 @@ class GeneralChat extends GroupChat
 		}
 
 		return '';
+	}
+
+	protected function updateStateAfterRelationsAdd(array $usersToAdd): Chat
+	{
+		$result = parent::updateStateAfterRelationsAdd($usersToAdd);
+		Recent::raiseChat($this, $this->getRelationsByUserIds($usersToAdd), new DateTime());
+
+		return $result;
+	}
+
+	protected function disableUserDeleteMessage(bool $skipRecent = false): void
+	{
+		return;
 	}
 
 	private static function getCache(string $cacheId): Cache

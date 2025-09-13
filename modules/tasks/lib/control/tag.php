@@ -31,6 +31,21 @@ class Tag
 		$this->userId = $userId;
 	}
 
+	public function add(int $taskId, array $tags, int $groupId): void
+	{
+		$add = $this->formatTags($tags);
+		if ($groupId > 0)
+		{
+			$this->addToGroupTask($taskId, $groupId, $add);
+		}
+		else
+		{
+			$this->addToTask($taskId, $add);
+		}
+
+		self::invalidate();
+	}
+
 	/**
 	 * @throws SystemException
 	 * @throws SqlQueryException
@@ -451,21 +466,7 @@ class Tag
 		$this->cacheCurrentTags($taskId);
 		$currentTags = $this->getNames(self::$storage[self::TASK_TAGS_CACHE]);
 
-		$addToTask = array_diff($newTags, $currentTags);
-
-		$add = [];
-		foreach ($addToTask as $tag)
-		{
-			if (is_string($tag))
-			{
-				$add[] = [
-					'NAME' => $tag,
-					'USER_ID' => $this->userId,
-				];
-			}
-		}
-
-		return $add;
+		return $this->formatTags(array_diff($newTags, $currentTags));
 	}
 
 	/**
@@ -478,17 +479,26 @@ class Tag
 		$this->cacheCurrentTags($taskId);
 		$currentTags = $this->getNames(self::$storage[self::TASK_TAGS_CACHE]);
 
-		$delete = [];
+		return $this->formatTags(array_diff($currentTags, $newTags));
+	}
 
-		foreach (array_diff($currentTags, $newTags) as $tag)
+	private function formatTags(array $tags): array
+	{
+		$data = [];
+		foreach ($tags as $tag)
 		{
-			$delete[] = [
+			if (!is_string($tag))
+			{
+				continue;
+			}
+
+			$data[] = [
 				'NAME' => $tag,
 				'USER_ID' => $this->userId,
 			];
 		}
 
-		return $delete;
+		return $data;
 	}
 
 	private function getNames(array $tags): array
@@ -764,7 +774,7 @@ class Tag
 					continue;
 				}
 				$addToUser[] = [
-					'USER_ID' => $tag['USER_ID'],
+					'USER_ID' => $tag['USER_ID'] ?? 0,
 					'NAME' => $tag['NAME'],
 				];
 				continue;

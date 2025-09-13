@@ -69,8 +69,6 @@ final class PlaceholderProvider extends BaseProvider
 	];
 
 	private int $entityTypeId;
-	private int $entityId;
-	private ?int $categoryId;
 	private string $viewType;
 
 	public function __construct(array $options = [])
@@ -78,8 +76,6 @@ final class PlaceholderProvider extends BaseProvider
 		parent::__construct();
 
 		$this->entityTypeId = (int)($options['entityTypeId'] ?? 0);
-		$this->entityId = (int)($options['entityId'] ?? 0);
-		$this->categoryId = isset($options['categoryId']) ? (int)$options['categoryId'] : null;
 		$this->viewType = $options['viewType'] ?? self::ITEMS_VIEW_TYPE_TREE;
 	}
 
@@ -286,6 +282,7 @@ final class PlaceholderProvider extends BaseProvider
 							'',
 							$leave['VALUE']
 						),
+						'text' => $parentTitle . ': ' . $leave['TITLE'],
 					],
 				];
 			}

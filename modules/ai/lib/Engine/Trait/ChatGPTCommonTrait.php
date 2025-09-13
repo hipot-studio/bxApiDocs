@@ -24,7 +24,7 @@ trait ChatGPTCommonTrait
 
 	private function shouldUseReasoning(): bool
 	{
-		return Config::getValue('should_use_reasoning') === 'Y';
+		return true;
 	}
 
 	private function isGpt4(): bool

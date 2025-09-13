@@ -93,6 +93,7 @@ class RestrictionManager
 	private static $calendarSharingRestriction;
 	/** @var Bitrix24AccessRestriction */
 	private static $taskRestriction;
+	private static ?AccessRestriction $repeatSaleRestriction = null;
 
 	/**
 	 * @return SqlRestriction
@@ -306,6 +307,18 @@ class RestrictionManager
 		return self::getCallTrackerRestriction()->hasPermission();
 	}
 
+	public static function getRepeatSaleRestriction(): AccessRestriction
+	{
+		self::initialize();
+
+		return self::$repeatSaleRestriction;
+	}
+
+	public static function isRepeatSalePermitted(): bool
+	{
+		return self::getRepeatSaleRestriction()->hasPermission();
+	}
+
 	/**
 	 * @return void
 	 */
@@ -335,6 +348,7 @@ class RestrictionManager
 		self::$addressSearchRestriction->reset();
 		self::$ufAccessRightsRestriction->reset();
 		self::$diskQuotaRestriction->reset();
+		self::$repeatSaleRestriction->reset();
 
 		self::$sqlRestriction = null;
 		self::$conversionRestriction = null;
@@ -356,6 +370,7 @@ class RestrictionManager
 		self::$addressSearchRestriction = null;
 		self::$ufAccessRightsRestriction = null;
 		self::$diskQuotaRestriction = null;
+		self::$repeatSaleRestriction = null;
 
 		self::$isInitialized = false;
 	}
@@ -692,6 +707,25 @@ class RestrictionManager
 				Bitrix24Manager::isFeatureEnabled("crm_phone_tracker")
 			);
 		}
+
+		//region RepeatSaleRestriction
+		self::$repeatSaleRestriction = new Bitrix24AccessRestriction(
+			'crm_repeat_sale',
+			true,
+			null,
+			[
+				'ID' => 'limit_v2_crm_repeat_sale',
+			]
+		);
+
+		if (!self::$repeatSaleRestriction->load())
+		{
+			self::$repeatSaleRestriction->permit(
+				Bitrix24Manager::isFeatureEnabled('crm_repeat_sale')
+			);
+		}
+
+		//endregion
 
 		self::$isInitialized = true;
 	}

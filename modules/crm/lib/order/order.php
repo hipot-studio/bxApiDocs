@@ -271,7 +271,6 @@ class Order extends Sale\Order
 		if (
 			$this->fields->isChanged('CANCELED')
 			&& $this->isCanceled()
-			&& Crm\Automation\Factory::isAutomationAvailable(\CCrmOwnerType::Order)
 		)
 		{
 			Crm\Automation\Trigger\OrderCanceledTrigger::execute(
@@ -351,7 +350,6 @@ class Order extends Sale\Order
 		{
 			if(
 				$this->fields->isChanged('RESPONSIBLE_ID')
-				&& Crm\Automation\Factory::isAutomationAvailable(\CCrmOwnerType::Order)
 				&& $this->isNew()
 			)
 			{
@@ -369,7 +367,6 @@ class Order extends Sale\Order
 			$binding = $this->getEntityBinding();
 			if (
 				$binding
-				&& Crm\Automation\Factory::canUseAutomation()
 				&& Crm\Automation\Trigger\OrderPaidTrigger::isSupported($binding->getOwnerTypeId())
 			)
 			{
@@ -400,13 +397,10 @@ class Order extends Sale\Order
 				&& $binding->getOwnerTypeId() === \CCrmOwnerType::Deal
 			)
 			{
-				if (Crm\Automation\Factory::isAutomationAvailable(\CCrmOwnerType::Deal))
-				{
-					Crm\Automation\Trigger\DeliveryFinishedTrigger::execute(
-						[['OWNER_TYPE_ID' => \CCrmOwnerType::Deal, 'OWNER_ID' => $binding->getOwnerId()]],
-						['ORDER' => $this]
-					);
-				}
+				Crm\Automation\Trigger\DeliveryFinishedTrigger::execute(
+					[['OWNER_TYPE_ID' => \CCrmOwnerType::Deal, 'OWNER_ID' => $binding->getOwnerId()]],
+					['ORDER' => $this]
+				);
 			}
 		}
 
@@ -695,27 +689,31 @@ class Order extends Sale\Order
 				$this
 			);
 
-			Crm\MessageSender\MessageSender::send(
-				[
-					Crm\Integration\NotificationsManager::getSenderCode() => [
-						'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_CRM_ORDER_COMPLETED,
-						'TEMPLATE_CODE' => 'ORDER_COMPLETED',
-						'PLACEHOLDERS' => [
-							'NAME' => $entityCommunication->getCustomerName(),
-						],
+			$senders = [];
+			if (Main\Application::getInstance()->getLicense()->getRegion() === 'ru')
+			{
+				$senders[Crm\Integration\NotificationsManager::getSenderCode()] = [
+					'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_CRM_ORDER_COMPLETED,
+					'TEMPLATE_CODE' => 'ORDER_COMPLETED',
+					'PLACEHOLDERS' => [
+						'NAME' => $entityCommunication->getCustomerName(),
 					],
-					Crm\Integration\SmsManager::getSenderCode() => [
-						'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_CRM_ORDER_COMPLETED,
-						'MESSAGE_BODY' => !empty($feedbackPage)
-							? Main\Localization\Loc::getMessage(
-								'CRM_ORDER_ORDER_CREATED_WITH_FEEDBACK_LINK',
-								[
-									'#FEEDBACK_LINK#' => UrlManager::getInstance()->getHostUrl() . \CBXShortUri::GetShortUri($feedbackPage),
-								]
-							)
-							: Main\Localization\Loc::getMessage('CRM_ORDER_ORDER_CREATED_WITHOUT_FEEDBACK_LINK'),
-					]
-				],
+				];
+			}
+			$senders[Crm\Integration\SmsManager::getSenderCode()] = [
+				'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_CRM_ORDER_COMPLETED,
+				'MESSAGE_BODY' => !empty($feedbackPage)
+					? Main\Localization\Loc::getMessage(
+						'CRM_ORDER_ORDER_CREATED_WITH_FEEDBACK_LINK',
+						[
+							'#FEEDBACK_LINK#' => UrlManager::getInstance()->getHostUrl() . \CBXShortUri::GetShortUri($feedbackPage),
+						]
+					)
+					: Main\Localization\Loc::getMessage('CRM_ORDER_ORDER_CREATED_WITHOUT_FEEDBACK_LINK'),
+			];
+
+			Crm\MessageSender\MessageSender::send(
+				$senders,
 				[
 					'COMMON_OPTIONS' => [
 						'PHONE_NUMBER' => $phoneTo,

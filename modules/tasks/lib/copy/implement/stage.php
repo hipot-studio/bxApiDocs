@@ -3,6 +3,7 @@ namespace Bitrix\Tasks\Copy\Implement;
 
 use Bitrix\Main\Copy\Container;
 use Bitrix\Tasks\Kanban\TaskStageTable;
+use Bitrix\Tasks\V2\Public\Command\Task\Kanban\AddTaskStageRelationCommand;
 
 class Stage
 {
@@ -40,7 +41,11 @@ class Stage
 			];
 			if (!TaskStageTable::getList(["filter" => $fields])->fetch())
 			{
-				$addResult = TaskStageTable::add($fields);
+				$addResult = (new AddTaskStageRelationCommand(
+					taskId: (int)$taskId,
+					stageId: (int)$stageId,
+				))->run();
+
 				$result[$oldId] = ($addResult->isSuccess() ? $addResult->getId() : false);
 			}
 		}

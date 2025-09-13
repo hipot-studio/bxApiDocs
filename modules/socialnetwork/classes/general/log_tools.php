@@ -545,7 +545,7 @@ class CSocNetLogTools
 			{
 				$arCreatedBy["IS_EXTRANET"] = "Y";
 				$arCreatedBy["IS_COLLAB"] = User::isCollaber((int)$arFields["USER_ID"]) ? "Y" : "N";
-				$suffix = (SITE_TEMPLATE_ID !== "bitrix24" ? GetMessage("SONET_LOG_EXTRANET_SUFFIX") : "");
+				$suffix = (SITE_TEMPLATE_ID !== "bitrix24" && SITE_TEMPLATE_ID !== 'air' ? GetMessage("SONET_LOG_EXTRANET_SUFFIX") : "");
 			}
 			else
 			{

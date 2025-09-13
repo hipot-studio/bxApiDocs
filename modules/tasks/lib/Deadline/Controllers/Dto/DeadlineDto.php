@@ -21,6 +21,5 @@ class DeadlineDto extends AbstractBaseDto
 	#[Max(Configuration::MAX_DEFAULT_DEADLINE_IN_SECONDS)]
 	public int $default;
 
-	#[Required]
-	public bool $isExactTime;
+	public bool $isExactTime = false;
 }

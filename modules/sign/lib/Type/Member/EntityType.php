@@ -8,7 +8,10 @@ final class EntityType
 	public const COMPANY = 'company';
 	public const USER = 'user';
 	public const DEPARTMENT = 'department';
+	public const ROLE = 'structure-node-role';
+
 	public const DEPARTMENT_FLAT = 'department_flat';
+	public const DOCUMENT = 'sign-document';
 
 	/**
 	 * @return array<self::*>
@@ -20,7 +23,9 @@ final class EntityType
 			self::COMPANY,
 			self::USER,
 			self::DEPARTMENT,
-			self::DEPARTMENT_FLAT
+			self::DEPARTMENT_FLAT,
+			self::ROLE,
+			self::DOCUMENT,
 		];
 	}
 
@@ -38,6 +43,7 @@ final class EntityType
 			self::DEPARTMENT,
 			self::DEPARTMENT_FLAT,
 			self::USER,
+			self::DOCUMENT,
 		];
 	}
 

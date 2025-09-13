@@ -188,6 +188,10 @@ class Quote extends Factory
 				'TYPE' => Field::TYPE_INTEGER,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 			],
+			Item::FIELD_LAST_COMMUNICATION_TIME => [
+				'TYPE' => Field::TYPE_STRING,
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::ReadOnly],
+			],
 		];
 
 		if ($this->isClientEnabled())

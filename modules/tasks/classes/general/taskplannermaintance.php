@@ -252,10 +252,54 @@ class CTaskPlannerMaintance
 
 	public static function plannerActions($arActions, $site_id = SITE_ID)
 	{
+		self::$SITE_ID = $site_id;
+		self::$USER_ID = \Bitrix\Tasks\Util\User::getId();
+
+		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('planner'))
+		{
+			$id = null;
+			if (($arActions['name'] ?? null) <> '')
+			{
+				$user = \Bitrix\Tasks\V2\Internal\Entity\User::mapFromId(self::$USER_ID);
+
+				$task = new \Bitrix\Tasks\V2\Internal\Entity\Task(
+					title:              $arActions['name'],
+					creator:            $user,
+					responsible:        $user,
+					status:             \Bitrix\Tasks\V2\Internal\Entity\Task\Status::Pending,
+					allowsTimeTracking: true,
+					siteId:             self::$SITE_ID,
+				);
+
+				$config = new \Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig(self::$USER_ID);
+
+				$result = (new \Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand(
+					task: $task,
+					config: $config,
+				))->run();
+
+				if ($result->isSuccess())
+				{
+					$id = $result->getObject()?->getId();
+				}
+			}
+
+			$toAdd = is_array($arActions['add']) ? $arActions['add'] : [];
+			$toDelete = is_array($arActions['remove']) ? $arActions['remove'] : [];
+
+			if ($id)
+			{
+				$toAdd = array_merge($toAdd, [$id]);
+			}
+
+			$service = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getPlannerService();
+
+			return $service->merge(self::$USER_ID, $toAdd, $toDelete);
+		}
+
 		global $CACHE_MANAGER;
 
-		self::$SITE_ID = $site_id;
-		self::$USER_ID = \Bitrix\Tasks\Util\User::getId(); // todo: need to remove this, use $userId instead, to be able to manage other users planner
+		// todo: need to remove this, use $userId instead, to be able to manage other users planner
 
 		$lastTaskId = 0;
 
@@ -474,8 +518,26 @@ class CTaskPlannerMaintance
 		return $count;
 	}
 
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use \Bitrix\Tasks\V2\Internal\Service\Task\PlannerService
+	 */
 	public static function getCurrentTasksList()
 	{
+		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('planner'))
+		{
+			global $USER;
+			if ($USER instanceof CUser)
+			{
+				$service = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getPlannerService();
+
+				return $service->syncAndGetActualUserTaskIds((int)$USER->getId());
+			}
+
+			return [];
+		}
+
 		static $checked;
 
 		$list = CUserOptions::GetOption(

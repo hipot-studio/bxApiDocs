@@ -105,7 +105,10 @@ class CBPSchedulerService extends CBPRuntimeService
 					self::addAgent($workflowId, $eventName, $expiresAt, $counter);
 				}
 			}
-			elseif ($e->getCode() !== \CBPRuntime::EXCEPTION_CODE_INSTANCE_NOT_FOUND)
+			elseif (
+				$e->getCode() !== \CBPRuntime::EXCEPTION_CODE_INSTANCE_NOT_FOUND
+				&& $e->getCode() !== \CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED
+			)
 			{
 				self::logUnknownException($e);
 			}
@@ -365,6 +368,10 @@ class CBPSchedulerService extends CBPRuntimeService
 			elseif ($e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_LOCKED)
 			{
 				self::addEventRepeatAgent($event, $counter);
+			}
+			else if ($e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED)
+			{
+				throw $e;
 			}
 			else
 			{

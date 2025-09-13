@@ -7,7 +7,7 @@ use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentTable;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\AIManager;
-use Bitrix\Crm\Integration\AI\Dto\ExtractScoringCriteriaPayload;
+use Bitrix\Crm\Integration\AI\Dto\Scoring\ExtractScoringCriteriaPayload;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
@@ -16,7 +16,7 @@ use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\ExtractScoringCriteriaEvent;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Main\Web\Json;
+use Bitrix\Crm\Service\Container;
 use CCrmOwnerType;
 
 final class ExtractScoringCriteria extends AbstractOperation
@@ -37,6 +37,13 @@ final class ExtractScoringCriteria extends AbstractOperation
 		parent::__construct($target, $userId, $parentJobId);
 	}
 
+	public static function isAccessGranted(int $userId, ItemIdentifier $target): bool
+	{
+		return parent::isAccessGranted($userId, $target)
+			&& Container::getInstance()->getUserPermissions($userId)->copilotCallAssessment()->canEdit()
+		;
+	}
+
 	public static function isSuitableTarget(ItemIdentifier $target): bool
 	{
 		return $target->getEntityTypeId() === CCrmOwnerType::CopilotCallAssessment;
@@ -54,22 +61,6 @@ final class ExtractScoringCriteria extends AbstractOperation
 				'user_input' => $this->prompt,
 			])->getResult()
 		;
-	}
-
-	protected function getStubPayload(): mixed
-	{
-		$fields = [
-			'status' => true,
-			'criteria' => [
-				'Mention the name of the factory',
-				'Call the client by name',
-				'Specify the order',
-				'Ask what the order is for',
-				'Ask if the cake needs customization',
-			],
-		];
-
-		return Json::encode($fields);
 	}
 
 	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void

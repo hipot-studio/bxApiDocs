@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\Onboarding\Transfer;
 
 use ArrayIterator;
+use Bitrix\Main\Validation\Rule\ElementsType;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use IteratorAggregate;
 
 /** @method CommandModel[] getIterator() */
 final class CommandModelCollection implements IteratorAggregate
 {
-	/** @var CommandModel[]  */
-	// #[Validatable]
-	// todo: add #[Validatable(iterator: true)] when it will be available
+	#[ElementsType(className: CommandModel::class)]
+	#[Validatable(true)]
 	private array $commandModels;
 
 	public function __construct(CommandModel ...$commandModels)
@@ -29,6 +29,32 @@ final class CommandModelCollection implements IteratorAggregate
 	public function add(CommandModel $commandModel): void
 	{
 		$this->commandModels[] = $commandModel;
+	}
+
+	public function merge(self $commandModelCollection): self
+	{
+		foreach ($commandModelCollection as $commandModel)
+		{
+			if (!$this->contains($commandModel))
+			{
+				$this->commandModels[] = $commandModel;
+			}
+		}
+
+		return $this;
+	}
+
+	private function contains(CommandModel $commandModel): bool
+	{
+		foreach ($this->commandModels as $model)
+		{
+			if ($model->isEqual($commandModel))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function getIterator(): ArrayIterator

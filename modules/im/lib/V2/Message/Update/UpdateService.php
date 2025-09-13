@@ -11,7 +11,6 @@ use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\Message\Params;
-use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
@@ -75,6 +74,8 @@ class UpdateService
 			return (new Result())->addError(new Message\MessageError(Message\MessageError::ACCESS_DENIED));
 		}
 
+		$previousMessage = clone $this->message;
+
 		$this->message->fill($fieldsToUpdate);
 
 		if ($this->message->isCompletelyEmpty())
@@ -109,6 +110,9 @@ class UpdateService
 		(new FileService())->saveFilesFromMessage($filesFromText, $this->message);
 
 		$this->fireEventAfterMessageUpdate();
+
+		// update mentions after all events
+		(new Message\Send\MentionService())->updateMentions($previousMessage, $this->message);
 
 		return $result;
 	}
@@ -224,10 +228,12 @@ class UpdateService
 
 		Bot::onMessageUpdate($this->message->getId(), $messageFields);
 
+		$chat->onAfterMessageUpdate($this->message);
+
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::UPDATED_MESSAGE_ENTITY, $this->message->getId()),
 			static fn () => $chat->getRelations()->getUserIds(),
-			$chat->getType()
+			$chat
 		);
 	}
 }

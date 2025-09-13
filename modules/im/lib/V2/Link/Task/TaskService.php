@@ -227,15 +227,17 @@ class TaskService
 				'FILES' => $this->getFilesForPrepareText($message)
 			]);
 
-			$fileIds = $this->getFilesIdsForTaskFromMessage($message);
+			$files = $this->getFilesDataForTaskFromMessage($message);
 
-			if (!empty($fileIds))
+			if (!empty($files))
 			{
+				$fileIds = $this->getFilesIds($files);
+
 				$diskFileUFCode = \Bitrix\Tasks\Integration\Disk\UserField::getMainSysUFCode();
 				$data['PARAMS'][$diskFileUFCode] = $fileIds;
 				$signer = new Signer();
 				$data['PARAMS'][$diskFileUFCode . '_SIGN'] = $signer->sign(Json::encode($fileIds), static::SIGNATURE_SALT);
-				$data['PARAMS'][$diskFileUFCode . '_DATA'] = $this->getFileDataForTask($message);
+				$data['PARAMS'][$diskFileUFCode . '_DATA'] = $files;
 			}
 
 			$data['PARAMS']['IM_MESSAGE_ID'] = $message->getMessageId();
@@ -277,7 +279,7 @@ class TaskService
 	 * @param Message $message
 	 * @return string[]
 	 */
-	protected function getFilesIdsForTaskFromMessage(Message $message): array
+	protected function getFilesDataForTaskFromMessage(Message $message): array
 	{
 		$copies = $message->getFiles()->copyToOwnUploadedFiles()->getResult();
 		if (!isset($copies))
@@ -286,55 +288,54 @@ class TaskService
 		}
 
 		$copies->addToTmp(TemporaryFileService::TASK_SOURCE);
-		$newIds = [];
-
-		foreach ($copies as $copy)
-		{
-			$newIds[] = FileUserType::NEW_FILE_PREFIX . $copy->getId();
-		}
-
-		return $newIds;
-	}
-
-	protected function getFileDataForTask(Message $message): array
-	{
-		$copies = $message->getFiles()->copyToOwnUploadedFiles()->getResult();
-		if (!isset($copies))
-		{
-			return [];
-		}
-
 		$files = [];
 
-		foreach ($copies as $copy)
+		foreach ($copies as $file)
 		{
-			$data = $copy->toRestFormat();
-
+			$fileData = $file->toRestFormat();
 			$files[] = [
-				'id' => FileUserType::NEW_FILE_PREFIX . $copy->getId(),
-				'objectId' => $data['viewerAttrs']['objectId'],
-				'name' => $data['name'],
-				'type' => $data['extension'],
-				'url' => $data['urlShow'],
-				'height' => $data['image']['height'] ?? 0,
-				'width' => $data['image']['width'] ?? 0,
-				'preview_url' => $data['urlPreview'],
+				'id' => FileUserType::NEW_FILE_PREFIX . $file->getId(),
+				'objectId' => $fileData['viewerAttrs']['objectId'],
+				'name' => $fileData['name'],
+				'type' => $fileData['extension'],
+				'url' => $fileData['urlShow'],
+				'height' => $fileData['image']['height'] ?? 0,
+				'width' => $fileData['image']['width'] ?? 0,
+				'preview_url' => $fileData['urlPreview'],
 			];
 		}
 
 		return $files;
 	}
 
+	protected function getFilesIds(array $files): array
+	{
+		$fileIds = [];
+		foreach ($files as $file)
+		{
+			if (isset($file['id']))
+			{
+				$fileIds[] = $file['id'];
+			}
+		}
+
+		return $fileIds;
+	}
+
 	protected function getAuditors(Chat $chat): array
 	{
-		$userIds = RelationCollection::find(
-			['ACTIVE' => true, 'ONLY_INTERNAL_TYPE' => true, 'CHAT_ID' => $chat->getId()],
+		return RelationCollection::find(
+			[
+				'ACTIVE' => true,
+				'ONLY_INTERNAL_TYPE' => true,
+				'CHAT_ID' => $chat->getId(),
+				'IS_HIDDEN' => false,
+				'ONLY_INTRANET' => true,
+				'!USER_ID' => $this->getContext()->getUserId()
+			],
 			limit: 50,
 			select: ['ID', 'USER_ID', 'CHAT_ID']
-		)->getUsers()->filterExtranet()->getIds();
-		unset($userIds[$this->getContext()->getUserId()]);
-
-		return $userIds;
+		)->getUserIds();
 	}
 
 	protected function getFilesForPrepareText(Message $message): array

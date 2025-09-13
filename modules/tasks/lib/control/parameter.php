@@ -19,6 +19,8 @@ class Parameter
 	 */
 	public function add(array $data)
 	{
+		ParameterTable::deleteByFilter(['=TASK_ID' => $this->taskId]);
+
 		if (
 			!array_key_exists('SE_PARAMETER', $data)
 			|| !is_array($data['SE_PARAMETER'])
@@ -65,6 +67,8 @@ class Parameter
 			}
 		}
 
+		ParameterTable::deleteByFilter(['=TASK_ID' => $this->taskId]);
+
 		$this->set($taskParams);
 	}
 
@@ -77,10 +81,6 @@ class Parameter
 	 */
 	private function set(array $rows)
 	{
-		ParameterTable::deleteList([
-			'=TASK_ID' => $this->taskId,
-		]);
-
 		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
 

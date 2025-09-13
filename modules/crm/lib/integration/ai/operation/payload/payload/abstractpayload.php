@@ -8,17 +8,22 @@ use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadInterface;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\Date;
 use CCrmOwnerType;
 use RuntimeException;
 
 abstract class AbstractPayload implements PayloadInterface
 {
 	protected array $markers = [];
+	private Date $currentDate;
 
 	public function __construct(
 		protected readonly int $userId,
 		protected readonly ItemIdentifier $identifier
-	) {}
+	)
+	{
+		$this->currentDate = new Date();
+	}
 	
 	public function setMarkers(array $markers): PayloadInterface
 	{
@@ -60,6 +65,21 @@ abstract class AbstractPayload implements PayloadInterface
 		}
 		
 		return null;
+	}
+	
+	final public function getCurrentYear(): string
+	{
+		return $this->currentDate->format('Y');
+	}
+	
+	final public function getCurrentMonth(): string
+	{
+		return $this->currentDate->format('m');
+	}
+	
+	final public function getCurrentDay(): string
+	{
+		return $this->currentDate->format('d');
 	}
 	
 	protected function getPayload(): IPayload

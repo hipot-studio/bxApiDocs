@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Badge;
 use Bitrix\Crm\Badge\Type\AiCallFieldsFillingResult;
 use Bitrix\Crm\Badge\Type\AiCallScoringStatus;
 use Bitrix\Crm\Badge\Type\BizprocWorkflowStatus;
+use Bitrix\Crm\Badge\Type\BookingStatus;
 use Bitrix\Crm\Badge\Type\CalendarSharingStatus;
 use Bitrix\Crm\Badge\Type\CallStatus;
 use Bitrix\Crm\Badge\Type\CopilotCallAssessmentStatus;
@@ -37,6 +38,7 @@ final class Factory
 			Badge::TODO_STATUS_TYPE => TodoStatus::class,
 			Badge::COPILOT_CALL_ASSESSMENT_STATUS_TYPE => CopilotCallAssessmentStatus::class,
 			Badge::AI_CALL_SCORING_STATUS => AiCallScoringStatus::class,
+			Badge::BOOKING_STATUS_TYPE => BookingStatus::class,
 			default => throw new ArgumentException('Unknown badge type: ' . $type),
 		};
 

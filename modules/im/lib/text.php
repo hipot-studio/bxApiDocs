@@ -2,7 +2,10 @@
 namespace Bitrix\Im;
 
 use Bitrix\Im\Integration\Socialnetwork\Extranet;
+use Bitrix\Im\V2\Message\Text\BbCode\Timestamp;
+use Bitrix\Im\V2\Message\Text\BbCode\Timestamp\DateFormat;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 
 Loc::loadMessages(__FILE__);
 
@@ -325,6 +328,7 @@ class Text
 		$text = preg_replace("/\[size=(\d+)](.*?)\[\/size]/i", "$2", $text);
 		$text = preg_replace("/\[color=#([0-9a-f]{3}|[0-9a-f]{6})](.*?)\[\/color]/i", "$2", $text);
 		$text = preg_replace_callback("/\[ICON\=([^\]]*)\]/i", Array('\Bitrix\Im\Text', 'modifyIcon'), $text);
+		$text = preg_replace_callback('/\[TIMESTAMP=(\d+) FORMAT=([^\]]*)\]/i', [__CLASS__, 'modifyTimestampCode'], $text);
 		$text = preg_replace('#\-{54}.+?\-{54}#s', " [".Loc::getMessage('IM_QUOTE')."] ", str_replace(array("#BR#"), Array(" "), $text));
 		$text = trim($text);
 
@@ -350,6 +354,20 @@ class Text
 			$userName = \Bitrix\Im\User::getInstance($userId)->getFullName(false);
 			return '[USER='.$userId.' REPLACE]'.$userName.'[/USER]';
 		}, $text);
+	}
+
+	public static function modifyTimestampCode(array $matches): string
+	{
+		$timestamp = (int)($matches[1] ?? 0);
+		$date = DateTime::createFromTimestamp($timestamp);
+		$format = $matches[2] ?? '';
+		$formatCode = DateFormat::tryFrom($format);
+		if ($formatCode === null)
+		{
+			return $matches[0];
+		}
+
+		return Timestamp::build($date, $formatCode)->toPlain();
 	}
 
 	public static function encodeEmoji($text)

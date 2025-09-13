@@ -549,7 +549,7 @@ class DealCategory
 				new CategoryIdentifier(\CCrmOwnerType::Deal, $ID)
 			);
 
-			$fields = array('RELATION' => $roleRelation);
+			$fields = ['PERMISSIONS' => $roleRelation];
 			$role->Update($roleID, $fields);
 		}
 		//endregion

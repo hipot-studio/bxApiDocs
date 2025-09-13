@@ -9,10 +9,15 @@ use Bitrix\Main\Config\Option;
 class Copilot extends BaseRecent
 {
 	use MessengerComponentTitle;
-	
+
 	public function isAvailable(): bool
 	{
 		return CopilotChat::isActive();
+	}
+
+	public function isPreload(): bool
+	{
+		return false;
 	}
 
 	public function getComponentCode(): string
@@ -35,7 +40,7 @@ class Copilot extends BaseRecent
 	{
 		return [
 			'useSearch' => true,
-			'preload' => true,
+			'preload' => $this->isPreload(),
 			'titleParams' => [
 				'useLargeTitleMode' => true,
 				'text' => $this->getTitle(),

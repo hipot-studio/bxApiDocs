@@ -39,6 +39,7 @@ class RestService extends \IRestService
 	const ERROR_TASK_TYPE = 'ERROR_TASK_TYPE';
 	const ERROR_TASK_COMPLETED = 'ERROR_TASK_COMPLETED';
 	const ERROR_TASK_EXECUTION = 'ERROR_TASK_EXECUTION';
+	const ERROR_SELECT_VALIDATION_FAILURE = 'ERROR_SELECT_VALIDATION_FAILURE';
 
 	private const ALLOWED_TASK_ACTIVITIES = [
 		'ReviewActivity',
@@ -724,6 +725,11 @@ class RestService extends \IRestService
 			throw new RestException('Empty workflow instance ID', self::ERROR_WRONG_WORKFLOW_ID);
 		}
 
+		if (!is_string($params['ID']))
+		{
+			throw new RestException('Invalid workflow instance ID (string expected)', self::ERROR_WRONG_WORKFLOW_ID);
+		}
+
 		$id = $params['ID'];
 		$status = isset($params['STATUS']) ? (string)$params['STATUS'] : '';
 		$errors = [];
@@ -951,15 +957,22 @@ class RestService extends \IRestService
 
 		$data = self::prepareTemplateData($params['TEMPLATE_DATA']);
 
-		return \CBPWorkflowTemplateLoader::ImportTemplate(
-			0,
-			$params['DOCUMENT_TYPE'],
-			$autoExecute,
-			$params['NAME'],
-			isset($params['DESCRIPTION']) ? (string) $params['DESCRIPTION'] : '',
-			$data,
-			self::generateTemplateSystemCode($server)
-		);
+		try
+		{
+			return \CBPWorkflowTemplateLoader::ImportTemplate(
+				0,
+				$params['DOCUMENT_TYPE'],
+				$autoExecute,
+				$params['NAME'],
+				isset($params['DESCRIPTION']) ? (string) $params['DESCRIPTION'] : '',
+				$data,
+				self::generateTemplateSystemCode($server)
+			);
+		}
+		catch (\Exception $e)
+		{
+			throw new RestException($e->getMessage());
+		}
 	}
 
 	/**
@@ -1473,13 +1486,21 @@ class RestService extends \IRestService
 		{
 			foreach ($rules as $field)
 			{
+				if (!is_scalar($field))
+				{
+					throw new RestException(
+						"Invalid data in SELECT parameter",
+						self::ERROR_SELECT_VALIDATION_FAILURE,
+					);
+				}
+
 				$field = mb_strtoupper($field);
 				if (isset($fields[$field]) && !in_array($field, $select))
 					$select[$field] = $fields[$field];
 			}
 		}
 
-		return $select ? $select : $default;
+		return $select ?: $default;
 	}
 
 	private static function getOrder($rules, $fields, array $default = array())
@@ -1731,7 +1752,7 @@ class RestService extends \IRestService
 		{
 			$documentService = \CBPRuntime::getRuntime()->getDocumentService();
 			$documentId = $documentService->normalizeDocumentId($documentId);
-			if ($documentService->getDocument($documentId))
+			if ($documentService->getDocument($documentId, select: ['ID']))
 			{
 				return $documentId;
 			}

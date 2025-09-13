@@ -53,7 +53,7 @@ class License extends BaseContent
 		];
 	}
 
-	private function isExpired(): bool
+	public function isExpired(): bool
 	{
 		return $this->license->isTimeBound() && $this->license->getExpireDate() < new Date();
 	}

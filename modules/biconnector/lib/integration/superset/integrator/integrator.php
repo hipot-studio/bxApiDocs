@@ -49,6 +49,7 @@ final class Integrator
 	private const PROXY_ACTION_USER_DEACTIVATE = '/user/deactivate';
 	private const PROXY_ACTION_USER_SET_EMPTY_ROLE = '/user/setEmptyRole';
 	private const PROXY_ACTION_USER_SYNC_PROFILE = '/user/syncProfile';
+	private const PROXY_ACTION_LIST_CHART = '/chart/list';
 	private const PROXY_ACTION_UPDATE_DASHBOARD = '/dashboard/update';
 	private const PROXY_ACTION_IMPORT_DATASET = '/dataset/import';
 	private const PROXY_ACTION_CREATE_EMPTY_DASHBOARD = '/dashboard/createEmpty';
@@ -60,12 +61,13 @@ final class Integrator
 	private const PROXY_ACTION_UPDATE_DATASET = '/dataset/update';
 	private const PROXY_ACTION_DELETE_DATASET = '/dataset/delete';
 	private const PROXY_ACTION_GET_DATASET_URL = '/dataset/getUrl';
+	private const PROXY_ACTION_GET_UNUSED_ELEMENTS = '/unusedElements/get';
+	private const PROXY_ACTION_DELETE_UNUSED_ELEMENTS = '/unusedElements/delete';
 
 	static private self $instance;
 
 	private Sender $sender;
 	private IntegratorLogger $logger;
-
 
 	public static function getInstance(): self
 	{
@@ -187,15 +189,8 @@ final class Integrator
 			);
 		}
 
-		$inversedIdList = SupersetDashboardTable::getList([
-			'select' => ['EXTERNAL_ID'],
-			'filter' => [
-				'!@EXTERNAL_ID' => $ids,
-			],
-		])->fetchAll();
-
 		$requestParams = [
-			'neqIds' => array_column($inversedIdList, 'EXTERNAL_ID'),
+			'ids' => $ids,
 		];
 
 		$response =
@@ -938,6 +933,44 @@ final class Integrator
 	 * @param array $ids External ids of dashboards.
 	 * @return IntegratorResponse
 	 */
+	public function getChartList(array $ids): IntegratorResponse
+	{
+		if (empty($ids))
+		{
+			return new IntegratorResponse(
+				status: IntegratorResponse::STATUS_OK,
+				data: []
+			);
+		}
+
+		$requestParams = [
+			'ids' => $ids,
+		];
+
+		$response =
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_LIST_CHART)
+				->setParams($requestParams)
+				->perform()
+		;
+
+		if ($response->hasErrors())
+		{
+			return $response;
+		}
+
+		$resultData = $response->getData();
+
+		return $response->setData($resultData['charts']);
+	}
+
+	/**
+	 * Returns response with list of dataset info on successful request.
+	 * If response code is not OK - returns empty data.
+	 *
+	 * @param array $ids External ids of dashboards.
+	 * @return IntegratorResponse
+	 */
 	public function getDatasetList(array $ids): IntegratorResponse
 	{
 		if (empty($ids))
@@ -948,15 +981,8 @@ final class Integrator
 			);
 		}
 
-		$inversedIdList = ExternalDatasetTable::getList([
-			'select' => ['EXTERNAL_ID'],
-			'filter' => [
-				'!@EXTERNAL_ID' => $ids,
-			],
-		])->fetchAll();
-
 		$requestParams = [
-			'neqIds' => array_column($inversedIdList, 'EXTERNAL_ID'),
+			'ids' => $ids,
 		];
 
 		$response =
@@ -1102,6 +1128,52 @@ final class Integrator
 			;
 	}
 
+	/**
+	 * Gets unused elements - dataset which are not used in charts and charts which are not used in dashboards.
+	 *
+	 * @param array $params ORM params - page, pageSize, filter, order.
+	 *
+	 * @return IntegratorResponse
+	 */
+	public function getUnusedElements(array $params): IntegratorResponse
+	{
+		$parameters = [
+			'ormParams' => [
+				'page' => $params['page'] ?? 0,
+				'pageSize' => $params['pageSize'] ?? 20,
+				'order' => $params['order'] ?? null,
+				'filter' => $params['filter'] ?? null,
+			],
+		];
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_GET_UNUSED_ELEMENTS)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->setParams($parameters)
+				->perform()
+		;
+	}
+
+	/**
+	 * @param array $elements Array of elements: [elementId: int, elementType: chart|dataset].
+	 *
+	 * @return IntegratorResponse
+	 */
+	public function deleteUnusedElements(array $elements): IntegratorResponse
+	{
+		$parameters = [
+			'elements' => $elements,
+		];
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_DELETE_UNUSED_ELEMENTS)
+				->setParams($parameters)
+				->perform()
+		;
+	}
+
 	// endregion
 
 	private function decode(string $data)
@@ -1151,7 +1223,10 @@ final class Integrator
 			self::PROXY_ACTION_CREATE_DATASET => true,
 			self::PROXY_ACTION_UPDATE_DATASET => true,
 			self::PROXY_ACTION_DELETE_DATASET => true,
+			self::PROXY_ACTION_GET_UNUSED_ELEMENTS => false,
+			self::PROXY_ACTION_DELETE_UNUSED_ELEMENTS => false,
 		];
+		// TODO Add other actions and create middleware which will check action existing in this list.
 
 		if (!array_key_exists($action, $actions))
 		{

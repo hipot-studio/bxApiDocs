@@ -155,13 +155,37 @@ final class TypeFile
 
 	public static function getByFilename($filename)
 	{
+		if (empty($filename))
+		{
+			return self::UNKNOWN;
+		}
+
 		return self::getByExtension(getFileExtension($filename));
 	}
 
 	protected static function getByFlexibleVar($file)
 	{
-		return $file instanceof File ?
-			self::getByFile($file) : self::getByFilename($file);
+		if ($file instanceof File)
+		{
+			return self::getByFile($file);
+		}
+		if ($file instanceof AttachedObject)
+		{
+			$attachedObject = $file;
+			if (!$attachedObject->isSpecificVersion())
+			{
+				return self::getByFlexibleVar($attachedObject->getFile());
+			}
+			$versionName = $attachedObject->getVersion()?->getName();
+
+			return self::getByFilename($versionName);
+		}
+		if (\is_string($file))
+		{
+			return self::getByFilename($file);
+		}
+
+		return false;
 	}
 
 	/**

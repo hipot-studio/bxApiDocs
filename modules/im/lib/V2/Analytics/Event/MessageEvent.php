@@ -3,29 +3,22 @@
 namespace Bitrix\Im\V2\Analytics\Event;
 
 use Bitrix\Disk\TypeFile;
-use Bitrix\Im\V2\Chat\ChannelChat;
-use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Entity\File\FileCollection;
+use Bitrix\Main\Loader;
 
 class MessageEvent extends ChatEvent
 {
 	protected const MULTI_TYPE = 'any';
 	protected const MEDIA_TYPE = 'media';
-	protected const FILE_TYPES = [
-		TypeFile::IMAGE => 'image',
-		TypeFile::VIDEO => 'video',
-		TypeFile::DOCUMENT => 'document',
-		TypeFile::ARCHIVE => 'archive',
-		TypeFile::SCRIPT => 'script',
-		TypeFile::UNKNOWN => 'unknown',
-		TypeFile::PDF => 'pdf',
-		TypeFile::AUDIO => 'audio',
-		TypeFile::KNOWN => 'known',
-		TypeFile::VECTOR_IMAGE => 'vector-image',
-	];
+	protected const UNKNOWN_TYPE = 'unknown';
 
 	public function setFilesType(FileCollection $files): self
 	{
+		if (!Loader::includeModule('disk'))
+		{
+			return $this;
+		}
+
 		$fileMap = [];
 		foreach ($files as $file)
 		{
@@ -53,7 +46,9 @@ class MessageEvent extends ChatEvent
 			return $this;
 		}
 
-		$this->type = self::FILE_TYPES[array_shift($fileMap)] ?? self::FILE_TYPES[TypeFile::UNKNOWN];
+		$diskFileType = array_shift($fileMap);
+
+		$this->type = $this->getFileType($diskFileType) ?? self::UNKNOWN_TYPE;
 
 		return $this;
 	}
@@ -63,5 +58,28 @@ class MessageEvent extends ChatEvent
 		$this->p3 = 'filesCount_' . $count;
 
 		return $this;
+	}
+
+	private function getFileType(string $diskFileType): ?string
+	{
+		if (!Loader::includeModule('disk'))
+		{
+			return self::UNKNOWN_TYPE;
+		}
+
+		$diskTypeToAnalyticTypeMap = [
+			TypeFile::IMAGE => 'image',
+			TypeFile::VIDEO => 'video',
+			TypeFile::DOCUMENT => 'document',
+			TypeFile::ARCHIVE => 'archive',
+			TypeFile::SCRIPT => 'script',
+			TypeFile::UNKNOWN => 'unknown',
+			TypeFile::PDF => 'pdf',
+			TypeFile::AUDIO => 'audio',
+			TypeFile::KNOWN => 'known',
+			TypeFile::VECTOR_IMAGE => 'vector-image',
+		];
+
+		return $diskTypeToAnalyticTypeMap[$diskFileType] ?? null;
 	}
 }

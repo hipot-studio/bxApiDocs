@@ -15,6 +15,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\BIConnector;
@@ -27,6 +28,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 class ApacheSupersetDashboardController extends CBitrixComponent
 {
 	private const URL_TEMPLATE_LIST = 'list';
+	private const URL_TEMPLATE_DETAIL = 'detail';
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -54,6 +56,13 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		if ($this->arParams['SEF_MODE'] === 'Y')
 		{
 			[$template, $variables] = $this->processSefMode($templateUrls);
+		}
+
+		if ($template === self::URL_TEMPLATE_DETAIL)
+		{
+			$listUri = (new Uri('/' . $templateUrls[self::URL_TEMPLATE_LIST]))->toAbsolute()->getLocator();
+
+			LocalRedirect($listUri);
 		}
 
 		$this->arResult['VARIABLES'] = $variables;
@@ -158,6 +167,7 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 	private static function getTemplateUrls(): array
 	{
 		return [
+			self::URL_TEMPLATE_DETAIL => 'bi/dashboard/detail/',
 			self::URL_TEMPLATE_LIST => 'bi/dashboard/',
 		];
 	}

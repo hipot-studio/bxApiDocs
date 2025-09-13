@@ -30,12 +30,20 @@ final class Provider
 	 *       DATE?: ?Date,
 	 *       CAMPAIGN_NAME: string,
 	 *       CAMPAIGN_ID: string,
+	 *         GROUP_NAME: string,
+	 *       GROUP_ID: string,
+	 *       AD_NAME: string,
+	 *       AD_ID: string,
 	 *       CURRENCY: string,
 	 *       CPM: float,
 	 *       CPC: float,
 	 *       CLICKS: int,
 	 *       IMPRESSIONS: int,
 	 *       ACTIONS: int,
+	 *         UTM_MEDIUM: string,
+	 *       UTM_SOURCE: string,
+	 *       UTM_CAMPAIGN: string,
+	 *       UTM_CONTENT: string
 	 *   }>
 	 *
 	 * @return Result
@@ -57,7 +65,10 @@ final class Provider
 		$accountResult = $this->account->getDailyExpensesReport($this->accountId, $dateFrom, $dateTo);
 		if (!$accountResult->isSuccess())
 		{
-			$result->addErrors($accountResult->getErrors());
+			foreach ($accountResult->getErrors() as $error)
+			{
+				$result->addError($this->wrapErrorToSourceIdPrefix($error));
+			}
 
 			return $result;
 		}
@@ -68,7 +79,7 @@ final class Provider
 		{
 			$collectionClassName = get_class($expensesCollection);
 			$error = new Error("[{$this->name}] Daily expenses result data expected 'Bitrix\Seo\Analytics\Internals\ExpensesCollection' instance, '{$collectionClassName}' got");
-			$result->addError($error);
+			$result->addError($this->wrapErrorToSourceIdPrefix($error));
 
 			return $result;
 		}
@@ -91,12 +102,20 @@ final class Provider
 	 *     DATE?: ?Date,
 	 *     CAMPAIGN_NAME: string,
 	 *     CAMPAIGN_ID: string,
+	 *     GROUP_NAME: string,
+	 *     GROUP_ID: string,
+	 *     AD_NAME: string,
+	 *     AD_ID: string,
 	 *     CURRENCY: string,
 	 *     CPM: float,
 	 *     CPC: float,
 	 *     CLICKS: int,
 	 *     IMPRESSIONS: int,
 	 *     ACTIONS: int,
+	 *     UTM_MEDIUM: string,
+	 *     UTM_SOURCE: string,
+	 *     UTM_CAMPAIGN: string,
+	 *     UTM_CONTENT: string
 	 * }
 	 */
 	private function parseRow(Seo\Analytics\Internals\Expenses $row): array
@@ -104,15 +123,23 @@ final class Provider
 		return [
 			'SOURCE_ID' => $this->id,
 			'EXPENSES' => $row->getSpend(),
-			'DATE' => $row->getDate(),
+			'DATE' => $row->getDate()?->format('Y-m-d H:i:s'),
 			'CAMPAIGN_NAME' => $row->getCampaignName(),
 			'CAMPAIGN_ID' => $row->getCampaignId(),
+			'GROUP_NAME' => $row->getGroupName(),
+			'GROUP_ID' => $row->getGroupId(),
+			'AD_NAME' => $row->getAdName(),
+			'AD_ID' => $row->getAdId(),
 			'CURRENCY' => $row->getCurrency(),
 			'CPM' => $row->getCpm(),
 			'CPC' => $row->getCpc(),
 			'CLICKS' => $row->getClicks(),
 			'IMPRESSIONS' => $row->getImpressions(),
 			'ACTIONS' => $row->getActions(),
+			'UTM_MEDIUM' => $row->getUtmMedium(),
+			'UTM_SOURCE' => $row->getUtmSource(),
+			'UTM_CAMPAIGN' => $row->getUtmCampaign(),
+			'UTM_CONTENT' => $row->getUtmContent(),
 		];
 	}
 
@@ -135,5 +162,10 @@ final class Provider
 			$this->getId(),
 			\Bitrix\Crm\Tracking\Internals\SourceFieldTable::FIELD_UTM_SOURCE
 		);
+	}
+
+	private function wrapErrorToSourceIdPrefix(Error $error): Error
+	{
+		return new Error("[source id: {$this->getId()}]{$error->getMessage()}", $error->getCode());
 	}
 }

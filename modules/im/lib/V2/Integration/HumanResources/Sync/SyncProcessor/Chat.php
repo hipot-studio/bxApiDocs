@@ -2,7 +2,9 @@
 
 namespace Bitrix\Im\V2\Integration\HumanResources\Sync\SyncProcessor;
 
+use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Type\RelationEntityType;
+use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Integration\HumanResources\Sync\Item\EntityType;
 use Bitrix\Im\V2\Integration\HumanResources\Sync\Item\QueueItem;
@@ -152,16 +154,49 @@ class Chat extends Base
 		}
 
 		$node = $this->nodeService->getNodeInformation($item->syncInfo->nodeId);
-		$nodeName = $node->name;
-		$postfix = $item->syncInfo->direction === SyncDirection::ADD ? 'ADD' : 'DELETE';
-		$postfix .= ($postfix === 'ADD') ? '_MSGVER_1' : '';
+		$messageCode = $this->buildSendFinishMessageCode($chat, $item, $node);
 
-		\CIMMessenger::Add([
-			'MESSAGE' => Loc::getMessage("IM_HR_INTEGRATION_CHAT_FINISH_{$postfix}", ['#DEPARTMENT_NAME#' => $nodeName]),
-			'FROM_USER_ID' => 0,
-			'TO_CHAT_ID' => $chat->getId(),
-			'MESSAGE_TYPE' => $chat->getType(),
-			'SYSTEM' => 'Y',
-		]);
+		\CIMMessenger::Add(
+			[
+				'MESSAGE' => Loc::getMessage($messageCode, ['#DEPARTMENT_NAME#' => $node->name]),
+				'FROM_USER_ID' => 0,
+				'TO_CHAT_ID' => $chat->getId(),
+				'MESSAGE_TYPE' => $chat->getType(),
+				'SYSTEM' => 'Y',
+			],
+		);
+	}
+
+	private function buildSendFinishMessageCode(\Bitrix\Im\V2\Chat $chat, QueueItem $item, Node $node): string
+	{
+		return match ($chat instanceof ChannelChat)
+		{
+			true => match ($item->syncInfo->direction)
+			{
+				SyncDirection::ADD => match ($node->isTeam())
+				{
+					true => 'IM_HR_INTEGRATION_CHANNEL_FINISH_ADD_TEAM',
+					false => 'IM_HR_INTEGRATION_CHANNEL_FINISH_ADD',
+				},
+				default => match ($node->isTeam())
+				{
+					true => 'IM_HR_INTEGRATION_CHANNEL_FINISH_DELETE_TEAM',
+					false => 'IM_HR_INTEGRATION_CHANNEL_FINISH_DELETE_MSGVER_1',
+				},
+			},
+			false => match ($item->syncInfo->direction)
+			{
+				SyncDirection::ADD => match ($node->isTeam())
+				{
+					true => 'IM_HR_INTEGRATION_CHAT_FINISH_ADD_TEAM',
+					false => 'IM_HR_INTEGRATION_CHAT_FINISH_ADD_MSGVER_2',
+				},
+				default => match ($node->isTeam())
+				{
+					true => 'IM_HR_INTEGRATION_CHAT_FINISH_DELETE_TEAM',
+					false => 'IM_HR_INTEGRATION_CHAT_FINISH_DELETE_MSGVER_2',
+				},
+			},
+		};
 	}
 }

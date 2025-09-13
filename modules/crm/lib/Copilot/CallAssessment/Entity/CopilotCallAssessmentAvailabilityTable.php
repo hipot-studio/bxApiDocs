@@ -12,6 +12,22 @@ use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 
+/**
+ * Class CopilotCallAssessmentAvailabilityTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_CopilotCallAssessmentAvailability_Query query()
+ * @method static EO_CopilotCallAssessmentAvailability_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_CopilotCallAssessmentAvailability_Result getById($id)
+ * @method static EO_CopilotCallAssessmentAvailability_Result getList(array $parameters = [])
+ * @method static EO_CopilotCallAssessmentAvailability_Entity getEntity()
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection createCollection()
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability wakeUpObject($row)
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection wakeUpCollection($rows)
+ */
 class CopilotCallAssessmentAvailabilityTable extends Main\ORM\Data\DataManager
 {
 	public static function getTableName(): string

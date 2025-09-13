@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\Integration\BIConnector;
 
 use Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorTasks;
-use Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorTasksEfficiency;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Loader;
 
@@ -37,23 +36,6 @@ class TaskBIAnalytics
 
 		return ScopeService::getInstance()->prepareScopeMenuItem(
 			ScopeService::BIC_SCOPE_TASKS,
-		);
-	}
-
-	public function getTasksEfficiencyDashboardsMenuItems(): array
-	{
-		if (!Loader::includeModule('biconnector'))
-		{
-			return [];
-		}
-
-		if (!class_exists(MenuItemCreatorTasksEfficiency::class))
-		{
-			return [];
-		}
-
-		return ScopeService::getInstance()->prepareScopeMenuItem(
-			ScopeService::BIC_SCOPE_TASKS_EFFICIENCY,
 		);
 	}
 }

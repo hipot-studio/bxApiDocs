@@ -96,7 +96,7 @@ class Form
 					return $matches[0];
 				}
 
-				$form = self::getFormById($id);
+				$form = self::getFormById($id, true);
 				if (!$form || !$form['URL'])
 				{
 					return $matches[0];
@@ -135,7 +135,7 @@ class Form
 			{
 				if (
 					!(int)$matches['id']
-					|| !($form = self::getFormById((int)$matches['id']))
+					|| !($form = self::getFormById((int)$matches['id'], true))
 				)
 				{
 					return $matches[0];
@@ -250,6 +250,7 @@ class Form
 				'order' => [
 					'ID' => 'ASC',
 				],
+				'cache' => ['ttl' => 86400],
 			]
 		);
 
@@ -257,13 +258,6 @@ class Form
 		while ($form = $res->fetch())
 		{
 			$form['ID'] = (int)$form['ID'];
-			$webpack = Webpack\Form::instance($form['ID']);
-			if (!$webpack->isBuilt())
-			{
-				$webpack->build();
-				$webpack = Webpack\Form::instance($form['ID']);
-			}
-			$form['URL'] = $webpack->getEmbeddedFileUrl();
 			$forms[$form['ID']] = $form;
 		}
 
@@ -301,11 +295,30 @@ class Form
 	 * Find just one form by ID. Return array of form fields, or empty array if not found
 	 * @return array
 	 */
-	public static function getFormById(int $id): array
+	public static function getFormById(int $id, bool $full = false): array
 	{
-		$forms = self::getFormsByFilter(['ID' => $id]);
+		$forms = self::getFormsByFilter(['=ID' => $id]);
+		$form = !empty($forms) ? array_shift($forms) : null;
+		if (!$form)
+		{
+			return [];
+		}
 
-		return !empty($forms) ? array_shift($forms) : [];
+		if ($full)
+		{
+			if (self::isCrm())
+			{
+				$webpack = Webpack\Form::instance($form['ID']);
+				if (!$webpack->isBuilt())
+				{
+					$webpack->build();
+					$webpack = Webpack\Form::instance($form['ID']);
+				}
+				$form['URL'] = $webpack->getEmbeddedFileUrl();
+			}
+		}
+
+		return $form;
 	}
 
 	/**
@@ -314,16 +327,28 @@ class Form
 	 */
 	public static function getCallbackForms(): array
 	{
-		return self::getFormsByFilter(['IS_CALLBACK_FORM' => 'Y', 'ACTIVE' => 'Y']);
+		return self::getFormsByFilter(['=IS_CALLBACK_FORM' => 'Y', '=ACTIVE' => 'Y']);
 	}
 
 	protected static function getFormsByFilter(array $filter): array
 	{
+		static $cache = [];
+		$cacheKey = serialize($filter);
+		if (array_key_exists($cacheKey, $cache))
+		{
+			return $cache[$cacheKey];
+		}
+
 		$filter = array_filter(
 			$filter,
 			static function ($key)
 			{
-				return in_array($key, self::AVAILABLE_FORM_FIELDS, true);
+				$key = trim($key);
+				$equalKey = ltrim($key, '=');
+				return
+					in_array($key, self::AVAILABLE_FORM_FIELDS, true)
+					|| in_array($equalKey, self::AVAILABLE_FORM_FIELDS, true)
+				;
 			},
 			ARRAY_FILTER_USE_KEY
 		);
@@ -352,6 +377,8 @@ class Form
 				}
 			}
 		}
+
+		$cache[$cacheKey] = $forms;
 
 		return $forms;
 	}
@@ -448,7 +475,7 @@ class Form
 				{
 					// try to get 1) default callback form 2) last added form 3) create new form
 					$forms = self::getFormsByFilter([
-						'XML_ID' => 'crm_preset_fb'
+						'=XML_ID' => 'crm_preset_fb'
 					]);
 					$forms = self::prepareFormsToAttrs($forms);
 					if (empty($forms))
@@ -711,7 +738,7 @@ class Form
 	{
 		if ($formId = self::createForm([]))
 		{
-			return self::getFormsByFilter(['ID' => $formId]);
+			return self::getFormsByFilter(['=ID' => $formId]);
 		}
 
 		return [];

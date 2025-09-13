@@ -18,6 +18,7 @@ class PopupFieldsPreparer
 		'DATE_MODIFY',
 		'COMMENTS',
 		'OPPORTUNITY',
+		'LAST_COMMUNICATION_TIME',
 	];
 
 	private array $fieldsSections;

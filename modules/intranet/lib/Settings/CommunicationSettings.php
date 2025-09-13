@@ -91,6 +91,21 @@ class CommunicationSettings extends AbstractSettings
 			\COption::SetOptionString("im", "general_chat_message_leave", false);
 		}
 
+		if (
+			isset($this->data['isAutoDeleteMessagesEnabled'])
+			&& Option::get('im', 'isAutoDeleteMessagesEnabled', null) !== $this->data['isAutoDeleteMessagesEnabled']
+		)
+		{
+			if ($this->data['isAutoDeleteMessagesEnabled'] !== 'N')
+			{
+				Option::set('im', 'isAutoDeleteMessagesEnabled', 'Y');
+			}
+			else
+			{
+				Option::set('im', 'isAutoDeleteMessagesEnabled', 'N');
+			}
+		}
+
 		if (isset($this->data["url_preview_enable"]) && $this->data["url_preview_enable"] <> 'N')
 		{
 			\COption::SetOptionString("main", "url_preview_enable", "Y");
@@ -347,7 +362,7 @@ class CommunicationSettings extends AbstractSettings
 		$data['allow_livefeed_toall'] = new Switcher(
 			'settings-communication-field-allow_livefeed_toall',
 			'allow_livefeed_toall',
-			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_POST_FEED'),
+			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_POST_FEED_MSGVER_1'),
 			Option::get('socialnetwork', 'allow_livefeed_toall', 'Y'),
 			[
 				'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_POST_FEED_ON')
@@ -506,12 +521,22 @@ class CommunicationSettings extends AbstractSettings
 
 		if (Loader::includeModule("im"))
 		{
-
 			$data['general_chat_message_leave'] = new Switcher(
 				'settings-communication-field-general_chat_message_leave',
 				'general_chat_message_leave',
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_LEAVE_MESSAGE'),
 				Option::get("im", "general_chat_message_leave") ? 'Y' : 'N',
+			);
+
+			$data['isAutoDeleteMessagesEnabled'] = new Switcher(
+				'settings-communication-field-isAutoDeleteMessagesEnabled',
+				'isAutoDeleteMessagesEnabled',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_DELETE_TO_BE_ENABLED'),
+				Option::get('im', 'isAutoDeleteMessagesEnabled', 'Y'),
+				[
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_DELETE_TO_BE_ENABLED')
+				],
+				helpDesk: 'redirect=detail&code=24402288'
 			);
 		}
 
@@ -706,7 +731,7 @@ class CommunicationSettings extends AbstractSettings
 		{
 			$departmentRepository = ServiceContainer::getInstance()->departmentRepository();
 			$department = $departmentRepository->getRootDepartment();
-			$rootDepartmentId = $department->getId();
+			$rootDepartmentId = $department?->getId();
 		}
 
 		foreach($rightsList as $key => $value)
@@ -749,7 +774,7 @@ class CommunicationSettings extends AbstractSettings
 				'settings-communication-section-channels' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CHANNELS') ?? '',
 			'settings-communication-section-disk' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_DISK'),
 			//fields
-			'allow_livefeed_toall' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_POST_FEED'),
+			'allow_livefeed_toall' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_POST_FEED_MSGVER_1'),
 			'default_livefeed_toall' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_PUBLISH_TO_ALL_DEFAULT'),
 			'rating_text_like_y' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_LIKE_INPUT'),
 			'allow_post_general_chat' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_POST_GEN_CHAT'),
@@ -764,6 +789,7 @@ class CommunicationSettings extends AbstractSettings
 			'disk_allow_use_external_link' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_PUBLIC_LINK'),
 			'disk_object_lock_enabled' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_BLOCK_DOC'),
 			'disk_allow_use_extended_fulltext' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_SEARCH_DOC'),
+			'isAutoDeleteMessagesEnabled' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_DELETE_TO_BE_ENABLED'),
 		]);
 
 		return $searchEngine->find($query);

@@ -21,11 +21,16 @@ use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\InvoiceSettings;
+use Bitrix\Crm\UI\Tools\NavigationBar;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\UI\Buttons;
+use Bitrix\UI\Buttons\Button;
+use Bitrix\UI\Buttons\Color;
 use Bitrix\UI\Buttons\Icon;
+use Bitrix\UI\Buttons\Tag;
 use Bitrix\UI\Toolbar;
 
 abstract class ItemList extends Base
@@ -361,6 +366,8 @@ abstract class ItemList extends Base
 			'filter' => $this->prepareFilter(),
 			'views' => $this->getToolbarViews(),
 			'isWithFavoriteStar' => true,
+			// shrink title for dynamic types, they can have very long names
+			'isTitleNoShrink' => !\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId),
 			'spotlight' => $spotlight,
 			'entityTypeName' => \CCrmOwnerType::ResolveName($this->entityTypeId),
 			'categoryId' => $this->arResult['categoryId'],
@@ -512,46 +519,42 @@ abstract class ItemList extends Base
 					'isActive' => false,
 				];
 			}
-
 		}
 
-		if (Automation\Factory::isAutomationAvailable($this->entityTypeId))
+		if (Automation\Factory::isAutomationAvailable($this->entityTypeId) && Loader::includeModule('ui'))
 		{
-			$categoryId = $this->getCategoryId();
-			if (is_null($categoryId) && $this->factory->isCategoriesSupported())
-			{
-				$categoryId = $this->factory->createDefaultCategoryIfNotExist()->getId();
-			}
-			$url = $this->router->getAutomationUrl(
-				$this->entityTypeId,
-				$categoryId
-			);
-			$robotView = [
-				'className' => 'ui-btn ui-btn-light-border ui-btn-no-caps ui-btn-themes ui-btn-round crm-robot-btn',
-				'title' => Loc::getMessage('CRM_COMMON_ROBOTS'),
-				'url' => $url,
-				'isActive' => false,
-				'position' => Toolbar\ButtonLocation::RIGHT,
-			];
+			$button = (new NavigationBar([]))->getAutomationViewLayout();
+
 			$dynamicTypesLimit = RestrictionManager::getDynamicTypesLimitRestriction();
 			$isTypeSettingsRestricted = $dynamicTypesLimit->isTypeSettingsRestricted($this->entityTypeId);
 			if ($isTypeSettingsRestricted)
 			{
-				$robotView['onclick'] = $dynamicTypesLimit->getShowFeatureJsFunctionString();
-				unset($robotView['url']);
+				$button->bindEvent('click', new Buttons\JsCode($dynamicTypesLimit->getShowFeatureJsFunctionString()));
+			}
+			elseif (!Container::getInstance()->getIntranetToolsManager()->checkRobotsAvailability())
+			{
+				$button->bindEvent('click', new Buttons\JsCode(AvailabilityManager::getInstance()->getRobotsAvailabilityLock()));
 			}
 			else
 			{
-				$toolsManager = Container::getInstance()->getIntranetToolsManager();
-				if (!$toolsManager->checkRobotsAvailability())
+				$categoryId = $this->getCategoryId();
+				if (is_null($categoryId) && $this->factory->isCategoriesSupported())
 				{
-					$robotView['onclick'] = htmlspecialcharsbx(
-						AvailabilityManager::getInstance()->getRobotsAvailabilityLock()
-					);
-					unset($robotView['url']);
+					$categoryId = $this->factory->createDefaultCategoryIfNotExist()->getId();
 				}
+				$url = $this->router->getAutomationUrl(
+					$this->entityTypeId,
+					$categoryId
+				);
+
+				$button->setLink((string)$url);
 			}
-			$views[] = $robotView;
+
+			$views[] = [
+				'html' => $button->render(),
+				'isActive' => false,
+				'position' => Toolbar\ButtonLocation::RIGHT,
+			];
 		}
 
 		return $views;

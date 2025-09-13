@@ -37,8 +37,10 @@ class MailMessageUidTable extends Entity\DataManager
 	public const DOWNLOADED = 'D';
 	public const MOVING = 'M';
 	public const REMOTE = 'R';
+	public const LOST = 'L';
 
 	public const EXCLUDED_COUNTER_STATUSES = [
+		self::LOST,
 		self::MOVING,
 		self::REMOTE,
 		self::OLD,
@@ -108,16 +110,9 @@ class MailMessageUidTable extends Entity\DataManager
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function deleteList(array $filter, array $messages = [], $limit = false): bool
+	public static function deleteList(array $filter, array $messages = [], $limit = false, bool $sendEvent = true): bool
 	{
 		$eventName = MessageEventManager::EVENT_DELETE_MESSAGES;
-
-		$filter = array_merge(
-			$filter,
-			[
-				'!=MESSAGE_ID' => 0,
-			]
-		);
 
 		$messages = static::selectMessagesToBeDeleted(
 			MessageEventManager::getRequiredFieldNamesForEvent($eventName),
@@ -185,27 +180,29 @@ class MailMessageUidTable extends Entity\DataManager
 			}
 		}
 
-		//Checking that the values were actually deleted:
-		$deletedMessages = array_filter(
-			$messages,
-			function ($item) use ($remains)
-			{
-				return !in_array($item['MESSAGE_ID'], $remains);
-			}
-		);
+		if ($sendEvent)
+		{
+			//Checking that the values were actually deleted:
+			$deletedMessages = array_filter(
+				$messages,
+				function ($item) use ($remains) {
+					return !in_array($item['MESSAGE_ID'], $remains);
+				}
+			);
 
-		$eventManager = EventManager::getInstance();
-		$eventKey = $eventManager->addEventHandler(
-			'mail',
-			'onMailMessageDeleted',
-			array(MessageEventManager::class, 'onMailMessageDeleted')
-		);
-		$event = new \Bitrix\Main\Event('mail', 'onMailMessageDeleted', array(
-			'MAIL_FIELDS_DATA' => $deletedMessages,
-			'DELETED_BY_FILTER' => $filter,
-		));
-		$event->send();
-		EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageDeleted', $eventKey);
+			$eventManager = EventManager::getInstance();
+			$eventKey = $eventManager->addEventHandler(
+				'mail',
+				'onMailMessageDeleted',
+				array(MessageEventManager::class, 'onMailMessageDeleted')
+			);
+			$event = new \Bitrix\Main\Event('mail', 'onMailMessageDeleted', array(
+				'MAIL_FIELDS_DATA' => $deletedMessages,
+				'DELETED_BY_FILTER' => $filter,
+			));
+			$event->send();
+			EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageDeleted', $eventKey);
+		}
 
 		return true;
 	}
@@ -214,7 +211,7 @@ class MailMessageUidTable extends Entity\DataManager
 	{
 		$additionalFilter = [];
 
-		if (\Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit() !== -1)
+		if (\Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit() > 0)
 		{
 			$additionalFilter = [
 				'>INTERNALDATE' => \Bitrix\Main\Type\Date::createFromTimestamp(strtotime(sprintf('-%u days', \Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit()))),
@@ -503,7 +500,14 @@ class MailMessageUidTable extends Entity\DataManager
 			),
 			'IS_OLD' => array(
 				'data_type' => 'enum',
-				'values'    => array(self::OLD, self::RECENT, self::DOWNLOADED, self::MOVING, self::REMOTE),
+				'values'    => [
+					self::OLD,
+					self::RECENT,
+					self::DOWNLOADED,
+					self::MOVING,
+					self::REMOTE,
+					self::LOST,
+				],
 			),
 			'SESSION_ID' => array(
 				'data_type' => 'string',

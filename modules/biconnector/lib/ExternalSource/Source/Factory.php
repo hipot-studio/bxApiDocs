@@ -18,6 +18,7 @@ final class Factory
 		{
 			Type::Csv => new Csv($id),
 			Type::Source1C => new Source1C($id),
+			Type::Rest => new Rest($id),
 			default => throw new SystemException("Unknown type {$type->value}"),
 		};
 	}

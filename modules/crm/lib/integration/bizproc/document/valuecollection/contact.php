@@ -25,6 +25,9 @@ class Contact extends Base
 			return;
 		}
 
+		$this->prepareFieldGroups();
+		$this->addContactCompanyFields();
+
 		$result = \CCrmContact::GetListEx(
 			[],
 			[
@@ -37,15 +40,24 @@ class Contact extends Base
 		);
 
 		$this->document = array_merge($this->document, $result->fetch() ?: []);
+		$this->loadAdditionalValues();
+		$this->document = Crm\Entity\CommentsHelper::prepareFieldsFromBizProc($this->typeId, $this->id, $this->document);
+	}
 
+	protected function loadAdditionalValues(): void
+	{
 		$this->appendDefaultUserPrefixes();
+
+		if (in_array('COMPANY_IDS', $this->select, true))
+		{
+			$this->document['COMPANY_IDS'] = Crm\Binding\ContactCompanyTable::getContactCompanyIDs($this->id);
+		}
 
 		$this->loadAddressValues();
 		$this->loadFmValues();
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 		$this->loadUserFieldValues();
-
-		$this->document = Crm\Entity\CommentsHelper::prepareFieldsFromBizProc($this->typeId, $this->id, $this->document);
+		$this->loadCommonFieldValues();
 	}
 
 	protected function loadAddressValues(): void

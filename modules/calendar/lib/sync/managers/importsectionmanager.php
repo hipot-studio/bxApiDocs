@@ -5,9 +5,7 @@ namespace Bitrix\Calendar\Sync\Managers;
 use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Sync;
 use Bitrix\Calendar\Sync\Factories\FactoryBase;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
-use Exception;
 
 class ImportSectionManager
 {

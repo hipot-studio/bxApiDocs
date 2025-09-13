@@ -7,8 +7,9 @@
  */
 namespace Bitrix\Main\Analytics;
 
-use Bitrix\Main\Entity;
 use Bitrix\Main\Security\Random;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
 
 /**
  * Class CounterDataTable
@@ -26,7 +27,7 @@ use Bitrix\Main\Security\Random;
  * @method static \Bitrix\Main\Analytics\EO_CounterData wakeUpObject($row)
  * @method static \Bitrix\Main\Analytics\EO_CounterData_Collection wakeUpCollection($rows)
  */
-class CounterDataTable extends Entity\DataManager
+class CounterDataTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -36,14 +37,14 @@ class CounterDataTable extends Entity\DataManager
 	public static function getMap()
 	{
 		return array(
-			new Entity\StringField('ID', array(
+			new Fields\StringField('ID', array(
 				'primary' => true,
 				'default_value' => array(__CLASS__ , 'getUniqueEventId')
 			)),
-			new Entity\StringField('TYPE', array(
+			new Fields\StringField('TYPE', array(
 				'required' => true
 			)),
-			new Entity\TextField('DATA', array(
+			new Fields\TextField('DATA', array(
 				'serialized' => true
 			))
 		);
@@ -51,7 +52,7 @@ class CounterDataTable extends Entity\DataManager
 
 	public static function getUniqueEventId()
 	{
-		list($usec, $sec) = explode(" ", microtime());
+		[$usec, $sec] = explode(" ", microtime());
 
 		$uniqid = mb_substr(base_convert($sec.mb_substr($usec, 2), 10, 36), 0, 16);
 

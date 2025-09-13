@@ -645,9 +645,29 @@ class UrlManager implements IErrorable
 		return '/bitrix/tools/disk/document.php?' . http_build_query($params);
 	}
 
-	public function getUrlForViewBoard(int $fileId, $absolute = false)
+	public static function getUrlForBoardsList(int $userId, array $getParams = [])
 	{
-		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $fileId . '/openDocument';
+		$get = '';
+		if ($getParams)
+		{
+			$get = '?' . http_build_query($getParams);
+		}
+		return '/company/personal/user/'.$userId.'/disk/boards/' . $get;
+	}
+
+	public function getUrlForViewBoard(int $fileId, $absolute = false, $c_element = null)
+	{
+		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $fileId . '/open' . ($c_element ? '?c_element=' . $c_element : '');
+	}
+
+	public function getUrlForViewBoardVersion(int $fileId, int $versionId, $absolute = false)
+	{
+		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $fileId . '/open?versionId=' . $versionId;
+	}
+
+	public function getUrlForViewAttachedBoard(int $attachedFileId, $absolute = false, $c_element = null)
+	{
+		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $attachedFileId . '/openAttached' . ($c_element ? '?c_element=' . $c_element : '');
 	}
 
 	/**

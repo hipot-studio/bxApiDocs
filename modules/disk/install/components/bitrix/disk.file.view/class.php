@@ -398,7 +398,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		global $APPLICATION;
 
 		$APPLICATION->IncludeComponent(
-			'bitrix:disk.sidepanel.wrapper',
+			'bitrix:ui.sidepanel.wrapper',
 			"",
 			array(
 				'POPUP_COMPONENT_NAME' => 'bitrix:disk.file.view',
@@ -413,7 +413,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		global $APPLICATION;
 
 		$APPLICATION->IncludeComponent(
-			'bitrix:disk.sidepanel.wrapper',
+			'bitrix:ui.sidepanel.wrapper',
 			"",
 			array(
 				'POPUP_COMPONENT_NAME' => 'bitrix:disk.file.view',

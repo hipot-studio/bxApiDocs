@@ -44,7 +44,7 @@ final class DatasetViewer
 		return $this;
 	}
 
-	public function getData(): array
+	public function getData(bool $skipCache = false): array
 	{
 		$result = [];
 
@@ -69,16 +69,16 @@ final class DatasetViewer
 			}
 
 			$headerData = [
-				'name' => self::prepareCode($names[$i]),
+				'name' => $this->prepareCode($names[$i]),
 				'externalCode' => $externalCodes[$i],
 				'type' => $type,
-				'visible' => true,
+				'visible' => $this->fields[$i]['VISIBLE'] ?? true,
 			];
 
 			$result['headers'][] = $headerData;
 		}
 
-		$result['data'] = $this->convertData($data);
+		$result['data'] = $this->convertData($data, $types);
 
 		return $result;
 	}
@@ -226,6 +226,9 @@ final class DatasetViewer
 			$currentExternalCodes = array_merge($currentExternalCodes, $newExternalCodes);
 		}
 
+		$currentExternalCodes = array_filter($currentExternalCodes, function ($code) use ($result) {
+			return array_key_exists($code, $result['headers']);
+		}, ARRAY_FILTER_USE_KEY );
 		$result['headers'] = array_values(array_merge($currentExternalCodes, $result['headers']));
 
 		$result['data'] = array_map(
@@ -261,7 +264,7 @@ final class DatasetViewer
 		return $viewerBuilder->build();
 	}
 
-	private function convertData(array $data): array
+	private function convertData(array $data, array $types): array
 	{
 		$needUseDefaultType = $this->needUseDefaultType($data);
 
@@ -275,82 +278,75 @@ final class DatasetViewer
 		{
 			foreach ($rowValue as $columnIndex => $columnValue)
 			{
-				if ($needUseDefaultType)
+				$type = $needUseDefaultType
+					? $types[$columnIndex]
+					: FieldType::from($this->fields[$columnIndex]['TYPE']);
+				switch ($type)
 				{
-					$data[$rowIndex][$columnIndex] = TypeConverter::convertToString($columnValue);
-				}
-				else
-				{
-					$type = FieldType::from($this->fields[$columnIndex]['TYPE']);
-					switch ($type)
-					{
-						case FieldType::Int:
-							$data[$rowIndex][$columnIndex] = TypeConverter::convertToInt($columnValue);
+					case FieldType::Int:
+						$data[$rowIndex][$columnIndex] = TypeConverter::convertToInt($columnValue);
 
-							break;
-						case FieldType::String:
-							$data[$rowIndex][$columnIndex] = TypeConverter::convertToString($columnValue);
+						break;
 
-							break;
+					case FieldType::Double:
+						$delimiter = $formats[FieldType::Double->value];
+						$data[$rowIndex][$columnIndex] = TypeConverter::convertToDouble(
+							$columnValue,
+							delimiter: $delimiter
+						);
 
-						case FieldType::Double:
-							$delimiter = $formats[FieldType::Double->value];
-							$data[$rowIndex][$columnIndex] = TypeConverter::convertToDouble(
+						break;
+
+					case FieldType::Date:
+						$format = $formats[FieldType::Date->value];
+						$value = TypeConverter::convertToDate(
+							$columnValue,
+							$format
+						);
+						if ($value)
+						{
+							$data[$rowIndex][$columnIndex] = $value->format('Y-m-d');
+						}
+						else
+						{
+							$data[$rowIndex][$columnIndex] = '';
+						}
+
+						break;
+
+					case FieldType::DateTime:
+						$format = $formats[FieldType::DateTime->value];
+						$value = TypeConverter::convertToDateTime(
+							$columnValue,
+							$format
+						);
+						if ($value)
+						{
+							$data[$rowIndex][$columnIndex] = $value->format('Y-m-d H:i:s');
+						}
+						else
+						{
+							$data[$rowIndex][$columnIndex] = '';
+						}
+
+						break;
+
+					case FieldType::Money:
+						$delimiter = $formats[FieldType::Money->value];
+						$data[$rowIndex][$columnIndex] = self::formatMoney(
+							TypeConverter::convertToMoney(
 								$columnValue,
 								delimiter: $delimiter
-							);
+							)
+						);
 
-							break;
+						break;
 
-						case FieldType::Date:
-							$format = $formats[FieldType::Date->value];
-							$value =
-								$columnValue
-									? TypeConverter::convertToDate($columnValue, $format)
-									: null
-							;
+					case FieldType::String:
+					default:
+						$data[$rowIndex][$columnIndex] = TypeConverter::convertToString($columnValue);
 
-							if ($value)
-							{
-								$data[$rowIndex][$columnIndex] = $value->format('Y-m-d');
-							}
-							else
-							{
-								$data[$rowIndex][$columnIndex] = '';
-							}
-
-							break;
-
-						case FieldType::DateTime:
-							$format = $formats[FieldType::DateTime->value];
-							$value =
-								$columnValue
-									? TypeConverter::convertToDateTime($columnValue, $format)
-									: null
-							;
-
-							if ($value)
-							{
-								$data[$rowIndex][$columnIndex] = $value->format('Y-m-d H:i:s');
-							}
-							else
-							{
-								$data[$rowIndex][$columnIndex] = '';
-							}
-
-							break;
-
-						case FieldType::Money:
-							$delimiter = $formats[FieldType::Money->value];
-							$data[$rowIndex][$columnIndex] = self::formatMoney(
-								TypeConverter::convertToMoney(
-									$columnValue,
-									delimiter: $delimiter
-								)
-							);
-
-							break;
-					}
+						break;
 				}
 			}
 		}
@@ -370,6 +366,11 @@ final class DatasetViewer
 			return true;
 		}
 
+		if ($this->type === Type::Rest || $this->type === Type::Source1C)
+		{
+			return true;
+		}
+
 		return false;
 	}
 
@@ -378,8 +379,13 @@ final class DatasetViewer
 		return number_format($value, 2, '.', '');
 	}
 
-	private static function prepareCode(string $name): string
+	private function prepareCode(string $name): string
 	{
+		if ($this->type === Type::Rest)
+		{
+			return $name;
+		}
+
 		$transliteratedName = \CUtil::translit($name, LANGUAGE_ID, ['change_case' => 'U']);
 		if ($transliteratedName === '_')
 		{

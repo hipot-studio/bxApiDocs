@@ -37,7 +37,7 @@ class AddAccomplice
 
 	private function prepareMembers(TaskObject $task, int $accompliceId):array
 	{
-		$accomplices['ACCOMPLICES'] = $task->getMemberList()->getAccomplices();
+		$accomplices['ACCOMPLICES'] = $task->getMemberList()->getAccompliceIds();
 		$accomplices['ACCOMPLICES'][] = $accompliceId;
 
 		return $accomplices;

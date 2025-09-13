@@ -13,6 +13,11 @@ class OpenChannelChat extends ChannelChat
 {
 	public const PULL_TAG_SHARED_LIST = 'IM_SHARED_CHANNEL_LIST';
 
+	public function getRecentSectionsForGuest(): array
+	{
+		return ['openChannel'];
+	}
+
 	protected function sendMessageUsersAdd(array $usersToAdd, AddUsersConfig $config): void
 	{
 		parent::sendMessageUsersAdd($this->getExtranetUsersToAdd($usersToAdd), $config);
@@ -75,9 +80,9 @@ class OpenChannelChat extends ChannelChat
 		return $accessCodes;
 	}
 
-	protected function updateStateAfterUsersAdd(array $usersToAdd): self
+	protected function updateStateAfterRelationsAdd(array $usersToAdd): self
 	{
-		parent::updateStateAfterUsersAdd($usersToAdd);
+		parent::updateStateAfterRelationsAdd($usersToAdd);
 
 		if (Loader::includeModule('pull'))
 		{

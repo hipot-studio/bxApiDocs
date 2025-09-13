@@ -620,7 +620,7 @@ final class Sharing extends Internals\Model
 			&& $sharingModel->getLinkObject()->getTypeFile() == TypeFile::FLIPCHART
 		)
 		{
-			$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId());
+			$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(),false, 'disk_page');
 		}
 		else
 		{
@@ -640,6 +640,7 @@ final class Sharing extends Internals\Model
 	private static function processConnectAndNotify(array $successSharingByEntity, BaseObject $objectToSharing)
 	{
 		$isFolder = $objectToSharing instanceof Folder;
+		$isBoard = !$isFolder && $objectToSharing->getRealObject()->getTypeFile() == TypeFile::FLIPCHART;
 		if(Configuration::canAutoconnectSharedObjects())
 		{
 			$urlManager = Driver::getInstance()->getUrlManager();
@@ -657,7 +658,14 @@ final class Sharing extends Internals\Model
 						continue;
 					}
 
-					$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $objectToSharing);
+					if ($isBoard)
+					{
+						$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
+					}
+					else
+					{
+						$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $objectToSharing);
+					}
 					$pathInListing = $urlManager::getUrlFocusController('showObjectInGrid', array(
 						'objectId' => $sharingModel->getLinkObjectId(),
 						'type' => $isFolder ? 'folder' : 'file',
@@ -668,21 +676,32 @@ final class Sharing extends Internals\Model
 						'cmd' => 'detach',
 					));
 					[$subTag, $tag] = $sharingModel->getNotifyTags();
+					$autoconnectFileMessage = $isBoard
+						? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_BOARD'
+						: 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE';
 					Driver::getInstance()->sendNotify(mb_substr($sharingModel->getToEntity(), 1), array(
 						'FROM_USER_ID' => $sharingModel->getCreatedBy(),
 						'NOTIFY_EVENT' => 'sharing',
 						'NOTIFY_TAG' => $tag,
 						'NOTIFY_SUB_TAG' => $subTag,
-						'NOTIFY_MESSAGE' => Loc::getMessage($isFolder? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE', array(
-							'#NAME#' => '<a href="'.($linkToViewDocument ?: $pathInListing).'">'.$objectToSharing->getName().'</a>',
-							'#DESCRIPTION#' => $sharingModel->getDescription(),
-							'#DISCONNECT_LINK#' => '<a href="'.$uriToDisconnect.'">'.Loc::getMessage('DISK_SHARING_MODEL_TEXT_DISCONNECT_LINK').'</a>',
+						'NOTIFY_MESSAGE' => Loc::getMessage(
+							$isFolder
+									? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY'
+									: $autoconnectFileMessage,
+							[
+								'#NAME#' => '<a href="'.($linkToViewDocument ?: $pathInListing).'">'. ($isBoard ? $objectToSharing->getNameWithoutExtension() : $objectToSharing->getName()).'</a>',
+								'#DESCRIPTION#' => $sharingModel->getDescription(),
+								'#DISCONNECT_LINK#' => '<a href="'.$uriToDisconnect.'">'.Loc::getMessage('DISK_SHARING_MODEL_TEXT_DISCONNECT_LINK').'</a>',
+							],
+						),
+						'NOTIFY_MESSAGE_OUT' => strip_tags(
+							Loc::getMessage($isFolder? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : $autoconnectFileMessage,
+							[
+								'#NAME#' => '<a href="'.$pathInListing.'">'.$objectToSharing->getName().'</a>',
+								'#DESCRIPTION#' => $sharingModel->getDescription(),
+								'#DISCONNECT_LINK#' => '',
+							]
 						)),
-						'NOTIFY_MESSAGE_OUT' => strip_tags(Loc::getMessage($isFolder? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE', array(
-							'#NAME#' => '<a href="'.$pathInListing.'">'.$objectToSharing->getName().'</a>',
-							'#DESCRIPTION#' => $sharingModel->getDescription(),
-							'#DISCONNECT_LINK#' => '',
-						))),
 					))
 					;
 				}
@@ -690,9 +709,19 @@ final class Sharing extends Internals\Model
 		}
 		else
 		{
+			$fileApproveButton = $isBoard
+				? 'DISK_SHARING_MODEL_APPROVE_Y_BOARD'
+				: 'DISK_SHARING_MODEL_APPROVE_Y_FILE';
+			$fileApproveMessage = $isBoard
+				? 'DISK_SHARING_MODEL_TEXT_APPROVE_CONFIRM_BOARD'
+				: 'DISK_SHARING_MODEL_TEXT_APPROVE_CONFIRM_FILE';
+			$objectToSharingName = $isBoard
+				? $objectToSharing->getNameWithoutExtension()
+				: $objectToSharing->getName();
+
 			$buttons = array(
 				array(
-					'TITLE' => Loc::getMessage($isFolder ? 'DISK_SHARING_MODEL_APPROVE_Y' : 'DISK_SHARING_MODEL_APPROVE_Y_FILE'),
+					'TITLE' => Loc::getMessage($isFolder ? 'DISK_SHARING_MODEL_APPROVE_Y' : $fileApproveButton),
 					'VALUE' => 'Y',
 					'TYPE' => 'accept'
 				),
@@ -702,8 +731,8 @@ final class Sharing extends Internals\Model
 					'TYPE' => 'cancel'
 				)
 			);
-			$message = Loc::getMessage($isFolder ? 'DISK_SHARING_MODEL_TEXT_APPROVE_CONFIRM' : 'DISK_SHARING_MODEL_TEXT_APPROVE_CONFIRM_FILE', array(
-				'#NAME#' => $objectToSharing->getName(),
+			$message = Loc::getMessage($isFolder ? 'DISK_SHARING_MODEL_TEXT_APPROVE_CONFIRM' : $fileApproveMessage, array(
+				'#NAME#' => $objectToSharingName,
 			));
 
 			foreach($successSharingByEntity as $entity => $sharingModel)
@@ -1262,10 +1291,33 @@ final class Sharing extends Internals\Model
 		)
 		{
 			$isFolder = $this->getRealObject() instanceof Folder;
+			$isBoard  = !$isFolder && $this->getRealObject()?->getTypeFile() == TypeFile::FLIPCHART;
+
+			$objectName = $this->getRealObject()->getName();
+			$disconnectMessageText = 'DISK_SHARING_MODEL_TEXT_SELF_DISCONNECT_FILE';
+			if ($isFolder)
+			{
+				$disconnectMessageText = 'DISK_SHARING_MODEL_TEXT_SELF_DISCONNECT';
+			}
+			elseif ($isBoard)
+			{
+				try
+				{
+					$user = User::loadById($declinedBy);
+					$gender = $user->getPersonalGender();
+				}
+				catch (\Exception)
+				{
+					$gender = 'M';
+				}
+				$objectName = $this->getRealObject()->getNameWithoutExtension();
+				$disconnectMessageText = 'DISK_SHARING_MODEL_TEXT_SELF_DISCONNECT_BOARD_' . $gender;
+			}
+
 			$message = Loc::getMessage(
-				$isFolder? 'DISK_SHARING_MODEL_TEXT_SELF_DISCONNECT' : 'DISK_SHARING_MODEL_TEXT_SELF_DISCONNECT_FILE',
+				$disconnectMessageText,
 				array(
-					'#NAME#' => $this->getRealObject()->getName(),
+					'#NAME#' => $objectName,
 					'#USERNAME#' => User::loadById($declinedBy)->getFormattedName(),
 				)
 			);
@@ -1483,16 +1535,32 @@ final class Sharing extends Internals\Model
 		if($sharingModel->approve())
 		{
 			$isFolder = $sharingModel->getLinkObject() instanceof Folder;
+			$isBoard = !$isFolder && $sharingModel->getLinkObject()->getTypeFile() == TypeFile::FLIPCHART;
 
-			$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $sharingModel->getLinkObject());
+			$autoconnectFileMessage = $isBoard
+				? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_BOARD'
+				: 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE';
+
+			$objectName = $isBoard
+				? $sharingModel->getLinkObject()->getNameWithoutExtension()
+				: $sharingModel->getLinkObject()->getName();
+
+			if ($isBoard)
+			{
+				$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
+			}
+			else
+			{
+				$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $sharingModel->getLinkObject());
+			}
 			$pathInListing = Driver::getInstance()->getUrlManager()->getUrlFocusController('showObjectInGrid', array(
 				'objectId' => $sharingModel->getLinkObjectId(),
 				'type' => $isFolder ? 'folder' : 'file',
 			));
 			$message = Loc::getMessage(
-				$isFolder ? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE',
+				$isFolder ? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : $autoconnectFileMessage,
 				array(
-					'#NAME#' => '<a href="' . ($linkToViewDocument ?: $pathInListing) . '">' . $sharingModel->getLinkObject()->getName() . '</a>',
+					'#NAME#' => '<a href="' . ($linkToViewDocument ?: $pathInListing) . '">' . $objectName . '</a>',
 					'#DESCRIPTION#' => '',
 					'#DISCONNECT_LINK#' => '',
 				)

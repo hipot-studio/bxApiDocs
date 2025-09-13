@@ -2,17 +2,34 @@
 
 namespace Bitrix\HumanResources\Service;
 
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
+use Bitrix\HumanResources\Builder\Structure\Sort\NodeSort;
+use Bitrix\HumanResources\Enum\DepthLevel;
+use Bitrix\HumanResources\Enum\Direction;
+use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
+use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Contract;
+use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Type;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\MemberSubordinateRelationType;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Type\NodeEntityTypeCollection;
+use Bitrix\HumanResources\Type\StructureRole;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 
 class NodeMemberService implements Contract\Service\NodeMemberService
 {
@@ -270,11 +287,31 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 
 	public function getDefaultHeadRoleEmployees(int $nodeId): Item\Collection\NodeMemberCollection
 	{
-		static $headRole = null;
+		$headRole = null;
+		static $departmentHeadRole = null;
+		static $teamHeadRole = null;
 
-		if ($headRole === null)
+		$node = $this->nodeRepository->getById($nodeId);
+		if (!$node)
 		{
-			$headRole = Container::getRoleRepository()->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])?->id;
+			return new Item\Collection\NodeMemberCollection();
+		}
+
+		if ($node->type === NodeEntityType::DEPARTMENT)
+		{
+			if ($departmentHeadRole === null)
+			{
+				$departmentHeadRole = Container::getRoleRepository()->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])?->id;
+			}
+			$headRole = $departmentHeadRole;
+		}
+		elseif ($node->type === NodeEntityType::TEAM)
+		{
+			if ($teamHeadRole === null)
+			{
+				$teamHeadRole = Container::getRoleRepository()->findByXmlId(NodeMember::TEAM_ROLE_XML_ID['TEAM_HEAD'])?->id;
+			}
+			$headRole = $teamHeadRole;
 		}
 
 		if ($headRole === null)
@@ -282,7 +319,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 			return new Item\Collection\NodeMemberCollection();
 		}
 
-		return $this->nodeMemberRepository->findAllByRoleIdAndNodeId($headRole, $nodeId);
+		return $this->nodeMemberRepository->findAllByRoleIdAndNodeId($headRole, $node->id);
 	}
 
 	/**
@@ -300,13 +337,33 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	 * @param NodeMember $nodeMember
 	 *
 	 * @return NodeMember|null
+	 * @throws ArgumentException
+	 * @throws DeleteFailedException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 * @throws UpdateFailedException
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws WrongStructureItemException
 	 */
 	public function removeUserMemberFromDepartment(Item\NodeMember $nodeMember): ?Item\NodeMember
+	{
+		$result = $this->removeUserWithEventQueue($nodeMember);
+		$this->nodeMemberRepository->sendEventQueue();
+
+		return $result;
+	}
+
+	/**
+	 * @param NodeMember $nodeMember
+	 *
+	 * @return NodeMember|null
+	 * @throws DeleteFailedException
+	 * @throws UpdateFailedException
+	 * @throws WrongStructureItemException
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	protected function removeUserWithEventQueue(Item\NodeMember $nodeMember): ?Item\NodeMember
 	{
 		$rootNode = StructureHelper::getRootStructureDepartment();
 
@@ -324,6 +381,17 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 
 		if (!$connection->lock($lockName, $timeout))
 		{
+			throw (new DeleteFailedException(
+				'You can\'t remove nodeMember now',
+			));
+		}
+
+		$node = $this->nodeRepository->getById($nodeMember->nodeId);
+		if ($node->type === NodeEntityType::TEAM)
+		{
+			$this->nodeMemberRepository->remove($nodeMember);
+			$connection->unlock($lockName);
+
 			return null;
 		}
 
@@ -342,8 +410,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		{
 			$connection->unlock($lockName);
 
-			return null;
-
+			throw (new DeleteFailedException('You can\'t remove employee from structure'));
 		}
 
 		if ($departmentsCollectionCount <= 1)
@@ -352,7 +419,9 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 			$nodeMember->nodeId = $rootNode->id;
 			$connection->unlock($lockName);
 
-			return $this->nodeMemberRepository->update($nodeMember);
+			$this->nodeMemberRepository->updateWithEventQueue($nodeMember);
+
+			return $nodeMember;
 		}
 
 		$this->nodeMemberRepository->remove($nodeMember);
@@ -367,6 +436,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	 *
 	 * @return Item\Collection\NodeMemberCollection
 	 * @throws \Bitrix\HumanResources\Exception\CreationFailedException
+	 * @throws \Bitrix\HumanResources\Exception\DeleteFailedException
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\DB\DuplicateEntryException
 	 * @throws \Bitrix\Main\DB\SqlQueryException
@@ -451,15 +521,16 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	}
 
 	/**
-	 * @param Item\Collection\NodeMemberCollection $nodeMemberCollection
+	 * @param NodeMemberCollection $nodeMemberCollection
 	 *
-	 * @return array|Item\Collection\NodeMemberCollection
+	 * @return NodeMemberCollection
+	 * @throws ArgumentException
+	 * @throws DeleteFailedException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 * @throws UpdateFailedException
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\DB\SqlQueryException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws WrongStructureItemException
+	 * @throws SqlQueryException
 	 */
 	public function removeUserMembersFromDepartmentByCollection(
 		Item\Collection\NodeMemberCollection $nodeMemberCollection,
@@ -472,7 +543,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 			$connection->startTransaction();
 			foreach ($nodeMemberCollection as $nodeMember)
 			{
-				$movedToRootUserNodeMember = $this->removeUserMemberFromDepartment($nodeMember);
+				$movedToRootUserNodeMember = $this->removeUserWithEventQueue($nodeMember);
 				if (!$movedToRootUserNodeMember)
 				{
 					continue;
@@ -480,10 +551,12 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 				$movedToRootUserNodeMemberCollection->add($movedToRootUserNodeMember);
 			}
 			$connection->commitTransaction();
+			$this->nodeMemberRepository->sendEventQueue();
 		}
 		catch (\Exception $exception)
 		{
 			$connection->rollbackTransaction();
+			$this->nodeMemberRepository->clearEventQueue();;
 			throw $exception;
 		}
 
@@ -572,5 +645,47 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		$this->nodeMemberRepository->updateByCollection($nodeMemberCollectionToUpdate);
 
 		return $nodeMemberCollection;
+	}
+
+	public function getNearestUserIdByEmployeeUserIdAndRole(int $employeeUserId, StructureRole $structureRole): int
+	{
+		$nodeMember = $this->getNodeMemberByEmployeeUserIdAndRoleId(
+			$employeeUserId,
+			$structureRole,
+			DepthLevel::FULL,
+		);
+
+		return (int)$nodeMember?->entityId;
+	}
+
+	private function getNodeMemberByEmployeeUserIdAndRoleId(
+		int $employeeUserId,
+		StructureRole $structureRole,
+		DepthLevel $depthLevel = DepthLevel::NONE,
+	): ?NodeMember
+	{
+		if ($employeeUserId < 1)
+		{
+			return null;
+		}
+
+		$nodeFilter = new NodeFilter(
+			entityTypeFilter: new NodeTypeFilter(
+				new NodeEntityTypeCollection(NodeEntityType::DEPARTMENT)
+			),
+			direction: Direction::ROOT,
+			depthLevel: $depthLevel,
+		);
+
+		return (new NodeMemberDataBuilder())
+			->setFilter(new NodeMemberFilter(
+				entityIdFilter: new EntityIdFilter(new Type\IntegerCollection($employeeUserId)),
+				entityType: MemberEntityType::USER,
+				nodeFilter: $nodeFilter,
+			))
+			->addStructureRole($structureRole)
+			->setSort(new NodeSort(depth: SortDirection::Desc))
+			->get()
+		;
 	}
 }

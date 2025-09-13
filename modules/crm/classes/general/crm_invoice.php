@@ -3004,6 +3004,22 @@ class CAllCrmInvoice
 		$errMsg = array();
 		$bError = false;
 
+		$cleanOldEventLogEmail = '~CRM_CLEAN_OLD_EVENT_LOG_EMAIL_V2';
+		if ((string)COption::GetOptionString('crm', $cleanOldEventLogEmail, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $cleanOldEventLogEmail, 'Y');
+
+			\CAgent::AddAgent(
+				'Bitrix\Crm\Agent\Event\CleanOldEventLogEmailTypeAgent::run();',
+				'crm',
+				'N',
+				60,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL')
+			);
+		}
+
 		$clearRoleAutomatedSolutionListOption = '~CRM_CLEAR_ROLE_AUTOMATED_SOLUTION_LIST';
 		if (
 			(string)COption::GetOptionString('crm', $clearRoleAutomatedSolutionListOption, 'N') === 'N'

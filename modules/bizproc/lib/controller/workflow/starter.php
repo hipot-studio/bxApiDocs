@@ -2,11 +2,12 @@
 
 namespace Bitrix\Bizproc\Controller\Workflow;
 
-use Bitrix\Bizproc\Api\Request\WorkflowService\PrepareParametersRequest;
-use Bitrix\Bizproc\Api\Request\WorkflowService\PrepareStartParametersRequest;
-use Bitrix\Bizproc\Api\Request\WorkflowService\SetConstantsRequest;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\PrepareParametersRequest;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\PrepareStartParametersRequest;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\SetConstantsRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowService\StartWorkflowRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowService;
+use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
 use Bitrix\Bizproc\Error;
 use Bitrix\Main\Localization\Loc;
 
@@ -71,8 +72,8 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 			return null;
 		}
 
-		$service = new WorkflowService();
-		$workflowParameters = $service->prepareStartParameters(
+		$templateService = new WorkflowTemplateService();
+		$workflowParameters = $templateService->prepareStartParameters(
 			new PrepareStartParametersRequest(
 				templateId: $templateId,
 				complexDocumentType: $complexDocumentType,
@@ -91,7 +92,8 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 			return null;
 		}
 
-		$startWorkflow = $service->startWorkflow(
+		$workflowService = new WorkflowService();
+		$startWorkflow = $workflowService->startWorkflow(
 			new StartWorkflowRequest(
 				userId: $this->getCurrentUserId(),
 				targetUserId: $this->getCurrentUserId(),
@@ -204,7 +206,7 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 		$request = $this->getRequest();
 
 		$response =
-			(new WorkflowService())
+			(new WorkflowTemplateService())
 				->setConstants(
 					new SetConstantsRequest(
 						templateId: $templateId,
@@ -337,7 +339,7 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 			$requestParameters[$key] = $allRequestParameters[$searchKey] ?? null;
 		}
 
-		$parameters = (new WorkflowService())
+		$parameters = (new WorkflowTemplateService())
 			->prepareParameters(
 				new PrepareParametersRequest(
 					templateParameters: $templateParameters,

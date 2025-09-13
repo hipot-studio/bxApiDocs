@@ -21,9 +21,9 @@ Loc::loadMessages(__FILE__);
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Site_Query query()
- * @method static EO_Site_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Site_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Site_Result getById($id)
- * @method static EO_Site_Result getList(array $parameters = array())
+ * @method static EO_Site_Result getList(array $parameters = [])
  * @method static EO_Site_Entity getEntity()
  * @method static \Bitrix\Landing\Internals\EO_Site createObject($setDefaultValues = true)
  * @method static \Bitrix\Landing\Internals\EO_Site_Collection createCollection()
@@ -98,7 +98,9 @@ class SiteTable extends Entity\DataManager
 			)),
 			'TITLE' => new Entity\StringField('TITLE', array(
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_SITE_TITLE'),
-				'required' => true
+				'required' => true,
+				'save_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getSaveModificator'),
+				'fetch_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getFetchModificator'),
 			)),
 			'XML_ID' => new Entity\StringField('XML_ID', array(
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_XML_ID')

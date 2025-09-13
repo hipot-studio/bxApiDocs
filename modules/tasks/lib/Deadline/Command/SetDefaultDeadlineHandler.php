@@ -43,7 +43,10 @@ class SetDefaultDeadlineHandler
 		$this->sendPush(
 			$command->entity->userId,
 			PushCommand::DEFAULT_DEADLINE_UPDATED,
-			['deadline' => $command->entity->defaultDeadlineInSeconds],
+			[
+				'deadline' => $command->entity->defaultDeadlineInSeconds,
+				'defaultDeadlineDate' => $deadlineUserOption->toArray()['defaultDeadlineDate'],
+			],
 		);
 	}
 }

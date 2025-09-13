@@ -29,6 +29,13 @@ class Bitrix24Server extends Server
 		return $this->enable;
 	}
 
+	public function getBillingCurrency(): ?string
+	{
+		$currency = \CBitrix24::BillingCurrency();
+
+		return is_string($currency) ? $currency : null;
+	}
+
 	protected function getLicense(): Bitrix24\License|Main\License
 	{
 		return $this->license;

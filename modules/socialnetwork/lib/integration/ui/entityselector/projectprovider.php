@@ -157,6 +157,10 @@ class ProjectProvider extends BaseProvider
 			$this->options['shouldSelectDialogId'] = $options['shouldSelectDialogId'];
 		}
 
+		/**
+		 * @deprecated
+		 * @see ProjectAccessCodesProvider use this instead
+		 */
 		$this->options['addProjectMetaUsers'] = false;
 		if (isset($options['addProjectMetaUsers']) && is_bool($options['addProjectMetaUsers']))
 		{
@@ -346,6 +350,7 @@ class ProjectProvider extends BaseProvider
 			'AVATAR_TYPE',
 			'LANDING',
 			'TYPE',
+			'SCRUM_MASTER_ID',
 		];
 
 		if (
@@ -999,11 +1004,7 @@ class ProjectProvider extends BaseProvider
 		$item = new Item([
 			'id' => $project->getId(),
 			'entityId' => static::ENTITY_ID,
-			'entityType' => (
-			$isCollab
-				? 'collab'
-				: ($isExtranet ? 'extranet' : 'project')
-			),
+			'entityType' => self::makeProjectEntityType($project),
 			'title' => $project->getName(),
 			'avatar' => self::makeProjectAvatar($project),
 			'customData' => [
@@ -1104,6 +1105,16 @@ class ProjectProvider extends BaseProvider
 		}
 
 		return null;
+	}
+
+	public static function makeProjectEntityType(EO_Workgroup $project): ?string
+	{
+		$extranetSiteId = Option::get('extranet', 'extranet_site');
+		$extranetSiteId = ($extranetSiteId && ModuleManager::isModuleInstalled('extranet') ? $extranetSiteId : false);
+		$isExtranet = ($extranetSiteId && $project->get('IS_EXTRANET') === 'Y');
+		$isCollab = $project->getType() === Type::Collab->value;
+
+		return ($isExtranet && !$isCollab) ? 'extranet' : $project->getType();
 	}
 
 	public static function getProjectUrl(?int $projectId = null, ?int $currentUserId = null): string

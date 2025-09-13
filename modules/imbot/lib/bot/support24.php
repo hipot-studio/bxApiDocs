@@ -1250,11 +1250,7 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 	 */
 	protected static function checkMessageRestriction(array $messageFields): bool
 	{
-		if (
-			!self::isUserAdmin(self::getCurrentUser()->getId())
-			&& !self::isUserIntegrator(self::getCurrentUser()->getId())
-			&& !self::isActivePaidSupportForAll()
-		)
+		if (!self::isActiveSupportForUser(self::getCurrentUser()->getId()))
 		{
 			return false;
 		}
@@ -1275,6 +1271,30 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 				$messageFields['MESSAGE_TYPE'] === \IM_MESSAGE_CHAT
 				&& $messageFields['CHAT_ENTITY_TYPE'] === self::CHAT_ENTITY_TYPE
 			);
+	}
+
+	/**
+	 * Support bot was activated.
+	 * @return bool
+	 */
+	public static function isActiveSupport(): bool
+	{
+		//todo: Add settings flags or something else.
+		return true;
+	}
+
+	/**
+	 * Allows certain user write to OL.
+	 * @param int $userId
+	 * @return bool
+	 */
+	public static function isActiveSupportForUser(int $userId): bool
+	{
+		return
+			self::isUserAdmin($userId)
+			|| self::isUserIntegrator($userId)
+			|| self::isActivePaidSupportForAll()
+		;
 	}
 
 	/**

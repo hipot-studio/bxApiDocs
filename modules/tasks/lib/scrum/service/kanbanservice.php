@@ -5,12 +5,16 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Integration\Recyclebin;
 use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Kanban\ProjectsTable;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
+use Bitrix\Tasks\V2\Public\Command\Task\Kanban\AddTaskStageRelationCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Kanban\DeleteTaskStageRelationCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
 
 class KanbanService implements Errorable
 {
@@ -234,10 +238,10 @@ class KanbanService implements Errorable
 			{
 				$stageId = ($taskStageIdsMap[$taskId] ?? $defaultStageId);
 
-				TaskStageTable::add([
-					'TASK_ID' => $taskId,
-					'STAGE_ID' => $stageId,
-				]);
+				(new AddTaskStageRelationCommand(
+					taskId: $taskId,
+					stageId: $stageId,
+				))->run();
 
 				$taskObject = new \CTasks;
 				$taskObject->update($taskId, ['STAGE_ID' => $stageId]);
@@ -275,10 +279,10 @@ class KanbanService implements Errorable
 			{
 				$this->removeTasksFromKanban($sprintId, [$taskId]);
 
-				TaskStageTable::add([
-					'TASK_ID' => $taskId,
-					'STAGE_ID' => $finishStageId
-				]);
+				(new AddTaskStageRelationCommand(
+					taskId: $taskId,
+					stageId: $finishStageId,
+				))->run();
 
 				$taskObject = new \CTasks;
 				$taskObject->update($taskId, ['STAGE_ID' => $finishStageId]);
@@ -355,10 +359,10 @@ class KanbanService implements Errorable
 			{
 				$this->removeTasksFromKanban($sprintId, [$taskId]);
 
-				TaskStageTable::add([
-					'TASK_ID' => $taskId,
-					'STAGE_ID' => $newStageId
-				]);
+				(new AddTaskStageRelationCommand(
+					taskId: $taskId,
+					stageId: $newStageId,
+				))->run();
 
 				$taskObject = new \CTasks;
 				$taskObject->update($taskId, ['STAGE_ID' => $newStageId]);
@@ -387,15 +391,21 @@ class KanbanService implements Errorable
 
 			foreach ($taskIds as $taskId)
 			{
-				$queryObject = TaskStageTable::getList([
+				$rows = TaskStageTable::getList([
 					'filter' => [
 						'TASK_ID' => $taskId,
 						'STAGE_ID' => $stageIds
 					]
-				]);
-				while ($taskStage = $queryObject->fetch())
+				])->fetchAll();
+
+				$ids = array_column($rows, 'ID');
+				Collection::normalizeArrayValuesByInt($ids, false);
+
+				if (!empty($ids))
 				{
-					TaskStageTable::delete($taskStage['ID']);
+					(new DeleteTaskStageRelationCommand(
+						relationIds: $ids
+					))->run();
 				}
 			}
 
@@ -610,9 +620,10 @@ class KanbanService implements Errorable
 		]);
 		if ($taskStage = $queryObject->fetch())
 		{
-			TaskStageTable::update($taskStage['ID'], [
-				'STAGE_ID' => $stageId,
-			]);
+			(new MoveTaskCommand(
+				relationId: (int)$taskStage['ID'],
+				stageId: $stageId
+			))->run();
 
 			$taskObject->update($taskId, ['STAGE_ID' => $stageId]);
 		}

@@ -18,10 +18,10 @@ Loader::includeModule("biconnector");
 
 class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 {
-
 	private const URL_TEMPLATE_DATASET = 'dataset';
 	private const URL_TEMPLATE_STATISTICS = 'statistics';
 	private const URL_TEMPLATE_SOURCE = 'source';
+	private const URL_TEMPLATE_UNUSED_ELEMENTS = 'unused_elements';
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -109,6 +109,8 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 	/**
 	 * Show component errors.
 	 *
+	 * @param $errorMessage
+	 *
 	 * @return void
 	 */
 	private function printError($errorMessage): void
@@ -131,6 +133,7 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 			self::URL_TEMPLATE_DATASET => 'bi/dataset/',
 			self::URL_TEMPLATE_STATISTICS => 'bi/statistics/',
 			self::URL_TEMPLATE_SOURCE => 'bi/source/',
+			self::URL_TEMPLATE_UNUSED_ELEMENTS => 'bi/unused_elements/',
 		];
 	}
 }

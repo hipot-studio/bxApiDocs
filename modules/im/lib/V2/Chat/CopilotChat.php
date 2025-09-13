@@ -5,6 +5,9 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Error;
+use Bitrix\Im\V2\Integration\AI\EngineManager;
+use Bitrix\Im\V2\Integration\AI\AIHelper;
+use Bitrix\Im\V2\Integration\AI\CopilotError;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
@@ -94,15 +97,15 @@ class CopilotChat extends GroupChat
 
 		if (!self::isAvailable())
 		{
-			return $result->addError(new Error(Restriction::AI_AVAILABLE_ERROR));
+			return $result->addError(new Error(CopilotError::AI_NOT_AVAILABLE));
 		}
 
 		if (!self::isActive())
 		{
-			return $result->addError(new Error(Restriction::AI_TEXT_ERROR));
+			return $result->addError(new Error(CopilotError::AI_NOT_ACTIVE));
 		}
 
-		$copilotBotId = static::getBotIdOrRegister();
+		$copilotBotId = AIHelper::getCopilotBotId();
 
 		if (!$copilotBotId)
 		{
@@ -194,9 +197,9 @@ class CopilotChat extends GroupChat
 	{
 		if (!isset($copilotName))
 		{
-			$roleManager = new Im\V2\Integration\AI\RoleManager();
+			$roleManager = (new Im\V2\Integration\AI\RoleManager())->setContextUser($this->getContext()->getUser());
 			$copilotCode = $roleManager->getMainRole($this->getChatId());
-			$copilotName = $roleManager->getRoles([$copilotCode], $this->getContext()->getUserId())[$copilotCode]['name'];
+			$copilotName = $roleManager->getRoles([$copilotCode])[$copilotCode]['name'];
 		}
 
 		\CIMMessage::Add([
@@ -256,6 +259,11 @@ class CopilotChat extends GroupChat
 		]);
 	}
 
+	public function containsCopilot(): bool
+	{
+		return true;
+	}
+
 	private function getUsersForBanner(array $addedUsers): string
 	{
 		$userCodes = [];
@@ -298,17 +306,6 @@ class CopilotChat extends GroupChat
 		return $title;
 	}
 
-	protected function addIndex(): Chat
-	{
-		return $this;
-	}
-
-	protected function updateIndex(): Chat
-	{
-		return $this;
-	}
-
-
 	protected function sendEventUsersAdd(array $usersToAdd): void
 	{
 		if (empty($usersToAdd))
@@ -325,7 +322,6 @@ class CopilotChat extends GroupChat
 			}
 			if ($relation->getUser()->isBot())
 			{
-				Im\Bot::changeChatMembers($this->getId(), $userId);
 				Im\Bot::onJoinChat('chat'.$this->getId(), [
 					'CHAT_TYPE' => $this->getType(),
 					'MESSAGE_TYPE' => $this->getType(),
@@ -342,21 +338,14 @@ class CopilotChat extends GroupChat
 		}
 	}
 
-	private static function getBotIdOrRegister(): int
-	{
-		return Bot\CopilotChatBot::getBotId() ?: Bot\CopilotChatBot::register();
-	}
-
 	public static function isActive(): bool
 	{
-		return Loader::includeModule('imbot')
-			&& (new Restriction(Restriction::AI_COPILOT_CHAT))->isActive()
-			&& static::getBotIdOrRegister();
+		return (new Restriction())->isActive();
 	}
 
 	public static function isAvailable(): bool
 	{
-		return (new Restriction(Restriction::AI_COPILOT_CHAT))->isAvailable();
+		return (new Restriction())->isAvailable();
 	}
 
 	public function deleteUser(int $userId, DeleteUserConfig $config = new DeleteUserConfig()): Result
@@ -372,7 +361,7 @@ class CopilotChat extends GroupChat
 	public function toPullFormat(): array
 	{
 		$pull = parent::toPullFormat();
-		$pull['ai_provider'] = IM\V2\Integration\AI\AIHelper::getProviderName();
+		$pull['ai_provider'] = EngineManager::getDefaultEngineName();
 
 		return $pull;
 	}

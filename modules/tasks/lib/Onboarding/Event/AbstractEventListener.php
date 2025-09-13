@@ -71,18 +71,21 @@ abstract class AbstractEventListener
 		$this->container->getQueueService()->add($commandModels);
 	}
 
-	protected function deleteJobs(int $taskId = 0, int $userId = 0): Result
+	protected function deleteByPair(int $taskId = 0, int $userId = 0): Result
 	{
 		$pair = PairFactory::createPair($taskId, $userId);
 
 		return $this->container->getQueueService()->deleteByPair($pair);
 	}
 
-	protected function deleteJob(Type $type, int $userId): Result
+	/**
+	 * @param Type[] $types
+	 */
+	protected function deleteByUserJob(array $types, int $userId, int $taskId = 0): Result
 	{
-		$userJob = UserJobFactory::createUserJob($type, $userId);
+		$userJob = UserJobFactory::createUserJob($types, $userId, $taskId);
 
-		return $this->container->getQueueService()->deleteUserJob($userJob);
+		return $this->container->getQueueService()->deleteByUserJob($userJob);
 	}
 
 	protected function init(): void

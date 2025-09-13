@@ -23,6 +23,7 @@ use Bitrix\Crm\Integrity\DuplicateIndexMismatch;
 use Bitrix\Crm\Integrity\DuplicateManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban\ViewMode;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 use Bitrix\Crm\Service\Container;
@@ -397,6 +398,8 @@ class CAllCrmLead
 
 			self::$FIELD_INFOS += Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsInfo(\CCrmOwnerType::Lead);
 			self::$FIELD_INFOS += self::getLastActivityAdapter()->getFieldsInfo();
+
+			self::$FIELD_INFOS += LastCommunicationTable::getLastStateFieldInfo();
 		}
 
 		return self::$FIELD_INFOS;
@@ -511,6 +514,7 @@ class CAllCrmLead
 		$result['ASSIGNED_BY'] = $result['ASSIGNED_BY_ID'];
 		$result['CREATED_BY'] = $result['CREATED_BY_ID'];
 		$result['MODIFY_BY'] = $result['MODIFY_BY_ID'];
+		$result['MOVED_BY'] = $result['MOVED_BY_ID'];
 
 		$additionalFields = is_array($arOptions) && isset($arOptions['ADDITIONAL_FIELDS'])
 			? $arOptions['ADDITIONAL_FIELDS'] : null;
@@ -560,7 +564,8 @@ class CAllCrmLead
 			Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsSqlInfo(
 				CCrmOwnerType::Lead,
 				'L'
-			)
+			),
+			LastCommunicationTable::getFieldsByEntityTypeId(CCrmOwnerType::Lead, true),
 		);
 
 		$result += self::getLastActivityAdapter()->getFields();

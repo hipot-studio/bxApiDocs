@@ -553,7 +553,7 @@ abstract class CheckListTree
 			'!' . $levelColumnName => 0
 		];
 
-		if ($parameters['DIRECT'])
+		if ($parameters['DIRECT'] ?? null)
 		{
 			$filter[$levelColumnName] = 1;
 		}

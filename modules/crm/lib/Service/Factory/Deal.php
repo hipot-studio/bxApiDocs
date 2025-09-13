@@ -429,6 +429,10 @@ final class Deal extends Factory
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
 				'CLASS' => Field\Observers::class,
 			],
+			Item::FIELD_LAST_COMMUNICATION_TIME => [
+				'TYPE' => Field::TYPE_STRING,
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::ReadOnly],
+			],
 		];
 
 		$locationAttributes = [];
@@ -709,6 +713,11 @@ final class Deal extends Factory
 			new Operation\Action\CreateFinalSummaryTimelineHistoryItem()
 		);
 
+		$operation->addAction(
+			Operation::ACTION_AFTER_SAVE,
+			new Operation\Action\UpdateRepeatSaleLog()
+		);
+
 		return $operation;
 	}
 
@@ -739,6 +748,10 @@ final class Deal extends Factory
 			->addAction(
 				Operation::ACTION_AFTER_SAVE,
 				new Operation\Action\DeleteEntityFieldsContext()
+			)
+			->addAction(
+				Operation::ACTION_AFTER_SAVE,
+				new Operation\Action\DeleteRepeatSaleLog()
 			)
 			->addAction(
 				Operation::ACTION_AFTER_SAVE,

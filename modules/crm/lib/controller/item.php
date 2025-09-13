@@ -19,7 +19,6 @@ use Bitrix\Main\Engine\Response\Component;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
-use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\ORM\Fields\Relations\Relation;
@@ -44,6 +43,13 @@ class Item extends Base
 
 	protected function getFactory(int $entityTypeId): ?Service\Factory
 	{
+		if (!\CCrmOwnerType::isUseFactoryBasedApproach($entityTypeId))
+		{
+			$this->addError(ErrorCode::getEntityTypeNotSupportedError($entityTypeId));
+
+			return null;
+		}
+
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 		if (!$factory)
 		{
@@ -51,11 +57,11 @@ class Item extends Base
 					Loc::getMessage('CRM_TYPE_TYPE_NOT_FOUND'),
 					ErrorCode::NOT_FOUND)
 			);
+
+			return null;
 		}
-		else
-		{
-			Container::getInstance()->getItemConverter()->preprocessUpperFieldNames(array_keys($factory->getFieldsInfo()));
-		}
+
+		Container::getInstance()->getItemConverter()->preprocessUpperFieldNames(array_keys($factory->getFieldsInfo()));
 
 		return $factory;
 	}
@@ -80,21 +86,10 @@ class Item extends Base
 			);
 		}
 
-		try
-		{
-			$item = $factory->getItems([
-				'select' => $select,
-				'filter' => ['=ID' => $id],
-			])[0] ?? null;
-		}
-		catch (InvalidOperationException $e)
-		{
-			$this->addError(new Error(
-				$e->getMessage()
-			));
-
-			return null;
-		}
+		$item = $factory->getItems([
+			'select' => $select,
+			'filter' => ['=ID' => $id],
+		])[0] ?? null;
 
 		if (!$item)
 		{
@@ -202,18 +197,8 @@ class Item extends Base
 			$parameters['limit'] = $pageNavigation->getLimit();
 		}
 
-		try
-		{
-			$items = $factory->getItemsFilteredByPermissions($parameters);
-			$items = array_values($this->getJsonForItems($factory, $items, $select, $isUseOriginalFieldNames));
-		}
-		catch (InvalidOperationException $e)
-		{
-			$this->addError(new Error(
-				$e->getMessage()
-			));
-			return null;
-		}
+		$items = $factory->getItemsFilteredByPermissions($parameters);
+		$items = array_values($this->getJsonForItems($factory, $items, $select, $isUseOriginalFieldNames));
 
 		return new Page(
 			'items',
@@ -237,17 +222,8 @@ class Item extends Base
 		{
 			return null;
 		}
-		try
-		{
-			$item = $factory->getItem($id);
-		}
-		catch (InvalidOperationException $e)
-		{
-			$this->addError(new Error(
-				$e->getMessage()
-			));
-			return null;
-		}
+
+		$item = $factory->getItem($id);
 
 		if (!$item)
 		{
@@ -450,21 +426,10 @@ class Item extends Base
 			return null;
 		}
 
-		try
+		$item = $factory->createItem();
+		if (isset($fields['categoryId']))
 		{
-			$item = $factory->createItem();
-			if (isset($fields['categoryId']))
-			{
-				$item->setCategoryId((int)$fields['categoryId']);
-			}
-		}
-		catch (InvalidOperationException $e)
-		{
-			$this->addError(new Error(
-				$e->getMessage()
-			));
-
-			return null;
+			$item->setCategoryId((int)$fields['categoryId']);
 		}
 
 		if (!Container::getInstance()->getUserPermissions()->item()->canAddItem($item))
@@ -521,18 +486,7 @@ class Item extends Base
 			return null;
 		}
 
-		try
-		{
-			$item = $factory->getItem($id);
-		}
-		catch (InvalidOperationException $e)
-		{
-			$this->addError(new Error(
-				$e->getMessage()
-			));
-
-			return null;
-		}
+		$item = $factory->getItem($id);
 
 		if (!$item)
 		{
@@ -629,18 +583,7 @@ class Item extends Base
 			return $this->importViaDeprecatedApi($entityTypeId, $fields, $isUseOriginalUfNames);
 		}
 
-		try
-		{
-			$item = $factory->createItem();
-		}
-		catch (InvalidOperationException $e)
-		{
-			$this->addError(new Error(
-				$e->getMessage()
-			));
-
-			return null;
-		}
+		$item = $factory->createItem();
 
 		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
 		$this->processFields($item, $fields, $factory->getFieldsCollection());

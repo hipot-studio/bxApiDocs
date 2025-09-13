@@ -20,7 +20,7 @@ class BalancerClient
 		'eu' => 'https://slb-de.webrtc.bitrix.info',
 		'us' => 'https://slb-us.webrtc.bitrix.info',
 	];
-	private const REGION_RU = ['ru', 'by', 'kz'];
+	private const REGION_RU = ['ru', 'by', 'kz', 'uz'];
 	private const REGION_EU = ['de', 'eu', 'fr', 'it', 'pl', 'tr', 'uk'];
 
 	private array $httpClientParameters = [];
@@ -86,7 +86,7 @@ class BalancerClient
 		$uri = new Uri($this->getServiceUrl() . '/v2/update-token-version');
 
 		$data = [
-			'portalId' => (int)Option::get("call", "call_portal_id", 0),
+			'portalId' => Settings::getPortalId(),
 			'minTokenVersion' => $tokenVersion,
 			'chatId' => $chatId
 		];

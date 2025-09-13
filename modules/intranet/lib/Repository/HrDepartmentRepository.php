@@ -136,10 +136,20 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 		}
 
 		$nodes = Container::getNodeRepository()
-			->findAllByAccessCodes(array_map(fn($id) => 'D' . $id, $ids));
+			->findAllByIds($ids);
 
 		return $this->makeDepartmentCollectionFromNodeCollection($nodes);
+	}
 
+	/**
+	 * @throws ArgumentException
+	 */
+	public function findAllByUserId(int $userId): DepartmentCollection
+	{
+		$nodes = Container::getNodeRepository()
+			->findAllByUserId($userId);
+
+		return $this->makeDepartmentCollectionFromNodeCollection($nodes);
 	}
 
 	/**
@@ -384,6 +394,7 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 			isGlobalActive: $node->globalActive,
 			depth: $node->depth,
 			accessCode: $node->accessCode,
+			isIblockSource: false,
 		);
 	}
 
@@ -453,5 +464,24 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 		);
 
 		return $node;
+	}
+
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
+	public function findAllByIblockIds(array $ids): DepartmentCollection
+	{
+		if (empty($ids))
+		{
+			return new DepartmentCollection();
+		}
+
+		$nodes = Container::getNodeRepository()
+			->findAllByAccessCodes(array_map(fn($id) => 'D' . $id, $ids));
+
+		return $this->makeDepartmentCollectionFromNodeCollection($nodes);
+
 	}
 }

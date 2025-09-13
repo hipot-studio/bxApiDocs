@@ -2,12 +2,21 @@
 namespace Bitrix\Disk\Uf\Integration;
 
 use Bitrix\Disk;
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\Driver;
+use Bitrix\Disk\File;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Disk\Ui\Text;
+use Bitrix\Disk\UI\Viewer\Renderer\Board;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\NotImplementedException;
+use Bitrix\Main\SystemException;
 use Bitrix\UI\FileUploader\Contracts\CustomLoad;
 use Bitrix\UI\FileUploader\Contracts\CustomRemove;
 use Bitrix\UI\FileUploader\FileData;
@@ -249,11 +258,16 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 	}
 
 	/**
-	 * @param Disk\AttachedObject | Disk\File $fileModel
+	 * @param AttachedObject | File $fileModel
 	 *
 	 * @return FileInfo|null
+	 * @throws ArgumentException
+	 * @throws ArgumentNullException
+	 * @throws ArgumentOutOfRangeException
+	 * @throws NotImplementedException
+	 * @throws SystemException
 	 */
-	private function createFileInfo($fileModel): ?FileInfo
+	private function createFileInfo(Disk\File|Disk\AttachedObject $fileModel): ?FileInfo
 	{
 		$fileInfo = FileInfo::createFromBFile($fileModel->getFileId());
 		if ($fileInfo === null)
@@ -342,10 +356,12 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				;
 
 				$customData['storage'] = $storageName . ' / ' . ($folder->isRoot() ? '' : $folder->getName());
+				$customData['createdBy'] = $file->getCreatedBy();
 			}
 		}
 
 		$fileInfo->setCustomData($customData);
+		$fileInfo->setViewerAttrs($this->prepareViewerAttrs($fileModel, $downloadUrl));
 
 		if ($fileInfo->isImage())
 		{
@@ -407,6 +423,42 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 		}
 
 		return [$folder, $storage];
+	}
+
+	/**
+	 * @param AttachedObject | File $fileModel
+	 * @param string $downloadUrl
+	 *
+	 * @return array
+	 * @throws ArgumentException
+	 */
+	private function prepareViewerAttrs(Disk\File|Disk\AttachedObject $fileModel, string $downloadUrl): array
+	{
+		$viewerAttrs = Disk\Ui\FileAttributes::buildByFileId($fileModel->getFileId(), $downloadUrl)
+			->setTitle($fileModel->getName())
+		;
+
+		if ($fileModel instanceof Disk\AttachedObject)
+		{
+			$viewerAttrs->setObjectId($fileModel->getObjectId());
+
+			if ($viewerAttrs->getViewerType() === Board::JS_TYPE_BOARD && Disk\Document\Flipchart\Configuration::isBoardsEnabled())
+			{
+				$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($fileModel->getObjectId(), false, 'disk_page');
+
+				$viewerAttrs->addAction([
+					'type' => 'open',
+					'buttonIconClass' => ' ',
+					'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+					'params' => [
+						'objectId' => $fileModel->getObjectId(),
+						'url' => $uri,
+					],
+				]);
+			}
+		}
+
+		return $viewerAttrs->toDataSet();
 	}
 
 	public function canView(): bool

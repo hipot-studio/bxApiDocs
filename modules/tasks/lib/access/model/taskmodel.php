@@ -12,7 +12,6 @@ use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Tasks\Access\AccessibleTask;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
-use Bitrix\Tasks\Flow;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -26,7 +25,8 @@ class TaskModel implements AccessibleTask
 	private $groupId;
 	private $status;
 	private $group;
-	private $flowId = null;
+	private ?int $flowId = null;
+	private ?int $parentId = null;
 
 	/**
 	 * @param int $taskId
@@ -50,11 +50,7 @@ class TaskModel implements AccessibleTask
 		return $model;
 	}
 
-	/**
-	 * @param int $taskId
-	 * @return AccessibleItem
-	 */
-	public static function createFromId(int $taskId): AccessibleItem
+	public static function createFromId(int $taskId): static
 	{
 		if (!isset(static::$cache[$taskId]))
 		{
@@ -263,6 +259,11 @@ class TaskModel implements AccessibleTask
 			$model->setFlowId((int)$data['FLOW_ID']);
 		}
 
+		if (!empty($data['PARENT_ID']) && (int)$data['PARENT_ID'] > 0)
+		{
+			$model->setParentId((int)$data['PARENT_ID']);
+		}
+
 		return $model;
 	}
 
@@ -430,6 +431,18 @@ class TaskModel implements AccessibleTask
 	public function setFlowId(int $value): self
 	{
 		$this->flowId = $value;
+		return $this;
+	}
+
+	public function getParentId(): ?int
+	{
+		return $this->parentId;
+	}
+
+	public function setParentId(int $parentId): self
+	{
+		$this->parentId = $parentId;
+
 		return $this;
 	}
 

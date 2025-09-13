@@ -10,12 +10,17 @@ use Bitrix\ImMobile\User;
 class Channel extends BaseRecent
 {
 	use MessengerComponentTitle;
-	
+
 	public function isAvailable(): bool
 	{
 		$userType = User::getCurrent()?->getType();
 
 		return $userType === UserType::USER;
+	}
+
+	public function isPreload(): bool
+	{
+		return false;
 	}
 
 	public function getId(): string
@@ -53,7 +58,7 @@ class Channel extends BaseRecent
 	{
 		return [
 			'useSearch' => true,
-			'preload' => true,
+			'preload' => $this->isPreload(),
 			'titleParams' => [
 				'useLargeTitleMode' => true,
 				'text' => $this->getTitle(),

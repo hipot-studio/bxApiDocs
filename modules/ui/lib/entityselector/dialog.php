@@ -28,6 +28,9 @@ class Dialog implements \JsonSerializable
 	/** @var PreselectedCollection */
 	protected $preselectedItems;
 
+	/** @var EntityErrorCollection */
+	protected $errors;
+
 	/** @var string */
 	protected $context;
 
@@ -87,6 +90,7 @@ class Dialog implements \JsonSerializable
 		$this->recentItems = new RecentCollection();
 		$this->globalRecentItems = new RecentCollection();
 		$this->preselectedItems = new PreselectedCollection();
+		$this->errors = new EntityErrorCollection();
 
 		if (isset($options['preselectedItems']) && is_array($options['preselectedItems']))
 		{
@@ -510,6 +514,16 @@ class Dialog implements \JsonSerializable
 		return $dialog->getItemCollection();
 	}
 
+	public function getErrors(): EntityErrorCollection
+	{
+		return $this->errors;
+	}
+
+	public function addError(EntityError $error): void
+	{
+		$this->errors->add($error);
+	}
+
 	public function saveRecentItems(array $recentItems)
 	{
 		if ($this->getContext() === null)
@@ -729,7 +743,7 @@ class Dialog implements \JsonSerializable
 		return $this->jsonSerialize();
 	}
 
-	public function jsonSerialize()
+	public function jsonSerialize(): array
 	{
 		$json = [
 			'id' => $this->getId(),
@@ -758,6 +772,11 @@ class Dialog implements \JsonSerializable
 		if ($this->getPreselectedCollection()->count() > 0)
 		{
 			$json['preselectedItems'] = $this->getPreselectedCollection();
+		}
+
+		if ($this->getErrors()->count() > 0)
+		{
+			$json['errors'] = $this->getErrors();
 		}
 
 		return $json;

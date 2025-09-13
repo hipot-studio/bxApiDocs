@@ -22,7 +22,7 @@ abstract class AbstractListPage extends AbstractPage
 		parent::__construct($request, $currentScope);
 	}
 
-	final protected function component(): Contract\Component
+	final public function component(): Contract\Component
 	{
 		return new Component(
 			name: $this->getComponentName(),

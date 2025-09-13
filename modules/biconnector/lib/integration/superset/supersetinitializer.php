@@ -2,6 +2,10 @@
 
 namespace Bitrix\BIConnector\Integration\Superset;
 
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
@@ -9,6 +13,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
@@ -25,6 +30,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\UI\Filter;
 use Bitrix\Rest\AppTable;
 
 final class SupersetInitializer
@@ -92,6 +98,9 @@ final class SupersetInitializer
 
 		if (self::getSupersetStatus() === self::SUPERSET_STATUS_DOESNT_EXISTS)
 		{
+			\Bitrix\BIConnector\Access\Install\AccessInstaller::reinstall();
+			Option::set('biconnector', \Bitrix\BIConnector\Configuration\Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
+
 			Application::getInstance()->addBackgroundJob(static function () {
 				self::makeSupersetCreateRequest();
 			});
@@ -490,13 +499,13 @@ final class SupersetInitializer
 			}
 		}
 
+		$connection = Application::getInstance()->getConnection();
 		foreach (DatasetManager::getList() as $dataset)
 		{
 			// Don't use DatasetManager::delete because it uses events
 			$datasetDeleteResult = ExternalDatasetTable::delete($dataset->getId());
 			if ($datasetDeleteResult->isSuccess())
 			{
-				$connection = Application::getInstance()->getConnection();
 				$tableName = Csv::TABLE_NAME_PREFIX . $dataset->getName();
 				try
 				{
@@ -525,8 +534,31 @@ final class SupersetInitializer
 		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
 
+		\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
+		\CUserOptions::DeleteOptionsByName('main.ui.filter.presets', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
+
 		Registrar::getRegistrar()->clear();
 
-		// TODO Clear permission and tag tables
+		SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);
+		SupersetDashboardGroupBindingTable::deleteByFilter(['>ID' => 0]);
+
+		$customGroups = SupersetDashboardGroupTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM],
+		])
+			->fetchAll()
+		;
+
+		$customGroupIds = array_column($customGroups, 'ID');
+		if (!empty($customGroupIds))
+		{
+			SupersetDashboardGroupScopeTable::deleteByFilter([
+				'=GROUP_ID' => $customGroupIds,
+			]);
+
+			SupersetDashboardGroupTable::deleteByFilter([
+				'=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM,
+			]);
+		}
 	}
 }

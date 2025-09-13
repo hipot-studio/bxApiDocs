@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\License\Widget\Content;
 
+use Bitrix\Intranet\Integration\Market\Label;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -103,6 +104,11 @@ class Market extends BaseContent
 
 	private function getTitle(): string
 	{
+		if (Label::isRenamedMarket())
+		{
+			return Loc::getMessage('INTRANET_LICENSE_WIDGET_CONTENT_MARKET_TEXT_MSGVER_1');
+		}
+
 		return Loc::getMessage('INTRANET_LICENSE_WIDGET_CONTENT_MARKET_TEXT');
 	}
 

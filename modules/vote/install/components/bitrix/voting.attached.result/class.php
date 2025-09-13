@@ -7,7 +7,6 @@ use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Vote\Attach;
 use Bitrix\Vote\Service\AttachedVoteFrontendFormatService;
-use Bitrix\Vote\Service\AttachedVoteSigner;
 use Bitrix\Vote\Service\VotedCollectorService;
 
 class VotingAttachedResultComponent extends \CBitrixComponent
@@ -35,26 +34,44 @@ class VotingAttachedResultComponent extends \CBitrixComponent
 			return;
 		}
 
-		$this->arResult['VOTED_PAGE_SIZE'] = self::ANSWER_VOTED_LIMIT;
-		$id = (string)($this->arParams['SIGNED_ATTACH_ID'] ?? '');
-		$id = explode('?', $id, 2)[0] ?? '';
-		$template = '';
 		try
 		{
-			$attachId = (new AttachedVoteSigner())->unsign($id);
-
-			$attach = new Attach((int)$attachId);
+			$attach = $this->getAttach();
 			$this->arResult['VOTE'] = [
 				'attach' => (new AttachedVoteFrontendFormatService())->format($attach, $userId),
 				'voted' => (new VotedCollectorService())->getByAttach($attach, self::ANSWER_VOTED_LIMIT),
 			];
+			$this->arResult['VOTED_PAGE_SIZE'] = self::ANSWER_VOTED_LIMIT;
+			$this->includeComponentTemplate();
 		}
-		catch (ObjectNotFoundException|BadSignatureException $exception)
+		catch (ObjectNotFoundException|BadSignatureException)
 		{
-			$template = 'error';
 			$this->arResult['ERROR_DESCRIPTION'] = Loc::getMessage('VOTE_ATTACHED_RESULT_COMPONENT_VOTE_NOT_FOUND');
+			$this->includeComponentTemplate('error');
 		}
+	}
 
-		$this->includeComponentTemplate($template);
+	/**
+	 * @return Attach
+	 * @throws BadSignatureException
+	 * @throws ObjectNotFoundException
+	 * @throws \Bitrix\Main\ArgumentTypeException
+	 */
+	private function getAttach(): Attach
+	{
+		$id = (string)($this->arParams['SIGNED_ATTACH_ID'] ?? '');
+		$id = $this->removeQueryParams($id);
+
+		$urlService = new \Bitrix\Vote\Service\AttachedVoteResultUrlService();
+
+		return $urlService->getAttachByUrlId($id);
+	}
+
+	private function removeQueryParams(string $value): string
+	{
+		$value = explode('/', $value, 2)[0] ?? '';
+		$value = explode('?', $value, 2)[0] ?? '';
+
+		return $value;
 	}
 }

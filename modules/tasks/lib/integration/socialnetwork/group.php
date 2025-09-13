@@ -317,6 +317,11 @@ class Group extends \Bitrix\Tasks\Integration\SocialNetwork
 
 	public static function canReadGroupTasks($userId, $groupId)
 	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return false;
+		}
+
 		static $access = [];
 
 		if (

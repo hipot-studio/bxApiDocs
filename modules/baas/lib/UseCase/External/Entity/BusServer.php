@@ -24,6 +24,11 @@ final class BusServer extends Server
 		return false;
 	}
 
+	public function getBillingCurrency(): ?string
+	{
+		return null;
+	}
+
 	protected function getLicense(): Bitrix24\License|Main\License
 	{
 		return $this->license;

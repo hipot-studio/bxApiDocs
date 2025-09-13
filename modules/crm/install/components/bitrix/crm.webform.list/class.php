@@ -751,6 +751,10 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 		{
 			$filter['=IS_CALLBACK_FORM'] = $requestFilter['IS_CALLBACK_FORM'] === 'Y';
 		}
+		if (isset($requestFilter['IS_BOOKING_FORM']) && in_array($requestFilter['IS_BOOKING_FORM'], ['Y', 'N'], true))
+		{
+			$filter['=IS_BOOKING_FORM'] = $requestFilter['IS_BOOKING_FORM'] === 'Y';
+		}
 		if (isset($requestFilter['IS_WHATSAPP_FORM']) && in_array($requestFilter['IS_WHATSAPP_FORM'], ['Y', 'N'], true))
 		{
 			$filter['=IS_WHATSAPP_FORM'] = $requestFilter['IS_WHATSAPP_FORM'] === 'Y';
@@ -885,6 +889,16 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 			]
 		);
 
+		if (ModuleManager::isModuleInstalled('booking'))
+		{
+			$list[] = [
+				"id" => 'IS_BOOKING_FORM',
+				"name" => Loc::getMessage('CRM_WEBFORM_LIST_FILTER_PRESET_BOOKING_FORMS'),
+				'type' => 'checkbox',
+				'default' => false,
+			];
+		}
+
 		if (\Bitrix\Main\ModuleManager::isModuleInstalled('landing'))
 		{
 			$list[] = array(
@@ -963,8 +977,18 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 					'GET_PAYMENT' => 'Y',
 					'ACTIVE' => 'Y',
 				]
-			]
+			],
 		);
+
+		if (ModuleManager::isModuleInstalled('booking'))
+		{
+			$list['booking_forms'] = [
+				'name' => Loc::getMessage('CRM_WEBFORM_LIST_FILTER_PRESET_BOOKING_FORMS'),
+				'fields' => [
+					'IS_BOOKING_FORM' => 'Y',
+				],
+			];
+		}
 
 		if (WebForm\WhatsApp::canUse())
 		{

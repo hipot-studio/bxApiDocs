@@ -7,6 +7,7 @@ use Bitrix\Main\Config;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\IO\File;
+use Bitrix\Main\Web\Json;
 
 class Configuration
 {
@@ -122,5 +123,45 @@ class Configuration
 		$webhookUrl = $urlManager->getHostUrl() . $default;
 
 		return Option::get('disk', 'flipchart.webhook_url', $webhookUrl);
+	}
+
+	public static function getAllowedLanguages(): array
+	{
+		$default = self::getFromSettings('allowed_languages', [
+			'ar',
+			'br',
+			'en',
+			'fr',
+			'id',
+			'it',
+			'ja',
+			'la',
+			'ms',
+			'pl',
+			'ru',
+			'sc',
+			'tc',
+			'th',
+			'tr',
+			'ua',
+			'vn',
+			'de',
+			'kz',
+		]);
+
+		$option = Option::get('disk', 'flipchart.allowed_languages');
+		if (!$option)
+		{
+			return (array)$default;
+		}
+
+		return (array)Json::decode($option);
+	}
+
+	public static function getDefaultLanguage(): string
+	{
+		$default = self::getFromSettings('default_language', 'en');
+
+		return (string)Option::get('disk', 'flipchart.default_language', $default);
 	}
 }

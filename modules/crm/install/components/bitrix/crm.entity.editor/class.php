@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)
 	die();
 }
 
+use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Agent\Requisite\CompanyAddressConvertAgent;
 use Bitrix\Crm\Agent\Requisite\CompanyUfAddressConvertAgent;
 use Bitrix\Crm\Agent\Requisite\ContactAddressConvertAgent;
@@ -13,10 +14,12 @@ use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\FieldContext\ContextManager;
 use Bitrix\Crm\FieldContext\Repository;
+use Bitrix\Crm\Integration\UI\EntityEditor\MartaAIMarksRepository;
 use Bitrix\Crm\Integration\UI\EntitySelector\CountryProvider;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Security\EntityAuthorization;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\EditorAdapter\SchemeDecorator;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Spotlight;
@@ -69,6 +72,9 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			[
 				'GUID' =>'entity_editor',
 				'ENABLE_PAGE_TITLE_CONTROLS' => true,
+				'ENABLE_PAGE_TITLE_CONTROLS_VIA_TOOLBAR' => false,
+				'ENABLE_PAGE_TITLE_EDIT' => false,
+				'ENABLE_PAGE_TITLE_COPY_URL' => true,
 				'ENABLE_COMMUNICATION_CONTROLS' => true,
 				'ENABLE_REQUIRED_FIELDS_INJECTION' => true,
 				'ENABLE_AVAILABLE_FIELDS_INJECTION' => false,
@@ -454,6 +460,25 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			$scheme[$additionalColumnIndex]['elements'][$additionalSectionIndex]['elements'] = $schemeElements;
 		}
 
+		$martaAiMarksRepository = MartaAIMarksRepository::fromEntity(
+			Container::getInstance()->getContext()->getUserId(),
+			$this->entityTypeID,
+			$this->categoryId,
+			$configScope,
+			$this->arResult['USER_SCOPE_ID'] ?? null,
+		);
+
+		/** @var SchemeDecorator[] $schemeDecorators */
+		$schemeDecorators = [
+			new SchemeDecorator\MartaAI\ConfiguredField($martaAiMarksRepository),
+			new SchemeDecorator\MartaAI\ConfiguredSection($martaAiMarksRepository),
+		];
+
+		foreach ($schemeDecorators as $decorator)
+		{
+			$scheme = $decorator->decorate($scheme);
+		}
+
 		$fieldsInfo['available'] = $availableFields;
 
 		return $scheme;
@@ -729,12 +754,30 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		$this->arResult['MESSAGES'] = (array)($this->arParams['MESSAGES'] ?? []);
 
+		if ($this->arResult['ENABLE_PAGE_TITLE_CONTROLS'] && $this->arResult['ENABLE_PAGE_TITLE_CONTROLS_VIA_TOOLBAR'])
+		{
+			UI\Toolbar\Facade\Toolbar::enableMultiLineTitle();
+
+			if ($this->arResult['ENABLE_PAGE_TITLE_COPY_URL'])
+			{
+				UI\Toolbar\Facade\Toolbar::setCopyLinkButton([
+					'title' => $this->arResult['MESSAGES']['COPY_PAGE_URL'] ?? null,
+					'successfulCopyMessage' => $this->arResult['MESSAGES']['PAGE_URL_COPIED'] ?? null,
+				]);
+			}
+			if ($this->arResult['ENABLE_PAGE_TITLE_EDIT'])
+			{
+				UI\Toolbar\Facade\Toolbar::addEditableTitle();
+			}
+		}
+
 		$this->prepareRestrictions();
 		$this->prepareEntityData();
 	}
 
 	protected function prepareEntityData(): void
 	{
+		(new LastCommunicationTimeFormatter())->formatDetailDate($this->arResult['ENTITY_DATA']);
 		$data = \Bitrix\Crm\Component\Utils\JsonCompatibleConverter::convert($this->arResult['ENTITY_DATA'] ?? []);
 		if (isset($data['sort']) && is_array($data['sort']))
 		{

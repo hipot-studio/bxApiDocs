@@ -165,10 +165,9 @@ class Fill
 		return $agreements;
 	}
 
-	private function getFilledFields()
+	private function getFilledFields(): array
 	{
 		$fields = $this->form->getFieldsMap();
-		$fileFieldsSizeMap = $this->getFilledFileFieldsSize();
 		foreach ($fields as $fieldKey => $field)
 		{
 			$fieldName = $field['name'];
@@ -184,9 +183,7 @@ class Fill
 
 				$fileController = new SiteFormFileUploaderController([
 					'formId' => strval($this->form->getId()),
-					'secCode' => $this->form->get()['SECURITY_CODE'] ?? "",
-					'fieldId' => $fieldName,
-					'fieldsSize' => $fileFieldsSizeMap
+					'secCode' => $this->form->get()['SECURITY_CODE'] ?? '',
 				]);
 				$uploader = new UI\FileUploader\Uploader($fileController);
 
@@ -202,6 +199,23 @@ class Fill
 							continue;
 						}
 
+						if (!$pendingFile->isValid())
+						{
+							$formId = $this->form->getId();
+							\Bitrix\Crm\Service\Container::getInstance()->getLogger('Webform')
+								->error("Failed to save file in form $formId for $fieldName", [
+									'formId' => $this->form->getId(),
+									'fieldName' => $fieldName,
+									'secCode' => $this->form->get()['SECURITY_CODE'] ?? '',
+									'fingerprint' => $fileController->getFingerprint(),
+									'token' => $fileData['token'],
+									'error' => $pendingFile->getErrors()[0] ?? null,
+								])
+							;
+
+							continue;
+						}
+
 						$pendingFiles->makePersistent();
 						$file = \CFile::MakeFileArray($pendingFile->getFileId());
 					}
@@ -213,7 +227,7 @@ class Fill
 					$dailyLimiter = Limitations\DailyFileUploadLimit::instance();
 					if ($dailyLimiter->isUsed())
 					{
-						$dailyLimiter->incrementByValue((int) $file['size'] ?? 0);
+						$dailyLimiter->incrementByValue((int)($file['size'] ?? 0));
 					}
 
 					$files[] = $file;
@@ -257,41 +271,5 @@ class Fill
 		}
 
 		return $fields;
-	}
-
-	private function getFilledFileFieldsSize(): array
-	{
-		$fieldsSizeMap = [];
-
-		$fields = array_filter(
-			$this->form->getFieldsMap(),
-			function ($field) {
-				return $field['type'] == 'file';
-			}
-		);
-
-		foreach ($fields as $fieldKey => $field)
-		{
-			$fieldName = $field['name'];
-			$fieldValues = $this->values[$fieldName] ?? [];
-			if (!is_array($fieldValues))
-			{
-				$fieldValues = [$fieldValues];
-			}
-
-			$summaryFieldSize = array_reduce(
-				$fieldValues,
-				function ($sum, $value) {
-					return $sum + $value['size'] ?? 0;
-				},
-				0
-			);
-			if ($summaryFieldSize > 0)
-			{
-				$fieldsSizeMap[$fieldName] = $summaryFieldSize;
-			}
-		}
-
-		return $fieldsSizeMap;
 	}
 }

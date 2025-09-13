@@ -29,11 +29,6 @@ class Http
 	 */
 	const CONNECTION_ERROR = 'no connection with controller';
 
-	/**
-	 * @deprecated \Bitrix\Transformer\Service\Http\ControllerResolver::getDefaultCloudControllerUrl
-	 */
-	public const CLOUD_CONVERTER_URL = 'https://transformer-de.bitrix.info/bitrix/tools/transformercontroller/add_queue.php';
-
 	public const CIRCUIT_BREAKER_ERRORS_THRESHOLD = 5;
 	public const CIRCUIT_BREAKER_ERRORS_SEARCH_PERIOD = 1800;
 

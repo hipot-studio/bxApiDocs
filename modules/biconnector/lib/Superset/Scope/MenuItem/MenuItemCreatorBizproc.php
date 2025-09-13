@@ -24,6 +24,15 @@ final class MenuItemCreatorBizproc extends BaseMenuItemCreator
 			];
 		}
 
+		if (!empty($menuItems))
+		{
+			$menuItems[] = [
+				'IS_DELIMITER' => true,
+			];
+
+			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
+		}
+
 		return [
 			'id' => 'BIC_DASHBOARDS',
 			'title' => $this->getMenuItemTitle(),

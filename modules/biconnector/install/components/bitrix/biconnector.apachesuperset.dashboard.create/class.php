@@ -2,15 +2,18 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
-	die();
+	die;
 }
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
+use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main;
@@ -32,17 +35,12 @@ class ApacheSupersetDashboardCreateComponent
 		$this->errorCollection = new Main\ErrorCollection();
 	}
 
-	public function configureActions()
+	public function configureActions(): array
 	{
 		return [];
 	}
 
-	public function onPrepareComponentParams($arParams)
-	{
-		return parent::onPrepareComponentParams($arParams);
-	}
-
-	public function executeComponent()
+	public function executeComponent(): void
 	{
 		$checkAccessResult = $this->checkAccess();
 		if (!$checkAccessResult->isSuccess())
@@ -68,6 +66,8 @@ class ApacheSupersetDashboardCreateComponent
 				'title' => $this->getDefaultDashboardTitle(),
 			],
 			'scopeParamsMap' => $this->getScopeParamsMap(),
+			'groupIds' => $this->getGroupIds(),
+			'canManageGroups' => $this->canManageGroups(),
 		];
 	}
 
@@ -95,12 +95,14 @@ class ApacheSupersetDashboardCreateComponent
 	{
 		$scopeParamsMap = [];
 		$globalParams = UrlParameter\ScopeMap::getGlobals();
+		$globalScopeKey = 'global';
 		foreach ($globalParams as $globalParam)
 		{
-			$scopeParamsMap['global'][] = [
+			$scopeParamsMap[$globalScopeKey][] = [
 				'code' => $globalParam->code(),
 				'title' => $globalParam->title(),
 				'description' => $globalParam->description(),
+				'scope' => $globalScopeKey,
 			];
 		}
 
@@ -113,11 +115,33 @@ class ApacheSupersetDashboardCreateComponent
 					'code' => $scopeParam->code(),
 					'title' => $scopeParam->title(),
 					'description' => $scopeParam->description(),
+					'scope' => $scopeCode,
 				];
 			}
 		}
 
 		return $scopeParamsMap;
+	}
+
+	private function getGroupIds(): array
+	{
+		if (!$this->canManageGroups())
+		{
+			return [];
+		}
+
+		$groupIds = $this->arParams['GROUP_IDS'];
+		if (empty($groupIds))
+		{
+			return [];
+		}
+
+		$groupIds = array_map('intval', $groupIds);
+
+		return array_intersect(
+			$groupIds,
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+		);
 	}
 
 	private function checkAccess(): Main\Result
@@ -146,6 +170,11 @@ class ApacheSupersetDashboardCreateComponent
 		}
 
 		return $result;
+	}
+
+	private function canManageGroups(): bool
+	{
+		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY);
 	}
 
 	public function saveAction(array $data, Main\Engine\CurrentUser $user): ?array
@@ -191,8 +220,8 @@ class ApacheSupersetDashboardCreateComponent
 			->setTitle($responseData['body']['result']['dashboard_title'])
 			->setType(SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
 			->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
-			->setCreatedById((int)$user?->getId())
-			->setOwnerId((int)$user?->getId())
+			->setCreatedById((int)$user->getId())
+			->setOwnerId((int)$user->getId())
 		;
 		$saveResult = $dashboard->save();
 
@@ -203,16 +232,33 @@ class ApacheSupersetDashboardCreateComponent
 			return null;
 		}
 
-		$scopes = $data['scopes'] ?? [];
-		$params = $data['params'] ?? [];
-		$saveScopesResult = ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopes);
-		$saveParamsResult = (new UrlParameter\Service($dashboard))->saveDashboardParams($params, $scopes);
-		if (
-			!$saveScopesResult->isSuccess()
-			|| !$saveParamsResult->isSuccess()
-		)
+		if ($this->canManageGroups())
 		{
-			$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
+			$groups = $data['groups'] ?? [];
+			$scopes = $data['scopes'] ?? [];
+			$params = $data['params'] ?? [];
+			foreach ($groups as $group)
+			{
+				$saveGroupResult = SupersetDashboardGroupBindingTable::add([
+					'DASHBOARD_ID' => $dashboard->getId(),
+					'GROUP_ID' => (int)$group,
+				]);
+
+				if (!$saveGroupResult->isSuccess())
+				{
+					$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
+				}
+			}
+
+			$saveScopesResult = ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopes);
+			$saveParamsResult = (new UrlParameter\Service($dashboard))->saveDashboardParams($params, $scopes);
+			if (
+				!$saveScopesResult->isSuccess()
+				|| !$saveParamsResult->isSuccess()
+			)
+			{
+				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
+			}
 		}
 
 		$data = [];
@@ -220,10 +266,11 @@ class ApacheSupersetDashboardCreateComponent
 		$dashboard = $superset->getDashboardRepository()->getById($saveResult->getId(), true);
 		if ($dashboard)
 		{
-			$gridRow = \Bitrix\BIConnector\Superset\Grid\DashboardGrid::prepareRowData($dashboard);
+			$gridRow = DashboardGrid::prepareDashboardRowData($dashboard, ['IS_ACCESS_ALLOWED' => true]);
 
 			$data['id'] = $dashboard->getId();
 			$data['title'] = $dashboard->getTitle();
+			$data['groupIds'] = $dashboard->getOrmObject()->getGroups()->getIdList();
 
 			$data['columns'] = $gridRow['columns'];
 			$data['actions'] = $gridRow['actions'];

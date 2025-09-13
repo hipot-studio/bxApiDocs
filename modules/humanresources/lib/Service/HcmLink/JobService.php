@@ -3,11 +3,12 @@
 namespace Bitrix\HumanResources\Service\HcmLink;
 
 use Bitrix\HumanResources\Contract;
-use Bitrix\HumanResources\Event\HcmLink\JobDoneEvent;
-use Bitrix\HumanResources\Event\HcmLink\JobEvent;
+use Bitrix\HumanResources\Internals\Event\HcmLink\JobDoneEvent;
+use Bitrix\HumanResources\Internals\Event\HcmLink\JobEvent;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Item\HcmLink\Job;
+use Bitrix\HumanResources\Item\HcmLink\Job\SettingsData;
 use Bitrix\HumanResources\Result\Service\HcmLink\JobServiceResult;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\HcmLink\JobStatus;
@@ -22,7 +23,7 @@ class JobService implements Contract\Service\HcmLink\JobService
 {
 	private const MODULE_ID = 'humanresources';
 
-	private Contract\Repository\HcmLink\JobRepository $jobRepository;
+	protected Contract\Repository\HcmLink\JobRepository $jobRepository;
 	protected Contract\Repository\HcmLink\CompanyRepository $companyRepository;
 
 	public function __construct(
@@ -92,22 +93,16 @@ class JobService implements Contract\Service\HcmLink\JobService
 			return (new Result())->addError(new Error('Failed to create job'));
 		}
 
-		$this->riseRestEvents(RestEventType::onEmployeeListRequested, $job);
+		$this->sendJob($job);
 
 		return new JobServiceResult($job);
 	}
 
-	/**
-	 * @param int $companyId \Bitrix\HumanResources\Item\HcmLink\Company::id
-	 * @param string[] $employeeUids
-	 * @param string[] $fieldUids
-	 *
-	 * @return JobServiceResult|Result
-	 */
 	public function requestFieldValue(
 		int $companyId,
 		array $employeeUids = [],
 		array $fieldUids = [],
+		array $documentIdByEmployeeIdMap = [],
 	): JobServiceResult|Result
 	{
 		$company = $this->companyRepository->getById($companyId);
@@ -130,7 +125,7 @@ class JobService implements Contract\Service\HcmLink\JobService
 			'company' => $company->code,
 			'employees' => $employeeUids,
 			'fields' => $fieldUids,
-			'date' =>  (new DateTime())->format(\DateTimeInterface::ATOM),
+			'date' => (new DateTime())->format(\DateTimeInterface::ATOM),
 		];
 
 		try
@@ -140,6 +135,9 @@ class JobService implements Contract\Service\HcmLink\JobService
 					companyId: $company->id,
 					type: JobType::FIELD_VALUES,
 					outputData: $data,
+					settingsData: new SettingsData(
+						documentIdByEmployeeId: $documentIdByEmployeeIdMap,
+					),
 				),
 			);
 		}
@@ -148,7 +146,7 @@ class JobService implements Contract\Service\HcmLink\JobService
 			return (new Result())->addError(new Error('Failed to create job'));
 		}
 
-		$this->riseRestEvents(RestEventType::onFieldValueRequested, $job);
+		$this->sendJob($job);
 
 		return new JobServiceResult($job);
 	}
@@ -200,7 +198,7 @@ class JobService implements Contract\Service\HcmLink\JobService
 			return (new Result())->addError(new Error('Failed to create job'));
 		}
 
-		$this->riseRestEvents(RestEventType::onEmployeeListMapped, $job);
+		$this->sendJob($job);
 
 		return new JobServiceResult($job);
 	}

@@ -4,6 +4,7 @@ namespace Bitrix\Vote\Integration\Im;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Vote\Attach;
 use Bitrix\Vote\Attachment\ImMessageConnector;
 use Bitrix\Vote\Attachment\Manager;
 use Bitrix\Vote\EO_Attach;
@@ -46,14 +47,22 @@ class ImVoteEventHandler
 			return;
 		}
 
-		(new EO_Attach())
-			->setModuleId('im')
-			->setObjectId($messageFields['PARAMS']['COMPONENT_PARAMS'][ImVote::MESSAGE_COMPONENT_PARAM_VOTE_ID])
-			->setEntityId($messageId)
-			->setEntityType(ImMessageConnector::className())
-			->setCreatedBy($messageFields['AUTHOR_ID'] ?? null)
-			->setCreateTime(new DateTime())
-			->save()
-		;
+		for ($try = 1; $try <= 2; $try++)
+		{
+			$result = (new EO_Attach())
+				->setModuleId('im')
+				->setObjectId($messageFields['PARAMS']['COMPONENT_PARAMS'][ImVote::MESSAGE_COMPONENT_PARAM_VOTE_ID])
+				->setEntityId($messageId)
+				->setEntityType(ImMessageConnector::className())
+				->setCreatedBy($messageFields['AUTHOR_ID'] ?? null)
+				->setCreateTime(new DateTime())
+				->setUid(Attach::generateUid())
+				->save()
+			;
+			if ($result->isSuccess())
+			{
+				break;
+			}
+		}
 	}
 }

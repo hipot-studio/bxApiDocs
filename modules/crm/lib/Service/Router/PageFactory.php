@@ -3,8 +3,6 @@
 namespace Bitrix\Crm\Service\Router;
 
 use Bitrix\Crm\Service\Router;
-use Bitrix\Crm\Service\Router\Component\Component;
-use Bitrix\Crm\Service\Router\Page\ComponentPage;
 
 final class PageFactory implements Router\Contract\PageFactory
 {
@@ -31,6 +29,9 @@ final class PageFactory implements Router\Contract\PageFactory
 			Page\AutomatedSolution\PermissionsPage::class,
 			Page\Copilot\CallAssessment\ListPage::class,
 			Page\Copilot\CallAssessment\DetailsPage::class,
+			Page\RepeatSale\Segment\ListPage::class,
+			Page\RepeatSale\Segment\DetailsPage::class,
+			Page\RepeatSale\Segment\ResultPage::class,
 			Page\Item\ListPage::class,
 			Page\Item\KanbanPage::class,
 			Page\Item\DeadlinesPage::class,

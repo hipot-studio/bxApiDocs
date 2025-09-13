@@ -464,11 +464,22 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 					}
 					if (isset($item['FILES']) && is_array($item['FILES']))
 					{
+						$fileList = $structure->getFileList() ?? [];
+						$existingFileIds = array_map('intval', array_column($fileList, 'ID'));
 						foreach ($item['FILES'] as $file)
 						{
-							if(isset($file['ID']))
+							$fileId = isset($file['ID']) ? (int)$file['ID'] : 0;
+
+							if ($fileId === 0)
 							{
 								$structure->saveFile($file['ID'], $file);
+								continue;
+							}
+
+							if (!in_array($fileId, $existingFileIds, true))
+							{
+								$structure->saveFile($fileId, $file);
+								$existingFileIds[] = $fileId;
 							}
 						}
 					}

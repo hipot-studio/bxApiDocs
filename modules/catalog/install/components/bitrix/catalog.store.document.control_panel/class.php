@@ -441,7 +441,7 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 			&& $this->accessController->check(ActionDictionary::ACTION_CATALOG_IMPORT_EXECUTION)
 		)
 		{
-			$url = '/marketplace/?tag[0]=migrator&tag[1]=inventory';
+			$url = '/market/collection/migration_inventory/';
 			$buttons[] = [
 				'ID' => 'transfer_data',
 				'TEXT' => Loc::getMessage('STORE_DOCUMENTS_TRANSFER_DATA_TITLE'),

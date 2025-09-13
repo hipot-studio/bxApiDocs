@@ -3,6 +3,8 @@ IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Im as IM;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Background\Background;
+use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Entity\User\UserError;
 use Bitrix\Imopenlines\Model\SessionTable;
 use Bitrix\Im\V2\Sync;
@@ -740,7 +742,7 @@ class CIMChat
 		return $arMessages;
 	}
 
-	public static function GetRelationById($ID, $userId = false, $timezone = true, $withCounter = true)
+	public static function GetRelationById($ID, $userId = false, $timezone = true, $withCounter = true, bool $raw = false)
 	{
 		global $DB;
 
@@ -770,6 +772,11 @@ class CIMChat
 		while ($arRes = $dbRes->Fetch())
 			$arResult[$arRes['USER_ID']] = $arRes;
 
+		if (!$raw)
+		{
+			$arResult = IM\Chat::filterRelationsByAccess($ID, $arResult);
+		}
+
 		if ($userId > 0)
 			$arResult = isset($arResult[$userId])? $arResult[$userId]: false;
 
@@ -784,7 +791,7 @@ class CIMChat
 			$readService = new IM\V2\Message\ReadService($userId);
 			if ($userId > 0)
 			{
-				$arResult['COUNTER'] = $readService->getCounterService()->getByChat($ID);
+				$arResult['COUNTER'] = $readService->getCounterService()->getByChatWithOverflow($ID);
 				$lastRead =  $readService->getViewedService()->getDateViewedByMessageId($arResult['LAST_ID']);
 				$arResult['LAST_READ'] = isset($lastRead) ? $lastRead->format('Y-m-d H:i:s') : null;
 			}
@@ -1212,6 +1219,8 @@ class CIMChat
 						'manage_messages' => mb_strtolower($arRes['CAN_POST']),
 						'can_post' => mb_strtolower($arRes['CAN_POST']),
 					],
+					'text_field_enabled' => (new TextFieldEnabled((int)$arRes["CHAT_ID"]))->get(),
+					'background_id' => (new Background((int)$arRes["CHAT_ID"]))->get(),
 					'message_type' => $arRes["CHAT_TYPE"],
 					'is_new' => CIMChat::isNewChat($arRes['CHAT_TYPE'], $dateCreate ?: null),
 				);
@@ -1592,6 +1601,7 @@ class CIMChat
 						'lines' => $relation['MESSAGE_TYPE'] === IM_MESSAGE_OPEN_LINE,
 						'viewedMessages' => $viewedMessages,
 						'counterType' => $chat->getCounterType()->value,
+						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 					),
 					'extra' => \Bitrix\Im\Common::getPullExtra()
 				));
@@ -1700,6 +1710,7 @@ class CIMChat
 						'unread' => Im\Recent::isUnread($this->user_id, $relation['MESSAGE_TYPE'], 'chat'.$chatId),
 						'lastMessageViews' => Im\Common::toJson($chat->getLastMessageViews()),
 						'counterType' => $chat->getCounterType()->value,
+						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 					),
 					'push' => Array('badge' => 'Y'),
 					'extra' => \Bitrix\Im\Common::getPullExtra()
@@ -1750,7 +1761,7 @@ class CIMChat
 			Sync\Logger::getInstance()->add(
 				new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chat->getChatId()),
 				$this->user_id,
-				$chat->getType()
+				$chat
 			);
 
 
@@ -3353,6 +3364,9 @@ class CIMChat
 			Chat::IM_TYPE_CHANNEL,
 			Chat::IM_TYPE_OPEN_CHANNEL,
 			Chat::IM_TYPE_COLLAB,
+			Chat::IM_TYPE_EXTERNAL,
+			Chat::IM_TYPE_AI_ASSISTANT,
+			Chat::IM_TYPE_AI_ASSISTANT_ENTITY,
 		];
 	}
 

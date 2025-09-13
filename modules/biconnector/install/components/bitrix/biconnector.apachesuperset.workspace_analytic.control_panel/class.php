@@ -35,8 +35,13 @@ class ApacheSupersetControlPanelWorkspaceAnalytic extends CBitrixComponent
 				'ID' => 'STATISTICS',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_STATISTICS'),
 				'URL' => '/bi/statistics/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER',
-				'IS_DISABLED' => false,
 				'IS_ACTIVE' => $currentPage === '/bi/statistics/',
+			],
+			[
+				'ID' => 'UNUSED_ELEMENTS',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_UNUSED_ELEMENTS'),
+				'URL' => '/bi/unused_elements/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER',
+				'IS_ACTIVE' => $currentPage === '/bi/unused_elements/',
 			],
 		];
 

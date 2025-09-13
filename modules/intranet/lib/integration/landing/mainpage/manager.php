@@ -33,6 +33,7 @@ class Manager
 	public const SEF_EDIT_URL_TEMPLATES = [
 		'landing_edit' => '#site_show#/#landing_edit#/',
 		'landing_view' => '#site_show#/view/#landing_edit#/',
+		'landing_settings' => '#site_show#/settings/#landing_edit#/',
 		'site_edit' => '#site_edit#/',
 		'site_show' => '#site_show#/',
 	];

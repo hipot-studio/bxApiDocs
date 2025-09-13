@@ -6,6 +6,7 @@ use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Access\Model\StoreDocument;
 use Bitrix\Catalog\Config\Feature;
 use Bitrix\Catalog\Config\State;
+use Bitrix\Catalog\StoreDocumentElementTable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Catalog\StoreDocumentTable;
 use Bitrix\Main\Engine\Response\DataType\Page;
@@ -384,6 +385,8 @@ class Document extends Controller
 
 		$documentData = $this->getDocumentData($documentIds);
 
+		$storeList = $this->getDocumentStoreList($documentIds);
+
 		foreach ($documentIds as $documentId)
 		{
 			$exception = null;
@@ -407,6 +410,12 @@ class Document extends Controller
 				ActionDictionary::ACTION_STORE_DOCUMENT_DELETE,
 				StoreDocument::createFromArray($document)
 			);
+
+			if ($storeList[$documentId])
+			{
+				$can = $can && $this->checkAllStoreAccess($storeList[$documentId]);
+			}
+
 			if ($can)
 			{
 				\CCatalogDocs::delete($documentId);
@@ -415,9 +424,18 @@ class Document extends Controller
 			}
 			else
 			{
-				$exception = new CApplicationException(
-					Loc::getMessage('DOCUMENT_CONTROLLER_NO_RIGHTS_ERROR')
+				$documentTitle = $document['TITLE'] ?: StoreDocumentTable::getTypeList(true)[$document['DOC_TYPE']];
+
+				$this->addError(
+					new Error(Loc::getMessage(
+						'DOCUMENT_CONTROLLER_NO_RIGHTS_TO_DELETE_ERROR',
+						[
+							'#DOC_TITLE#' => htmlspecialcharsbx($documentTitle),
+						],
+					))
 				);
+
+				return null;
 			}
 
 			if ($exception)
@@ -470,6 +488,13 @@ class Document extends Controller
 		}
 
 		if (!$this->checkDocumentAccess(ActionDictionary::ACTION_STORE_DOCUMENT_DELETE, $id))
+		{
+			return null;
+		}
+
+		$storeList = $this->getDocumentStoreList([$id]);
+
+		if (isset($storeList[$id]) && !$this->checkAllStoreAccess($storeList[$id]))
 		{
 			return null;
 		}
@@ -751,6 +776,59 @@ class Document extends Controller
 		}
 
 		return $documentTitles;
+	}
+
+	private function getDocumentStoreList(array $documentIds): array
+	{
+		$documentRawList = StoreDocumentElementTable::getList([
+			'select' => [
+				'DOC_ID',
+				'STORE_FROM',
+				'STORE_TO',
+			],
+			'filter' => [
+				'@DOC_ID' => $documentIds,
+			],
+		]);
+
+		$storeList = [];
+
+		while ($document = $documentRawList->fetch())
+		{
+			$documentId = (int)$document['DOC_ID'];
+			$storeList[$documentId] ??= [];
+
+			$storeFrom = (int)$document['STORE_FROM'];
+			$storeTo = (int)$document['STORE_TO'];
+
+			if ($document['STORE_FROM'] > 0)
+			{
+				$storeList[$documentId][$storeFrom] = $storeFrom;
+			}
+			if ($document['STORE_TO'] > 0)
+			{
+				$storeList[$documentId][$storeTo] = $storeTo;
+			}
+		}
+
+		return $storeList;
+	}
+
+	private function checkAllStoreAccess(array $documentIds): bool
+	{
+		$can = true;
+
+		foreach ($documentIds as $storeId)
+		{
+			if (!$this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, $storeId))
+			{
+				$can = false;
+
+				break;
+			}
+		}
+
+		return $can;
 	}
 
 	/**

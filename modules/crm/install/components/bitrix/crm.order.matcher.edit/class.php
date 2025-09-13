@@ -510,7 +510,14 @@ class CCrmConfigOrderProps extends \CBitrixComponent
 
 		foreach (\Bitrix\Crm\Order\Matcher\BaseEntityMatcher::DUPLICATE_CONTROL_MODES as $mode)
 		{
-			$duplicateModeList[$mode] = Loc::getMessage('CRM_ORDERFORM_RESULT_ENTITY_DC_'.$mode);
+			$message = Loc::getMessage('CRM_ORDERFORM_RESULT_ENTITY_DC_' . $mode) ?? null;
+
+			if (!$message)
+			{
+				$message = Loc::getMessage('CRM_ORDERFORM_RESULT_ENTITY_DC_' . $mode . '_MSGVER_1');
+			}
+
+			$duplicateModeList[$mode] = $message;
 		}
 
 		return $duplicateModeList;

@@ -3,6 +3,7 @@ namespace Bitrix\Disk\Internals;
 
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\MysqlCommonConnection;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Entity\UpdateResult;
@@ -521,12 +522,24 @@ class ObjectTable extends DataManager
 		$helper = $connection->getSqlHelper();
 		$update = $helper->prepareUpdate($table, ['SYNC_UPDATE_TIME' => $dateTime,]);
 
-		$sql = "
-			UPDATE {$table} obj
-			INNER JOIN {$tablePath} p ON p.OBJECT_ID = obj.ID
-			SET {$update[0]}
-			WHERE p.PARENT_ID = {$objectId}
-		";
+		if ($connection instanceof MysqlCommonConnection)
+		{
+			$sql = "
+				UPDATE {$table} obj
+				INNER JOIN {$tablePath} p ON p.OBJECT_ID = obj.ID
+				SET {$update[0]}
+				WHERE p.PARENT_ID = {$objectId}
+			";
+		}
+		else
+		{
+			$sql = "
+				UPDATE {$table} AS obj
+				SET {$update[0]}
+				FROM {$tablePath} p
+				WHERE obj.ID = p.OBJECT_ID
+				  AND p.PARENT_ID = {$objectId};";
+		}
 
 		$connection->queryExecute($sql, $update[1]);
 	}

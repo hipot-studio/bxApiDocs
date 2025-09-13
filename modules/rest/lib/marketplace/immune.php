@@ -3,6 +3,8 @@
 namespace Bitrix\Rest\Marketplace;
 
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DB\Exception;
+use Bitrix\Main\SystemException;
 use Bitrix\Rest\Internals\FreeAppTable;
 
 /**
@@ -58,7 +60,6 @@ class Immune
 	{
 		$immuneAppList = Client::getImmuneApp();
 		FreeAppTable::updateFreeAppTable($immuneAppList);
-
 		$cache = Cache::createInstance();
 		$cache->clean('immuneAppList', static::CACHE_DIR);
 

@@ -2,6 +2,8 @@
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\User\Access\Model\TargetUserModel;
+use Bitrix\Intranet\User\Access\UserAccessController;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Intranet\Component\UserProfile;
@@ -162,6 +164,16 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->arResult['ADDITIONAL_BLOCKS'] = $this->getAdditionalBlocks();
 		$this->arResult['IS_ADDITIONAL_BLOCK'] = !empty($this->arResult['ADDITIONAL_BLOCKS']);
 
+		$userService = \Bitrix\Intranet\Service\ServiceContainer::getInstance()->getUserService();
+		$access = UserAccessController::createByDefault();
+		$userEntity = \Bitrix\Intranet\Entity\User::initByArray($this->arResult['User']);
+		$userAccessModel = TargetUserModel::createFromUserEntity($userEntity);
+		$availableActions = $userService->getAvailableActions($userEntity);
+		$availableActions = $access->batchCheck(
+			\Bitrix\Intranet\User\Access\UserActionDictionary::valuesForBatchCheck($availableActions),
+			$userAccessModel,
+		);
+		$this->arResult['ACTIONS_AVAILABILITY'] = $availableActions;
 
 		$this->processShowYear();
 
@@ -171,6 +183,20 @@ class CIntranetUserProfileComponent extends UserProfile
 		{
 			$APPLICATION->SetTitle(\CUser::FormatName(\CSite::GetNameFormat(), $this->arResult["User"], true));
 		}
+
+		$rootDepartment = \Bitrix\Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()
+			->findFirstPossibleAvailableDepartment();
+		$this->arResult["ROOT_DEPARTMENT"] = null;
+		if ($rootDepartment)
+		{
+			$this->arResult["ROOT_DEPARTMENT"] = [
+				'id' => $rootDepartment->getId(),
+				'name' => $rootDepartment->getName(),
+				'accessCode' => $rootDepartment->getAccessCode(),
+			];
+		}
+
+
 
 		$this->includeComponentTemplate();
 	}

@@ -19,8 +19,13 @@ class GroupProvider
 		return \Bitrix\Socialnetwork\Provider\GroupProvider::getInstance();
 	}
 
-	public static function isCollab(int $groupId): ?bool
+	public static function isCollab(int $groupId): bool
 	{
-		return static::getInstance()->getGroupType($groupId) === Type::Collab;
+		return static::getInstance()?->getGroupType($groupId) === Type::Collab;
+	}
+
+	public static function isProject(int $groupId): bool
+	{
+		return static::getInstance()?->getGroupType($groupId) === Type::Project;
 	}
 }

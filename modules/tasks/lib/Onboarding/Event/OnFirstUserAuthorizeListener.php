@@ -53,7 +53,7 @@ final class OnFirstUserAuthorizeListener extends AbstractEventListener
 
 		$this->saveCommandModels($commandModels);
 
-		$this->deleteJob(Type::ResponsibleInvitationNotAcceptedOneDay, $userId);
+		$this->deleteByUserJob([Type::ResponsibleInvitationNotAcceptedOneDay], $userId);
 
 		return $eventResult;
 	}

@@ -2,6 +2,7 @@
 
 use Bitrix\Main\Application;
 use Bitrix\Main\ModuleTable;
+use Bitrix\Main\Service\Version\BitrixVm;
 
 class CSiteCheckerTest
 {
@@ -612,35 +613,18 @@ class CSiteCheckerTest
 
 		if (IsModuleInstalled('intranet'))
 		{
-			$vm = getenv('BITRIX_VA_VER');
-			if (!$vm)
+			$vm = new BitrixVm();
+			$vmVer = $vm->getVersion();
+			if (!$vmVer)
 			{
 				$strError .= GetMessage('ERR_NO_VM') . "<br>";
 			}
 			else
 			{
-				$last_version = '7.3.0';
-				$tmp = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/tmp/bitrix-env.version';
-				if (!file_exists($tmp) || time() - filemtime($tmp) > 86400)
+				$vmAvailableVer = $vm->getAvailableVersion();
+				if (version_compare($vmVer, $vmAvailableVer, '<'))
 				{
-					$http = new \Bitrix\Main\Web\HttpClient([
-						"socketTimeout" => 5,
-						"streamTimeout" => 5,
-					]);
-					$http->download('https://repos.1c-bitrix.ru/yum/bitrix-env.version', $tmp);
-				}
-
-				if (file_exists($tmp))
-				{
-					$last_version_remote = str_replace('-', '.', file_get_contents($tmp));
-					if (version_compare($last_version_remote, $last_version, '>'))
-					{
-						$last_version = $last_version_remote;
-					}
-				}
-				if (version_compare($vm, $last_version, '<'))
-				{
-					$strError .= GetMessage('ERR_OLD_VM', ['#CURRENT#' => $vm, '#LAST_VERSION#' => $last_version]) . "<br>";
+					$strError .= GetMessage('ERR_OLD_VM', ['#CURRENT#' => $vmVer, '#LAST_VERSION#' => $vmAvailableVer]) . "<br>";
 				}
 			}
 		}

@@ -206,15 +206,6 @@ class LandingSiteDemoPreviewComponent extends LandingSiteDemoComponent
 					$this->arParams['IS_CRM_FORM'] = 'Y';
 				}
 
-				if ($this->request('context_section') !== '')
-				{
-					$this->arParams['CONTEXT_SECTION'] = $this->request('context_section');
-				}
-				if ($this->request('context_element') !== '')
-				{
-					$this->arParams['CONTEXT_ELEMENT'] = $this->request('context_element');
-				}
-
 				if ($this->arParams['TYPE'] === Type::SCOPE_CODE_MAINPAGE)
 				{
 					$manager = new Mainpage\Manager();

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Main\Messenger\Internals\Storage\Db\Model;
 
-use Bitrix\Main\Entity\IntegerField;
-use Bitrix\Main\Entity\TextField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\Type\DateTime;

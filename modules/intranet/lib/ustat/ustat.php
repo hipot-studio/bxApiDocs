@@ -8,11 +8,14 @@
 
 namespace Bitrix\Intranet\UStat;
 
+use Bitrix\Intranet\Repository\HrDepartmentRepository;
+use Bitrix\Intranet\User;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlException;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type;
@@ -126,7 +129,12 @@ class UStat
 		if (empty($userId))
 		{
 			// try to get current user id
-			if (isset($GLOBALS['USER']) && is_object($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser)
+			if (
+				isset($GLOBALS['USER'])
+				&& is_object($GLOBALS['USER'])
+				&& $GLOBALS['USER'] instanceof \CUser
+				&& $GLOBALS['USER']->getId() > 0
+			)
 			{
 				/** @var \CUser[] $GLOBALS */
 				$userId = (int) $GLOBALS['USER']->getId();
@@ -149,9 +157,8 @@ class UStat
 		}
 
 		// check if user is in intranet and has a department
-		$usersDepartments = static::getUsersDepartments();
-
-		if (!isset($usersDepartments[$userId]))
+		$user = new User($userId);
+		if (!$user->isIntranet())
 		{
 			return false;
 		}
@@ -214,9 +221,11 @@ class UStat
 		}
 
 		// get user departments
-		$allUDepts = static::getUsersDepartments();
-		$userDepts = $allUDepts[$userId];
-		$departmentHitStat = new DepartmentHitStat($userDepts);
+		/** @var HrDepartmentRepository $repo */
+		$repo = ServiceLocator::getInstance()->get('intranet.repository.hr.department');
+		$departmentCollection = $repo->findAllByUserId($userId);
+		$userDepartmentIds = $departmentCollection->map(fn(\Bitrix\Intranet\Entity\Department $department) => $department->getId());
+		$departmentHitStat = new DepartmentHitStat($userDepartmentIds);
 		$departmentHitStat->hour($section, $currentHour);
 		$departmentHitStat->day($section, $currentHour);
 	}

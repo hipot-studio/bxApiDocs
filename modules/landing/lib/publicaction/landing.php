@@ -1,18 +1,19 @@
 <?php
 namespace Bitrix\Landing\PublicAction;
 
-use \Bitrix\Landing\Hook;
-use \Bitrix\Landing\Manager;
-use \Bitrix\Landing\File;
-use \Bitrix\Landing\Folder;
-use \Bitrix\Landing\Site;
-use \Bitrix\Landing\Block as BlockCore;
-use \Bitrix\Landing\TemplateRef;
-use \Bitrix\Landing\Landing as LandingCore;
-use \Bitrix\Landing\PublicActionResult;
-use \Bitrix\Landing\Internals\HookDataTable;
-use \Bitrix\Landing\History;
-use \Bitrix\Main\Localization\Loc;
+use Bitrix\Landing\Hook;
+use Bitrix\Landing\Manager;
+use Bitrix\Landing\File;
+use Bitrix\Landing\Folder;
+use Bitrix\Landing\Metrika;
+use Bitrix\Landing\Site;
+use Bitrix\Landing\Block as BlockCore;
+use Bitrix\Landing\TemplateRef;
+use Bitrix\Landing\Landing as LandingCore;
+use Bitrix\Landing\PublicActionResult;
+use Bitrix\Landing\Internals\HookDataTable;
+use Bitrix\Landing\History;
+use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
@@ -144,7 +145,12 @@ class Landing
 
 		if ($landing->exist())
 		{
-			if ($landing->publication())
+			$metrikaParams = new Metrika\FieldsDto(
+				type: Metrika\Types::template,
+				subSection: 'from_editor',
+				element: 'auto',
+			);
+			if ($landing->publication(null, $metrikaParams))
 			{
 				$result->setResult(true);
 			}

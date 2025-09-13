@@ -68,7 +68,7 @@ class TaskRegistry
 	 */
 	public function get(int $taskId, bool $withRelations = false): ?array
 	{
-		if (!array_key_exists($taskId, $this->storage))
+		if (!$this->isLoaded($taskId))
 		{
 			$this->load($taskId, $withRelations);
 		}
@@ -160,7 +160,9 @@ class TaskRegistry
 			->addSelect('ID')
 			->addSelect('TITLE')
 			->addSelect('GROUP_ID')
+			->addSelect('STAGE_ID')
 			->addSelect('STATUS')
+			->addSelect('STATUS_CHANGED_DATE')
 			->addSelect('ALLOW_CHANGE_DEADLINE')
 			->addSelect('ALLOW_TIME_TRACKING')
 			->addSelect('DEADLINE')
@@ -174,6 +176,7 @@ class TaskRegistry
 			->addSelect('CREATED_DATE')
 			->addSelect('START_DATE_PLAN')
 			->addSelect('END_DATE_PLAN')
+			->addSelect('SITE_ID')
 			->whereIn('ID', $taskIds)
 			->exec();
 
@@ -207,6 +210,11 @@ class TaskRegistry
 		}
 
 		return $this;
+	}
+
+	public function isLoaded(int $taskId): bool
+	{
+		return array_key_exists($taskId, $this->storage);
 	}
 
 	/**

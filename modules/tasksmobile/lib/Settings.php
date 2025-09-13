@@ -36,18 +36,12 @@ final class Settings
 		$this->userId = $userId;
 	}
 
-	public function clientHasApiVersion(int $apiVersion): bool
-	{
-		return Mobile::getInstance()::getApiVersion() >= $apiVersion;
-	}
-
 	public function isBetaAvailable(): bool
 	{
 		return (
 			Mobile::getInstance()::$isDev
 			|| (
-				$this->clientHasApiVersion(54)
-				&& Option::get('tasksmobile', Settings::IS_BETA_AVAILABLE, 'Y', '-') === 'Y'
+				Option::get('tasksmobile', Settings::IS_BETA_AVAILABLE, 'Y', '-') === 'Y'
 			)
 		);
 	}
@@ -74,7 +68,7 @@ final class Settings
 
 	public function isTaskFlowAvailable(): bool
 	{
-		return FlowFeature::isOn() && $this->clientHasApiVersion(54);
+		return FlowFeature::isOn();
 	}
 
 	public function getDashboardSelectedView(int $projectId = 0): string

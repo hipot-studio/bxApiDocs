@@ -7,6 +7,7 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\Main\Application;
 use Bitrix\Intranet\MainPage;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Type\Date;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -207,14 +208,20 @@ class CIntranetUtils
 						$departments[] = DepartmentBackwardAccessCode::makeById((int)$department);
 					}
 				);
-				$nodes = \Bitrix\HumanResources\Service\Container::getNodeRepository()
-					->findAllByAccessCodes($departments);
 
-				foreach ($nodes as $node)
+				$departmentsChunk = array_chunk($departments, 200);
+
+				foreach ($departmentsChunk as $chunk)
 				{
-					$sectionId = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
-					$INTR_DEPARTMENTS_CACHE[] = $sectionId;
-					$INTR_DEPARTMENTS_CACHE_VALUE[$sectionId] = $node->name;
+					$nodes = \Bitrix\HumanResources\Service\Container::getNodeRepository()
+						->findAllByAccessCodes($chunk);
+
+					foreach ($nodes as $node)
+					{
+						$sectionId = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
+						$INTR_DEPARTMENTS_CACHE[] = $sectionId;
+						$INTR_DEPARTMENTS_CACHE_VALUE[$sectionId] = $node->name;
+					}
 				}
 			}
 			elseif (Loader::includeModule('iblock'))
@@ -244,7 +251,7 @@ class CIntranetUtils
 		if (null === $CACHE_ABSENCE)
 		{
 			$cache_ttl = (24-date('G')) * 3600;
-			$cache_dir = '/'.SITE_ID.'/intranet/absence';
+			$cache_dir = '/'.SITE_ID.'/intranet/absence/v3';
 
 			$obCache = new CPHPCache();
 			if ($obCache->InitCache($cache_ttl, 'intranet_absence', $cache_dir))
@@ -256,17 +263,28 @@ class CIntranetUtils
 				if (null == $CALENDAR_IBLOCK_ID)
 					$CALENDAR_IBLOCK_ID = COption::GetOptionInt('intranet', 'iblock_calendar', null);
 
-				$dt = ConvertTimeStamp(false, 'SHORT');
+				$timeZoneEnabled = \CTimeZone::Enabled();
+
+				if ($timeZoneEnabled)
+				{
+					\CTimeZone::Disable();
+				}
+
 				$arAbsence = CIntranetUtils::GetAbsenceData(
 					array(
 						'CALENDAR_IBLOCK_ID' => $CALENDAR_IBLOCK_ID,
-						'DATE_START' => $dt,
-						'DATE_FINISH' => $dt,
+						'DATE_START' => (new Date(null, 'Y-m-01'))->add('-1 day'),
+						'DATE_FINISH' => (new Date(null, 'Y-m-01'))->add('1 month'),
 						'PER_USER' => true,
 						'SELECT' => array('DATE_ACTIVE_FROM', 'DATE_ACTIVE_TO'),
 						'CHECK_PERMISSIONS' => 'N'
 					)
 				);
+
+				if ($timeZoneEnabled)
+				{
+					\CTimeZone::Enable();
+				}
 
 				$obCache->StartDataCache();
 				$CACHE_MANAGER->StartTagCache($cache_dir);
@@ -292,19 +310,28 @@ class CIntranetUtils
 
 		if (is_array($arAbsence[$USER_ID] ?? null))
 		{
-			$ts = time() + \CTimeZone::getOffset();
+			$ts = (new \Bitrix\Main\Type\DateTime())->enableUserTime()->getTimestamp();
 			foreach($arAbsence[$USER_ID] as $arEntry)
 			{
-				$ts_start = MakeTimeStamp($arEntry['DATE_FROM'], FORMAT_DATETIME);
+				$ts_start = MakeTimeStamp($arEntry['DATE_FROM'], FORMAT_DATETIME) + CTimeZone::GetOffset();
 				if ($ts_start < $ts)
 				{
-					$ts_finish = MakeTimeStamp($arEntry['DATE_TO'], FORMAT_DATETIME);
+					$ts_finish = MakeTimeStamp($arEntry['DATE_TO'], FORMAT_DATETIME) + CTimeZone::GetOffset();
 
 					if ($ts_finish > $ts)
+					{
 						return true;
+					}
 
-					if (($ts_start+date('Z')) % 86400 == 0 && $ts_start == $ts_finish)
+					if ($ts_start === $ts_finish && !self::IsDateTime($ts_start))
+					{
 						return true;
+					}
+
+					if (($ts_finish + 86400 > $ts) && (!self::IsDateTime($ts_finish)))
+					{
+						return true;
+					}
 				}
 			}
 		}
@@ -1184,7 +1211,7 @@ class CIntranetUtils
 			self::_GetDeparmentsTreeWithoutEmployee();
 		}
 
-		return self::$SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE['DATA'][$section_id]['UF_HEAD'];
+		return self::$SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE['DATA'][$section_id]['UF_HEAD'] ?? null;
 	}
 
 	/**
@@ -1211,9 +1238,9 @@ class CIntranetUtils
 		$arManagerIDs = array();
 		foreach ($arDepartments as $section_id)
 		{
-			$arSection = self::$SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE['DATA'][$section_id];
+			$arSection = self::$SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE['DATA'][$section_id] ?? null;
 
-			if ($arSection['UF_HEAD'] && $arSection['UF_HEAD'] != $skipUserId)
+			if (isset($arSection['UF_HEAD']) && $arSection['UF_HEAD'] && $arSection['UF_HEAD'] != $skipUserId)
 			{
 				$arManagers[$arSection['UF_HEAD']] = null;
 				$arManagerIDs[] = $arSection['UF_HEAD'];
@@ -1234,13 +1261,14 @@ class CIntranetUtils
 
 		foreach ($arDepartments as $section_id)
 		{
-			$arSection = self::$SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE['DATA'][$section_id];
+			$arSection = self::$SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE['DATA'][$section_id] ?? null;
 
-			$bFound = $arSection['UF_HEAD']
+			$bFound = isset($arSection['UF_HEAD'])
+				&& $arSection['UF_HEAD']
 				&& $arSection['UF_HEAD'] != $skipUserId
 				&& array_key_exists($arSection['UF_HEAD'], $arManagers);
 
-			if (!$bFound && $bRecursive && $arSection['IBLOCK_SECTION_ID'])
+			if (!$bFound && $bRecursive && !empty($arSection['IBLOCK_SECTION_ID']))
 			{
 				$ar = CIntranetUtils::GetDepartmentManager(array($arSection['IBLOCK_SECTION_ID']), $skipUserId, $bRecursive);
 				$arManagers = $arManagers + $ar;
@@ -1909,6 +1937,7 @@ class CIntranetUtils
 							'FROM_USER_ID'   => 0,
 							'NOTIFY_TYPE'    => IM_NOTIFY_SYSTEM,
 							'NOTIFY_MODULE'  => 'intranet',
+							'NOTIFY_EVENT' => 'admin_notification',
 							'NOTIFY_MESSAGE' => str_replace(
 								array('#DOMAIN#', '#SERVER#'),
 								array(htmlspecialcharsbx($service['SERVER']), $siteUrl),
@@ -2226,8 +2255,6 @@ class CIntranetUtils
 
 		switch ($portalZone)
 		{
-			case "ua_bitrix_portal":
-				return "ua";
 			case "bitrix_portal":
 				return "en";
 			case "1c_bitrix_portal":

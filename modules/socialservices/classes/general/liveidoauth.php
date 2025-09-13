@@ -1,5 +1,6 @@
 <?
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Web\Json;
 
 IncludeModuleLangFile(__FILE__);
@@ -539,7 +540,14 @@ class CLiveIDOAuthInterface
 			"grant_type"=>"refresh_token",
 		), array(), $this->httpTimeout);
 
-		$arResult = Json::decode($result);
+		try
+		{
+			$arResult = Json::decode($result);
+		}
+		catch (ArgumentException)
+		{
+			return false;
+		}
 
 		if(isset($arResult["access_token"]) && $arResult["access_token"] <> '')
 		{

@@ -173,7 +173,7 @@ class CIntranetNotify
 		{
 			return;
 		}
-		
+
 		CSocNetLogRights::Add($logID, $arRights);
 		CSocNetLog::SendEvent($logID, "SONET_NEW_EVENT", $logID);
 	}
@@ -404,7 +404,7 @@ class CIntranetNotify
 
 				if (
 					$arParams["MOBILE"] !== "Y"
-					&& $arParams["NEW_TEMPLATE"] !== "Y"
+					&& (!isset($arParams["NEW_TEMPLATE"]) || $arParams["NEW_TEMPLATE"] !== "Y")
 				)
 				{
 					$arResult['EVENT_FORMATTED']['IS_MESSAGE_SHORT'] = CSocNetLogTools::FormatEvent_IsMessageShort($arFields['MESSAGE']);

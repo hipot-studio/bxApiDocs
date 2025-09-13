@@ -4,7 +4,6 @@ namespace Bitrix\Calendar\Sync\Managers;
 
 use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Core\Base\BaseException;
-use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Handlers\UpdateMasterExdateHandler;
 use Bitrix\Calendar\Core\Managers\Compare\EventCompareManager;
@@ -28,7 +27,6 @@ use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use CCalendar;
 use CCalendarSect;

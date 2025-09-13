@@ -11,10 +11,10 @@ use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
 use Bitrix\Crm\Format\Duration;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\OperationState;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
+use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotButtonTrait;
 use Bitrix\Crm\Service\Timeline\Item\Payload;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
@@ -51,6 +51,8 @@ use CFile;
 
 class Call extends Activity
 {
+	use CopilotButtonTrait;
+
 	private const BLOCK_DELIMITER = '&bull;';
 
 	final protected function getActivityTypeId(): string
@@ -832,7 +834,7 @@ class Call extends Activity
 			&& $this->hasUpdatePermission()
 			&& $this->isCopilotScope()
 			&& count($this->fetchAudioRecordList()) > 0
-			&& (new Orchestrator())->findPossibleFillFieldsTarget($activityId)?->getHash() === $this->getContext()->getIdentifier()->getHash()
+			&& $this->isItemHashValid($activityId, $this->getContext())
 		;
 
 		if (!$isButtonVisible)

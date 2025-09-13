@@ -33,8 +33,10 @@ use Bitrix\Im\Bot;
  */
 class Provider
 {
-	public const URI_METHOD_INFO = 'https://util.bitrixsoft.com/example_b24/redirect.php';
-	public const URI_EXAMPLE_DOWNLOAD = 'https://util.bitrixsoft.com/example_b24/';
+	/** @deprecated */
+	public const URI_METHOD_INFO = '';
+	/** @deprecated */
+	public const URI_EXAMPLE_DOWNLOAD = '';
 	public const APP_MODE_SERVER = 'SERVER';
 	public const APP_MODE_ZIP = 'ZIP';
 
@@ -175,6 +177,7 @@ class Provider
 						if (HoldEntity::is(HoldEntity::TYPE_WEBHOOK, $integration['PASS']))
 						{
 							HoldEntity::delete(HoldEntity::TYPE_WEBHOOK, $integration['PASS']);
+							HoldEntity::checkBlockCode(HoldEntity::TYPE_WEBHOOK);
 						}
 					}
 				}

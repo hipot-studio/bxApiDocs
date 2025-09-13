@@ -67,10 +67,14 @@ final class BalanceReport
 					$packBalance = [];
 					foreach ($purchasedPack->getPurchasedServices() as $service)
 					{
-						$packBalance[$service->getServiceCode()] ??= ['current' => 0, 'max' => 0];
+						$packBalance[$service->getServiceCode()] ??= ['current' => 'not actual', 'max' => 0];
 						$packBalance[$service->getServiceCode()]['max'] += $service->getInitialValue();
 						if ($purchasedPack->isActual())
 						{
+							if (!is_integer($packBalance[$service->getServiceCode()]['current']))
+							{
+								$packBalance[$service->getServiceCode()]['current'] = 0;
+							}
 							$packBalance[$service->getServiceCode()]['current'] += $service->getCurrentValue();
 						}
 					}
@@ -81,8 +85,12 @@ final class BalanceReport
 							$package->getCode(),
 							$purchase->getCode(),
 							$purchasedPack->getCode(),
-							$purchasedPack->getStartDate()->format('Y-m-d'),
-							$purchasedPack->getExpirationDate()->format('Y-m-d'),
+							$purchasedPack->getStartDate()->format(
+								Baas\Contract\DateTimeFormat::LOCAL_DATETIME->value
+							),
+							$purchasedPack->getExpirationDate()->format(
+								Baas\Contract\DateTimeFormat::LOCAL_DATETIME->value
+							),
 						]];
 					}
 				}
@@ -104,7 +112,7 @@ final class BalanceReport
 				);
 			}
 		}
-		$cb = fn($value) => str_pad((string)$value, 20, '_', STR_PAD_RIGHT);
+		$cb = fn($value) => str_pad(substr((string)$value, 0, 20), 20, '_', STR_PAD_RIGHT);
 		array_walk(
 			$noticeCollection['packages'],
 			function (&$row) use ($cb) {

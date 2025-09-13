@@ -707,6 +707,31 @@ class SprintService implements Errorable
 		return $sprint;
 	}
 
+	public function getSprintByIds(array $ids): array
+	{
+		\Bitrix\Main\Type\Collection::normalizeArrayValuesByInt($ids, false);
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		$sprints = [];
+
+		$query = new Query(EntityTable::getEntity());
+		$query->setSelect(['*']);
+		$query->whereIn('ID', $ids);
+		$rows = $query->exec();
+
+		while ($sprintsData = $rows->fetch())
+		{
+			$sprint = new EntityForm();
+			$sprint->fillFromDatabase($sprintsData);
+			$sprints[] = $sprint;
+		}
+
+		return $sprints;
+	}
+
 	public function removeSprint(EntityForm $sprint, PushService $pushService = null): bool
 	{
 		try

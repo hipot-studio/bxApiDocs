@@ -173,7 +173,7 @@ class Email extends Activity\Provider\Base
 	{
 		$direction = isset($activityFields['DIRECTION']) ? (int)$activityFields['DIRECTION'] : \CCrmActivityDirection::Undefined;
 
-		if ($direction === \CCrmActivityDirection::Outgoing && Crm\Automation\Factory::canUseAutomation())
+		if ($direction === \CCrmActivityDirection::Outgoing)
 		{
 			EmailSentTrigger::execute($activityFields['BINDINGS'], $activityFields);
 		}

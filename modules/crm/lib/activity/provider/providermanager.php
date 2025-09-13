@@ -3,6 +3,7 @@ namespace Bitrix\Crm\Activity\Provider;
 
 use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Badge\SourceIdentifier;
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Monitor;
@@ -91,6 +92,11 @@ class ProviderManager
 		if (!$checkAvailable || Zoom::isAvailable())
 		{
 			$providersList[Zoom::getId()] = Zoom::className();
+		}
+		
+		if (Feature::enabled(Feature\RepeatSale::class))
+		{
+			$providersList[RepeatSale::getId()] = RepeatSale::className();
 		}
 
 		return array_merge($providersList, self::anotherProviders());

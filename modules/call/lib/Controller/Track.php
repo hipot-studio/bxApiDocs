@@ -5,6 +5,7 @@ namespace Bitrix\Call\Controller;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Response\BFile;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Registry;
 use Bitrix\Call\Error;
@@ -13,7 +14,7 @@ use Bitrix\Call\NotifyService;
 use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\ControllerClient;
-use Bitrix\Call\Integration\AI\CallAIError;
+use Bitrix\Call\Integration\AI\ChatMessage;
 use Bitrix\Call\Integration\AI\CallAISettings;
 
 
@@ -38,14 +39,13 @@ class Track extends Engine\Controller
 		Loader::includeModule('im');
 	}
 
-		/**
+	/**
 	 * @restMethod call.Track.list
-	 * @param int $callId
 	 * @return array<array>|null
 	 */
-	public function listAction(int $callId): ?array
+	public function listAction(): ?array
 	{
-		$call = $this->getCall($callId);
+		$call = $this->getCall();
 		if (!$call)
 		{
 			return null;
@@ -105,32 +105,48 @@ class Track extends Engine\Controller
 
 	/**
 	 * @restMethod call.Track.destroy
-	 * @param int $callId
 	 * @return array|null
 	 */
-	public function destroyAction(int $callId): ?array
+	public function destroyAction(): ?array
 	{
-		$call = $this->getCall($callId);
+		$call = $this->getCall();
 		if (!$call)
 		{
 			return null;
 		}
 
-		$result = (new ControllerClient)->destroyTrack($call);
-		if (!$result->isSuccess())
+		if (Settings::isNewCallsEnabled())
 		{
-			$this->addErrors($result->getErrors());
-			return null;
+			$call
+				->setActionUserId($this->getCurrentUser()->getId())
+				->disableAudioRecord()
+				->disableAiAnalyze()
+				->save()
+			;
+		}
+		else
+		{
+			$call
+				->setActionUserId($this->getCurrentUser()->getId())
+				->disableAudioRecord()
+				->disableAiAnalyze()
+				->save()
+			;
+
+			$this->sendSwitchTrackRecordStatus($call, false);
+
+			(new ControllerClient)->destroyTrack($call);
 		}
 
-		$call
-			->setActionUserId($this->getCurrentUser()->getId())
-			->disableAudioRecord()
-			->disableAiAnalyze()
-			->save()
-		;
+		Loader::includeModule('im');
 
-		$this->sendSwitchTrackRecordStatus($call, false);
+		$chat = Chat::getInstance($call->getChatId());
+		$message = ChatMessage::generateTrackDestroyMessage($call->getId(), $this->getCurrentUser()->getId(), $chat->getId());
+		if ($message)
+		{
+			$message->setAuthorId($call->getInitiatorId());
+			NotifyService::getInstance()->sendMessageDeferred($chat, $message);
+		}
 
 		return ['destroyed' => true];
 	}
@@ -139,40 +155,17 @@ class Track extends Engine\Controller
 
 	/**
 	 * @restMethod call.Track.start
-	 * @param int $callId
 	 * @return array|null
 	 */
-	public function startAction(int $callId): ?array
+	public function startAction(): ?array
 	{
-		$call = $this->getCall($callId);
+		$call = $this->getCall();
 		if (!$call)
 		{
 			return null;
 		}
 
-		$error = null;
-		if (
-			!Settings::isAIServiceEnabled()
-			|| !CallAISettings::isTariffAvailable()
-		)
-		{
-			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR);// AI service unavailable by tariff
-		}
-		elseif (!CallAISettings::isEnableBySettings())
-		{
-			$error = new CallAIError(CallAIError::AI_SETTINGS_ERROR);// Module AI is disabled by settings
-		}
-		elseif (!CallAISettings::isAgreementAccepted())
-		{
-			$error = new CallAIError(CallAIError::AI_AGREEMENT_ERROR);// AI service agreement must be accepted
-		}
-		elseif (!CallAISettings::isAutoStartRecordingEnable())
-		{
-			if (!CallAISettings::isBaasServiceHasPackage())
-			{
-				$error = new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR);// It's not enough baas packages
-			}
-		}
+		$error = CallAISettings::isAIAvailableInCall();
 		if ($error)
 		{
 			$this->addError($error);
@@ -181,52 +174,74 @@ class Track extends Engine\Controller
 			return null;
 		}
 
-		$result = (new ControllerClient)->startTrack($call);
-		if (!$result->isSuccess())
+		if (Settings::isNewCallsEnabled())
 		{
-			$this->addErrors($result->getErrors());
-			return null;
+			$call
+				->setActionUserId($this->getCurrentUser()->getId())
+				->enableAudioRecord()
+				->enableAiAnalyze()
+				->save()
+			;
 		}
+		else
+		{
+			$result = (new ControllerClient)->startTrack($call);
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+				return null;
+			}
 
-		$call
-			->setActionUserId($this->getCurrentUser()->getId())
-			->enableAudioRecord()
-			->enableAiAnalyze()
-			->save()
-		;
+			$call
+				->setActionUserId($this->getCurrentUser()->getId())
+				->enableAudioRecord()
+				->enableAiAnalyze()
+				->save()
+			;
 
-		$this->sendSwitchTrackRecordStatus($call, true);
+			$this->sendSwitchTrackRecordStatus($call, true);
+		}
 
 		return ['started' => true];
 	}
 
 	/**
 	 * @restMethod call.Track.stop
-	 * @param int $callId
 	 * @return array|null
 	 */
-	public function stopAction(int $callId): ?array
+	public function stopAction(): ?array
 	{
-		$call = $this->getCall($callId);
+		$call = $this->getCall();
 		if (!$call)
 		{
 			return null;
 		}
 
-		$result = (new ControllerClient)->stopTrack($call);
-		if (!$result->isSuccess())
+		if (Settings::isNewCallsEnabled())
 		{
-			$this->addErrors($result->getErrors());
-			return null;
+			$call
+				->setActionUserId($this->getCurrentUser()->getId())
+				->disableAudioRecord()
+				->save()
+			;
 		}
+		else
+		{
+			$result = (new ControllerClient)->stopTrack($call);
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+				return null;
+			}
 
-		$call
-			->setActionUserId($this->getCurrentUser()->getId())
-			->disableAudioRecord()
-			->save()
-		;
+			$call
+				->setActionUserId($this->getCurrentUser()->getId())
+				->disableAudioRecord()
+				->save()
+			;
 
-		$this->sendSwitchTrackRecordStatus($call, false);
+			$this->sendSwitchTrackRecordStatus($call, false);
+		}
 
 		return ['stopped' => true];
 	}
@@ -266,30 +281,6 @@ class Track extends Engine\Controller
 		return BFile::createByFileId($track->getFileId(), $track->getFileName())->showInline(!$forceDownload);
 	}
 
-	/**
-	 * Setup session flag to enable record all user's call.
-	 * @restMethod call.Track.debugOn
-	 * @return array
-	 */
-	public function debugOnAction(int $chatId): array
-	{
-		\Bitrix\Call\Integration\AI\ChatEventLog::chatDebugEnable($chatId);
-
-		return ['record.audio' => 'on'];
-	}
-
-	/**
-	 * Removes session flag that is enabled record all user's call.
-	 * @restMethod call.Track.debugOff
-	 * @return array
-	 */
-	public function debugOffAction(int $chatId): array
-	{
-		\Bitrix\Call\Integration\AI\ChatEventLog::chatDebugDisable($chatId);
-
-		return ['record.audio' => 'off'];
-	}
-
 
 	protected function getTrack(int $callId, int $trackId): ?\Bitrix\Call\Track
 	{
@@ -309,30 +300,49 @@ class Track extends Engine\Controller
 		return $track;
 	}
 
-	protected function getCall(int $callId): ?\Bitrix\Im\Call\Call
+
+	protected function getCall(): ?\Bitrix\Im\Call\Call
 	{
-		$call = Registry::getCallWithId($callId);
+		if ($this->getRequest()->isPost())
+		{
+			$sourceParametersList = $this->getSourceParametersList()[0];
+		}
+		else
+		{
+			$sourceParametersList = $this->getSourceParametersList()[1];
+		}
+
+		$call = null;
+		if (!empty($sourceParametersList['callUuid']))
+		{
+			$call = Registry::getCallWithUuid((string)$sourceParametersList['callUuid']);
+		}
+		elseif (!empty($sourceParametersList['callId']) && is_numeric($sourceParametersList['callId']))
+		{
+			$call = Registry::getCallWithId((int)$sourceParametersList['callId']);
+		}
 		if (!$call)
 		{
 			$this->addError(new Error("call_not_found", "Call not found"));
 			return null;
 		}
 
-		$currentUserId = $this->getCurrentUser()->getId();
-		if (!$this->checkCallAccess($call, $currentUserId))
+		$currentUserId = $this->getCurrentUser()?->getId();
+		if (!$currentUserId || !$call->checkAccess($currentUserId))
 		{
-			$this->addError(new Error("access_denied", "You do not have access to the parent call"));
+			$this->addError(new Error("access_denied", "You do not have access to this call"));
 			return null;
 		}
 
 		return $call;
 	}
 
+
 	protected function checkCallAccess(Call $call, int $userId): bool
 	{
 		if (!$call->checkAccess($userId))
 		{
-			$this->addError(new Error("You don't have access to the call " . $call->getId() . "; (current user id: " . $userId . ")", 'access_denied'));
+			$this->addError(new Error('access_denied', "You don't have access to the call " . $call->getId() . "; (current user id: " . $userId . ")"));
 			return false;
 		}
 
@@ -341,10 +351,10 @@ class Track extends Engine\Controller
 
 	protected function sendSwitchTrackRecordStatus(Call $call, bool $isTrackRecordOn)
 	{
-		$currentUserId = $this->getCurrentUser()->getId();
-		if (!$this->checkCallAccess($call, $currentUserId))
+		$currentUserId = $this->getCurrentUser()?->getId();
+		if (!$currentUserId || !$call->checkAccess($currentUserId))
 		{
-			$this->addError(new Error("access_denied", "You do not have access to the parent call"));
+			$this->addError(new Error("access_denied", "You do not have access to this call"));
 			return null;
 		}
 		$call->getSignaling()->sendSwitchTrackRecordStatus($currentUserId, $isTrackRecordOn);
@@ -359,5 +369,4 @@ class Track extends Engine\Controller
 	{
 		return \Bitrix\Main\Component\ParameterSigner::unsignParameters('call.Track.download', $signedParameters);
 	}
-
 }

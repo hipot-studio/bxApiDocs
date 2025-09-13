@@ -4,6 +4,7 @@ namespace Bitrix\Bizproc\UI;
 
 use Bitrix\Bizproc\Api\Data\UserService\UsersToGet;
 use Bitrix\Bizproc\Api\Request\WorkflowFacesService\GetDataRequest;
+use Bitrix\Bizproc\Api\Response\WorkflowFacesService\GetDataByStepsResponse;
 use Bitrix\Bizproc\Api\Service\UserService;
 use Bitrix\Bizproc\Api\Service\WorkflowAccessService;
 use Bitrix\Bizproc\Api\Service\WorkflowFacesService;
@@ -13,6 +14,7 @@ class WorkflowFacesView implements \JsonSerializable
 	private string $workflowId;
 	private int $runningTaskId;
 	private array $usersView = [];
+	private ?GetDataByStepsResponse $data = null;
 
 	public function __construct(string $workflowId, ?int $runningTaskId = null)
 	{
@@ -22,23 +24,48 @@ class WorkflowFacesView implements \JsonSerializable
 
 	public function jsonSerialize(): array
 	{
-		$workflowFacesService = new WorkflowFacesService(
-			new WorkflowAccessService()
-		);
-
-		$request = new GetDataRequest(
-			workflowId: $this->workflowId,
-			runningTaskId: $this->runningTaskId,
-			skipAccessCheck: true,
-		);
-
-		$data = $workflowFacesService->getDataBySteps($request);
+		$data = $this->loadData();
 		if (!$data->isSuccess())
 		{
 			return [];
 		}
 
-		$this->loadUsersView($data->getUniqueUserIds());
+		$this->loadUsersView($this->getUniqueUserIds());
+
+		$result = [
+			'workflowId' => $this->workflowId,
+			'steps' => $this->getSteps(),
+			'timeStep' => $this->getTimeStep(),
+			'isWorkflowFinished' => $data->getIsWorkflowFinished(),
+		];
+
+		$progressBox = $data->getProgressBox();
+		if ($progressBox && $progressBox->getProgressTasksCount() > 0)
+		{
+			$result['progressBox'] = $progressBox->getData();
+		}
+
+		return $result;
+	}
+
+	public function getUniqueUserIds(): array
+	{
+		$data = $this->loadData();
+		if ($data->isSuccess())
+		{
+			return $data->getUniqueUserIds();
+		}
+
+		return [];
+	}
+
+	public function getSteps(): array
+	{
+		$data = $this->loadData();
+		if (!$data->isSuccess())
+		{
+			return [];
+		}
 
 		$steps = [];
 		foreach ($data->getSteps() as $step)
@@ -57,20 +84,38 @@ class WorkflowFacesView implements \JsonSerializable
 			}
 		}
 
-		$result = [
-			'workflowId' => $this->workflowId,
-			'steps' => $steps,
-			'timeStep' => $data->getTimeStep()?->getData(),
-			'isWorkflowFinished' => $data->getIsWorkflowFinished(),
-		];
+		return $steps;
+	}
 
-		$progressBox = $data->getProgressBox();
-		if ($progressBox && $progressBox->getProgressTasksCount() > 0)
+	public function getTimeStep(): ?array
+	{
+		$data = $this->loadData();
+		if ($data->isSuccess())
 		{
-			$result['progressBox'] = $progressBox->getData();
+			return $data->getTimeStep()?->getData();
 		}
 
-		return $result;
+		return null;
+	}
+
+	private function loadData(): GetDataByStepsResponse
+	{
+		if ($this->data === null)
+		{
+			$workflowFacesService = new WorkflowFacesService(
+				new WorkflowAccessService()
+			);
+
+			$request = new GetDataRequest(
+				workflowId: $this->workflowId,
+				runningTaskId: $this->runningTaskId,
+				skipAccessCheck: true,
+			);
+
+			$this->data = $workflowFacesService->getDataBySteps($request);
+		}
+
+		return $this->data;
 	}
 
 	private function loadUsersView(array $userIds): void

@@ -359,11 +359,6 @@ class User implements RestEntity
 		$option['FOR_REST'] = false;
 		$userData = $this->toRestFormat($option);
 
-		if ($option['USER_SHORT_FORMAT'] ?? null)
-		{
-			return $userData;
-		}
-
 		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER | Converter::KEYS);
 		$userData = $converter->process($userData);
 
@@ -463,6 +458,11 @@ class User implements RestEntity
 		return $this->userData['EXTERNAL_AUTH_ID'] ?? 'default';
 	}
 
+	public function isInternalType(): bool
+	{
+		return !in_array($this->getExternalAuthId(), \Bitrix\Im\Model\UserTable::getExternalUserTypes(), true);
+	}
+
 	public function getWebsite(): string
 	{
 		return $this->userData['PERSONAL_WWW'] ?? '';
@@ -536,6 +536,11 @@ class User implements RestEntity
 	public function isExtranet(): bool
 	{
 		return $this->userData['IS_EXTRANET'] ?? false;
+	}
+
+	public function isCollaber(): bool
+	{
+		return $this->getType() === UserType::COLLABER;
 	}
 
 	public function isActive(): bool

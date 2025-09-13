@@ -42,14 +42,17 @@ class ViewersProvider
 		{
 			foreach ($viewers['items'] as $item)
 			{
-				$timestamp = strtotime($item['DATE_VIEW']);
+				$clientOffset = \CTimeZone::GetOffset();
+				$serverTime = strtotime($item['DATE_VIEW']);
+				$clientTime = $serverTime - $clientOffset;
+
 				$userIds[] = (int) $item['ID'];
 
 				$result['items'][] = [
 					'entityType' => $entityType,
 					'entityId' => $entityId,
 					'id' => (int)$item['ID'],
-					'viewTimestamp' => $timestamp,
+					'viewTimestamp' => $clientTime,
 				];
 			}
 		}

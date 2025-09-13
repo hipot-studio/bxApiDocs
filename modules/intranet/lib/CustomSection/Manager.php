@@ -244,7 +244,7 @@ class Manager
 		;
 
 		return [
-			htmlspecialcharsbx($customSection->getTitle()),
+			$customSection->getTitle(),
 			$this->getUrlForPage($customSection->getCode(), $page->getCode()),
 			[ $this->getSectionRootUrl($customSection->getCode()) ],
 			[
@@ -276,7 +276,7 @@ class Manager
 		{
 			$pageUrl = $this->getUrlForPage($customSection->getCode(), $page->getCode());
 			$compiledLeftMenuPages[] = [
-				htmlspecialcharsbx($page->getTitle()),
+				$page->getTitle(),
 				$pageUrl,
 				[],
 				$params,

@@ -205,6 +205,20 @@ class Sender extends MicroService\BaseSender
 			$scheme = "http://";
 		}
 
-		return $scheme . \Bitrix\Main\Config\Option::get("main", "server_name");
+		$rootServerName = \Bitrix\Main\Config\Option::get('main', 'server_name');
+		if (!empty($rootServerName))
+		{
+			return $scheme . $rootServerName;
+		}
+
+		if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME !== '')
+		{
+			return $scheme . SITE_SERVER_NAME;
+		}
+
+		$serverName = $_SERVER['SERVER_NAME'] ?? '';
+
+
+		return $scheme . $serverName;
 	}
 }

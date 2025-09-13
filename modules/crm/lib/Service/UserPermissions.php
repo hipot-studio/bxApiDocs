@@ -16,21 +16,22 @@ use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\PermIdentifier;
 use Bitrix\Crm\Service\UserPermissions\Admin;
 use Bitrix\Crm\Service\UserPermissions\AutomatedSolution;
 use Bitrix\Crm\Service\UserPermissions\Automation;
-use Bitrix\Crm\Service\UserPermissions\SiteButton;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\CatalogEntityItem;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemsList;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Stage;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\SaleEntityItem;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Category;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Type;
-use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Item;
-use Bitrix\Crm\Service\UserPermissions\Kanban;
-use Bitrix\Crm\Service\UserPermissions\Product;
-use Bitrix\Crm\Service\UserPermissions\EntityEditor;
 use Bitrix\Crm\Service\UserPermissions\CopilotCallAssessment;
 use Bitrix\Crm\Service\UserPermissions\DynamicType;
+use Bitrix\Crm\Service\UserPermissions\EntityEditor;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\CatalogEntityItem;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Category;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Item;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemsList;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\SaleEntityItem;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Stage;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Type;
 use Bitrix\Crm\Service\UserPermissions\Exclusion;
+use Bitrix\Crm\Service\UserPermissions\Kanban;
+use Bitrix\Crm\Service\UserPermissions\Product;
+use Bitrix\Crm\Service\UserPermissions\RepeatSale;
 use Bitrix\Crm\Service\UserPermissions\SaleTarget;
+use Bitrix\Crm\Service\UserPermissions\SiteButton;
 use Bitrix\Crm\Service\UserPermissions\WebForm;
 
 class UserPermissions
@@ -80,6 +81,7 @@ class UserPermissions
 	protected ?CopilotCallAssessment $copilotCallAssessmentPermissions = null;
 	protected ?Exclusion $exclusionPermissions = null;
 	protected ?SaleTarget $saleTargetPermissions = null;
+	protected ?RepeatSale $repeatSalePermissions = null;
 
 	/**
 	 * @deprecated
@@ -372,6 +374,23 @@ class UserPermissions
 		}
 
 		return $this->copilotCallAssessmentPermissions;
+	}
+
+	/**
+	 * Manage permissions for repeat sales
+	 * @return RepeatSale
+	 */
+	public function repeatSale(): RepeatSale
+	{
+		if (!$this->repeatSalePermissions)
+		{
+			$this->repeatSalePermissions = new RepeatSale(
+				$this->getPermissionsManager(),
+				$this->admin(),
+			);
+		}
+
+		return $this->repeatSalePermissions;
 	}
 
 	/**

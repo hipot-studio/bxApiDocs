@@ -8,6 +8,9 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\UI\Extension;
 use Bitrix\UI\Contract;
+use Bitrix\UI\counter\Counter;
+use Bitrix\UI\Counter\CounterColor;
+use Bitrix\UI\Counter\CounterStyle;
 
 //We know about lazy load. So, the code loads common messages for default buttons,
 //which implemented by subclasses of BaseButton.
@@ -22,6 +25,8 @@ class BaseButton implements Contract\Renderable
 	protected $id;
 	/** @var string */
 	protected $text;
+	/** @var bool */
+	protected bool $useAirDesign = false;
 	/** @var string */
 	protected $tag = Tag::BUTTON;
 	/** @var string */
@@ -98,6 +103,11 @@ class BaseButton implements Contract\Renderable
 		);
 
 		$this->getAttributeCollection()->setClassList($params['classList']);
+
+		if (isset($params['air']) && $params['air'] === true)
+		{
+			$this->setAirDesign();
+		}
 
 		if (!empty($params['counter']))
 		{
@@ -232,6 +242,36 @@ class BaseButton implements Contract\Renderable
 	protected function renderInner()
 	{
 		$counter = $this->getCounter();
+
+		if ($this->hasAirDesign())
+		{
+			$result = '<span class="ui-btn-text">';
+
+			$result .= '<span class="ui-btn-text-inner">';
+
+			if (!empty($this->getText()))
+			{
+				$result .= htmlspecialcharsbx($this->getText());
+			}
+
+			$result .= '</span>';
+
+			if ($counter !== null)
+			{
+				$counter = new Counter(
+					useAirDesign: true,
+					style: CounterStyle::FILLED_ALERT,
+					value: (int)$counter,
+				);
+
+				$result .= '<span class="ui-btn-right-counter">' . $counter->render() . '</span>';
+			}
+
+			$result .= '</span>';
+
+			return $result;
+		}
+
 		return (
 			(!empty($this->getText()) ? '<span class="ui-btn-text">'.htmlspecialcharsbx($this->getText()).'</span>' : '').
 			($counter !== null ? '<span class="ui-btn-counter">'.htmlspecialcharsbx($counter).'</span>' : '' )
@@ -257,6 +297,16 @@ class BaseButton implements Contract\Renderable
 	public function getUniqId()
 	{
 		return $this->getAttributeCollection()->getDataAttribute(self::UNIQ_ID_DATA_ATTR);
+	}
+
+	public function setUniqId(string $uniqId): self
+	{
+		if (!empty($uniqId))
+		{
+			$this->getAttributeCollection()->addDataAttribute(self::UNIQ_ID_DATA_ATTR, $uniqId);
+		}
+
+		return $this;
 	}
 
 	public function getId()
@@ -442,6 +492,37 @@ class BaseButton implements Contract\Renderable
 		$this->text = $text;
 
 		return $this;
+	}
+
+	/**
+	 * @param bool $flag
+	 * @return void
+	 */
+	public function setAirDesign(bool $flag = true): void
+	{
+		if (defined('AIR_SITE_TEMPLATE') === false)
+		{
+			return;
+		}
+
+		$this->useAirDesign = $flag;
+
+		if ($flag)
+		{
+			$this->addClass('--air');
+		}
+		else
+		{
+			$this->removeClass('--air');
+		}
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function hasAirDesign(): bool
+	{
+		return $this->useAirDesign;
 	}
 
 	/**

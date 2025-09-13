@@ -2,10 +2,12 @@
 
 namespace Bitrix\Crm\Filter;
 
+use Bitrix\Crm\Activity\LastCommunication\LastCommunicationAvailabilityChecker;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\Currency;
 use Bitrix\Crm\Integration\Main\UISelector;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -469,6 +471,20 @@ class ItemDataProvider extends EntityDataProvider
 			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_ACTIVITY_BLOCK'),
 		];
 
+		if (LastCommunicationAvailabilityChecker::getInstance()->isEnabled())
+		{
+			[$code, $name] = LastCommunicationTable::getLastStateCodeName();
+			$fields[$code] = [
+				'type' => static::TYPE_DATE,
+				'displayGrid' => true,
+				'displayFilter' => true,
+				'defaultGrid' => false,
+				'defaultFilter' => false,
+				'sortField' => $code,
+				'customCaption' => $name,
+			];
+		}
+
 		$this->addParentFieldsInfo($fields);
 
 		return $fields;
@@ -787,10 +803,11 @@ class ItemDataProvider extends EntityDataProvider
 				'referenceClass' => $fieldID !== Item::FIELD_NAME_OBSERVERS ? $referenceClass : null,
 			];
 
-			if ($factory->isCountersEnabled() && $fieldID === Item::FIELD_NAME_ASSIGNED)
+			if ($factory?->isCountersEnabled() && $fieldID === Item::FIELD_NAME_ASSIGNED)
 			{
 				$params['isEnableAllUsers'] = true;
 				$params['isEnableOtherUsers'] = true;
+				$params['isEnableStructureNode'] = true;
 			}
 
 			if ($fieldID === 'ACTIVITY_RESPONSIBLE_IDS')
@@ -798,6 +815,7 @@ class ItemDataProvider extends EntityDataProvider
 				$params['referenceClass'] = null;
 				$params['isEnableAllUsers'] = true;
 				$params['isEnableOtherUsers'] = true;
+				$params['isEnableStructureNode'] = true;
 			}
 
 			return $this->getUserEntitySelectorParams(

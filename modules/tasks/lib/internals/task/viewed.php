@@ -2,13 +2,11 @@
 namespace Bitrix\Tasks\Internals\Task;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\BooleanField;
 use Bitrix\Main\Event;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddMergeTrait;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\ORM\Data\Internal\MergeTrait;
@@ -24,6 +22,8 @@ use Bitrix\Tasks\Internals\TaskDataManager;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\MemberTable;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
+use Bitrix\Tasks\V2\Public\Command\Task\Attention\ViewCommand;
+use Bitrix\Tasks\V2\FormV2Feature;
 use Throwable;
 
 /**
@@ -46,6 +46,7 @@ use Throwable;
  */
 class ViewedTable extends TaskDataManager
 {
+	use AddMergeTrait;
 	use MergeTrait;
 
 	private const STEP_LIMIT = 5000;
@@ -104,7 +105,7 @@ class ViewedTable extends TaskDataManager
 		];
 	}
 	
-	public static function sendPushTaskView(int $userId, int $taskId): void
+	private static function sendPushTaskView(int $userId, int $taskId): void
 	{
 		PushService::addEvent([$userId], [
 			'module_id' => 'tasks',
@@ -258,13 +259,9 @@ class ViewedTable extends TaskDataManager
 	}
 
 	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @param DateTime|null $viewedDate
-	 * @param array $parameters
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
 	 */
 	public static function set(int $taskId, int $userId, ?DateTime $viewedDate = null, array $parameters = []): void
 	{
@@ -275,16 +272,41 @@ class ViewedTable extends TaskDataManager
 
 		$viewedDate = ($viewedDate ?? new DateTime());
 
+
+		if (FormV2Feature::isOn('view') || true)
+		{
+			(new ViewCommand(
+				taskId: $taskId,
+				userId: $userId,
+				viewedTs: $viewedDate->getTimestamp(),
+				isRealView: (bool)$parameters['IS_REAL_VIEW'],
+				sendPush: (bool)$parameters['SEND_PUSH'],
+				updateTopicLastVisit: (bool)$parameters['UPDATE_TOPIC_LAST_VISIT'],
+			))->run();
+
+			return;
+		}
+
 		static::onBeforeView($taskId);
 		static::viewTask($taskId, $userId, $viewedDate, $parameters);
 		static::onAfterView($taskId, $userId, $viewedDate, $parameters);
 	}
-	
+
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
+	 */
 	private static function onBeforeView(int $taskId): void
 	{
 		CounterService::getInstance()->collectData($taskId);
 	}
-	
+
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
+	 */
 	private static function viewTask(int $taskId, int $userId, DateTime $viewedDate, array $parameters = []): void
 	{
 		$cacheKey = $taskId . '.' . $userId . '.' . $viewedDate->getTimestamp();
@@ -307,6 +329,11 @@ class ViewedTable extends TaskDataManager
 		self::$cache[$cacheKey] = true;
 	}
 
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
+	 */
 	private static function getView(int $taskId, int $userId): ?View
 	{
 		try
@@ -324,6 +351,11 @@ class ViewedTable extends TaskDataManager
 		}
 	}
 
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
+	 */
 	private static function updateView(View $item, DateTime $viewedDate, array $parameters = []): void
 	{
 		$primary = ['TASK_ID' => $item->getTaskId(), 'USER_ID' => $item->getUserId()];
@@ -343,6 +375,11 @@ class ViewedTable extends TaskDataManager
 		}
 	}
 
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
+	 */
 	private static function addView(int $taskId, int $userId, DateTime $viewedDate, array $parameters = []): void
 	{
 		$connection = Application::getConnection();
@@ -398,14 +435,9 @@ class ViewedTable extends TaskDataManager
 	}
 
 	/**
-	 * @param int $taskId
-	 * @param int $userId
-	 * @param DateTime $viewedDate
-	 * @param array $parameters
-	 * @throws ArgumentException
-	 * @throws SqlQueryException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
+	 * @deprecated
+	 * @TasksV2
+	 * @use ViewCommand
 	 */
 	private static function onAfterView(int $taskId, int $userId, DateTime $viewedDate, array $parameters): void
 	{

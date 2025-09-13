@@ -4,10 +4,15 @@ namespace Bitrix\BIConnector\Integration\Superset;
 
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Access\Role\RoleTable;
+use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\LanguageTable;
 
 class Agent
 {
@@ -16,7 +21,7 @@ class Agent
 	public static function setDashboardOwners(): string
 	{
 		$dashboards = SupersetDashboardTable::getList([
-			'filter' => ['=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM]
+			'filter' => ['=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM],
 		])
 			->fetchCollection()
 		;
@@ -41,7 +46,7 @@ class Agent
 	 */
 	public static function setDefaultOwnerForDashboards(int $previousOwnerId): string
 	{
-		$user = (new SupersetUserRepository)->getAdmin();
+		$user = (new SupersetUserRepository())->getAdmin();
 
 		$integrator = Integrator::getInstance();
 		if ($user && !$user->clientId)
@@ -122,6 +127,58 @@ class Agent
 		{
 			AccessInstaller::install(false);
 		}
+
+		return '';
+	}
+
+	/**
+	 * Convert from separate dashboard rights to group dashboard rights.
+	 *
+	 * @return string
+	 */
+	public static function convertToGroupDashboardRights(): string
+	{
+		if (SupersetInitializer::isSupersetExist() && !Feature::isCheckPermissionsByGroup())
+		{
+			Converter::updateToGroup(true);
+		}
+
+		return '';
+	}
+
+	/**
+	 * Restore default values for group names.
+	 *
+	 * @return string
+	 */
+	public static function restoreSystemDashboardGroupNames(): string
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			$defaultLanguage = \CBitrix24::getLicensePrefix();
+		}
+		else
+		{
+			$defaultLanguage = LanguageTable::getList([
+				'select' => ['ID'],
+				'filter' => ['=ACTIVE' => 'Y', '=DEF' => 'Y'],
+			])
+				->fetch()['ID'] ?? null
+			;
+		}
+
+		$groupCollection = SupersetDashboardGroupTable::getList([
+			'filter' => ['=TYPE' =>  SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM],
+		])
+			->fetchCollection()
+		;
+
+		foreach ($groupCollection as $group)
+		{
+			$group->setName(AccessInstaller::getDefaultGroupName($group->getCode(), $defaultLanguage));
+		}
+
+		$groupCollection->save();
 
 		return '';
 	}

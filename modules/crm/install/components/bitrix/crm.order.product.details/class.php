@@ -77,8 +77,7 @@ class CCrmOrderProductDetailsComponent extends \CBitrixComponent
 		$this->arResult['IS_PRODUCT_CREATION'] = $isProductCreation;
 		$APPLICATION->SetTitle($title);
 
-		$this->guid = $this->arResult['GUID'] = isset($this->arParams['GUID'])
-			? $this->arParams['GUID'] : "order_order_product_detail_{$this->arResult['ENTITY_ID']}";
+		$this->arResult['GUID'] = $this->arParams['GUID'] ?? "order_order_product_detail_{$this->arResult['ENTITY_ID']}";
 
 		$this->arResult['EDITOR_CONFIG_ID'] = isset($this->arParams['EDITOR_CONFIG_ID'])
 			? $this->arParams['EDITOR_CONFIG_ID'] : 'order_order_product_detail';

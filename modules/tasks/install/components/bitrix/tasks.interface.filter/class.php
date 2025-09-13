@@ -7,12 +7,14 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\WorkgroupTable;
+use Bitrix\Tasks\Helper\Filter;
 use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Scrum\Service\SprintService;
 use Bitrix\Tasks\TourGuide\PresetsMoved;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\FilterLimit;
 use Bitrix\Tasks\Ui\Filter\Task;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 Loader::includeModule('socialnetwork');
 
@@ -56,6 +58,8 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 	public function executeComponent()
 	{
 		$this->arResult['showPresetTourGuide'] = $this->showPresetTourGuide();
+		$this->arResult['roles'] = $this->prepareRoles();
+
 		return parent::executeComponent();
 	}
 
@@ -463,7 +467,18 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 
 	protected function getData()
 	{
-		$this->arParams['VIEW_STATE_FOR_ANALYTICS'] = \Bitrix\Tasks\Helper\Analytics::getInstance($this->arParams['USER_ID'], $this->arParams['GROUP_ID'] ?? 0)->getViewStateName();
+		$viewState = \Bitrix\Tasks\Helper\Analytics::getInstance($this->arParams['USER_ID'], $this->arParams['GROUP_ID'] ?? 0)->getViewStateName();
+		$sectionType = match (true) {
+			($this->arResult['IS_SCRUM_PROJECT'] ?? false) => 'scrum',
+			($this->arResult['IS_COLLAB'] ?? false) => 'collab',
+			($this->arParams['MENU_GROUP_ID'] ?? $this->arParams['GROUP_ID'] ?? false) => 'project',
+			true => 'tasks',
+		};
+
+		$this->arResult['CREATE_BUTTON_ANALYTICS'] = [
+			'sectionType' => $sectionType,
+			'viewState' => $viewState,
+		];
 	}
 
 	private function getTasksViewList(): array
@@ -534,4 +549,16 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 		return $this->getTasksViewMode($viewCode);
 	}
 
+	private function prepareRoles(): array
+	{
+		$items = Container::getInstance()->getRoleProvider()->getItems($this->userId);
+		$groupId = $this->arParams['GROUP_ID'] ?? 0;
+		$selectedRoleId = Filter::getInstance($this->userId, $groupId)->getDefaultRoleId();
+
+		return [
+			'items' => $items,
+			'selectedRoleId' => $selectedRoleId,
+			'selectedRoleName' => $items[$selectedRoleId]['TEXT'] ?? null,
+		];
+	}
 }

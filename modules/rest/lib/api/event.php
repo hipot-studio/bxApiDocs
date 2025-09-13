@@ -168,7 +168,7 @@ class Event extends \IRestService
 		$eventCallback = $query['HANDLER'] ?? '';
 		$options = isset($query['OPTIONS']) && is_array($query['OPTIONS']) ? $query['OPTIONS'] : [];
 
-		if($eventUser > 0)
+		if ($eventUser > 0)
 		{
 			if(!\CRestUtil::isAdmin() && $eventUser !== intval($USER->GetID()))
 			{

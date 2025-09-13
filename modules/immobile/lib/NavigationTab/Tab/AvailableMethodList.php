@@ -14,4 +14,6 @@ enum AvailableMethodList: string
 	case PROMOTION = 'promotion';
 	case DEPARTMENT_COLLEAGUES = 'departmentColleagues';
 	case TARIFF_RESTRICTION = 'tariffRestriction';
+	case ACTIVE_CALLS = 'activeCalls';
+	case ANCHORS = 'anchors';
 }

@@ -112,6 +112,10 @@ class CrmConfigurationCheckerComponent extends \CBitrixComponent implements \Bit
 
 		global $APPLICATION;
 		$APPLICATION->SetTitle($this->configurator->getTitle());
+		if (\Bitrix\Main\Loader::includeModule('ui'))
+		{
+			\Bitrix\UI\Toolbar\Facade\Toolbar::deleteFavoriteStar();
+		}
 		$this->includeComponentTemplate();
 	}
 
@@ -182,7 +186,7 @@ class CrmConfigurationCheckerComponent extends \CBitrixComponent implements \Bit
 		];
 		return $result;
 	}
-	
+
 	public function showSliderAction()
 	{
 		$result = ["show" => "N", "lastVisit" => null];
@@ -211,4 +215,3 @@ class CrmConfigurationCheckerComponent extends \CBitrixComponent implements \Bit
 		return $this->errorCollection->getErrorByCode($code);
 	}
 }
-

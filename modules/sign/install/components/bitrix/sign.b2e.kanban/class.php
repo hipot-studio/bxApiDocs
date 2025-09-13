@@ -66,7 +66,7 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 			if ($button instanceof Button && str_contains($button->getLink(), 'sign/b2e/doc/'))
 			{
 				$button
-					->addClass('ui-btn-icon-lock')
+					->setIcon(\Bitrix\UI\Buttons\Icon::LOCK)
 					->addClass('sign-b2e-js-tarriff-slider-trigger')
 					->setTag('button')
 				;
@@ -85,8 +85,9 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 		$this->arResult['SHOW_WELCOME_TOUR'] = false;
 		$this->arResult['SHOW_BY_EMPLOYEE_TOUR'] = false;
 		$this->arResult['SHOW_TOUR_BTN_CREATE'] = false;
+		$this->arResult['BY_EMPLOYEE_ENABLED'] = \Bitrix\Sign\Config\Feature::instance()->isSendDocumentByEmployeeEnabled();
 
-		if (\Bitrix\Sign\Config\Feature::instance()->isSendDocumentByEmployeeEnabled())
+		if (!Storage::instance()->isToursDisabled())
 		{
 			$lastOnboardingVisitDate = \Bitrix\Sign\Service\Container::instance()
 				->getTourService()
@@ -96,17 +97,15 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 				)
 			;
 
-			$this->arResult['SHOW_WELCOME_TOUR'] =
-				$lastOnboardingVisitDate === null
-				&& !Storage::instance()->isToursDisabled()
-				&& !$this->isCurrentUserCreatedB2eDocuments()
-			;
+			if ($lastOnboardingVisitDate === null)
+			{
+				$this->arResult['SHOW_BY_EMPLOYEE_TOUR'] =
+					\Bitrix\Sign\Config\Feature::instance()->isSendDocumentByEmployeeEnabled()
+					&& $this->isCurrentUserCreatedB2eDocuments()
+				;
 
-			$this->arResult['SHOW_BY_EMPLOYEE_TOUR'] =
-				$this->arResult['SHOW_WELCOME_TOUR'] === false
-				&& $lastOnboardingVisitDate === null
-				&& !Storage::instance()->isToursDisabled()
-			;
+				$this->arResult['SHOW_WELCOME_TOUR'] = !$this->arResult['SHOW_BY_EMPLOYEE_TOUR'];
+			}
 
 			$this->arResult['TOUR_ID'] = self::TOUR_ID;
 		}

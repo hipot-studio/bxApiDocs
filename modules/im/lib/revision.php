@@ -1,5 +1,8 @@
 <?php
+
 namespace Bitrix\Im;
+
+use Bitrix\Im\V2\Service\Locator;
 
 class Revision
 {
@@ -18,12 +21,18 @@ class Revision
 	 * @filesource synchronize immobile/install/components/bitrix/immobile.webcomponent/webcomponents/im.dialog/bundle/component/src/component.js:3
 	 * @filesource synchronize immobile/install/components/bitrix/immobile.webcomponent/webcomponents/im.dialog/bundle/component/src/mobile_dialog.js:22
 	 */
-	const MOBILE = 19;
+	const MOBILE = 20;
 
+	/**
+	 * Desktop Api revision (legacy version)
+	 * Will not be updated anymore, instead use {@see self::DESKTOP}
+	 */
+	const DESKTOP_LEGACY = 5;
+	
 	/**
 	 * Desktop Api revision
 	 */
-	const DESKTOP = 5;
+	const DESKTOP = 6;
 
 	/**
 	 * Rest Api revision
@@ -42,7 +51,13 @@ class Revision
 
 	public static function getDesktop()
 	{
-		return static::DESKTOP;
+		$application = Locator::getMessenger()->getApplication();
+		if ($application->isAirDesignEnabled())
+		{
+			return static::DESKTOP;
+		}
+
+		return static::DESKTOP_LEGACY;
 	}
 
 	public static function getRest()

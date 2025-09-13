@@ -5,6 +5,7 @@ namespace Bitrix\Crm;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\Item\DisabledField;
 use Bitrix\Crm\Item\FieldImplementation;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Observer\Entity\EO_Observer;
 use Bitrix\Crm\Observer\Entity\EO_Observer_Collection;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
@@ -214,6 +215,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	public const FIELD_NAME_IS_RETURN_CUSTOMER = 'IS_RETURN_CUSTOMER';
 	public const FIELD_NAME_LEAD_ID = 'LEAD_ID';
 	public const FIELD_NAME_FM = 'FM';
+	public const FIELD_LAST_COMMUNICATION_TIME = 'LAST_COMMUNICATION_TIME';
 
 	protected const SORT_OFFSET = 10;
 
@@ -241,6 +243,8 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	/** @var FieldImplementation[]|null */
 	private $allImplementationsCache;
 	private array $badges = [];
+	private LastCommunicationTable|string $lastCommunicationDataClass = LastCommunicationTable::class;
+	private bool $isLastCommunicationDataLoaded = false;
 
 	public function __construct(
 		int $entityTypeId,
@@ -754,6 +758,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		$entityFieldNames = array_merge(
 			$this->getEntityFieldNames($fieldTypeMask),
 			$this->utmTableClassName::getCodeList(),
+			$this->lastCommunicationDataClass::getCodeList(),
 		);
 
 		if ($this->hasField(static::FIELD_NAME_OBSERVERS))
@@ -2011,6 +2016,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 				| FieldTypeMask::USERTYPE
 				| FieldTypeMask::EXPRESSION
 			),
+			$this->lastCommunicationDataClass::getCodeList(true),
 		);
 	}
 
@@ -2240,11 +2246,16 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		{
 			$this->loadUtm();
 		}
+
+		if ($this->isLastCommunicationField($commonFieldName))
+		{
+			$this->loadLastCommunication();
+		}
 	}
 
 	protected function isExpressionField(string $commonFieldName): bool
 	{
-		if ($this->isUtmField($commonFieldName))
+		if ($this->isUtmField($commonFieldName) || $this->isLastCommunicationField($commonFieldName))
 		{
 			return true;
 		}
@@ -2383,5 +2394,30 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	public function addBadge(array $badge): void
 	{
 		$this->badges[] = $badge;
+	}
+
+	private function isLastCommunicationField(string $commonFieldName): bool
+	{
+		return in_array($commonFieldName, $this->lastCommunicationDataClass::getCodeList(true), true);
+	}
+
+	private function loadLastCommunication(): void
+	{
+		if (!$this->isLastCommunicationDataLoaded)
+		{
+			$this->isLastCommunicationDataLoaded = true;
+			if($this->isNew())
+			{
+				$commValues = array_fill_keys($this->lastCommunicationDataClass::getCodeList(true), null);
+			}
+			else
+			{
+				$commValues = $this->lastCommunicationDataClass::getEntityLastCommunication(
+					new ItemIdentifier($this->getEntityTypeId(), $this->getId())
+				);
+			}
+
+			$this->actualValues = array_merge($this->actualValues, $commValues);
+		}
 	}
 }

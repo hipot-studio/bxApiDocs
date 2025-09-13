@@ -56,7 +56,7 @@ class ReadService
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $message->getChatId()),
 			$this->getContext()->getUserId(),
-			$message->getChat()->getType()
+			$message->getChat()
 		);
 
 		$viewedMessages = [];
@@ -84,7 +84,7 @@ class ReadService
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chat->getChatId()),
 			$this->getContext()->getUserId(),
-			$chat->getType()
+			$chat
 		);
 
 		return (new Result())->setResult(['COUNTER' => $counter, 'VIEWED_MESSAGES' => $messagesToView]);
@@ -130,7 +130,7 @@ class ReadService
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
 			$this->getContext()->getUserId(),
-			$chat->getType()
+			$chat
 		);
 
 		if ($chat instanceof Chat\ChannelChat)
@@ -180,7 +180,7 @@ class ReadService
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $message->getChatId()),
 			$this->getContext()->getUserId(),
-			$message->getChat()->getType()
+			$message->getChat()
 		);
 
 		return new Result();
@@ -189,7 +189,7 @@ class ReadService
 	public function unreadNotifications(MessageCollection $messages, Relation $relation): Result
 	{
 		$this->counterService->addCollection($messages, $relation);
-		$counter = $this->counterService->getByChat($relation->getChatId());
+		$counter = $this->counterService->getByChatWithOverflow($relation->getChatId());
 
 		return (new Result())->setResult(['COUNTER' => $counter]);
 	}
@@ -266,16 +266,6 @@ class ReadService
 		;
 
 		return (new Result())->setResult(['COUNTERS' => $counters]);
-	}
-
-	public function onAfterNotificationSend(Message $message, Relation $relation): Result
-	{
-		$relationCollection = new RelationCollection();
-		$relationCollection->add($relation);
-		$this->counterService->addForEachUser($message, $relationCollection);
-		$counter = $this->counterService->getByChat($relation->getChatId());
-
-		return (new Result())->setResult(['COUNTER' => $counter]);
 	}
 
 	public function deleteByMessage(Message $message, ?array $invalidateCacheUsers = null): void

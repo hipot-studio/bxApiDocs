@@ -3,6 +3,7 @@
 	die();
 }
 
+use Bitrix\Main\Application;
 use Bitrix\Rest\Configuration\Manifest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\LoaderException;
@@ -174,6 +175,14 @@ class RestConfigurationComponent extends CBitrixComponent
 		if (!empty($this->request->get('from')))
 		{
 			$analyticFrom .= '_' . htmlspecialcharsbx($this->request->get('from'));
+		}
+
+		if (
+			$componentPage === 'section'
+			&& in_array(Application::getInstance()->getLicense()->getRegion(), ['ru', 'by', 'kz'])
+		)
+		{
+			$componentPage = 'section_crm';
 		}
 
 		$appTagBanner = $appTag;

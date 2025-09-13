@@ -1262,17 +1262,43 @@ class CBPVirtualDocument extends CIBlockDocument
 
 	public static function getDocument($documentId)
 	{
-		$documentId = intval($documentId);
+		$args = func_get_args();
+		$select = $args[2] ?? [];
+		$documentId = (int)$documentId;
 		if ($documentId <= 0)
-			throw new CBPArgumentNullException("documentId");
+		{
+			throw new CBPArgumentNullException('documentId');
+		}
 
 		$arResult = null;
+		if (!empty($select))
+		{
+			$select = array_filter($select, fn($field) => !str_starts_with($field, 'PROPERTY_'));
+			$select = array_merge(['ID', 'IBLOCK_ID'], $select);
 
-		$dbDocumentList = CIBlockElement::GetList(
-			array(),
-			array("ID" => $documentId, "SHOW_NEW" => "Y")
+			if (in_array('CREATED_BY', $select) && !in_array('CREATED_USER_NAME', $select))
+			{
+				$select[] = 'CREATED_USER_NAME';
+			}
+			if (in_array('MODIFIED_BY', $select) && !in_array('USER_NAME', $select))
+			{
+				$select[] = 'USER_NAME';
+			}
+		}
+
+		$userNameFields = [
+			'CREATED_BY_PRINTABLE' => 'CREATED_USER_NAME',
+			'MODIFIED_BY_PRINTABLE' => 'USER_NAME',
+		];
+
+		$select = array_map(static fn($selectField) => $userNameFields[$selectField] ?? $selectField, $select);
+
+		$iterator = CIBlockElement::GetList(
+			[],
+			['ID' => $documentId, 'SHOW_NEW' => 'Y'],
+			arSelectFields: $select,
 		);
-		if ($objDocument = $dbDocumentList->GetNextElement(false, true))
+		if ($objDocument = $iterator->GetNextElement(false, true))
 		{
 			$arDocumentFields = $objDocument->GetFields();
 			$arDocumentProperties = $objDocument->GetProperties();

@@ -21,6 +21,7 @@ final class JobOffset
 			Type::ResponsibleInvitationNotAcceptedOneDay => ['onboarding_tasks_responsible_invitation_not_accepted_one_day_offset', self::SECONDS_IN_DAY],
 			Type::InvitedResponsibleNotViewTaskTwoDays => ['onboarding_tasks_invited_responsible_not_view_task_two_days_offset', self::SECONDS_IN_DAY * 2],
 			Type::ResponsibleInvitationAccepted => ['onboarding_tasks_responsible_invitation_accepted_offset', 0],
+			Type::InviteToMobile => ['onboarding_tasks_invite_to_mobile_offset', 0],
 			default => ['onboarding_default_offset', self::SECONDS_IN_DAY],
 		};
 

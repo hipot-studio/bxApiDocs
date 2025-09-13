@@ -2,26 +2,34 @@
 
 namespace Bitrix\Im\V2\Message\Delete\Strategy;
 
-use Bitrix\Disk\SystemUser;
-use Bitrix\Im\V2\Entity\File\FileCollection;
-use Bitrix\Im\V2\Entity\File\FileItem;
+use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Chat\NullChat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Result;
+use Bitrix\Im\V2\Sync\Event;
 use Bitrix\Main\Localization\Loc;
 
 class SoftDeletionStrategy extends DeletionStrategy
 {
-	protected ?FileCollection $files = null;
-
 	protected function execute(): void
 	{
 		$result = $this->messages->save();
 		$this->checkResult($result);
 	}
 
+	/**
+	 * @throws InterruptedExecutionException
+	 */
 	protected function onBeforeDelete(): void
 	{
-		$this->files = $this->messages->getFiles();
+		if ($this->chat instanceof NullChat)
+		{
+			throw new InterruptedExecutionException(
+				(new Result())->addError(new ChatError(ChatError::NOT_FOUND))
+			);
+		}
+
+		$this->messages->fillFiles();
 
 		foreach ($this->messages as $message)
 		{
@@ -36,18 +44,8 @@ class SoftDeletionStrategy extends DeletionStrategy
 
 	protected function onAfterDelete(): void
 	{
-		if (!isset($this->files))
-		{
-			return;
-		}
-
-		foreach ($this->files as $file)
-		{
-			/**
-			 * @var FileItem $file
-			 */
-			$file->getDiskFile()?->delete(SystemUser::SYSTEM_USER_ID);
-		}
+		$this->logToSync(Event::DELETE_EVENT);
+		$this->deleteFiles();
 	}
 
 	private function getMessageOut(Message $message): string

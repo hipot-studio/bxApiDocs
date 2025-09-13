@@ -55,6 +55,7 @@ use Bitrix\Tasks\Scrum\Utility\StoryPoints;
 use Bitrix\Tasks\Scrum\Utility\ViewHelper;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction;
+use Bitrix\Tasks\Helper\Analytics;
 
 class TasksScrumComponent extends \CBitrixComponent implements Controllerable, Errorable
 {
@@ -270,7 +271,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		$this->arResult['debugMode'] = ($this->debugMode ? 'Y' : 'N');
 		$this->arResult['frameMode'] = ($this->frameMode ? 'Y' : 'N');
-		$this->arResult['views'] = $this->getViewsInfo($groupId);
+		$this->arResult['views'] = $this->prepareViewsInfo($this->getViewsInfo($groupId));
 		$this->arResult['culture'] = $this->getCultureInfo();
 
 		switch ($activeTab)
@@ -1212,11 +1213,33 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 					{
 						$kanbanService->addTasksToKanban($targetEntity->getId(), [$taskId]);
 						$kanbanService->addTasksToKanban($targetEntity->getId(), $subTaskIds);
+
+						// "MOVE_TO_SPRINT" analytics label
+						$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
+
+						Analytics::getInstance($this->userId)->onTaskUpdate(
+							event: Analytics::EVENT['task_update'],
+							subSection: Analytics::SUB_SECTION['task_card'],
+							params: [
+								'p1' => 'isDemo_' . $isDemo,
+							],
+						);
 					}
 
 					if (!$sourceEntity->isEmpty() && $sourceEntity->isActiveSprint())
 					{
 						$kanbanService->removeTasksFromKanban($sourceEntity->getId(), $idsToMove);
+
+						// "MOVE_TO_BACKLOG" analytics label
+						$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
+
+						Analytics::getInstance($this->userId)->onTaskUpdate(
+							event: Analytics::EVENT['task_update'],
+							subSection: Analytics::SUB_SECTION['task_card'],
+							params: [
+								'p1' => 'isDemo_' . $isDemo,
+							],
+						);
 					}
 
 					if($sourceEntity->getEntityType() !== $targetEntity->getEntityType())
@@ -2289,7 +2312,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			$completedSprint = $sprintService->getLastCompletedSprint($groupId);
 		}
 
-		$sprintViews = $this->arResult['views'];
+		$sprintViews = $this->getViewsInfo($groupId);
 
 		if ($completedSprint->isEmpty())
 		{
@@ -2664,6 +2687,23 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 				'active' => ($viewHelper->getActiveView($groupId) == 'completed_sprint')
 			],
 		];
+	}
+
+	private function prepareViewsInfo(array $views): array
+	{
+		$result = [];
+
+		foreach ($views as $id => $view) {
+			$result[] = [
+				'id' => $id,
+				'title' => $view['name'],
+				'active' => $view['active'],
+				'url' => $view['url'],
+				'link' => ['href' => $view['url']],
+			];
+		}
+
+		return $result;
 	}
 
 	private function getCultureInfo(): array

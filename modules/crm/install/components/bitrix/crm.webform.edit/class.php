@@ -938,17 +938,21 @@ class CCrmWebFormEditComponent extends \CBitrixComponent
 				]];
 			}
 
-			if(!$formData['BUTTON_CAPTION'])
+			$scenarioId = $this->request->get('SCENARIO_ID') ?? 'crm_preset_cd';
+			$preset = $scenarioId ? WebForm\Preset::getById($scenarioId) : null;
+
+			$formData = $formData + ($this->arResult['FORM']['IS_CALLBACK_FORM']
+				? WebForm\Preset::getCallback('', '')
+				: $preset
+			);
+
+			if (!$formData['BUTTON_CAPTION'])
 			{
 				$formData['BUTTON_CAPTION'] = $this->crmWebForm->getButtonCaption();
 			}
 
-			$formData = $formData + ($this->arResult['FORM']['IS_CALLBACK_FORM']
-				? WebForm\Preset::getCallback('', '')
-				: WebForm\Preset::getById('crm_preset_cd')
-			);
 			$formData['TEMPLATE_ID'] = !$this->arResult['FORM']['IS_CALLBACK_FORM']
-				? 'contacts'
+				? $formData['TEMPLATE_ID'] ?? 'contacts'
 				: 'callback';
 
 			// add date to form name

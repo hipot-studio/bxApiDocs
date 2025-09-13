@@ -8,12 +8,12 @@ use Bitrix\Im\V2\Message\MessagePopupItem;
 use Bitrix\Im\V2\Registry;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
-use Bitrix\Im\V2\Rest\RestConvertible;
+use Bitrix\Im\V2\Rest\PopupDataItem;
 
 /**
  * @extends Registry<RecentItem>
  */
-class Recent extends Registry implements RestConvertible, PopupDataAggregatable
+class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 {
 	use ContextCustomer;
 
@@ -21,17 +21,20 @@ class Recent extends Registry implements RestConvertible, PopupDataAggregatable
 	{
 		$messageIds = [];
 		$chats = [];
+		$chatIds = [];
 
 		foreach ($this as $item)
 		{
 			$messageIds[] = $item->getMessageId();
 			$chats[] = Chat::getInstance($item->getChatId());
+			$chatIds[] = $item->getChatId();
 		}
 
 		return new PopupData([
 			new MessagePopupItem($messageIds, true),
 			new Chat\ChatPopupItem($chats),
 			new BirthdayPopupItem(),
+			new Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs($chatIds),
 		], $excludedList);
 	}
 
@@ -50,5 +53,10 @@ class Recent extends Registry implements RestConvertible, PopupDataAggregatable
 		}
 
 		return $rest;
+	}
+
+	public function merge(PopupDataItem $item): PopupDataItem
+	{
+		return $this;
 	}
 }

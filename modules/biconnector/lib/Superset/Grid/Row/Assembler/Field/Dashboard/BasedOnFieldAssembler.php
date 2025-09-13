@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Dashboard;
 
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
 
@@ -10,6 +11,11 @@ class BasedOnFieldAssembler extends FieldAssembler
 {
 	protected function prepareColumn($value): string
 	{
+		if ($value['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
+		{
+			return '';
+		}
+
 		$sourceId = $value['SOURCE_ID'];
 		$sourceTitle = htmlspecialcharsbx($value['SOURCE_TITLE']);
 		$type = $value['TYPE'];
@@ -26,23 +32,7 @@ class BasedOnFieldAssembler extends FieldAssembler
 
 		$detailUrl = $value['SOURCE_DETAIL_URL'] ?? "/bi/dashboard/detail/{$sourceId}/";
 
-		if (empty($value['SOURCE_HAS_ZONE_URL_PARAMS']))
-		{
-			$link = "<a href='{$detailUrl}'>{$sourceTitle}</a>";
-		}
-		else
-		{
-			$link = "
-				<a 
-					style='cursor: pointer' 
-					onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.showLockedByParamsPopup()'
-				>
-					{$sourceTitle}
-				</a>
-			";
-		}
-
-		return $link;
+		return "<a href='{$detailUrl}'>{$sourceTitle}</a>";
 	}
 
 	protected function prepareRow(array $row): array
@@ -60,8 +50,8 @@ class BasedOnFieldAssembler extends FieldAssembler
 				'SOURCE_ID' => $row['data']['SOURCE_ID'],
 				'SOURCE_TITLE' => $row['data']['SOURCE_TITLE'],
 				'TYPE' => $row['data']['TYPE'],
-				'SOURCE_HAS_ZONE_URL_PARAMS' => $row['data']['SOURCE_HAS_ZONE_URL_PARAMS'],
 				'SOURCE_DETAIL_URL' => $row['data']['SOURCE_DETAIL_URL'],
+				'ENTITY_TYPE' => $row['data']['ENTITY_TYPE'],
 			];
 			$row['columns'][$columnId] = $this->prepareColumn($value);
 		}

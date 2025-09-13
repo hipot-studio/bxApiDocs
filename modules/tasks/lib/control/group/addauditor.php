@@ -36,7 +36,7 @@ class AddAuditor
 
 	private function prepareMembers(TaskObject $task, int $auditorId): array
 	{
-		$auditors['AUDITORS'] = $task->getMemberList()->getAuditors();
+		$auditors['AUDITORS'] = $task->getMemberList()->getAuditorIds();
 		$auditors['AUDITORS'][] = $auditorId;
 
 		return $auditors;

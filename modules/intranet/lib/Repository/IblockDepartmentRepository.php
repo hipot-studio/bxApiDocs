@@ -188,6 +188,31 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 	 * @throws ObjectException
 	 * @throws ArgumentException
 	 */
+	public function findAllByUserId(int $userId): DepartmentCollection
+	{
+		$userData = \CUser::GetByID($userId)->Fetch();
+		if ($userData !== false && !empty($userData['UF_DEPARTMENT']))
+		{
+			$departmentResult = \CIBlockSection::GetList(
+				['ID' => 'ASC'],
+				[
+					'IBLOCK_ID' => $this->getIblockId(),
+					'ID' => $userData['UF_DEPARTMENT']
+				],
+				false,
+				['ID', 'NAME', 'XML_ID', 'MODIFIED_BY', 'CREATED_BY', 'TIMESTAMP_X', 'DATE_CREATE', 'IBLOCK_SECTION_ID'],
+			);
+
+			return $this->makeDepartmentCollectionFromIBlockResult($departmentResult);
+		}
+
+		return new DepartmentCollection();
+	}
+
+	/**
+	 * @throws ObjectException
+	 * @throws ArgumentException
+	 */
 	public function findAllByXmlId(string $xmlId): DepartmentCollection
 	{
 		$departmentResult = \CIBlockSection::GetList(
@@ -369,15 +394,17 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 		return new Department(
 			name: $data['NAME'] ?? null,
 			id: $data['ID'],
-			parentId: $data['IBLOCK_SECTION_ID'],
+			parentId: $data['IBLOCK_SECTION_ID'] ?? null,
 			createdBy: $data['CREATED_BY'] ?? null,
-			createdAt: $data['DATE_CREATE'] ? new DateTime($data['DATE_CREATE']) : null,
-			updatedAt: $data['TIMESTAMP_X'] ? new DateTime($data['TIMESTAMP_X']) : null,
+			createdAt: isset($data['DATE_CREATE']) ? new DateTime($data['DATE_CREATE']) : null,
+			updatedAt: isset($data['TIMESTAMP_X']) ? new DateTime($data['TIMESTAMP_X']) : null,
 			xmlId: $data['XML_ID'] ?? null,
 			sort: $data['SORT'] ?? null,
 			isActive: $active,
 			isGlobalActive: $globalActive,
 			depth: $data['DEPTH_LEVEL'] ?? null,
+			accessCode: 'D'.$data['ID'],
+			isIblockSource: true,
 		);
 	}
 

@@ -149,7 +149,6 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 		$this->arResult['INCLUDE_CRM_ENTITY_EDITOR'] = Contractor\Provider\Manager::isActiveProviderByModule(Contractor\Provider\Manager::PROVIDER_STORE_DOCUMENT, 'crm');
 		$this->arResult['GUID'] = $this->arResult['FORM']['GUID'];
-		$this->arResult['TOOLBAR_ID'] = "toolbar_store_document_{$this->documentId}";
 		$this->arResult['IS_MAIN_CARD_READ_ONLY'] = $this->arResult['FORM']['READ_ONLY'];
 		$this->arResult['DOCUMENT_TYPE'] = $this->getDocumentType();
 		$this->arResult['FOCUSED_TAB'] = $this->request->get('focusedTab');
@@ -169,7 +168,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 		$this->checkIfInventoryManagementIsUsed();
 
-		$this->arResult['BUTTONS'] = $this->getToolbarButtons();
+		$this->arResult['CRM_DOCUMENT_BUTTON_CONFIG'] = $this->getDocumentButtonConfig();
 
 		$this->arResult['INVENTORY_MANAGEMENT_SOURCE'] =
 			InventoryManagementSourceBuilder::getInstance()->getInventoryManagementSource()
@@ -180,12 +179,9 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$this->includeComponentTemplate();
 	}
 
-	/**
-	 * @return array
-	 */
-	private function getToolbarButtons(): array
+	private function getDocumentButtonConfig(): ?array
 	{
-		$result = [];
+		$result = null;
 
 		$documentType2ProviderMap = [
 			StoreDocumentTable::TYPE_ARRIVAL => StoreDocumentArrival::class,
@@ -204,14 +200,14 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		);
 		if ($isDocumentButtonAvailable)
 		{
-			$result[] = [
-				'TEXT' => Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_DOCUMENT_BUTTON'),
-				'TYPE' => 'crm-document-button',
-				'PARAMS' => DocumentGeneratorManager::getInstance()->getDocumentButtonParameters(
-					$documentType2ProviderMap[$this->arResult['DOCUMENT']['DOC_TYPE']],
-					$this->arResult['DOCUMENT']['ID']
-				),
-			];
+			$result = DocumentGeneratorManager::getInstance()->getDocumentButtonParameters(
+				$documentType2ProviderMap[$this->arResult['DOCUMENT']['DOC_TYPE']],
+				$this->arResult['DOCUMENT']['ID']
+			);
+			if (empty($result))
+			{
+				$result = null;
+			}
 		}
 
 		return $result;

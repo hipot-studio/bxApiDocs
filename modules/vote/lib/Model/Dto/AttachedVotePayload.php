@@ -6,6 +6,7 @@ use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Vote\Attach;
 use Bitrix\Vote\Attachment\Manager;
+use Bitrix\Vote\Service\AttachedVoteResultUrlService;
 use Bitrix\Vote\Service\AttachedVoteSigner;
 
 class AttachedVotePayload
@@ -43,9 +44,7 @@ class AttachedVotePayload
 	{
 		try
 		{
-			$attachId = (new AttachedVoteSigner())->unsign($signedAttachId);
-
-			$attach = new Attach($attachId);
+			$attach = (new AttachedVoteResultUrlService())->getAttachByUrlId($signedAttachId);
 		}
 		catch (ObjectNotFoundException|BadSignatureException)
 		{

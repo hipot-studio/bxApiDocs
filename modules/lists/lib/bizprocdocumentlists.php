@@ -43,7 +43,17 @@ class BizprocDocumentLists extends \BizprocDocument
 
 		if (!empty($select))
 		{
+			$select = array_filter($select, fn($field) => !str_starts_with($field, 'PROPERTY_'));
 			$select = array_merge(['ID', 'IBLOCK_ID'], $select);
+
+			if (in_array('CREATED_BY', $select) && !in_array('CREATED_USER_NAME', $select))
+			{
+				$select[] = 'CREATED_USER_NAME';
+			}
+			if (in_array('MODIFIED_BY', $select) && !in_array('USER_NAME', $select))
+			{
+				$select[] = 'USER_NAME';
+			}
 		}
 
 		$userNameFields = [

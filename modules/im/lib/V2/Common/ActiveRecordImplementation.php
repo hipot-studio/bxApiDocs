@@ -379,6 +379,10 @@ trait ActiveRecordImplementation
 		{
 			return $result->setResult(['IS_CHANGES' => false]);
 		}
+		if ($result->getData()['SKIP_SAVE'] ?? false)
+		{
+			return $result;
+		}
 
 		$saveResult = $this->getDataEntity()->save();
 		if ($saveResult->isSuccess())

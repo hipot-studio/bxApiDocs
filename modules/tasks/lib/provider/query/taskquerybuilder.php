@@ -48,6 +48,7 @@ use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
 use Bitrix\Tasks\Scrum\Internal\ItemTable;
+use Bitrix\Tasks\V2\Internal\Model\TaskChatTable;
 use CUserTypeEntity;
 
 class TaskQueryBuilder implements QueryBuilderInterface
@@ -87,6 +88,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	public const ALIAS_SCRUM_ENTITY_D = 'TSEE';
 	public const ALIAS_TASK_SCENARIO = 'SCR';
 	public const ALIAS_TASK_REGULAR = 'REG';
+	public const ALIAS_TASK_CHAT_ID = 'TCID';
 
 	private TaskQuery $taskQuery;
 	private ?UserModel $user;
@@ -1020,6 +1022,18 @@ class TaskQueryBuilder implements QueryBuilderInterface
 
 			case self::ALIAS_SEARCH_FULL:
 				break;
+
+			// New chat integration, new chat type, ref: tasks/lib/V2/
+			case self::ALIAS_TASK_CHAT_ID:
+				$this->query->registerRuntimeField(
+					$alias,
+					(new ReferenceField(
+						$alias,
+						TaskChatTable::getEntity(),
+						Join::on('this.ID', 'ref.TASK_ID')
+					))->configureJoinType('left')
+				);
+				break;
 		}
 	}
 
@@ -1340,6 +1354,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 			'IS_REGULAR' => 'IS_REGULAR',
 			'FLOW_ID' => self::ALIAS_TASK_FLOW_ID . '.FLOW_ID',
 			'FLOW' => self::ALIAS_TASK_FLOW . '.NAME',
+			'CHAT_ID' => self::ALIAS_TASK_CHAT_ID . '.CHAT_ID',
 			"SPRINT_ID" => function ()
 			{
 				return $this->getScrumField("SPRINT_ID", EntityForm::SPRINT_TYPE);

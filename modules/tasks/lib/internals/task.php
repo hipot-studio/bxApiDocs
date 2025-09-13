@@ -32,6 +32,7 @@ use Bitrix\Tasks\Internals\Task\UtsTasksTaskTable;
 use Bitrix\Tasks\Util\Entity\DateTimeField;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\UserField;
+use Bitrix\Tasks\V2\Internal\Model\TaskChatTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -342,6 +343,12 @@ class TaskTable extends TaskDataManager
 			(new Reference(
 				'FLOW_TASK',
 				FlowTaskTable::getEntity(),
+				Join::on('this.ID', 'ref.TASK_ID'),
+			))->configureJoinType(Join::TYPE_LEFT),
+
+			(new Reference(
+				'CHAT_TASK',
+				TaskChatTable::getEntity(),
 				Join::on('this.ID', 'ref.TASK_ID'),
 			))->configureJoinType(Join::TYPE_LEFT),
 		);

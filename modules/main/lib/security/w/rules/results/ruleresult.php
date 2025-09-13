@@ -1,1 +1,8 @@
-<? namespace Bitrix\Main\Security\W\Rules\Results; class RuleResult{}?>
+<?php
+
+namespace Bitrix\Main\Security\W\Rules\Results;
+
+class RuleResult
+{
+
+}

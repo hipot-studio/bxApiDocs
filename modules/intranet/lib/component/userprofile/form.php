@@ -199,17 +199,6 @@ class Form
 				"type" => "text",
 				"editable" => true
 			),
-			/*
-			array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_UF_SKYPE"),
-				"name" => "UF_SKYPE",
-				"type" => "link",
-				"data" => array(
-					"link_template" => "callto:#LINK#"
-				),
-				"editable" => true
-			),
-			*/
 		);
 
 		if(\CTimeZone::Enabled())
@@ -244,7 +233,7 @@ class Form
 
 		$languages = Main\Localization\LanguageTable::getList([
 			'select' => ['VALUE' => 'ID', 'NAME'],
-			'filter'=> ['ACTIVE'=>'Y'],
+			'filter'=> ['=ACTIVE'=>'Y'],
 			'order'=> ['SORT'=>'ASC'],
 		])->fetchAll();
 		if (count($languages) > 1)
@@ -493,7 +482,9 @@ class Form
 			'UF_VI_PASSWORD',
 			'UF_VI_BACKPHONE',
 			'UF_VI_PHONE',
-			'UF_VI_PHONE_PASSWORD'
+			'UF_VI_PHONE_PASSWORD',
+			'UF_SKYPE',
+			'UF_SKYPE_LINK',
 		];
 	}
 
@@ -658,8 +649,6 @@ class Form
 				array('name' => 'PERSONAL_WWW'),
 				array('name' => 'PERSONAL_CITY'),
 				array('name' => 'UF_EMPLOYMENT_DATE'),
-				array('name' => 'UF_SKYPE'),
-				array('name' => 'UF_SKYPE_LINK'),
 				array('name' => 'UF_ZOOM'),
 				array('name' => 'TIME_ZONE'),
 				array('name' => 'LANGUAGE_ID'),
@@ -709,8 +698,6 @@ class Form
 			"UF_PHONE_INNER" => $result["User"]["UF_PHONE_INNER"],
 			"PERSONAL_CITY" => $result["User"]["PERSONAL_CITY"],
 			"EMAIL" => $result["User"]["EMAIL"],
-			"UF_SKYPE" => $result["User"]["UF_SKYPE"],
-			"UF_SKYPE_LINK" => $result["User"]["UF_SKYPE_LINK"],
 			"UF_ZOOM" => $result["User"]["UF_ZOOM"],
 			"TIME_ZONE" => [
 				"timeZone" => $result["User"]["TIME_ZONE"],
@@ -740,7 +727,7 @@ class Form
 
 		foreach($userFields as $fieldName => $userField)
 		{
-			$fieldValue = isset($userField['VALUE']) ? $userField['VALUE'] : '';
+			$fieldValue = $result['User'][$fieldName] ?? $userField['VALUE'] ?? '';
 			$fieldData = isset($userFieldInfos[$fieldName])
 				? $userFieldInfos[$fieldName] : null;
 

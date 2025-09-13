@@ -297,6 +297,10 @@ final class Company extends Service\Factory
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
 				'CLASS' => Field\Observers::class,
 			],
+			Item::FIELD_LAST_COMMUNICATION_TIME => [
+				'TYPE' => Field::TYPE_STRING,
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::ReadOnly],
+			],
 		];
 	}
 

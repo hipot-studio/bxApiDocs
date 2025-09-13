@@ -25,22 +25,25 @@ class Hydrator
 
 	private function validateAndSet(string $property, $value): void
 	{
-		$expectedType = gettype($this->$property);
+		$expectedType = gettype($this->{$property});
 		$actualType = gettype($value);
 
 		if ($expectedType === $actualType)
 		{
-			$this->$property = $value;
+			$this->{$property} = $value;
 		}
 		else
 		{
 			switch ($expectedType)
 			{
 				case 'integer':
-					$this->$property = (int)$value;
+					$this->{$property} = (int)$value;
 					break;
 				case 'string':
-					$this->$property = (string)$value;
+					$this->{$property} = (string)$value;
+					break;
+				case 'boolean':
+					$this->{$property} = (bool)$value;
 					break;
 				default:
 					throw new \InvalidArgumentException("Invalid type for property {$property}. Expected {$expectedType}, got {$actualType}.");

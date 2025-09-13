@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Crm\Filter;
 
 use Bitrix\Catalog\Config\State;
@@ -167,6 +168,25 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				[
 					'type' => 'entity_selector',
 					'partial' => true,
+				]
+			),
+			'MOVED_BY_ID' => $this->createField(
+				'MOVED_BY_ID',
+				[
+					'type' => 'entity_selector',
+					'partial' => true,
+				]
+			),
+			'MOVED_TIME' => $this->createField(
+				'MOVED_TIME',
+				[
+					'type' => 'date',
+					'data' => [
+						'additionalFilter' => [
+							'isEmpty',
+							'hasAnyValue',
+						],
+					],
 				]
 			),
 		);
@@ -579,6 +599,8 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			);
 		}
 
+		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationField($this, $result);
+
 		return $result;
 	}
 
@@ -604,7 +626,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'items' => \CCrmStatus::GetStatusList('DEAL_TYPE')
 			);
 		}
-		elseif(in_array($fieldID, ['ASSIGNED_BY_ID', 'CREATED_BY_ID', 'MODIFY_BY_ID', 'OBSERVER_IDS', 'ACTIVITY_RESPONSIBLE_IDS'], true))
+		elseif(in_array($fieldID, ['ASSIGNED_BY_ID', 'CREATED_BY_ID', 'MODIFY_BY_ID', 'OBSERVER_IDS', 'ACTIVITY_RESPONSIBLE_IDS', 'MOVED_BY_ID'], true))
 		{
 			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
 
@@ -628,6 +650,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 					'referenceClass' => $referenceClass,
 					'isEnableAllUsers' => $isEnableAllUsers,
 					'isEnableOtherUsers' => $isEnableOtherUsers,
+					'isEnableStructureNode' => true,
 				]
 			);
 		}

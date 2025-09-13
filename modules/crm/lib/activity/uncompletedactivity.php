@@ -29,6 +29,10 @@ class UncompletedActivity
 		{
 			return;
 		}
+		if ($change->isChangedAlreadyDeletedCompletedActivity())
+		{
+			return;
+		}
 
 		$bindings = [];
 		$removedBindings = [];

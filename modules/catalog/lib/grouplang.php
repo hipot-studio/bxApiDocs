@@ -1,10 +1,9 @@
 <?php
+
 namespace Bitrix\Catalog;
 
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
-
-Loc::loadMessages(__FILE__);
 
 /**
  * Class GroupLangTable
@@ -41,7 +40,7 @@ class GroupLangTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_catalog_group_lang';
 	}
@@ -51,7 +50,7 @@ class GroupLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return array(
 			'ID' => new Main\Entity\IntegerField('ID', array(

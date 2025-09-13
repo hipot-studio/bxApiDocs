@@ -285,7 +285,7 @@ abstract class Base
 	 *
 	 * @return array
 	 */
-	private function applyDateFilter(
+	protected function applyDateFilter(
 		array $sqlWhere,
 		array $dateRange,
 		string $timeFilterColumn = ''
@@ -353,7 +353,7 @@ abstract class Base
 	 *
 	 * @return array
 	 */
-	private function applyDimensionsFilters($sqlWhere, &$canBeFiltered, $dimensionsFilters): array
+	protected function applyDimensionsFilters($sqlWhere, &$canBeFiltered, $dimensionsFilters): array
 	{
 		$tableFields = $this->rawInfo['FIELDS'] ?? [];
 
@@ -444,6 +444,8 @@ abstract class Base
 
 	/**
 	 * @param array $parameters
+	 * @param int $limit
+	 * @param array $dateFormats
 	 *
 	 * @return \Generator
 	 */
@@ -452,6 +454,16 @@ abstract class Base
 		int $limit,
 		array $dateFormats = []
 	): \Generator;
+
+	/**
+	 * Is source response prepared for trino and does it not require decoding and other preparations.
+	 *
+	 * @return bool
+	 */
+	public function isFulfilledOutput(): bool
+	{
+		return false;
+	}
 
 	/**
 	 *

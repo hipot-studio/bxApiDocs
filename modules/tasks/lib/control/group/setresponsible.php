@@ -46,7 +46,7 @@ class SetResponsible
 
 		$allMembers = $task->getMemberList();
 
-		$members['AUDITORS'] = $allMembers->getAuditors();
+		$members['AUDITORS'] = $allMembers->getAuditorIds();
 		$oldResponsibleId = $allMembers->getResponsible();
 
 		if ($oldResponsibleId !== null && $responsibleId !== $oldResponsibleId)

@@ -10,6 +10,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BiConnector\Settings;
@@ -57,8 +58,10 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 					'id' => $source->getId(),
 					'title' => htmlspecialcharsbx($source->getTitle()),
 					'type' => $source->getType(),
+					'code' => $source->getCode() ?? $source->getType(),
 					'active' => $source->getActive(),
 				];
+
 				$settings = ExternalSourceSettingsTable::getList([
 					'filter' => [
 						'SOURCE_ID' => $source->getId(),
@@ -71,6 +74,18 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 						$this->arResult['SOURCE_FIELDS'][$setting['CODE']] = htmlspecialcharsbx($setting['VALUE']);
 					}
 				}
+			}
+		}
+		else
+		{
+			if (!empty($this->arParams['CONNECTOR_CODE']))
+			{
+				$this->arResult['SOURCE_FIELDS']['code'] = htmlspecialcharsbx($this->arParams['CONNECTOR_CODE']);
+			}
+
+			if (!empty($this->arParams['CONNECTOR_TYPE']))
+			{
+				$this->arResult['SOURCE_FIELDS']['type'] = htmlspecialcharsbx($this->arParams['CONNECTOR_TYPE']);
 			}
 		}
 		$this->arResult['SIGNED_PARAMETERS'] = $this->getSignedParameters();

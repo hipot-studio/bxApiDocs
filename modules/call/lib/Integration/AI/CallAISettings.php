@@ -341,4 +341,38 @@ class CallAISettings
 
 		return false;
 	}
+
+	public static function isAIAvailableInCall(): ?CallAIError
+	{
+		$error = null;
+		if (!Settings::isAIServiceEnabled())
+		{
+			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'AI service is unavailable');
+		}
+		elseif (!Loader::includeModule('ai'))
+		{
+			$error = new CallAIError(CallAIError::AI_MODULE_ERROR,  'AI service is unavailable');
+		}
+		elseif (!self::isTariffAvailable())
+		{
+			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'AI service is unavailable');
+		}
+		elseif (!self::isEnableBySettings())
+		{
+			$error = new CallAIError(CallAIError::AI_SETTINGS_ERROR, 'AI service is disabled by settings');
+		}
+		elseif (!self::isAgreementAccepted())
+		{
+			$error = new CallAIError(CallAIError::AI_AGREEMENT_ERROR, 'AI service agreement must be accepted');
+		}
+		elseif (!self::isAutoStartRecordingEnable())
+		{
+			if (!self::isBaasServiceHasPackage())
+			{
+				$error = new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR, 'It is not enough baas packages');
+			}
+		}
+
+		return $error;
+	}
 }

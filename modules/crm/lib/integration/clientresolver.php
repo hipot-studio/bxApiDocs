@@ -521,7 +521,7 @@ class ClientResolver extends ResolverBase
 		{
 			$map  = [
 				Requisite\Country::ID_BELARUS => 'integrations24.portal_nalog_gov_by',
-				Requisite\Country::ID_KAZAKHSTAN => 'integrations24.mns_kazakhstan_poisk_po_bin',
+				Requisite\Country::ID_KAZAKHSTAN => 'integrations24ru.poisk_po_bin_iin_kz',
 			];
 		}
 

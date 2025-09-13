@@ -37,4 +37,6 @@ abstract class Server
 	abstract public function getId(): string;
 
 	abstract public function isEnabled(): bool;
+
+	abstract public function getBillingCurrency(): ?string;
 }

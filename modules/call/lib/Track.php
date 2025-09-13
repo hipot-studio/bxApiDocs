@@ -64,7 +64,7 @@ class Track extends EO_CallTrack
 		$chatId = $this->fillCall()?->getChatId();
 		if ($chatId)
 		{
-			if ($this->hasDiskFileId())
+			if ($this->getDiskFileId())
 			{
 				$diskFileId = $this->getDiskFileId();
 			}
@@ -117,7 +117,7 @@ class Track extends EO_CallTrack
 	public function drop(): Result
 	{
 		$deleted = false;
-		if ($this->hasDiskFileId() && $this->getDiskFileId())
+		if ($this->getDiskFileId())
 		{
 			if (Loader::includeModule('im'))
 			{
@@ -134,12 +134,12 @@ class Track extends EO_CallTrack
 			}
 		}
 
-		if (!$deleted && $this->hasFileId() && $this->getFileId())
+		if (!$deleted && $this->getFileId())
 		{
 			\CFile::Delete($this->getFileId());
 		}
 
-		if ($this->hasExternalTrackId())
+		if ($this->getExternalTrackId())
 		{
 			(new ControllerClient())->dropTrack($this);
 		}
@@ -175,7 +175,7 @@ class Track extends EO_CallTrack
 			$absolute
 		);
 
-		if (Loader::includeModule('ai'))
+		if ($absolute && Loader::includeModule('ai'))
 		{
 			$publicUrl = \Bitrix\AI\Config::getValue('public_url') ?? '';
 			if (!empty($publicUrl))

@@ -33,7 +33,7 @@ class Component implements \Bitrix\Crm\Service\Router\Contract\Component
 		return $this->parent;
 	}
 
-	public function setParameter(string $name, mixed $value): self
+	public function setParameter(string $name, mixed $value): static
 	{
 		$this->parameters[$name] = $value;
 
@@ -43,6 +43,13 @@ class Component implements \Bitrix\Crm\Service\Router\Contract\Component
 	public function parameter(string $name): mixed
 	{
 		return $this->parameters[$name] ?? null;
+	}
+
+	public function setParent(?\CBitrixComponent $parent): static
+	{
+		$this->parent = $parent;
+
+		return $this;
 	}
 
 	public function render(): void

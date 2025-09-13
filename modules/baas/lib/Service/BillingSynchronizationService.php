@@ -25,12 +25,15 @@ class BillingSynchronizationService
 		$this->configs = $configs ?? new Baas\Config\Client();
 	}
 
-	public function syncIfNeeded(): void
+	public function syncIfNeeded(): Main\Result
 	{
 		if (self::$synchronized === false && $this->isTimeToSynchronize())
 		{
-			$this->sync();
+			self::$synchronized = true;
+			return $this->sync();
 		}
+
+		return new Main\Result();
 	}
 
 	public function sync(): Main\Result
@@ -56,10 +59,10 @@ class BillingSynchronizationService
 		);
 	}
 
-	protected function isTimeToSynchronize(): bool
+	protected function isTimeToSynchronize(?int $now = null): bool
 	{
 		$nextSyncTime = $this->configs->getNextSyncTime();
-		$now = time();
+		$now = $now ?? time();
 		// If the next sync time is in the future, we should not sync
 		if ($nextSyncTime > $now)
 		{
@@ -73,9 +76,9 @@ class BillingSynchronizationService
 			return true;
 		}
 
-		$ttl = min($this->configs->getSyncInterval(), strtotime('tomorrow') + 1 - $now);
+		$lastSyncDate = strtotime(date('Y-m-d', $lastTimeToSync));
+		$nowDate = strtotime(date('Y-m-d', $now - $this->configs->getSyncDelta()));
 
-		// If the last sync time is older than the ttl, we should sync
-		return ($lastTimeToSync + $ttl) < time();
+		return $lastSyncDate < $nowDate;
 	}
 }

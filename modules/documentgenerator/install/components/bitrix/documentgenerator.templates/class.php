@@ -41,31 +41,20 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 	 */
 	public function executeComponent()
 	{
-		$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
-		if($request->get('IFRAME') === 'Y')
-		{
-			$this->arResult['IS_SLIDER'] = true;
-		}
-		else
-		{
-			$this->arResult['IS_SLIDER'] = false;
-			if(SITE_TEMPLATE_ID == "bitrix24")
-			{
-				$this->arResult['TOP_VIEW_TARGET_ID'] = 'pagetitle';
-			}
-		}
 		if(!$this->includeModules())
 		{
 			$this->arResult['ERROR'] = Loc::getMessage('DOCGEN_TEMPLATE_DOWNLOAD_ADD_TEMPLATE_ERROR_MODULE');
 			$this->includeComponentTemplate();
 			return;
 		}
+
 		if(!Driver::getInstance()->getUserPermissions()->canModifyTemplates())
 		{
 			$this->arResult['ERROR'] = Loc::getMessage('DOCGEN_TEMPLATE_DOWNLOAD_PERMISSIONS_ERROR');
 			$this->includeComponentTemplate();
 			return;
 		}
+
 		if(!isset($this->arParams['USER_NAME_FORMAT']))
 		{
 			$this->arParams['USER_NAME_FORMAT'] = DataProviderManager::getInstance()->getCulture()->getNameFormat();
@@ -74,6 +63,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 		{
 			$this->arParams['USER_PROFILE_URL'] = \Bitrix\Main\Config\Option::get('intranet', 'path_user', '/company/personal/user/#USER_ID#/', SITE_ID);
 		}
+
 		if ($this->getTemplateName() === 'upload')
 		{
 			$this->arResult['TITLE'] = Loc::getMessage('DOCGEN_TEMPLATE_DOWNLOAD_ADD_TEMPLATE');
@@ -150,7 +140,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 		}
 		else
 		{
-			$this->processGridActions($request);
+			$this->processGridActions($this->request);
 
 			$this->arResult['params'] = [];
 			$this->arResult['params']['uploadUri'] = $this->arParams['UPLOAD_URI'];
@@ -201,6 +191,12 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 			$this->arResult['TITLE'] = Loc::getMessage('DOCGEN_TEMPLATE_LIST_TITLE');
 			$this->arResult['FILTER'] = $this->prepareFilter();
 			$this->arResult['GRID'] = $this->prepareGrid();
+		}
+
+		if (!empty($this->arResult['TITLE']))
+		{
+			global $APPLICATION;
+			$APPLICATION->SetTitle($this->arResult['TITLE']);
 		}
 
 		$this->includeComponentTemplate();

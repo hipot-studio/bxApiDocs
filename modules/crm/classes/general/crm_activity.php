@@ -8,6 +8,7 @@ IncludeModuleLangFile(__FILE__);
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\FastSearch;
 use Bitrix\Crm\Activity\FillActLightCounter;
+use Bitrix\Crm\Activity\LastCommunication\SyncLastCommunication;
 use Bitrix\Crm\Activity\LightCounter\ActCounterLightTimeRepo;
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Activity\Provider\Eventable\PingOffset;
@@ -2055,6 +2056,7 @@ class CAllCrmActivity
 			if (
 				!isset($fields['EDITOR_ID'])
 				&& ($fields['PROVIDER_ID'] ?? null) !== Provider\Email::getId()
+				&& ($params['PREVIOUS_FIELDS']['PROVIDER_ID'] ?? null) !== Provider\Email::getId()
 			)
 			{
 				$userID = $fields['AUTHOR_ID'] ?? 0;
@@ -2229,11 +2231,14 @@ class CAllCrmActivity
 		);
 
 		$monitor = Crm\Service\Timeline\Monitor::getInstance();
+		$lastCommunication = (new SyncLastCommunication());
 		foreach ($affectedBindings as $binding)
 		{
 			if (\CCrmOwnerType::IsDefined($binding->getOwnerTypeId()) && $binding->getOwnerId() > 0)
 			{
-				$monitor->onActivityRemoveIfSuitable(new Crm\ItemIdentifier($binding->getOwnerTypeId(), $binding->getOwnerId()), $activityID);
+				$itemIdentifier = new Crm\ItemIdentifier($binding->getOwnerTypeId(), $binding->getOwnerId());
+				$monitor->onActivityRemoveIfSuitable($itemIdentifier, $activityID);
+				$lastCommunication->onActivityRemoveIfSuitable($itemIdentifier, $activityID);
 			}
 		}
 
@@ -5196,6 +5201,8 @@ class CAllCrmActivity
 			}
 		}
 		//endregion
+
+		(new SyncLastCommunication())->onEntityDelete(new Crm\ItemIdentifier($ownerTypeID, $ownerID));
 	}
 	public static function DeleteBindingsByOwner($ownerTypeID, $ownerID)
 	{
@@ -7090,48 +7097,44 @@ class CAllCrmActivity
 
 		$arCalEventFields['SECTIONS'] = [\CCalendar::GetCrmSection($responsibleID, true)];
 
-		$calendarEventId = isset($arFields['CALENDAR_EVENT_ID']) ? (int)$arFields['CALENDAR_EVENT_ID'] : 0;
+		$calendarEventId = (int)($arFields['CALENDAR_EVENT_ID'] ?? 0);
 
 		if($calendarEventId > 0)
 		{
-			$arPresentEventFields = \Bitrix\Crm\Integration\Calendar::getEvent($calendarEventId);
+			$arPresentEventFields = \Bitrix\Crm\Integration\Calendar::getEvent($calendarEventId, true);
 			if(is_array($arPresentEventFields))
 			{
-				$presentResponsibleID = isset($arPresentEventFields['OWNER_ID']) ? (int)$arPresentEventFields['OWNER_ID'] : 0;
-				if($presentResponsibleID === $responsibleID)
-				{
-					$arCalEventFields['ID'] = $calendarEventId;
-				}
+				$arCalEventFields['ID'] = $calendarEventId;
 
 				if(!empty($arPresentEventFields['RRULE']))
 				{
 					$arCalEventFields['RRULE'] = CCalendarEvent::ParseRRULE($arPresentEventFields['RRULE']);
 				}
-			}
 
-			if (
-				!empty($prevEnrichedDescription)
-				&& trim($description) !== trim($prevEnrichedDescription)
-			)
-			{
-				$culture = \Bitrix\Main\Context::getCurrent()?->getCulture();
-				$date = new DateTime();
-				if ($culture)
+				if (
+					!empty($prevEnrichedDescription)
+					&& trim($description) !== trim($prevEnrichedDescription)
+				)
 				{
-					$date->format($culture->getShortDateFormat() . ' ' . $culture->getShortTimeFormat());
+					$culture = \Bitrix\Main\Context::getCurrent()?->getCulture();
+					$date = new DateTime();
+					if ($culture)
+					{
+						$date->format($culture->getShortDateFormat() . ' ' . $culture->getShortTimeFormat());
+					}
+					$descriptionSubtitle = Loc::getMessage(
+						'CRM_ACTIVITY_CALENDAR_SUBTITLE',
+						['#DATE#' => $date]
+					);
+					$arCalEventFields['DESCRIPTION'] =
+						$arPresentEventFields['DESCRIPTION']
+						. PHP_EOL
+						. PHP_EOL
+						. $descriptionSubtitle
+						. PHP_EOL
+						. $arCalEventFields['DESCRIPTION']
+					;
 				}
-				$descriptionSubtitle = Loc::getMessage(
-					'CRM_ACTIVITY_CALENDAR_SUBTITLE',
-					['#DATE#' => $date]
-				);
-				$arCalEventFields['DESCRIPTION'] =
-					$arPresentEventFields['DESCRIPTION']
-					. PHP_EOL
-					. PHP_EOL
-					. $descriptionSubtitle
-					. PHP_EOL
-					. $arCalEventFields['DESCRIPTION']
-				;
 			}
 		}
 		if(isset($arFields['NOTIFY_TYPE']) && (int)$arFields['NOTIFY_TYPE'] !== CCrmActivityNotifyType::None)

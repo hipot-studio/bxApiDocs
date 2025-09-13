@@ -4,6 +4,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\SmartDocument;
 use Bitrix\Main\Application;
@@ -14,16 +15,20 @@ use Bitrix\Main\Session\SessionInterface;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Config\Feature;
+use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\B2e\KanbanCategory;
 use Bitrix\Sign\Item\B2e\KanbanCategoryCollection;
 use Bitrix\Sign\Service\Sign\UrlGeneratorService;
 use Bitrix\Sign\Type\CounterType;
 use Bitrix\UI\Buttons\Button;
+use Bitrix\UI\Buttons\Color;
+use Bitrix\UI\Buttons\Icon;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\Sign\Service\Container as SignContainer;
 
 \CBitrixComponent::includeComponentClass('bitrix:sign.base');
+\Bitrix\Main\UI\Extension::load(['sign.v2.grid.b2e.templates', 'crm_common']);
 
 class SignStartComponent extends SignBaseComponent
 {
@@ -33,6 +38,7 @@ class SignStartComponent extends SignBaseComponent
 	private const SIGN_B2E_CRM_DIRECTION_BUTTON_CSS_CLASS = 'ui-toolbar-btn-dropdown';
 	private const SIGN_B2E_HIDDEN_BUTTON_CSS_CLASS = 'ui-btn-dropdown-hidden';
 	private const SIGN_B2E_CLASS_FOR_ONBOARDING_ROUTE = 'sign-b2e-onboarding-route';
+	private const SIGN_B2E_CLASS_FOR_ONBOARDING_CREATE_BUTTON = 'sign-b2e-onboarding-create';
 
 	/**
 	 * Section menu item index.
@@ -71,6 +77,8 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_settings' => 'b2e/settings/',
 		'b2e_member_dynamic_settings' => 'b2e/member_dynamic_settings/',
 		'b2e_preview' => 'b2e/preview/#doc_id#/',
+		'b2e_template_folder_content_kanban' => 'b2e/employee/templates/folder/',
+		'b2e_template_folder_content_list' => 'b2e/list/employee/templates/folder/',
 	];
 
 	/**
@@ -95,6 +103,8 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_settings' => [],
 		'b2e_member_dynamic_settings' => [],
 		'b2e_preview' => ['doc_id'],
+		'b2e_template_folder_content_kanban' => [],
+		'b2e_template_folder_content_list' => [],
 	];
 
 	/**
@@ -136,10 +146,52 @@ class SignStartComponent extends SignBaseComponent
 
 		parent::executeComponent();
 
+		$isCreateButtonExists = $this->isCreateButtonExists();
+		$classListForCreateButton = $this->getCreateButtonClassList();
 		if ($this->isB2eKanbanOrList() && $this->removeButtons())
 		{
+			if ($isCreateButtonExists && Feature::instance()->isTemplateFolderGroupingAllowed())
+			{
+				$this->addCreateButton($classListForCreateButton);
+			}
+
 			$this->addCategorySelectButton();
 		}
+	}
+
+	private function isCreateButtonExists(): bool
+	{
+		return $this->getB2eCreateButton() !== null;
+	}
+
+	private function getCreateButtonClassList(): array
+	{
+		$button = $this->getB2eCreateButton();
+		return $button ? $button->getClassList() : [];
+	}
+
+	private function getB2eCreateButton(): ?Button
+	{
+		$buttons = \Bitrix\UI\Toolbar\Facade\Toolbar::getButtons();
+		foreach ($buttons as $button)
+		{
+			if ($this->shouldDisplaySignB2eSplitCreateButtonForRuRegion($button))
+			{
+				return $button;
+			}
+		}
+
+		return null;
+	}
+
+	private function shouldDisplaySignB2eSplitCreateButtonForRuRegion(mixed $button): bool
+	{
+		return $button instanceof \Bitrix\UI\Buttons\Button
+			&& $button->getLink() === $this->getCreateB2eSignDocumentUrl()
+			&& Feature::instance()->isTemplateFolderGroupingAllowed()
+			&& $this->getCategory()?->code !== self::SIGN_B2E_EMPLOYEE_ITEM_CATEGORY_CODE
+			&& Feature::instance()->isDocumentTemplatesAvailable()
+		;
 	}
 
 	/**
@@ -414,6 +466,34 @@ class SignStartComponent extends SignBaseComponent
 		$this->subscribeOnEventsToReplaceCrmUrls();
 		$this->prepareMenuItems();
 		$this->setParam('ENTITY_ID', \Bitrix\Sign\Document\Entity\Smart::getEntityTypeId());
+		$this->setParam('URL_LIST_FOR_RELOAD_TEMPLATE_GRID', $this->getUrlListForReloadTemplateGrid());
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getUrlListForReloadTemplateGrid(): array
+	{
+		$urlListForReloadKeys = [
+			'b2e_document',
+			'b2e_template_folder_content_kanban',
+			'b2e_template_folder_content_list'
+		];
+
+		$urls = [];
+		foreach ($this->defaultUrlTemplates as $key => $value)
+		{
+			if (in_array($key, $urlListForReloadKeys))
+			{
+				$url = CComponentEngine::makePathFromTemplate(
+					$this->getStringParam('SEF_FOLDER') . $value,
+					($key === 'b2e_document') ? ['doc_id' => 0] : []
+				);
+				$urls[] = $url;
+			}
+		}
+
+		return $urls;
 	}
 
 	private function onCrmGetComponentItemListAddBtnParameters(\Bitrix\Main\Event $event): ?\Bitrix\Main\EventResult
@@ -434,12 +514,17 @@ class SignStartComponent extends SignBaseComponent
 			return null;
 		}
 
-		$btnParameters['link'] = CComponentEngine::makePathFromTemplate(
+		$btnParameters['link'] = $this->getCreateB2eSignDocumentUrl();
+
+		return new \Bitrix\Main\EventResult(\Bitrix\Main\EventResult::SUCCESS, $btnParameters, 'sign');
+	}
+
+	private function getCreateB2eSignDocumentUrl(): string
+	{
+		return CComponentEngine::makePathFromTemplate(
 			$this->getStringParam('SEF_FOLDER') . $this->defaultUrlTemplates['b2e_document'],
 			['doc_id' => 0],
 		);
-
-		return new \Bitrix\Main\EventResult(\Bitrix\Main\EventResult::SUCCESS, $btnParameters, 'sign');
 	}
 
 	private function getB2bMenuItems(): array
@@ -451,9 +536,8 @@ class SignStartComponent extends SignBaseComponent
 			?->getId()
 		;
 
-		$canReadSmartDocumentContact = $userPermissions->checkReadPermissions(
+		$canReadSmartDocumentContact = $userPermissions->entityType()->canReadItemsInCategory(
 			CCrmOwnerType::Contact,
-			0,
 			$contactCategoryId
 		);
 		$items = [];
@@ -565,7 +649,7 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 		if (
-			Feature::instance()->isSendDocumentByEmployeeEnabled()
+			Feature::instance()->isDocumentTemplatesAvailable()
 			&& $this->accessController->check(ActionDictionary::ACTION_B2E_TEMPLATE_READ)
 		)
 		{
@@ -620,7 +704,7 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 		if (
-			Feature::instance()->isSendDocumentByEmployeeEnabled()
+			Feature::instance()->isDocumentTemplatesAvailable()
 			&& $this->accessController->check(ActionDictionary::ACTION_B2E_MEMBER_DYNAMIC_FIELDS_DELETE)
 		)
 		{
@@ -641,7 +725,11 @@ class SignStartComponent extends SignBaseComponent
 
 		Toolbar::deleteButtons(
 			fn(Button $button, string $location): bool => $location === ButtonLocation::AFTER_TITLE
-				&& ($button->hasClass(self::SIGN_B2E_CRM_DIRECTION_BUTTON_CSS_CLASS) || $isNeedToRemove)
+				&& (
+					$button->hasClass(self::SIGN_B2E_CRM_DIRECTION_BUTTON_CSS_CLASS)
+					|| $this->shouldDisplaySignB2eSplitCreateButtonForRuRegion($button)
+					|| $isNeedToRemove
+				)
 		);
 
 		foreach (Toolbar::getButtons() as $button)
@@ -675,19 +763,65 @@ class SignStartComponent extends SignBaseComponent
 		$button = new Button();
 		$button->setText($title);
 		$button->addClass(self::SIGN_B2E_CLASS_FOR_ONBOARDING_ROUTE);
-		$button->addClass('ui-btn-light-border');
-		$button->addClass($this->getCategoryButtonIconClassByCode($code));
-		$button->setDropdown(true);
+		$button->setColor(Color::LIGHT_BORDER);
+		$button->setIcon($this->getCategoryButtonIconByCode($code));
+		$button->setDropdown();
 		$button->setMenu($this->getB2eKanbanButtonMenuItems());
 
 		Toolbar::addButton($button, ButtonLocation::AFTER_TITLE);
 	}
 
-	private function getCategoryButtonIconClassByCode(string $code): string
+
+	private function addCreateButton(array $classList): void
+	{
+		$btnLink = $this->getCreateB2eSignDocumentUrl();
+
+		$menuItems = [
+			[
+				'text' => Loc::getMessage('SIGN_TOOLBAR_CREATE_BUTTON_TITLE_DOCUMENT'),
+				'href' => $btnLink,
+				'onclick' => new \Bitrix\UI\Buttons\JsCode('this.close()'),
+			],
+			[
+				'text' => Loc::getMessage('SIGN_TOOLBAR_CREATE_BUTTON_TITLE_ON_TEMPLATE'),
+				'onclick' => new \Bitrix\UI\Buttons\JsCode('this.close(); new BX.Sign.V2.Grid.B2e.Templates().openSliderTemplateFolderContent();'),
+			],
+		];
+
+		$buttonParams = [
+			'text' => Loc::getMessage('SIGN_TOOLBAR_CREATE_BUTTON_TITLE'),
+		];
+
+		$showTariffSlider = B2eTariff::instance()->isB2eRestrictedInCurrentTariff();
+		if (!$showTariffSlider)
+		{
+			$buttonParams['mainButton'] = ['link' => $btnLink];
+			$buttonParams['menu'] = ['items' => $menuItems];
+		}
+
+		$splitButton = new \Bitrix\UI\Buttons\Split\CreateButton($buttonParams);
+		if ($showTariffSlider)
+		{
+			$splitButton
+				->setIcon(\Bitrix\UI\Buttons\Icon::LOCK)
+				->addClass('sign-b2e-js-tarriff-slider-trigger')
+				->setTag('button');
+		}
+
+		if (in_array(self::SIGN_B2E_CLASS_FOR_ONBOARDING_CREATE_BUTTON, $classList, true))
+		{
+			$splitButton->addClass(self::SIGN_B2E_CLASS_FOR_ONBOARDING_CREATE_BUTTON);
+		}
+
+		Toolbar::addButton($splitButton, ButtonLocation::AFTER_TITLE);
+	}
+
+	private function getCategoryButtonIconByCode(string $code): string
 	{
 		return $code === self::SIGN_B2E_EMPLOYEE_ITEM_CATEGORY_CODE
-			? 'ui-btn-icon-kanban-employee-category'
-			: 'ui-btn-icon-kanban-category';
+			? Icon::TWO_PERSONS
+			: Icon::CITY
+		;
 	}
 
 	private function getB2eKanbanButtonMenuItems(): array

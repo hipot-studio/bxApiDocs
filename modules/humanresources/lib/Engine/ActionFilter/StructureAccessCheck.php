@@ -2,10 +2,10 @@
 
 namespace Bitrix\HumanResources\Engine\ActionFilter;
 
-use Bitrix\HumanResources\Attribute\Access\LogicAnd;
-use Bitrix\HumanResources\Attribute\Access\LogicOr;
-use Bitrix\HumanResources\Attribute\ActionAccess;
-use Bitrix\HumanResources\Attribute\StructureActionAccess;
+use Bitrix\HumanResources\Access\Model\UserModel;
+use Bitrix\HumanResources\Internals\Attribute\Access\LogicAnd;
+use Bitrix\HumanResources\Internals\Attribute\Access\LogicOr;
+use Bitrix\HumanResources\Internals\Attribute\StructureActionAccess;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Type\AccessibleItemType;
@@ -77,7 +77,7 @@ final class StructureAccessCheck extends Main\Engine\ActionFilter\Base
 	{
 		$this->addError(
 			new Main\Error(
-				Loc::getMessage('HR_ACTION_ACCESS_DENIED'),
+				Loc::getMessage('HR_ACTION_ACCESS_DENIED_MSGVER_1'),
 				self::ERROR_ACCESS_DENIED,
 			),
 		);
@@ -195,6 +195,19 @@ final class StructureAccessCheck extends Main\Engine\ActionFilter\Base
 				if ($nodeMember)
 				{
 					return NodeModel::createFromId($nodeMember->nodeId);
+				}
+			}
+		}
+
+		if ($type === AccessibleItemType::USER)
+		{
+			$userId = $this->getValueByRequestId($requestIdKey);
+			if (is_numeric($userId))
+			{
+				$user = Container::getUserService()->getUserById($userId);
+				if ($user)
+				{
+					return UserModel::createFromId($user->id);
 				}
 			}
 		}

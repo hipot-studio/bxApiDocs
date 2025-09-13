@@ -7,7 +7,7 @@ use \Bitrix\Baas;
 
 class RegisterDomain extends VerifyDomain
 {
-	private string $regionId;
+	private ?string $regionId;
 	private string $languageId = 'en';
 
 	public function __construct(

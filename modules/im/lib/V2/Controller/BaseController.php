@@ -121,6 +121,7 @@ abstract class BaseController extends Controller
 			['ID' => 'DESC'],
 			$pinLimit
 		);
+
 		$restAdapter = new RestAdapter($chat, $messages, $pins);
 
 		$rest = $restAdapter->toRestFormat();

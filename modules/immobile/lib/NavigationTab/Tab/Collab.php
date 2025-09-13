@@ -9,12 +9,17 @@ use Bitrix\Main\Localization\Loc;
 class Collab extends BaseRecent
 {
 	use MessengerComponentTitle;
-	
+
 	public function isAvailable(): bool
 	{
 		return Settings::getImFeatures()?->collabAvailable ?? false;
 	}
-	
+
+	public function isPreload(): bool
+	{
+		return false;
+	}
+
 	protected function getParams(): array
 	{
 		return [
@@ -30,7 +35,7 @@ class Collab extends BaseRecent
 	{
 		return [
 			'useSearch' => true,
-			'preload' => false,
+			'preload' => $this->isPreload(),
 			'titleParams' => [
 				'useLargeTitleMode' => true,
 				'text' => $this->getTitle(),
@@ -52,7 +57,7 @@ class Collab extends BaseRecent
 	{
 		return 'im.collab.messenger';
 	}
-	
+
 	protected function getComponentName(): string
 	{
 		return 'im:collab-messenger';

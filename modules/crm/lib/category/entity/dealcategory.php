@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\Category\Entity;
 
+use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Entry\EntryException;
+use Bitrix\Crm\RepeatSale\Segment\SegmentManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
@@ -102,6 +104,12 @@ class DealCategory extends Category
 		catch (EntryException $exception)
 		{
 			$result->addError(new Error($exception->getLocalizedMessage()));
+		}
+
+		if ($result->isSuccess())
+		{
+			SegmentManager::onCategoryDelete(new CategoryIdentifier($this->getEntityTypeId(), $this->getId()));
+			$this->processDeletedEvent();
 		}
 
 		return $result;

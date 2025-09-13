@@ -15,6 +15,8 @@ use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
+use Bitrix\Crm\Integration;
+use Bitrix\UI\Buttons;
 
 Loader::includeModule('crm');
 
@@ -806,5 +808,44 @@ HTML;
 			return null;
 		}
 		return $this->getCategories();
+	}
+
+	protected function getToolbarParameters(): array
+	{
+		$buttonsRight = [
+			Buttons\IntranetBindingMenu::createByComponentParameters([
+				'SECTION_CODE' => Integration\Intranet\BindingMenu\SectionCode::TUNNELS,
+				'MENU_CODE' => Integration\Intranet\BindingMenu\CodeBuilder::getMenuCode(
+					$this->factory->getEntityTypeId(),
+				),
+			])
+		];
+
+		if ($this->isCategoryCreatable())
+		{
+			$buttonsRight[] = new Buttons\Button([
+				'color' => Buttons\Color::LIGHT_BORDER,
+				'icon' => Buttons\Icon::INFO,
+				// used in js
+				'className' => 'crm-st-help-button',
+				'text' => Loc::getMessage('CRM_ST_HELP_BUTTON'),
+			]);
+
+			$buttonsRight[] = new Buttons\Button([
+				'color' => Buttons\Color::PRIMARY,
+				// used in js
+				'className' => 'crm-st-add-category-btn-top',
+				'text' => Loc::getMessage('CRM_ST_ADD_FUNNEL_BUTTON2'),
+			]);
+		}
+
+		return array_merge(
+			parent::getToolbarParameters(),
+			[
+				'buttons' => [
+					\Bitrix\UI\Toolbar\ButtonLocation::RIGHT => $buttonsRight,
+				],
+			],
+		);
 	}
 }

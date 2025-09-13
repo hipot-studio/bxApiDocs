@@ -45,7 +45,7 @@ final class ExternalSourceGrid extends Grid
 
 		return new Rows(
 			$rowAssembler,
-			new \Bitrix\BIConnector\Superset\Grid\Row\Action\ExternalSourceDataProvider($this->getSettings())
+			new \Bitrix\BIConnector\Superset\Grid\Row\Action\Source\ExternalSourceActionDataProvider($this->getSettings())
 		);
 	}
 

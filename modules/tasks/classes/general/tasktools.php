@@ -849,14 +849,4 @@ class CTasksTools
 			)
 		);
 	}
-
-
-	public static function savePopupOptions($value)
-	{
-		CUserOptions::SetOption(
-			'tasks',
-			'popup_options',
-			$value
-		);
-	}
 }

@@ -202,7 +202,7 @@ class Controller
 			$this->buffer,
 			$this->userRepository,
 			new ProviderCollection(...[
-				new Forum\NotificationProvider()
+				new Forum\NotificationProvider(),
 			])
 		))->execute($text);
 

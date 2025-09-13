@@ -17,13 +17,20 @@ class DbStorage implements StorageInterface
 {
 	private const LOCK_KEY = 'queueLock';
 
-	private const LOCK_TIMEOUT = 15;
+	private const LOCK_TIMEOUT = 0;
 
 	private MessageRepository $repository;
+
+	private static bool $locked;
 
 	public function __construct(Entity $tableEntity)
 	{
 		$this->repository = new MessageRepository($tableEntity);
+	}
+
+	public function __destruct()
+	{
+		$this->unlock();
 	}
 
 	/**
@@ -44,8 +51,6 @@ class DbStorage implements StorageInterface
 			$this->repository->updateStatus(new MessageBoxCollection($messageBox), MessageStatus::Processing);
 		}
 
-		$this->unlock();
-
 		return $messageBox;
 	}
 
@@ -63,8 +68,6 @@ class DbStorage implements StorageInterface
 		$messageBoxes = $this->repository->getReadyMessagesOfQueue($queueId, $limit);
 
 		$this->repository->updateStatus($messageBoxes, MessageStatus::Processing);
-
-		$this->unlock();
 
 		return $messageBoxes;
 	}
@@ -87,24 +90,19 @@ class DbStorage implements StorageInterface
 
 	private function lock(): bool
 	{
-		$attempts = 3;
-
-		while ($attempts > 0)
+		if (isset(self::$locked))
 		{
-			if (Application::getConnection()->lock(self::LOCK_KEY, self::LOCK_TIMEOUT))
-			{
-				return true;
-			}
-
-			$attempts--;
+			return self::$locked;
 		}
 
-		return false;
+		return self::$locked = Application::getConnection()->lock(self::LOCK_KEY, self::LOCK_TIMEOUT);
 	}
 
 	private function unlock(): void
 	{
 		Application::getConnection()->unlock(self::LOCK_KEY);
+
+		self::$locked = false;
 	}
 
 	/**

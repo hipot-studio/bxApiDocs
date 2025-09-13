@@ -41,7 +41,7 @@ class MainButton extends BaseContent
 
 		if ($this->isExpired())
 		{
-			$additionalClasses = 'license-btn-alert-border ui-btn-icon-battery';
+			$additionalClasses = 'license-btn-alert-border license-btn-animate license-btn-animate-forward';
 		}
 		elseif ($this->isAlmostExpired())
 		{

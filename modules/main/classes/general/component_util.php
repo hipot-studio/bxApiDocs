@@ -356,7 +356,10 @@ class CComponentUtil
 	{
 		$arTree = CComponentUtil::__GetComponentsTree($filterNamespace, $arNameFilter, $arFilter);
 
-		CComponentUtil::__SortComponentsTree($arTree["#"]);
+		if (isset($arTree["#"]))
+		{
+			CComponentUtil::__SortComponentsTree($arTree["#"]);
+		}
 
 		return $arTree;
 	}

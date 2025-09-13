@@ -18,8 +18,8 @@ use Bitrix\Main\Web\Json;
  */
 class CategoryRepository
 {
-	private const COMPANY_CODE = 'CATALOG_CONTRACTOR_COMPANY';
-	private const CONTACT_CODE = 'CATALOG_CONTRACTOR_CONTACT';
+	public const CATALOG_CONTRACTOR_COMPANY = 'CATALOG_CONTRACTOR_COMPANY';
+	public const CATALOG_CONTRACTOR_CONTACT = 'CATALOG_CONTRACTOR_CONTACT';
 
 	/**
 	 * @param int $entityTypeId
@@ -170,7 +170,7 @@ class CategoryRepository
 				new CategoryIdentifier($entityTypeId, $categoryId)
 			);
 
-			$fields = ['RELATION' => $rolePerms];
+			$fields = ['PERMISSIONS' => $rolePerms];
 			(new \CCrmRole())->update($role['ID'], $fields);
 		}
 	}
@@ -182,8 +182,8 @@ class CategoryRepository
 	private static function getCodeByEntityTypeId(int $entityTypeId): ?string
 	{
 		$map = [
-			\CCrmOwnerType::Contact => self::CONTACT_CODE,
-			\CCrmOwnerType::Company => self::COMPANY_CODE,
+			\CCrmOwnerType::Contact => self::CATALOG_CONTRACTOR_CONTACT,
+			\CCrmOwnerType::Company => self::CATALOG_CONTRACTOR_COMPANY,
 		];
 
 		return $map[$entityTypeId] ?? null;

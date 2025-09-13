@@ -979,7 +979,10 @@ class Letter extends Base
 		$instance->save();
 		$this->getErrorCollection()->add($instance->getErrors());
 
-		if (!is_null($this->getMessage()->getConfiguration()->get('MESSAGE')))
+		if (
+			!is_null($this->getMessage()->getConfiguration()->get('MESSAGE'))
+			&& !is_null($instance->getId())
+		)
 		{
 			FileTable::syncFiles(
 				$instance->getId(),

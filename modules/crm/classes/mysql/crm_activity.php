@@ -1,5 +1,7 @@
 <?php
 //@codingStandardsIgnoreFile
+use Bitrix\Crm\Activity\LastCommunication\SyncLastCommunication;
+
 class CCrmActivity extends CAllCrmActivity
 {
 	const TABLE_NAME = 'b_crm_act';
@@ -133,18 +135,28 @@ class CCrmActivity extends CAllCrmActivity
 		}
 
 		$monitor = \Bitrix\Crm\Service\Timeline\Monitor::getInstance();
+		$lastCommunication = new SyncLastCommunication();
 		foreach ($added as $binding)
 		{
-			if (\CCrmOwnerType::IsDefined($binding['OWNER_TYPE_ID']) && (int)$binding['OWNER_ID'] > 0)
+			$itemIdentifier = \Bitrix\Crm\ItemIdentifier::createFromArray($binding);
+			if ($itemIdentifier)
 			{
-				$monitor->onActivityAddIfSuitable(new \Bitrix\Crm\ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']), $ID);
+				$monitor->onActivityAddIfSuitable($itemIdentifier, $ID);
 			}
 		}
+
+		if (!empty($added))
+		{
+			$lastCommunication->onActivityAddIfSuitable($ID);
+		}
+
 		foreach ($removed as $binding)
 		{
-			if (\CCrmOwnerType::IsDefined($binding['OWNER_TYPE_ID']) && (int)$binding['OWNER_ID'] > 0)
+			$itemIdentifier = \Bitrix\Crm\ItemIdentifier::createFromArray($binding);
+			if ($itemIdentifier)
 			{
-				$monitor->onActivityRemoveIfSuitable(new \Bitrix\Crm\ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']), $ID);
+				$monitor->onActivityRemoveIfSuitable($itemIdentifier, $ID);
+				$lastCommunication->onActivityRemoveIfSuitable($itemIdentifier, $ID);
 			}
 		}
 

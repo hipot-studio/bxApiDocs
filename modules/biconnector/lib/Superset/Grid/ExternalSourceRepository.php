@@ -2,12 +2,14 @@
 
 namespace Bitrix\BIConnector\Superset\Grid;
 
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
 use Bitrix\BIConnector\Superset\ExternalSource\CrmTracking\SourceProvider;
 use Bitrix\Crm\Tracking\Internals\SourceTable;
 use Bitrix\Crm\Tracking\Provider;
 use Bitrix\Main\Entity\ExpressionField;
+use Bitrix\Main\Loader;
 
 class ExternalSourceRepository
 {
@@ -41,6 +43,14 @@ class ExternalSourceRepository
 				'CODE' => '1c',
 				'ICON_CLASS' => 'ui-icon ui-icon-service-1c',
 				'NAME' => '1C',
+			];
+		}
+
+		if (Loader::includeModule('rest'))
+		{
+			$actualSourceList[] = [
+				'CODE' => 'rest',
+				'NAME' => 'REST',
 			];
 		}
 
@@ -107,5 +117,28 @@ class ExternalSourceRepository
 	private function getCrmSourceTableSelect(): array
 	{
 		return ['ID', 'TITLE' => 'NAME', 'TYPE' => 'CODE', 'ACTIVE', 'DATE_CREATE', 'CREATED_BY_ID', 'DESCRIPTION'];
+	}
+
+	public static function getRestLogoBySourceId(int $sourceId): array
+	{
+		static $connectorsOfSourceList = null;
+
+		if ($connectorsOfSourceList === null)
+		{
+			$connectorsOfSourceList = [];
+			$rawData = ExternalSourceRestTable::getList([
+				'select' => ['SOURCE_ID', 'CONNECTOR.TITLE', 'CONNECTOR.LOGO'],
+			])->fetchCollection();
+
+			foreach ($rawData as $item)
+			{
+				$connectorsOfSourceList[$item->getSourceId()] = [
+					'TITLE' => $item->getConnector()->getTitle(),
+					'LOGO' => $item->getConnector()->getLogo(),
+				];
+			}
+		}
+
+		return $connectorsOfSourceList[$sourceId] ?? [];
 	}
 }

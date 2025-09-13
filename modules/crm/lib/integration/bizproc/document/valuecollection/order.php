@@ -4,12 +4,17 @@ namespace Bitrix\Crm\Integration\BizProc\Document\ValueCollection;
 
 use Bitrix\Crm;
 use Bitrix\Main;
+use Bitrix\Main\Application;
+use Bitrix\Main\Type\DateTime;
 
 class Order extends Base
 {
 	protected $order;
 	protected $contactDocument;
 	protected $companyDocument;
+
+	protected array $contactFields;
+	protected array $companyFields;
 
 	protected function processField(string $fieldId): bool
 	{
@@ -79,15 +84,49 @@ class Order extends Base
 			return;
 		}
 
-		$order = $this->getOrder();
+		$this->contactFields = $this->extractFieldsByPrefix('CONTACT.');
+		$this->companyFields = $this->extractFieldsByPrefix('COMPANY.');
 
+		$this->prepareFieldGroups();
+
+		$this->addSelectField($this->contactFields, 'CONTACT_ID');
+		$this->addSelectField($this->companyFields, 'COMPANY_ID');
+
+		$order = $this->getOrder();
 		if (!$order)
 		{
 			return;
 		}
 
 		$fields = $order->getFieldValues();
+		$this->document = array_merge($this->document, $fields ?: []);
+		$this->loadAdditionalValues();
+	}
 
+	protected function loadTimeCreateValues(): void
+	{
+		$culture = Application::getInstance()->getContext()->getCulture();
+
+		$dateCreate = (string)$this->document['DATE_INSERT'];
+		$isCorrectDate = DateTime::isCorrect($dateCreate);
+		if ($isCorrectDate && $culture)
+		{
+			$dateCreateObject = new DateTime($dateCreate);
+			$this->document['TIME_CREATE'] = $dateCreateObject->format($culture->getShortTimeFormat());
+		}
+	}
+
+	protected function processFieldDependencies(): void
+	{
+		if (in_array('TIME_CREATE', $this->fieldGroups['common'], true))
+		{
+			$this->select[] = 'DATE_INSERT';
+		}
+	}
+
+	protected function loadAdditionalValues(): void
+	{
+		$fields = [];
 		$userKeys = [
 			'USER_ID', 'EMP_PAYED_ID', 'EMP_DEDUCTED_ID', 'EMP_STATUS_ID', 'EMP_MARKED_ID',
 			'EMP_ALLOW_DELIVERY_ID', 'CREATED_BY', 'RESPONSIBLE_ID', 'EMP_CANCELED_ID',
@@ -138,41 +177,82 @@ class Order extends Base
 
 		$this->document = array_merge($this->document, $fields ?: []);
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
+
+		if (!empty($this->document['CONTACT_ID']))
+		{
+			$this->loadContactFieldValues($this->contactFields);
+		}
+
+		if (!empty($this->document['COMPANY_ID']))
+		{
+			$this->loadCompanyFieldValues($this->companyFields);
+		}
+
+		$shopFields = $this->extractFieldsByPrefix('SHOP_');
+		if (!empty($shopFields))
+		{
+			$this->loadShopValues();
+		}
+
+		$shippingFields = $this->extractFieldsByPrefix('SHIPPING.');
+		if (!empty($shippingFields))
+		{
+			$this->loadShippingValues();
+		}
+
+		$responsibleFields = $this->extractFieldsByPrefix('RESPONSIBLE_ID.');
+		if (!empty($responsibleFields))
+		{
+			$this->loadAssignedByValues('RESPONSIBLE_ID', 'RESPONSIBLE_ID', false);
+		}
+
+		$this->appendDefaultUserPrefixes();
 		$this->loadUserFieldValues();
+		$this->loadCommonFieldValues();
 	}
 
 	protected function loadContactFieldValue($fieldId): void
 	{
-		if ($this->contactDocument === null)
+		$contactFieldId = substr($fieldId, strlen('CONTACT.'));
+		if ($this->contactDocument[$contactFieldId] === null)
 		{
-			$this->loadEntityValues();
+			if (!$this->document['CONTACT_ID'])
+			{
+				$this->select = array_merge($this->select, ['CONTACT_ID']);
+				$this->loadEntityValues();
+			}
+
 			if ($this->document['CONTACT_ID'])
 			{
 				$this->contactDocument = \CCrmDocumentContact::getDocument('CONTACT_' . $this->document['CONTACT_ID']);
 			}
 		}
 
-		if ($this->contactDocument)
+		if ($this->contactDocument[$contactFieldId])
 		{
-			$contactFieldId = substr($fieldId, strlen('CONTACT.'));
 			$this->document[$fieldId] = $this->contactDocument[$contactFieldId];
 		}
 	}
 
 	protected function loadCompanyFieldValue($fieldId): void
 	{
-		if ($this->companyDocument === null)
+		$companyFieldId = substr($fieldId, strlen('COMPANY.'));
+		if ($this->companyDocument[$companyFieldId] === null)
 		{
-			$this->loadEntityValues();
+			if (!$this->document['COMPANY_ID'])
+			{
+				$this->select = array_merge($this->select, ['COMPANY_ID']);
+				$this->loadEntityValues();
+			}
+
 			if ($this->document['COMPANY_ID'])
 			{
 				$this->companyDocument = \CCrmDocumentCompany::GetDocument('COMPANY_' . $this->document['COMPANY_ID']);
 			}
 		}
 
-		if ($this->companyDocument)
+		if ($this->companyDocument[$companyFieldId])
 		{
-			$companyFieldId = substr($fieldId, strlen('COMPANY.'));
 			$this->document[$fieldId] = $this->companyDocument[$companyFieldId];
 		}
 	}
@@ -253,6 +333,40 @@ class Order extends Base
 			{
 				$fields[$field] = $value->format(Main\Type\Date::getFormat());
 			}
+		}
+	}
+
+	protected function loadContactFieldValues(array $fields): void
+	{
+		$this->loadContactValues($this->document, $this->contactDocument, $fields);
+	}
+
+	protected function loadCompanyFieldValues(array $fields): void
+	{
+		$this->loadCompanyValues($this->document, $this->companyDocument, $fields);
+	}
+
+	protected function loadCreatedByPrintable(): void
+	{
+		if (isset($this->document['CREATED_BY']))
+		{
+			$user = $this->getUserValues($this->document['CREATED_BY']);
+			if (!$user)
+			{
+				return;
+			}
+
+			$this->document['CREATED_BY_PRINTABLE'] = \CUser::FormatName(
+				\CSite::GetNameFormat(false),
+				[
+					'LOGIN' => $user['LOGIN'] ?? '',
+					'NAME' => $user['NAME'] ?? '',
+					'LAST_NAME' => $user['LAST_NAME'] ?? '',
+					'SECOND_NAME' => $user['SECOND_NAME'] ?? '',
+				],
+				true,
+				false
+			);
 		}
 	}
 }

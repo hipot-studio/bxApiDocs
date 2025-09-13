@@ -9,8 +9,11 @@ use Bitrix\Tasks\Onboarding\Transfer\UserJob;
 
 final class UserJobFactory
 {
-	public static function createUserJob(Type $type, int $userId): UserJob
+	/**
+	 * @param Type[] $types
+	 */
+	public static function createUserJob(array $types, int $userId, int $taskId = 0): UserJob
 	{
-		return new UserJob($type, $userId);
+		return new UserJob($types, $userId, $taskId);
 	}
 }

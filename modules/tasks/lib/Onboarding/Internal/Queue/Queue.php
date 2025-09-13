@@ -15,6 +15,7 @@ use Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable;
 use Bitrix\Tasks\Onboarding\Internal\Model\QueueItem;
 use Bitrix\Tasks\Onboarding\Internal\Model\QueueItemCollection;
 use Bitrix\Tasks\Onboarding\Internal\Model\QueueTable;
+use Bitrix\Tasks\Onboarding\Internal\Type;
 use Bitrix\Tasks\Onboarding\Transfer\QueueJobCollection;
 use Throwable;
 
@@ -138,17 +139,33 @@ final class Queue implements QueueInterface
 		QueueTable::deleteByFilter($filter);
 	}
 
-	public function clearByTypeAndUserId(string $type, int $userId): void
+	/**
+	 * @param Type[] $types
+	 * @throws ArgumentException
+	 */
+	public function clearByUserJobParams(array $types, int $userId, int $taskId = 0): void
 	{
-		if ($userId <= 0 || $type === '')
+		$filter = [];
+
+		if ($userId > 0)
+		{
+			$filter['=USER_ID'] = $userId;
+		}
+
+		if ($taskId > 0)
+		{
+			$filter['=TASK_ID'] = $taskId;
+		}
+
+		if (!empty($types))
+		{
+			$filter['@TYPE'] = array_map(static fn(Type $type): string => $type->value, $types);
+		}
+
+		if (empty($filter))
 		{
 			return;
 		}
-
-		$filter = [
-			'=TYPE' => $type,
-			'=USER_ID' => $userId,
-		];
 
 		QueueTable::deleteByFilter($filter);
 	}

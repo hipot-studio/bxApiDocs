@@ -1,8 +1,7 @@
 <?php
 
 use Bitrix\Intranet\CurrentUser;
-use Bitrix\Main\ArgumentException;
-use Bitrix\Intranet\License;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -24,17 +23,30 @@ class IntranetLicenseWidgetComponent extends \CBitrixComponent
 			return;
 		}
 
-		try
-		{
-			$this->arResult['CONTENT'] = (new License\Widget())->getContentCollection();
-		}
-		catch (ArgumentException)
-		{
-			return;
-		}
+		$this->arResult['skeleton'] = $this->getSkeleton();
 
 		global $APPLICATION;
 		$APPLICATION->SetPageProperty('HeaderClass', 'intranet-header--with-controls');
 		$this->includeComponentTemplate();
+	}
+
+	private function getSkeleton(): array
+	{
+		$items = [];
+
+		if (Application::getInstance()->getLicense()->isTimeBound())
+		{
+			$items[] = ['type' => 'item', 'height' => 55];
+		}
+
+		$items[] = ['type' => 'item', 'height' => 31];
+		$items[] = ['type' => 'item', 'height' => 26];
+		$items[] = ['type' => 'split', 'height' => 19];
+
+		return [
+			'header' => false,
+			'footer' => true,
+			'items' => $items,
+		];
 	}
 }

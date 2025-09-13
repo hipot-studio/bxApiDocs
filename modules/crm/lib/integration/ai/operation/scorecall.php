@@ -17,7 +17,7 @@ use Bitrix\Crm\Copilot\PullManager;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Config;
-use Bitrix\Crm\Integration\AI\Dto\ScoreCallPayload;
+use Bitrix\Crm\Integration\AI\Dto\Scoring\ScoreCallPayload;
 use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
@@ -32,8 +32,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
 use Bitrix\Main;
-use Bitrix\Main\Security\Random;
-use Bitrix\Main\Web\Json;
+use CCrmActivity;
 use CCrmOwnerType;
 
 final class ScoreCall extends AbstractOperation
@@ -61,6 +60,16 @@ final class ScoreCall extends AbstractOperation
 		);
 
 		parent::__construct($target, $userId, $parentJobId);
+	}
+
+	public static function isAccessGranted(int $userId, ItemIdentifier $target): bool
+	{
+		return parent::isAccessGranted($userId, $target)
+			&& CCrmActivity::CheckItemUpdatePermission(
+				['ID' => $target->getEntityId()],
+				Container::getInstance()->getUserPermissions($userId)->getCrmPermissions(),
+			)
+		;
 	}
 
 	public static function isSuitableTarget(ItemIdentifier $target): bool
@@ -130,27 +139,6 @@ final class ScoreCall extends AbstractOperation
 		;
 	}
 
-	protected function getStubPayload(): mixed
-	{
-		$criteriaList = array_map(
-			static fn(int $index) => [
-					'criterion' => "name of criterion {$index}",
-					'status' => (bool)Random::getInt(0, 1),
-					'explanation' => "explanation of criterion {$index}",
-			], [1, 2, 3, 4, 5, 6, 7]
-		);
-
-		$fields = [
-			'call_review' => [
-				'criteria' => $criteriaList,
-			],
-			'overall_summary' => 'The manager successfully met almost all criteria, providing quality service and attention to detail.',
-			'recommendations' => "It is recommended to offer customers a 'gift wrap' promotion for a review on WhatsApp or Instagram to increase customer engagement and loyalty."
-		];
-
-		return Json::encode($fields);
-	}
-
 	protected function getContextLanguageId(): string
 	{
 		$itemIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->target->getEntityId());
@@ -178,9 +166,12 @@ final class ScoreCall extends AbstractOperation
 	// region notify
 	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void
 	{
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($result->getTarget()?->getEntityId());
+		$activityId = $result->getTarget()?->getEntityId();
+		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
 		if ($nextTarget)
 		{
+			self::notifyTimelinesAboutActivityUpdate($activityId, true);
+			
 			Controller::getInstance()->onStartCallScoring(
 				$nextTarget,
 				$result->getTarget()?->getEntityId(),
@@ -230,7 +221,7 @@ final class ScoreCall extends AbstractOperation
 					[
 						'OPERATION_TYPE_ID' => self::TYPE_ID,
 						'ENGINE_ID' => self::$engineId,
-						'ERRORS' => $result->getErrorMessages(),
+						'ERRORS' => array_unique($result->getErrorMessages()),
 					],
 					$result->getUserId(),
 				);
@@ -317,7 +308,6 @@ final class ScoreCall extends AbstractOperation
 			}
 
 			self::notifyTimelinesAboutActivityUpdate($activityId);
-
 			self::notifyCallQualityUpdate($activityId, 'error');
 
 			return;
@@ -378,6 +368,7 @@ final class ScoreCall extends AbstractOperation
 				]
 			);
 
+			self::cleanBadgeByType($activityId, Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT);
 			self::trySyncScoreStatusBadge(
 				$activityId,
 				$assessment,

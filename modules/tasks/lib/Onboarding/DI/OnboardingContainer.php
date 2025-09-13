@@ -15,6 +15,8 @@ use Bitrix\Tasks\Onboarding\Counter\Service\CounterService;
 use Bitrix\Tasks\Onboarding\Internal\Queue\QueueServiceInterface;
 use Bitrix\Tasks\Onboarding\Internal\Queue\Service\QueueService;
 use Bitrix\Tasks\Onboarding\Notification\NotificationController;
+use Bitrix\Tasks\Onboarding\Promo\Repository\InviteToMobileRepositoryInterface;
+use Bitrix\Tasks\Onboarding\Promo\Service\InviteToMobileService;
 use Bitrix\Tasks\Onboarding\Task\Repository\TaskRepository;
 use Bitrix\Tasks\Onboarding\Task\TaskRepositoryInterface;
 use Bitrix\Tasks\Onboarding\View\Repository\ViewRepository;
@@ -48,6 +50,16 @@ final class OnboardingContainer extends AbstractContainer
 			static fn (): NotificationController => new NotificationController(),
 			'tasks.onboarding.notification.controller'
 		);
+	}
+
+	public function getInviteToMobileService(): InviteToMobileService
+	{
+		return $this->getRegisteredObject(InviteToMobileService::class);
+	}
+
+	public function getInviteToMobileRepository(): InviteToMobileRepositoryInterface
+	{
+		return $this->getRuntimeObjectWithDi(InviteToMobileRepositoryInterface::class);
 	}
 
 	public function getCounterService(): CounterServiceInterface

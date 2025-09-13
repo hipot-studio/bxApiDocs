@@ -180,7 +180,7 @@ class GeneralChannel extends OpenChannelChat
 		}
 
 		$managerIds = array_unique($managerIds);
-		$config->setManagerIds($managerIds);
+		$config = $config->setManagerIds($managerIds);
 
 		return parent::addUsers($userIds, $config);
 	}

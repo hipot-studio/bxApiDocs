@@ -5,6 +5,9 @@ if(!CModule::IncludeModule('rest'))
 use Bitrix\Intranet\Repository;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Rest\AccessException;
+use Bitrix\Rest\Exceptions\ObjectNotFoundException;
+use Bitrix\Rest\RestException;
 
 class CIntranetRestService extends IRestService
 {
@@ -169,17 +172,17 @@ class CIntranetRestService extends IRestService
 			catch (SqlQueryException)
 			{
 				$conn->rollbackTransaction();
-				throw new Exception('Internal error adding department. Try adding again.');
+				throw new RestException('Internal error adding department. Try adding again.');
 			}
 			catch (\Exception $exception)
 			{
 				$conn->rollbackTransaction();
-				throw new Exception($exception->getMessage());
+				throw new RestException($exception->getMessage());
 			}
 		}
 		else
 		{
-			throw new Exception('Access denied!');
+			throw new AccessException();
 		}
 	}
 
@@ -225,22 +228,22 @@ class CIntranetRestService extends IRestService
 				catch (SqlQueryException)
 				{
 					$conn->rollbackTransaction();
-					throw new Exception('Internal error updating department. Try updating again.');
+					throw new RestException('Internal error updating department. Try updating again.');
 				}
 				catch (\Exception $exception)
 				{
 					$conn->rollbackTransaction();
-					throw new Exception($exception->getMessage());
+					throw new RestException($exception->getMessage());
 				}
 			}
 			else
 			{
-				throw new Exception('Department not found');
+				throw new ObjectNotFoundException('Department not found');
 			}
 		}
 		else
 		{
-			throw new Exception('Access denied!');
+			throw new AccessException();
 		}
 	}
 
@@ -271,22 +274,22 @@ class CIntranetRestService extends IRestService
 				catch (SqlQueryException)
 				{
 					$conn->rollbackTransaction();
-					throw new Exception('Internal error deleting department. Try deleting again.');
+					throw new RestException('Internal error deleting department. Try deleting again.');
 				}
 				catch (\Exception $exception)
 				{
 					$conn->rollbackTransaction();
-					throw new Exception($exception->getMessage());
+					throw new RestException($exception->getMessage());
 				}
 			}
 			else
 			{
-				throw new Exception('Department not found');
+				throw new ObjectNotFoundException('Department not found');
 			}
 		}
 		else
 		{
-			throw new Exception('Access denied!');
+			throw new AccessException();
 		}
 	}
 

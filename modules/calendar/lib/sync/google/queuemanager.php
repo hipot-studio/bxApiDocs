@@ -302,8 +302,8 @@ class QueueManager
 			. " INNER JOIN b_calendar_section s ON e.SECTION_ID = s.ID"
 			. " INNER JOIN b_dav_connections c ON c.ID = s.CAL_DAV_CON"
 			. " WHERE e.SYNC_STATUS <> 'success'"
-				. " AND e.ID > ".$lastHandledId
-				. " AND s.EXTERNAL_TYPE IN ('local', 'google')"
+			. " AND e.ID > ".$lastHandledId
+			. " AND s.EXTERNAL_TYPE IN ('local', 'google')"
 			. " ORDER BY e.ID ASC"
 			. " LIMIT 10"
 			. ";"
@@ -369,7 +369,7 @@ class QueueManager
 			->setLimit(self::LIMIT_SECTIONS_FOR_CHECK)
 			->exec()
 			->fetchAll()
-		;
+			;
 	}
 
 	/**

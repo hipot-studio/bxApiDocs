@@ -47,6 +47,11 @@ class EventHandler
 					$call->removeUser($userId);
 					$call->getSignaling()->sendHangup($userId, $call->getUsers(), null);
 				}
+				if (Settings::isNewCallsEnabled())
+				{
+					$chat->getCallToken()->update();
+					$call->getSignaling()->sendPushTokenUpdate($chat->getCallToken()->getToken(), $call->getUsers());
+				}
 			}
 		}
 

@@ -286,11 +286,27 @@ class CommonActions extends BaseObject
 		];
 	}
 
+	public function checkFileLimitAction(Disk\Type\ObjectCollection $objectCollection)
+	{
+		$isFileLimitExceeded = false;
+
+		$userId = $this->getCurrentUser()?->getId();
+		if (ZipNginx\Archive::isFileLimitExceededByObjects($objectCollection, $userId))
+		{
+			$isFileLimitExceeded = true;
+		}
+
+		return [
+			'isFileLimitExceeded' => $isFileLimitExceeded,
+		];
+	}
+
 	public function downloadArchiveAction(Disk\Type\ObjectCollection $objectCollection): ZipNginx\Archive
 	{
 		$archiveName = 'archive' . date('y-m-d');
+		$userId = $this->getCurrentUser()?->getId();
 
-		return ZipNginx\Archive::createByObjects($archiveName, $objectCollection, $this->getCurrentUser()?->getId());
+		return ZipNginx\Archive::createByObjects($archiveName, $objectCollection, $userId);
 	}
 
 	public function listRecentlyUsedAction()

@@ -151,33 +151,12 @@ class CMailClientComponent extends CBitrixComponent
 			array('user_id' => $USER->getId())
 		);
 
-		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/mail.client.sidepanel/templates/.default/style.css');
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/mail.client.config/templates/.default/style.css');
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/mail.contact.avatar/templates/.default/style.css');
 
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/main.interface.buttons/templates/.default/style.css');
 
 		$this->includeComponentTemplate($componentPage);
-	}
-
-	public function includePageComponent($name, $template, &$params)
-	{
-		global $APPLICATION;
-
-		if (isset($_REQUEST['IFRAME']) && $_REQUEST['IFRAME'] == 'Y')
-		{
-			$APPLICATION->includeComponent(
-				'bitrix:mail.client.sidepanel',
-				'',
-				array(
-					'COMPONENT_ARGUMENTS' => array($name, $template, $params, $this),
-				)
-			);
-		}
-		else
-		{
-			$APPLICATION->includeComponent($name, $template, $params, $this);
-		}
 	}
 
 }

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm;
 
+use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Color\PhaseColorScheme;
@@ -1579,6 +1580,7 @@ abstract class Kanban
 					$data = [
 						'code' => $field['code'],
 						'value' => $field['value'] ?? null,
+						'html' => $field['html'] ?? null,
 					];
 
 					if (isset($field['config']))
@@ -1653,6 +1655,8 @@ abstract class Kanban
 	protected function prepareField(array &$data, $value, ?array $displayedFieldsValues = []): void
 	{
 		$data['value'] = $value;
+
+		(new LastCommunicationTimeFormatter())->formatKanbanDate($data);
 	}
 
 	/**

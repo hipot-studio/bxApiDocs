@@ -163,7 +163,7 @@ final class ProjectDependence extends \Bitrix\Tasks\Manager
 				}
 			}
 		}
-		catch(\Bitrix\Tasks\DB\Tree\LinkExistsException $e)
+		catch(\Bitrix\Tasks\Internals\DataBase\Tree\LinkExistsException $e)
 		{
 			// todo: PROJECTDEPENDENCE: more clever error code here
 			$errors->add('PROJECTDEPENDENCE', $e->getMessageFriendly());

@@ -11,6 +11,7 @@ use Bitrix\Landing\Manager;
 use Bitrix\Landing\Repo;
 use Bitrix\Landing\Internals;
 use Bitrix\Landing\Site\Type;
+use Bitrix\Main\Application;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
@@ -514,7 +515,7 @@ class BlockRepo
 		if (!empty($blocksRepo) && !empty($apps))
 		{
 			$this->repository['separator_apps'] = [
-				'name' => Loc::getMessage('LANDING_BLOCK_SEPARATOR_PARTNER_2'),
+				'name' => Loc::getMessage('LANDING_BLOCK_SEPARATOR_PARTNER_2_MSGVER_1'),
 				'separator' => true,
 				'items' => [],
 			];
@@ -581,9 +582,23 @@ class BlockRepo
 
 	private function fillLastUsedBlocks(): static
 	{
+		$request = Application::getInstance()->getContext()->getRequest();
+		if ($request->get('landing_mode') !== 'edit')
+		{
+			return $this;
+		}
+
+		static $lastUsedItems = null;
+		if ($lastUsedItems !== null)
+		{
+			$this->repository[self::SECTION_LAST]['items'] = $lastUsedItems;
+
+			return $this;
+		}
+
 		$this->repository[self::SECTION_LAST]['items'] = [];
 		$lastUsed = Block::getLastUsed();
-		if ($lastUsed)
+		if (count($lastUsed) > 0)
 		{
 			foreach ($lastUsed as $code)
 			{
@@ -616,6 +631,8 @@ class BlockRepo
 				}
 			}
 		}
+
+		$lastUsedItems = $this->repository[self::SECTION_LAST]['items'];
 
 		return $this;
 	}

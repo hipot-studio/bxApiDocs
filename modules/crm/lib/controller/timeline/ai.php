@@ -17,7 +17,7 @@ use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\CopilotLauncher;
 use Bitrix\Crm\Integration\AI\Dto\FillItemFieldsFromCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\MultipleFieldFillPayload;
-use Bitrix\Crm\Integration\AI\Dto\ScoreCallPayload;
+use Bitrix\Crm\Integration\AI\Dto\Scoring\ScoreCallPayload;
 use Bitrix\Crm\Integration\AI\Dto\SingleFieldFillPayload;
 use Bitrix\Crm\Integration\AI\ErrorCode as AIErrorCode;
 use Bitrix\Crm\Integration\AI\Feedback;

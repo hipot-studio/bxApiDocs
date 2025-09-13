@@ -10,6 +10,7 @@ class CallRequest extends Hydrator
 	public int $callId = 0;
 	public string $requestId = '';
 	public string $callUuid = '';
+	public string $roomId = '';
 	public string $parentCallUuid = '';
 	public string $provider = '';
 	public int $callType = 0;

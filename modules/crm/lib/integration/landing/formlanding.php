@@ -41,8 +41,8 @@ class FormLanding
 	 */
 	protected $lastError = null;
 
-	/** @var int|null|false $siteId  */
-	protected $siteId = false;
+	/** @var ?int $siteId  */
+	protected ?int $siteId = null;
 
 	/** @var static */
 	protected static $instance;
@@ -127,7 +127,7 @@ class FormLanding
 			return null;
 		}
 
-		if ($this->siteId !== false)
+		if (isset($this->siteId))
 		{
 			return $this->siteId;
 		}
@@ -208,7 +208,8 @@ class FormLanding
 				Main\Config\Option::set(
 					'crm', $this::OPT_CODE_LANDINGS_SITE_ID, 0
 				);
-				$this->siteId = false;
+				$this->siteId = null;
+
 				return $this->getSiteId();
 			}
 		}

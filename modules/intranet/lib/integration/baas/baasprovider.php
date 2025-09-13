@@ -40,7 +40,7 @@ final class BaasProvider
 		{
 			if ($this->baas)
 			{
-				$this->purchaseCount = count($this->baas->getPurchases());
+				$this->purchaseCount = count($this->baas->getNotExpiredPurchases());
 			}
 			else
 			{

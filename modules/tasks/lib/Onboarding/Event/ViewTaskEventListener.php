@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\Onboarding\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Event\View\OnTaskFirstViewEvent;
+use Bitrix\Tasks\Onboarding\Internal\Type;
 
 final class ViewTaskEventListener extends AbstractEventListener
 {
@@ -28,7 +29,18 @@ final class ViewTaskEventListener extends AbstractEventListener
 			return $eventResult;
 		}
 
-		$this->deleteJobs($taskId);
+		$this->deleteByUserJob(
+			[
+				Type::OneDayNotViewed,
+				Type::TwoDaysNotViewed,
+				Type::TooManyTasks,
+				Type::ResponsibleInvitationNotAcceptedOneDay,
+				Type::ResponsibleInvitationAccepted,
+				Type::InvitedResponsibleNotViewTaskTwoDays,
+			],
+			$userId,
+			$taskId,
+		);
 
 		return new EventResult(EventResult::SUCCESS);
 	}

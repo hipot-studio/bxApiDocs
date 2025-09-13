@@ -7,7 +7,7 @@ use Bitrix\MobileApp;
 abstract class BaseRecent implements TabInterface
 {
 	protected array $params = [];
-	
+
 	public function __construct()
 	{
 		$this->params = $this->getParams();
@@ -18,24 +18,24 @@ abstract class BaseRecent implements TabInterface
 	abstract protected function getComponentName(): string;
 	abstract protected function getParams(): array;
 	abstract protected function getWidgetSettings(): array;
-	
+
 	public function isNeedMergeSharedParams(): bool
 	{
 		return true;
 	}
-	
+
 	public function mergeParams(array $params): void
 	{
 		$this->params = array_merge($params, $this->params);
 	}
-	
+
 	public function getComponentData(): ?array
 	{
 		if (!$this->isAvailable())
 		{
 			return null;
 		}
-		
+
 		return [
 			"id" => $this->getId(),
 			"title" => $this->getTabTitle(),
@@ -45,10 +45,11 @@ abstract class BaseRecent implements TabInterface
 				"scriptPath" => MobileApp\Janative\Manager::getComponentPath($this->getComponentName()),
 				'params' => $this->params,
 				'settings' => $this->getWidgetSettings(),
-			]
+			],
+			'spotlightId' => $this->getId()
 		];
 	}
-	
+
 	protected function getWidgetName(): string
 	{
 		return 'JSComponentChatRecent';

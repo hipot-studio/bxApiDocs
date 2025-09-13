@@ -6,6 +6,8 @@ use Bitrix\Main;
 
 class Client extends Config
 {
+	protected const SYNCHRONIZATION_DELTA = 7200;
+
 	protected function getModuleId(): string
 	{
 		return 'baas';
@@ -110,6 +112,21 @@ class Client extends Config
 	public function getSyncInterval(): int
 	{
 		return (int)$this->get('synchronization:ttl', '86400');
+	}
+
+	public function getSyncDelta(): int
+	{
+		$delta = (int)$this->get('synchronization:delta', 0);
+		if ($delta > 0)
+		{
+			return $delta;
+		}
+
+		$delta = rand(1, self::SYNCHRONIZATION_DELTA);
+
+		$this->set('synchronization:delta', $delta);
+
+		return $delta;
 	}
 
 	public function isTurnedOn(): bool

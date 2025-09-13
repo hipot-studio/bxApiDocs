@@ -42,7 +42,7 @@ abstract class Event
 		return $this;
 	}
 
-	protected function convertUnderscore(string $string): string
+	public static function convertUnderscore(string $string): string
 	{
 		return (new Converter(Converter::TO_CAMEL | Converter::LC_FIRST))->process($string);
 	}

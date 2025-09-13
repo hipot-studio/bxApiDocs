@@ -259,4 +259,21 @@ class UseCaseFactory
 			),
 		);
 	}
+
+	public function createGetPurchasedPackageReport(
+		string $packageCode,
+		string $purchaseCode,
+		?string $serviceCode = null,
+	): Baas\UseCase\External\GetPurchaseReport
+	{
+		return new Baas\UseCase\External\GetPurchaseReport(
+			new Baas\UseCase\External\Request\GetPurchaseReportRequest(
+				server: $this->server,
+				client: $this->client,
+				packageCode: $packageCode,
+				purchaseCode: $purchaseCode,
+				serviceCode: $serviceCode,
+			),
+		);
+	}
 }

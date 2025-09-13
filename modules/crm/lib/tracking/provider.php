@@ -13,6 +13,7 @@ use Bitrix\Landing;
 use Bitrix\Crm\Communication;
 use Bitrix\Crm\Integration\Bitrix24\Product;
 use Bitrix\Crm\Integration;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * Class Provider
@@ -29,8 +30,8 @@ class Provider
 	public static function getFeedbackParameters()
 	{
 		return [
-			'ID' => 'crm-tracking',
-			'FORMS' => [
+			'id' => 'crm-tracking',
+			'forms' => [
 				['zones' => ['com.br'], 'id' => '70','lang' => 'br', 'sec' => 'ro93se'],
 				['zones' => ['es'], 'id' => '72','lang' => 'la', 'sec' => 'p94c2f'],
 				['zones' => ['de'], 'id' => '74','lang' => 'de', 'sec' => 'nb1umg'],
@@ -38,8 +39,13 @@ class Provider
 				['zones' => ['ru', 'by', 'kz'], 'id' => '80','lang' => 'ru', 'sec' => 'cw9dbl'],
 				['zones' => ['en'], 'id' => '76','lang' => 'en', 'sec' => 'stvrqm'],
 			],
-			'PRESETS' => []
+			'presets' => []
 		];
+	}
+
+	public static function getFeedbackButtonTitle(): string
+	{
+		return Loc::getMessage('CRM_TRACKING_FEEDBACK_BUTTON_TITLE');
 	}
 
 	/**
@@ -395,7 +401,7 @@ class Provider
 
 	/**
 	 * Get actual sources.
-	 
+
 	 * @return array
 	 */
 	public static function getActualSources()
@@ -490,7 +496,7 @@ class Provider
 			{
 				continue;
 			}
-			
+
 			/*
 			if (empty($source['EMAIL']) && empty($source['PHONE']))
 			{

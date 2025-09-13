@@ -9,7 +9,6 @@ use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Integration\Baas\BaasTokenService;
-use Bitrix\AI\Limiter\Enums\ErrorLimit;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Payload\Text;
 use Bitrix\AI\QueueJob;
@@ -19,6 +18,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
+use Bitrix\UI\Util;
 use Bitrix\Main\Loader;
 use function call_user_func;
 use function is_callable;
@@ -35,6 +35,9 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 
 	protected const ERROR_CODE_LIMIT_STANDARD = 'LIMIT_IS_EXCEEDED_MONTHLY';
 	protected const ERROR_CODE_LIMIT_BAAS = 'LIMIT_IS_EXCEEDED_BAAS';
+	protected const ERROR_CODE_RATE_LIMIT = 'RATE_LIMIT';
+
+	protected const RATE_LIMIT_HELP_CODE = '24736310';
 
 	public function checkLimits(): bool
 	{
@@ -190,7 +193,15 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		[$showSliderWithMsg, $sliderCode, $errorCode, $msgForIm] = $this->getErrorsLimitRules($errorLimit);
 
 		$error = new Error(
-			Loc::getMessage('AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED'),
+			$errorCode === static::ERROR_CODE_RATE_LIMIT
+			? Loc::getMessage(
+				'AI_ENGINE_ERROR_RATE_LIMIT_IS_EXCEEDED',
+				[
+					'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp() . '" target="blank">',
+					'[/helpdesklink]' => '</a>',
+				]
+			)
+			: Loc::getMessage('AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED'),
 			$errorCode,
 			[
 				'sliderCode' => $sliderCode,
@@ -213,7 +224,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 	{
 		$errorData = $errorLimit->getCustomData();
 		$isAvailableBaas = $this->isAvailableBaas();
-		$errorCode = $this->getSliderCode($errorData, $isAvailableBaas);
+		$errorCode = $this->getErrorCode($errorData, $isAvailableBaas);
 		$sliderCode = static::SLIDER_CODE_REQUESTS;
 
 		$msgForIm = Loc::getMessage(
@@ -236,6 +247,18 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			]
 		);
 
+		if ($errorCode === static::ERROR_CODE_RATE_LIMIT)
+		{
+			$msgForIm = Loc::getMessage(
+				'AI_ENGINE_ERROR_IM_RATE_LIMIT_IS_EXCEEDED',
+				[
+					'#LINK#' => $this->getLinkOnHelp(),
+				]
+			);
+
+			$sliderCode = 'redirect=detail&code=' . static::RATE_LIMIT_HELP_CODE;
+		}
+
 		return [!$isAvailableBaas, $sliderCode, $errorCode, $msgForIm];
 	}
 
@@ -247,18 +270,31 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		return $baasTokenService->isAvailable();
 	}
 
-	protected function getSliderCode(array $errorData, bool $isAvailableBaas)
+	protected function getErrorCode(array $errorData, bool $isAvailableBaas)
 	{
 		if (empty($errorData['errorLimitType']))
 		{
 			return static::ERROR_CODE_LIMIT_STANDARD;
 		}
 
-		if ($isAvailableBaas) {
+		if ($errorData['errorLimitType'] === static::ERROR_CODE_RATE_LIMIT)
+		{
+			return static::ERROR_CODE_RATE_LIMIT;
+		}
+
+		if ($isAvailableBaas)
+		{
 			return static::ERROR_CODE_LIMIT_BAAS;
 		}
 
 		return $errorData['errorLimitType'];
+	}
+
+	private function getLinkOnHelp(): string
+	{
+		return Loader::includeModule('ui')
+			? Util::getArticleUrlByCode(static::RATE_LIMIT_HELP_CODE)
+			: 'https://helpdesk.bitrix24.ru/open/' . static::RATE_LIMIT_HELP_CODE;
 	}
 
 	abstract protected function getDefaultModel(): string;

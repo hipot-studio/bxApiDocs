@@ -143,11 +143,9 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $id;
 	}
 
-	public function getCommonChat(): ?Chat
+	public function getCommonChat(): Chat
 	{
-		$chatId = $this->getCommonChatId();
-
-		return $chatId ? Chat::getInstance($chatId) : null;
+		return Chat::getInstance($this->getCommonChatId());
 	}
 
 	//endregion
@@ -251,16 +249,16 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 				$message->getParams(true)->load([]);
 			}
 
-			$paramsCollection = MessageParamTable::query()
+			$result = MessageParamTable::query()
 				->setSelect(['*'])
 				->whereIn('MESSAGE_ID', $this->getIds())
 				->whereNot('PARAM_NAME', 'LIKE')
-				->fetchCollection()
+				->exec()
 			;
 
-			foreach ($paramsCollection as $paramRow)
+			while ($row = $result->fetch())
 			{
-				$this[$paramRow->getMessageId()]->getParams(true)->load($paramRow);
+				$this[$row['MESSAGE_ID']]->getParams(true)->load([$row]);
 			}
 
 			$this->isParamsFilled = true;
@@ -411,6 +409,11 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		$urlIdByMessageIds = [];
 		foreach ($this as $message)
 		{
+			if (!$message->getParams()->isSet(Params::URL_ID))
+			{
+				continue;
+			}
+
 			$urlId = $message->getParams()->get(Params::URL_ID)->getValue()[0] ?? null;
 			if (isset($urlId))
 			{
@@ -640,7 +643,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $reactions;
 	}
 
-	protected function getCopilotRoles(): array
+	public function getCopilotRoles(): array
 	{
 		$this->fillParams();
 		$copilotRoles = [];
@@ -686,9 +689,8 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		$popup = [
 			new UserPopupItem($this->getUserIds()),
 			new FilePopupItem($this->getFiles()),
-			//new ReminderPopupItem($this->getReminders()),
 			new AdditionalMessagePopupItem($additionalMessageIds),
-			new CopilotPopupItem($this->getCopilotRoles(), CopilotPopupItem::ENTITIES['messageCollection']),
+			CopilotPopupItem::getInstanceByMessages($this),
 		];
 
 		if (!in_array(ReactionPopupItem::class, $excludedList, true))
@@ -696,9 +698,12 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			$popup[] = new ReactionPopupItem($this->getReactions());
 		}
 
-		$chat = $this->getAny()?->getChat();
+		$chat = $this->getCommonChat();
 
-		if ($chat instanceof ChannelChat)
+		if (
+			!in_array(CommentPopupItem::class, $excludedList, true)
+			&& $chat instanceof ChannelChat
+		)
 		{
 			$popup[] = new CommentPopupItem($chat->getId(), $this->getIds());
 		}
@@ -788,6 +793,11 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			$to->add('1 DAY');
 
 			$query->where('DATE_CREATE', '<=', $to);
+		}
+
+		if ($filter['WITHOUT_SYSTEM_MESSAGE'] ?? false)
+		{
+			$query->where('AUTHOR_ID', '!=', 0);
 		}
 	}
 }

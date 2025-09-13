@@ -9,6 +9,7 @@ enum Type: string
 	case OneDayNotViewed = 'OneDayNotViewed';
 	case TwoDaysNotViewed = 'TwoDaysNotViewed';
 	case TooManyTasks = 'TooManyTasks';
+	case InviteToMobile = 'InviteToMobile';
 	case ResponsibleInvitationNotAcceptedOneDay = 'ResponsibleInvitationNotAcceptedOneDay';
 	case ResponsibleInvitationAccepted = 'ResponsibleInvitationAccepted';
 	case InvitedResponsibleNotViewTaskTwoDays = 'InvitedResponsibleNotViewTaskTwoDays';

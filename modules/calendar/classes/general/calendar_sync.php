@@ -1224,7 +1224,8 @@ class CCalendarSync
 			{
 				$manager = new Sync\Managers\DataExchangeManager(
 					FactoriesCollection::createByUserId(
-						$userId, [
+						$userId,
+						[
 							Google\Factory::SERVICE_NAME,
 							Office365\Factory::SERVICE_NAME,
 						]

@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Integration\Bizproc\Automation\Target;
 use Bitrix\Tasks;
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Integration\Bizproc\Document;
+use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
 
 if (!Loader::includeModule('bizproc'))
 {
@@ -56,7 +57,10 @@ class PlanTask extends Base
 
 		foreach ($stages as $stage)
 		{
-			Tasks\Kanban\TaskStageTable::update($stage['ID'], ['STAGE_ID' => $statusId]);
+			(new MoveTaskCommand(
+				relationId: (int)$stage['ID'],
+				stageId: (int)$statusId
+			))->run();
 
 			Tasks\Integration\Bizproc\Listener::onPlanTaskStageUpdate(
 				$planId,

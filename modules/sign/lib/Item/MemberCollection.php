@@ -231,4 +231,15 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 	{
 		return $this->queryTotal;
 	}
+
+	public function cloneMembers(): static
+	{
+		$newCollection = new MemberCollection();
+		foreach ($this as $member)
+		{
+			$newCollection->add(clone $member);
+		}
+
+		return $newCollection;
+	}
 }

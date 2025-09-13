@@ -8,6 +8,8 @@ use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 use Bitrix\Timeman\Form\Worktime\WorktimeRecordForm;
 use Bitrix\Timeman\Helper\TimeHelper;
+use Bitrix\Timeman\Integration\Pull\PushEvent;
+use Bitrix\Timeman\Integration\Pull\PushService;
 use Bitrix\Timeman\Model\Schedule\Schedule;
 use Bitrix\Timeman\Model\Schedule\Shift\Shift;
 use Bitrix\Timeman\Model\Worktime\Contract\WorktimeRecordIdStorable;
@@ -21,7 +23,6 @@ use Bitrix\Timeman\Service\BaseServiceResult;
 use Bitrix\Timeman\Service\Worktime\Action\WorktimeAction;
 use Bitrix\Timeman\Service\Worktime\Action\WorktimeActionList;
 use Bitrix\Timeman\Service\Worktime\Notification\WorktimeNotificationService;
-use Bitrix\Timeman\Service\Worktime\Record;
 use Bitrix\Timeman\Service\Worktime\Record\WorktimeManagerFactory;
 use Bitrix\Timeman\Service\Worktime\Result\WorktimeServiceResult;
 
@@ -260,6 +261,31 @@ class WorktimeService extends BaseService
 			{
 				$this->sendNotifications($actualRecord, $actionListResult->getSchedule());
 			}
+
+			$tmUserObject = new \CTimeManUser($actualRecord->getUserId());
+			$workTimeState = $tmUserObject->state();
+			$workTimeAction = '';
+			if ($workTimeState === 'CLOSED')
+			{
+				$workTimeAction = $tmUserObject->openAction();
+				$workTimeAction = ($workTimeAction === false) ? '' : $workTimeAction;
+			}
+
+			(new PushService())->sendEvent(
+				new PushEvent(
+					command: mb_strtolower($actionListResult->getWorktimeAction()->getType()),
+					recipients: [$actualRecord->getUserId()],
+					params: [
+						'info' => [
+							'state' => $workTimeState,
+							'action' => $workTimeAction,
+						],
+					],
+					entityId: $actualRecord->getId(),
+				)
+			);
+
+			(new \CPHPCache)->cleanDir('/timeman/work-time-data/' . $actualRecord->getUserId());
 
 			return (new WorktimeServiceResult())
 				->setWorktimeRecord($actualRecord)

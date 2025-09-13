@@ -310,9 +310,11 @@ class Template extends Base
 	 * Install default template.
 	 *
 	 * @param array $template
+	 * @param bool $checkPermissions
+	 *
 	 * @return Result
 	 */
-	public function installDefaultTemplate(array $template)
+	public function installDefaultTemplate(array $template, bool $checkPermissions = true)
 	{
 		$result = new Result();
 		if (!isset($template['BODY_TYPE']) || !is_a($template['BODY_TYPE'], Body::class, true))
@@ -399,7 +401,7 @@ class Template extends Base
 				unset($template['PRODUCTS_TABLE_VARIANT']);
 			}
 
-			$result = $this->add($template, $providers, [TemplateUserTable::ALL_USERS]);
+			$result = $this->add($template, $providers, [TemplateUserTable::ALL_USERS], $checkPermissions);
 		}
 
 		return $result;
@@ -408,7 +410,7 @@ class Template extends Base
 	/**
 	 * @internal
 	 */
-	final public function updateBodyOfDefaultTemplate(array $defaultTemplateDescription): Result
+	final public function updateBodyOfDefaultTemplate(array $defaultTemplateDescription, bool $checkPermissions = true): Result
 	{
 		$result = new Result();
 
@@ -449,7 +451,7 @@ class Template extends Base
 			return $fileSaveResult;
 		}
 
-		return $this->add(['ID' => $id, 'FILE_ID' => $fileSaveResult->getId()]);
+		return $this->add(['ID' => $id, 'FILE_ID' => $fileSaveResult->getId()], [], [], $checkPermissions);
 	}
 
 	/**
@@ -642,11 +644,11 @@ class Template extends Base
 	 * @throws \Bitrix\Main\ObjectException
 	 * @throws \Exception
 	 */
-	protected function add(array $templateData, array $providers = [], array $users = [])
+	protected function add(array $templateData, array $providers = [], array $users = [], bool $checkPermissions = true)
 	{
 		$result = new Result();
 		$id = intval($templateData['ID'] ?? 0);
-		if($id > 0 && !Driver::getInstance()->getUserPermissions()->canModifyTemplate($id))
+		if($id > 0 && $checkPermissions && !Driver::getInstance()->getUserPermissions()->canModifyTemplate($id))
 		{
 			$result->addError(new Error('You do not have permissions to modify this template'));
 		}

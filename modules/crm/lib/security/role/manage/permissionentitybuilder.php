@@ -2,8 +2,6 @@
 
 namespace Bitrix\Crm\Security\Role\Manage;
 
-use Bitrix\Crm\Feature;
-use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionList;
 use Bitrix\Crm\Security\Role\Manage\Entity\Button;
@@ -23,13 +21,14 @@ use Bitrix\Crm\Security\Role\Manage\Entity\OldInvoice;
 use Bitrix\Crm\Security\Role\Manage\Entity\Order;
 use Bitrix\Crm\Security\Role\Manage\Entity\PermissionEntity;
 use Bitrix\Crm\Security\Role\Manage\Entity\Quote;
+use Bitrix\Crm\Security\Role\Manage\Entity\RepeatSale;
 use Bitrix\Crm\Security\Role\Manage\Entity\SaleTarget;
 use Bitrix\Crm\Security\Role\Manage\Entity\SmartInvoice;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebForm;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebFormConfig;
 use Bitrix\Crm\Security\Role\Manage\Enum\Permission;
-use CCrmSaleHelper;
 use Bitrix\Main\Loader;
+use CCrmSaleHelper;
 
 final class PermissionEntityBuilder
 {
@@ -79,6 +78,7 @@ final class PermissionEntityBuilder
 			Permission::SaleTarget => new SaleTarget(),
 			Permission::Exclusion => new Exclusion(),
 			Permission::CopilotCallAssessment => new CopilotCallAssessment(),
+			Permission::RepeatSale => new RepeatSale(),
 			Permission::AutomatedSolutionConfig => new AutomatedSolutionConfig(),
 			Permission::AutomatedSolutionList => new AutomatedSolutionList(),
 			Permission::CrmConfig => new CrmConfig(),

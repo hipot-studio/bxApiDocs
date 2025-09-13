@@ -46,10 +46,13 @@ class CatalogStoreAdminList extends CBitrixComponent
 
 	public function executeComponent()
 	{
+		$this->arResult['PATH_TO'] = $this->arParams['PATH_TO'] ?? [];
+
 		if (!$this->checkStoreAccessRights())
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('STORE_LIST_NO_VIEW_RIGHTS_ERROR');
 			$this->includeComponentTemplate();
+
 			return;
 		}
 
@@ -60,7 +63,6 @@ class CatalogStoreAdminList extends CBitrixComponent
 		$this->arResult['GRID'] = $this->prepareGrid();
 		$this->prepareToolbar();
 
-		$this->arResult['PATH_TO'] = $this->arParams['PATH_TO'] ?? [];
 		$this->arResult['TARIFF_HELP_LINK'] = Catalog\Config\Feature::getMultiStoresHelpLink();
 
 		$this->includeComponentTemplate();
@@ -354,24 +356,25 @@ class CatalogStoreAdminList extends CBitrixComponent
 		$button = null;
 		if ($this->checkStoreModifyRights())
 		{
-			$buttonConfig = null;
+			$buttonConfig = [
+				'text' => Loc::getMessage('STORE_LIST_ADD_STORE_BUTTON'),
+			];
+
 			if (Catalog\Config\State::isAllowedNewStore())
 			{
-				$buttonConfig = [
-					'onclick' => 'BX.Catalog.Store.Grid.openStoreCreation',
-				];
+				$buttonConfig['onclick'] = 'BX.Catalog.Store.Grid.openStoreCreation';
 			}
 			else
 			{
 				$helpLink = Catalog\Config\Feature::getMultiStoresHelpLink();
+
 				if (!empty($helpLink))
 				{
 					\Bitrix\Main\Loader::includeModule('ui');
 					\Bitrix\Main\UI\Extension::load(['ui.info-helper']);
-					$buttonConfig = [
-						'click' => 'BX.Catalog.Store.Grid.openTariffHelp',
-					];
+					$buttonConfig['click'] = 'BX.Catalog.Store.Grid.openTariffHelp';
 				}
+
 				unset($helpLink);
 			}
 
@@ -469,7 +472,7 @@ class CatalogStoreAdminList extends CBitrixComponent
 		return $siteTitle;
 	}
 
-	private function getListFilter()
+	private function getListFilter(): array
 	{
 		$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->filter->getID());
 		$filterFields = $this->filter->getFieldArrays();
@@ -485,7 +488,21 @@ class CatalogStoreAdminList extends CBitrixComponent
 		$allowedStores = $this->accessController->getPermissionValue(ActionDictionary::ACTION_STORE_VIEW) ?? [];
 		if (!in_array(PermissionDictionary::VALUE_VARIATION_ALL, $allowedStores, true))
 		{
-			$filter['=ID'] = $allowedStores;
+			$innerFilter = [
+				'LOGIC' => 'OR',
+			];
+
+			if (!empty($allowedStores))
+			{
+				$innerFilter[] = ['@ID' => $allowedStores];
+			}
+
+			if ($this->checkStoreModifyRights())
+			{
+				$innerFilter[] = ['=USER_ID' => $this->accessController->getUser()->getUserId()];
+			}
+
+			$filter[] = $innerFilter;
 		}
 
 		return $filter;
@@ -499,11 +516,6 @@ class CatalogStoreAdminList extends CBitrixComponent
 		}
 
 		$this->arResult['ERROR_MESSAGES'] = [];
-		if (!$this->checkStoreAccessRights())
-		{
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('STORE_LIST_NO_VIEW_RIGHTS_ERROR');
-			$this->endResponseWithErrors();
-		}
 
 		$action = $this->request->get('action');
 		if ($action)
@@ -762,9 +774,12 @@ class CatalogStoreAdminList extends CBitrixComponent
 	private function checkStoreAccessRights(): bool
 	{
 		return
-			$this->accessController->check(ActionDictionary::ACTION_CATALOG_READ)
-			&& $this->accessController->check(ActionDictionary::ACTION_INVENTORY_MANAGEMENT_ACCESS)
-			&& $this->accessController->check(ActionDictionary::ACTION_STORE_VIEW)
+			$this->checkStoreModifyRights()
+			|| (
+				$this->accessController->check(ActionDictionary::ACTION_CATALOG_READ)
+				&& $this->accessController->check(ActionDictionary::ACTION_INVENTORY_MANAGEMENT_ACCESS)
+				&& $this->accessController->check(ActionDictionary::ACTION_STORE_VIEW)
+			)
 		;
 	}
 
@@ -775,9 +790,14 @@ class CatalogStoreAdminList extends CBitrixComponent
 
 	private function checkSpecificStoreModifyRights(int $storeId): bool
 	{
+		$creatorId = StoreTable::getStoreCreatorId($storeId);
+
 		return
 			$this->accessController->check(ActionDictionary::ACTION_STORE_MODIFY)
-			&& $this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, (string)$storeId)
+			&& (
+				$this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, (string)$storeId)
+				|| $creatorId === $this->accessController->getUser()->getUserId()
+			)
 		;
 	}
 

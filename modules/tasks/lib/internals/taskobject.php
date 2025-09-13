@@ -9,7 +9,6 @@ use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Contract\Arrayable;
-use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
 use Bitrix\Tasks\Integration\SocialNetwork\Collab\Provider\CollabProvider;
 use Bitrix\Tasks\Integration\SocialNetwork\Exception\SocialnetworkException;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
@@ -22,7 +21,6 @@ use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Member\AbstractMemberService;
 use Bitrix\Tasks\Member\Service\TaskMemberService;
 use Bitrix\Tasks\Util\Type\DateTime;
-use Throwable;
 
 class TaskObject extends EO_Task implements Arrayable
 {

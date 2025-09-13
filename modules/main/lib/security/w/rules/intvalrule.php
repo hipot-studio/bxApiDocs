@@ -1,1 +1,25 @@
-<? namespace Bitrix\Main\Security\W\Rules;$GLOBALS['____1596425093']= array(base64_decode('cH'.'JlZ19tYXR'.'jaA=='),base64_decode('a'.'W5'.'0'.'dm'.'Fs'));if(!function_exists(__NAMESPACE__.'\\___28307926')){function ___28307926($_1812832682){static $_1681593741= false; if($_1681593741 == false) $_1681593741=array('L'.'15'.'cZCskLw==');return base64_decode($_1681593741[$_1812832682]);}}; use Bitrix\Main\Text\StringHelper; use Bitrix\Main\Security\W\Rules\Results\ModifyResult; use Bitrix\Main\Security\W\Rules\Results\RuleResult; class IntvalRule extends Rule{ public function evaluate($_807529312): bool| RuleResult{ if(!StringHelper::isStringable($_807529312)){ return new ModifyResult((184*2-368));} if(!$GLOBALS['____1596425093'][0](___28307926(0), (string) $_807529312)){ return new ModifyResult($GLOBALS['____1596425093'][1]((string) $_807529312));} return true;}}?>
+<?php
+
+namespace Bitrix\Main\Security\W\Rules;
+
+use Bitrix\Main\Text\StringHelper;
+use Bitrix\Main\Security\W\Rules\Results\ModifyResult;
+use Bitrix\Main\Security\W\Rules\Results\RuleResult;
+
+class IntvalRule extends Rule
+{
+	public function evaluate($value): bool | RuleResult
+	{
+		if (!StringHelper::isStringable($value))
+		{
+			return new ModifyResult(0);
+		}
+
+		if (!preg_match('/^\d+$/', (string) $value))
+		{
+			return new ModifyResult(intval((string) $value));
+		}
+
+		return true;
+	}
+}

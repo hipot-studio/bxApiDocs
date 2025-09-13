@@ -7,6 +7,16 @@ use Bitrix\BIConnector\DataSourceConnector\FieldDto;
 
 class ApacheSuperset extends MicrosoftPowerBI
 {
+	public const TYPE_STRING = 'STRING';
+	public const TYPE_INT = 'INT';
+	public const TYPE_DOUBLE = 'DOUBLE';
+	public const TYPE_BOOLEAN = 'BOOLEAN';
+	public const TYPE_DATE = 'DATE';
+	public const TYPE_DATETIME = 'DATETIME';
+	public const TYPE_ARRAY_STRING = 'ARRAY_STRING';
+	public const TYPE_MAP_STRING = 'MAP_STRING';
+
+
 	protected static $serviceId = 'superset';
 
 	/**
@@ -38,6 +48,32 @@ class ApacheSuperset extends MicrosoftPowerBI
 	}
 
 	/**
+	 * @param string $name
+	 *
+	 * @return Connector\Base|null
+	 */
+	public function getDataSourceConnector(string $name): ?Connector\Base
+	{
+		$connector = parent::getDataSourceConnector($name);
+
+		if (!empty($connector))
+		{
+			return $connector;
+		}
+
+		$dataSources = [];
+		$event = new \Bitrix\Main\Event('biconnector', 'OnBIBuilderDataSources', [
+			$this->manager,
+			&$dataSources,
+			$this->languageId,
+			$name,
+		]);
+		$event->send();
+
+		return (!empty($dataSources[$name]) && $dataSources[$name] instanceof Connector\Base) ? $dataSources[$name] : null;
+	}
+
+	/**
 	 * Returns all available data sources descriptions.
 	 *
 	 * @return array
@@ -51,6 +87,7 @@ class ApacheSuperset extends MicrosoftPowerBI
 			$this->manager,
 			&$dataSources,
 			$this->languageId,
+			null,
 		]);
 		$event->send();
 
@@ -82,19 +119,19 @@ class ApacheSuperset extends MicrosoftPowerBI
 	{
 		if (is_string($fieldName) && str_starts_with($fieldName, 'UF_'))
 		{
-			return 'STRING';
+			return self::TYPE_STRING;
 		}
 
 		return match ($internalType)
 		{
-			'file', 'enum', 'int' => 'INT',
-			'double' => 'DOUBLE',
-			'date' => 'DATE',
-			'datetime' => 'DATETIME',
-			'bool' => 'BOOLEAN',
-			'array_string' => 'ARRAY_STRING',
-			'map_string' => 'MAP_STRING',
-			default => 'STRING',
+			'file', 'enum', 'int' => self::TYPE_INT,
+			'double' => self::TYPE_DOUBLE,
+			'date' => self::TYPE_DATE,
+			'datetime' => self::TYPE_DATETIME,
+			'bool' => self::TYPE_BOOLEAN,
+			'array_string' => self::TYPE_ARRAY_STRING,
+			'map_string' => self::TYPE_MAP_STRING,
+			default => self::TYPE_STRING,
 		};
 	}
 }

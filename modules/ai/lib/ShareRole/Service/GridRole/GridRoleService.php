@@ -15,6 +15,8 @@ use Bitrix\AI\ShareRole\Service\GridRole\Dto\GridRoleDto;
 use Bitrix\AI\ShareRole\Service\GridRole\Dto\ShareDto;
 use Bitrix\AI\ShareRole\Service\GridRole\Dto\SharingInfoDto;
 use Bitrix\AI\ShareRole\Service\GridRole\Enum\Order;
+use Bitrix\Extranet\Contract\Service\CollaberService;
+use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Grid\Row\Assembler\Field\Helpers\UserPhoto;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\ArgumentException;
@@ -239,6 +241,12 @@ class GridRoleService
 		return [$result, $sharingInfoDto];
 	}
 
+	protected function getCollabersAccessCodes(array $accessCodes): array
+	{
+		$collaberAccessCodes = array_map(fn($id) => $this->getCodeForUser($id), $this->getCollaberService()->getCollaberIds());
+		return array_map(fn($code) => new AccessCode($code),array_intersect($accessCodes, $collaberAccessCodes));
+	}
+
 	protected function updateSharingInfo(
 		array $codesInRole,
 		SharingInfoDto $sharingInfoDto,
@@ -248,6 +256,7 @@ class GridRoleService
 	{
 		$userGroups = array_flip($this->userAccessRepository->getCodesForUserGroup($userId));
 		$accessRightsDataProvider = $this->getAccessRightsDataProvider();
+		$collabersAccessCodes = $this->getCollabersAccessCodes($codesInRole);
 
 		foreach (array_unique($codesInRole) as $code)
 		{
@@ -256,6 +265,24 @@ class GridRoleService
 				$gridRoleDto->setShare(
 					new ShareDto($this->getAllUsersEntityName(), $code)
 				);
+
+				if (!empty($collabersAccessCodes))
+				{
+					foreach ($collabersAccessCodes as $collabersAccessCode)
+					{
+						$gridRoleDto->incrementCountShare();
+
+						if ($gridRoleDto->getCountInFillShare() >= static::MAX_SHARE_DATA)
+						{
+							continue;
+						}
+
+						$gridRoleDto->addUserIdInShare(
+							$collabersAccessCode->getEntityId()
+						);
+						$sharingInfoDto->addUserId($collabersAccessCode->getEntityId());
+					}
+				}
 
 				break;
 			}
@@ -571,5 +598,10 @@ class GridRoleService
 		});
 
 		return $gridRoleDtoList;
+	}
+
+	protected function getCollaberService(): CollaberService
+	{
+		return ServiceContainer::getInstance()->getCollaberService();
 	}
 }

@@ -13,6 +13,8 @@ class ExcludeDatesHandler
 	 * @param Map|null $exceptionEvents
 	 *
 	 * @return void
+	 *
+	 * @deprecated Use \Bitrix\Calendar\Core\Event\Properties\ExcludedDatesCollection::removeDateFromCollection
 	 */
 	public function prepareEventExcludeDates(Event $event, ?Core\Base\Map $exceptionEvents)
 	{
@@ -25,7 +27,7 @@ class ExcludeDatesHandler
 		{
 			return;
 		}
-		
+
 		/** @var Core\Base\Date $date */
 		foreach ($event->getExcludedDateCollection() as $key => $date)
 		{

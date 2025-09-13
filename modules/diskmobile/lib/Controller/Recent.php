@@ -52,7 +52,7 @@ class Recent extends BaseFileList
 
 		if (isset($page['items']))
 		{
-			$response['items'] = array_map(fn(array $item): array => $item['trackedObject']['file'], $page['items']);
+			$response['items'] = array_map([$this, 'trackedToItem'], $page['items']);
 			$response = $this->withUsers($response);
 			$response = $this->withRealStorageIds($response);
 			$response = $this->withStorages($response);

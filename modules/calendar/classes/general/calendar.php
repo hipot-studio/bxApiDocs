@@ -451,13 +451,16 @@ class CCalendar
 			'isExtranetUser' => $isExtranetUser,
 			'isGoogleApplicationRefused' => COption::GetOptionString('calendar', 'isGoogleApplicationRefused', 'N'),
 			'showGoogleApplicationRefused' => CUserOptions::getOption('calendar', 'showGoogleApplicationRefused', 'Y'),
+			'useAirDesign' => defined('AIR_SITE_TEMPLATE'),
+			'isBitrix24Template' => SITE_TEMPLATE_ID === 'bitrix24',
 		];
 
 		if (Loader::includeModule('socialnetwork'))
 		{
 			$projectLimitFeatureId = \Bitrix\Socialnetwork\Helper\Feature::PROJECTS_GROUPS;
 
-			$JSConfig['projectFeatureEnabled'] = \Bitrix\Socialnetwork\Helper\Feature::isFeatureEnabled($projectLimitFeatureId)
+			$JSConfig['projectFeatureEnabled'] =
+				\Bitrix\Socialnetwork\Helper\Feature::isFeatureEnabled($projectLimitFeatureId)
 				|| \Bitrix\Socialnetwork\Helper\Feature::canTurnOnTrial($projectLimitFeatureId)
 			;
 		}
@@ -565,58 +568,12 @@ class CCalendar
 
 		self::$userMeetingSection = self::GetCurUserMeetingSection();
 
-		$followedSectionList = UserSettings::getFollowedSectionIdList(self::$userId);
 		$defaultHiddenSections = [];
 		$sections = [];
-		// collab user not have access to rooms management, but it should be defined on page for proper event display
-		$roomsList = Rooms\Manager::getRoomsList();
-
 		$categoryList = Rooms\Categories\Manager::getCategoryList();
-		$collabSectionList = [];
 
-		if (self::$type === 'location')
-		{
-			$sectionList = $roomsList ?? [];
-		}
-		else
-		{
-			$owners = [self::$ownerId];
-			$types = [self::$type];
-			if (self::$type === 'user' && OpenEvents\Feature::getInstance()->isAvailable())
-			{
-				$types[] = Core\Event\Tools\Dictionary::CALENDAR_TYPE['open_event'];
-				$owners[] = 0;
-			}
+		[$sectionList, $collabSectionList, $followedSectionList, $roomsList] = self::getSectionsInfo($isCollabUser);
 
-			$sectionList = self::getSectionList([
-				'CAL_TYPE' => $types,
-				'OWNER_ID' => $owners,
-				'ACTIVE' => 'Y',
-				'ADDITIONAL_IDS' => $followedSectionList,
-				'checkPermissions' => true,
-				'getPermissions' => true,
-				'getImages' => true,
-			]);
-
-			if (self::$type === 'user' && $isCollabUser)
-			{
-				$userCollabIds = UserCollabs::getInstance()->getIds(self::$userId);
-
-				$collabSectionList = self::getSectionList([
-					'CAL_TYPE' => Dictionary::CALENDAR_TYPE['group'],
-					'OWNER_ID' => $userCollabIds,
-					'ACTIVE' => 'Y',
-					'checkPermissions' => true,
-					'getPermissions' => true,
-				]);
-			}
-		}
-
-		$sectionList = array_merge(
-			$sectionList,
-			self::getSectionListAvailableForUser(self::$userId),
-			$collabSectionList
-		);
 		$sectionIdList = [];
 		foreach ($sectionList as $section)
 		{
@@ -657,12 +614,7 @@ class CCalendar
 			$readOnly = true;
 		}
 
-		$bCreateDefault = !self::$bAnonym;
-
-		if (self::$type === 'user')
-		{
-			$bCreateDefault = self::$ownerId === self::$userId;
-		}
+		$bCreateDefault = self::hasToCreateDefaultCalendar($sections);
 
 		$groupOrUser = self::$type === 'user' || self::$type === 'group';
 		if ($groupOrUser)
@@ -699,15 +651,6 @@ class CCalendar
 			if (in_array($section['ID'], $followedSectionList))
 			{
 				$sections[$i]['SUPERPOSED'] = true;
-			}
-
-			if (
-				$bCreateDefault
-				&& $section['CAL_TYPE'] === self::$type
-				&& (int)$section['OWNER_ID'] === self::$ownerId
-			)
-			{
-				$bCreateDefault = false;
 			}
 
 			$type = $sections[$i]['CAL_TYPE'];
@@ -6929,5 +6872,165 @@ class CCalendar
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @throws Main\Access\Exception\UnknownActionException
+	 */
+	public static function hasTypeAccess(): bool
+	{
+		$typeModel = TypeModel::createFromXmlId(self::$type);
+
+		return (new TypeAccessController(self::$userId))
+			->check(ActionDictionary::ACTION_TYPE_ACCESS, $typeModel, [])
+		;
+	}
+
+	public static function isReadOnly(array $sections, array $collabSectionList = []): bool
+	{
+		$permission = self::GetPermissions([
+			'type' => self::$type,
+			'ownerId' => self::$ownerId,
+			'userId' => self::$userId,
+		]);
+
+		$readOnly = !$permission['edit'] && !$permission['section_edit'];
+
+		if (self::$type === Dictionary::CALENDAR_TYPE['user'] && self::$userId !== self::$ownerId)
+		{
+			$readOnly = true;
+		}
+
+		if (self::$bAnonym)
+		{
+			$readOnly = true;
+		}
+
+		$groupOrUser = self::$type === Dictionary::CALENDAR_TYPE['user']
+			|| self::$type === Dictionary::CALENDAR_TYPE['group']
+		;
+		$noEditAccessedCalendars = $groupOrUser;
+
+		if (self::hasToCreateDefaultCalendar($sections))
+		{
+			$sections[] = \CCalendarSect::CreateDefault([
+				'type' => self::$type,
+				'ownerId' => self::$ownerId,
+			]);
+		}
+
+		foreach ($sections as $section)
+		{
+			if (
+				$groupOrUser
+				&& $section['CAL_TYPE'] === self::$type
+				&& (int)$section['OWNER_ID'] === (int)self::$ownerId
+			)
+			{
+				if ($noEditAccessedCalendars && $section['PERM']['edit'])
+				{
+					$noEditAccessedCalendars = false;
+				}
+
+				if ($readOnly && ($section['PERM']['edit'] || $section['PERM']['edit_section']))
+				{
+					$readOnly = false;
+				}
+			}
+		}
+
+		if (!empty($collabSectionList))
+		{
+			$noEditAccessedCalendars = self::checkCollabSectionAccess($collabSectionList);
+		}
+
+		if ($groupOrUser && $noEditAccessedCalendars)
+		{
+			$readOnly = true;
+		}
+
+		return $readOnly;
+	}
+
+	/**
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 * @throws ArgumentException
+	 */
+	public static function getSectionsInfo($isCollabUser): array
+	{
+		$followedSectionList = UserSettings::getFollowedSectionIdList(self::$userId);
+		$roomsList = Rooms\Manager::getRoomsList();
+		$collabSectionList = [];
+
+		if (self::$type === Dictionary::CALENDAR_TYPE['location'])
+		{
+			$sectionList = $roomsList ?? [];
+		}
+		else
+		{
+			$owners = [self::$ownerId];
+			$types = [self::$type];
+			if (self::$type === 'user' && OpenEvents\Feature::getInstance()->isAvailable())
+			{
+				$types[] = Core\Event\Tools\Dictionary::CALENDAR_TYPE['open_event'];
+				$owners[] = 0;
+			}
+
+			$sectionList = self::getSectionList([
+				'CAL_TYPE' => $types,
+				'OWNER_ID' => $owners,
+				'ACTIVE' => 'Y',
+				'ADDITIONAL_IDS' => $followedSectionList,
+				'checkPermissions' => true,
+				'getPermissions' => true,
+				'getImages' => true,
+			]);
+
+			if (self::$type === Dictionary::CALENDAR_TYPE['user'] && $isCollabUser)
+			{
+				$userCollabIds = UserCollabs::getInstance()->getIds(self::$userId);
+
+				$collabSectionList = self::getSectionList([
+					'CAL_TYPE' => Dictionary::CALENDAR_TYPE['group'],
+					'OWNER_ID' => $userCollabIds,
+					'ACTIVE' => 'Y',
+					'checkPermissions' => true,
+					'getPermissions' => true,
+				]);
+			}
+		}
+
+		$sectionList = array_merge(
+			$sectionList,
+			self::getSectionListAvailableForUser(self::$userId),
+			$collabSectionList
+		);
+
+		return [$sectionList, $collabSectionList, $followedSectionList, $roomsList];
+	}
+
+	public static function hasToCreateDefaultCalendar(array $sections): bool
+	{
+		$createDefault = !self::$bAnonym;
+
+		if (self::$type === Dictionary::CALENDAR_TYPE['user'])
+		{
+			$createDefault = self::$userId === (int)self::$ownerId;
+		}
+
+		foreach ($sections as $section)
+		{
+			if (
+				$createDefault
+				&& $section['CAL_TYPE'] === self::$type
+				&& (int)$section['OWNER_ID'] === (int)self::$ownerId
+			)
+			{
+				return false;
+			}
+		}
+
+		return $createDefault;
 	}
 }

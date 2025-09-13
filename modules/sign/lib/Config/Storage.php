@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Sign\Config;
 
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
@@ -101,6 +102,7 @@ class Storage
 	public function isNewSignEnabled(): bool
 	{
 		$isAllowed = ($this->read('service.new.ui') ?? false) === true;
+
 		return $isAllowed || Main\Config\Option::get('sign', 'NEW_SIGN_UI', 'N') === 'Y';
 	}
 
@@ -143,6 +145,7 @@ class Storage
 			$address = $address ?: $this->getSelfAddress();
 			$host = (new Main\Web\Uri($address))->getHost();
 			$proto = mb_substr($address, 0, mb_strpos($address, ':'));
+
 			return "{$proto}://{$host}";
 		}
 
@@ -221,7 +224,7 @@ class Storage
 
 	public function getImagesCountLimitForBlankUpload(): int
 	{
-		return (int) Main\Config\Option::get('sign', 'max_count_pages_img');
+		return (int)Main\Config\Option::get('sign', 'max_count_pages_img');
 	}
 
 	/**
@@ -261,12 +264,14 @@ class Storage
 	public function setClientId(string $id): self
 	{
 		Main\Config\Option::set('sign', '~sign_safe_client_id', $id);
+
 		return $this;
 	}
 
 	public function setClientToken(string $token): self
 	{
 		Main\Config\Option::set('sign', '~sign_safe_client_token_id', $token);
+
 		return $this;
 	}
 
@@ -274,8 +279,7 @@ class Storage
 	{
 		return Main\Service\MicroService\Client::getServerName()
 			. "/bitrix/services/main/ajax.php"
-			. "?action=sign.callback.handle"
-		;
+			. "?action=sign.callback.handle";
 	}
 
 	public function getLicenseToken(): string
@@ -358,12 +362,12 @@ class Storage
 	 */
 	public function getProfileSafeUrl(int $userId): string
 	{
-		return '/company/personal/user/'.$userId.'/sign';
+		return '/company/personal/user/' . $userId . '/sign';
 	}
 
 	public function isEdoRegion(?string $regionCode = null): bool
 	{
-		$regionCode = $regionCode ?? \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
+		$regionCode ??= \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
 
 		return in_array($regionCode, ['ru', 'by'], true);
 	}

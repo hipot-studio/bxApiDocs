@@ -59,6 +59,7 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 					'inn' => $this->getValueFromSettings('SERVICE', 'INN'),
 					'payment_address' => $this->getValueFromSettings('SERVICE', 'P_ADDRESS'),
 				],
+				'internet' => $this->getField('USE_OFFLINE') === 'N',
 				'payments' => [],
 				'items' => [],
 				'total' => (float)$data['total_sum']

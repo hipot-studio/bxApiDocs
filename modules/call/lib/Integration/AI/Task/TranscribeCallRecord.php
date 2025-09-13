@@ -61,7 +61,7 @@ class TranscribeCallRecord extends AITask
 		}
 
 		if (
-			$track->hasDownloadUrl()
+			$track->getDownloaded() === false
 			&& !empty($track->getDownloadUrl())
 		)
 		{

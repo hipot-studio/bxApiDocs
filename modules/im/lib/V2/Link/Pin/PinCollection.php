@@ -110,4 +110,26 @@ class PinCollection extends BaseLinkCollection
 	{
 		static::processSidebarFilters($query, $filter, $order);
 	}
+
+	public function getAuthorIds(): array
+	{
+		$authorIds = [];
+		foreach ($this as $item)
+		{
+			$authorIds[$item->getAuthorId()] = $item->getAuthorId();
+		}
+
+		return $authorIds;
+	}
+
+	public function getMessageIds(): array
+	{
+		$messageIds = [];
+		foreach ($this as $item)
+		{
+			$messageIds[$item->getMessageId()] = $item->getMessageId();
+		}
+
+		return $messageIds;
+	}
 }

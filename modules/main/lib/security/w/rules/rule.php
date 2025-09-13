@@ -1,1 +1,289 @@
-<? namespace Bitrix\Main\Security\W\Rules;$GLOBALS['____499392724']= array(base64_decode('a'.'XNfc'.'3R'.'yaW5'.'n'),base64_decode('c'.'3RydG'.'9sb3dl'.'c'.'g'.'=='),base64_decode('aX'.'NfYXJyYX'.'k'.'='),base64_decode('a'.'X'.'Nfc'.'3R'.'yaW5'.'n'),base64_decode(''.'Z3pk'.'ZWN'.'vZGU='),base64_decode('YmFzZT'.'Y0'.'X2RlY29kZQ='.'='),base64_decode('dXJs'.'ZG'.'Vjb2Rl'),base64_decode('YXJy'.'YX'.'lfcm'.'V2ZX'.'JzZQ=='),base64_decode('Z3'.'plbmNvZGU='),base64_decode('Ym'.'FzZTY'.'0X2VuY2'.'9kZQ=='),base64_decode('dX'.'J'.'sZW5jb2'.'R'.'l'),base64_decode(''.'YmluM'.'mh'.'leA'.'=='),base64_decode('aXNfY'.'X'.'JyY'.'X'.'k'.'='),base64_decode('c3Ryd'.'G9'.'sb3dlc'.'g=='),base64_decode('aXNfY'.'XJyYXk='),base64_decode('am'.'9pbg=='),base64_decode(''.'Zm'.'5tY'.'X'.'RjaA='.'='),base64_decode('cmF3'.'dXJsZGV'.'jb2Rl'),base64_decode(''.'c'.'3V'.'ic3'.'R'.'y'),base64_decode('c3'.'V'.'i'.'c'.'3Ry'),base64_decode('c3Ry'.'X3JlcGxhY2U='),base64_decode('c'.'HJlZ19xdW90ZQ=='),base64_decode('cHJlZ'.'19t'.'Y'.'XR'.'j'.'aA=='));if(!function_exists(__NAMESPACE__.'\\___254505491')){function ___254505491($_1935725845){static $_1395457205= false; if($_1395457205 == false) $_1395457205=array('Y'.'WN'.'0aW9u','aW50dmFs','c'.'GF0aA==','Y'.'29udGV4d'.'A'.'='.'=','a'.'2V'.'5cw==','cHJ'.'vY2V'.'zcw'.'==','Z'.'W5jb2'.'Rpbmc=','cHJl'.'Z19yZX'.'BsYWNl','cGF0aA==','Y29'.'u'.'dG'.'V4dA'.'==','a2V5cw==','cHJv'.'Y'.'2Vzcw==','Z'.'W'.'5j'.'b2R'.'pbmc'.'=','c'.'GF0'.'dGVybg='.'=','cH'.'JlZ19'.'tYXR'.'jaA==',''.'cG'.'F0a'.'A==','Y'.'2'.'9udG'.'V4dA'.'==','a2'.'V5cw==','cHJvY2Vzcw==',''.'ZW5jb'.'2Rp'.'bmc=','cGF0'.'dGVybg==','cG9zdF9'.'h'.'Y3R'.'pb24=','Y'.'2hl'.'Y2tfY3'.'NyZg='.'=','cGF'.'0aA==','Y'.'29'.'udGV'.'4dA='.'=','a2V5cw==','c'.'HJvY2'.'V'.'zcw==','Z'.'W5jb2Rpbmc=','cG'.'F0dG'.'V'.'ybg'.'='.'=','YWN0aW'.'9u','YW'.'N0aW9u','Y'.'WN'.'0aW9u','YWN0aW'.'9u','Y'.'WN'.'0a'.'W9u','YW'.'N'.'0a'.'W9'.'u',''.'cG9zdF'.'9hY3Rpb24=','ZW5j'.'b2'.'Rp'.'bmc=','ZW5jb2R'.'pbmc=',''.'ZW5j'.'b2Rpbmc=',''.'Z'.'W5j'.'b2R'.'pbm'.'c=','ZW5'.'jb'.'2Rpbmc=','ZW5jb2Rp'.'b'.'mc'.'=','Z3o=','YmF'.'zZTY0','dX'.'Js','aGV4','Lg==','Lw==','aW5kZXgucGhw','L2luZGV'.'4Ln'.'B'.'ocA='.'=','U0NSSVBUX05BTUU=','L'.'2'.'luZGV4Ln'.'BocA==','U0'.'NSSVBUX05BT'.'U'.'U=','U0'.'NSSVBUX05BTUU=',''.'U0NSSVBUX05BTUU=','fg==','fl4'.'=','fg==','X'.'H'.'4=','J'.'H4=');return base64_decode($_1395457205[$_1935725845]);}}; use Bitrix\Main\IO\Path; use Bitrix\Main\Web\Uri; use Bitrix\Main\Security\W\Rules\Results\ModifyResult; abstract class Rule{ protected $_1851307618; protected $_243614588; protected $_1345835221; protected $_1697557070; protected $_1828011290; public static function make(array $_957403841):?static{ $_957403841= static::prepareRuleParameters($_957403841); return match($_957403841[___254505491(0)]){ ___254505491(1) => new IntvalRule( $_957403841[___254505491(2)], $_957403841[___254505491(3)], $_957403841[___254505491(4)], $_957403841[___254505491(5)], $_957403841[___254505491(6)]), ___254505491(7) => new PregReplaceRule( $_957403841[___254505491(8)], $_957403841[___254505491(9)], $_957403841[___254505491(10)], $_957403841[___254505491(11)], $_957403841[___254505491(12)], $_957403841[___254505491(13)]), ___254505491(14) => new PregMatchRule( $_957403841[___254505491(15)], $_957403841[___254505491(16)], $_957403841[___254505491(17)], $_957403841[___254505491(18)], $_957403841[___254505491(19)], $_957403841[___254505491(20)], $_957403841[___254505491(21)]), ___254505491(22) => new CsrfRule( $_957403841[___254505491(23)], $_957403841[___254505491(24)], $_957403841[___254505491(25)], $_957403841[___254505491(26)], $_957403841[___254505491(27)], $_957403841[___254505491(28)],), default => null,};} protected static function prepareRuleParameters(array $_1556868386): array{ if($GLOBALS['____499392724'][0]($_1556868386[___254505491(29)])){ $_1556868386[___254505491(30)]= $GLOBALS['____499392724'][1]($_1556868386[___254505491(31)]);} elseif($GLOBALS['____499392724'][2]($_1556868386[___254505491(32)])){ $_1450017024= $_1556868386[___254505491(33)]; $_1556868386[___254505491(34)]= $_1450017024[(956-2*478)]; $_1556868386[___254505491(35)]= $_1450017024[round(0+0.33333333333333+0.33333333333333+0.33333333333333)];} $_1556868386[___254505491(36)]=!empty($_1556868386[___254505491(37)])? $_1556868386[___254505491(38)]:[]; if($GLOBALS['____499392724'][3]($_1556868386[___254505491(39)])){ $_1556868386[___254505491(40)]=[$_1556868386[___254505491(41)]];} return $_1556868386;}  public function __construct($_1851307618, $_243614588, $_1345835221, $_1697557070, $_1828011290){ $this->_1851307618= $_1851307618; $this->_243614588= $this->castContext($_243614588); $this->_1345835221= $this->castKeys($_1345835221); $this->_1697557070= $_1697557070; $this->_1828011290= $_1828011290;} public function evaluateValue($_1143798413){ if(!empty($this->_1828011290)){ foreach($this->_1828011290 as $_1219890000){ $_1143798413= match($_1219890000){ 'gz' => $GLOBALS['____499392724'][4]($_1143798413), 'base64' => $GLOBALS['____499392724'][5]($_1143798413), 'url' => $GLOBALS['____499392724'][6]($_1143798413), 'hex' => hex2bin($_1143798413)};}} $_1956330282= $this->evaluate($_1143798413); if(!empty($this->_1828011290) && $_1956330282 instanceof ModifyResult){ $_2127008181= $_1956330282->getCleanValue(); foreach($GLOBALS['____499392724'][7]($this->_1828011290) as $_1219890000){ $_2127008181= match($_1219890000){ ___254505491(42) => $GLOBALS['____499392724'][8]($_2127008181), ___254505491(43) => $GLOBALS['____499392724'][9]($_2127008181), ___254505491(44) => $GLOBALS['____499392724'][10]($_2127008181), ___254505491(45) => $GLOBALS['____499392724'][11]($_2127008181)};} $_1956330282= new ModifyResult($_2127008181);} return $_1956330282;} abstract public function evaluate($_1143798413); protected function castContext($_243614588){ if(!$GLOBALS['____499392724'][12]($_243614588)){ $_243614588=[$_243614588];} foreach($_243614588 as $_1947358278 => $_849036883){ $_243614588[$_1947358278]= $GLOBALS['____499392724'][13]($_849036883);} return $_243614588;} protected function castKeys($_1345835221){ if(!$GLOBALS['____499392724'][14]($_1345835221)){ $_1345835221=[$_1345835221];} return $_1345835221;} public function matchKey(array $_1996044081): bool{ $_1996044081= $GLOBALS['____499392724'][15](___254505491(46), $_1996044081); foreach($this->_1345835221 as $_972209759){   if($GLOBALS['____499392724'][16]($_972209759, $_1996044081)){ return true;}} return false;}  public function matchPath($_240897700){ if($this->_1851307618 === '*'){ return true;}  $_2049462413= new Uri($_240897700); $_434764348= $_2049462413->getPath(); $_434764348= $GLOBALS['____499392724'][17]($_434764348);      if(str_ends_with($_434764348, ___254505491(47))){ $_434764348 .= ___254505491(48);} $_434764348= Path::normalize($_434764348);  $_671536635[]= $_434764348; if(str_ends_with($_434764348, ___254505491(49))){ $_671536635[]= $GLOBALS['____499392724'][18]($_434764348, min(158,0,52.666666666667),-round(0+4.5+4.5));} elseif(str_ends_with($_SERVER[___254505491(50)], ___254505491(51))){ $_671536635[]= $GLOBALS['____499392724'][19]($_SERVER[___254505491(52)],(180*2-360),-round(0+3+3+3));} if($_434764348 !== $_SERVER[___254505491(53)]){ $_671536635[]= $_SERVER[___254505491(54)];}  if(str_starts_with($this->_1851307618, ___254505491(55))){ $_1697263978= $this->_1851307618;} else{ $_1697263978= ___254505491(56). $GLOBALS['____499392724'][20](___254505491(57), ___254505491(58), $GLOBALS['____499392724'][21]($this->_1851307618)). ___254505491(59);} foreach($_671536635 as $_1765906191){ if($this->_1851307618 === $_1765906191 || $GLOBALS['____499392724'][22]($_1697263978, $_1765906191)){ return true;}} return false;}  public function getPath(){ return $this->_1851307618;}  public function getContext(){ return $this->_243614588;}  public function getKeys(){ return $this->_1345835221;}  public function getProcess(){ return $this->_1697557070;}}?>
+<?php
+
+namespace Bitrix\Main\Security\W\Rules;
+
+use Bitrix\Main\IO\Path;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Main\Security\W\Rules\Results\ModifyResult;
+
+abstract class Rule
+{
+	protected $path;
+
+	protected $context;
+
+	protected $keys;
+
+	protected $process;
+
+	protected $encoding;
+
+	public static function make(array $rule): ?static
+	{
+		$rule = static::prepareRuleParameters($rule);
+
+		return match ($rule['action'])
+		{
+			'intval' => new IntvalRule(
+				$rule['path'],
+				$rule['context'],
+				$rule['keys'],
+				$rule['process'],
+				$rule['encoding']
+			),
+			'preg_replace' => new PregReplaceRule(
+				$rule['path'],
+				$rule['context'],
+				$rule['keys'],
+				$rule['process'],
+				$rule['encoding'],
+				$rule['pattern']
+			),
+			'preg_match' => new PregMatchRule(
+				$rule['path'],
+				$rule['context'],
+				$rule['keys'],
+				$rule['process'],
+				$rule['encoding'],
+				$rule['pattern'],
+				$rule['post_action']
+			),
+			'check_csrf' => new CsrfRule(
+				$rule['path'],
+				$rule['context'],
+				$rule['keys'],
+				$rule['process'],
+				$rule['encoding'],
+				$rule['pattern'],
+			),
+			default => null,
+		};
+	}
+
+	protected static function prepareRuleParameters(array $parameters): array
+	{
+		if (is_string($parameters['action']))
+		{
+			$parameters['action'] = strtolower($parameters['action']);
+		}
+		elseif (is_array($parameters['action']))
+		{
+			$complexAction = $parameters['action'];
+
+			$parameters['action'] = $complexAction[0];
+			$parameters['post_action'] = $complexAction[1];
+		}
+
+		$parameters['encoding'] = !empty($parameters['encoding'])
+			? $parameters['encoding']
+			: [];
+
+		if (is_string($parameters['encoding']))
+		{
+			$parameters['encoding'] = [$parameters['encoding']];
+		}
+
+		return $parameters;
+	}
+
+	/**
+	 * @param $path
+	 * @param $context
+	 * @param $keys
+	 * @param $process
+	 */
+	public function __construct($path, $context, $keys, $process, $encoding)
+	{
+		$this->path = $path;
+		$this->context = $this->castContext($context);
+		$this->keys = $this->castKeys($keys);
+		$this->process = $process;
+		$this->encoding = $encoding;
+	}
+
+	public function evaluateValue($value)
+	{
+		if (!empty($this->encoding))
+		{
+			foreach ($this->encoding as $encodingType)
+			{
+				$value = match ($encodingType)
+				{
+					'gz' => gzdecode($value),
+					'base64' => base64_decode($value),
+					'url' => urldecode($value),
+					'hex' => hex2bin($value)
+				};
+			}
+		}
+
+		$result = $this->evaluate($value);
+
+		if (!empty($this->encoding) && $result instanceof ModifyResult)
+		{
+			$cleanValue = $result->getCleanValue();
+
+			foreach (array_reverse($this->encoding) as $encodingType)
+			{
+				$cleanValue = match ($encodingType)
+				{
+					'gz' => gzencode($cleanValue),
+					'base64' => base64_encode($cleanValue),
+					'url' => urlencode($cleanValue),
+					'hex' => bin2hex($cleanValue)
+				};
+			}
+
+			$result = new ModifyResult($cleanValue);
+		}
+
+		return $result;
+	}
+
+	abstract public function evaluate($value);
+
+	protected function castContext($context)
+	{
+		if (!is_array($context))
+		{
+			$context = [$context];
+		}
+
+		foreach ($context as $k => $v)
+		{
+			$context[$k] = strtolower($v);
+		}
+
+		return $context;
+	}
+
+	protected function castKeys($keys)
+	{
+		if (!is_array($keys))
+		{
+			$keys = [$keys];
+		}
+
+		return $keys;
+	}
+
+	public function matchKey(array $contextKey): bool
+	{
+		$contextKey = join('.', $contextKey);
+
+		foreach ($this->keys as $key)
+		{
+			//if ($key === $contextKey)
+			// bxu_files.validKey.phpinfo();die(); =>  bxu_files.*
+			if (fnmatch($key, $contextKey))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * 3 uri types: public scripts, urlrewrite and routing.
+	 * There is base check for both types.
+	 * There is one more check for real path for public scripts.
+	 *
+	 * @param $uri
+	 * @return bool
+	 */
+	public function matchPath($uri)
+	{
+		if ($this->path === '*')
+		{
+			return  true;
+		}
+
+		// normalize uri
+		$parsedUri = new Uri($uri);
+		$_uri = $parsedUri->getPath();
+
+		$_uri = rawurldecode($_uri);
+//
+//		if (Application::hasInstance())
+//		{
+//			$_uri = Encoding::convertEncodingToCurrent($_uri);
+//		}
+
+		if (str_ends_with($_uri, '/'))
+		{
+			$_uri .= 'index.php';
+		}
+
+		$_uri = Path::normalize($_uri);
+
+		// valid uris
+		$cleanUris[] = $_uri;
+
+		if (str_ends_with($_uri, '/index.php'))
+		{
+			$cleanUris[] = substr($_uri, 0, -9);
+		}
+		elseif (str_ends_with($_SERVER['SCRIPT_NAME'], '/index.php'))
+		{
+			$cleanUris[] = substr($_SERVER['SCRIPT_NAME'], 0, -9);
+		}
+
+		if ($_uri !== $_SERVER['SCRIPT_NAME'])
+		{
+			$cleanUris[] = $_SERVER['SCRIPT_NAME'];
+		}
+
+		// analyze
+		if (str_starts_with($this->path, '~'))
+		{
+			$pattern = $this->path;
+		}
+		else
+		{
+			$pattern = '~^' . str_replace('~', '\~', preg_quote($this->path)) . '$~';
+		}
+
+		foreach ($cleanUris as $cleanUri)
+		{
+			if ($this->path === $cleanUri || preg_match($pattern, $cleanUri))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @return mixed
+	 */
+	public function getPath()
+	{
+		return $this->path;
+	}
+
+	/**
+	 * @return mixed
+	 */
+	public function getContext()
+	{
+		return $this->context;
+	}
+
+	/**
+	 * @return mixed
+	 */
+	public function getKeys()
+	{
+		return $this->keys;
+	}
+
+	/**
+	 * @return mixed
+	 */
+	public function getProcess()
+	{
+		return $this->process;
+	}
+}

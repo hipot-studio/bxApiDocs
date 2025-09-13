@@ -168,6 +168,12 @@ class Options
 			'analytics' => $this->getAnalytics(),
 			'integration' => $this->form->getIntegration()->toArray(),
 			'embedding' => $this->getEmbedding(),
+			'bookingResourceAutoSelection' => [
+				'use' => (
+					isset($formData['FORM_SETTINGS']['BOOKING_RESOURCE_AUTO_SELECTION'])
+					&& $formData['FORM_SETTINGS']['BOOKING_RESOURCE_AUTO_SELECTION'] === 'Y'
+				),
+			],
 		];
 	}
 
@@ -302,6 +308,7 @@ class Options
 				'DISABLED_PAY_SYSTEMS' =>	$this->convertPaySystemIds(
 					$options['payment']['disabledSystems'] ?? []
 				),
+				'BOOKING_RESOURCE_AUTO_SELECTION' => ($options['bookingResourceAutoSelection']['use'] ?? false) ? 'Y' : 'N',
 			],
 
 			'ASSIGNED_BY_ID' => array_filter(

@@ -16,6 +16,8 @@ use Bitrix\AI\Quality;
 use Bitrix\AI\QueueJob;
 use Bitrix\AI\Result;
 use Bitrix\AI\Role\RoleManager;
+use Bitrix\AI\Services\ImageService;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
@@ -33,11 +35,13 @@ abstract class Engine
 	protected const SHARD_PREFIX = '';
 
 	protected const PARAM_CONSUMPTION_ID = 'consumptionId';
+	protected const PARAM_QUALITY = 'qualityParam';
 
 	protected const URL_COMPLETIONS_QUEUE_DEFAULT = '';
 	protected const URL_COMPLETIONS_QUEUE_PATH = '/api/v1/proxy/send';
 	protected const HTTP_STATUS_OK = 200;
 
+	protected ImageService $imageService;
 	protected int $modelContextLimit = 0;
 	protected array $params = [];
 	protected bool $historyState = false;
@@ -93,6 +97,30 @@ abstract class Engine
 		}
 
 		return $consumptionId;
+	}
+
+	public function setQuality(string $quality): void
+	{
+		if (!empty($quality))
+		{
+			$this->setParameters([self::PARAM_QUALITY => $quality]);
+		}
+	}
+
+	public function getQuality(): string
+	{
+		if (empty($this->params[self::PARAM_QUALITY]))
+		{
+			return '';
+		}
+
+		$quality = $this->params[self::PARAM_QUALITY];
+		if (!is_string($quality))
+		{
+			return '';
+		}
+
+		return $quality;
 	}
 
 	/**
@@ -813,5 +841,15 @@ abstract class Engine
 		}
 
 		return $value;
+	}
+
+	protected function getImgService(): ImageService
+	{
+		if (!isset($this->imageService))
+		{
+			$this->imageService = ServiceLocator::getInstance()->get(ImageService::class);
+		}
+
+		return $this->imageService;
 	}
 }

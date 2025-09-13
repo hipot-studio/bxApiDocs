@@ -6,12 +6,18 @@ use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 
 class AutomatedSolutionMapping
 {
-	public static function getMapping(string $languageId): array
+	public static function getMapping(string $languageId, ?string $tableName = null): array
 	{
 		$solutions = AutomatedSolutionTable::query()->setSelect(['ID', 'TITLE'])->fetchCollection();
 
 		$result = [];
-		foreach ($solutions as $solution) {
+		foreach ($solutions as $solution)
+		{
+			if (!empty($tableName) && 'crm_automated_solution_' . $solution->getId() !== $tableName)
+			{
+				continue;
+			}
+
 			$result['crm_automated_solution_' . $solution->getId()] = [
 				'TABLE_NAME' => 'b_crm_dynamic_type',
 				'TABLE_DESCRIPTION' => Localization::getMessage('CRM_AUTOMATED_SOLUTION_TABLE', $languageId, ['#TITLE#' => $solution->getTitle()]) ?? $solution->getTitle(),

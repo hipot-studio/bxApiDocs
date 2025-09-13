@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Main\Messenger\Internals\Storage\Db;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Messenger\Entity\MessageBox;
 use Bitrix\Main\Messenger\Entity\MessageInterface;
 use Bitrix\Main\Messenger\Internals\Exception\Storage\MappingException;
@@ -17,6 +18,8 @@ use Bitrix\Main\Web\Json;
 
 class MessageMapper
 {
+	private const ENCODING_FLAGS = Json::DEFAULT_OPTIONS ^ JSON_UNESCAPED_UNICODE;
+
 	private string $tableClass;
 
 	public function __construct(Entity $tableEntity)
@@ -26,13 +29,21 @@ class MessageMapper
 
 	/**
 	 * @throws MappingException
+	 * @throws ArgumentException
 	 */
 	public function convertFromOrm(EntityObject $ormModel): MessageBox
 	{
 		/** @var EO_MessengerMessage $ormModel */
 		$class = $ormModel->getClass();
 
-		if (!(class_exists($class) && is_subclass_of($class, MessageInterface::class)))
+		if (!class_exists($class))
+		{
+			throw new MappingException(
+				sprintf('The class "%s" does not exist', $class)
+			);
+		}
+
+		if (!is_subclass_of($class, MessageInterface::class))
 		{
 			throw new MappingException(
 				sprintf('The class "%s" does not implement "%s"', $class, MessageInterface::class)
@@ -72,7 +83,7 @@ class MessageMapper
 			->setQueueId($messageBox->getQueueId())
 			->setItemId($messageBox->getItemId())
 			->setClass($messageBox->getClassName())
-			->setPayload(Json::encode($messageBox->getMessage()))
+			->setPayload(Json::encode($messageBox->getMessage(), self::ENCODING_FLAGS))
 			->setCreatedAt($messageBox->getCreatedAt())
 			->setTtl($messageBox->getTtl())
 			->setAvailableAt($messageBox->getAvailableAt());

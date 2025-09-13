@@ -100,7 +100,7 @@ final class Task extends \Bitrix\Tasks\Integration
 		}
 
 		$arSearchIndex = array(
-			"LAST_MODIFIED" => $task["CHANGED_DATE"] ? $task["CHANGED_DATE"] : $task["CREATED_DATE"],
+			"LAST_MODIFIED" => ($task["CHANGED_DATE"] ?? null) ? $task["CHANGED_DATE"] : $task["CREATED_DATE"],
 			"TITLE" => $task["TITLE"],
 			"BODY" => strip_tags($task["DESCRIPTION"] ?? '') ? strip_tags($task["DESCRIPTION"] ?? '') : $task["TITLE"],
 			"TAGS" => $tags,

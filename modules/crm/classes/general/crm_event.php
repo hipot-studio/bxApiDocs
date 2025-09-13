@@ -8,6 +8,7 @@ use Bitrix\Crm\Service\EventHistory;
 use Bitrix\Crm\Settings\HistorySettings;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Text\Emoji;
 
 class CCrmEvent
 {
@@ -99,17 +100,18 @@ class CCrmEvent
 			unset($arFile);
 		}
 
-
-		$arFields_i = Array(
-			'ASSIGNED_BY_ID'=> (int)(isset($arFields['USER_ID']) ? intval($arFields['USER_ID']) : $this->currentUserID),
-			'CREATED_BY_ID'	=> (int)(isset($arFields['USER_ID']) ? intval($arFields['USER_ID']) : $this->currentUserID),
-			'EVENT_ID' 		=> isset($arFields['EVENT_ID'])? $arFields['EVENT_ID']: '',
-			'EVENT_NAME' 	=> $arFields['EVENT_NAME'],
-			'EVENT_TYPE' 	=> intval($arFields['EVENT_TYPE']),
-			'EVENT_TEXT_1'  => isset($arFields['EVENT_TEXT_1'])? $arFields['EVENT_TEXT_1']: '',
-			'EVENT_TEXT_2'  => isset($arFields['EVENT_TEXT_2'])? $arFields['EVENT_TEXT_2']: '',
+		$userId = (int)($arFields['USER_ID'] ?? 0);
+		$arFields_i = [
+			'ASSIGNED_BY_ID'=> $userId > 0 ? $userId : $this->currentUserID,
+			'CREATED_BY_ID' => $userId > 0 ? $userId : $this->currentUserID,
+			'EVENT_ID' => $arFields['EVENT_ID'] ?? '',
+			'EVENT_NAME' => $arFields['EVENT_NAME'],
+			'EVENT_TYPE' => (int)$arFields['EVENT_TYPE'],
+			'EVENT_TEXT_1' => Emoji::encode($arFields['EVENT_TEXT_1'] ?? ''),
+			'EVENT_TEXT_2' => Emoji::encode($arFields['EVENT_TEXT_2'] ?? ''),
 			'FILES' => null,
-		);
+		];
+
 		if (count($arFiles) > 0)
 		{
 			$arFields_i['FILES'] = serialize($arFiles);

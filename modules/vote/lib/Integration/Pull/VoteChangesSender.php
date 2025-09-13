@@ -6,10 +6,11 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Pull\Event;
 use Bitrix\Vote\Attach;
 use Bitrix\Vote\Integration\Mobile\MobileUserProvider;
-use Bitrix\Vote\Service\VotedCollectorService;
 
 class VoteChangesSender
 {
+	private const MAX_ACTION_UUID_LENGTH = 1000;
+
 	public function isAvailable(): bool
 	{
 		return \Bitrix\Main\Loader::includeModule("pull");
@@ -18,6 +19,7 @@ class VoteChangesSender
 	public function sendStop(
 		int $voteId,
 		int $entityId = 0,
+		string $actionUuid = '',
 	): void
 	{
 		if (!$this->isAvailable())
@@ -32,6 +34,7 @@ class VoteChangesSender
 				"params" => [
 					"voteId" => $voteId,
 					"entityId" => $entityId,
+					"actionUuid" => $this->truncateActionUid($actionUuid),
 				],
 			],
 		);
@@ -40,6 +43,7 @@ class VoteChangesSender
 	public function sendResume(
 		int $voteId,
 		int $entityId = 0,
+		string $actionUuid = '',
 	): void
 	{
 		if (!$this->isAvailable())
@@ -54,12 +58,13 @@ class VoteChangesSender
 				"params" => [
 					"voteId" => $voteId,
 					"entityId" => $entityId,
+					"actionUuid" => $this->truncateActionUid($actionUuid),
 				],
 			],
 		);
 	}
 
-	public function sendVoting(Attach $attach): void
+	public function sendVoting(Attach $attach, string $actionUuid = ''): void
 	{
 		if (!$this->isAvailable())
 		{
@@ -109,6 +114,7 @@ class VoteChangesSender
 				attach: $attach,
 				questionsUpdateData: $questionsUpdateData,
 				userAnswerMap: $userAnswerMap,
+				actionUuid: $actionUuid,
 			);
 		}
 	}
@@ -128,6 +134,7 @@ class VoteChangesSender
 		Attach $attach,
 		array $questionsUpdateData,
 		array $userAnswerMap,
+		string $actionUuid,
 	): void
 	{
 		if (!$this->isAvailable() || $authorId <= 0)
@@ -145,6 +152,7 @@ class VoteChangesSender
 				'QUESTIONS' => $questionsUpdateData,
 				'userAnswerMap' => $userAnswerMap,
 				'entityId' => (int)$attach->getEntityId(),
+				'actionUuid' => $this->truncateActionUid($actionUuid),
 			],
 		]);
 	}
@@ -174,5 +182,10 @@ class VoteChangesSender
 		}
 
 		return $result;
+	}
+
+	private function truncateActionUid(string $actionUuid): string
+	{
+		return mb_substr($actionUuid, 0, self::MAX_ACTION_UUID_LENGTH);
 	}
 }

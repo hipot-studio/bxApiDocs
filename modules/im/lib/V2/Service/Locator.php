@@ -22,6 +22,11 @@ class Locator
 		return ServiceLocator::getInstance()->get('Im.PullSender');
 	}
 
+	public static function getAccessService(): AccessService
+	{
+		return ServiceLocator::getInstance()->get('Im.AccessService');
+	}
+
 	public static function getContext(): Context
 	{
 		if (!self::$context instanceof Context)

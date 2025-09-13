@@ -12,7 +12,10 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 
 class TranscriptionInsights extends AITask
 {
-	public const PROMPT_ID = 'meeting_insights';
+	public const
+		PROMPT_ID = 'meeting_insights_reasoning_eu',
+		PROMPT_ID_CIS = 'meeting_insights_reasoning_cis'
+	;
 
 	protected static string
 		$promptFields =<<<JSON
@@ -22,7 +25,23 @@ class TranscriptionInsights extends AITask
 						"speaker": "string or null",
 						"detailed_insight": "string or null"
 					}
-				]
+				],
+				"meeting_strengths": [
+					{
+						"strength_title": "string",
+						"strength_explanation": "string"
+					}
+				],
+				"meeting_weaknesses": [
+					{
+						"weakness_title": "string",
+						"weakness_explanation": "string"
+					}
+				],
+				"speech_style_influence": "string or null",
+				"engagement_level": "string or null",
+				"areas_of_responsibility": "string or null",
+				"final_recommendations": "string"
 			}
 		JSON
 	;
@@ -85,10 +104,21 @@ class TranscriptionInsights extends AITask
 			$content .= sprintf('"%s-%s", "%s", "%s"', $row->start, $row->end, $userName, $text). "\n";
 		}
 
-		$payload = new \Bitrix\AI\Payload\Prompt(static::PROMPT_ID);
+		$payload = new \Bitrix\AI\Payload\Prompt($this->getPromptCode());
 		$payload->setMarkers(['transcripts' => $content, 'json_call' => static::getAIPromptFields()]);
 
 		return $result->setData(['payload' => $payload]);
+	}
+
+	protected function getPromptCode(): string
+	{
+		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
+
+		return match ($region)
+		{
+			'ru', 'by', 'kz' => self::PROMPT_ID_CIS,
+			default => self::PROMPT_ID,
+		};
 	}
 
 	public function getAIEngineCategory(): string
@@ -138,7 +168,7 @@ class TranscriptionInsights extends AITask
 
 		$fields = static::getAIPromptFields();
 		$fieldsConvert = [];
-		($findFieldToConvert = function(array $fields) use (&$findFieldToConvert, &$fieldsConvert)
+		($findFieldToConvert = static function (array $fields) use (&$findFieldToConvert, &$fieldsConvert)
 		{
 			foreach ($fields as $code => $field)
 			{
@@ -146,14 +176,14 @@ class TranscriptionInsights extends AITask
 				{
 					$findFieldToConvert($field);
 				}
-				elseif (is_string($field) && str_contains($field, 'string or null'))
+				elseif (is_string($field) && str_contains($field, 'string'))
 				{
 					$fieldsConvert[$code] = true;
 				}
 			}
 		})($fields);
 
-		($convert = function(array &$jsonData) use (&$convert, $fieldsConvert, $mentionService)
+		($convert = static function (array &$jsonData) use (&$convert, $fieldsConvert, $mentionService)
 		{
 			foreach ($jsonData as $code => &$field)
 			{

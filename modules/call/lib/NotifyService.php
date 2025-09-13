@@ -3,13 +3,17 @@
 namespace Bitrix\Call;
 
 use Bitrix\Call\Integration\AI\ChatMessage;
+use Bitrix\Call\Analytics\FollowUpAnalytics;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Application;
+use Bitrix\Main\Localization\Loc;
 
 class NotifyService
 {
@@ -26,8 +30,13 @@ class NotifyService
 		MESSAGE_TYPE_ERROR = 'ERROR',
 		MESSAGE_TYPE_AI_OVERVIEW = 'AI_OVERVIEW',
 		MESSAGE_TYPE_AI_START = 'AI_START',
-		MESSAGE_TYPE_AI_FAILED = 'AI_FAILED'
+		MESSAGE_TYPE_AI_FAILED = 'AI_FAILED',
+		MESSAGE_TYPE_AI_INFO = 'AI_INFO',
+		MESSAGE_TYPE_AI_WAIT = 'AI_WAIT',
+		MESSAGE_TYPE_AI_DESTROY = 'AI_DESTROY'
 	;
+
+	public const ADMIN_NOTIFICATION_TAG = 'call_registration';
 
 	private static ?NotifyService $service = null;
 
@@ -55,15 +64,19 @@ class NotifyService
 
 		$chat = Chat::getInstance($call->getChatId());
 
-		if ($this->findMessage($chat, $call->getId(), self::MESSAGE_TYPE_AI_FAILED, 3) === null)
+		if ($chat->getId() > 0)
 		{
-			$message = ChatMessage::generateTaskFailedMessage($call->getId(), $error, $chat);
-			if ($message)
+			if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, 3) === null)
 			{
-				$message->setAuthorId($call->getInitiatorId());
-				$this->sendMessageDeferred($chat, $message);
+				$message = ChatMessage::generateTaskFailedMessage($call->getId(), $error, $chat);
+				if ($message)
+				{
+					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
 
-				(new \Bitrix\Call\Analytics\FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+					$this->sendMessageDeferred($chat, $message, $sendingConfig);
+
+					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+				}
 			}
 		}
 	}
@@ -78,40 +91,82 @@ class NotifyService
 
 		$chat = Chat::getInstance($call->getChatId());
 
-		if ($this->findMessage($chat, $call->getId(), self::MESSAGE_TYPE_AI_FAILED, 3) === null)
+		if (
+			$chat->getId()
+			&& $this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, 3) === null
+		)
 		{
 			$errorMessage = ChatMessage::generateErrorMessage($error, $chat, $call);
 			if ($errorMessage)
 			{
 				$this->sendError($chat, $errorMessage);
 
-				(new \Bitrix\Call\Analytics\FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+				(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
 			}
 		}
 	}
 
-	public function sendMessage(Chat $chat, Message $message): void
+	public function sendTaskWaitMessage(Call $call): void
+	{
+		if (isset($this->shownMessage[self::MESSAGE_TYPE_AI_WAIT][$call->getId()]))
+		{
+			return;
+		}
+		$this->shownMessage[self::MESSAGE_TYPE_AI_WAIT][$call->getId()] = true;
+
+		$chat = Chat::getInstance($call->getChatId());
+
+		if (
+			$chat->getId()
+			&& $this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_WAIT, 3) === null
+		)
+		{
+			$message = ChatMessage::generateWaitMessage($call, $chat);
+			if ($message)
+			{
+				$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+				$this->sendMessageDeferred($chat, $message, $sendingConfig);
+			}
+		}
+	}
+
+	public function sendOpponentBusyMessage(int $currentUserId, int $opponentUserId): void
+	{
+		$chat = ChatFactory::getInstance()->getPrivateChat($currentUserId, $opponentUserId);
+		if ($chat->getId() > 0)
+		{
+			$message = ChatMessage::generateOpponentBusyMessage($opponentUserId);
+			if ($message)
+			{
+				$sendingConfig = (new SendingConfig)->disableSkipCounterIncrements();
+				$context = (new Context())->setUser($opponentUserId);
+				$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+			}
+		}
+	}
+
+	public function sendMessage(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): void
 	{
 		$chat
-			->setContext(new Context)
-			->sendMessage($message);
+			->setContext($context ?? new Context)
+			->sendMessage($message, $sendingConfig);
 	}
 
-	public function sendError(Chat $chat, Message $message): void
+	public function sendError(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): void
 	{
 		$chat
-			->setContext(new Context)
-			->sendMessage($message);
+			->setContext($context ?? new Context)
+			->sendMessage($message, $sendingConfig);
 	}
 
-	public function sendMessageDeferred(Chat $chat, Message $message): void
+	public function sendMessageDeferred(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): void
 	{
-		Application::getInstance()->addBackgroundJob([$this, 'sendMessage'], [$chat, $message], Application::JOB_PRIORITY_LOW);
+		Application::getInstance()->addBackgroundJob([$this, 'sendMessage'], [$chat, $message, $sendingConfig, $context], Application::JOB_PRIORITY_LOW);
 	}
 
-	public function findMessage(Chat $chat, int $callId, string $messageType, int $depth = 100): ?Message
+	public function findMessage(int $chatId, int $callId, string $messageType, int $depth = 100): ?Message
 	{
-		$messages = MessageCollection::find(['CHAT_ID' => $chat->getId()], ['ID' => 'DESC'], $depth);
+		$messages = MessageCollection::find(['CHAT_ID' => $chatId], ['ID' => 'DESC'], $depth);
 		if ($messages->count() === 0)
 		{
 			return null;
@@ -125,9 +180,6 @@ class NotifyService
 
 			/** @see \Bitrix\Im\Call\Integration\Chat::onStateChange */
 			if (
-				//todo: Return COMPONENT_ID for call message
-				//$params->isSet(Params::COMPONENT_ID)
-				//&& $params->get(Params::COMPONENT_ID)->getValue() == self::MESSAGE_COMPONENT_ID
 				$params->isSet(Params::COMPONENT_PARAMS)
 				&& isset($params->get(Params::COMPONENT_PARAMS)->getValue()['MESSAGE_TYPE'])
 				&& $params->get(Params::COMPONENT_PARAMS)->getValue()['CALL_ID'] == $callId
@@ -145,5 +197,71 @@ class NotifyService
 		}
 
 		return null;
+	}
+
+	/**
+	 * @param int $chatId
+	 * @param int $callId
+	 * @param int $depth
+	 * @return MessageCollection<Message>
+	 */
+	public function findMessagesForCall(int $chatId, int $callId, int $depth = 100): MessageCollection
+	{
+		$result = new MessageCollection();
+
+		$messages = MessageCollection::find(['CHAT_ID' => $chatId], ['ID' => 'DESC'], $depth);
+		if ($messages->count() === 0)
+		{
+			return $result;
+		}
+
+		$messages->fillParams();
+
+		foreach ($messages as $message)
+		{
+			$params = $message->getParams();
+
+			/** @see \Bitrix\Im\Call\Integration\Chat::onStateChange */
+			if (
+				$params->isSet(Params::COMPONENT_PARAMS)
+				&& $params->get(Params::COMPONENT_PARAMS)->getValue()['CALL_ID'] == $callId
+			)
+			{
+				$result->add($message);
+
+				if ($params->get(Params::COMPONENT_PARAMS)->getValue()['MESSAGE_TYPE'] == self::MESSAGE_TYPE_START)
+				{
+					break;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	public function addAdminNotify(string $message): void
+	{
+		\CAdminNotify::add([
+			'MESSAGE' => $message,
+			'TAG' => self::ADMIN_NOTIFICATION_TAG,
+			'MODULE_ID' => 'call',
+			'ENABLE_CLOSE' => 'Y',
+			'NOTIFY_TYPE' => \CAdminNotify::TYPE_NORMAL,
+		]);
+	}
+
+	public function addAdminNotifyError(string $message): void
+	{
+		\CAdminNotify::add([
+			'MESSAGE' => $message,
+			'TAG' => self::ADMIN_NOTIFICATION_TAG,
+			'MODULE_ID' => 'call',
+			'ENABLE_CLOSE' => 'Y',
+			'NOTIFY_TYPE' => \CAdminNotify::TYPE_ERROR,
+		]);
+	}
+	public function clearAdminNotify(): void
+	{
+		\CAdminNotify::DeleteByTag(self::ADMIN_NOTIFICATION_TAG);
 	}
 }

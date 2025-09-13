@@ -19,13 +19,11 @@ class Widget extends Controller
 		return $prefilters;
 	}
 
-	public function getDynamicContentAction(): AjaxJson
+	public function getContentAction(): AjaxJson
 	{
 		try
 		{
-			$dynamicContentCollection = (new License\Widget())->getDynamicContentCollection();
-
-			return AjaxJson::createSuccess($dynamicContentCollection);
+			return AjaxJson::createSuccess((new License\Widget())->getContentCollection());
 		}
 		catch (ArgumentException $e)
 		{

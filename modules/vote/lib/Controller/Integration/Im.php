@@ -11,7 +11,11 @@ use Bitrix\Vote\Integration\Im\Result\ImVoteSendResult;
 
 class Im extends Controller
 {
-	public function sendAction(int $chatId, array $IM_MESSAGE_VOTE_DATA): ?array
+	public function sendAction(
+		int $chatId,
+		array $IM_MESSAGE_VOTE_DATA,
+		?string $templateId = null,
+	): ?array
 	{
 		$currentUserId = (int)CurrentUser::get()->getId();
 		if ($currentUserId <= 0)
@@ -21,11 +25,12 @@ class Im extends Controller
 			return null;
 		}
 
-		$result = ImVote::sendVote($chatId, $currentUserId, $IM_MESSAGE_VOTE_DATA);
+		$result = ImVote::sendVote($chatId, $currentUserId, $IM_MESSAGE_VOTE_DATA, $templateId);
 		if ($result instanceof ImVoteSendResult)
 		{
 			return [
 				'messageId' => $result->messageId,
+				'voteId' => $result->voteId,
 			];
 		}
 

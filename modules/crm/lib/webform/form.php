@@ -714,6 +714,12 @@ class Form
 			$resourceBooking->build();
 		}
 
+		$booking = Webpack\Form\Booking::instance();
+		if (Main\ModuleManager::isModuleInstalled('booking') && !$booking->isBuilt())
+		{
+			$booking->build();
+		}
+
 		$app = Webpack\Form\App::instance();
 		if ($this->forceBuild || !$app->isBuilt(new Main\Type\Date()))
 		{
@@ -1650,6 +1656,45 @@ class Form
 			}
 
 			$redirectUrl = $this->params['RESULT_SUCCESS_URL'];
+
+			if (Booking::isResourceForm($resultFields))
+			{
+				$bookingValue = Booking::getResourceFieldValue($resultFields);
+				if ($bookingValue)
+				{
+					$event = new Main\Event(
+						'crm',
+						'OnCrmBookingFormSubmitted',
+						[
+							'FORM_ID' => $this->id,
+							'LANG_ID' => $this->getLanguageId(),
+							'CRM_ENTITY_TYPE' => $fieldPhoneEntityTypeName,
+							'CRM_ENTITY_ID' => $result->getResultEntity()->getEntityIdByTypeName($fieldPhoneEntityTypeName),
+							'PHONE_NUMBER' => $fieldPhoneValue,
+							'CRM_ENTITY_LIST' => $result->getResultEntity()->getResultEntities(),
+							'VALUE' => $bookingValue,
+						],
+					);
+					$event->send();
+
+					if (empty($redirectUrl))
+					{
+						$resultList = $event->getResults();
+						if (is_array($resultList))
+						{
+							foreach ($resultList as $eventResult)
+							{
+								$bookingUrl = $eventResult->getParameters();
+								if ($bookingUrl !== null)
+								{
+									$redirectUrl = $bookingUrl;
+								}
+							}
+						}
+					}
+				}
+			}
+
 			if($this->isPayable())
 			{
 				$resultEntity = $result->getResultEntity();

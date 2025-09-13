@@ -5,7 +5,7 @@ namespace Bitrix\Intranet\License\Widget\Content;
 use Bitrix\Intranet\Integration\Baas\BaasProvider;
 use Bitrix\Main\Localization\Loc;
 
-class Baas extends DynamicContent
+class Baas extends BaseContent
 {
 	private BaasProvider $provider;
 
@@ -23,13 +23,6 @@ class Baas extends DynamicContent
 	{
 		return [
 			'isAvailable' => $this->provider->isAvailable(),
-		];
-	}
-
-	public function getDynamicConfiguration(): array
-	{
-		return [
-			...$this->getConfiguration(),
 			'title' => $this->getTitle(),
 			'isActive' => $this->provider->isActive(),
 			'messages' => [

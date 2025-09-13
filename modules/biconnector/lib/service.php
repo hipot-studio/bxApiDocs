@@ -75,6 +75,7 @@ abstract class Service
 				'=LID' => $languageId,
 				'=ACTIVE' => 'Y'
 			],
+			'cache' => ['ttl' => 86400],
 		])
 			->fetch()
 		;
@@ -115,11 +116,38 @@ abstract class Service
 	/**
 	 * @param string $name
 	 *
-	 * @return DataSourceConnector\Connector\Base|null
+	 * @return Connector\Base|null
 	 */
-	public function getDataSourceConnector(string $name): ?DataSourceConnector\Connector\Base
+	public function getDataSourceConnector(string $name): ?Connector\Base
 	{
-		return $this->getDataSourceConnectors()[$name] ?? null;
+		if (!empty($this->dataSourceConnectors[$name]) && $this->dataSourceConnectors[$name] instanceof Connector\Base)
+		{
+			return $this->dataSourceConnectors[$name];
+		}
+
+		$dataSources = [];
+		$event = new \Bitrix\Main\Event('biconnector', 'OnBIConnectorDataSources', [
+			$this->manager,
+			&$dataSources,
+			$this->languageId,
+			$name,
+		]);
+		$event->send();
+
+		if (empty($dataSources[$name]))
+		{
+			return null;
+		}
+
+		$source = $dataSources[$name];
+
+		$fields = new FieldCollection();
+		foreach ($source['FIELDS'] as $fieldName => $fieldInfo)
+		{
+			$fields->add($this->prepareFieldDto($fieldName, $fieldInfo));
+		}
+
+		return new Connector\Sql($name, $fields, $source);
 	}
 
 	/**
@@ -136,6 +164,7 @@ abstract class Service
 			$this->manager,
 			&$dataSources,
 			$this->languageId,
+			null,
 		]);
 		$event->send();
 

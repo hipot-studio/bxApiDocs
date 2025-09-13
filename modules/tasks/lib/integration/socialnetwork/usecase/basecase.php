@@ -21,14 +21,12 @@ class BaseCase
 		// TODO: this code was moved from classes/tasksnotifications propably needs reraftoring
 		$filter = [];
 
-		if (!$isCrm)
+		if (!$isCrm || !Loader::includeModule('crm'))
 		{
-			$filter = [
+			return [
 				'EVENT_ID' => 'tasks',
 				'SOURCE_ID' => $taskId
 			];
-
-			return $filter;
 		}
 
 		if (array_key_exists($taskId, self::$cache))

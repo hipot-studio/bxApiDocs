@@ -6709,28 +6709,32 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 	}
 	protected function innerDelete($ID, &$errors, array $params = null)
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
+		$container = \Bitrix\Crm\Service\Container::getInstance();
+		if (!$container->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
+
 			return false;
 		}
 
-		if(!DealCategory::exists($ID))
+		if (!DealCategory::exists($ID))
 		{
 			$errors[] = 'Not found.';
+
 			return false;
 		}
 
-		try
+		$factory = $container->getFactory(\CCrmOwnerType::Deal);
+		$category = $factory->getCategory($ID);
+		$deleteResult = $category->delete();
+		if ($deleteResult->isSuccess())
 		{
-			DealCategory::delete($ID);
 			return true;
 		}
-		catch(Main\SystemException $ex)
-		{
-			$errors[] = $ex->getMessage();
-			return false;
-		}
+
+		$errors = array_merge($errors, $deleteResult->getErrorMessages());
+
+		return false;
 	}
 	public function resolveStatusEntityID($ID)
 	{
@@ -9772,64 +9776,76 @@ class CCrmActivityRestProxy extends CCrmRestProxyBase
 		}
 
 
-		$storageTypeID = $fields['STORAGE_TYPE_ID'] = CCrmActivity::GetDefaultStorageTypeID();
+		$storageTypeID = CCrmActivity::GetDefaultStorageTypeID();
 		unset($fields['STORAGE_ELEMENT_IDS']);
-		if($storageTypeID === StorageType::WebDav)
+		unset($fields['STORAGE_TYPE_ID']);
+		if ($storageTypeID === StorageType::WebDav)
 		{
 			$webdavElements = isset($fields['WEBDAV_ELEMENTS']) && is_array($fields['WEBDAV_ELEMENTS'])
-				? $fields['WEBDAV_ELEMENTS'] : array();
+				?
+				$fields['WEBDAV_ELEMENTS']
+				: []
+			;
 
-			$prevStorageElementIDs = $currentFields['STORAGE_ELEMENT_IDS'] ?? array();
-			$oldStorageElementIDs = array();
-			foreach($webdavElements as &$element)
+			$prevStorageElementIDs = $currentFields['STORAGE_ELEMENT_IDS'] ?? [];
+			$oldStorageElementIDs = [];
+			foreach ($webdavElements as &$element)
 			{
 				$elementID = isset($element['ELEMENT_ID']) ? intval($element['ELEMENT_ID']) : 0;
-				if($elementID > 0)
+				if ($elementID > 0)
 				{
-					if(!isset($fields['STORAGE_ELEMENT_IDS']))
+					if (!isset($fields['STORAGE_ELEMENT_IDS']))
 					{
-						$fields['STORAGE_ELEMENT_IDS'] = array();
+						$fields['STORAGE_ELEMENT_IDS'] = [];
 					}
 					$fields['STORAGE_ELEMENT_IDS'][] = $elementID;
 				}
 
 				$oldElementID = isset($element['OLD_ELEMENT_ID']) ? intval($element['OLD_ELEMENT_ID']) : 0;
-				if($oldElementID > 0
-					&& ($elementID > 0 || (isset($element['DELETE']) && $element['DELETE'] === true)))
+				if (
+					$oldElementID > 0
+					&& ($elementID > 0 || (isset($element['DELETE']) && $element['DELETE'] === true))
+				)
 				{
-					if(in_array($oldElementID, $prevStorageElementIDs))
+					if (in_array($oldElementID, $prevStorageElementIDs))
 					{
 						$oldStorageElementIDs[] = $oldElementID;
 					}
 				}
 			}
-			unset($element);
 		}
-		else if($storageTypeID === StorageType::Disk)
+		elseif ($storageTypeID === StorageType::Disk)
 		{
 			$diskFiles = isset($fields['FILES']) && is_array($fields['FILES'])
-				? $fields['FILES'] : array();
+				? $fields['FILES']
+				: []
+			;
 
-			if(empty($diskFiles))
+			if (empty($diskFiles))
 			{
 				//For backward compatibility only
 				$diskFiles = isset($fields['WEBDAV_ELEMENTS']) && is_array($fields['WEBDAV_ELEMENTS'])
-					? $fields['WEBDAV_ELEMENTS'] : array();
+					? $fields['WEBDAV_ELEMENTS']
+					: []
+				;
 			}
 
-			foreach($diskFiles as &$fileInfo)
+			foreach ($diskFiles as &$fileInfo)
 			{
 				$fileID = isset($fileInfo['FILE_ID']) ? (int)$fileInfo['FILE_ID'] : 0;
-				if($fileID > 0)
+				if ($fileID > 0)
 				{
-					if(!isset($fields['STORAGE_ELEMENT_IDS']))
+					if (!isset($fields['STORAGE_ELEMENT_IDS']))
 					{
-						$fields['STORAGE_ELEMENT_IDS'] = array();
+						$fields['STORAGE_ELEMENT_IDS'] = [];
 					}
 					$fields['STORAGE_ELEMENT_IDS'][] = $fileID;
 				}
 			}
-			unset($fileInfo);
+		}
+		if (!empty($fields['STORAGE_ELEMENT_IDS']))
+		{
+			$fields['STORAGE_TYPE_ID'] = $storageTypeID;
 		}
 
 		$regEvent = true;
@@ -14067,50 +14083,38 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 		return $result;
 	}
 
-	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
+	public function getList($order, $filter, $select, $start)
 	{
-		$oldRightsCheck = true;
-		$identsResult = $this->getIdents($filter);
-		if ($identsResult->isSuccess())
-		{
-			$oldRightsCheck = false;
-			$identFields = $identsResult->getData();
-			if (
-				!EntityAddress::checkReadPermissionOwnerEntity(
-					$identFields['entityTypeId'],
-					$identFields['entityId']
-				)
-			)
-			{
-				$errors[] = 'Access denied.';
-				return false;
-			}
-		}
+		$this->prepareListParams($order, $filter, $select);
 
-		if ($oldRightsCheck)
+		$navigation = CCrmRestService::getNavData($start, true);
+
+		$fieldsInfo = $this->getFieldsInfo();
+		$this->internalizeFilterFields($filter, $fieldsInfo);
+
+		if(!EntityAddress::checkReadPermissionOwnerEntity())
 		{
-			if(!EntityAddress::checkReadPermissionOwnerEntity())
-			{
-				$errors[] = 'Access denied.';
-				return false;
-			}
+			throw new RestException('Access denied.');
 		}
 
 		$entity = self::getEntity();
 
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : false;
-		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * ($page - 1);
+		$limit = (int)($navigation['limit'] ?? CCrmRestService::LIST_LIMIT);
+		$offset = (int)($navigation['offset'] ?? 0);
 
 		if(!is_array($select))
-			$select = array();
+		{
+			$select = [];
+		}
 
 		if(empty($select))
+		{
 			$select = array_keys($this->getFieldsInfo());
+		}
 
 		//For backward compatibility only
 		if(isset($filter['ENTITY_TYPE_ID']) &&
-				($filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Company || $filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Contact))
+			($filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Company || $filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Contact))
 		{
 			$filter['ANCHOR_TYPE_ID'] = $filter['ENTITY_TYPE_ID'];
 			unset($filter['ENTITY_TYPE_ID']);
@@ -14122,27 +14126,27 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 			}
 		}
 
-		$listParams = [
+		$iterator = $entity->getList([
 			'order' => $order,
 			'filter' => $filter,
 			'select' => $select,
-			'count_total' => true
-		];
+			'limit' => $limit,
+			'offset' => $offset,
+		]);
 
-		if ($page !== false)
+		$result = [];
+		while ($item = $iterator->fetch())
 		{
-			$listParams['limit'] = $limit;
-			$listParams['offset'] = $offset;
+			$this->externalizeFields($item, $fieldsInfo);
+			$result[] = $item;
 		}
 
-		$result = $entity->getList($listParams);
-
-		if (!is_object($result))
+		if ($start < 0)
 		{
-			$result = [];
+			return $result;
 		}
 
-		return $this->prepareListResult($result, $page, $limit);
+		return CCrmRestService::setNavData($result, ['offset' => $offset, 'count' => $entity->getCount($filter)]);
 	}
 
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)

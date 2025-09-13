@@ -19,6 +19,7 @@ abstract class Base extends ValueCollection
 	protected $typeId;
 	protected $id;
 	protected array $select = [];
+	protected array $fieldGroups;
 
 	public function __construct(int $typeId, int $id, array $select = ['*'])
 	{
@@ -30,6 +31,28 @@ abstract class Base extends ValueCollection
 	}
 
 	abstract protected function processField(string $fieldId): bool;
+
+	abstract protected function loadAdditionalValues(): void;
+
+	protected function loadCommonFieldValues(): void
+	{
+		$handlers = [
+			'form' => fn() => $this->loadFormValues(),
+			'communication' => fn() => $this->loadCommunicationValues(),
+			'assigned' => fn() => $this->loadAssignedByValues(),
+			'created' => fn() => $this->loadCreatedByPrintable(),
+		];
+
+		foreach ($handlers as $key => $handler)
+		{
+			if ($this->fieldGroups[$key])
+			{
+				$handler();
+			}
+		}
+
+		$this->loadCommonFields($this->fieldGroups['common']);
+	}
 
 	protected function loadValue(string $fieldId): void
 	{
@@ -147,8 +170,6 @@ abstract class Base extends ValueCollection
 		bool $compatible = true
 	): void
 	{
-		$this->loadEntityValues();
-
 		$user = $this->getUserValues($this->document[$fieldId]);
 		if (!$user)
 		{
@@ -226,8 +247,6 @@ abstract class Base extends ValueCollection
 
 	protected function loadCreatedByPrintable(): void
 	{
-		$this->loadEntityValues();
-
 		if (isset($this->document['CREATED_BY_ID']))
 		{
 			$this->document['CREATED_BY_PRINTABLE'] = \CUser::FormatName(
@@ -247,9 +266,13 @@ abstract class Base extends ValueCollection
 	protected function loadUserFieldValues(): void
 	{
 		$userFields = $this->findUserFields($this->select);
-		if (empty($userFields) && !empty($this->select))
+		$userFields = $this->normalizeUserFields($userFields);
+		$defaultValue = \Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24') ? 'Y' : 'N';
+		$selectEnabled = \Bitrix\Main\Config\Option::get('bizproc', 'enable_getdocument_select', $defaultValue) === 'Y';
+
+		if (empty($userFields) && $selectEnabled)
 		{
-			return;
+			//return;
 		}
 
 		$entity = \CCrmOwnerType::ResolveUserFieldEntityID($this->typeId);
@@ -382,6 +405,20 @@ abstract class Base extends ValueCollection
 		return $userFields;
 	}
 
+	protected function normalizeUserFields(?array $fields): ?array
+	{
+		if (!$fields)
+		{
+			return null;
+		}
+
+		return array_values(
+			array_unique(
+				array_map(static fn($item) => explode('.', $item)[0], $fields)
+			)
+		);
+	}
+
 	private static function prepareResourceBookingField(array &$document, $fieldId): void
 	{
 		if (empty($document[$fieldId]) || !\Bitrix\Main\Loader::includeModule('calendar'))
@@ -422,6 +459,11 @@ abstract class Base extends ValueCollection
 			}
 			$document[$fieldId . '.USERS'] = $users;
 		}
+	}
+
+	protected function addContactCompanyFields()
+	{
+		$this->select = array_merge($this->select, ['CONTACT_ID', 'COMPANY_ID']);
 	}
 
 	protected function loadFmValues(): void
@@ -723,8 +765,6 @@ abstract class Base extends ValueCollection
 
 	protected function loadTimeCreateValues(): void
 	{
-		$this->loadEntityValues();
-
 		$culture = Application::getInstance()->getContext()->getCulture();
 
 		$dateCreate = $this->document['DATE_CREATE'];
@@ -755,6 +795,254 @@ abstract class Base extends ValueCollection
 			if (array_key_exists($field, $this->document) && $this->document[$field] <= 0)
 			{
 				$this->document[$field] = null;
+			}
+		}
+	}
+
+	protected function extractFieldsByPrefix(string $prefix): array
+	{
+		$matchedFields = [];
+		foreach ($this->select as $fieldId)
+		{
+			if (str_starts_with($fieldId, $prefix))
+			{
+				$matchedFields[] = substr($fieldId, strlen($prefix));
+			}
+		}
+
+		return $matchedFields;
+	}
+
+	protected function addSelectField(array $entityFields, string $field)
+	{
+		if ($entityFields && $field)
+		{
+			$this->select = array_merge($this->select, [$field]);
+		}
+	}
+
+	protected function loadContactValues(array &$document, &$contactDocument, array $fields): void
+	{
+		if (!isset($document['CONTACT_ID']) || !$document['CONTACT_ID'])
+		{
+			return;
+		}
+
+		if ($contactDocument === null)
+		{
+			$contactDocument = \CCrmDocumentContact::getDocument(
+				'CONTACT_' . $document['CONTACT_ID'],
+				null,
+				$fields
+			);
+		}
+
+		if ($contactDocument)
+		{
+			foreach ($fields as $field)
+			{
+				$document['CONTACT.' . $field] = $contactDocument[$field] ?? null;
+			}
+		}
+	}
+
+	protected function loadCompanyValues(array &$document, &$companyDocument, array $fields): void
+	{
+		if (!isset($document['COMPANY_ID']) || !$document['COMPANY_ID'])
+		{
+			return;
+		}
+
+		if ($companyDocument === null)
+		{
+			$companyDocument = \CCrmDocumentCompany::getDocument(
+				'COMPANY_' . $document['COMPANY_ID'],
+				null,
+				$fields
+			);
+		}
+
+		if ($companyDocument)
+		{
+			foreach ($fields as $field)
+			{
+				$document['COMPANY.' . $field] = $companyDocument[$field] ?? null;
+			}
+		}
+	}
+
+	protected function loadCommonFields(array $commonFields): void
+	{
+		$handlers = [
+			'OBSERVER_IDS' => fn() => $this->loadObserverValues(),
+			'CRM_ID' => fn() => $this->loadCrmId(),
+			'URL' => fn() => $this->loadUrl(),
+			'URL_BB' => fn() => $this->loadUrlBB(),
+			'CREATED_BY' => fn() => $this->loadCreatedByPrintable(),
+			'CREATED_BY_PRINTABLE' => fn() => $this->loadCreatedByPrintable(),
+			'TIME_CREATE' => fn() => $this->loadTimeCreateValues(),
+			'TRACKING_SOURCE_ID' => fn() => $this->loadTrackingValues(),
+		];
+
+		foreach ($commonFields as $field)
+		{
+			if (isset($handlers[$field]))
+			{
+				$handlers[$field]();
+			}
+
+			if (str_starts_with($field, 'PRODUCT_IDS'))
+			{
+				$this->loadProductValues();
+			}
+		}
+	}
+
+	protected function filterCommonFields(): array
+	{
+		return array_filter($this->select, static function(string $field)
+		{
+			return str_starts_with($field, 'OBSERVER_IDS')
+				|| str_starts_with($field, 'CRM_ID')
+				|| str_starts_with($field, 'URL')
+				|| str_starts_with($field, 'URL_BB')
+				|| str_starts_with($field, 'TIME_CREATE')
+				|| str_starts_with($field, 'TRACKING_SOURCE_ID')
+				|| str_starts_with($field, 'ASSIGNED_BY_PRINTABLE')
+				|| str_starts_with($field, 'PRODUCT_IDS')
+				|| str_starts_with($field, 'FORMS.')
+				|| str_starts_with($field, 'COMMUNICATIONS.')
+			;
+		});
+	}
+
+	protected function loadCrmId()
+	{
+		$this->document['CRM_ID'] = \CCrmOwnerTypeAbbr::ResolveByTypeID($this->typeId) . '_' . $this->id;
+	}
+
+	protected function loadUrl()
+	{
+		/** @var \CCrmDocument $entity */
+		[, $entity, $documentId] = \CCrmBizProcHelper::ResolveDocumentId($this->typeId, $this->id);
+		$this->document['URL'] = call_user_func([$entity, 'GetDocumentAdminPage'], $documentId);
+	}
+
+	protected function loadUrlBB()
+	{
+		$url = $this['URL'];
+		$title = \CCrmOwnerType::GetCaption($this->typeId, $this->id, false);
+		$this->document['URL_BB'] = sprintf(
+			'[url=%s]%s[/url]',
+			$url,
+			$title
+		);
+	}
+
+	protected function prepareFieldGroups(): void
+	{
+		$this->fieldGroups = [
+			'form' => $this->extractFieldsByPrefix('FORMS.'),
+			'communication' => $this->extractFieldsByPrefix('COMMUNICATIONS.'),
+			'assigned' => $this->extractFieldsByPrefix('ASSIGNED_BY'),
+			'created' => $this->extractFieldsByPrefix('CREATED_BY'),
+			'common' => $this->filterCommonFields(),
+		];
+
+		$this->processFieldDependencies();
+		$this->select = array_diff($this->select, $this->fieldGroups['common']);
+	}
+
+	/**
+	 * Removes non-existent fields from select to prevent SQL errors
+	 *
+	 * @return void
+	 */
+	protected function normalizeSelectFields(): void
+	{
+		if ($this->select === ['*'] || empty($this->select))
+		{
+			return;
+		}
+
+		$factory = Crm\Service\Container::getInstance()->getFactory($this->typeId);
+		if ($factory)
+		{
+			$normalizedSelect = [];
+
+			foreach ($this->select as $field)
+			{
+				if ($field === '*' || $factory->isFieldExists($field))
+				{
+					$normalizedSelect[] = $field;
+				}
+			}
+
+			$this->select = $normalizedSelect;
+		}
+	}
+
+	protected function processFieldDependencies(): void
+	{
+		$dependencies = [
+			'TIME_CREATE' => 'DATE_CREATE',
+		];
+
+		foreach ($dependencies as $field => $requiredField)
+		{
+			$requiredField = (array)$requiredField;
+			if (in_array($field, $this->fieldGroups['common'], true))
+			{
+				array_push($this->select, ...$requiredField);
+			}
+		}
+
+		if (
+			$this->extractFieldsByPrefix('ASSIGNED_BY')
+			&& !in_array('ASSIGNED_BY_ID', $this->select, true)
+		)
+		{
+			$this->select[] = 'ASSIGNED_BY_ID';
+		}
+
+		if (
+			$this->extractFieldsByPrefix('STAGE_ID')
+			&& !in_array('CATEGORY_ID', $this->select, true)
+		)
+		{
+			$this->select[] = 'CATEGORY_ID';
+		}
+
+		if ($this->extractFieldsByPrefix('FULL_ADDRESS'))
+		{
+			$this->select = array_merge($this->select, [
+				'ADDRESS',
+				'ADDRESS_2',
+				'ADDRESS_CITY',
+				'ADDRESS_POSTAL_CODE',
+				'ADDRESS_REGION',
+				'ADDRESS_PROVINCE',
+				'ADDRESS_COUNTRY',
+				'ADDRESS_COUNTRY_CODE',
+				'ADDRESS_LOC_ADDR_ID',
+				'ADDRESS_LOC_ADDR',
+			]);
+		}
+
+		$createdByFields = [
+			'CREATED_BY_ID',
+			'CREATED_BY_LOGIN',
+			'CREATED_BY_NAME',
+			'CREATED_BY_LAST_NAME',
+			'CREATED_BY_SECOND_NAME',
+		];
+
+		if ($this->extractFieldsByPrefix('CREATED_BY'))
+		{
+			$missingFields = array_diff($createdByFields, $this->select);
+			if (!empty($missingFields))
+			{
+				$this->select = array_merge($this->select, $missingFields);
 			}
 		}
 	}

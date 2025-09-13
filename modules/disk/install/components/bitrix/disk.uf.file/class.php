@@ -1,4 +1,6 @@
 <?php
+
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Document\GoogleHandler;
@@ -12,7 +14,9 @@ use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
 
@@ -281,6 +285,13 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		$this->includeComponentTemplate($this->editMode ? 'edit' : 'show'.($this->arParams['INLINE'] === 'Y' ? '_inline' : ''));
 	}
 
+	private function getTokenScopeByAttachedObject(AttachedObject $attachedModel): string
+	{
+		$entityType = str_replace('\\', '', $attachedModel->getEntityType());
+
+		return $entityType . '_' . $attachedModel->getEntityId();
+	}
+
 	private function loadFilesData()
 	{
 		if(empty($this->arParams['PARAMS']['arUserField']))
@@ -300,6 +311,8 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		$urlManager = $driver->getUrlManager();
 		$userFieldManager = $driver->getUserFieldManager();
 		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
+
+		$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
 
 		$userFieldManager->loadBatchAttachedObject($values);
 		foreach($values as $id)
@@ -338,10 +351,20 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 				/** @var File $fileModel */
 				$fileModel = $attachedModel->getFile();
 			}
-			$securityContext = $fileModel->getStorage()->getCurrentUserSecurityContext();
 
+			$securityContext = $fileModel->getStorage()->getCurrentUserSecurityContext();
 			$name = $fileModel->getName();
-			$data = array(
+
+			$accessInfo = ['encryptedScope' => ''];
+			if ($attachedModel)
+			{
+				$accessInfo = $scopeTokenService->grantAccessWithScope(
+					$attachedModel,
+					$this->getTokenScopeByAttachedObject($attachedModel)
+				);
+			}
+
+			$data = [
 				'ID' => $id,
 				'NAME' => $name,
 				'CONVERT_EXTENSION' => DocumentHandler::isNeedConvertExtension($fileModel->getExtension()),
@@ -361,15 +384,21 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				'VIEW_URL' => $urlManager->getUrlToShowAttachedFileByService($id, 'gvdrive'),
 				'EDIT_URL' => $urlManager->getUrlToStartEditUfFileByService($id, 'gdrive'),
-				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', array('attachedId' => $id)),
-				'COPY_TO_ME_URL' => $urlManager->getUrlUfController('copyToMe', array('attachedId' => $id)),
+				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', ['attachedId' => $id, '_esd' => $accessInfo['encryptedScope']]),
+				'COPY_TO_ME_URL' => $urlManager->getUrlUfController('copyToMe', ['attachedId' => $id]),
 
-				'DELETE_URL' => ""
-			);
-			if(\Bitrix\Disk\TypeFile::isImage($fileModel))
+				'DELETE_URL' => ''
+			];
+
+			if (\Bitrix\Disk\TypeFile::isImage($fileModel))
 			{
-				$data["PREVIEW_URL"] = ($attachedModel === null ? $urlManager->getUrlForShowFile($fileModel) : $urlManager->getUrlUfController('show', array('attachedId' => $id)));
-				$data["IMAGE"] = $fileModel->getFile();
+				$data['PREVIEW_URL'] = (
+					$attachedModel === null ?
+						$urlManager->getUrlForShowFile($fileModel) :
+						$urlManager->getUrlUfController('show', ['attachedId' => $id, '_esd' => $accessInfo['encryptedScope']])
+				);
+
+				$data['IMAGE'] = $fileModel->getFile();
 			}
 
 			if(!$this->editMode && \Bitrix\Disk\TypeFile::isVideo($fileModel))
@@ -394,10 +423,17 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 						}
 						else
 						{
-							$viewPath = array(
-								$urlManager->getUrlUfController('showView', array('attachedId' => $id, 'filename' => $fileModel->getName(), 'viewId' => $fileModel->getView()->getId())),
-								$urlManager->getUrlUfController('show', array('attachedId' => $id, 'filename' => $fileModel->getName(), 'viewId' => $fileModel->getView()->getId())),
-							);
+							$videoParams = [
+								'attachedId' => $id,
+								'filename' => $fileModel->getName(),
+								'viewId' => $fileModel->getView()->getId(),
+								'_esd' => $accessInfo['encryptedScope'],
+							];
+
+							$viewPath = [
+								$urlManager->getUrlUfController('showView', $videoParams),
+								$urlManager->getUrlUfController('show', $videoParams),
+							];
 							if($fileModel->getPreviewId())
 							{
 								$previewPath = $urlManager->getUrlUfController('showPreview', array('attachedId' => $id, 'viewId' => $fileModel->getView()->getId()));
@@ -459,7 +495,10 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				}
 
-				$sourceUri = new \Bitrix\Main\Web\Uri($urlManager->getUrlUfController('download', array('attachedId' => $attachedModel->getId())));
+				$sourceUri = new Uri($urlManager->getUrlUfController('download', [
+					'attachedId' => $attachedModel->getId(),
+					'_esd' => $accessInfo['encryptedScope'],
+				]));
 
 				$groupId = $this->componentId;
 				if (!$this->editMode)
@@ -492,7 +531,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				if ($attachedModel->getObject()->getTypeFile() == TypeFile::FLIPCHART && $attachedModel->canRead($userId))
 				{
-					$openUrl = $this->getUrlManager()->getUrlForViewBoard($attachedModel->getObjectId());
+					$openUrl = $this->getUrlManager()->getUrlForViewAttachedBoard($attachedModel->getId(), false, 'docs_attach');
 					$attr->addAction([
 						'type' => 'open',
 						'buttonIconClass' => ' ',
@@ -550,7 +589,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		return $files;
 	}
 
-	private function buildItemAttributes(\Bitrix\Disk\AttachedObject $attachedObject, $sourceUri)
+	private function buildItemAttributes(\Bitrix\Disk\AttachedObject $attachedObject, Uri $sourceUri)
 	{
 		if ($attachedObject->getExtra()->get('FILE_CONTENT_TYPE'))
 		{

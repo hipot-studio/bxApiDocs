@@ -16,4 +16,22 @@ class Base extends Controller
 			new ActionFilter\Scope(ActionFilter\Scope::NOT_REST),
 		];
 	}
+
+	protected function trackedToItem($trackedItem): array
+	{
+		$trackedObject = $trackedItem['trackedObject'];
+
+		return array_merge(
+			[
+				'trackedId' => (int)$trackedObject['id'],
+			],
+			$trackedObject['file'],
+			[
+				'links' => [
+					'download' => $trackedObject['links']['download']->getUri(),
+					'preview' => $trackedObject['links']['preview']->getUri(),
+				]
+			],
+		);
+	}
 }

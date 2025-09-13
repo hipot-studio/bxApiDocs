@@ -3,7 +3,6 @@
 namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\V2\Error;
-use Bitrix\Im\V2\Sync\SyncError;
 use Bitrix\Im\V2\Sync\SyncService;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
@@ -11,6 +10,8 @@ use DateTimeInterface;
 
 class Sync extends BaseController
 {
+	private const DATE_FORMAT = DateTimeInterface::RFC3339;
+
 	public function listAction(array $filter = [], int $limit = 50): ?array
 	{
 		$syncService = new SyncService();
@@ -19,7 +20,7 @@ class Sync extends BaseController
 		{
 			try
 			{
-				$date = new DateTime($filter['lastDate'], DateTimeInterface::RFC3339);
+				$date = new DateTime($filter['lastDate'], self::DATE_FORMAT);
 			}
 			catch (ObjectException $exception)
 			{
@@ -27,17 +28,12 @@ class Sync extends BaseController
 
 				return null;
 			}
-
-			return $syncService->getChangesFromDate($date, $limit);
 		}
-
-		$lastId = null;
-
-		if (isset($filter['lastId']))
+		else
 		{
-			$lastId = (int)$filter['lastId'];
+			$date = new DateTime(null, self::DATE_FORMAT);
 		}
 
-		return $syncService->getChangesFromId($lastId, $limit);
+		return $syncService->getChangesFromDate($date, $limit);
 	}
 }

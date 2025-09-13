@@ -10,6 +10,7 @@ use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
+use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
@@ -28,12 +29,13 @@ use Bitrix\Main\Security\Random;
 use CCrmOwnerType;
 use Psr\Log\LoggerInterface;
 
-final class AIManager
+class AIManager
 {
 	public const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
 	
 	public const SUPPORTED_ENTITY_TYPE_IDS = FillItemFieldsFromCallTranscription::SUPPORTED_TARGET_ENTITY_TYPE_IDS;
 	public const AI_LICENCE_FEATURE_NAME = 'ai_available_by_version';
+	public const AI_PACKAGES_EMPTY_COMMON_SLIDER_CODE = 'limit_boost_copilot';
 	public const AI_PACKAGES_EMPTY_SLIDER_CODE = 'limit_boost_crm_automation';
 	public const AI_COPILOT_FEATURE_RESTRICTED_SLIDER_CODE = 'limit_v2_crm_copilot_call_assessment';
 
@@ -46,7 +48,7 @@ final class AIManager
 	private const AI_LIMIT_SLIDERS_MAP = [
 		self::AI_LIMIT_CODE_DAILY => 'limit_copilot_max_number_daily_requests',
 		self::AI_LIMIT_CODE_MONTHLY => 'limit_copilot_requests',
-		self::AI_LIMIT_BAAS => 'limit_boost_copilot',
+		self::AI_LIMIT_BAAS => self::AI_PACKAGES_EMPTY_COMMON_SLIDER_CODE,
 	];
 
 	private const AI_APP_COLLECTION_MARKET_MAP = [
@@ -79,7 +81,7 @@ final class AIManager
 
 	public static function isEnabledInGlobalSettings(string|GlobalSetting $code = GlobalSetting::FillItemFromCall): bool
 	{
-		if (!self::isAvailable())
+		if (!static::isAvailable())
 		{
 			return false;
 		}
@@ -92,7 +94,7 @@ final class AIManager
 
 		if (
 			$setting === GlobalSetting::FillCrmText
-			&& !self::isEngineAvailable(EventHandler::ENGINE_CATEGORY)
+			&& !static::isEngineAvailable(EventHandler::ENGINE_CATEGORY)
 		)
 		{
 			return false;
@@ -111,7 +113,7 @@ final class AIManager
 
 	public static function isEngineAvailable(string $type): bool
 	{
-		if (!self::isAvailable())
+		if (!static::isAvailable())
 		{
 			return false;
 		}
@@ -127,20 +129,26 @@ final class AIManager
 
 	public static function isAiCallProcessingEnabled(): bool
 	{
-		return
-			self::isAvailable()
-			&& Bitrix24Manager::isFeatureEnabled(self::AI_COPILOT_FEATURE_NAME)
-		;
+		static $result = null;
+
+		if (is_null($result))
+		{
+			$result = static::isAvailable()
+				&& Bitrix24Manager::isFeatureEnabled(self::AI_COPILOT_FEATURE_NAME)
+			;
+		}
+
+		return $result;
 	}
 
 	public static function isAiCallAutomaticProcessingAllowed(): bool
 	{
 		return
-			self::isAiCallProcessingEnabled()
+			static::isAiCallProcessingEnabled()
 			&& Option::get(
 				'crm',
 				self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME,
-				self::isBaasServiceAvailable()
+				static::isBaasServiceAvailable()
 			)
 		;
 	}
@@ -170,7 +178,7 @@ final class AIManager
 			return self::$baasService->isAvailable();
 		}
 
-		return self::isBaasServiceIgnored();
+		return static::isBaasServiceIgnored();
 	}
 
 	public static function isBaasServiceHasPackage(): bool
@@ -188,12 +196,12 @@ final class AIManager
 			return self::$baasService->hasPackage() && self::$baasService->canConsume();
 		}
 
-		return self::isBaasServiceIgnored();
+		return static::isBaasServiceIgnored();
 	}
 
 	public static function isAILicenceAccepted(int $userId = null): bool
 	{
-		if (self::isAvailable())
+		if (static::isAvailable())
 		{
 			// check for box instances
 			if (\Bitrix\Crm\Settings\Crm::isBox())
@@ -274,7 +282,7 @@ final class AIManager
 	{
 		$result = new Result(TranscribeCallRecording::TYPE_ID);
 
-		if (!self::isAvailable() || !self::isAiCallProcessingEnabled())
+		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
 		{
 			return $result->addError(ErrorCode::getAINotAvailableError());
 		}
@@ -328,7 +336,7 @@ final class AIManager
 	{
 		$result = new Result(ExtractScoringCriteria::TYPE_ID);
 
-		if (!self::isAvailable() || !self::isAiCallProcessingEnabled())
+		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
 		{
 			return $result->addError(ErrorCode::getAINotAvailableError());
 		}
@@ -354,6 +362,31 @@ final class AIManager
 
 		return $operation->launch();
 	}
+	
+	public static function launchFillRepeatSaleTips(int $activityId, ?int $userId = null, bool $isManualLaunch = false): Result
+	{
+		$result = new Result(FillRepeatSaleTips::TYPE_ID);
+
+		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
+		{
+			return $result->addError(ErrorCode::getAINotAvailableError());
+		}
+
+		if ($activityId <= 0)
+		{
+			return $result->addError(ErrorCode::getNotFoundError());
+		}
+
+		$operation = new FillRepeatSaleTips(
+			new ItemIdentifier(CCrmOwnerType::Activity, $activityId),
+			$userId,
+		);
+
+		$operation->setIsManualLaunch($isManualLaunch);
+		$operation->setScenario(Scenario::REPEAT_SALE_TIPS_SCENARIO);
+
+		return $operation->launch();
+	}
 	// endregion
 
 	public static function getAllOperationTypes(): array
@@ -364,6 +397,7 @@ final class AIManager
 			FillItemFieldsFromCallTranscription::TYPE_ID,
 			ScoreCall::TYPE_ID,
 			ExtractScoringCriteria::TYPE_ID,
+			FillRepeatSaleTips::TYPE_ID,
 		];
 	}
 
@@ -375,12 +409,24 @@ final class AIManager
 	public static function fetchLimitError(Error $error): ?Error
 	{
 		$errorCode = $error->getCode();
+		$errorMessage = $error->getMessage();
+		$customData = $error->getCustomData();
+
+		if ($errorCode === 'RATE_LIMIT' && !empty($customData['sliderCode']))
+		{
+			return ErrorCode::getAILimitOfRequestsExceededError(
+				[
+					'sliderCode' => $customData['sliderCode']
+				],
+				$errorMessage
+			);
+		}
+
 		if (!str_starts_with($errorCode, 'LIMIT_IS_EXCEEDED'))
 		{
 			return null;
 		}
 
-		$customData = $error->getCustomData();
 		if (!empty($customData['sliderCode']))
 		{
 			$sliderCode = $customData['sliderCode'];
@@ -421,7 +467,7 @@ final class AIManager
 
 	public static function getAvailableLanguageList(): array
 	{
-		if (self::isAvailable())
+		if (static::isAvailable())
 		{
 			return Language::getAvailable();
 		}

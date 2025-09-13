@@ -155,12 +155,17 @@ class Signaling
 		return $push;
 	}
 
+	/**
+	 * @param int $senderId
+	 * @param int[] $joinedUsers
+	 * @return bool
+	 */
 	public function sendUsersJoined(int $senderId, array $joinedUsers)
 	{
 		$config = [
 			'call' => $this->call->toArray(),
 			'users' => $joinedUsers,
-			'userData' => Util::getUsers($joinedUsers),
+			'userData' => $this->call->prepareUserData($joinedUsers),
 			'senderId' => $senderId,
 			'publicIds' => $this->getPublicIds($joinedUsers),
 		];
@@ -173,7 +178,7 @@ class Signaling
 		$config = [
 			'call' => $this->call->toArray(),
 			'users' => $users,
-			'userData' => Util::getUsers($users),
+			'userData' => $this->call->prepareUserData($users),
 			'senderId' => $senderId,
 			'publicIds' => $this->getPublicIds($users),
 			'show' => $show,
@@ -321,6 +326,7 @@ class Signaling
 		return $this->send('Call::switchTrackRecordStatus', $toUserIds, [
 			'senderId' => $senderId,
 			'isTrackRecordOn' => $isTrackRecordOn,
+			'callUuid' => $this->call->getUuid(),
 			'errorCode' => $errorCode,
 		]);
 	}
@@ -364,7 +370,12 @@ class Signaling
 
 		if (!isset($params['call']))
 		{
-			$params['call'] = ['ID' => $this->call->getId()];
+			$params['call'] = [
+				'ID' => $this->call->getId(),
+				'UUID' => $this->call->getUuid(),
+				'PROVIDER' => $this->call->getProvider(),
+				'SCHEME' => $this->call->getScheme(),
+			];
 		}
 
 		if (!isset($params['callId']))

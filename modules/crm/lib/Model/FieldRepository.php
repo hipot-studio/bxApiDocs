@@ -102,7 +102,7 @@ final class FieldRepository
 		bool $feminine = false
 	): ScalarField
 	{
-		$messageCode = 'CRM_TYPE_ITEM_FIELD_MOVED_TIME';
+		$messageCode = 'CRM_TYPE_ITEM_FIELD_MOVED_TIME_V2';
 		$this->prepareMessageCode($messageCode, $feminine);
 
 		return
@@ -163,7 +163,7 @@ final class FieldRepository
 		bool $feminine = false
 	): ScalarField
 	{
-		$messageCode = 'CRM_TYPE_ITEM_FIELD_MOVED_BY';
+		$messageCode = 'CRM_TYPE_ITEM_FIELD_MOVED_BY_V2';
 		$this->prepareMessageCode($messageCode, $feminine);
 
 		return
@@ -976,5 +976,36 @@ final class FieldRepository
 				Join::on('this.ID', 'ref.ROW_ID')
 			)
 		);
+	}
+
+	/**
+	 * @param int $entityTypeId
+	 * @return Relation[]
+	 */
+	public function getLastCommunications(int $entityTypeId): array
+	{
+		$communications = [];
+
+		foreach (LastCommunicationTable::getCodeNames() as $fieldName => $fieldTitle)
+		{
+			$fmTableName = $this->sqlHelper->quote(LastCommunicationTable::getTableName());
+			$typeId = $this->sqlHelper->convertToDbString($entityTypeId);
+			$type = $this->sqlHelper->convertToDbString($fieldName);
+
+			$sql = "SELECT LCT.LAST_COMMUNICATION_TIME FROM {$fmTableName} LCT WHERE LCT.ENTITY_TYPE_ID = {$typeId}"
+				. " AND LCT.ENTITY_ID = %s AND LCT.TYPE = {$type}";
+			;
+
+			$communications[] =
+				(new ExpressionField(
+					LastCommunicationTable::FIELD_PREFIX . $fieldName,
+					'(' . $this->sqlHelper->getTopSql($sql, 1) . ')',
+					['ID']
+				))
+				->configureTitle($fieldTitle)
+				->configureValueType(DatetimeField::class);
+		}
+
+		return $communications;
 	}
 }

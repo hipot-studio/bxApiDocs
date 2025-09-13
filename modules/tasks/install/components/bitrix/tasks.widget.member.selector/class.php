@@ -2,6 +2,7 @@
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Socialnetwork\WorkgroupTable;
@@ -19,6 +20,7 @@ use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Integration\Extranet;
 use Bitrix\Tasks\Validation\Validator\SerializedValidator;
+use Bitrix\Tasks\Helper\Analytics;
 
 Loc::loadMessages(__FILE__);
 
@@ -316,6 +318,16 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 				]
 			);
 		}
+
+		$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
+
+		Analytics::getInstance($this->userId)->onTaskUpdate(
+			event: Analytics::EVENT['task_update'],
+			subSection: Analytics::SUB_SECTION['task_card'],
+			params: [
+				'p1' => 'isDemo_' . $isDemo,
+			],
+		);
 
 
 		if ($this->errorCollection->checkNoFatals())
@@ -620,6 +632,29 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 			);
 		}
 
+		// analytics for task auditors
+		if ($context && $context !== self::CONTEXT_TEMPLATE)
+		{
+			$userId = User::getId();
+			$members = TaskModel::createFromId($taskId)->getMembers();
+
+			$analytics = Analytics::getInstance($userId);
+
+			$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
+
+			$analytics->onTaskUpdate(
+				event: Analytics::EVENT['add_viewer'],
+				section: Analytics::SECTION[$analytics->getTaskContext($taskId)],
+				element: Analytics::ELEMENT['viewer_button'],
+				params: [
+					'p1' => 'isDemo_' . $isDemo,
+					'p3' => 'viewersCount_' . (array_key_exists('U', $members) ? (string)count($members['U']) : '0'),
+
+					'p5' => 'coexecutorsCount_' . (array_key_exists('A', $members) ? (string)count($members['A']) : '0'),
+				],
+			);
+		}
+
 		if ($this->errorCollection->checkNoFatals())
 		{
 			return null;
@@ -712,6 +747,27 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 				$taskId,
 				[
 					'SE_ACCOMPLICE' => $data,
+				]
+			);
+		}
+
+		// analytics for task coexecutors
+		if ($context && $context !== self::CONTEXT_TEMPLATE)
+		{
+			$userId = User::getId();
+
+			$analytics = Analytics::getInstance($userId);
+
+			$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
+
+			$analytics->onTaskUpdate(
+				event: Analytics::EVENT['add_coexecutor'],
+				section: Analytics::SECTION[$analytics->getTaskContext($taskId)],
+				element: Analytics::ELEMENT['coexecutor_button'],
+				params: [
+					'p1' => 'isDemo_' . $isDemo,
+					'p3' => 'viewersCount_' . (array_key_exists('U', $members) ? (string)count($members['U']) : '0'),
+					'p5' => 'coexecutorsCount_' . (array_key_exists('A', $members) ? (string)count($members['A']) : '0'),
 				]
 			);
 		}
@@ -816,7 +872,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		}
 
 		$responsibleId = $task->getResponsibleId();
-
+ 
 		$responsible = User::getData([$responsibleId], [
 			'ID',
 			'NAME',
@@ -850,7 +906,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 
 			return null;
 		}
-
+ 
 		$task = TaskRegistry::getInstance()->getObject($taskId);
 		if (null === $task)
 		{
@@ -869,7 +925,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 	public function getMemberAction(array $userIds, int $taskId): ?array
 	{
 		Collection::normalizeArrayValuesByInt($userIds, false);
-
+ 
 		if (empty($userIds) || $taskId <= 0)
 		{
 			return [];
@@ -898,7 +954,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		{
 			return [];
 		}
-
+ 
 		foreach ($userIds as $userId)
 		{
 			if (!in_array($userId, $task->getAuditorMembersIds(), true))

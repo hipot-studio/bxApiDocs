@@ -25,6 +25,15 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 			];
 		}
 
+		if (!empty($menuItems))
+		{
+			$menuItems[] = [
+				'IS_DELIMITER' => true,
+			];
+
+			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
+		}
+
 		return [
 			'ID' => 'BIC_DASHBOARDS',
 			'TEXT' => $this->getMenuItemTitle(),

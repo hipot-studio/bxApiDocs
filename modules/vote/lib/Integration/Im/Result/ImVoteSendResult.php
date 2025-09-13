@@ -8,6 +8,7 @@ class ImVoteSendResult extends Result
 {
 	public function __construct(
 		public int $messageId,
+		public int $voteId,
 	)
 	{
 		parent::__construct();

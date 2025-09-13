@@ -153,11 +153,6 @@ class VideoConfChat extends GroupChat
 			$params['TITLE'] = $this->generateTitle();
 		}
 
-		if (isset($params['OWNER_ID']))
-		{
-			$params['OWNER_ID'] = (int)$params['OWNER_ID'];
-		}
-
 		if (!isset($params['VIDEOCONF']['PASSWORD']) && isset($params['CONFERENCE_PASSWORD']))
 		{
 			$params['PASSWORD'] = $params['CONFERENCE_PASSWORD'];
@@ -215,9 +210,9 @@ class VideoConfChat extends GroupChat
 		return false;
 	}
 
-	protected function updateStateAfterUsersAdd(array $usersToAdd): self
+	protected function updateStateAfterRelationsAdd(array $usersToAdd): self
 	{
-		parent::updateStateAfterUsersAdd($usersToAdd);
+		parent::updateStateAfterRelationsAdd($usersToAdd);
 
 		$wasUserBlocked = BlockUserTable::query()
 			->setSelect(['ID'])
@@ -254,5 +249,10 @@ class VideoConfChat extends GroupChat
 		}
 
 		return $this;
+	}
+
+	protected function needToSendMessageUserDelete(): bool
+	{
+		return false;
 	}
 }

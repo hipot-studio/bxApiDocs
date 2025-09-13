@@ -203,6 +203,27 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 	}
 
 	/**
+	 * Generates HTML and CSS tags to load and apply a specified font.
+	 *
+	 * @param string $fontName The name of the font to be loaded and applied.
+	 *
+	 * @return string HTML and CSS tags for embedding the specified font.
+	 */
+	public static function generateFontTags(string $fontName): string
+	{
+		$fontUrl = "https://fonts.bitrix24.ru/css2?family="
+			. str_replace(' ', '+', $fontName)
+			. ":wght@100;200;300;400;500;600;700;800;900";
+		$fontClass = strtolower(str_replace(' ', '-', $fontName));
+
+		return <<<HTML
+			<noscript><link rel="stylesheet" href="$fontUrl" data-font="g-font-$fontClass"></noscript>
+			<link rel="preload" href="$fontUrl" data-font="g-font-$fontClass" onload="this.removeAttribute('onload');this.rel='stylesheet'" as="style">
+			<style data-id="g-font-$fontClass">.g-font-$fontClass { font-family: "$fontName", sans-serif; }</style>
+		HTML;
+}
+
+	/**
 	 * Proxy font url to bitrix servers
 	 * @param string $fontString - string of font with link, noscript or other tags
 	 * @return string

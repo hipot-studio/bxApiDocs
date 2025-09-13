@@ -82,7 +82,7 @@ class TooManyTasks implements CountableCommandInterface
 		$limit = TaskCountLimit::get($this->type);
 
 		$taskRepository = $this->getContainer()->getTaskRepository();
-		$count = $taskRepository->getCount($this->task->getCreatedBy());
+		$count = $taskRepository->getOnePersonTasksCount($this->task->getCreatedBy());
 
 		return $count >= $limit;
 	}

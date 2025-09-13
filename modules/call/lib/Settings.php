@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
 use Bitrix\Im;
 
@@ -10,26 +11,30 @@ class Settings
 	public static function getMobileOptions(): array
 	{
 		return array_merge([
-			'useCustomTurnServer' => Option::get('im', 'turn_server_self') === 'Y',
-			'turnServer' => Option::get('im', 'turn_server', ''),
-			'turnServerLogin' => Option::get('im', 'turn_server_login', ''),
-			'turnServerPassword' => Option::get('im', 'turn_server_password', ''),
-			'callLogService' => Option::get('im', 'call_log_service', ''),
+			'useCustomTurnServer' => Option::get('call', 'turn_server_self') === 'Y',
+			'turnServer' => \Bitrix\Im\Call\Call::getTurnServer(),
+			'turnServerLogin' => Option::get('call', 'turn_server_login', ''),
+			'turnServerPassword' => Option::get('call', 'turn_server_password', ''),
+			'callLogService' => Option::get('call', 'call_log_service', ''),
 			'sfuServerEnabled' => Im\Call\Call::isCallServerEnabled(),
 			'bitrixCallsEnabled' => Im\Call\Call::isBitrixCallEnabled(),
 			'callBetaIosEnabled' => Im\Call\Call::isIosBetaEnabled(),
 			'isAIServiceEnabled' => static::isAIServiceEnabled(),
 			'isNewMobileGridEnabled' => static::isNewMobileGridEnabled(),
+			'userJwt' => JwtCall::getUserJwt(),
+			'callBalancerUrl' => static::getBalancerUrl(),
+			'jwtCallsEnabled' => static::isNewCallsEnabled(),
+			'jwtInPlainCallsEnabled' => static::isPlainCallsUseNewScheme(),
 		], self::getAdditionalMobileOptions());
 	}
 
 	// todo should be moved to callmobile along with the rest of the parameters
 	protected static function getAdditionalMobileOptions(): array
 	{
-		\Bitrix\Main\Loader::includeModule('im');
+		Loader::includeModule('im');
 
 		$userId = (int)$GLOBALS['USER']->getId();
-		$usersData = \Bitrix\Im\Call\Util::getUsers([$userId]);
+		$usersData = Im\Call\Util::getUsers([$userId]);
 
 		return [
 			'currentUserData' => $usersData[$userId],
@@ -47,11 +52,15 @@ class Settings
 	 */
 	public static function isAIServiceEnabled(): bool
 	{
+		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: '';
+		if ($region === 'cn')
+		{
+			return false;
+		}
+
 		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
 		{
 			// box
-			$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: 'us';
-
 			return in_array($region, ['ru', 'by', 'kz'], true);
 		}
 
@@ -68,42 +77,92 @@ class Settings
 			return $value;
 		}
 
-		/*
-		return match (\Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: $region)
-		{
-			'ru' => 'Y',
-			default => 'N',
-		};
-		*/
 		return 'N';
 	}
 
-	/**
-	 * User control feature is enabled.
-	 * @return bool
-	 */
-	public static function isUserControlFeatureEnabled(): bool
+	public static function getBalancerUrl(): string
 	{
-		if (Option::get('call', 'call_user_control_enabled', false))
-		{
-			return true;
-		}
-
-		return (bool)\CUserOptions::GetOption('call', 'call_user_control_enabled', false);
+		return (new BalancerClient())->getServiceUrl();
 	}
 
 	/**
-	 * Picture in picture feature is enabled.
+	 * @deprecated
+	 */
+	public static function registerPortalKey(): bool
+	{
+		return JwtCall::registerPortal()->isSuccess();
+	}
+
+	/**
+	 * @deprecated
+	 */
+	public static function registerPortalKeyAgent(int $retryCount = 1): string
+	{
+		return JwtCall::registerPortalAgent();
+	}
+
+	public static function isNewCallsEnabled(): bool
+	{
+		$defaultValue = \Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24');
+
+		return
+			(bool)Option::get('call', 'call_v2_enabled', $defaultValue)
+			&& (self::getPortalId() > 0)
+		;
+	}
+
+	public static function getPortalId(): int
+	{
+		return (int)Option::get('call', 'call_portal_id', 0);
+	}
+
+	public static function isPlainCallsUseNewScheme(): bool
+	{
+		return (bool)Option::get('call', 'plain_calls_use_new_scheme', false);
+	}
+
+	/**
+	 * @deprecated
+	 */
+	public static function updateCallV2Availability(bool $isJwtEnabled, bool $isPlainUseJwt, string $callBalancerUrl = '', string $callServerUrl = ''): void
+	{
+		JwtCall::updateCallV2Availability($isJwtEnabled, $isPlainUseJwt, $callBalancerUrl, $callServerUrl);
+	}
+
+	/**
+	 * Disable camera of new joined users feature is enabled.
 	 * @return bool
 	 */
-	public static function isPictureInPictureFeatureEnabled(): bool
+	public static function isDisableCameraNewJoinedUsersFeatureEnabled(): bool
 	{
-		if (Option::get('call', 'call_picture_in_picture_enabled', false))
+		if (Option::get('call', 'call_disable_camera_new_joined_users_enabled', false))
 		{
 			return true;
 		}
 
-		return (bool)\CUserOptions::GetOption('call', 'call_picture_in_picture_enabled', false);
+		return (bool)\CUserOptions::GetOption('call', 'call_disable_camera_new_joined_users_enabled', false);
+	}
+	/**
+	 * Enable/disable logs to Kibana.
+	 * @return bool
+	 */
+	public static function isKibanaLogsEnabled(): bool
+	{
+		if (Option::get('call', 'call_kibana_logs_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'call_kibana_logs_enabled', false);
+	}
+	
+	/**
+	 * Disable camera of new joined users feature is enabled.
+	 * @return int
+	 */
+	public static function countDisableCameraNewJoinedUsersFeature(): int
+	{
+		return Option::get('call', 'call_disable_camera_new_joined_users_count', 4);
 	}
 
 	/**
@@ -132,19 +191,5 @@ class Settings
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_new_mobile_grid', false);
-	}
-
-	/**
-	 * New copilot follow up is enabled.
-	 * @return bool
-	 */
-	public static function isNewFollowUpSliderEnabled(): bool
-	{
-		if (Option::get('call', 'call_new_followup_slider', false))
-		{
-			return true;
-		}
-
-		return (bool)\CUserOptions::GetOption('call', 'call_new_followup_slider', false);
 	}
 }

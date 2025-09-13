@@ -14,6 +14,7 @@ class RecentItem implements RestConvertible
 	protected int $messageId;
 	protected int $counter = 0;
 	protected int $lastReadMessageId = 0;
+	protected int $markedId = 0;
 	protected bool $pinned = false;
 	protected bool $unread = false;
 	protected ?DateTime $dateUpdate = null;
@@ -152,6 +153,17 @@ class RecentItem implements RestConvertible
 	public function setDateLastActivity(?DateTime $dateLastActivity): RecentItem
 	{
 		$this->dateLastActivity = $dateLastActivity;
+		return $this;
+	}
+
+	public function getMarkedId(): int
+	{
+		return $this->markedId;
+	}
+
+	public function setMarkedId(int $markedId): self
+	{
+		$this->markedId = $markedId;
 		return $this;
 	}
 

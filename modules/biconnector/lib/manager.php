@@ -351,6 +351,7 @@ class Manager
 			'KEY_ID' => $this->keyId,
 			'SERVICE_ID' => substr($this->serviceId, 0, 150),
 			'SOURCE_ID' => substr($sourceId, 0, 150),
+			'ROW_NUM' => 0,
 		];
 		if ($fields)
 		{

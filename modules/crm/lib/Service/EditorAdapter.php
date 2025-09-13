@@ -61,6 +61,7 @@ class EditorAdapter
 	public const FIELD_PARENT_PREFIX = 'PARENT_ID_';
 	public const FIELD_MY_COMPANY_DATA_NAME = 'MYCOMPANY_ID_DATA';
 	public const FIELD_MY_COMPANY_DATA_INFO = 'MYCOMPANY_ID_INFO';
+	public const FIELD_LAST_COMMUNICATION = 'LAST_COMMUNICATION_TYPE_LAST_STATE';
 	public const LAST_MYCOMPANY_INFOS = 'LAST_MYCOMPANY_INFOS';
 
 	public const CONTROLLER_PRODUCT_LIST = 'PRODUCT_LIST';
@@ -1734,18 +1735,28 @@ class EditorAdapter
 		return $this->srcItemProductsEntityData;
 	}
 
+	public function getProductRowSummaryItemFieldsToSelect(): array
+	{
+		return [
+			Item::FIELD_NAME_ID,
+			Item::FIELD_NAME_CATEGORY_ID,
+			Item::FIELD_NAME_PRODUCTS,
+			Item::FIELD_NAME_CURRENCY_ID,
+			Item::FIELD_NAME_OPPORTUNITY,
+			Item::FIELD_NAME_COMPANY_ID,
+			Item::FIELD_NAME_LOCATION_ID,
+		];
+	}
+
 	protected function getProductsSummaryEntityData(Item $item, int $mode = ComponentMode::VIEW): array
 	{
-		$entityTypeId = $item->getEntityTypeId();
-		$entityId = $item->getId();
-
 		$isReadOnly = true;
 		if (
 			(
 				$mode === ComponentMode::MODIFICATION
-				&& EntityAuthorization::checkUpdatePermission($entityTypeId, $entityId)
+				&& Container::getInstance()->getUserPermissions()->item()->canUpdateItem($item)
 			)
-			|| EntityAuthorization::checkCreatePermission($entityTypeId)
+			|| Container::getInstance()->getUserPermissions()->item()->canAddItem($item)
 		)
 		{
 			$isReadOnly = false;

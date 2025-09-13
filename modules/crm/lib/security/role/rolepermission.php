@@ -151,17 +151,14 @@ class RolePermission
 		$result = [];
 		$systemRolesIds = self::getSystemRolesIds();
 
-		$needSplitByRoleGroup = Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class);
-		if ($needSplitByRoleGroup)
+		$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
+		if (!$entityTypeId)
 		{
-			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
-			if (!$entityTypeId)
-			{
-				return $result;
-			}
-			$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
-			$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
+			return $result;
 		}
+		$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
+		$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
+
 
 		foreach (self::getAll() as $roleId => $entities)
 		{
@@ -169,7 +166,7 @@ class RolePermission
 			{
 				continue;
 			}
-			if ($needSplitByRoleGroup && !in_array($roleId, $rolesIdsInGroup, false))
+			if (!in_array($roleId, $rolesIdsInGroup, false))
 			{
 				continue;
 			}
@@ -198,18 +195,10 @@ class RolePermission
 
 		$result = new Main\Result();
 
-		$needSplitByRoleGroup = Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class);
-		if ($needSplitByRoleGroup)
-		{
-			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
-			$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
-			$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
-			$adminRolesIds = self::getAdminRolesIds($entityTypeId);
-		}
-		else
-		{
-			$adminRolesIds = self::getAdminRolesIds();
-		}
+		$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
+		$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
+		$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
+		$adminRolesIds = self::getAdminRolesIds($entityTypeId);
 
 		$role = new \CCrmRole();
 		foreach (self::getAll() as $roleId => $entities)
@@ -222,7 +211,7 @@ class RolePermission
 			{
 				continue;
 			}
-			if ($needSplitByRoleGroup && !in_array($roleId, $rolesIdsInGroup, false))
+			if (!in_array($roleId, $rolesIdsInGroup, false))
 			{
 				continue;
 			}
@@ -231,7 +220,7 @@ class RolePermission
 			{
 				$entities[$permissionEntityId] = $permissionSet[$roleId];
 
-				$fields = ["RELATION" => $entities];
+				$fields = ['PERMISSIONS' => $entities];
 				if (!$role->Update($roleId, $fields))
 				{
 					$result->addError(new Main\Error($fields["RESULT_MESSAGE"]));
@@ -257,11 +246,6 @@ class RolePermission
 
 		$systemRolesIds = self::getSystemRolesIds();
 
-		if ($needStrictByRoleGroupCode && !Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class))
-		{
-			$needStrictByRoleGroupCode = false;
-		}
-
 		$emptyRoles = [];
 		if ($needStrictByRoleGroupCode)
 		{
@@ -275,14 +259,7 @@ class RolePermission
 
 		$result = new Main\Result();
 
-		if (Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class))
-		{
-			$adminRolesIds = self::getAdminRolesIds($categoryIdentifier->getEntityTypeId());
-		}
-		else
-		{
-			$adminRolesIds = self::getAdminRolesIds();
-		}
+		$adminRolesIds = self::getAdminRolesIds($categoryIdentifier->getEntityTypeId());
 
 		$role = new \CCrmRole();
 
@@ -304,7 +281,7 @@ class RolePermission
 
 			$entities[$permissionEntityId] = $permissionSet;
 
-			$fields = ["RELATION" => $entities];
+			$fields = ['PERMISSIONS' => $entities];
 			if (!$role->Update($roleId, $fields))
 			{
 				$result->addError(new Main\Error($fields["RESULT_MESSAGE"]));
@@ -322,12 +299,12 @@ class RolePermission
 				continue;
 			}
 
-			$fields = ["RELATION" => [
+			$fields = ['PERMISSIONS' => [
 				$permissionEntityId => $permissionSet,
 			]];
 			if (!$role->Update($emptyRoleId, $fields))
 			{
-				$result->addError(new Main\Error($fields["RESULT_MESSAGE"]));
+				$result->addError(new Main\Error($fields['RESULT_MESSAGE']));
 			}
 		}
 

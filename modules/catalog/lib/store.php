@@ -415,6 +415,14 @@ class StoreTable extends Main\Entity\DataManager
 		return ($defaultStoreId > 0 ? $defaultStoreId : null);
 	}
 
+	public static function getStoreCreatorId(int $storeId): ?int
+	{
+		$row = self::getRowById($storeId, ['select' => ['USER_ID']]);
+		$creatorId = (int)($row['USER_ID'] ?? 0);
+
+		return ($creatorId > 0 ? $creatorId : null);
+	}
+
 	/**
 	 * Default onBeforeAdd handler. Absolutely necessary.
 	 *

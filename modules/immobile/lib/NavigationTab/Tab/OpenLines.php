@@ -31,15 +31,21 @@ class OpenLines extends BaseRecent
 		{
 			return false;
 		}
-		
+
 		if (!ModuleManager::isModuleInstalled('imopenlines'))
 		{
 			return false;
 		}
-		
+
 		return true;
 	}
-	
+
+
+	public function isPreload(): bool
+	{
+		return false;
+	}
+
 	public function getId(): string
 	{
 		return 'openlines';
@@ -74,7 +80,7 @@ class OpenLines extends BaseRecent
 	protected function getWidgetSettings(): array
 	{
 		return [
-			'preload' => false,
+			'preload' => $this->isPreload(),
 			'useSearch' => false,
 			'titleParams' => [
 				'useLargeTitleMode' => true,

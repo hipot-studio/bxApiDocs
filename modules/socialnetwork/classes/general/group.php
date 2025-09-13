@@ -11,8 +11,8 @@ use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\Helper\Path;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
+use Bitrix\Socialnetwork\Item\Workgroup\AvatarType;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
-use Bitrix\Socialnetwork\Site\Site;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ScrumLimit;
@@ -200,12 +200,23 @@ class CAllSocNetGroup
 			}
 		}
 
+		$avatarType = $arFields['AVATAR_TYPE'] ?? null;
 		if (
 			is_set($arFields, 'AVATAR_TYPE')
 			&& !array_key_exists($arFields['AVATAR_TYPE'], Workgroup::getAvatarTypes())
 		)
 		{
 			unset($arFields['AVATAR_TYPE']);
+		}
+
+		$canSetEmptyAvatarType =
+			($arFields['TYPE'] ?? null) === Type::Collab->value
+			&& $avatarType === AvatarType::None->value
+		;
+
+		if ($canSetEmptyAvatarType)
+		{
+			$arFields['AVATAR_TYPE'] = '';
 		}
 
 		if (!$USER_FIELD_MANAGER->CheckFields("SONET_GROUP", $ID, $arFields))

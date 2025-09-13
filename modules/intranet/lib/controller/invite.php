@@ -1,8 +1,9 @@
 <?php
 namespace Bitrix\Intranet\Controller;
 
-use Bitrix\Bitrix24\Portal\Notification\EmailConfirmationPopup;
+use Bitrix\Bitrix24\Integration\Network\RegisterSettingsSynchronizer;
 use Bitrix\Bitrix24\Portal\Settings\EmailConfirmationRequirements\Type;
+use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\Intranet\Service\InviteLinkGenerator;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
@@ -14,16 +15,15 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Event;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
-use Bitrix\Socialservices\Network;
 use Bitrix\Intranet\Invitation;
 use Bitrix\Intranet\Entity;
 use Bitrix\Intranet\Dto;
 use Bitrix\Intranet\Service\UseCase;
 use Bitrix\Intranet;
 use Bitrix\Main;
+use CIntranetInviteDialog;
 
 class Invite extends Main\Engine\Controller
 {
@@ -45,7 +45,9 @@ class Invite extends Main\Engine\Controller
 							$user['name'] ?? null,
 							$user['lastName'] ?? null,
 							isset($user['phone']) ? new Entity\Type\Phone($user['phone']) : null,
-							isset($user['email']) ? new Entity\Type\Email($user['email']) : null
+							isset($user['email']) ? new Entity\Type\Email($user['email']) : null,
+							null,
+							$user['languageId'] ?? null,
 						));
 					}
 
@@ -81,10 +83,10 @@ class Invite extends Main\Engine\Controller
 				}
 			),
 			new ExactParameter(
-				Entity\Type\Collection\InvitationCollection::class,
+				Intranet\Public\Type\Collection\InvitationCollection::class,
 				'emailInvitations',
 				function($className, array $emailInvitations) {
-					$collection = new Entity\Type\Collection\InvitationCollection();
+					$collection = new Intranet\Public\Type\Collection\InvitationCollection();
 					foreach ($emailInvitations as $invitation)
 					{
 						$email = $invitation['email'] ?? null;
@@ -92,7 +94,7 @@ class Invite extends Main\Engine\Controller
 						{
 							continue;
 						}
-						$emailInvitation = new Entity\Type\EmailInvitation(
+						$emailInvitation = new Intranet\Public\Type\EmailInvitation(
 							$email,
 							$invitation['name'] ?? null,
 							$invitation['lastName'] ?? null,
@@ -104,10 +106,10 @@ class Invite extends Main\Engine\Controller
 				}
 			),
 			new ExactParameter(
-				Entity\Type\Collection\InvitationCollection::class,
+				Intranet\Public\Type\Collection\InvitationCollection::class,
 				'phoneInvitations',
 				function($className, array $phoneInvitations) {
-					$collection = new Entity\Type\Collection\InvitationCollection();
+					$collection = new Intranet\Public\Type\Collection\InvitationCollection();
 					foreach ($phoneInvitations as $invitation)
 					{
 						$phoneNumber = $invitation['phoneNumber'] ?? null;
@@ -115,7 +117,7 @@ class Invite extends Main\Engine\Controller
 						{
 							continue;
 						}
-						$emailInvitation = new Entity\Type\PhoneInvitation(
+						$emailInvitation = new Intranet\Public\Type\PhoneInvitation(
 							$invitation['phoneNumber'] ?? null,
 							$invitation['name'] ?? null,
 							$invitation['lastName'] ?? null,
@@ -130,16 +132,16 @@ class Invite extends Main\Engine\Controller
 			new ExactParameter(
 				Entity\Collection\DepartmentCollection::class,
 				'departmentCollection',
-				function($className, ?array $departmentIds = null) {
+				function($className, ?array $departmentIds = null): ?Entity\Collection\DepartmentCollection {
 					if (!$departmentIds)
 					{
-						return null;
+						$departmentCollection = new Entity\Collection\DepartmentCollection();
+						$departmentCollection->add((new Intranet\Integration\HumanResources\Department())->getRootDepartment());
+
+						return $departmentCollection;
 					}
 
-					return Intranet\Service\ServiceContainer::getInstance()
-						->departmentRepository()
-						->findAllByIds($departmentIds)
-						;
+					return (new Intranet\Integration\HumanResources\Department())->getByIds($departmentIds);
 				}
 			),
 		];
@@ -149,7 +151,7 @@ class Invite extends Main\Engine\Controller
 	{
 		$preFilters = parent::getDefaultPreFilters();
 		$preFilters[] = new Intranet\ActionFilter\UserType(['employee', 'extranet']);
-		$preFilters[] = new Intranet\ActionFilter\InviteIntranetAccessControl();
+		$preFilters[] = new Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl();
 
 		return $preFilters;
 	}
@@ -169,7 +171,7 @@ class Invite extends Main\Engine\Controller
 					new Intranet\ActionFilter\InviteLimitControl(),
 				],
 				'-prefilters' => [
-					Intranet\ActionFilter\InviteIntranetAccessControl::class,
+					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
 				],
 			],
 			'getLinkByCollabId' => [
@@ -178,7 +180,7 @@ class Invite extends Main\Engine\Controller
 					new Intranet\ActionFilter\InviteLimitControl(),
 				],
 				'-prefilters' => [
-					Intranet\ActionFilter\InviteIntranetAccessControl::class,
+					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
 				],
 			],
 			'regenerateLinkByCollabId' => [
@@ -186,7 +188,7 @@ class Invite extends Main\Engine\Controller
 					new Intranet\ActionFilter\InviteToCollabAccessControl(),
 				],
 				'-prefilters' => [
-					Intranet\ActionFilter\InviteIntranetAccessControl::class,
+					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
 				],
 			],
 			'getEmailsInviteStatus' => [
@@ -195,7 +197,7 @@ class Invite extends Main\Engine\Controller
 				],
 				'-prefilters' => [
 					Intranet\ActionFilter\UserType::class,
-					Intranet\ActionFilter\InviteIntranetAccessControl::class,
+					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
 				],
 			],
 			'getPhoneNumbersInviteStatus' => [
@@ -204,17 +206,21 @@ class Invite extends Main\Engine\Controller
 				],
 				'-prefilters' => [
 					Intranet\ActionFilter\UserType::class,
-					Intranet\ActionFilter\InviteIntranetAccessControl::class,
+					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
 				],
 			],
 			'inviteUsersByEmail' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\InviteLimitControl(),
+					new Intranet\Infrastructure\Controller\ActionFilter\ActiveUserInvitation(new Intranet\Repository\UserRepository()),
+					new Intranet\Infrastructure\Controller\ActionFilter\UserInvitedExtranet(new Intranet\Repository\UserRepository()),
 				],
 			],
 			'inviteUsersByPhoneNumber' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\InviteLimitControl(),
+					new Intranet\Infrastructure\Controller\ActionFilter\ActiveUserInvitation(new Intranet\Repository\UserRepository()),
+					new Intranet\Infrastructure\Controller\ActionFilter\UserInvitedExtranet(new Intranet\Repository\UserRepository()),
 				],
 			],
 		];
@@ -232,14 +238,16 @@ class Invite extends Main\Engine\Controller
 		return $result->getData();
 	}
 
-	private function inviteUsers(Entity\Type\InvitationsContainer $invitationsContainer): ?array
+	private function inviteUsers(
+		Intranet\Public\Type\Collection\InvitationCollection $emailInvitations,
+		?Entity\Collection\DepartmentCollection              $departmentCollection,
+	): ?array
 	{
 		try
 		{
-			$userCollection = Intranet\Service\ServiceContainer::getInstance()
-				->inviteService()
-				->inviteUsers($invitationsContainer);
-			;
+			$invitationFacade = new Intranet\Public\Facade\Invitation\IntranetInvitationFacade($departmentCollection);
+			$userCollection = $invitationFacade->inviteByCollection($emailInvitations);
+
 			$response = [];
 			foreach ($userCollection as $user)
 			{
@@ -250,6 +258,7 @@ class Invite extends Main\Engine\Controller
 					'authPhoneNumber' => $user->getAuthPhoneNumber(),
 					'name' => $user->getName(),
 					'lastName' => $user->getLastName(),
+					'fullName' => $user->getFormattedName(),
 					'invitationStatus' => $user->getInviteStatus()->value,
 				];
 			}
@@ -268,21 +277,26 @@ class Invite extends Main\Engine\Controller
 	 * @restMethod intranet.invite.inviteUsersByEmail
 	 */
 	public function inviteUsersByEmailAction(
-		Entity\Type\Collection\InvitationCollection $emailInvitations,
-		?Entity\Collection\DepartmentCollection $departmentCollection,
+		Intranet\Public\Type\Collection\InvitationCollection $emailInvitations,
+		?Entity\Collection\DepartmentCollection              $departmentCollection,
 	): ?array
 	{
-		$invitationsContainer = new Entity\Type\InvitationsContainer($emailInvitations, $departmentCollection);
+		$invitedUsers = $this->inviteUsers($emailInvitations, $departmentCollection);
 
-		return $this->inviteUsers($invitationsContainer);
+		if (is_array($invitedUsers))
+		{
+			$this->setDefaultUserGroups($invitedUsers);
+		}
+
+		return $invitedUsers;
 	}
 
 	/**
 	 * @restMethod intranet.invite.inviteUsersByPhoneNumber
 	 */
 	public function inviteUsersByPhoneNumberAction(
-		Entity\Type\Collection\InvitationCollection $phoneInvitations,
-		?Entity\Collection\DepartmentCollection $departmentCollection,
+		Intranet\Public\Type\Collection\InvitationCollection $phoneInvitations,
+		?Entity\Collection\DepartmentCollection              $departmentCollection,
 	): ?array
 	{
 		if (!Loader::includeModule('bitrix24'))
@@ -290,10 +304,14 @@ class Invite extends Main\Engine\Controller
 			$this->addError(new Error('This method is not available'));
 			return null;
 		}
+		$invitedUsers = $this->inviteUsers($phoneInvitations, $departmentCollection);
 
-		$invitationsContainer = new Entity\Type\InvitationsContainer($phoneInvitations, $departmentCollection);
+		if (is_array($invitedUsers))
+		{
+			$this->setDefaultUserGroups($invitedUsers);
+		}
 
-		return $this->inviteUsers($invitationsContainer);
+		return $invitedUsers;
 	}
 
 	/**
@@ -303,18 +321,11 @@ class Invite extends Main\Engine\Controller
 		?Entity\Collection\DepartmentCollection $departmentCollection
 	): ?string
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			$this->addError(new Error('This method is not available'));
-
-			return null;
-		}
-
 		if (!$departmentCollection)
 		{
 			$departmentCollection = new Entity\Collection\DepartmentCollection();
 		}
-		$departmentRepository = Intranet\Service\ServiceContainer::getInstance()->departmentRepository();
+		$departmentRepository = Intranet\Service\ServiceContainer::getInstance()->hrDepartmentRepository();
 		if ($departmentCollection->empty())
 		{
 			$departmentCollection->add($departmentRepository->getRootDepartment());
@@ -345,7 +356,10 @@ class Invite extends Main\Engine\Controller
 	): Main\Engine\Response\AjaxJson
 	{
 		$useCase = new UseCase\Invitation\BulkInviteUsersToCollabAndPortal();
-		$result = $useCase->execute(collabId: $collabId, userInvitationDtoCollection: $users);
+		$result = $useCase->execute(
+			collabId: $collabId,
+			userInvitationDtoCollection: $users,
+		);
 
 		if (!$result->isSuccess())
 		{
@@ -451,12 +465,11 @@ class Invite extends Main\Engine\Controller
 		}
 
 		return $this->reInviteInternal(
-			$userId,
-			isset($params['extranet']) ? $params['extranet'] === 'Y' : null,
+			$userId
 		);
 	}
 
-	private function reInviteInternal(int $userId, ?bool $extranet = null): ?array
+	private function reInviteInternal(int $userId): ?array
 	{
 		$res = UserTable::getList([
 			'filter' => [
@@ -484,10 +497,8 @@ class Invite extends Main\Engine\Controller
 			return null;
 		}
 
-		$extranet ??=
-			Loader::includeModule('extranet')
-			&& !\CExtranet::isIntranetUser(SITE_ID, $userId)
-		;
+		$isEmployee = (new Intranet\Integration\HumanResources\HrUserService)->isEmployee(new Entity\User(id: $userId));
+		$extranet = Loader::includeModule('extranet') && !$isEmployee;
 		if (!$extranet)
 		{
 			if ($userFields['EMAIL'])
@@ -496,7 +507,13 @@ class Invite extends Main\Engine\Controller
 			}
 			else
 			{
-				$result = \CIntranetInviteDialog::reinviteUserByPhone($userId);
+				$reinviteResult = \CIntranetInviteDialog::reinviteUserByPhone($userId);
+				$result = $reinviteResult->isSuccess();
+				if (!$result && !empty($reinviteResult->getError()?->getMessage()))
+				{
+					$this->addError($reinviteResult->getError());
+					return null;
+				}
 			}
 		}
 		else
@@ -610,10 +627,10 @@ class Invite extends Main\Engine\Controller
 
 		if (
 			!empty($data)
-			&& Loader::includeModule("socialservices")
+			&& Loader::includeModule("bitrix24")
 		)
 		{
-			Network::setRegisterSettings($data);
+			RegisterSettingsSynchronizer::setRegisterSettings($data);
 			$result = 'success';
 		}
 
@@ -634,11 +651,10 @@ class Invite extends Main\Engine\Controller
 
 		$allowSelfRegister = false;
 		if (
-			ModuleManager::isModuleInstalled('bitrix24')
-			&& Loader::includeModule('socialservices')
+			Loader::includeModule('bitrix24')
 		)
 		{
-			$registerSettings = \Bitrix\Socialservices\Network::getRegisterSettings();
+			$registerSettings = RegisterSettingsSynchronizer::getRegisterSettings();
 			if ($registerSettings['REGISTER'] === 'Y')
 			{
 				$allowSelfRegister = true;
@@ -674,9 +690,9 @@ class Invite extends Main\Engine\Controller
 		return $result->isSuccess();
 	}
 
-	public function getLinkByCollabIdAction(int $collabId): Main\Engine\Response\AjaxJson
+	public function getLinkByCollabIdAction(int $collabId, string $userLang = LANGUAGE_ID): Main\Engine\Response\AjaxJson
 	{
-		$linkGenerator = InviteLinkGenerator::createByCollabId($collabId);
+		$linkGenerator = InviteLinkGenerator::createByCollabId($collabId, $userLang);
 
 		if (!$linkGenerator)
 		{
@@ -722,5 +738,28 @@ class Invite extends Main\Engine\Controller
 
 		return Main\Engine\Response\AjaxJson::createSuccess();
 	}
-}
 
+	public function getInviteDialogLinkAction(string $source): string
+	{
+		return CIntranetInviteDialog::showInviteDialogLink(
+			[
+				'analyticsLabel' => [
+					'analyticsLabel[source]' => $source,
+				]
+			]
+		);
+	}
+
+	private function setDefaultUserGroups(array $users): void
+	{
+		$groupsIds = \CIntranetInviteDialog::getUserGroups(SITE_ID);
+
+		foreach ($users as $user)
+		{
+			if (isset($user['id']))
+			{
+				\CUser::SetUserGroup($user['id'], $groupsIds);
+			}
+		}
+	}
+}

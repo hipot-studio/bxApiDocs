@@ -25,7 +25,7 @@ abstract class Base
 	/**
 	 * @return array
 	 */
-	abstract public function getEntityList(): array;
+	abstract public function getEntityList(): Main\Result;
 
 	/**
 	 * @param string $entityName
@@ -36,7 +36,8 @@ abstract class Base
 	/**
 	 * @param string $entityName
 	 * @param int $n
+	 * @param array $fields
 	 * @return array
 	 */
-	abstract public function getFirstNData(string $entityName, int $n): array;
+	abstract public function getFirstNData(string $entityName, int $n, array $fields = []): array;
 }

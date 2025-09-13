@@ -1,8 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Booking;
 
 use Bitrix\Booking\Internals\Integration\Crm\BookingActivity;
+use Bitrix\Crm\Dto\Booking\Booking\BookingFields;
+use Bitrix\Crm\Dto\Booking\Booking\BookingFieldsMapper;
+use Bitrix\Crm\Dto\Booking\Booking\BookingStatusEnum;
+use Bitrix\Crm\Dto\Booking\Message\Message;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Service\Timeline\Item\Model;
@@ -21,7 +27,15 @@ use Bitrix\Main\Type\DateTime;
 
 class Booking extends Activity
 {
+	private const ACTIVITY_STATUS_FAILED = 'failed';
+	private const ACTIVITY_STATUS_SUCCESS = 'success';
+	private const ACTIVITY_STATUS_NOT_CONFIRMED = 'not_confirmed';
+	private const ACTIVITY_STATUS_CONFIRMED = 'confirmed';
+	private const ACTIVITY_STATUS_LATE = 'late';
+	private const ACTIVITY_STATUS_OVERBOOKING = 'overbooking';
+
 	private bool $isBookingLoaded = false;
+	private BookingFields|null $bookingModel = null;
 
 	public function __construct(Context $context, Model $model)
 	{
@@ -40,7 +54,23 @@ class Booking extends Activity
 
 	public function getTitle(): ?string
 	{
-		return Loc::getMessage('CRM_TIMELINE_BOOKING_TITLE');
+		$activityStatus = $this->getActivityStatus();
+
+		if ($this->isScheduled())
+		{
+			return match ($activityStatus)
+			{
+				self::ACTIVITY_STATUS_LATE => Loc::getMessage('CRM_TIMELINE_BOOKING_TITLE_LATE'),
+				self::ACTIVITY_STATUS_OVERBOOKING => Loc::getMessage('CRM_TIMELINE_BOOKING_TITLE_OVERBOOKING'),
+				default => Loc::getMessage('CRM_TIMELINE_BOOKING_TITLE'),
+			};
+		}
+
+		return match ($activityStatus)
+		{
+			self::ACTIVITY_STATUS_FAILED => Loc::getMessage('CRM_TIMELINE_BOOKING_TITLE_NOT_VISITED_MSGVER_1'),
+			default => Loc::getMessage('CRM_TIMELINE_BOOKING_TITLE_VISITED_MSGVER_1'),
+		};
 	}
 
 	public function getIconCode(): ?string
@@ -51,17 +81,35 @@ class Booking extends Activity
 	public function getLogo(): ?Layout\Body\Logo
 	{
 		$booking = $this->getAssociatedEntityModelFields();
-		$bookingDateStart = DateTime::createFromTimestamp($booking['datePeriod']['from']['timestamp']);
+		$bookingDateStart = DateTime::createFromTimestamp($booking->datePeriod->from);
 
-		$logo = new Layout\Body\CalendarLogo($bookingDateStart);
-		$logo->setIconType(Layout\Body\Logo::ICON_TYPE_SUCCESS);
+		$logo = (new Layout\Body\CalendarLogo($bookingDateStart))
+			->setIconType($this->getIconType())
+		;
+		if ($additionalIconCode = $this->getAdditionalIconCode())
+		{
+			$logo->setAdditionalIconCode($additionalIconCode);
+		}
 
 		return $logo;
 	}
 
 	public function getTags(): ?array
 	{
-		return [];
+		if (!$this->isScheduled())
+		{
+			return [];
+		}
+
+		$tags = [];
+
+		$statusTag = $this->getStatusTag();
+		if ($statusTag)
+		{
+			$tags['status'] = $statusTag;
+		}
+
+		return $tags;
 	}
 
 	public function getContentBlocks(): ?array
@@ -100,30 +148,54 @@ class Booking extends Activity
 			$result['secondaryResourceMob'] = $secondaryResourceBlockMob;
 		}
 
+		if ($noteBlock = $this->buildNoteBlock())
+		{
+			$result['noteBlock'] = $noteBlock;
+		}
+
 		return $result;
 	}
 
+	/**
+	 * @return array<string, Button>
+	 */
 	public function getButtons(): array
 	{
-		$result = [];
-
-		$result['openButton'] = (new Button(
-			Loc::getMessage('CRM_TIMELINE_BOOKING_BTN_OPEN'),
-			Button::TYPE_PRIMARY)
-		)
-			->setScopeWeb()
-			->setAction($this->getOpenBookingAction())
-		;
-
 		if (!$this->isBookingLoaded)
 		{
-			return $result;
+			return [];
 		}
 
 		if (!$this->isScheduled())
 		{
-			return $result;
+			return ['openButton' => $this->getOpenBookingButton(Button::TYPE_SECONDARY)];
 		}
+
+		return !$this->isBookingStarted()
+			? $this->getBeforeStartButtons()
+			: $this->getAfterStartButtons()
+		;
+	}
+
+	private function isBookingStarted(): bool
+	{
+		$from = $this->getAssociatedEntityModelFields()->datePeriod->from ?? null;
+		$currentTimestamp = (new \DateTimeImmutable())->getTimestamp();
+
+		return $currentTimestamp > $from;
+	}
+
+	/**
+	 * @return array<string, Button>
+	 */
+	private function getBeforeStartButtons(): array
+	{
+		if (!$this->isBookingLoaded)
+		{
+			return [];
+		}
+
+		$result['openButton'] = $this->getOpenBookingButton();
 
 		$bookingId = $this->getBookingId();
 		$messageMenuItems = $this->getMessageMenuItems(
@@ -156,6 +228,49 @@ class Booking extends Activity
 			);
 
 		return $result;
+	}
+
+	/**
+	 * @return array<string, Button>
+	 */
+	private function getAfterStartButtons(): array
+	{
+		$result = [];
+
+		$result['served'] = (new Button(
+			Loc::getMessage('CRM_TIMELINE_BOOKING_BTN_SERVED'),
+			Button::TYPE_PRIMARY
+		))
+			->setAction($this->getCompleteAction())->setHideIfReadonly();
+
+		$result['notServed'] = (new Button(
+			Loc::getMessage('CRM_TIMELINE_BOOKING_BTN_NOT_SERVED'),
+			Button::TYPE_SECONDARY
+		))
+			->setAction(
+				(new Layout\Action\RunAjaxAction(\Bitrix\Crm\Controller\Timeline\Booking::ACTION_NAME_COMPLETE_WITH_STATUS))
+					->addActionParamInt('activityId', $this->getActivityId())
+					->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+					->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+					->addActionParamString('status', self::ACTIVITY_STATUS_FAILED)
+					->setAnimation(Layout\Action\Animation::disableItem()->setForever()
+				)
+			);
+
+		$result['openButton'] = $this->getOpenBookingButton(Button::TYPE_SECONDARY);
+
+		return $result;
+	}
+
+	private function getOpenBookingButton(string $type = Button::TYPE_PRIMARY): Button
+	{
+		return (new Button(
+			Loc::getMessage('CRM_TIMELINE_BOOKING_BTN_OPEN'),
+			$type)
+		)
+			->setScopeWeb()
+			->setAction($this->getOpenBookingAction())
+		;
 	}
 
 	private function getMessageMenuItems(int $bookingId, array $messageMenuItems): array
@@ -195,15 +310,26 @@ class Booking extends Activity
 
 		unset($items['edit'], $items['view']);
 
-		return $items;
+		$menuItems = [
+			(new MenuItem(Loc::getMessage('CRM_TIMELINE_BOOKING_MENU_ITEM_CYCLE') ?? ''))
+				->setAction(
+					(new Action\JsEvent($this->getType() . ':ShowCyclePopup'))
+						->addActionParamString('status', $this->getActivityStatus())
+					,
+				)
+			,
+		];
+
+		return array_merge($items, $menuItems);
 	}
 
 	private function buildBookingStartBlock(): ContentBlockWithTitle|null
 	{
-		$fields = $this->getAssociatedEntityModelFields();
-		$dateStart = $fields['datePeriod']['from']['timestamp'] ?? null;
+		$booking = $this->getAssociatedEntityModelFields();
+		$dateStart = $booking->datePeriod->from;
+		$dateEnd = $booking->datePeriod->to;
 
-		if (!$dateStart)
+		if (!$dateStart || !$dateEnd)
 		{
 			return null;
 		}
@@ -216,6 +342,7 @@ class Booking extends Activity
 				(new ContentBlock\EditableDate())
 					->setStyle(ContentBlock\EditableDate::STYLE_PILL)
 					->setDate(DateTime::createFromTimestamp($dateStart))
+					->setDuration($dateEnd - $dateStart)
 			);
 
 		return $titleBlockObject;
@@ -223,15 +350,15 @@ class Booking extends Activity
 
 	private function buildPrimaryResourceBlock(string $scope): ContentBlockWithTitle|null
 	{
-		$fields = $this->getAssociatedEntityModelFields();
-		$primaryResource = $fields['resources'][0] ?? null;
+		$booking = $this->getAssociatedEntityModelFields();
+		$primaryResource = $booking->resources[0] ?? null;
 
 		if (!$primaryResource)
 		{
 			return null;
 		}
 
-		$resourceTypeName = $primaryResource['type']['name']
+		$resourceTypeName = $primaryResource->typeName
 			?? Loc::getMessage('CRM_TIMELINE_BOOKING_CONTENT_BLOCK_PRIMARY_RESOURCE_TITLE');
 
 		$titleBlockObject = new ContentBlockWithTitle();
@@ -246,7 +373,7 @@ class Booking extends Activity
 					->setScopeWeb()
 					->setContentBlock(
 						(new ContentBlock\Link())
-							->setValue($primaryResource['name'])
+							->setValue($primaryResource->name)
 							->setAction($this->getOpenBookingAction()),
 					);
 				break;
@@ -255,7 +382,7 @@ class Booking extends Activity
 					->setScopeMobile()
 					->setContentBlock(
 						(new ContentBlock\Text())
-							->setValue($primaryResource['name'])
+							->setValue($primaryResource->name)
 					);
 				break;
 		}
@@ -265,8 +392,8 @@ class Booking extends Activity
 
 	private function buildSecondaryResourceBlock(string $scope): ContentBlockWithTitle|null
 	{
-		$fields = $this->getAssociatedEntityModelFields();
-		$resources = $fields['resources'] ?? null;
+		$booking = $this->getAssociatedEntityModelFields();
+		$resources = $booking->resources ?? null;
 
 		if (empty($resources) || count($resources) <= 1)
 		{
@@ -277,7 +404,7 @@ class Booking extends Activity
 
 		foreach (array_slice($resources, 1) as $resource)
 		{
-			$secondaryResourceNames[]= $resource['name'];
+			$secondaryResourceNames[] = $resource->name;
 		}
 
 		$titleBlockObject = new ContentBlockWithTitle();
@@ -326,11 +453,141 @@ class Booking extends Activity
 		return (int)$associatedEntityId;
 	}
 
-	private function getAssociatedEntityModelFields(): array
+	private function getAssociatedEntityModelFields(): BookingFields|null
 	{
-		$settings = $this->getAssociatedEntityModel()->get('SETTINGS');
-		$settings = is_array($settings) ? $settings : [];
+		if ($this->bookingModel)
+		{
+			return $this->bookingModel;
+		}
 
-		return isset($settings['FIELDS']) && is_array($settings['FIELDS']) ? $settings['FIELDS'] : [];
+		$settings = $this->getAssociatedEntityModel()->get('SETTINGS');
+		$fields = isset($settings['FIELDS']) && is_array($settings['FIELDS']) ? $settings['FIELDS'] : null;
+		if (!$fields)
+		{
+			return null;
+		}
+
+		$this->bookingModel = isset($fields['description'])
+			// bc for old format
+			? BookingFieldsMapper::mapFromBookingArray($fields)
+			: BookingFields::mapFromArray($fields)
+		;
+
+		return $this->bookingModel;
+	}
+
+	private function getBookingCompleteStatus(): string|null
+	{
+		return $this->getAssociatedEntityModel()->get('SETTINGS')['COMPLETE_STATUS'] ?? null;
+	}
+
+	private function getActivityStatus(): string
+	{
+		// late > overbooking > confirmed > not confirmed
+		if ($this->isScheduled())
+		{
+			if ($this->getStatus() === BookingStatusEnum::DelayedCounterActivated)
+			{
+				return self::ACTIVITY_STATUS_LATE;
+			}
+
+			if ($this->getAssociatedEntityModelFields()->isOverbooking)
+			{
+				return self::ACTIVITY_STATUS_OVERBOOKING;
+			}
+
+			if ($this->getAssociatedEntityModelFields()->isConfirmed)
+			{
+				return self::ACTIVITY_STATUS_CONFIRMED;
+			}
+
+			return self::ACTIVITY_STATUS_NOT_CONFIRMED;
+		}
+
+		if ($this->getBookingCompleteStatus() === self::ACTIVITY_STATUS_FAILED)
+		{
+			return self::ACTIVITY_STATUS_FAILED;
+		}
+
+		return self::ACTIVITY_STATUS_SUCCESS;
+	}
+
+	private function getIconType(): string
+	{
+		$status = $this->getActivityStatus();
+		if ($this->isScheduled() && $this->getAssociatedEntityModelFields()->isOverbooking)
+		{
+			// rewrite original status, overbooking status always on top of list for icon if scheduled
+			$status = self::ACTIVITY_STATUS_OVERBOOKING;
+		}
+
+		return match ($status)
+		{
+			self::ACTIVITY_STATUS_SUCCESS, self::ACTIVITY_STATUS_CONFIRMED => Layout\Body\Logo::ICON_TYPE_GREEN,
+			self::ACTIVITY_STATUS_LATE, self::ACTIVITY_STATUS_FAILED => Layout\Body\Logo::ICON_TYPE_ORANGE_STRIPE,
+			self::ACTIVITY_STATUS_OVERBOOKING => Layout\Body\Logo::ICON_TYPE_DARK_ORANGE,
+			self::ACTIVITY_STATUS_NOT_CONFIRMED => Layout\Body\Logo::ICON_TYPE_DEFAULT,
+			default => Layout\Body\Logo::ICON_TYPE_DEFAULT,
+		};
+	}
+
+	private function getAdditionalIconCode(): string|null
+	{
+		return match ($this->getActivityStatus())
+		{
+			self::ACTIVITY_STATUS_SUCCESS => Layout\Body\Logo::ADDITIONAL_ICON_CODE_DONE,
+			self::ACTIVITY_STATUS_FAILED => Layout\Body\Logo::ADDITIONAL_ICON_CODE_CROSS,
+			default => null,
+		};
+	}
+
+	private function buildNoteBlock(): ContentBlock|null
+	{
+		$note = $this->getAssociatedEntityModelFields()->note;
+		if (!$note)
+		{
+			return null;
+		}
+
+		return (new Layout\Body\ContentBlock\EditableDescription())
+			->setText($note)
+			->setEditable(false)
+			->setCopied(true)
+			->setHeight(Layout\Body\ContentBlock\EditableDescription::HEIGHT_SHORT)
+		;
+	}
+
+	private function getMessage(): Message|null
+	{
+		$message = $this->getAssociatedEntityModel()->get('SETTINGS')['MESSAGE'] ?? null;
+		if (!$message)
+		{
+			return null;
+		}
+
+		try
+		{
+			return Message::mapFromArray($message);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	private function getStatus(): BookingStatusEnum|null
+	{
+		$storedStatus = $this->getAssociatedEntityModel()->get('SETTINGS')['STATUS'] ?? null;
+
+		return $storedStatus && is_string($storedStatus) ? BookingStatusEnum::tryFrom($storedStatus) : null;
+	}
+
+	private function getStatusTag(): Layout\Header\Tag|null
+	{
+		return TagMapper::mapFromMessageAndStatus(
+			message: $this->getMessage(),
+			status: $this->getStatus(),
+			statusUpdated: (int)($this->getAssociatedEntityModel()->get('SETTINGS')['STATUS_UPDATED'] ?? 0),
+		);
 	}
 }

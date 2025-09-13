@@ -3,21 +3,22 @@
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Call;
 
 use Bitrix\AI\Config;
-use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\OperationState;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\SuitableAudiosChecker;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\AssociatedEntityModel;
+use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotButtonTrait;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
-use Bitrix\Crm\Settings\Crm;
 use Bitrix\Main\Localization\Loc;
 
 final class CopilotButton extends Button
 {
+	use CopilotButtonTrait;
+
 	private readonly OperationState $operationState;
 	private ?JsEvent $jsEventAction;
 
@@ -68,29 +69,6 @@ final class CopilotButton extends Button
 			->setTooltip($buttonTooltip)
 			->setScopeWeb()
 		;
-	}
-
-	private function fillAILicenceAttributes(): self
-	{
-		$this->props = [
-			'data-activity-id' => $this->activityId,
-		];
-
-		if (!AIManager::isAILicenceAccepted($this->context->getUserId()))
-		{
-			if (Crm::isBox())
-			{
-				$this->jsEventAction->addActionParamBoolean('isCopilotAgreementNeedShow', true);
-			}
-			else if (!$this->context->getUserPermissions()->isAdmin())
-			{
-				$this->props = [
-					'data-bitrix24-license-feature' => AIManager::AI_LICENCE_FEATURE_NAME,
-				];
-			}
-		}
-
-		return $this;
 	}
 
 	private function buildMenu(): array

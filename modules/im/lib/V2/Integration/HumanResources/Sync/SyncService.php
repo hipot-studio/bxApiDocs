@@ -106,7 +106,10 @@ class SyncService
 	{
 		/** @var NodeRelation $relation */
 		$relation = $event->getParameter('relation');
-		if ($relation->entityType !== RelationEntityType::CHAT)
+		if (
+			$relation->entityType !== RelationEntityType::CHAT
+			|| $relation->node === null
+		)
 		{
 			return;
 		}
@@ -120,7 +123,10 @@ class SyncService
 	{
 		/** @var NodeRelation $relation */
 		$relation = $event->getParameter('relation');
-		if ($relation->entityType !== RelationEntityType::CHAT)
+		if (
+			$relation->entityType !== RelationEntityType::CHAT
+			|| $relation->node === null
+		)
 		{
 			return;
 		}

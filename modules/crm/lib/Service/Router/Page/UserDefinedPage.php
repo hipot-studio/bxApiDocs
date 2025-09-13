@@ -2,15 +2,11 @@
 
 namespace Bitrix\Crm\Service\Router\Page;
 
-use Bitrix\Crm\Service\Router\AbstractPage;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\Service\Router\Contract\Page;
-use Bitrix\Crm\Service\Router\Enum\Scope;
 use Bitrix\Crm\Service\Router\Route;
-use Bitrix\Main\HttpRequest;
 
-final class UserDefinedPage implements Contract\Page\UserDefinedPage
+final class UserDefinedPage implements Contract\Page\UserDefinedPage, Contract\Page\HasComponent
 {
 	private array $parameters = [];
 
@@ -33,13 +29,18 @@ final class UserDefinedPage implements Contract\Page\UserDefinedPage
 
 	public function render(?\CBitrixComponent $parentComponent = null): void
 	{
-		$component = new Component(
+		$this
+			->component()
+			->setParent($parentComponent)
+			->render();
+	}
+
+	public function component(): Contract\Component
+	{
+		return new Component(
 			name: $this->componentName,
 			parameters: $this->parameters,
-			parent: $parentComponent,
 		);
-
-		$component->render();
 	}
 
 	public function route(): Route
@@ -49,7 +50,7 @@ final class UserDefinedPage implements Contract\Page\UserDefinedPage
 		;
 	}
 
-	public function setParameters(array $parameters = []): self
+	public function setParameters(array $parameters = []): static
 	{
 		$this->parameters = $parameters;
 

@@ -8,6 +8,7 @@ use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
 
 final class User extends Controller
 {
@@ -46,7 +47,7 @@ final class User extends Controller
 
 		if (!$user)
 		{
-			$this->addError(new Main\Error('User not found'));
+			$this->addError(new Error('User not found'));
 
 			return [];
 		}

@@ -2,14 +2,14 @@
 
 namespace Bitrix\Rest\Marketplace;
 
-use Bitrix\Bitrix24\License\Market;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
-use CBitrix24;
+use Bitrix\Rest\Integration\Bitrix24\Bitrix24;
 
 Loc::loadMessages(__FILE__);
 
@@ -126,15 +126,15 @@ class Notification
 
 			if (
 				$option === 'SUBSCRIPTION_MARKET_DEMO_END'
-				&& Loader::includeModule('bitrix24')
-				&& \Bitrix\Bitrix24\License::getCurrent()->getRegion() === 'ru'
+				&& Bitrix24::getInstance()->isAvailableForRuRegion()
 			)
 			{
-				return self::getSubscriptionMarketDemoEndNotifyData($option);
+				return self::getNotificationAboutDemoEnd($option);
 			}
 
 			$message = Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_1');
-			if ($message !== '')
+
+			if (!empty($message))
 			{
 				$result = [
 					'BUTTON_TEXT' => $url !== '' ? Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_BTN') : null,
@@ -144,6 +144,9 @@ class Notification
 			}
 			else
 			{
+				\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog(
+					new SystemException("Notification message for code '$option' not found.")
+				);
 				static::reset();
 			}
 		}
@@ -151,12 +154,11 @@ class Notification
 		return $result;
 	}
 
-	private static function getSubscriptionMarketDemoEndNotifyData(string $option): array
+	private static function getNotificationAboutDemoEnd(string $option): array
 	{
-		$url = CBitrix24::isLicensePaid()? Market::getDefaultBuyPath() : Market::PATH_MARKET_BUT_WITHOUT_TARIFF;
 		return [
 			'BUTTON_TEXT' => Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_BTN_MSGVER_1'),
-			'PANEL_LINK' => $url,
+			'PANEL_LINK' => Bitrix24::getInstance()->getBuyPath(),
 			'PANEL_MESSAGE' => Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_2')
 		];
 	}

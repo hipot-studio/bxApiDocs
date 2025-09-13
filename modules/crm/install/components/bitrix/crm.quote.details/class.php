@@ -12,6 +12,7 @@ use Bitrix\Crm\EO_Company;
 use Bitrix\Crm\Integration\Disk\AttachedObjectService;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\QuoteDefaultEntityConfig;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Kanban\Entity\Deadlines\DeadlinesStageManager;
@@ -120,11 +121,6 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		}
 
 		return (string)$this->item->getHeading();
-	}
-
-	protected function isPageTitleEditable(): bool
-	{
-		return true;
 	}
 
 	protected function getDeleteMessage(): string
@@ -405,12 +401,12 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		{
 			if (\CCrmQuote::allowLegacyPrintDocuments())
 			{
-				$buttons[ButtonLocation::AFTER_TITLE][] = $this->getActionsToolbarButton();
+				$buttons[ButtonLocation::RIGHT][] = $this->getActionsToolbarButton();
 			}
 
 			if (ConversionManager::isConversionPossible($this->item))
 			{
-				$buttons[ButtonLocation::AFTER_TITLE][] = $this->getConversionToolbarButton();
+				$buttons[ButtonLocation::RIGHT][] = $this->getConversionToolbarButton();
 			}
 		}
 
@@ -484,7 +480,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 	protected function getConversionToolbarButton(): Buttons\Split\Button
 	{
 		$convertButton = new Bitrix\UI\Buttons\Split\Button([
-			'color' => Buttons\Color::PRIMARY,
+			'color' => Buttons\Color::LIGHT_BORDER,
 		]);
 
 		$convertButton->getMainButton()->addAttribute('id', 'crm-quote-details-convert-main-button');
@@ -498,7 +494,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		$sections = [];
 		$sections[] = [
 			'name' => 'main',
-			'title' => Loc::getMessage('CRM_QUOTE_DETAILS_EDITOR_MAIN_SECTION_TITLE_MSGVER_1'),
+			'title' => QuoteDefaultEntityConfig::getMainSectionTitle(),
 			'type' => 'section',
 			'elements' => [
 				['name' => Item\Quote::FIELD_NAME_TITLE],
@@ -511,65 +507,9 @@ class CrmQuoteDetailsComponent extends FactoryBased
 
 	public function getEditorEntityConfig(): array
 	{
-		$sectionMain = [
-			'name' => 'main',
-			'title' => Loc::getMessage('CRM_QUOTE_DETAILS_EDITOR_MAIN_SECTION_TITLE_MSGVER_1'),
-			'type' => 'section',
-			'elements' => [
-				['name' => Item\Quote::FIELD_NAME_STAGE_ID],
-				['name' => Item\Quote::FIELD_NAME_NUMBER],
-				['name' => Item\Quote::FIELD_NAME_TITLE],
-				['name' => EditorAdapter::FIELD_OPPORTUNITY],
-				['name' => EditorAdapter::FIELD_CLIENT],
-				['name' => Item\Quote::FIELD_NAME_MYCOMPANY_ID],
-				['name' => EditorAdapter::FIELD_FILES],
-			],
-		];
-		if (Container::getInstance()->getAccounting()->isTaxMode())
-		{
-			$sectionMain['elements'][] = [
-				'name' => Item::FIELD_NAME_LOCATION_ID,
-			];
-		}
-		$sections[] = $sectionMain;
+		$userFieldNames = array_keys($this->prepareEntityUserFields());
 
-		$sectionAdditional = [
-			'name' => 'additional',
-			'title' => Loc::getMessage('CRM_TYPE_ITEM_EDITOR_SECTION_ADDITIONAL'),
-			'type' => 'section',
-			'elements' => [
-				['name' => Item\Quote::FIELD_NAME_LEAD_ID],
-				['name' => Item\Quote::FIELD_NAME_DEAL_ID],
-				['name' => Item\Quote::FIELD_NAME_BEGIN_DATE],
-				['name' => Item\Quote::FIELD_NAME_ACTUAL_DATE],
-				['name' => Item\Quote::FIELD_NAME_CLOSE_DATE],
-				['name' => Item\Quote::FIELD_NAME_OPENED],
-				['name' => Item\Quote::FIELD_NAME_ASSIGNED],
-				['name' => Item\Quote::FIELD_NAME_CONTENT],
-				['name' => Item\Quote::FIELD_NAME_TERMS],
-				['name' => Item\Quote::FIELD_NAME_COMMENTS],
-				['name' => Item\Quote::FIELD_NAME_CLOSED],
-				['name' => EditorAdapter::FIELD_UTM],
-			],
-		];
-		foreach($this->prepareEntityUserFields() as $fieldName => $userField)
-		{
-			$sectionAdditional['elements'][] = [
-				'name' => $fieldName,
-			];
-		}
-		$sections[] = $sectionAdditional;
-
-		$sections[] = [
-			'name' => 'products',
-			'title' => Loc::getMessage('CRM_COMMON_PRODUCTS'),
-			'type' => 'section',
-			'elements' => [
-				['name' => EditorAdapter::FIELD_PRODUCT_ROW_SUMMARY],
-			],
-		];
-
-		return $sections;
+		return (new QuoteDefaultEntityConfig($userFieldNames))->get();
 	}
 
 	protected function getDefaultTabInfoByCode(string $tabCode): ?array

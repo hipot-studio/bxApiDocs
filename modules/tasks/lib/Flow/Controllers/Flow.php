@@ -36,6 +36,12 @@ use Bitrix\Tasks\Helper\Analytics;
 use InvalidArgumentException;
 use Throwable;
 
+
+use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Tasks\Flow\Provider\Query\FlowQuery;
+use Bitrix\Tasks\Flow\Filter\Filter;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+
 class Flow extends Controller
 {
 	use MessageTrait;
@@ -50,6 +56,7 @@ class Flow extends Controller
 	protected FlowMemberFacade $memberFacade;
 	protected Converter $converter;
 	protected int $userId;
+	protected Filter $filter;
 
 	public function configureActions(): array
 	{
@@ -73,6 +80,7 @@ class Flow extends Controller
 		$this->flowUserOptionService = FlowUserOptionService::getInstance();
 		$this->flowUserOptionRepository = FlowUserOptionRepository::getInstance();
 		$this->converter = new Converter();
+		$this->filter = Filter::getInstance($this->userId);
 	}
 
 	/**
@@ -562,5 +570,137 @@ class Flow extends Controller
 			'p4' => 'changeDeadline_' . ($flow->canResponsibleChangeDeadline() ? 'Y' : 'N'),
 			'p5' => 'flowId_' . $flow->getId(),
 		];
+	}
+
+	/**
+	 * @restMethod tasks.flow.flow.list
+	 */
+	public function listAction(
+		PageNavigation $pageNavigation,
+		array $select = [],
+		array $filter = [],
+		array $order = [],
+		array $group = [],
+	): ?array
+	{
+		if (!$this->checkOrder($order))
+		{
+			return $this->buildErrorResponse('Incorrect sort field');
+		}
+
+		if (!$this->checkSelect($select))
+		{
+			return $this->buildErrorResponse('Invalid select data');
+		}
+
+		if (!$this->checkFilter($filter))
+		{
+			return $this->buildErrorResponse('Invalid filter data');
+		}
+
+		if (!$this->checkGroup($group))
+		{
+			return $this->buildErrorResponse('Invalid group data');
+		}
+
+		$preparedSelect = $this->prepareSelect($select);
+		$preparedFilter = $this->prepareFilter($filter);
+
+		$flowQuery = new FlowQuery($this->userId);
+		$flowQuery
+			->setSelect($preparedSelect)
+			->setWhere($preparedFilter)
+			->setLimit($pageNavigation->getLimit())
+			->setOffset($pageNavigation->getOffset())
+			->setOrderBy($order)
+			->setGroupBy($group)
+		;
+
+		try
+		{
+			$listFlowData = $this->provider->getList($flowQuery)->toJson();
+		}
+		catch (Throwable $e)
+		{
+			$this->log($e);
+
+			return $this->buildErrorResponse($this->getUnknownError(__LINE__));
+		}
+
+		return array_values($listFlowData);
+	}
+
+	private function checkSelect(array $select): bool
+	{
+		$availableKeys = array_keys($this->provider->getFlowFields(false));
+		$availableKeys[] = '*';
+
+		return empty(array_diff($select, $availableKeys));
+	}
+
+	private function checkOrder(array $order): bool
+	{
+		$orderKeys = array_keys(array_change_key_case($order, CASE_UPPER));
+		$availableKeys = array_keys($this->provider->getFlowFields(false));
+
+		return empty(array_diff($orderKeys, $availableKeys));
+	}
+
+	private function checkFilter(array $filterValues): bool
+	{
+		$availableKeys = $this->provider->getFlowFields(false);
+
+		if ($this->validateFilter($filterValues, $availableKeys))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	private function checkGroup(array $group): bool
+	{
+		$availableKeys = array_keys($this->provider->getFlowFields(false));
+
+		return empty(array_diff($group, $availableKeys));
+	}
+
+	private function prepareSelect(array $select): array
+	{
+		$availableKeys = array_keys($this->provider->getFlowFields(false));
+		$select = (!empty($select) && !in_array('*', $select, true) ? $select : $availableKeys);
+		if (!in_array('ID', $select))
+		{
+			$select[] = 'ID';
+		}
+
+		return array_intersect($select, $availableKeys);
+	}
+
+	private function prepareFilter(array $filterValues): ConditionTree
+	{
+		$newFilter = [];
+
+		foreach ($filterValues as $filterFieldName => $filterValue)
+		{
+			$prefix = $this->filter->extractPrefix($filterFieldName);
+			$filterName = str_replace($prefix, '', $filterFieldName);
+
+			if ($prefix === '')
+			{
+				$newFilter[] = [$filterName, $filterValue];
+			}
+			else
+			{
+				$newFilter[] = [$filterName, Filter::CORRECT_FILTER_FIELD_PREFIXES[$prefix], $filterValue];
+			}
+		}
+
+		return ConditionTree::createFromArray($newFilter);
+	}
+
+	private function validateFilter(array $filter, array $allowedFields): bool
+	{
+		return $this->filter->validate($filter, $allowedFields)->isSuccess();
 	}
 }

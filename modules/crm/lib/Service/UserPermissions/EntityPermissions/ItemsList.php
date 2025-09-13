@@ -10,6 +10,9 @@ use Bitrix\Crm\Security\QueryBuilder\Result\RawQueryResult;
 use Bitrix\Crm\Security\QueryBuilderFactory;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 
 /**
  * @internal
@@ -145,6 +148,68 @@ class ItemsList
 		}
 
 		return $parameters;
+	}
+
+	public function applyAvailableItemsQueryParameters(
+		Query $query,
+		array $permissionEntityTypes,
+		?string $operation = UserPermissions::OPERATION_READ,
+		string $primary = \Bitrix\Crm\Item::FIELD_NAME_ID,
+	): Query
+	{
+		$operations = $operation !== null ? (array)$operation : null;
+		$isSkipOtherEntityTypes = !empty($permissionEntityTypes);
+
+		$resultType = new RawQueryResult(identityColumnName: $primary);
+		$queryBuilderOptions = (new OptionsBuilder($resultType))
+			->setOperationsIfNotNull($operations)
+			->setSkipCheckOtherEntityTypes($isSkipOtherEntityTypes)
+			->build();
+
+		$queryBuilder = $this->createQueryBuilder($permissionEntityTypes, $queryBuilderOptions);
+		$result = $queryBuilder->build();
+
+		if (!$result->hasRestrictions())
+		{
+			return $query;
+		}
+
+		if (!$result->hasAccess())
+		{
+			$filter = [
+				$query->getFilter(),
+				"@{$primary}" => [0],
+			];
+
+			return $query->setFilter($filter);
+		}
+
+		if ($result->isOrmConditionSupport())
+		{
+			if (array_key_exists('permissions', $query->getRuntimeChains() ?? []))
+			{
+				return $query;
+			}
+
+			$reference = new Reference(
+				'ENTITY',
+				$result->getEntity(),
+				$result->getOrmConditions(),
+				[
+					'join_type' => Join::TYPE_INNER,
+				],
+			);
+
+			return $query->registerRuntimeField('permissions', $reference);
+		}
+
+		$filter = $this->addRestrictionFilter(
+			$query->getFilter(),
+			$primary,
+			$result->getSqlExpression(),
+		);
+
+		return $query->setFilter($filter);
 	}
 
 	private function addRestrictionFilter(array $filter, string $primary, $restrictExpression): array

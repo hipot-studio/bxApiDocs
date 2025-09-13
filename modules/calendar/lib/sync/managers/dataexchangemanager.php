@@ -12,7 +12,6 @@ use Bitrix\Calendar\Sync\Factories\FactoriesCollection;
 use Bitrix\Calendar\Sync\Factories\FactoryBase;
 use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Sync\Factories\SyncSectionFactory;
-use Bitrix\Calendar\Sync\Icloud;
 use Bitrix\Calendar\Sync\Google;
 use Bitrix\Calendar\Sync\Office365;
 use Bitrix\Main\ArgumentException;
@@ -28,7 +27,6 @@ use Bitrix\Main\SystemException;
 class DataExchangeManager
 {
 	private const COUNT_CONNECTIONS_FOR_REGULAR_SYNC = 10;
-	protected SyncSectionFactory $syncSectionFactory;
 	private FactoriesCollection $factories;
 
 	/**

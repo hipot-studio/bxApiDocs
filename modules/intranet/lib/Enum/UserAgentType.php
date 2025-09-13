@@ -3,11 +3,14 @@
 namespace Bitrix\Intranet\Enum;
 
 use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Web\UserAgent\Detector;
+use Bitrix\Main\Web\UserAgent\DeviceType;
 
 enum UserAgentType
 {
 	case MOBILE_APP;
 	case DESKTOP;
+	case TV_APP;
 	case BROWSER;
 	case UNKNOWN;
 
@@ -16,14 +19,21 @@ enum UserAgentType
 		$userAgent = $request->getUserAgent();
 		if (empty($userAgent))
 		{
-			return static::UNKNOWN;
+			return UserAgentType::UNKNOWN;
 		}
 
-		return match (true)
+		$browser = (new Detector())->detectBrowser($userAgent);
+		switch ($browser->getDeviceType())
 		{
-			str_contains($userAgent, 'BitrixDesktop') => static::DESKTOP,
-			str_contains($userAgent, 'BitrixMobile') => static::MOBILE_APP,
-			default => static::BROWSER,
-		};
+			case DeviceType::DESKTOP:
+				return UserAgentType::DESKTOP;
+			case DeviceType::MOBILE_PHONE:
+			case DeviceType::TABLET:
+				return UserAgentType::MOBILE_APP;
+			case DeviceType::TV:
+				return UserAgentType::TV_APP;
+			default:
+				return UserAgentType::BROWSER;
+		}
 	}
 }

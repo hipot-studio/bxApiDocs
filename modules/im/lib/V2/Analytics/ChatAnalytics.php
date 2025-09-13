@@ -27,6 +27,8 @@ class ChatAnalytics extends AbstractAnalytics
 	protected const DELETE_DEPARTMENT = 'delete_department';
 	protected const EDIT_PERMISSIONS = 'edit_permissions';
 	protected const SET_TYPE = 'set_type';
+	protected const AUTODELETE_ON = 'autodelete_on';
+	protected const AUTODELETE_OFF = 'autodelete_off';
 
 	protected static array $oneTimeEvents = [];
 	protected static array|bool $blockSingleUserEvents = [];
@@ -92,6 +94,34 @@ class ChatAnalytics extends AbstractAnalytics
 			$this
 				->createChatEvent($flag ? self::FOLLOW_COMMENTS : self::UNFOLLOW_COMMENTS)
 				?->send()
+			;
+		});
+	}
+
+	public function addAutoDeleteOn(int $messagesAutoDeleteDelay): void
+	{
+		$this->async(function () use ($messagesAutoDeleteDelay) {
+			$this
+				->createChatEvent(self::AUTODELETE_ON)
+				?->setP2(null)
+				->setP3('timer_' . $messagesAutoDeleteDelay)
+				->setP4(null)
+				->setP5(null)
+				->send()
+			;
+		});
+	}
+
+	public function addAutoDeleteOff(): void
+	{
+		$this->async(function () {
+			$this
+				->createChatEvent(self::AUTODELETE_OFF)
+				?->setP2(null)
+				->setP3(null)
+				->setP4(null)
+				->setP5(null)
+				->send()
 			;
 		});
 	}

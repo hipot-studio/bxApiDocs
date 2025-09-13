@@ -62,4 +62,12 @@ final class Source implements ExternalSource\Source
 	{
 		return Loc::getMessage('BICONNECTOR_CRM_TRACKING_SOURCE_' . mb_strtoupper($this->code) . '_DESCRIPTION') ?? '';
 	}
+
+	/**
+	 * @return null | string
+	 */
+	public function getLogo(): ?string
+	{
+		return null;
+	}
 }

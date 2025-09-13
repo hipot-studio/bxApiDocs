@@ -1,16 +1,18 @@
 <?php
+
 namespace Bitrix\Landing\Controller;
 
 use Bitrix\Landing\Landing as LandingCore;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Engine;
 
 class Landing extends Controller
 {
 	public function getDefaultPreFilters(): array
 	{
 		return [
-			new \Bitrix\Main\Engine\ActionFilter\Authentication(),
-			new ActionFilter\Extranet()
+			new Engine\ActionFilter\Authentication(),
+			new ActionFilter\Extranet(),
 		];
 	}
 
@@ -23,15 +25,16 @@ class Landing extends Controller
 	{
 		$res = LandingCore::getList([
 			'select' => [
-				'*'
+				'*',
 			],
 			'filter' => [
-				'ID' => $landingId
-			]
+				'ID' => $landingId,
+			],
 		]);
 		if ($row = $res->fetch())
 		{
 			$row['ADDITIONAL_FIELDS'] = LandingCore::getAdditionalFieldsAsArray($landingId);
+
 			return $row;
 		}
 
