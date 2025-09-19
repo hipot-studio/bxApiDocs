@@ -12,6 +12,7 @@ use Bitrix\Socialnetwork\Collab\Control\Option\Type\ManageMessagesOption;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\MessagesAutoDeleteDelay;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\ShowHistoryOption;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\WhoCanInviteOption;
+use Bitrix\Socialnetwork\Collab\Control\Option\Type\AllowGuestsInvitationField;
 
 final class OptionFactory
 {
@@ -23,6 +24,7 @@ final class OptionFactory
 		CanGuestScreenshotOption::NAME => CanGuestScreenshotOption::DEFAULT_VALUE,
 		MessagesAutoDeleteDelay::NAME => MessagesAutoDeleteDelay::DEFAULT_VALUE,
 		ManageMessagesAutoDelete::NAME => ManageMessagesAutoDelete::DEFAULT_VALUE,
+		AllowGuestsInvitationField::NAME => AllowGuestsInvitationField::DEFAULT_VALUE,
 	];
 	/**
 	 * @throws ObjectNotFoundException
@@ -41,6 +43,7 @@ final class OptionFactory
 			CanGuestScreenshotOption::NAME => new CanGuestScreenshotOption($value),
 			MessagesAutoDeleteDelay::NAME => new MessagesAutoDeleteDelay($value),
 			ManageMessagesAutoDelete::NAME => new ManageMessagesAutoDelete($value),
+			AllowGuestsInvitationField::NAME => new AllowGuestsInvitationField($value),
 			default => throw new ObjectNotFoundException(),
 		};
 	}

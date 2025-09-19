@@ -10,7 +10,10 @@ use Bitrix\HumanResources\Result\PropertyResult;
 class CreateNodeCommandResult extends PropertyResult
 {
 	public function __construct(
-		public ?Node $node = null
+		public Node $node,
+		public ?array $userMovedToRootIds = null,
+		public ?array $updatedDepartmentIds = null,
+		public ?int $userCount = null,
 	)
 	{
 		parent::__construct();

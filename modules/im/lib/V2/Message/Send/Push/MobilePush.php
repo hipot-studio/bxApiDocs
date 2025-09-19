@@ -343,9 +343,9 @@ class MobilePush
 		$files = $message['files'] ?? null;
 		$text = $message['message']['text'] ?? null;
 
-		if (!empty($attach))
+		if (!empty($attach) && is_array($attach))
 		{
-			$attachmentSuffix = $attach[0]['DESCRIPTION'];
+			$attachmentSuffix = self::getAttachDescription($attach);
 
 			if (!$attachmentSuffix)
 			{
@@ -361,7 +361,7 @@ class MobilePush
 			}
 		}
 
-		if (!empty($files))
+		if (!empty($files) && is_array($files))
 		{
 			$file = reset($files);
 
@@ -375,6 +375,17 @@ class MobilePush
 		}
 
 		return $attachmentSuffix;
+	}
+
+	protected static function getAttachDescription(array $attach): string
+	{
+		$attachItem = reset($attach);
+		if (is_array($attachItem))
+		{
+			return (string)($attachItem['DESCRIPTION'] ?? '');
+		}
+
+		return '';
 	}
 
 	private function prepareEventForPush(string $command, array $event): array

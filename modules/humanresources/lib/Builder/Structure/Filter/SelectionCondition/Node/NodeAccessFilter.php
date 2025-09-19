@@ -31,6 +31,13 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 	public function __construct(
 		readonly public StructureAction $action,
 		public ?int $userId = null,
+		public array $allowedLevels = [
+			PermissionVariablesDictionary::VARIABLE_ALL,
+			PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+			PermissionVariablesDictionary::VARIABLE_SELF_TEAMS,
+			PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
+			PermissionVariablesDictionary::VARIABLE_SELF_TEAMS_SUB_TEAMS,
+		],
 	)
 	{
 		$this->structureAccessService = new StructureAccessService();
@@ -155,7 +162,15 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 			return $departmentCondition->where($this->getFieldByQueryContext('TYPE'), NodeEntityType::DEPARTMENT->value);
 		}
 
-		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_NONE || !$isEmployee)
+		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_NONE
+			|| !$isEmployee
+			|| !in_array($permissionValue,
+				array_intersect([
+					PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
+					PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+				], $this->allowedLevels), true
+			)
+		)
 		{
 			return null;
 		}
@@ -205,15 +220,19 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 		if ($teamValue === PermissionVariablesDictionary::VARIABLE_ALL)
 		{
 			$teamCondition->where($this->getFieldByQueryContext('TYPE'), NodeEntityType::TEAM->value);
-			$departmentPermissionValue =
-				$this->structureAccessService
-					->setAction(StructureAction::ViewAction)
-					->getPermissionValue()
-					->getFirst()
-					->value
-			;
-			$this->structureAccessService->setAction($this->action);
-			$departmentValue = min($departmentValue, $departmentPermissionValue);
+
+			if ($this->action === StructureAction::CreateAction)
+			{
+				$departmentPermissionValue =
+					$this->structureAccessService
+						->setAction(StructureAction::ViewAction)
+						->getPermissionValue()
+						->getFirst()
+						->value
+				;
+				$this->structureAccessService->setAction($this->action);
+				$departmentValue = min($departmentValue, $departmentPermissionValue);
+			}
 
 			if ($this->action !== StructureAction::CreateAction || $departmentValue === PermissionVariablesDictionary::VARIABLE_NONE)
 			{
@@ -231,7 +250,14 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 			$additionalCreateCondition->logic(ConditionTree::LOGIC_AND);
 			$additionalCreateCondition->where($this->getFieldByQueryContext('TYPE'), NodeEntityType::DEPARTMENT->value);
 			$userNodeIds = $this->getAllUserNodeIds($this->structureAccessService->getUserId());
-			if (empty($userNodeIds))
+			if (empty($userNodeIds)
+				|| !in_array($departmentValue,
+					array_intersect([
+						PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
+						PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+					], $this->allowedLevels), true
+				)
+			)
 			{
 				return $teamCondition;
 			}
@@ -262,16 +288,29 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 		;
 
 		$subTeamCondition = (new ConditionTree())->logic(ConditionTree::LOGIC_OR);
-		$departmentPermissionValue =
-			$this->structureAccessService
-				->setAction(StructureAction::ViewAction)
-				->getPermissionValue()
-				->getFirst()
-				->value
-		;
-		$this->structureAccessService->setAction($this->action);
-		$departmentValue = min($departmentValue, $departmentPermissionValue);
-		if($departmentValue > PermissionVariablesDictionary::VARIABLE_NONE)
+
+		if ($this->action === StructureAction::CreateAction)
+		{
+			$departmentPermissionValue =
+				$this->structureAccessService
+					->setAction(StructureAction::ViewAction)
+					->getPermissionValue()
+					->getFirst()
+					->value
+			;
+			$this->structureAccessService->setAction($this->action);
+			$departmentValue = min($departmentValue, $departmentPermissionValue);
+		}
+
+		if($departmentValue > PermissionVariablesDictionary::VARIABLE_NONE
+			&& in_array($departmentValue,
+				array_intersect([
+					PermissionVariablesDictionary::VARIABLE_ALL,
+					PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
+					PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+				], $this->allowedLevels), true
+			)
+		)
 		{
 			$userNodeIds = $this->getAllUserNodeIds($this->structureAccessService->getUserId());
 			if (!empty($userNodeIds))
@@ -318,7 +357,15 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 			}
 		}
 
-		if ($teamValue > PermissionVariablesDictionary::VARIABLE_NONE)
+		if ($teamValue > PermissionVariablesDictionary::VARIABLE_NONE
+			&& in_array($teamValue,
+				array_intersect([
+					PermissionVariablesDictionary::VARIABLE_ALL,
+					PermissionVariablesDictionary::VARIABLE_SELF_TEAMS_SUB_TEAMS,
+					PermissionVariablesDictionary::VARIABLE_SELF_TEAMS,
+				], $this->allowedLevels), true
+			)
+		)
 		{
 			$userNodeIds = $this->getAllUserNodeIds($this->structureAccessService->getUserId(), NodeEntityType::TEAM);
 			if (!empty($userNodeIds))

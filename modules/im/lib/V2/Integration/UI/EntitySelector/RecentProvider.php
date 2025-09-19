@@ -49,6 +49,7 @@ class RecentProvider extends BaseProvider
 	private const ENTITY_TYPE_CHAT = 'im-chat';
 	private const WITH_CHAT_BY_USERS_OPTION = 'withChatByUsers';
 	private const ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION = 'onlyWithManageMessagesRight';
+	protected const ONLY_WITH_MANAGE_USERS_ADD_RIGHT_OPTION = 'onlyWithManageUsersAddRight';
 	protected const ONLY_WITH_OWNER_RIGHT_OPTION = 'onlyWithOwnerRight';
 	protected const ONLY_WITH_NULL_ENTITY_TYPE_OPTION = 'onlyWithNullEntityType';
 	private const EXCLUDE_FROM_RECENT_OPTION = 'excludeFromRecent';
@@ -553,6 +554,11 @@ class RecentProvider extends BaseProvider
 		if ($this->options[self::ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION])
 		{
 			\Bitrix\Im\V2\Permission\Filter::getRoleOrmFilter($query, ActionGroup::ManageMessages, 'RELATION', '');
+		}
+
+		if ($this->options[self::ONLY_WITH_MANAGE_USERS_ADD_RIGHT_OPTION])
+		{
+			\Bitrix\Im\V2\Permission\Filter::getRoleOrmFilter($query, ActionGroup::ManageUsersAdd, 'RELATION', '');
 		}
 
 		if ($this->options[self::ONLY_WITH_OWNER_RIGHT_OPTION])

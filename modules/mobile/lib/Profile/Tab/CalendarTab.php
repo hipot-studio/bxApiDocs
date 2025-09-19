@@ -59,7 +59,9 @@ class CalendarTab extends BaseProfileTab
 	public function getParams(): array
 	{
 		return [
+			'CAL_TYPE' => 'user',
 			'OWNER_ID' => $this->ownerId,
+			'VIEW_MODE' => 'tabs',
 		];
 	}
 

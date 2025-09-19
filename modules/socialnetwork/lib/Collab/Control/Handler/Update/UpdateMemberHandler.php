@@ -66,6 +66,7 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 				$command->getId(),
 				$command->getInitiatorId(),
 				UserToGroupTable::ROLE_USER,
+				$command->getInitiatedByType(),
 			...$add,
 		);
 

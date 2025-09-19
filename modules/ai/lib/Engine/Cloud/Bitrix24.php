@@ -6,7 +6,9 @@ namespace Bitrix\AI\Engine\Cloud;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IContext;
 use Bitrix\AI\Engine\IQueueOptional;
+use Bitrix\AI\Facade\AiUrlManager;
 use Bitrix\AI\Quality;
+use Bitrix\Main\DI\ServiceLocator;
 
 final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 {
@@ -17,8 +19,6 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 
 	public const ENGINE_CODE = 'b24ai';
 
-	protected const URL_COMPLETIONS = 'https://b24ai.bitrix.info/v1/chat/completions';
-
 	protected const SYSTEM_ROLE = 'system';
 	protected const DEFAULT_ROLE = 'user';
 
@@ -27,7 +27,6 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 
 	protected const ABSENT_QUALITIES = [
 		Quality::QUALITIES['give_advice'],
-		Quality::QUALITIES['meeting_processing'],
 		Quality::QUALITIES['ai_site'],
 	];
 
@@ -52,5 +51,15 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 	protected function availableForModules(): array
 	{
 		return [];
+	}
+
+	protected function getCompletionsUrl(): string
+	{
+		return $this->getAiUrlManager()->getChatCompletionsUrl();
+	}
+
+	protected function getAiUrlManager(): AiUrlManager
+	{
+		return ServiceLocator::getInstance()->get(AiUrlManager::class);
 	}
 }

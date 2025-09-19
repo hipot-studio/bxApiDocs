@@ -6,6 +6,7 @@ use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Manager;
+use Bitrix\Im\V2\Analytics\CopilotAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Pull\Event\ChangeEngine;
 use Bitrix\Im\V2\Result;
@@ -96,6 +97,7 @@ class EngineManager
 			return $result->addError($error);
 		}
 
+		$oldEngineName = $this->getEngineNameByCode($chat->getEngineCode() ?? self::getDefaultEngineCode());
 		/**
 		 * @var Chat\CopilotChat $chat
 		 */
@@ -105,6 +107,7 @@ class EngineManager
 		{
 			$this->setLastSelectedEngineCode($engineCode, $chat->getContext()->getUserId());
 			$this->sendUpdateEngineMessage($chat, $engineCode);
+			(new CopilotAnalytics($chat))->addChangeEngine($oldEngineName ?? '');
 
 			$engineName = $this->getEngineNameByCode($engineCode) ?? '';
 			(new ChangeEngine($chat, $engineCode, $engineName))

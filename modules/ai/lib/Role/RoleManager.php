@@ -67,30 +67,53 @@ class RoleManager
 	 */
 	public function getRolesByCode(array $roleCodes): array
 	{
-		$query = RoleTable::query()
-			->setSelect([
-				'CODE',
-				'AVATAR',
-				'INDUSTRY_CODE',
-				'IS_NEW',
-				'HASH',
-				'IS_RECOMMENDED',
-				'IS_SYSTEM',
-				'IS_ACTIVE',
-				'DEFAULT_NAME',
-				'DEFAULT_DESCRIPTION',
-				'RULES',
-				'ROLE_TRANSLATE_DESCRIPTION.TEXT',
-				'ROLE_TRANSLATE_NAME.TEXT',
-			])
-			->setFilter([
-				'=CODE' => $roleCodes,
-			])
-		;
+		static $roleCache = [];
 
-		$query = $this->addTranslateReferenceFields($query);
+		$rolesToFetch = array_diff($roleCodes, array_keys($roleCache));
 
-		return $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
+		if (!empty($rolesToFetch))
+		{
+			$query = RoleTable::query()
+				->setSelect([
+					'CODE',
+					'AVATAR',
+					'INDUSTRY_CODE',
+					'IS_NEW',
+					'HASH',
+					'IS_RECOMMENDED',
+					'IS_SYSTEM',
+					'IS_ACTIVE',
+					'DEFAULT_NAME',
+					'DEFAULT_DESCRIPTION',
+					'RULES',
+					'ROLE_TRANSLATE_DESCRIPTION.TEXT',
+					'ROLE_TRANSLATE_NAME.TEXT',
+				])
+				->setFilter([
+					'=CODE' => $rolesToFetch,
+				])
+			;
+
+			$query = $this->addTranslateReferenceFields($query);
+
+			$fetchedRoles = $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
+
+			foreach ($fetchedRoles as $role)
+			{
+				$roleCache[$role['code']] = $role;
+			}
+		}
+
+		$roles = [];
+		foreach ($roleCodes as $code)
+		{
+			if (isset($roleCache[$code]))
+			{
+				$roles[] = $roleCache[$code];
+			}
+		}
+
+		return $roles;
 	}
 
 	/**

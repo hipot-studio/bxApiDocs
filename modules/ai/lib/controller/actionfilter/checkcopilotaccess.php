@@ -9,6 +9,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Error;
 use Bitrix\Extranet\Service\ServiceContainer;
+use Bitrix\Main\Loader;
 
 class CheckCopilotAccess extends ActionFilter\Base
 {
@@ -20,8 +21,18 @@ class CheckCopilotAccess extends ActionFilter\Base
 	public function onBeforeAction(Event $event): ?EventResult
 	{
 		$userId = User::getCurrentUserId();
-		$collaberService = ServiceContainer::getInstance()->getCollaberService();
-		if(!Util::isIntranetUser($userId) && !$collaberService->isCollaberById($userId))
+
+		if(!Loader::includeModule('extranet'))
+		{
+			$isCollaber = false;
+		}
+		else
+		{
+			$collaberService = ServiceContainer::getInstance()->getCollaberService();
+			$isCollaber = $collaberService->isCollaberById($userId);
+		}
+
+		if(!$isCollaber && !Util::isIntranetUser($userId))
 		{
 			$this->errorCollection[] = new Error(
 				'This action is available only to intranet users and collabers',

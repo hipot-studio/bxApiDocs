@@ -5,6 +5,7 @@ namespace Bitrix\AI\Engine\Trait;
 use Bitrix\AI\Config;
 use Bitrix\AI\Context\Message;
 use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Payload\Text;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
@@ -12,7 +13,6 @@ use Bitrix\Main\Application;
 
 trait BitrixGPTCommonTrait
 {
-
 	protected function getSystemParameters(): array
 	{
 		return [
@@ -57,6 +57,10 @@ trait BitrixGPTCommonTrait
 			unset($this->params['collect_context']);
 		}
 
+		if ($this->payload::class === Text::class)
+		{
+			$this->payload->setPayload(str_replace(['/think', '/no_think'], '', $this->payload->getData()));
+		}
 		// user message (payload)
 		$data[] = [
 			'role' => self::DEFAULT_ROLE,
@@ -87,20 +91,6 @@ trait BitrixGPTCommonTrait
 
 	public function isPreferredForQuality(?Quality $quality = null): bool
 	{
-		$shouldUseB24 = Bitrix24::shouldUseB24();
-
-		if (!$shouldUseB24)
-		{
-			$prefer = [
-				Quality::QUALITIES['translate'],
-				Quality::QUALITIES['summarize'],
-				Quality::QUALITIES['fields_highlight'],
-				Quality::QUALITIES['chat_talk'],
-			];
-
-			return $quality === null || !empty(array_intersect($quality->getRequired(), $prefer));
-		}
-
 		return true;
 	}
 
@@ -114,6 +104,7 @@ trait BitrixGPTCommonTrait
 
 		if ($text && $this->isModeResponseJson)
 		{
+			$text = trim($text, " \n\r\t\v\0`");
 			$dataJson = json_decode($text, true) ?? null;
 		}
 
@@ -160,5 +151,21 @@ trait BitrixGPTCommonTrait
 		return $isBitrixGptEnabled
 			&& $availableByRegion
 			&& $isAvailableByModuleId;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function makeRequestParams(array $postParams = []): array
+	{
+		$params = parent::makeRequestParams($postParams);
+		$reasoningEffort = $params['reasoning_effort'] ?? null;
+		unset($params['reasoning_effort']);
+
+		$params['chat_template_kwargs'] = [
+			'enable_thinking' => !empty($reasoningEffort),
+		];
+
+		return $params;
 	}
 }

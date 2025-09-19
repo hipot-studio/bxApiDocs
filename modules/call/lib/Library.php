@@ -8,18 +8,22 @@ use Bitrix\Main\Config\Configuration;
 
 class Library
 {
+	public const
+		REGION_CIS = ['ru', 'by', 'kz', 'am', 'az', 'ge', 'kg', 'uz'],
+		REGION_EU = ['de', 'eu', 'fr', 'it', 'pl', 'tr', 'uk']
+	;
+
 	protected const SELF_TEST_UTL = [
 		'ru' => 'https://calltest.bitrix24.ru/',
 		'en' => 'https://calltest.bitrix24.com/',
 	];
 
-	public static function getClientSelfTestUrl(string $region = 'en'): string
+	public static function getClientSelfTestUrl(): string
 	{
-		$url = match (\Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: $region)
-		{
-			'ru','by','kz','uz' => self::SELF_TEST_UTL['ru'],
-			default => self::SELF_TEST_UTL['en'],
-		};
+		$url = in_array(\Bitrix\Main\Application::getInstance()->getLicense()->getRegion(), Library::REGION_CIS, true)
+			? self::SELF_TEST_UTL['ru']
+			: self::SELF_TEST_UTL['en']
+		;
 		$url .= '?hl='. \Bitrix\Main\Localization\Loc::getCurrentLang();
 
 		return $url;

@@ -25,7 +25,7 @@ abstract class AiAssistantBaseChat extends GroupChat
 
 	public function add(array $params, ?Context $context = null): Result
 	{
-		if (!Features::isAiAssistantAvailable())
+		if (!Features::isAiAssistantChatCreationAvailable())
 		{
 			return (new Result())->addError(new ChatError(ChatError::AI_ASSISTANT_NOT_AVAILABLE));
 		}

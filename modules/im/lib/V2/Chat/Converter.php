@@ -21,6 +21,7 @@ class Converter
 		Chat::IM_TYPE_CHAT => [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_OPEN_CHANNEL, Chat::IM_TYPE_COLLAB],
 		Chat::IM_TYPE_OPEN_CHANNEL => [Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_CHAT, Chat::IM_TYPE_OPEN],
 		Chat::IM_TYPE_CHANNEL => [Chat::IM_TYPE_OPEN_CHANNEL,  Chat::IM_TYPE_CHAT, Chat::IM_TYPE_OPEN],
+		Chat::IM_TYPE_COPILOT => [Chat::IM_TYPE_AI_ASSISTANT],
 	];
 	private const OPEN_TYPES = [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_OPEN_CHANNEL];
 	private const CHANNEL_TYPES = [Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_OPEN_CHANNEL];
@@ -96,7 +97,7 @@ class Converter
 
 	protected function isSonetChat(): bool
 	{
-		return $this->getChat()->getEntityType() === Chat\Type::Sonet->value && $this->getChat()->getEntityId() > 0;
+		return $this->getChat()->getEntityType() === Chat\ExtendedType::Sonet->value && $this->getChat()->getEntityId() > 0;
 	}
 
 	protected function onAfterConvert(): void

@@ -48,9 +48,20 @@ class Filter
 		return $this;
 	}
 
-	public function filterByAuthor(int $userId): self
+	public function filterByPermissions(int $userId, ActionGroup $action): self
 	{
-		$this->query->where('AUTHOR_ID', $userId);
+		$this->query
+			->registerRuntimeField(new Reference(
+					'RELATION',
+					RelationTable::class,
+					Join::on('this.ID', 'ref.CHAT_ID')
+						->where('ref.USER_ID', $userId),
+					['join_type' => Join::TYPE_LEFT]
+				)
+			)
+		;
+
+		\Bitrix\Im\V2\Permission\Filter::getRoleOrmFilter($this->query, $action, 'RELATION', '');
 
 		return $this;
 	}

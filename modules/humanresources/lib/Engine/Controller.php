@@ -242,7 +242,7 @@ abstract class Controller extends Main\Engine\Controller
 				{
 					if (!$roleId && !$roleXmlId)
 					{
-						throw new ElementNotFoundException('Role not found');
+						return null;
   					}
 
 					$roleRepository = Container::getRoleRepository();

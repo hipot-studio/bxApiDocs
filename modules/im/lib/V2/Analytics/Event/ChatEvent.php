@@ -17,6 +17,7 @@ use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\VideoConfChat;
 use Bitrix\Im\V2\Entity\User\UserCollaber;
 use Bitrix\Im\V2\Entity\User\UserExternal;
+use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 
 class ChatEvent extends Event
@@ -149,6 +150,16 @@ class ChatEvent extends Event
 
 	protected function setChatP2(): self
 	{
+		if ($this->chat instanceof CopilotChat)
+		{
+			$engineCode = $this->chat->getEngineCode() ?? EngineManager::getDefaultEngineCode();
+			$engineName = (new EngineManager())->getEngineNameByCode($engineCode) ?? '';
+
+			$this->p2 = 'provider_' . Event::convertUnderscore($engineName);
+
+			return $this;
+		}
+
 		$currentUser = $this->chat->getContext()->getUser();
 
 		$this->p2 = match (true)

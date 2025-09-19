@@ -536,16 +536,6 @@ class CommentChat extends GroupChat
 		return 'com_create_' . $messageId;
 	}
 
-	protected function sendPushOnChangeUsers(RelationCollection $relations, array $pushMessage): void
-	{
-		if (!\Bitrix\Main\Loader::includeModule('pull'))
-		{
-			return;
-		}
-
-		\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $this->getParentChatId(), $pushMessage);
-	}
-
 	protected function needToSendMessageUserDelete(): bool
 	{
 		return false;

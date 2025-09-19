@@ -3,6 +3,7 @@
 use Bitrix\Disk;
 use Bitrix\Disk\File;
 use Bitrix\Disk\FileLink;
+use Bitrix\Disk\SystemUser;
 use \Bitrix\Im as IM;
 use Bitrix\Main\Loader;
 use \Bitrix\Main\Localization\Loc;
@@ -826,7 +827,7 @@ class CIMDisk
 	 * @param int[] $files
 	 * @return int[]|false
 	 */
-	public static function UploadFileFromMain($chatId, $files)
+	public static function UploadFileFromMain($chatId, $files, ?int $authorId = null)
 	{
 		if ((int)$chatId <= 0 || empty($files))
 		{
@@ -869,7 +870,7 @@ class CIMDisk
 				'NAME' => $fileName,
 				'FILE_ID' => $fileId,
 				'SIZE' => $file['FILE_SIZE'],
-				'CREATED_BY' => \Bitrix\Disk\SystemUser::SYSTEM_USER_ID,
+				'CREATED_BY' => $authorId ?? SystemUser::SYSTEM_USER_ID,
 			), Array(), true);
 			if ($newFile)
 			{
@@ -2105,7 +2106,7 @@ class CIMDisk
 			$backgroundFolderModel = $storageModel->addFolder([
 				'NAME' => 'CALL_BACKGROUND',
 				'CODE' => 'CALL_BACKGROUND',
-				'CREATED_BY' => \Bitrix\Disk\SystemUser::SYSTEM_USER_ID,
+				'CREATED_BY' => SystemUser::SYSTEM_USER_ID,
 			], [], true);
 		}
 		if (!$backgroundFolderModel)
@@ -2445,7 +2446,7 @@ class CIMDisk
 		));
 		foreach ($fileModels as $fileModel)
 		{
-			$fileModel->delete(\Bitrix\Disk\SystemUser::SYSTEM_USER_ID);
+			$fileModel->delete(SystemUser::SYSTEM_USER_ID);
 		}
 
 		return __METHOD__. '();';

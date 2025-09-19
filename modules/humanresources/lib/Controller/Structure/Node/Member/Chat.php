@@ -6,9 +6,9 @@ use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Command\Structure\Node\SaveNodeChatsCommand;
 use Bitrix\HumanResources\Engine\Controller;
 use Bitrix\HumanResources\Integration\Im\ChatService;
+use Bitrix\HumanResources\Integration\Socialnetwork\CollabService;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Service\Container;
-use Bitrix\HumanResources\Service\NodeMemberService;
 use Bitrix\HumanResources\Exception\CommandException;
 use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Type\AccessibleItemType;
@@ -19,41 +19,45 @@ use Bitrix\HumanResources\Internals\Attribute;
 class Chat extends Controller
 {
 	private readonly ChatService $chatService;
-	private readonly NodeMemberService $nodeMemberService;
+	private readonly CollabService $collabService;
+
 	public function __construct(Request $request = null)
 	{
 		$this->chatService = Container::getChatService();
-		$this->nodeMemberService = Container::getNodeMemberService();
+		$this->collabService = Container::getCollabService();
 		parent::__construct($request);
 	}
 
 	#[Attribute\Access\LogicOr(
 		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_DEPARTMENT_CREATE,
-			itemType: AccessibleItemType::NODE,
-			itemParentIdRequestKey: 'parentId',
-		),
-		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_TEAM_CREATE,
-			itemType: AccessibleItemType::NODE,
-			itemParentIdRequestKey: 'parentId',
-		),
-		new Attribute\StructureActionAccess(
 			permission: StructureActionDictionary::ACTION_DEPARTMENT_COMMUNICATION_EDIT,
-			itemType: AccessibleItemType::NODE,
+			itemType: AccessibleItemType::CHAT_LIST,
 			itemIdRequestKey: 'nodeId',
 		),
 		new Attribute\StructureActionAccess(
 			permission: StructureActionDictionary::ACTION_TEAM_COMMUNICATION_EDIT,
-			itemType: AccessibleItemType::NODE,
+			itemType: AccessibleItemType::CHAT_LIST,
 			itemIdRequestKey: 'nodeId',
 		),
 	)]
 	public function saveChatListAction(
 		Item\Node $node,
-		array $createDefault = [SaveNodeChatsCommand::CHAT_INDEX => false, SaveNodeChatsCommand::CHANNEL_INDEX => false],
-		array $ids = [SaveNodeChatsCommand::CHAT_INDEX => [], SaveNodeChatsCommand::CHANNEL_INDEX => []],
-		array $removeIds = [],
+		array $createDefault = [
+			SaveNodeChatsCommand::CHAT_INDEX => false,
+			SaveNodeChatsCommand::CHANNEL_INDEX => false,
+			SaveNodeChatsCommand::COLLAB_INDEX => false,
+		],
+		array $ids = [
+			SaveNodeChatsCommand::CHAT_INDEX => [],
+			SaveNodeChatsCommand::CHANNEL_INDEX => [],
+			SaveNodeChatsCommand::COLLAB_INDEX => [],
+			SaveNodeChatsCommand::WITH_CHILDREN_INDEX => false,
+		],
+		array $removeIds = [
+			SaveNodeChatsCommand::CHAT_INDEX => [],
+			SaveNodeChatsCommand::CHANNEL_INDEX => [],
+			SaveNodeChatsCommand::COLLAB_INDEX => [],
+		],
 	): void
 	{
 		try
@@ -84,6 +88,9 @@ class Chat extends Controller
 			return [];
 		}
 
-		return $this->chatService->getChatsAndChannelsByNode($node);
+		$result = $this->chatService->getChatsAndChannelsByNode($node);
+		$result['collabs'] = $this->collabService->getCollabsByNode($node);
+
+		return $result;
 	}
 }

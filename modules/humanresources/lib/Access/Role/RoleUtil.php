@@ -52,6 +52,9 @@ class RoleUtil extends \Bitrix\Main\Access\Role\RoleUtil
 			RoleDictionary::ROLE_TEAM_DIRECTOR => (new Role\System\Team\Director())->getMap(),
 			RoleDictionary::ROLE_TEAM_DEPUTY => (new Role\System\Team\Deputy())->getMap(),
 			RoleDictionary::ROLE_TEAM_EMPLOYEE => (new Role\System\Team\Employee())->getMap(),
+			RoleDictionary::ROLE_DIRECTOR => (new Role\System\Team\DepartmentDirector())->getMap(),
+			RoleDictionary::ROLE_DEPUTY => (new Role\System\Team\DepartmentDeputy())->getMap(),
+			RoleDictionary::ROLE_EMPLOYEE => (new Role\System\Team\DepartmentEmployee())->getMap(),
 		];
 	}
 

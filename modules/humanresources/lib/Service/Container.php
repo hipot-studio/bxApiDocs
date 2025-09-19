@@ -7,6 +7,7 @@ use Bitrix\HumanResources\Compatibility\Converter\StructureBackwardConverter;
 use Bitrix\HumanResources\Compatibility\Converter\UserBackwardConverter;
 use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
+use Bitrix\HumanResources\Integration\Socialnetwork\CollabService;
 use Bitrix\HumanResources\Repository\NodeRelationRepository;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Contract\Repository\StructureRepository;
@@ -69,11 +70,6 @@ class Container
 			StructureAction::InviteUserAction => self::getService('humanresources.repository.inviteEmployeePermission.restricted.node'),
 			default => throw new SystemException('Invalid StructureAction for PermissionRestrictedRepository'),
 		};
-	}
-
-	public static function getNodeAccessCodeRepository(): Contract\Repository\NodeAccessCodeRepository
-	{
-		return self::getService('humanresources.repository.node.access.code');
 	}
 
 	public static function getNodeRelationRepository(): NodeRelationRepository
@@ -304,6 +300,11 @@ class Container
 	public static function getChatService(): ChatService
 	{
 		return self::getService('humanresources.intergation.im.chatService');
+	}
+
+	public static function getCollabService(): CollabService
+	{
+		return self::getService('humanresources.intergation.socialnetwork.collabService');
 	}
 
 	public static function getPushMessageService(): PushMessageService

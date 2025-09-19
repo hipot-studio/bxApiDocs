@@ -6,7 +6,6 @@ use Bitrix\Im\Model\EO_Recent_Collection;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message\CounterService;
-use Bitrix\Im\V2\Settings\UserConfiguration;
 use Bitrix\Main\Type\DateTime;
 
 class RecentCollab extends Recent
@@ -55,7 +54,7 @@ class RecentCollab extends Recent
 			->where('USER_ID', $userId)
 			->where('ITEM_TYPE', Chat::IM_TYPE_COLLAB)
 			->setLimit($limit)
-			->setOrder(self::getOrderBySort($userId))
+			->setOrder(self::getOrder($userId))
 		;
 
 		if (isset($lastMessageDate))
@@ -64,24 +63,5 @@ class RecentCollab extends Recent
 		}
 
 		return $query->fetchCollection();
-	}
-
-	protected static function getOrderBySort(int $userId): array
-	{
-		$sortOption = (new UserConfiguration($userId))->getGeneralSettings()['pinnedChatSort'];
-
-		if ($sortOption === 'byCost')
-		{
-			return [
-				'PINNED' => 'DESC',
-				'PIN_SORT' => 'ASC',
-				'DATE_LAST_ACTIVITY' => 'DESC',
-			];
-		}
-
-		return [
-			'PINNED' => 'DESC',
-			'DATE_LAST_ACTIVITY' => 'DESC',
-		];
 	}
 }

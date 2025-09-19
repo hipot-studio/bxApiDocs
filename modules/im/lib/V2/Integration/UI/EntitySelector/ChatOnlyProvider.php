@@ -25,7 +25,7 @@ class ChatOnlyProvider extends RecentProvider
 	{
 		$options[self::INCLUDE_ONLY_OPTION] = [self::FLAG_CHATS];
 		parent::__construct($options);
-		$this->options[self::ONLY_WITH_OWNER_RIGHT_OPTION] = true;
+		$this->options[self::ONLY_WITH_MANAGE_USERS_ADD_RIGHT_OPTION] = true;
 		$this->options[self::ONLY_WITH_NULL_ENTITY_TYPE_OPTION] = true;
 	}
 

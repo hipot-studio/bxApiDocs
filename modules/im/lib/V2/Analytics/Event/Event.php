@@ -21,10 +21,11 @@ abstract class Event
 	protected ?string $p4 = null;
 	protected ?string $p5 = null;
 
-	public function __construct(string $eventName, Chat $chat)
+	public function __construct(string $eventName, Chat $chat, int $userId)
 	{
 		$this->chat = $chat;
 		$this->event = new AnalyticsEvent($eventName, $this->getTool(), $this->getCategory($eventName));
+		$this->event->setUserId($userId);
 		$this->setDefaultParams();
 	}
 

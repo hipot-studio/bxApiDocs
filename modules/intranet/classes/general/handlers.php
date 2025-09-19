@@ -525,7 +525,8 @@ class CIntranetEventHandlers
 		}
 
 		if (
-			!array_key_exists("TOPIC_INFO", $arForumMessage)
+			!is_array($arForumMessage)
+			|| !array_key_exists("TOPIC_INFO", $arForumMessage)
 			|| !is_array($arForumMessage["TOPIC_INFO"])
 			|| !array_key_exists("XML_ID", $arForumMessage["TOPIC_INFO"])
 			|| empty($arForumMessage["TOPIC_INFO"]["XML_ID"])
@@ -1192,12 +1193,12 @@ class CIntranetEventHandlers
 	{
 		if(array_key_exists('UF_DEPARTMENT', $fields))
 		{
+			// Empty array to check for adding a previously non-existent department
 			$ufDepartment = is_array($fields['UF_DEPARTMENT']) ? $fields['UF_DEPARTMENT'] : [];
-			$cacheDepartment = is_array(self::$userDepartmentCache[$fields['ID']]) ? self::$userDepartmentCache[$fields['ID']] : [];
-
+			$cachedDepartment = is_array(self::$userDepartmentCache[$fields['ID']]) ? self::$userDepartmentCache[$fields['ID']] : [];
 			if(
-					array_diff($ufDepartment, $cacheDepartment)
-					|| count($ufDepartment) !== count($cacheDepartment)
+				array_diff($ufDepartment, $cachedDepartment)
+				|| count($ufDepartment) !== count($cachedDepartment)
 			)
 			{
 				$event = new Event("intranet", "onEmployeeDepartmentsChanged", array(
@@ -1504,7 +1505,7 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 			return;
 		}
 
-		if($USER->IsAdmin())
+		if($USER->IsAdmin() && \CTopPanel::shouldShowPanel())
 		{
 			$hint = GetMessage('INTR_SET_BUT_HINT');
 			$arMenu = Array(

@@ -75,6 +75,8 @@ class StructureAccessService
 	 */
 	public function canDoActionWithAnyNode(): bool
 	{
+		$this->checkHrAccessCodesUpdate();
+
 		if ($this->accessController->getUser()->isAdmin())
 		{
 			return true;
@@ -254,7 +256,6 @@ class StructureAccessService
 		}
 
 		$viewPermissionId = PermissionDictionary::HUMAN_RESOURCES_TEAM_VIEW;
-		$structureViewPermissionId = PermissionDictionary::HUMAN_RESOURCES_STRUCTURE_VIEW;
 		if (!$this->isUserAdmin())
 		{
 			$teamViewPermissionId = $viewPermissionId . '_' . PermissionValueType::TeamValue->value;
@@ -263,7 +264,6 @@ class StructureAccessService
 			$departmentValue = min(
 				$departmentValue,
 				(int)$this->accessController->getUser()->getPermission($departmentViewPermissionId),
-				(int)$this->accessController->getUser()->getPermission($structureViewPermissionId),
 			);
 		}
 
@@ -275,5 +275,21 @@ class StructureAccessService
 		return $permissionCollection->add(
 			Permission::getWithoutRoleId($departmentPermissionId, $departmentValue)
 		);
+	}
+
+	private function checkHrAccessCodesUpdate(): void
+	{
+		if (\COption::GetOptionInt("humanresources", "re_hr_access_user_update") !== 1)
+		{
+			\CAgent::AddAgent(
+				name: 'Bitrix\HumanResources\Install\Agent\AccessCodes\HrAccessCodeUpdate::run();',
+				module: 'humanresources',
+				interval: 20,
+				next_exec: \ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+				existError: false,
+			);
+
+			\COption::SetOptionInt("humanresources", "re_hr_access_user_update", 1);
+		}
 	}
 }

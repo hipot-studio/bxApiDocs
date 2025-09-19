@@ -16,6 +16,10 @@ class EngineSettingsService
 {
 	private const TRANSCRIBE_VIDEO_CALL_TRACK_ITEM = 'transcribe_track';
 	private const TRANSCRIBE_CRM_CALL_TRACK_ITEM = 'crm_copilot_fill_item_from_call_engine_audio';
+	private const RESUME_TRANSCRIPTION_ITEM = 'resume_transcription';
+	private const TRANSCRIBE_TRACK_ITEM = 'transcribe_track';
+	private const BGPT = 'b24ai';
+	private const BITRIX_AUDIO_CALL = 'BitrixAudioCall';
 
 	public function __construct()
 	{
@@ -109,6 +113,14 @@ class EngineSettingsService
 		}
 
 		Config::setOptionsValue('bitrixaudio_portalSettingsItemsToForceReset', json_encode([]));
+	}
+
+	public function resetResumeTranscriptionToBGPT(): void
+	{
+		$manager = new Manager();
+		$this->updateEngineCode($manager, self::BGPT, self::RESUME_TRANSCRIPTION_ITEM);
+		$this->updateEngineCode($manager, self::BITRIX_AUDIO_CALL, self::TRANSCRIBE_TRACK_ITEM);
+		$manager->save();
 	}
 
 	private function updateEngineCode(Manager $manager, string $preferredCode, string $itemName): void

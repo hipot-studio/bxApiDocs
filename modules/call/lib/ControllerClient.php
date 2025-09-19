@@ -19,8 +19,6 @@ class ControllerClient extends BaseSender
 		'eu' => 'https://videocalls-de.bitrix.info',
 		'us' => 'https://videocalls-us.bitrix.info',
 	];
-	private const REGION_CIS = ['ru', 'by', 'kz', 'am', 'az', 'ge', 'kg', 'uz'];
-	private const REGION_EU = ['de', 'eu', 'fr', 'it', 'pl', 'tr', 'uk'];
 
 	private array $httpClientParameters = [];
 
@@ -36,11 +34,11 @@ class ControllerClient extends BaseSender
 
 		if (empty($endpoint))
 		{
-			if (in_array($region, self::REGION_CIS, true))
+			if (in_array($region, Library::REGION_CIS, true))
 			{
 				$endpoint = self::SERVICE_MAP['ru'];
 			}
-			elseif (in_array($region, self::REGION_EU, true))
+			elseif (in_array($region, Library::REGION_EU, true))
 			{
 				$endpoint = self::SERVICE_MAP['eu'];
 			}

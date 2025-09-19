@@ -234,24 +234,34 @@ class MentionService
 
 		foreach ($mentionedUserIds as $userId)
 		{
-			$messageFields = [
-				"TO_USER_ID" => $userId,
-				"FROM_USER_ID" => $message->getAuthorId(),
-				"NOTIFY_TYPE" => \IM_NOTIFY_FROM,
-				"NOTIFY_MODULE" => "im",
-				"NOTIFY_EVENT" => "mention",
-				"NOTIFY_TAG" => 'IM|MENTION|' . $chat->getChatId(),
-				"NOTIFY_SUB_TAG" => 'IM_MESS_' . $chat->getChatId() . '_' . $userId,
-				"NOTIFY_MESSAGE" => $this->prepareNotifyMessage($chatTitle, $message, $userGender),
-				"NOTIFY_MESSAGE_OUT" => $this->prepareNotifyMail($chatTitle, $userGender),
-			];
-			CIMNotify::Add($messageFields);//todo: Replace with new sending functional
+			if($this->shouldSendMentionNotification($chat, $userId))
+			{
+				$messageFields = [
+					"TO_USER_ID" => $userId,
+					"FROM_USER_ID" => $message->getAuthorId(),
+					"NOTIFY_TYPE" => \IM_NOTIFY_FROM,
+					"NOTIFY_MODULE" => "im",
+					"NOTIFY_EVENT" => "mention",
+					"NOTIFY_TAG" => 'IM|MENTION|' . $chat->getChatId(),
+					"NOTIFY_SUB_TAG" => 'IM_MESS_' . $chat->getChatId() . '_' . $userId,
+					"NOTIFY_MESSAGE" => $this->prepareNotifyMessage($chatTitle, $message, $userGender),
+					"NOTIFY_MESSAGE_OUT" => $this->prepareNotifyMail($chatTitle, $userGender),
+				];
+				CIMNotify::Add($messageFields);
+			}
 
 			if ($this->isPullEnable() && $this->needToSendPull())
 			{
 				Push::add($userId, $this->preparePushForMentionInChat($message));
 			}
 		}
+	}
+
+	protected function shouldSendMentionNotification(Chat $chat, int $userId): bool
+	{
+		$relation = $chat->getRelationByUserId($userId);
+
+		return ($chat instanceof Chat\OpenChannelChat || $chat instanceof Chat\OpenChat) && !$relation;
 	}
 
 	private function deleteMentionNotifications(Message $message, array $unmentionedUserIds): void

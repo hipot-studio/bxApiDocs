@@ -64,6 +64,8 @@ class Track extends EO_CallTrack
 		$chatId = $this->fillCall()?->getChatId();
 		if ($chatId)
 		{
+			$callInitiatorId = $this->getCall()->getInitiatorId();
+
 			if ($this->getDiskFileId())
 			{
 				$diskFileId = $this->getDiskFileId();
@@ -76,7 +78,7 @@ class Track extends EO_CallTrack
 						new TrackError(TrackError::DISK_ATTACH_ERROR, 'Can not put file on chat disk')
 					);
 				}
-				$diskFileId = \CIMDisk::UploadFileFromMain($chatId, [$this->getFileId()])[0];
+				$diskFileId = \CIMDisk::UploadFileFromMain($chatId, [$this->getFileId()], $callInitiatorId)[0];
 			}
 
 			if ($diskFileId)
@@ -94,7 +96,7 @@ class Track extends EO_CallTrack
 				$file = \Bitrix\Im\V2\Entity\File\FileItem::initByDiskFileId($diskFileId);
 				$link = (new \Bitrix\Im\V2\Link\File\FileItem)
 					->setSubtype($type)
-					->setAuthorId($this->getCall()->getInitiatorId())
+					->setAuthorId($callInitiatorId)
 					->setChatId($this->getCall()->getChatId())
 					->setEntity($file)
 				;

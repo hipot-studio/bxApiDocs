@@ -14,6 +14,8 @@ class Feature
 	private const FIRE_PERMISSION_AVAILABLE_OPTION_NAME = 'use_hr_fire_permission';
 	private const STRUCT_INVITE_PERMISSION_OPTION_NAME = 'use_hr_invite_permission';
 	private const CROSS_FUNCTIONAL_TEAMS_IS_AVAILABLE_OPTION_NAME = 'teams_available';
+	private const COLLABS_IS_AVAILABLE_OPTION_NAME = 'collabs_available';
+	private const DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME = 'deputy_approves_bp_available';
 
 	public function isHcmLinkAvailable(): bool
 	{
@@ -25,6 +27,22 @@ class Feature
 	public function isCrossFunctionalTeamsAvailable(): bool
 	{
 		return true; // enabled in 25.700.0
+	}
+
+	public function isCollabsAvailable(): bool
+	{
+		return $this->getOptionValue(self::COLLABS_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function isDeputyApprovesBPAvailable(): bool
+	{
+		return $this->getOptionValue(self::DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function setDeputyApprovesBPAvailable(bool $value): void
+	{
+		$stringValue = $value ? 'Y' : 'N';
+		$this->setOptionValue(self::DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME, $stringValue);
 	}
 
 	public function isHRFirePermissionAvailable(): bool

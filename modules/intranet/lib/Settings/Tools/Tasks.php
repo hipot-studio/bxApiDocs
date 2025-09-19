@@ -7,7 +7,6 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
-use Bitrix\Tasks\Flow;
 
 class Tasks extends Tool
 {
@@ -84,7 +83,7 @@ class Tasks extends Tool
 
 		foreach (self::TASKS_SUBGROUP_ID as $id => $menuId)
 		{
-			if ($id === 'flows' && Loader::includeModule('tasks') && !Flow\FlowFeature::isOptionEnabled())
+			if ($id === 'flows' && Loader::includeModule('tasks'))
 			{
 				continue;
 			}

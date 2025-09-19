@@ -47,7 +47,8 @@ class Features
 		public readonly bool $isCopilotSelectModelAvailable,
 		public readonly bool $teamsInStructureAvailable,
 		public readonly bool $isDesktopRedirectAvailable,
-		public readonly bool $isAiAssistantAvailable,
+		public readonly bool $aiAssistantAvailable,
+		public readonly bool $aiAssistantChatCreationAvailable,
 	){}
 
 	public static function get(): self
@@ -89,6 +90,7 @@ class Features
 			Structure::isTeamsAvailable(),
 			self::isDesktopRedirectAvailable(),
 			self::isAiAssistantAvailable(),
+			self::isAiAssistantChatCreationAvailable(),
 		);
 	}
 
@@ -152,6 +154,11 @@ class Features
 
 	public static function isAiAssistantAvailable(): bool
 	{
-		return ServiceLocator::getInstance()->get(AiAssistantService::class)->isAssistantAvailable();
+		return ServiceLocator::getInstance()->get(AiAssistantService::class)->isAiAssistantAvailable();
+	}
+
+	public static function isAiAssistantChatCreationAvailable(): bool
+	{
+		return ServiceLocator::getInstance()->get(AiAssistantService::class)->isAiAssistantChatCreationAvailable();
 	}
 }

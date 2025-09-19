@@ -10,7 +10,9 @@ use Bitrix\HumanResources\Contract\Builder\Filter;
 use Bitrix\HumanResources\Contract\Builder;
 use Bitrix\HumanResources\Contract\Item;
 use Bitrix\HumanResources\Contract\ItemCollection;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\Validation\ValidationService;
 
 /**
  * @template ItemT of Item
@@ -23,7 +25,6 @@ abstract class BaseDataBuilder implements Builder
 	 */
 	protected array $filters = [];
 
-	private const DEFAULT_SELECT_LIMIT = 10;
 	protected string $logic = ConditionTree::LOGIC_AND;
 	protected ?SortInterface $sort = null;
 
@@ -33,6 +34,13 @@ abstract class BaseDataBuilder implements Builder
 
 	protected array $select = [];
 
+	protected ValidationService $validationService;
+
+	public function __construct()
+	{
+		$this->validationService = ServiceLocator::getInstance()->get('main.validation.service');
+	}
+
 	public function setLimit(int $limit): static
 	{
 		$this->limit = $limit;
@@ -40,9 +48,9 @@ abstract class BaseDataBuilder implements Builder
 		return $this;
 	}
 
-	private function getLimit(): int
+	public function getLimit(): int
 	{
-		return $this->limit > 0 ? $this->limit : self::DEFAULT_SELECT_LIMIT;
+		return $this->limit;
 	}
 
 	public function getOffset(): int

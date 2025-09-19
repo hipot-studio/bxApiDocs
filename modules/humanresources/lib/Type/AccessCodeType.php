@@ -97,5 +97,31 @@ enum AccessCodeType: string
 		);
 	}
 
+	/**
+	 * Returns all structure access code types that are used together with nodeId.
+	 * @return array
+	 */
+	public static function getAllStructureTypes(): array
+	{
+		return [
+			AccessCodeType::HrStructureNodeType,
+			AccessCodeType::HrTeamType,
+			AccessCodeType::HrTeamRecursiveType,
+			AccessCodeType::HrDepartmentType,
+			AccessCodeType::HrDepartmentRecursiveType,
+		];
+	}
+
+	/**
+	 * @return array
+	 */
+	public static function getAllStructurePrefixes(): array
+	{
+		return array_map(
+			fn(AccessCodeType $type) => $type->value,
+			self::getAllStructureTypes(),
+		);
+	}
+
 	use ValuesTrait;
 }

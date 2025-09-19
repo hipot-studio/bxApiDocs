@@ -26,13 +26,22 @@ class CopilotPopupItem implements PopupDataItem
 
 	private array $chatIds;
 
-	protected function __construct(array $chatIds = [], array $messageIds = [])
+	public function __construct(array $chatIds = [], array $messageIds = [])
 	{
 		$chatIds = array_filter($chatIds, 'is_int');
 		$messageIds = array_filter($messageIds, 'is_int');
 
 		$this->chatIds = array_combine($chatIds, $chatIds);
 		$this->messageIds = array_combine($messageIds, $messageIds);
+	}
+
+	public static function getInstanceByChatIdsAndMessages(MessageCollection $messages, array $chatIds): self
+	{
+		$messages = clone $messages;
+		$instance = new self(chatIds: $chatIds, messageIds: $messages->getIds());
+		$instance->messages = $messages;
+
+		return $instance;
 	}
 
 	public static function getInstanceByMessages(MessageCollection $messages): self

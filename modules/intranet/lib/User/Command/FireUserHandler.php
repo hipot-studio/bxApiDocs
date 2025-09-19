@@ -6,11 +6,13 @@ namespace Bitrix\Intranet\User\Command;
 
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Repository\UserRepository;
+use Bitrix\Intranet\Service\UserService;
 
 class FireUserHandler
 {
 	public function __construct(
-		private readonly UserRepository $userRepository
+		private readonly UserRepository $userRepository,
+		private readonly UserService $userService,
 	)
 	{
 	}
@@ -23,5 +25,6 @@ class FireUserHandler
 		$user = $command->user;
 		$user->setActive(false);
 		$this->userRepository->update($user);
+		$this->userService->clearCache();
 	}
 }

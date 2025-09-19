@@ -15,6 +15,7 @@ class NodeSort implements SortInterface
 	public function __construct(
 		public readonly ?SortDirection $depth = null,
 		public readonly ?SortDirection $sort = null,
+		public readonly ?SortDirection $type = null,
 	)
 	{
 	}
@@ -26,6 +27,7 @@ class NodeSort implements SortInterface
 	{
 		$this->addDepthSort();
 		$this->addSort();
+		$this->addTypeSort();
 
 		return $this->orderColumns;
 	}
@@ -48,6 +50,16 @@ class NodeSort implements SortInterface
 		}
 
 		$this->orderColumns[$this->alias . 'SORT'] = $this->sort->value;
+	}
+
+	private function addTypeSort(): void
+	{
+		if ($this->type === null)
+		{
+			return;
+		}
+
+		$this->orderColumns[$this->alias . 'TYPE'] = $this->type->value;
 	}
 
 	public function setCurrentAlias(string $alias): static

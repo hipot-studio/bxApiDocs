@@ -1,8 +1,9 @@
-<?
+<?php
 
 namespace Bitrix\Mobile\Controller;
 
 use Bitrix\Main\Error;
+use Bitrix\Mobile\AppTabs\Menu;
 use Bitrix\Mobile\Tab\Manager;
 
 class Tabs extends \Bitrix\Main\Engine\Controller
@@ -18,12 +19,12 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 	{
 		$manager = new Manager();
 		$result = [
-			"presets" => [
-				"current" => $manager->getPresetName(),
-				"list" => $manager->getPresetList()
+			'presets' => [
+				'current' => $manager->getPresetName(),
+				'list' => $manager->getPresetList(),
 			],
-			"tabs" => [
-				"list"=>$manager->getAllTabIDs()
+			'tabs' => [
+				'list' => $manager->getAllTabIDs(),
 			],
 		];
 
@@ -48,10 +49,11 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 			static function ($result, $tabId) use ($manager)
 			{
 				$instance = $manager->getTabInstance($tabId);
+
 				$result[$tabId] = [
 					'title' => $instance->getTitle(),
 					'shortTitle' => $instance->getShortTitle(),
-					'iconId' => $instance->getIconId(),
+					'iconId' => $instance->getIconId()
 				];
 
 				return $result;

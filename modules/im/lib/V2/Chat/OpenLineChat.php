@@ -550,29 +550,4 @@ class OpenLineChat extends EntityChat
 	{
 		return;
 	}
-
-	protected function sendPushOnChangeUsers(RelationCollection $relations, array $pushMessage): void
-	{
-		if (!\Bitrix\Main\Loader::includeModule('pull'))
-		{
-			return;
-		}
-
-		$userIds = $relations->getUserIds();
-
-		foreach ($relations as $relation)
-		{
-			if ($relation->getUser()->getExternalAuthId() === 'imconnector')
-			{
-				unset($relations[$relation->getUserId()]);
-			}
-		}
-
-		Event::add(array_values($userIds), $pushMessage);
-
-		if ($this->needToSendPublicPull())
-		{
-			\CPullWatch::AddToStack('IM_PUBLIC_' . $this->getId(), $pushMessage);
-		}
-	}
 }

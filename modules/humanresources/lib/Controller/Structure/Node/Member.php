@@ -13,6 +13,7 @@ use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Internals\Attribute\Access\LogicOr;
 use Bitrix\HumanResources\Internals\Attribute\StructureActionAccess;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
@@ -73,6 +74,7 @@ final class Member extends Controller
 	public function moveUserAction(
 		Item\NodeMember $nodeUserMember,
 		Item\Node $targetNode,
+		?Item\Role $role,
 	):array
 	{
 		if ($nodeUserMember->nodeId === $targetNode->id)
@@ -89,14 +91,17 @@ final class Member extends Controller
 
 		try
 		{
-			$xmlId = $targetNode->type->isTeam()
-				? NodeMember::TEAM_ROLE_XML_ID['TEAM_EMPLOYEE']
-				: NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE']
-			;
+			if (!$role)
+			{
+				$xmlId = $targetNode->type->isTeam()
+					? NodeMember::TEAM_ROLE_XML_ID['TEAM_EMPLOYEE']
+					: NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE']
+				;
 
-			$employeeRole = $this->roleRepository->findByXmlId($xmlId);
-			$nodeUserMember->role = $employeeRole->id;
-			$this->nodeMemberService->moveMember($nodeUserMember, $targetNode);
+				$role = $this->roleRepository->findByXmlId($xmlId);
+			}
+
+			InternalContainer::getNodeMemberService()->moveMember($nodeUserMember, $targetNode, $role);
 		}
 		catch (UpdateFailedException $exception)
 		{
@@ -114,6 +119,10 @@ final class Member extends Controller
 				}
 			}
 			$this->addErrors($errors->toArray());
+		}
+		catch (\Exception $e)
+		{
+			$this->addError(new Error('Can\'t move member'));
 		}
 
 		return [];
@@ -251,13 +260,8 @@ final class Member extends Controller
 	 *      MEMBER_EMPLOYEE?: list<int>,
 	 *      MEMBER_DEPUTY_HEAD?: list<int>
 	 * } $userIds
- *
+	 *
 	 * @return array
-	 * @throws ArgumentException
-	 * @throws Main\DB\DuplicateEntryException
-	 * @throws Main\ObjectPropertyException
-	 * @throws SqlQueryException
-	 * @throws SystemException
 	 */
 	#[Attribute\Access\LogicOr(
 		new Attribute\StructureActionAccess(

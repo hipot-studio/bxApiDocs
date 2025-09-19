@@ -16,6 +16,8 @@ class SaveNodeChatsCommand extends AbstractCommand
 {
 	const CHAT_INDEX = 'chat';
 	const CHANNEL_INDEX = 'channel';
+	const COLLAB_INDEX = 'collab';
+	const WITH_CHILDREN_INDEX = 'withChildren';
 
 	public readonly array $ids;
 	public readonly array $removeIds;
@@ -27,21 +29,43 @@ class SaveNodeChatsCommand extends AbstractCommand
 	 */
 	public function __construct(
 		public readonly Item\Node $node,
-		public readonly array $createDefault = [self::CHAT_INDEX => false, self::CHANNEL_INDEX => false],
-		array $ids = [self::CHAT_INDEX => [], self::CHANNEL_INDEX => []],
-		array $removeIds = [],
+		public readonly array $createDefault = [
+			self::CHAT_INDEX => false,
+			self::CHANNEL_INDEX => false,
+			self::COLLAB_INDEX => false,
+		],
+		array $ids = [
+			self::CHAT_INDEX => [],
+			self::CHANNEL_INDEX => [],
+			self::COLLAB_INDEX => [],
+		],
+		array $removeIds = [
+			self::CHAT_INDEX => [],
+			self::CHANNEL_INDEX => [],
+			self::COLLAB_INDEX => [],
+		],
 	)
 	{
-		$this->ids = array_merge([self::CHAT_INDEX => [], self::CHANNEL_INDEX => []], $ids);
-		$this->removeIds = $removeIds;
+		$ids[self::WITH_CHILDREN_INDEX] = self::convertToBoolean($ids[self::WITH_CHILDREN_INDEX] ?? false);
+		$this->ids = array_merge([self::CHAT_INDEX => [], self::CHANNEL_INDEX => [], self::COLLAB_INDEX => []], $ids);
+		$this->removeIds = array_merge([
+			self::CHAT_INDEX => [],
+			self::CHANNEL_INDEX => [],
+			self::COLLAB_INDEX => [],
+		], $removeIds);
 	}
 
 	protected function validate(): bool
 	{
 		if (!isset($this->createDefault[self::CHAT_INDEX])
 			|| !isset($this->createDefault[self::CHANNEL_INDEX])
+			|| !isset($this->createDefault[self::COLLAB_INDEX])
 			|| !is_array($this->ids[self::CHAT_INDEX])
 			|| !is_array($this->ids[self::CHANNEL_INDEX])
+			|| !is_array($this->ids[self::COLLAB_INDEX])
+			|| !is_array($this->removeIds[self::CHAT_INDEX])
+			|| !is_array($this->removeIds[self::CHANNEL_INDEX])
+			|| !is_array($this->removeIds[self::COLLAB_INDEX])
 		)
 		{
 			return false;
@@ -49,7 +73,10 @@ class SaveNodeChatsCommand extends AbstractCommand
 
 		if (!array_product(array_map('is_numeric', $this->ids[self::CHAT_INDEX]))
 			|| !array_product(array_map('is_numeric', $this->ids[self::CHANNEL_INDEX]))
-			|| !array_product(array_map('is_numeric', $this->removeIds))
+			|| !array_product(array_map('is_numeric', $this->ids[self::COLLAB_INDEX]))
+			|| !array_product(array_map('is_numeric', $this->removeIds[self::CHAT_INDEX]))
+			|| !array_product(array_map('is_numeric', $this->removeIds[self::CHANNEL_INDEX]))
+			|| !array_product(array_map('is_numeric', $this->removeIds[self::COLLAB_INDEX]))
 		)
 		{
 			return false;
@@ -76,5 +103,10 @@ class SaveNodeChatsCommand extends AbstractCommand
 
 			return $result;
 		}
+	}
+
+	private static function convertToBoolean($value): bool
+	{
+		return $value === true || $value === 'true' || $value === '1' || $value === 'Y' || $value === 1;
 	}
 }

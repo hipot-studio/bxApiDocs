@@ -4,25 +4,26 @@ namespace Bitrix\AI\Engine\Cloud;
 
 use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IQueueOptional;
+use Bitrix\AI\Facade\AiUrlManager;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 
-final class BitrixAudio extends CloudEngine implements IQueueOptional
+class BitrixAudio extends CloudEngine implements IQueueOptional
 {
 	use Engine\Trait\AudioCommonTrait;
 
 	protected const CATEGORY_CODE = Engine::CATEGORIES['audio'];
 	protected const ENGINE_NAME = 'BitrixAudio';
 	public const ENGINE_CODE = 'BitrixAudio';
-	protected const URL_COMPLETIONS = 'https://b24ai.bitrix.info/v1/audio/transcriptions';
 
 	/**
 	 * @inheritDoc
 	 */
 	public function getName(): string
 	{
-		return self::ENGINE_NAME;
+		return static::ENGINE_NAME;
 	}
 
 	protected function getDefaultModel(): string
@@ -57,5 +58,15 @@ final class BitrixAudio extends CloudEngine implements IQueueOptional
 		}
 
 		return !empty(array_intersect($quality->getRequired(), $prefer));
+	}
+
+	protected function getCompletionsUrl(): string
+	{
+		return $this->getAiUrlManager()->getAudioCompletionsUrl();
+	}
+
+	protected function getAiUrlManager(): AiUrlManager
+	{
+		return ServiceLocator::getInstance()->get(AiUrlManager::class);
 	}
 }

@@ -13,12 +13,18 @@ class ChatPopupItem implements PopupDataItem
 	/**
 	 * @var Chat[]
 	 */
-	protected array $chats;
+	protected array $chats = [];
 	protected ?array $chatIds = null;
 
+	/**
+	 * @var Chat[] $chats
+	 */
 	public function __construct(array $chats)
 	{
-		$this->chats = $chats;
+		foreach ($chats as $chat)
+		{
+			$this->chats[$chat->getChatId()] = $chat;
+		}
 	}
 
 	public function merge(PopupDataItem $item): PopupDataItem

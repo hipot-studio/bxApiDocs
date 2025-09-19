@@ -16,7 +16,6 @@ use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Type\AccessCodeType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\Application;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserAccessTable;
 use CAuthProvider;
 
@@ -28,6 +27,9 @@ use CAuthProvider;
 class StructureAuthProvider extends CAuthProvider
 {
 	private const PROVIDER_ID = 'hr_structure';
+	private const LOCK_NAME = 'auth_provider_lock';
+	private const LOCK_TIMEOUT = 10;
+	private const CHUNK_SIZE = 500;
 	private ?int $structureId = null;
 
 	public function __construct()
@@ -137,6 +139,7 @@ class StructureAuthProvider extends CAuthProvider
 						structureId: $this->structureId,
 						depthLevel: DepthLevel::NONE,
 					),
+					findRelatedMembers: true,
 				),
 			)
 			->getAll()
@@ -205,22 +208,35 @@ class StructureAuthProvider extends CAuthProvider
 	 */
 	private function saveAccessCodes(int $userId, array $accessCodes): void
 	{
-		if (empty($accessCodes))
+		if (empty($accessCodes) || !$userId)
 		{
 			return;
 		}
 
 		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
+		$lockName = $this->getLockNameByUserId($userId);
 
-		foreach (array_chunk($accessCodes, 500) as $chunk)
+		if (!$connection->lock($lockName, self::LOCK_TIMEOUT))
 		{
-			$sql = $helper->getInsertIgnore(
-				UserAccessTable::getTableName(),
-				'(USER_ID, PROVIDER_ID, ACCESS_CODE)',
-				$this->buildUserAccessInsertValues($userId, $chunk),
-			);
-			$connection->queryExecute($sql);
+			return;
+		}
+
+		try
+		{
+			foreach (array_chunk($accessCodes, self::CHUNK_SIZE) as $chunk)
+			{
+				$sql = $helper->getInsertIgnore(
+					UserAccessTable::getTableName(),
+					'(USER_ID, PROVIDER_ID, ACCESS_CODE)',
+					$this->buildUserAccessInsertValues($userId, $chunk),
+				);
+				$connection->queryExecute($sql);
+			}
+		}
+		finally
+		{
+			$connection->unlock($lockName);
 		}
 	}
 
@@ -345,5 +361,10 @@ class StructureAuthProvider extends CAuthProvider
 	public function setStructureId(?int $structureId): void
 	{
 		$this->structureId = $structureId;
+	}
+
+	private function getLockNameByUserId(int $userId): string
+	{
+		return self::PROVIDER_ID . '_' . $userId . '_' . self::LOCK_NAME;
 	}
 }

@@ -421,8 +421,17 @@ class CBPDocument
 			$tpl = WorkflowTemplateTable::getById($workflowTemplateId)->fetchObject();
 			if ($tpl)
 			{
-				$usages = $tpl->collectUsages();
-				$usagesCache[$workflowTemplateId] = $usages->getValuesBySourceType(SourceType::DocumentField);
+				try
+				{
+					$usages = $tpl->collectUsages();
+					$usagesCache[$workflowTemplateId] = $usages->getValuesBySourceType(
+						SourceType::DocumentField
+					);
+				}
+				catch (\Throwable $e)
+				{
+					$usagesCache[$workflowTemplateId] = [];
+				}
 			}
 		}
 

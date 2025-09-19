@@ -5,15 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\HumanResources\Builder\Structure;
 
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
-use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
 use Bitrix\HumanResources\Contract\Builder;
 use Bitrix\HumanResources\Builder\Structure\Sort\NodeSort;
-use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Contract\Builder\Structure\SelectionCondition;
 use Bitrix\HumanResources\Exception\NodeAccessFilterException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Internals\Repository\Mapper\NodeMemberMapper;
-use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Item\Collection\RoleCollection;
@@ -22,10 +19,12 @@ use Bitrix\HumanResources\Contract\Repository\RoleRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\StructureRole;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Entity\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Validation\Rule\ElementsType;
+use InvalidArgumentException;
 
 /**
  * @extends BaseDataBuilder<NodeMember, NodeMemberCollection>
@@ -47,14 +46,15 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 		'UPDATED_AT',
 		'ROLE',
 	];
-    /**
-     * @var StructureRole[]
-     */
-    private array $structureRoleList = [];
+
+	#[ElementsType(className: StructureRole::class, errorMessage: 'Invalid structure role list')]
+	private array $structureRoleList = [];
 	private ?SelectionCondition $selectionCondition = null;
 
 	public function __construct()
 	{
+		parent::__construct();
+
 		$this->roleRepository = Container::instance()->getRoleRepository();
 		$this->roleCollection = $this->roleRepository->list();
 		$this->mapper = new NodeMemberMapper();
@@ -74,6 +74,18 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 		return $this;
 	}
 
+	public function setStructureRoles(array $roles): self
+	{
+		$this->structureRoleList = $roles;
+
+		$validateResult = $this->validationService->validate($this);
+		if (!$validateResult->isSuccess())
+		{
+			throw new InvalidArgumentException(implode(', ', $validateResult->getErrorMessages()));
+		}
+
+		return $this;
+	}
 
 	public function setSelectionCondition(SelectionCondition $selectionCondition): self
 	{
@@ -83,8 +95,8 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 	}
 
     /**
-     * @throws SystemException
-     */
+     * @throws SystemException|WrongStructureItemException
+	 */
 	protected function getData(): NodeMemberCollection
 	{
 		try
@@ -108,21 +120,17 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 			: $nodeMemberCollection;
 	}
 
-    /**
-     * @return int[]
-     */
+	/**
+	 * @return int[]
+	 */
 	private function getStructureRoleIdList(): array
 	{
 		$result = [];
+		/** @var StructureRole $structureRole */
 		foreach ($this->structureRoleList as $structureRole)
 		{
-			$xmlRoleId = NodeMember::DEFAULT_ROLE_XML_ID[$structureRole->name] ?? null;
-			if ($xmlRoleId === null)
-			{
-				continue;
-			}
-
-			$roleItem = $this->roleCollection->getItemByXmlId($xmlRoleId);
+			$xmlId = $structureRole->getXmlId();
+			$roleItem = $this->roleCollection->getItemByXmlId($xmlId);
 			if ($roleItem === null)
 			{
 				continue;

@@ -5,7 +5,7 @@ namespace Bitrix\Im\V2;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\GeneralChannel;
 use Bitrix\Im\V2\Chat\GeneralChat;
-use Bitrix\Im\V2\Chat\Type;
+use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserType;
 use Bitrix\Im\V2\Permission\Action;
@@ -77,7 +77,7 @@ class Permission
 
 		self::$permissionsByChatTypes[self::TYPE_DEFAULT] = $default;
 
-		self::$permissionsByChatTypes[Type::Private->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Private->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::Mute->value => Chat::ROLE_NONE,
@@ -91,7 +91,7 @@ class Permission
 			Action::ChangeManagers->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::General->value] = [
+		self::$permissionsByChatTypes[ExtendedType::General->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::Extend->value => Chat::ROLE_NONE,
@@ -101,7 +101,7 @@ class Permission
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::GeneralChannel->value] = [
+		self::$permissionsByChatTypes[ExtendedType::GeneralChannel->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::Extend->value => Chat::ROLE_NONE,
@@ -114,18 +114,18 @@ class Permission
 			Action::CreateMeeting->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::Copilot->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Copilot->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::Announcement->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Announcement->value] = [
 			Action::LeaveOwner->value => Chat::ROLE_OWNER,
 			Action::Send->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Channel->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Channel->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::CreateTask->value => Chat::ROLE_NONE,
 			Action::CreateMeeting->value => Chat::ROLE_NONE,
@@ -134,7 +134,7 @@ class Permission
 			Action::Delete->value => Chat::ROLE_OWNER,
 		];
 
-		self::$permissionsByChatTypes[Type::OpenChannel->value] = [
+		self::$permissionsByChatTypes[ExtendedType::OpenChannel->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::CreateTask->value => Chat::ROLE_NONE,
 			Action::CreateMeeting->value => Chat::ROLE_NONE,
@@ -143,7 +143,7 @@ class Permission
 			Action::Delete->value => Chat::ROLE_OWNER,
 		];
 
-		self::$permissionsByChatTypes[Type::Comment->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Comment->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Extend->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
@@ -152,13 +152,13 @@ class Permission
 			Action::HideChat->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::Support24Notifier->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Support24Notifier->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::Support24Question->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Support24Question->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Extend->value => Chat::ROLE_NONE,
 			Action::Call->value => Chat::ROLE_NONE,
@@ -168,11 +168,11 @@ class Permission
 			Action::UserList->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::NetworkDialog->value] =
-			self::$permissionsByChatTypes[Type::Support24Question->value]
+		self::$permissionsByChatTypes[ExtendedType::NetworkDialog->value] =
+			self::$permissionsByChatTypes[ExtendedType::Support24Question->value]
 		;
 
-		self::$permissionsByChatTypes[Type::Sonet->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Sonet->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::Extend->value => Chat::ROLE_NONE,
@@ -181,7 +181,7 @@ class Permission
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Collab->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Collab->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::Update->value => Chat::ROLE_OWNER,
@@ -193,21 +193,21 @@ class Permission
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Tasks->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Tasks->value] = [
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Calendar->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Calendar->value] = [
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Crm->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Crm->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::Call->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Call->value] = [
 			Action::Extend->value => Chat::ROLE_NONE,
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Mute->value => Chat::ROLE_NONE,
@@ -215,24 +215,24 @@ class Permission
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 		];
 
-		self::$permissionsByChatTypes[Type::Chat->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Chat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::OpenChat->value] = [
+		self::$permissionsByChatTypes[ExtendedType::OpenChat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 		];
 
-		self::$permissionsByChatTypes[Type::Videoconference->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Videoconference->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 		];
 
-		self::$permissionsByChatTypes[Type::Lines->value] = [
+		self::$permissionsByChatTypes[ExtendedType::Lines->value] = [
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::ChangeOwner->value => Chat::ROLE_NONE,
@@ -303,6 +303,7 @@ class Permission
 				GlobalAction::CreateChannel->value => true,
 				GlobalAction::CreateConference->value => true,
 				GlobalAction::CreateCopilot->value => true,
+				GlobalAction::CreateAiAssistant->value => true,
 				GlobalAction::CreateChat->value => true,
 				GlobalAction::GetMarket->value => true,
 				GlobalAction::GetOpenlines->value => true,
@@ -315,6 +316,7 @@ class Permission
 				GlobalAction::CreateChannel->value => false,
 				GlobalAction::CreateConference->value => false,
 				GlobalAction::CreateCopilot->value => false,
+				GlobalAction::CreateAiAssistant->value => false,
 				GlobalAction::CreateChat->value => false,
 				GlobalAction::GetMarket->value => false,
 				GlobalAction::GetOpenlines->value => false,
@@ -327,6 +329,7 @@ class Permission
 				GlobalAction::CreateChannel->value => false,
 				GlobalAction::CreateConference->value => false,
 				GlobalAction::CreateCopilot->value => true,
+				GlobalAction::CreateAiAssistant->value => true,
 				GlobalAction::CreateChat->value => false,
 				GlobalAction::GetMarket->value => false,
 				GlobalAction::GetOpenlines->value => false,
@@ -375,6 +378,11 @@ class Permission
 			if ($type === Chat::IM_TYPE_CHANNEL || $type === Chat::IM_TYPE_OPEN_CHANNEL)
 			{
 				return GlobalAction::CreateChannel;
+			}
+
+			if ($type === Chat::IM_TYPE_AI_ASSISTANT)
+			{
+				return GlobalAction::CreateAiAssistant;
 			}
 
 			if ($type === Chat::IM_TYPE_COPILOT)
@@ -439,8 +447,8 @@ class Permission
 
 		$defaultPermissionsByTypes = [
 			self::TYPE_DEFAULT => ActionGroup::getDefaultPermissions(),
-			Type::Channel->value => $channelDefaultPermissions,
-			Type::OpenChannel->value => $channelDefaultPermissions,
+			ExtendedType::Channel->value => $channelDefaultPermissions,
+			ExtendedType::OpenChannel->value => $channelDefaultPermissions,
 		];
 
 		if ($this->jsonFormat)

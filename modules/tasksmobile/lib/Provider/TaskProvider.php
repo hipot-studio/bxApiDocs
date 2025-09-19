@@ -164,7 +164,7 @@ final class TaskProvider
 	{
 		$select = $this->getSelect();
 		$filter = $this->getFilter($workMode, $stageId, $projectId);
-		$order = $this->getOrder($workMode);
+		$order = $this->getOrder($workMode, $projectId);
 		$params = $this->getParams($projectId);
 
 		$tasks = $this->getTasks($select, $filter, $order, $params, $this->pageNavigation);
@@ -244,6 +244,7 @@ final class TaskProvider
 			'PRIORITY',
 			'IS_MUTED',
 			'IS_PINNED',
+			'IS_PINNED_IN_GROUP',
 			'FAVORITE',
 
 			'CREATED_BY',
@@ -507,7 +508,7 @@ final class TaskProvider
 		return $filter;
 	}
 
-	private function getOrder(?string $workMode): array
+	private function getOrder(?string $workMode, ?int $projectId): array
 	{
 		$ASC = $this->isASC ? 'ASC' : 'DESC';
 
@@ -515,7 +516,14 @@ final class TaskProvider
 
 		if (!isset($workMode))
 		{
-			$order['IS_PINNED'] = 'DESC';
+			if ($projectId !== null && $projectId > 0)
+			{
+				$order['IS_PINNED_IN_GROUP'] = 'DESC';
+			}
+			else
+			{
+				$order['IS_PINNED'] = 'DESC';
+			}
 		}
 
 		if ($this->order === TaskProvider::ORDER_DEADLINE)
@@ -568,11 +576,36 @@ final class TaskProvider
 			'NAV_PARAMS' => $this->getNavParams($pageNavigation),
 		];
 		$listResult = Manager\Task::getList($this->userId, $getListParams, $params);
-
 		$tasks = $listResult['DATA'];
-		$tasks = $this->fillDataForTasks($tasks);
 
-		return $tasks;
+		// todo: get rid of this in the future, when bug with mutes in tasks module will be fixed
+		$this->updateIsMutedStateForCurrentUser($tasks, $getListParams, $params);
+
+		return $this->fillDataForTasks($tasks);
+	}
+
+	private function updateIsMutedStateForCurrentUser(array &$tasks, array $getListParams, array $params): void
+	{
+		if ($this->userId === $params['TARGET_USER_ID'])
+		{
+			return;
+		}
+
+		$mutesList = Manager\Task::getList(
+			$this->userId,
+			[
+				...$getListParams,
+				'select' => ['IS_MUTED'],
+			],
+			[
+				...$params,
+				'TARGET_USER_ID' => $this->userId,
+			]);
+
+		foreach ($mutesList['DATA'] as $id => $taskWithMute)
+		{
+			$tasks[$id]['IS_MUTED'] = $taskWithMute['IS_MUTED'];
+		}
 	}
 
 	public function getTask(int $taskId): TaskDto
@@ -1652,6 +1685,7 @@ final class TaskProvider
 
 					'isMuted' => ($task['IS_MUTED'] === 'Y'),
 					'isPinned' => ($task['IS_PINNED'] === 'Y'),
+					'isPinnedInGroup' => ($task['IS_PINNED_IN_GROUP'] === 'Y'),
 					'isInFavorites' => ($task['FAVORITE'] === 'Y'),
 					'isResultRequired' => ($task['TASK_REQUIRE_RESULT'] === 'Y'),
 					'isResultExists' => ($task['TASK_HAS_RESULT'] === 'Y'),
@@ -2468,9 +2502,10 @@ final class TaskProvider
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function pin(int $taskId): bool
+	public function pin(int $taskId, ?int $groupId = null): bool
 	{
-		$result = UserOption::add($taskId, $this->userId, UserOption\Option::PINNED);
+		$option = $groupId ? UserOption\Option::PINNED_IN_GROUP : UserOption\Option::PINNED;
+		$result = UserOption::add($taskId, $this->userId, $option);
 
 		return $result->isSuccess();
 	}
@@ -2482,9 +2517,10 @@ final class TaskProvider
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function unpin(int $taskId): bool
+	public function unpin(int $taskId, ?int $groupId = null): bool
 	{
-		$result = UserOption::delete($taskId, $this->userId, UserOption\Option::PINNED);
+		$option = $groupId ? UserOption\Option::PINNED_IN_GROUP : UserOption\Option::PINNED;
+		$result = UserOption::delete($taskId, $this->userId, $option);
 
 		return $result->isSuccess();
 	}

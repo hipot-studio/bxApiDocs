@@ -124,6 +124,47 @@ class Call extends JwtController
 	{
 		Loader::includeModule('im');
 
+		// Validate required parameters
+		if (!$callRequest->chatId)
+		{
+			$this->addError(new Error('Chat ID is required', 'missing_chat_id'));
+			return [
+				'result' => false,
+				'errorCode' => 'missing_chat_id',
+				'errorMessage' => 'Chat ID is required',
+			];
+		}
+
+		if (!$callRequest->initiatorUserId)
+		{
+			$this->addError(new Error('Initiator user ID is required', 'missing_initiator_user_id'));
+			return [
+				'result' => false,
+				'errorCode' => 'missing_initiator_user_id',
+				'errorMessage' => 'Initiator user ID is required',
+			];
+		}
+
+		if (!$callRequest->provider)
+		{
+			$this->addError(new Error('Provider is required', 'missing_provider'));
+			return [
+				'result' => false,
+				'errorCode' => 'missing_provider',
+				'errorMessage' => 'Provider is required',
+			];
+		}
+
+		if (!$callRequest->callUuid && !$callRequest->roomId)
+		{
+			$this->addError(new Error('Call UUID or Room ID is required', 'missing_call_identifier'));
+			return [
+				'result' => false,
+				'errorCode' => 'missing_call_identifier',
+				'errorMessage' => 'Call UUID or Room ID is required',
+			];
+		}
+
 		try
 		{
 			$tokenVersion = JwtCall::getTokenVersion($callRequest->chatId);
@@ -141,6 +182,9 @@ class Call extends JwtController
 			$userId = $callRequest->initiatorUserId;
 			$roomId = $callRequest->roomId ?: $callRequest->callUuid;
 			$entityId = \Bitrix\Im\Dialog::getDialogId($callRequest->chatId, $userId);
+
+			// Terminate ALL active calls in this chat before starting new one
+			\Bitrix\Call\Call::terminateAllCallsInChat($callRequest->chatId, null);
 
 			$prevCall = CallFactory::searchActiveCall(
 				type: $callRequest->callType,
@@ -161,6 +205,13 @@ class Call extends JwtController
 				$prevCall->finish();
 			}
 
+			$lockName = static::getLockNameWithCallId('call_state', $roomId);
+			if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+			{
+				$this->addError(new \Bitrix\Main\Error('Could not get exclusive lock', 'could_not_lock'));
+				return null;
+			}
+
 			$call = CallFactory::createWithEntity(
 				type: $callRequest->callType,
 				provider: $callRequest->provider,
@@ -177,6 +228,8 @@ class Call extends JwtController
 				return null;
 			}
 
+			\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
+
 			$this->setUserStateReady($call, $userId, $callRequest->legacyMobile);
 
 			$users = array_diff($call->getUsers(), [$userId]);
@@ -189,6 +242,8 @@ class Call extends JwtController
 				'N',
 				Signaling::MODE_WEB
 			);
+
+			Application::getConnection()->unlock($lockName);
 
 			$callAIError = CallAISettings::isAIAvailableInCall();
 
@@ -281,9 +336,27 @@ class Call extends JwtController
 	{
 		Loader::includeModule('im');
 
-		$call = Registry::getCallWithUuid($callRequest->roomId ?: $callRequest->callUuid);
+		// Validate required parameters
+		if (!$callRequest->callUuid && !$callRequest->roomId)
+		{
+			$this->addError(new \Bitrix\Main\Error('Call UUID or Room ID is required', 'missing_call_identifier'));
+			return null;
+		}
+
+		$callUuid = $callRequest->roomId ?: $callRequest->callUuid;
+
+		// Lock to prevent race conditions with startCall
+		$lockName = static::getLockNameWithCallId('call_state', $callUuid);
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new \Bitrix\Main\Error('Could not get exclusive lock', 'could_not_lock'));
+			return null;
+		}
+
+		$call = Registry::getCallWithUuid($callUuid);
 		if (!$call)
 		{
+			Application::getConnection()->unlock($lockName);
 			$this->addError(new \Bitrix\Main\Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
 			return null;
 		}
@@ -297,6 +370,13 @@ class Call extends JwtController
 
 		$call->save();
 		$call->finish();
+
+		// Terminate all other active calls in the same chat after this call finishes
+		\Bitrix\Call\Call::terminateAllCallsInChat($call->getChatId(), $call->getId());
+
+		\Bitrix\Call\Call::updateCallCache($call->getId());
+
+		Application::getConnection()->unlock($lockName);
 
 		if ($callRequest->requestId)
 		{
@@ -329,6 +409,7 @@ class Call extends JwtController
 			{
 				continue;
 			}
+
 			if (!$call->hasUser($userId))
 			{
 				if (!$call->addUser($userId))
@@ -346,6 +427,8 @@ class Call extends JwtController
 			{
 				$callUser->updateState(CallUser::STATE_CALLING);
 			}
+
+			\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
 		}
 
 		if (!empty($existingUsers))
@@ -432,6 +515,8 @@ class Call extends JwtController
 		Application::getConnection()->unlock($lockName);
 
 		$call->getSignaling()->sendAnswer($currentUserId, $userRequest->callInstanceId, $isLegacyMobile);
+
+		\Bitrix\Call\Call::updateCallCache($call->getId());
 	}
 
 	/**
@@ -497,6 +582,9 @@ class Call extends JwtController
 		{
 			$call->setActionUserId($currentUserId)->finish();
 		}
+
+		\Bitrix\Call\Call::updateCallCache($call->getId());
+		\Bitrix\Call\Call::updateUserActiveCallsCache($currentUserId);
 	}
 
 	/**
@@ -656,7 +744,7 @@ class Call extends JwtController
 			return null;
 		}
 
-		$call->getUser($currentUserId)->update([
+		$call->getUser($currentUserId)?->update([
 			'LAST_SEEN' => new DateTime(),
 			'IS_MOBILE' => ($isLegacyMobile ? 'Y' : 'N')
 		]);
@@ -857,6 +945,8 @@ class Call extends JwtController
 			}
 			$call->getSignaling()->sendUsersJoined($currentUserId, [$currentUserId]);
 		}
+
+		\Bitrix\Call\Call::updateCallCache($call->getId());
 
 		return array_merge(
 			['success' => true],

@@ -657,12 +657,12 @@ class Task extends Base
 		}
 	}
 
-	public function pinAction(int $taskId): ?array
+	public function pinAction(int $taskId, ?int $projectId = null): ?array
 	{
 		try
 		{
 			$provider = new TaskProvider($this->getCurrentUser()?->getId());
-			$pinResult = $provider->pin($taskId);
+			$pinResult = $provider->pin($taskId, $projectId);
 
 			return $this->prepareActionResult($pinResult, $taskId);
 		}
@@ -674,12 +674,12 @@ class Task extends Base
 		}
 	}
 
-	public function unpinAction(int $taskId): ?array
+	public function unpinAction(int $taskId, ?int $projectId = null): ?array
 	{
 		try
 		{
 			$provider = new TaskProvider($this->getCurrentUser()?->getId());
-			$unpinResult = $provider->unpin($taskId);
+			$unpinResult = $provider->unpin($taskId, $projectId);
 
 			return $this->prepareActionResult($unpinResult, $taskId);
 		}

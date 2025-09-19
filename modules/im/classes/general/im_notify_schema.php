@@ -60,9 +60,6 @@ class CIMNotifySchema
 						"PUSH" => 'Y',
 						"DISABLED" => [IM_NOTIFY_FEATURE_SITE, IM_NOTIFY_FEATURE_XMPP, IM_NOTIFY_FEATURE_MAIL],
 					],
-					"like" => [
-						"NAME" => GetMessage('IM_NS_LIKE'),
-					],
 					"mention" => [
 						"NAME" => GetMessage('IM_NS_MENTION_2'),
 						"PUSH" => 'Y',

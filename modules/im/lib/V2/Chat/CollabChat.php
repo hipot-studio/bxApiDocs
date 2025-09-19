@@ -47,7 +47,7 @@ class CollabChat extends GroupChat
 			return (new Result())->addError(new ChatError(ChatError::ENTITY_ID_EMPTY));
 		}
 
-		$params['ENTITY_TYPE'] = Type::Sonet->value;
+		$params['ENTITY_TYPE'] = ExtendedType::Sonet->value;
 
 		return parent::prepareParams($params);
 	}

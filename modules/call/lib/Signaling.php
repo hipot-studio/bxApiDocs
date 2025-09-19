@@ -296,6 +296,7 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 	{
 		return [
 			'uuid' => $this->call->getUuid(),
+			'parentId' => $this->call->getParentId(),
 			'parentUuid' => $this->call->getParentUuid(),
 			'provider' => $this->call->getProvider(),
 			'type' => $this->call->getType(),

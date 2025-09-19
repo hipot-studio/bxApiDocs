@@ -57,12 +57,21 @@ final class NodeFilter extends BaseFilter
 		$conditionTree = new ConditionTree();
 		$conditionTree->where($this->getFieldByQueryContext('STRUCTURE_ID'), $this->structureId);
 		$this->addConditionsForIdsFilter($conditionTree);
-		$this->applyNodeEntityTypeWithActionPermissionCheck($conditionTree);
 		$this->addActiveFilter($conditionTree);
 
 		if ($this->name !== null)
 		{
 			$conditionTree->whereLike($this->getFieldByQueryContext('NAME'), '%' . $this->name . '%');
+		}
+
+		$additionalEntityTypeCondition = $this->applyNodeEntityTypeWithActionPermissionCheck();
+		if ($additionalEntityTypeCondition)
+		{
+			return (new ConditionTree())
+				->logic(ConditionTree::LOGIC_AND)
+				->addCondition($conditionTree)
+				->addCondition($additionalEntityTypeCondition)
+			;
 		}
 
 		return $conditionTree;
@@ -191,13 +200,14 @@ final class NodeFilter extends BaseFilter
 	 * @throws SystemException
 	 * @throws NodeAccessFilterException
 	 */
-	private function applyNodeEntityTypeWithActionPermissionCheck(ConditionTree $conditionTree): ConditionTree
+	private function applyNodeEntityTypeWithActionPermissionCheck(): ?ConditionTree
 	{
 		if (is_null($this->entityTypeFilter) && is_null($this->accessFilter))
 		{
-			return $conditionTree;
+			return null;
 		}
 
+		$conditionTree = new ConditionTree();
 		if (is_null($this->accessFilter))
 		{
 			$conditionTree->addCondition(
@@ -214,15 +224,6 @@ final class NodeFilter extends BaseFilter
 		)
 		{
 			throw new ArgumentException('Node entity types must be set for access permission check');
-		}
-
-		if ($this->accessFilter->isUserAdmin())
-		{
-			$conditionTree->addCondition(
-				$this->entityTypeFilter->setCurrentAlias($this->currentAlias)->prepareFilter(),
-			);
-
-			return $conditionTree;
 		}
 
 		$entityTypes = $this->entityTypeFilter->entityTypes;

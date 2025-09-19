@@ -3,6 +3,10 @@
 namespace Bitrix\Intranet\Integration\HumanResources;
 
 use Bitrix\HumanResources;
+use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\MemberEntityType;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\User;
@@ -82,5 +86,29 @@ final class DepartmentAssigner
 		{
 			HumanResources\Service\Container::getNodeMemberRepository()->createByCollection($memberCollection);
 		}
+	}
+
+	public function reassignUser(
+		User $user,
+	): void
+	{
+		$currentNodeMemberCollection = Container::getNodeMemberRepository()->findAllByEntityIdAndEntityTypeAndNodeType(
+			entityId: $user->getId(),
+			entityType: MemberEntityType::USER,
+			nodeType: NodeEntityType::DEPARTMENT,
+		);
+		$newDepartmentsIds = $this->departmentCollection->map(
+			fn (\Bitrix\Intranet\Entity\Department $department) => $department->getId()
+		);
+		$nodeMemberCollectionToRemove = $currentNodeMemberCollection->filter(
+			fn(NodeMember $nodeMember) => !in_array($nodeMember->nodeId, $newDepartmentsIds)
+		);
+
+		if (!$nodeMemberCollectionToRemove->empty())
+		{
+			HumanResources\Service\Container::getNodeMemberRepository()->removeByCollection($nodeMemberCollectionToRemove);
+		}
+
+		$this->assignUser($user);
 	}
 }

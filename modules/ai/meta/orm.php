@@ -124,6 +124,16 @@ namespace Bitrix\AI\Model {
 	 * @method \Bitrix\AI\Entity\Prompt resetPrompt()
 	 * @method \Bitrix\AI\Entity\Prompt unsetPrompt()
 	 * @method \string fillPrompt()
+	 * @method \string getJsonOutputSchema()
+	 * @method \Bitrix\AI\Entity\Prompt setJsonOutputSchema(\string|\Bitrix\Main\DB\SqlExpression $jsonOutputSchema)
+	 * @method bool hasJsonOutputSchema()
+	 * @method bool isJsonOutputSchemaFilled()
+	 * @method bool isJsonOutputSchemaChanged()
+	 * @method \string remindActualJsonOutputSchema()
+	 * @method \string requireJsonOutputSchema()
+	 * @method \Bitrix\AI\Entity\Prompt resetJsonOutputSchema()
+	 * @method \Bitrix\AI\Entity\Prompt unsetJsonOutputSchema()
+	 * @method \string fillJsonOutputSchema()
 	 * @method array getTextTranslates()
 	 * @method \Bitrix\AI\Entity\Prompt setTextTranslates(array|\Bitrix\Main\DB\SqlExpression $textTranslates)
 	 * @method bool hasTextTranslates()
@@ -352,6 +362,8 @@ namespace Bitrix\AI\Model {
 	 * @method \string[] fillHash()
 	 * @method \string[] getPromptList()
 	 * @method \string[] fillPrompt()
+	 * @method \string[] getJsonOutputSchemaList()
+	 * @method \string[] fillJsonOutputSchema()
 	 * @method array[] getTextTranslatesList()
 	 * @method array[] fillTextTranslates()
 	 * @method \string[] getIsSystemList()
@@ -2276,6 +2288,169 @@ namespace Bitrix\AI\Chatbot\Model {
 	 * @method \Bitrix\AI\Chatbot\Model\EO_MessageUnread_Collection wakeUpCollection($rows)
 	 */
 	class EO_MessageUnread_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\AI\Chatbot\Model\ScenarioTable:ai/lib/chatbot/model/scenariotable.php */
+namespace Bitrix\AI\Chatbot\Model {
+	/**
+	 * EO_Scenario
+	 * @see \Bitrix\AI\Chatbot\Model\ScenarioTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario resetModuleId()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getCode()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario resetCode()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getClass()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario setClass(\string|\Bitrix\Main\DB\SqlExpression $class)
+	 * @method bool hasClass()
+	 * @method bool isClassFilled()
+	 * @method bool isClassChanged()
+	 * @method \string remindActualClass()
+	 * @method \string requireClass()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario resetClass()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario unsetClass()
+	 * @method \string fillClass()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario resetDateCreate()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario set($fieldName, $value)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario reset($fieldName)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Chatbot\Model\EO_Scenario wakeUp($data)
+	 */
+	class EO_Scenario {
+		/* @var \Bitrix\AI\Chatbot\Model\ScenarioTable */
+		static public $dataClass = '\Bitrix\AI\Chatbot\Model\ScenarioTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Chatbot\Model {
+	/**
+	 * EO_Scenario_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getClassList()
+	 * @method \string[] fillClass()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Chatbot\Model\EO_Scenario $object)
+	 * @method bool has(\Bitrix\AI\Chatbot\Model\EO_Scenario $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario getByPrimary($primary)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario[] getAll()
+	 * @method bool remove(\Bitrix\AI\Chatbot\Model\EO_Scenario $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Chatbot\Model\EO_Scenario_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario_Collection merge(?\Bitrix\AI\Chatbot\Model\EO_Scenario_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_Scenario_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Chatbot\Model\ScenarioTable */
+		static public $dataClass = '\Bitrix\AI\Chatbot\Model\ScenarioTable';
+	}
+}
+namespace Bitrix\AI\Chatbot\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Scenario_Result exec()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario fetchObject()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario_Collection fetchCollection()
+	 */
+	class EO_Scenario_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario fetchObject()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario_Collection fetchCollection()
+	 */
+	class EO_Scenario_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario_Collection createCollection()
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario wakeUpObject($row)
+	 * @method \Bitrix\AI\Chatbot\Model\EO_Scenario_Collection wakeUpCollection($rows)
+	 */
+	class EO_Scenario_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\AI\Chatbot\Model\ChatTable:ai/lib/chatbot/model/chattable.php */
 namespace Bitrix\AI\Chatbot\Model {

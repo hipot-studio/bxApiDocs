@@ -2,10 +2,9 @@
 
 namespace Bitrix\Im\V2\Recent\Config;
 
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
-use Bitrix\Im\V2\Chat\Type;
+use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Main\Engine\Response\Converter;
 
 class RecentConfigManager
@@ -74,14 +73,14 @@ class RecentConfigManager
 
 	private function loadInternal(): void
 	{
-		$this->configByTypes[Type::Copilot->value] = new RecentConfig(true, true);
-		$this->configByTypes[Type::AiAssistant->value] = new RecentConfig(true, true);
-		$this->configByTypes[Type::AiAssistantEntity->value] = new RecentConfig(false, false);
-		$this->configByTypes[Type::Collab->value] = new RecentConfig(true, true);
-		$this->configByTypes[Type::Lines->value] = new RecentConfig(false, true);
-		$this->configByTypes[Type::Comment->value] = new RecentConfig(false, false);
-		$this->configByTypes[Type::OpenChannel->value] = new RecentConfig(true, true);
-		$this->configByTypes[Type::GeneralChannel->value]
+		$this->configByTypes[ExtendedType::Copilot->value] = new RecentConfig(true, true);
+		$this->configByTypes[ExtendedType::AiAssistant->value] = new RecentConfig(true, true);
+		$this->configByTypes[ExtendedType::AiAssistantEntity->value] = new RecentConfig(false, false);
+		$this->configByTypes[ExtendedType::Collab->value] = new RecentConfig(true, true);
+		$this->configByTypes[ExtendedType::Lines->value] = new RecentConfig(false, true);
+		$this->configByTypes[ExtendedType::Comment->value] = new RecentConfig(false, false);
+		$this->configByTypes[ExtendedType::OpenChannel->value] = new RecentConfig(true, true);
+		$this->configByTypes[ExtendedType::GeneralChannel->value]
 			= (new RecentConfig(true, true))->setOwnSectionName('openChannel')
 		;
 	}

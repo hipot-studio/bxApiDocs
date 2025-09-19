@@ -132,7 +132,7 @@ class Limit
 			}
 		}
 
-		if ($this->aiAssistantService->isAssistantChat($chat))
+		if ($this->aiAssistantService->isAiAssistantChat($chat))
 		{
 			return false;
 		}

@@ -523,11 +523,6 @@ class User implements RestEntity
 		return $this->userData['COLOR'] ?? '';
 	}
 
-	public function getTzOffset(): string
-	{
-		return $this->userData['TIME_ZONE_OFFSET'] ?? '';
-	}
-
 	public function getLanguageId(): ?string
 	{
 		return $this->userData['LANGUAGE_ID'] ?? null;
@@ -595,6 +590,11 @@ class User implements RestEntity
 		}
 
 		return 'online';
+	}
+
+	public function getTimeZone(): string
+	{
+		return $this->userData['TIME_ZONE'] ?? '';
 	}
 
 	public function getIdle(bool $real = false): ?DateTime

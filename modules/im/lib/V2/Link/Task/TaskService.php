@@ -187,7 +187,7 @@ class TaskService
 		$link = new Uri($taskPath);
 		$link->addParams([
 			'ta_sec' => 'chat',
-			'ta_el' => 'create_button',
+			'ta_el' => 'comment_context_menu',
 		]);
 
 		$data['LINK'] = $link->getUri();

@@ -12,7 +12,7 @@ class NodeMemberMapper
 	public function convertFromOrmArray(array $nodeMember): NodeMember
 	{
 		return new NodeMember(
-			entityType: MemberEntityType::tryFrom($nodeMember['ENTITY_TYPE']),
+			entityType: MemberEntityType::tryFrom($nodeMember['ENTITY_TYPE'] ?? '') ?? null,
 			entityId: isset($nodeMember['ENTITY_ID']) ? (int)$nodeMember['ENTITY_ID'] : null,
 			nodeId: isset($nodeMember['NODE_ID']) ? (int)$nodeMember['NODE_ID'] : null,
 			active: isset($nodeMember['ACTIVE']) ? $nodeMember['ACTIVE'] === 'Y' : null,

@@ -1,7 +1,8 @@
 <?php
 
-namespace Bitrix\Intranet\Internal\Entity\UserField;
+declare(strict_types=1);
 
+namespace Bitrix\Intranet\Internal\Entity\UserField;
 
 class SelectField implements UserField
 {

@@ -41,6 +41,9 @@ class RestService extends \IRestService
 	const ERROR_TASK_EXECUTION = 'ERROR_TASK_EXECUTION';
 	const ERROR_SELECT_VALIDATION_FAILURE = 'ERROR_SELECT_VALIDATION_FAILURE';
 
+	const ERROR_INVALID_USER_ID = 'ERROR_INVALID_USER_ID';
+	const ERROR_DELEGATION_NOT_ALLOWED = 'ERROR_DELEGATION_NOT_ALLOWED';
+
 	private const ALLOWED_TASK_ACTIVITIES = [
 		'ReviewActivity',
 		'ApproveActivity',
@@ -68,6 +71,7 @@ class RestService extends \IRestService
 				//task
 				'bizproc.task.list' => [__CLASS__, 'getTaskList'],
 				'bizproc.task.complete' => [__CLASS__, 'completeTask'],
+				'bizproc.task.delegate' => [__CLASS__, 'delegateTask'],
 
 				//workflow
 				'bizproc.workflow.terminate' => [__CLASS__, 'terminateWorkflow'],
@@ -1306,6 +1310,42 @@ class RestService extends \IRestService
 		if (!\CBPDocument::postTaskForm($task, $userId, $request, $errors))
 		{
 			throw new RestException($errors[0]["message"], self::ERROR_TASK_EXECUTION);
+		}
+
+		return true;
+	}
+
+	public static function delegateTask($params, $n, $server)
+	{
+		$params = array_change_key_case($params, CASE_UPPER);
+		$currentUserId = self::getCurrentUserId();
+
+		if (!is_array($params['TASK_IDS']) || array_filter($params['TASK_IDS'], static fn($id) => !is_numeric($id)))
+		{
+			throw new RestException('Invalid TASK_IDS', self::ERROR_TASK_VALIDATION);
+		}
+		$taskIds = array_map('intval', $params['TASK_IDS']);
+
+		if (!isset($params['FROM_USER_ID']) || !is_numeric($params['FROM_USER_ID']) || $params['FROM_USER_ID'] <= 0)
+		{
+			throw new RestException('Invalid FROM_USER_ID', self::ERROR_INVALID_USER_ID);
+		}
+		$fromUserId = (int)$params['FROM_USER_ID'];
+
+		if (!isset($params['TO_USER_ID']) || !is_numeric($params['TO_USER_ID']) || $params['TO_USER_ID'] <= 0)
+		{
+			throw new RestException('Invalid TO_USER_ID', self::ERROR_INVALID_USER_ID);
+		}
+		$toUserId = (int)$params['TO_USER_ID'];
+
+		$taskService = new Api\Service\TaskService(new Api\Service\TaskAccessService($currentUserId));
+		$tasksRequest = new Api\Request\TaskService\DelegateTasksRequest($taskIds, $fromUserId, $toUserId, $currentUserId);
+		$delegateTaskResult = $taskService->delegateTasks($tasksRequest);
+
+		if (!$delegateTaskResult->isSuccess())
+		{
+			$errors = implode(';', $delegateTaskResult->getErrorMessages());
+			throw new RestException($errors, self::ERROR_DELEGATION_NOT_ALLOWED);
 		}
 
 		return true;

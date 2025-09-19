@@ -116,6 +116,7 @@ class GratitudeProvider
 	private function collectPostItems(array $posts, array $badges, int $ownerId): array
 	{
 		$badgeNames = $this->createBadgeNameMap($badges);
+		$result = [];
 
 		foreach ($posts as $post)
 		{

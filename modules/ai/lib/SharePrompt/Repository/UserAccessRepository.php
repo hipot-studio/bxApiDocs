@@ -8,6 +8,7 @@ use Bitrix\AI\Integration\Socialnetwork\GroupService;
 use Bitrix\AI\SharePrompt\Service\ShareService;
 use Bitrix\Extranet\Contract\Service\CollaberService;
 use Bitrix\Extranet\Service\ServiceContainer;
+use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\UserAccessTable;
 
@@ -107,7 +108,7 @@ class UserAccessRepository extends BaseRepository
 			return [];
 		}
 
-		if (!$this->getCollaberService()->isCollaberById($userId))
+		if (Loader::includeModule('extranet') && !$this->getCollaberService()->isCollaberById($userId))
 		{
 			$groups[] = self::CODE_ALL_USER;
 		}

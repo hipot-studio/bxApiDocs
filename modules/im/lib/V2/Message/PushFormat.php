@@ -53,7 +53,7 @@ class PushFormat
 				'templateFileId' => $message->getFileUuid(),
 				'prevId' => $message->getPrevId(),
 				'chatId' => $chat->getChatId(),
-				'senderId' => $message->getContext()->getUserId(),
+				'senderId' => $message->getActionContextUserId(),
 				'recipientId' => $chat->getDialogId(),
 				'system' => ($message->isSystem() ? 'Y': 'N'),
 				'date' => DateTime::createFromTimestamp(time()), // DATE_CREATE
@@ -96,14 +96,17 @@ class PushFormat
 			return $this->getUserForLiveChat();
 		}
 
+		$contextUserId = $this->message->getActionContextUserId();
+		$contextUser = User::getInstance($contextUserId);
+
 		if ($this->message->getChat() instanceof PrivateChat)
 		{
-			$toUser = $this->message->getChat()->getCompanion($this->message->getAuthorId());
+			$toUser = $this->message->getChat()->getCompanion($contextUserId);
 
-			return $this->getUsersLegacyFormat([$this->message->getAuthor(), $toUser]);
+			return $this->getUsersLegacyFormat([$contextUser, $toUser]);
 		}
 
-		return $this->getUsersLegacyFormat([$this->message->getAuthor()]);
+		return $this->getUsersLegacyFormat([$contextUser]);
 	}
 
 	protected function getUserForLiveChat(): array
@@ -157,7 +160,6 @@ class PushFormat
 		$services = $user->getServices();
 		$result['avatar_id'] = $user->getAvatarId();
 		$result['phone_device'] = $user->getPhoneDevice();
-		$result['tz_offset'] = (int)$user->getTzOffset();
 		$result['services'] = empty($services) ? null : $services;
 		$result['profile'] = \CIMContactList::GetUserPath($user->getId());
 

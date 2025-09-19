@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\HumanResources\Builder\Structure\Filter\Column;
 
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Type\IntegerCollection;
 
 final class IdFilter extends BaseColumnFilter
@@ -43,5 +44,17 @@ final class IdFilter extends BaseColumnFilter
 		}
 
 		return new self(new IntegerCollection(...$ids));
+	}
+
+	public static function fromAccessCodes(array $accessCodes): self
+	{
+		if (empty($accessCodes))
+		{
+			return new self();
+		}
+
+		$nodeIds = InternalContainer::getNodeAccessCodeService()->getNodeIdsByAccessCodes($accessCodes);
+
+		return new self(new IntegerCollection(...$nodeIds));
 	}
 }

@@ -21,7 +21,7 @@ final class NodeMemberFilter extends BaseFilter
 		public ?EntityIdFilter $entityIdFilter = null,
 		public ?MemberEntityType $entityType = MemberEntityType::USER,
 		public ?NodeFilter $nodeFilter = null,
-		public bool $findRelatedMembers = true,
+		public bool $findRelatedMembers = false,
 		public ?bool $active = true,
 	)
 	{}

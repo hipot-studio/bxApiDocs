@@ -9,6 +9,10 @@ use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Integration\AI\AIHelper;
 use Bitrix\Im\V2\Integration\AI\CopilotError;
 use Bitrix\Im\V2\Integration\AI\Restriction;
+use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
+use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Message\Send\SendResult;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
 use Bitrix\Im\V2\Result;
@@ -16,6 +20,8 @@ use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\ImBot\Bot;
 use Bitrix\Imbot\Bot\CopilotChatBot;
+use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -23,6 +29,7 @@ class CopilotChat extends GroupChat
 {
 	private const COUNTER_CHAT_CODE = 'copilot_chat_counter';
 	private const COPILOT_ROLE_UPDATED = 'COPILOT_ROLE_UPDATED';
+	private const COPILOT_CONVERSION_LOCK_TIMEOUT = 3;
 
 	public function __construct($source = null)
 	{
@@ -105,6 +112,11 @@ class CopilotChat extends GroupChat
 			return $result->addError(new Error(CopilotError::AI_NOT_ACTIVE));
 		}
 
+		if (Im\V2\Application\Features::isAiAssistantChatCreationAvailable())
+		{
+			return $result->addError(new Error(CopilotError::COPILOT_REPLACED_BY_AI_ASSISTANT));
+		}
+
 		$copilotBotId = AIHelper::getCopilotBotId();
 
 		if (!$copilotBotId)
@@ -164,6 +176,85 @@ class CopilotChat extends GroupChat
 		}
 
 		return $usersToAdd;
+	}
+
+	public function sendMessage(Message $message, ?SendingConfig $sendingConfig = null): SendResult
+	{
+		if (!Im\V2\Application\Features::isAiAssistantChatCreationAvailable())
+		{
+			return parent::sendMessage($message, $sendingConfig);
+		}
+
+		$result = $this->convertToAssistantChat();
+		$convertedChat = $result->getResult();
+		if (!$convertedChat || !$result->isSuccess())
+		{
+			return (new SendResult())->addErrors($result->getErrors());
+		}
+
+		return $convertedChat->markAsConverted()->sendMessage($message, $sendingConfig);
+	}
+
+	/**
+	 * @return Result<Chat\Ai\AiAssistantChat>
+	 */
+	protected function convertToAssistantChat(): Result
+	{
+		$result = new Result();
+
+		$lockName = $this->getConversionLockName();
+		$connection = Application::getConnection();
+
+		$isLocked = $connection->lock($lockName, self::COPILOT_CONVERSION_LOCK_TIMEOUT);
+		if (!$isLocked)
+		{
+			return $result->addError(new ChatError(ChatError::CREATE_LOCK_ERROR));
+		}
+
+		$updateService = new Chat\Update\UpdateService($this, $this->getUpdateFieldsForConversion());
+
+		try
+		{
+			$convertResult = $updateService->updateChat();
+			$convertedChat = $convertResult->getResult();
+
+			if (!$convertResult->isSuccess())
+			{
+				$result->addErrors($convertResult->getErrors());
+			}
+			else
+			{
+				$result->setResult($convertedChat);
+			}
+		}
+		catch (\Throwable)
+		{
+			$result->addError(new CopilotError(CopilotError::COPILOT_TO_ASSISTANT_CONVERSION_ERROR));
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+
+			return $result;
+		}
+	}
+
+	private function getConversionLockName(): string
+	{
+		return 'convert_copilot_to_assistant_chat_' . $this->getChatId();
+	}
+
+	private function getUpdateFieldsForConversion(): Chat\Update\UpdateFields
+	{
+		$aiAssistantService = ServiceLocator::getInstance()->get(AiAssistantService::class);
+		$aiAssistantBotId = $aiAssistantService->getBotId();
+		$copilotBotId = AIHelper::getCopilotBotId();
+
+		return Chat\Update\UpdateFields::create([
+			'TYPE' => Chat::IM_TYPE_AI_ASSISTANT,
+			'ADDED_MEMBER_ENTITIES' => [['user', $aiAssistantBotId]],
+			'DELETED_MEMBER_ENTITIES' => [['user', $copilotBotId]],
+		]);
 	}
 
 	protected function sendMessageUsersAdd(array $usersToAdd, AddUsersConfig $config): void

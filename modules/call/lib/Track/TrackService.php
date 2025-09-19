@@ -119,6 +119,10 @@ final class TrackService
 
 			$error = new CallAIError(CallAIError::AI_RECORD_TOO_SHORT);
 
+
+			$aiService = AI\CallAIService::getInstance();
+			$aiService->removeExpectation($track->getCallId());
+
 			if ($track->getType() == Call\Track::TYPE_TRACK_PACK)
 			{
 				$call = Registry::getCallWithId($track->getCallId());

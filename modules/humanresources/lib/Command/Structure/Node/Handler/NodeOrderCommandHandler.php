@@ -9,6 +9,7 @@ use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\Application;
+use Bitrix\HumanResources\Internals;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\ObjectPropertyException;
@@ -18,10 +19,12 @@ use Bitrix\Main\SystemException;
 class NodeOrderCommandHandler
 {
 	private NodeRepository $nodeRepository;
+	private Internals\Service\Structure\NodeSettingsService $nodeSettingsService;
 
 	public function __construct()
 	{
 		$this->nodeRepository = Container::getNodeRepository();
+		$this->nodeSettingsService = Internals\Service\Container::getNodeSettingsService();
 	}
 
 	/**

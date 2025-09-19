@@ -420,15 +420,17 @@ class CBPDocumentService extends CBPRuntimeService
 
 	public function getDocumentFieldTypes($parameterDocumentType)
 	{
-		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentType);
+		[$moduleId, $entity, $documentType] = CBPHelper::parseDocumentId($parameterDocumentType);
 
 		if ($moduleId)
 		{
-			CModule::IncludeModule($moduleId);
+			Loader::includeModule($moduleId);
 		}
 
-		if (class_exists($entity) && method_exists($entity, "GetDocumentFieldTypes"))
-			return call_user_func_array(array($entity, "GetDocumentFieldTypes"), array($documentType));
+		if (class_exists($entity) && method_exists($entity, 'GetDocumentFieldTypes'))
+		{
+			return call_user_func([$entity, 'GetDocumentFieldTypes'], $documentType);
+		}
 
 		return CBPHelper::GetDocumentFieldTypes();
 	}

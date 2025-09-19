@@ -7,6 +7,7 @@ use Bitrix\Main\Entity\EventResult;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\V2\Call\CallFactory;
 use Bitrix\Im\Call\Integration\EntityType;
+use Bitrix\Call\Cache\ActiveCallsCache;
 
 
 class EventHandler
@@ -29,7 +30,7 @@ class EventHandler
 
 			$type = Call::TYPE_INSTANT;
 			$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
-			if ($chat->getEntityType() == \Bitrix\Im\V2\Chat\Type::Videoconference->value)
+			if ($chat->getEntityType() == \Bitrix\Im\V2\Chat\ExtendedType::Videoconference->value)
 			{
 				$type = Call::TYPE_PERMANENT;
 			}
@@ -52,9 +53,36 @@ class EventHandler
 					$chat->getCallToken()->update();
 					$call->getSignaling()->sendPushTokenUpdate($chat->getCallToken()->getToken(), $call->getUsers());
 				}
+
+				$ids = array_unique(array_merge($userIds, array_keys($call->getCallUsers())));
+				foreach ($ids as $userId)
+				{
+					\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
+				}
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Handles call finished event to clear active calls cache
+	 *
+	 * @event 'call:onCallFinished'
+	 * @param Event $event
+	 * @return void
+	 */
+	public static function onCallFinished(Event $event): void
+	{
+		$call = $event->getParameter('call');
+		if (!$call instanceof \Bitrix\Im\Call\Call)
+		{
+			return;
+		}
+
+		ActiveCallsCache::clearCallCache($call->getId());
+
+		// Terminate all other calls in the same chat when this call finishes
+		\Bitrix\Call\Call::terminateAllCallsInChat($call->getChatId(), $call->getId());
 	}
 }

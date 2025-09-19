@@ -86,6 +86,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		{
 			$this->setCache(true);
 		}
+		$params = $this->makeRequestParams();
 		$this->queueJob = QueueJob::createWithinFromEngine($this)->register();
 
 		$cacheManager = new EngineResultCache($this->queueJob->getCacheHash());
@@ -123,7 +124,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),
 			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
 			'url' => $this->getCompletionsUrl(),
-			'params' => $this->makeRequestParams(),
+			'params' => $params,
 		]);
 
 		if ($responseResult->isSuccess())

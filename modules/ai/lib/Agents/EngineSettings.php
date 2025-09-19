@@ -110,6 +110,13 @@ final class EngineSettings
 		return '\Bitrix\AI\Agents\EngineSettings::resetToBitrixAudioInCloudAgent();';
 	}
 
+	public static function resetFollowUpTextStepsToBGPTAgent(): string
+	{
+		self::getEngineSettingsService()->resetResumeTranscriptionToBGPT();
+
+		return '';
+	}
+
 	private static function getEngineSettingsService(): EngineSettingsService
 	{
 		return ServiceLocator::getInstance()->get(EngineSettingsService::class);

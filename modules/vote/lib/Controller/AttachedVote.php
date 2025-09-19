@@ -286,4 +286,14 @@ class AttachedVote extends Controller
 
 		return false;
 	}
+
+	protected function writeToLogException(\Throwable $e): void
+	{
+		if ($e instanceof AccessDeniedException)
+		{
+			return; // do not write to error log access denied errors
+		}
+
+		parent::writeToLogException($e);
+	}
 }

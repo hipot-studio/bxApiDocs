@@ -22,6 +22,7 @@ use Bitrix\HumanResources\Internals\Attribute;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Request;
 use Bitrix\HumanResources\Enum\DepthLevel;
@@ -81,7 +82,11 @@ final class Structure extends Controller
 			$result[] = StructureHelper::getNodeInfo($node);
 		}
 
-		return $result;
+		$internalNodeRepository = InternalContainer::getNodeRepository();
+		return [
+			'structure' => $result,
+			'map' => $internalNodeRepository->getStructuresNodeMap($structure->id),
+		];
 	}
 
 	#[Attribute\StructureActionAccess(permission: StructureActionDictionary::ACTION_STRUCTURE_VIEW_ACCESS)]
@@ -175,6 +180,8 @@ final class Structure extends Controller
 			'permissionVariablesDictionary' => PermissionVariablesDictionary::getVariables(),
 			'firstTimeOpened' => \CUserOptions::GetOption("humanresources", 'first_time_opened', 'N'),
 			'teamsAvailable' => Feature::instance()->isCrossFunctionalTeamsAvailable(),
+			'collabsAvailable' => Feature::instance()->isCollabsAvailable(),
+			'deputyApprovesBP' => Feature::instance()->isDeputyApprovesBPAvailable(),
 		];
 	}
 

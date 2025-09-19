@@ -157,7 +157,7 @@ class CalendarService
 		$data['params']['sliderId'] = "im:chat{$chat->getChatId()}{$randomPostfix}";
 		$data['params']['createChatId'] = $chat->getId();
 
-		if ($chat->getEntityType() === Chat\Type::Sonet->value)
+		if ($chat->getEntityType() === Chat\ExtendedType::Sonet->value)
 		{
 			$data['params']['type'] = 'group';
 			$data['params']['ownerId'] = $chat->getEntityId();

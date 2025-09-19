@@ -258,7 +258,7 @@ class TranscriptionOverview extends AITask
 		if (
 			($chatId = $call?->getChatId())
 			&& ($chat = Chat::getInstance($chatId))
-			&& $chat->getEntityType() == Chat\Type::Calendar->value
+			&& $chat->getEntityType() == Chat\ExtendedType::Calendar->value
 			&& Loader::includeModule('calendar')
 			&& ($entryId = $chat->getEntityId())
 			&& ($event = \Bitrix\Calendar\Internals\EventTable::getById($entryId)?->fetchObject())

@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Engine\ActionFilter;
 
+use Bitrix\HumanResources\Access\Model\ChatListModel;
 use Bitrix\HumanResources\Access\Model\UserModel;
 use Bitrix\HumanResources\Internals\Attribute\Access\LogicAnd;
 use Bitrix\HumanResources\Internals\Attribute\Access\LogicOr;
@@ -210,6 +211,15 @@ final class StructureAccessCheck extends Main\Engine\ActionFilter\Base
 					return UserModel::createFromId($user->id);
 				}
 			}
+		}
+
+		if ($type === AccessibleItemType::CHAT_LIST)
+		{
+			$chatIds = $this->getValueByRequestId('ids');
+			$chatModel = ChatListModel::createFromId($this->getValueByRequestId($requestIdKey));
+			$chatModel->setIdsArray($chatIds);
+
+			return $chatModel;
 		}
 
 		return null;

@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Integration\Im;
 
+use Bitrix\HumanResources\Access\Model\ChatListModel;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\StructureAccessController;
 use Bitrix\HumanResources\Repository\NodeRelationRepository;
@@ -14,6 +15,7 @@ use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatFactory;
+use Bitrix\Im\V2\Permission\ActionGroup;
 use Bitrix\Im\V2\Service\Messenger;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -145,7 +147,7 @@ class ChatService
 
 		$filter = Chat\Filter::init()
 			->filterByIds($ids)
-			->filterByAuthor($userId)
+			->filterByPermissions($userId, ActionGroup::ManageUsersAdd)
 			->filterByEntityType(null)
 		;
 
@@ -193,14 +195,14 @@ class ChatService
 
 		$userId = $userId ?? CurrentUser::get()->getId();
 
-		$accessController = StructureAccessController::getInstance($userId);
-		$actionId = StructureAction::CommunicationEditAction->getAccessInfoByEntityType($node->type)->actionId;
-		$hasCommunicationPermission = $accessController->check($actionId, NodeModel::createFromId($node->id));
-		$checkChatPermission = !$hasCommunicationPermission;
+		$chatList = $this->getChatsByIds($chatIds, $userId, $indirectRelations);
+		$channelsList = $this->getChatsByIds($channelIds, $userId, $indirectRelations);
 
 		return [
-			'chats' => $this->getChatsByIds($chatIds, $userId, $indirectRelations, $checkChatPermission),
-			'channels' => $this->getChatsByIds($channelIds, $userId, $indirectRelations, $checkChatPermission),
+			'chats' => array_values(array_filter($chatList, fn($chat) => $chat['hasAccess'] === true)),
+			'channels' => array_values(array_filter($channelsList, fn($channel) => $channel['hasAccess'] === true)),
+			'chatsNoAccess' => count(array_filter($chatList, fn($chat) => $chat['hasAccess'] === false)),
+			'channelsNoAccess' => count(array_filter($channelsList, fn($channel) => $channel['hasAccess'] === false)),
 		];
 	}
 
@@ -214,7 +216,7 @@ class ChatService
 	 *
 	 * @return array
 	 */
-	private function getChatsByIds(array $ids, int $userId, array $indirectRelations = [], bool $checkChatPermission = true): array
+	private function getChatsByIds(array $ids, int $userId, array $indirectRelations = []): array
 	{
 		$result = [];
 		if (!$this->isAvailable() || empty($ids))
@@ -222,7 +224,7 @@ class ChatService
 			return $result;
 		}
 
-		$chats = $this->messenger->getChats($ids, $checkChatPermission);
+		$chats = $this->messenger->getChats($ids);
 
 		if (empty($chats))
 		{
@@ -236,7 +238,7 @@ class ChatService
 				continue;
 			}
 
-			$result[] = $this->getChatEntityBaseInfo($chat, $userId, $indirectRelations, !$checkChatPermission);
+			$result[] = $this->getChatEntityBaseInfo($chat, $userId, $indirectRelations);
 		}
 
 		return $result;
@@ -250,12 +252,15 @@ class ChatService
 	 *
 	 * @return array
 	 */
-	private function getChatEntityBaseInfo(
-		Chat $chat, int $userId,
-		array $indirectRelations = [],
-		bool $checkIndividualPermission = false
-	): array
+	private function getChatEntityBaseInfo(Chat $chat, int $userId, array $indirectRelations = []): array
 	{
+		if (!$chat->checkAccess($userId)->isSuccess())
+		{
+			return [
+				'hasAccess' => false,
+			];
+		}
+
 		return [
 			'id' => $chat->getId(),
 			'dialogId' => $chat->getDialogId(),
@@ -266,7 +271,7 @@ class ChatService
 			'type' => RelationEntitySubtype::fromChatType($chat->getType())?->value,
 			'isExtranet' => $chat->getExtranet() ?? false,
 			'originalNodeId' => $indirectRelations[$chat->getId()] ?? null,
-			'hasAccess' => $checkIndividualPermission ? $chat->checkAccess($userId)->isSuccess() : true,
+			'hasAccess' => true,
 		];
 	}
 

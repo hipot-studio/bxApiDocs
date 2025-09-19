@@ -12,6 +12,8 @@ class RecentItem implements RestConvertible
 	protected string $dialogId;
 	protected int $chatId;
 	protected int $messageId;
+	protected int $id = 0;
+	protected RecentType $type = RecentType::Chat;
 	protected int $counter = 0;
 	protected int $lastReadMessageId = 0;
 	protected int $markedId = 0;
@@ -29,6 +31,8 @@ class RecentItem implements RestConvertible
 		$recentItem->dialogId = static::formDialogId($entity->getItemId(), $entity->getItemType());
 		$recentItem->chatId = $entity->getItemCid();
 		$recentItem->messageId = $entity->getItemMid();
+		$recentItem->id = $entity->getItemId() ?? 0;
+		$recentItem->type = RecentType::tryFromChatType($entity->getItemType());
 		$recentItem->pinned = $entity->getPinned();
 		$recentItem->unread = $entity->getUnread();
 
@@ -65,6 +69,28 @@ class RecentItem implements RestConvertible
 	public function setMessageId(int $messageId): RecentItem
 	{
 		$this->messageId = $messageId;
+		return $this;
+	}
+
+	public function getId(): int
+	{
+		return $this->id;
+	}
+
+	public function setId(int $id): RecentItem
+	{
+		$this->id = $id;
+		return $this;
+	}
+
+	public function getType(): RecentType
+	{
+		return $this->type;
+	}
+
+	public function setType(RecentType $type): RecentItem
+	{
+		$this->type = $type;
 		return $this;
 	}
 
@@ -188,6 +214,7 @@ class RecentItem implements RestConvertible
 			'dialogId' => $this->dialogId,
 			'chatId' => $this->chatId,
 			'messageId' => $this->messageId,
+			'type' => $this->type,
 			'pinned' => $this->pinned,
 			'unread' => $this->unread,
 			'options' => $this->options,

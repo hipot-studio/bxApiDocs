@@ -168,7 +168,7 @@ class UserRepository
 		);
 	}
 
-	private static function getAvatar(int $avatarId): array
+	public static function getAvatar(int $avatarId, array $size = ['width' => 100, 'height' => 100]): array
 	{
 		static $cache = [];
 
@@ -184,7 +184,7 @@ class UserRepository
 				{
 					$resizedFile = \CFile::resizeImageGet(
 						$originalFile,
-						['width' => 100, 'height' => 100],
+						$size,
 						BX_RESIZE_IMAGE_EXACT,
 						false,
 						false,

@@ -156,7 +156,7 @@ class FeedbackForm
 	 */
 	private function findFormByZone(array $forms): array
 	{
-		$zone = $this->getZone();
+		$zone = $this->getZone() ?? $this->getDefaultZone();
 		$found = array_filter($forms, static function ($form) use ($zone)
 		{
 			return in_array($zone, $form->zones, true);
@@ -219,9 +219,9 @@ class FeedbackForm
 		$this->currentForm = $form;
 	}
 
-	protected function getZone(): string
+	protected function getZone(): ?string
 	{
-		return Application::getInstance()->getLicense()->getRegion() ?? $this->getDefaultZone();
+		return Application::getInstance()->getLicense()->getRegion();
 	}
 
 	private function getDefaultZone(): string
@@ -241,9 +241,9 @@ class FeedbackForm
 
 	private function isCis(): bool
 	{
-		$region = Application::getInstance()->getLicense()->getRegion();
+		$zone = $this->getZone() ?? '';
 
-		return in_array($region, ['ru', 'by', 'kz', 'uz']);
+		return in_array($zone, ['ru', 'by', 'kz', 'uz']);
 	}
 
 	public static function getCisZones(): array

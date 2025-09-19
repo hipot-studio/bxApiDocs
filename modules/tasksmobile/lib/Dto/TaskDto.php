@@ -50,6 +50,7 @@ final class TaskDto extends Dto
 
 	public bool $isMuted;
 	public bool $isPinned;
+	public bool $isPinnedInGroup;
 	public bool $isInFavorites;
 	public bool $isResultRequired;
 	public bool $isResultExists;

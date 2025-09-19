@@ -19,7 +19,7 @@ class NodeMapper
 
 		return new Node(
 			name: $node['NAME'] ?? null,
-			type: NodeEntityType::tryFrom($node['TYPE']) ?? null,
+			type: NodeEntityType::tryFrom($node['TYPE'] ?? '') ?? null,
 			structureId: isset($node['STRUCTURE_ID']) ? (int)$node['STRUCTURE_ID'] : null,
 			accessCode: $accessCode,
 			id: isset($node['ID']) ? (int)$node['ID'] : null,

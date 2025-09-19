@@ -13,7 +13,6 @@ use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Error;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Result;
-use Bitrix\Main\Validation\ValidationResult;
 
 class DeleteUserCommand extends AbstractCommand
 {
@@ -23,19 +22,18 @@ class DeleteUserCommand extends AbstractCommand
 	{
 	}
 
-	protected function validate(): ValidationResult
+	protected function beforeRun(): ?Result
 	{
-		$result = new ValidationResult();
 		$isActionAvailable = ServiceContainer::getInstance()
 			->getUserService()
 			->isActionAvailableForUser($this->user, UserActionDictionary::DELETE);
 
 		if (!$isActionAvailable)
 		{
-			$result->addError(new Error('You can only delete invited users who have never logged into the portal'));
+			return (new Result())->addError(new Error('You can only delete invited users who have never logged into the portal'));
 		}
 
-		return $result;
+		return null;
 	}
 
 	protected function execute(): Result

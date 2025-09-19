@@ -3,6 +3,9 @@
 namespace Bitrix\Intranet\Internal\Factory\User;
 
 use Bitrix\Intranet\Exception\UserFieldTypeException;
+use Bitrix\Intranet\Internal\Entity\UserField\EmailField;
+use Bitrix\Intranet\Internal\Entity\UserField\MultiSelectField;
+use Bitrix\Intranet\Internal\Entity\UserField\PhoneField;
 use Bitrix\Intranet\Internal\Entity\UserField\UserField;
 use Bitrix\Intranet\Internal\Entity\UserField\DateField;
 use Bitrix\Intranet\Internal\Entity\UserField\SelectField;
@@ -36,7 +39,7 @@ class UserFieldFactory
 				[
 					'type' => $userFieldInfo['USER_TYPE_ID'],
 					'name' => $userFieldInfo['FIELD'],
-					'title' => $fieldInfo['name'],
+					'title' => $fieldInfo['title'],
 					'editable' => $fieldInfo['editable'] ?? false,
 					'showAlways' => $fieldInfo['showAlways'] ?? false,
 				],
@@ -44,11 +47,17 @@ class UserFieldFactory
 			);
 		}
 
-		$fieldClassName = $this->getUserFieldClassByType($fieldInfo['type']);
+		$fieldClassName = $this->getUserFieldClassByName($fieldInfo['name'])
+			?? $this->getUserFieldClassByType($fieldInfo['type']);
 
 		if ($fieldClassName === SelectField::class)
 		{
 			return $this->createSelectField($fieldInfo, $value);
+		}
+
+		if ($fieldClassName === MultiSelectField::class)
+		{
+			return $this->createMultiSelectField($fieldInfo, $value);
 		}
 
 		if ($fieldClassName === DateField::class)
@@ -73,10 +82,21 @@ class UserFieldFactory
 	{
 		return match($type)
 		{
-			'text', 'link', 'phone', 'string', 'string_formatted' => StringField::class,
+			'text', 'link', 'string', 'string_formatted' => StringField::class,
+			'phone' => PhoneField::class,
 			'date', 'datetime' => DateField::class,
 			'list' => SelectField::class,
+			'multilist' => MultiSelectField::class,
 			default => throw new UserFieldTypeException("Wrong user field type: $type"),
+		};
+	}
+
+	private function getUserFieldClassByName(string $name): ?string
+	{
+		return match ($name)
+		{
+			'EMAIL' => EmailField::class,
+			default => null,
 		};
 	}
 
@@ -98,6 +118,30 @@ class UserFieldFactory
 		}
 
 		return new SelectField(
+			id: $fieldInfo['name'],
+			title: $fieldInfo['title'],
+			isEditable: $fieldInfo['editable'] ?? false,
+			isShowAlways: $fieldInfo['showAlways'] ?? false,
+			items: $items,
+			value: $value,
+		);
+	}
+
+	private function createMultiSelectField(array $fieldInfo, mixed $value): MultiSelectField
+	{
+		if (empty($fieldInfo['data']['items']))
+		{
+			throw new ArgumentException("Selectable user field required items");
+		}
+
+		$items = [];
+
+		foreach ($fieldInfo['data']['items'] as $item)
+		{
+			$items[$item['VALUE']] = $item['NAME'];
+		}
+
+		return new MultiSelectField(
 			id: $fieldInfo['name'],
 			title: $fieldInfo['title'],
 			isEditable: $fieldInfo['editable'] ?? false,

@@ -290,6 +290,13 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $this;
 	}
 
+	public function addParam(string $name, mixed $value): self
+	{
+		$this->getParams()->get($name)->setValue($value);
+
+		return $this;
+	}
+
 	/**
 	 * @param array $params
 	 * @return $this
@@ -329,6 +336,20 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		return $this->params;
+	}
+
+	public function enableNotify(): self
+	{
+		$this->getParams()->remove(Message\Params::NOTIFY);
+
+		return $this;
+	}
+
+	public function disableNotify(): self
+	{
+		$this->getParams()->get(Message\Params::NOTIFY)->setValue(false);
+
+		return $this;
 	}
 
 	/**
@@ -1938,10 +1959,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		$chat = $this->getChat();
 		$roleManager = (new RoleManager())->setContextUser($this->getAuthorId());
 
-		if (
-			!$this->getParams()->isSet(Params::COPILOT_ROLE)
-			&& !$chat instanceof Im\V2\Chat\CopilotChat
-		)
+		if (!$this->isCopilotMessage())
 		{
 			return null;
 		}
@@ -1983,15 +2001,17 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getCopilotRole(): ?string
 	{
-		if (
-			!$this->chat instanceof Im\V2\Chat\CopilotChat
-			&& !$this->getParams()->isSet(Params::COPILOT_ROLE)
-		)
+		if (!$this->isCopilotMessage())
 		{
 			return null;
 		}
 
 		return $this->getParams()->get(Params::COPILOT_ROLE)->getValue() ?? $this->getDefaultCopilotRole();
+	}
+
+	public function isCopilotMessage(): bool
+	{
+		return $this->getParams()->isSet(Params::COPILOT_ROLE);
 	}
 
 	protected function getDefaultCopilotRole(): ?string
@@ -2081,5 +2101,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		{
 			$this->setMessage(Text::filterUserBbCodes($this->getMessage(), $this->getContext()->getUserId()));
 		}
+	}
+
+	public function getActionContextUserId(): int
+	{
+		return $this->getAuthorId() ?: $this->getContext()->getUserId();
 	}
 }

@@ -4,6 +4,7 @@ namespace Bitrix\HumanResources\Command\Structure\Node\Handler;
 
 use Bitrix\HumanResources\Command\Structure\Node\SaveNodeChatsCommand;
 use Bitrix\HumanResources\Integration\Im\ChatService;
+use Bitrix\HumanResources\Integration\Socialnetwork\CollabService;
 use Bitrix\HumanResources\Result\Command\Structure\SaveNodeChatsResult;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Contract\Service\NodeMemberService;
@@ -16,6 +17,7 @@ use Bitrix\Main\Engine\CurrentUser;
 class SaveNodeChatsCommandHandler
 {
 	private ChatService $chatService;
+	private CollabService $collabService;
 	private NodeMemberService $nodeMemberService;
 	private NodeRelationService $nodeRelationService;
 
@@ -24,18 +26,34 @@ class SaveNodeChatsCommandHandler
 		$this->chatService = Container::getChatService();
 		$this->nodeMemberService = Container::getNodeMemberService();
 		$this->nodeRelationService = Container::getNodeRelationService();
+		$this->collabService = Container::getCollabService();
 	}
 
 	public function __invoke(SaveNodeChatsCommand $command): SaveNodeChatsResult
 	{
-		if (!empty($command->removeIds))
+		if (!empty($command->removeIds[SaveNodeChatsCommand::CHAT_INDEX])
+			|| !empty($command->removeIds[SaveNodeChatsCommand::CHANNEL_INDEX])
+		)
 		{
 			// unlink removed relations
 			// no need to check permission, because we depend on _COMMUNICATION_EDIT permission
 			$this->nodeRelationService->unlinkByEntityIdsAndNodeIdAndType(
 				$command->node->id,
-				$command->removeIds,
+				array_merge(
+					$command->removeIds[SaveNodeChatsCommand::CHAT_INDEX],
+					$command->removeIds[SaveNodeChatsCommand::CHANNEL_INDEX],
+				),
 				RelationEntityType::CHAT,
+			);
+		}
+
+		if (!empty($command->removeIds[SaveNodeChatsCommand::COLLAB_INDEX]))
+		{
+			// same for collabs
+			$this->nodeRelationService->unlinkByEntityIdsAndNodeIdAndType(
+				$command->node->id,
+				$command->removeIds[SaveNodeChatsCommand::COLLAB_INDEX],
+				RelationEntityType::COLLAB,
 			);
 		}
 
@@ -57,9 +75,14 @@ class SaveNodeChatsCommandHandler
 				RelationEntitySubtype::Channel)
 			->getChatIds()
 		;
+		$filteredCollabsIds = $this->collabService->filterByPermissions(
+			$command->ids[SaveNodeChatsCommand::COLLAB_INDEX],
+			CurrentUser::get()->getId(),
+		);
 
 		if ($command->createDefault[SaveNodeChatsCommand::CHAT_INDEX]
 			|| $command->createDefault[SaveNodeChatsCommand::CHANNEL_INDEX]
+			|| $command->createDefault[SaveNodeChatsCommand::COLLAB_INDEX]
 		)
 		{
 			$heads = $this->nodeMemberService->getDefaultHeadRoleEmployees($command->node->id);
@@ -84,6 +107,12 @@ class SaveNodeChatsCommandHandler
 					$filteredChannelsIds[] = $addResult->getChatId();
 				}
 			}
+
+			// create default collab
+			if ((count($headIds) > 0) && $command->createDefault[SaveNodeChatsCommand::COLLAB_INDEX])
+			{
+				// ToDo: implement
+			}
 		}
 
 		$nodeRelationCollection = new Item\Collection\NodeRelationCollection();
@@ -94,6 +123,7 @@ class SaveNodeChatsCommandHandler
 					nodeId: $command->node->id,
 					entityId: $chatId,
 					entityType: RelationEntityType::CHAT,
+					withChildNodes: $command->ids[SaveNodeChatsCommand::WITH_CHILDREN_INDEX] ?? false,
 					entitySubtype: RelationEntitySubtype::Chat,
 				)
 			);
@@ -106,7 +136,19 @@ class SaveNodeChatsCommandHandler
 					nodeId: $command->node->id,
 					entityId: $channelId,
 					entityType: RelationEntityType::CHAT,
+					withChildNodes: $command->ids[SaveNodeChatsCommand::WITH_CHILDREN_INDEX] ?? false,
 					entitySubtype: RelationEntitySubtype::Channel,
+				)
+			);
+		}
+
+		foreach ($filteredCollabsIds as $collabId)
+		{
+			$nodeRelationCollection->add(
+				new Item\NodeRelation(
+					nodeId: $command->node->id,
+					entityId: $collabId,
+					entityType: RelationEntityType::COLLAB,
 				)
 			);
 		}

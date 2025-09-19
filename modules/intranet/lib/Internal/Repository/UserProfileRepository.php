@@ -1,19 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Intranet\Internal\Repository;
 
 use Bitrix\Intranet\Component\UserProfile\Form;
+use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Exception\UserFieldTypeException;
 use Bitrix\Intranet\Exception\WrongIdException;
-use Bitrix\Intranet\Internal\Entity\Collection\UserFieldCollection;
-use Bitrix\Intranet\Internal\Entity\Collection\UserFieldSectionCollection;
+use Bitrix\Intranet\Internal\Entity\UserField\UserFieldCollection;
+use Bitrix\Intranet\Internal\Entity\UserProfile\UserFieldSectionCollection;
+use Bitrix\Intranet\Internal\Entity\UserBaseInfo;
 use Bitrix\Intranet\Internal\Entity\UserField\UserField;
-use Bitrix\Intranet\Internal\Entity\UserFieldSection;
-use Bitrix\Intranet\Internal\Entity\UserProfile;
+use Bitrix\Intranet\Internal\Entity\UserProfile\UserFieldSection;
+use Bitrix\Intranet\Internal\Entity\UserProfile\UserProfile;
 use Bitrix\Intranet\Internal\Factory\User\UserFieldFactory;
 use Bitrix\Intranet\Internals\Trait\UserUpdateError;
+use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\SystemException;
@@ -50,7 +55,7 @@ class UserProfileRepository
 				'WORK_CITY', 'WORK_COUNTRY', 'WORK_COMPANY', 'WORK_DEPARTMENT',
 				'PERSONAL_PROFESSION', 'WORK_NOTES', 'WORK_PROFILE', 'LANGUAGE_ID',
 			],
-			'SELECT' => [ 'UF_DEPARTMENT', 'UF_PHONE_INNER', 'UF_SKYPE', 'UF_SKYPE_LINK', 'UF_ZOOM', 'UF_PUBLIC' ]
+			'SELECT' => [ 'UF_PHONE_INNER', 'UF_SKYPE', 'UF_SKYPE_LINK', 'UF_ZOOM', 'UF_PUBLIC' ]
 		];
 
 		$dbUser = \CUser::GetList('id', 'asc', $filter, $params);
@@ -60,6 +65,12 @@ class UserProfileRepository
 		{
 			throw new ObjectNotFoundException('User not found');
 		}
+
+		$user['UF_DEPARTMENT'] = array_values(
+			(new HrDepartmentRepository())
+				->findAllByUserId($userId)
+				->map(fn (Department $department) => $department->getId())
+		);
 
 		return $user;
 	}
@@ -82,19 +93,28 @@ class UserProfileRepository
 		return $this->createUserProfileByProfileFormAndProfileData($profileForm, $profileData);
 	}
 
-	/**
-	 * @throws WrongIdException
-	 */
-	public function getByUserProfileArray(array $userProfile): UserProfile
+	public function getUserFieldsByUserData(array $userData): UserFieldCollection
 	{
-		if (!isset($userProfile['ID']) || $userProfile['ID'] <= 0)
-		{
-			throw new WrongIdException();
-		}
+		$profileForm = new Form();
 
-		$profileForm = new Form($userProfile['ID']);
+		return $this->createUserFieldCollectionByProfileFormAndProfileData(
+			$profileForm,
+			$userData,
+		);
+	}
 
-		return $this->createUserProfileByProfileFormAndProfileData($profileForm, $userProfile);
+	public function getUserBaseInfoByUserData(array $userData): UserBaseInfo
+	{
+		$user = User::initByArray($userData);
+		$fullName = \CUser::FormatName(\CSite::GetNameFormat(), $userData, false, false);
+
+		return new UserBaseInfo(
+			userId: (int)$userData['ID'],
+			fullName: $fullName,
+			userRole: $user->getRole(),
+			invitationStatus: $user->getInviteStatus(),
+			photoId: isset($userData['PERSONAL_PHOTO']) ? (int)$userData['PERSONAL_PHOTO'] : null,
+		);
 	}
 
 	/**
@@ -129,22 +149,33 @@ class UserProfileRepository
 
 	private function createUserProfileByProfileFormAndProfileData(Form $profileForm, array $profileData): UserProfile
 	{
-		$profileSections = $profileForm->getConfig();
-		$userFieldCollection = $this->createUserFieldCollectionByProfileFormAndProfileData($profileForm, $profileData);
+		$profileSections = $profileForm->getNewConfig();
+		$userFieldCollection = $this->createUserFieldCollectionByProfileFormAndProfileData(
+			$profileForm,
+			$profileForm->getData(['User' => $profileData])
+		);
 
+		$profileSectionCollection = $this->createSectionCollectionFromProfileSectionsAndUserFields(
+			$profileSections,
+			$userFieldCollection,
+		);
+
+		return new UserProfile(
+			baseInfo: $this->getUserBaseInfoByUserData($profileData),
+			fieldSectionCollection: $profileSectionCollection,
+		);
+	}
+
+	private function createSectionCollectionFromProfileSectionsAndUserFields(
+		array $profileSections,
+		UserFieldCollection $userFieldCollection,
+	): UserFieldSectionCollection
+	{
 		$profileSectionCollection = new UserFieldSectionCollection();
 
 		foreach ($profileSections as $profileSection)
 		{
 			$sectionUserFieldCollection = new UserFieldCollection();
-
-			$section = new UserFieldSection(
-				id: $profileSection['name'],
-				title: $profileSection['title'],
-				isEditable: $profileSection['data']['isChangeable'],
-				isRemovable: $profileSection['data']['isRemovable'],
-				userFieldCollection: $userFieldCollection,
-			);
 
 			foreach ($profileSection['elements'] as $element)
 			{
@@ -160,23 +191,47 @@ class UserProfileRepository
 				if (isset($userField))
 				{
 					$sectionUserFieldCollection->add($userField);
+					$userFieldCollection->removeItem($userField);
 				}
 			}
+
+			$section = new UserFieldSection(
+				id: $profileSection['name'],
+				title: $profileSection['title'],
+				isEditable: $profileSection['data']['isChangeable'],
+				isRemovable: $profileSection['data']['isRemovable'],
+				userFieldCollection: $sectionUserFieldCollection,
+				isDefault: $profileSection['data']['isDefault'] ?? false,
+			);
 
 			$profileSectionCollection->add($section);
 		}
 
-		$user = User::initByArray($profileData);
-		$fullName = \CUser::FormatName(\CSite::GetNameFormat(), $profileData, false, false);
+		if (!$userFieldCollection->isEmpty())
+		{
+			$this->addUserFieldsToDefaultSection($userFieldCollection, $profileSectionCollection);
+		}
 
-		return new UserProfile(
-			userId: $profileData['ID'],
-			fullName: $fullName,
-			userRole: $user->getRole(),
-			invitationStatus: $user->getInviteStatus(),
-			fieldSectionCollection: $profileSectionCollection,
-			photoId: $profileData['PERSONAL_PHOTO'] ?? null,
+		return $profileSectionCollection;
+	}
+
+	private function addUserFieldsToDefaultSection(
+		UserFieldCollection $userFieldCollection,
+		UserFieldSectionCollection $profileSectionCollection,
+	): void
+	{
+		/* @var UserFieldSection $defaultSection */
+		$defaultSection = $profileSectionCollection->find(
+			fn (UserFieldSection $section) => $section->isDefault
 		);
+
+		if (isset($defaultSection))
+		{
+			foreach ($userFieldCollection as $userField)
+			{
+				$defaultSection->userFieldCollection->add($userField);
+			}
+		}
 	}
 
 	private function createUserFieldCollectionByProfileFormAndProfileData(
@@ -185,14 +240,13 @@ class UserProfileRepository
 	): UserFieldCollection
 	{
 		$profileFieldInfo = $profileForm->getFieldInfo($profileData);
-		$profileFormData = $profileForm->getData(['User' => $profileData]);
 		$userFieldCollection = new UserFieldCollection();
 
 		foreach ($profileFieldInfo as $fieldInfo)
 		{
 			if (
 				!isset($fieldInfo['name'])
-				|| !isset($profileFormData[$fieldInfo['name']])
+				|| !isset($profileData[$fieldInfo['name']])
 			)
 			{
 				continue;
@@ -200,7 +254,7 @@ class UserProfileRepository
 
 			try
 			{
-				$userField = $this->userFieldFactory->createUserFieldByArray($fieldInfo, $profileFormData[$fieldInfo['name']]);
+				$userField = $this->userFieldFactory->createUserFieldByArray($fieldInfo, $profileData[$fieldInfo['name']]);
 			}
 			catch (UserFieldTypeException|ArgumentException)
 			{

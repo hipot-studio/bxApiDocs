@@ -640,7 +640,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	 */
 	public function getRootNodeByStructureId(int $structureId): ?Item\Node
 	{
-		$node = $this->getNodeQueryWithPreparedTypeFilter()
+		$node = NodeTable::query()
 			->setSelect(['*'])
 			->addSelect('ACCESS_CODE')
 			->where('STRUCTURE_ID', $structureId)
@@ -699,6 +699,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 				->addSelect('ACCESS_CODE')
 				->setLimit($limit)
 				->setOffset($offset)
+				->setOrder(['ID' => 'ASC'])
 				->where('STRUCTURE_ID', $structureId)
 		;
 		$query = $this->setNodeActiveFilter($query, $activeFilter);

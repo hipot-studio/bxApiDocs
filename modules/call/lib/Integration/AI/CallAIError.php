@@ -79,21 +79,37 @@ class CallAIError extends \Bitrix\Call\Error
 	{
 		if (\Bitrix\Main\Loader::includeModule('ai'))
 		{
-			$history = \Bitrix\AI\Model\HistoryTable::getList([
-				'filter' => [
-					'=CONTEXT_MODULE' => 'call',
-					'=CONTEXT_ID' => $task->getContextId()
-				],
-				'order' => ['ID' => 'DESC'],
-				'limit' => 1,
-			]);
-			if (
-				($row = $history->fetch())
-				&& !empty($row['RESULT_TEXT'])
-				&& $row['RESULT_TEXT'] != $againstError
-			)
+			$payloadResult = $task->getAIPayload();
+			if ($payloadResult->isSuccess())
 			{
-				return $row['RESULT_TEXT'];
+				/**
+				 * @var \Bitrix\AI\Payload\IPayload $payload
+				 */
+				$payload = $payloadResult->getData()['payload'];
+				$context = $task->getAIEngineContext();
+				$engine = $task->getAIEngine($context);
+
+				$history = \Bitrix\AI\Model\HistoryTable::getList([
+					'filter' => [
+						'=CONTEXT_MODULE' => 'call',
+						'=CONTEXT_ID' => $task->getContextId(),
+						'=ENGINE_CODE' => $task->getAIEngineCode(),
+						'=ENGINE_CLASS' => $engine::class,
+						'=PAYLOAD_CLASS' => $payload::class,
+						'>DATE_CREATE' => (new \Bitrix\Main\Type\DateTime())->add('-5sec'),
+					],
+					'order' => ['ID' => 'DESC'],
+					'limit' => 1,
+				]);
+				if (
+					($row = $history->fetch())
+					&& !empty($row['RESULT_TEXT'])
+					&& $row['RESULT_TEXT'] != $againstError
+					&& !str_starts_with(ltrim($row['RESULT_TEXT']), '{')
+				)
+				{
+					return $row['RESULT_TEXT'];
+				}
 			}
 		}
 

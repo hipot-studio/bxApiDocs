@@ -246,7 +246,7 @@ class JwtCall
 
 	public static function getPrivateKey(): string
 	{
-		$privateKey = base64_decode(Option::get('call', 'call_portal_key'));
+		$privateKey = Option::get('call', 'call_portal_key');
 
 		$cryptoOptions = Configuration::getValue('crypto');
 		if (!empty($cryptoOptions['crypto_key']))
@@ -254,7 +254,7 @@ class JwtCall
 			try
 			{
 				$cipher = new Cipher();
-				$privateKey = $cipher->decrypt($privateKey, $cryptoOptions['crypto_key']);
+				$privateKey = $cipher->decrypt(base64_decode($privateKey), $cryptoOptions['crypto_key']);
 			}
 			catch (SecurityException $exception)
 			{

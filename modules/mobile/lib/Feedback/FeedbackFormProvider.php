@@ -29,135 +29,137 @@ class FeedbackFormProvider
 		'copilotRoles' => [
 			'ru-by-kz' => [
 				'portalZones' => ['ru', 'by', 'kz'],
-				'formData' => [
-					'data-b24-form' => 'inline/746/we50kv',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_746.js',
-				],
+				'formId' => 746,
+				'sec' => 'we50kv',
+				'lang' => 'ru',
 			],
 			'de' => [
 				'portalZones' => ['de'],
-				'formData' => [
-					'data-b24-form' => 'inline/742/vqqxgr',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_742.js',
-				],
+				'formId' => 742,
+				'sec' => 'vqqxgr',
+				'lang' => 'de',
 			],
 			'com.br' => [
 				'portalZones' => ['com.br'],
-				'formData' => [
-					'data-b24-form' => 'inline/744/nz3zig',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_744.js',
-				],
+				'formId' => 744,
+				'sec' => 'nz3zig',
+				'lang' => 'br',
 			],
 			'es' => [
 				'portalZones' => ['es'],
-				'formData' => [
-					'data-b24-form' => 'inline/738/77ui4p',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_738.js',
-				],
+				'formId' => 738,
+				'sec' => '77ui4p',
+				'lang' => 'es',
 			],
 			'en' => [
 				'isDefault' => true,
 				'portalZones' => ['en'],
-				'formData' => [
-					'data-b24-form' => 'inline/740/obza3e',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_740.js',
-				],
+				'formId' => 740,
+				'sec' => 'obza3e',
+				'lang' => 'en',
 			],
 		],
 		'appFeedbackLight' => [
 			'ru-by-kz' => [
 				'portalZones' => ['ru', 'by', 'kz'],
-				'formData' => [
-					'data-b24-form' => 'inline/586/nkupl5',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_586.js',
-					'formId' => 586,
-				],
+				'formId' => 586,
+				'sec' => 'nkupl5',
+				'lang' => 'ru',
 			],
 			'de' => [
 				'portalZones' => ['de'],
-				'formData' => [
-					'data-b24-form' => 'inline/802/lgshoi',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_802.js',
-					'formId' => 802,
-				],
+				'formId' => 802,
+				'sec' => 'lgshoi',
+				'lang' => 'de',
 			],
 			'com.br' => [
 				'portalZones' => ['com.br'],
-				'formData' => [
-					'data-b24-form' => 'inline/806/4lxtzv',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_806.js',
-					'formId' => 806,
-				],
+				'formId' => 806,
+				'sec' => '4lxtzv',
+				'lang' => 'br',
 			],
 			'es' => [
 				'portalZones' => ['es'],
-				'formData' => [
-					'data-b24-form' => 'inline/804/6vz7b5',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_804.js',
-					'formId' => 804,
-				],
+				'formId' => 804,
+				'sec' => '6vz7b5',
+				'lang' => 'es',
 			],
 			'en' => [
 				'isDefault' => true,
 				'portalZones' => ['en'],
-				'formData' => [
-					'data-b24-form' => 'inline/582/dyd2ut',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_582.js',
-					'formId' => 582,
-				],
+				'formId' => 582,
+				'sec' => 'dyd2ut',
+				'lang' => 'en',
 			],
 		],
 		'appFeedbackDark' => [
 			'ru-by-kz' => [
 				'portalZones' => ['ru', 'by', 'kz'],
-				'formData' => [
-					'data-b24-form' => 'inline/810/z0e29c',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_810.js',
-					'formId' => 810,
-				],
+				'formId' => 810,
+				'sec' => 'z0e29c',
+				'lang' => 'ru',
 			],
 			'de' => [
 				'portalZones' => ['de'],
-				'formData' => [
-					'data-b24-form' => 'inline/812/n27x9c',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_812.js',
-					'formId' => 812,
-				],
+				'formId' => 812,
+				'sec' => 'n27x9c',
+				'lang' => 'de',
 			],
 			'com.br' => [
 				'portalZones' => ['com.br'],
-				'formData' => [
-					'data-b24-form' => 'inline/816/v35xqq',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_816.js',
-					'formId' => 816,
-				],
+				'formId' => 816,
+				'sec' => 'v35xqq',
+				'lang' => 'br',
 			],
 			'es' => [
 				'portalZones' => ['es'],
-				'formData' => [
-					'data-b24-form' => 'inline/814/30eaek',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_814.js',
-					'formId' => 814,
-				],
+				'formId' => 814,
+				'sec' => '30eaek',
+				'lang' => 'es',
 			],
 			'en' => [
 				'isDefault' => true,
 				'portalZones' => ['en'],
-				'formData' => [
-					'data-b24-form' => 'inline/808/8al21c',
-					'uri' => 'https://cdn.bitrix24.com/b5309667/crm/form/loader_808.js',
-					'formId' => 808,
-				],
+				'formId' => 808,
+				'sec' => '8al21c',
+				'lang' => 'en',
 			],
 		],
 	];
 
-	/**
-	 * @throws LoaderException
-	 */
+	public static function getFormConfig(string $formId): array
+	{
+		$targetForm = self::FORMS[$formId] ?? null;
+		if (!isset($targetForm) || !is_array($targetForm))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($targetForm as $regionData)
+		{
+			if (empty($regionData['portalZones'])
+				|| empty($regionData['formId'])
+				|| empty($regionData['lang'])
+				|| empty($regionData['sec']))
+			{
+				continue;
+			}
+
+			$result[] = [
+				'zones' => $regionData['portalZones'],
+				'id' => (int)$regionData['formId'],
+				'lang' => $regionData['lang'],
+				'sec' => $regionData['sec'],
+			];
+		}
+
+		return $result;
+	}
+
 	public static function getFormData(string $formId): array|null
 	{
-		$targetForm = self::FORMS[$formId];
+		$targetForm = self::FORMS[$formId] ?? null;
 		if (!empty($targetForm) && is_array($targetForm))
 		{
 			$portalZone = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: "en";
@@ -166,12 +168,11 @@ class FeedbackFormProvider
 			{
 				if (in_array($portalZone, $portalZonesData['portalZones']))
 				{
-					return $portalZonesData['formData'];
+					return $portalZonesData;
 				}
-
-				if ($portalZonesData['isDefault'] === true)
+				if (($portalZonesData['isDefault'] ?? false) === true)
 				{
-					$defaultFormData = $portalZonesData['formData'];
+					$defaultFormData = $portalZonesData;
 				}
 			}
 

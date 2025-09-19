@@ -17,7 +17,6 @@ use Bitrix\Mobile\Collab\Provider\LanguageProvider;
 use Bitrix\Mobile\Trait\PublicErrorsTrait;
 use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
 use Bitrix\SocialNetwork\Collab\Access\CollabDictionary;
-use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Config\Option;
 
 final class Collab extends JsonController
@@ -68,20 +67,12 @@ final class Collab extends JsonController
 
 	/**
 	 * @restMethod mobile.Collab.getInviteSettings
+	 * @param int $collabId
 	 * @return array
 	 * @throws LoaderException
 	 */
 	public function getInviteSettingsAction(int $collabId): array
 	{
-		if (!$this->isCollabToolEnabled())
-		{
-			return [
-				'canCurrentUserInvite' => false,
-				'isBitrix24Included' => false,
-				'canInviteCollabers' => false,
-			];
-		}
-
 		$canCurrentUserInvite = CollabAccessController::can($this->getCurrentUser()?->getId(), CollabDictionary::INVITE, $collabId);
 		$isBitrix24Included = Loader::includeModule('bitrix24');
 		$languages = (new LanguageProvider())->getLanguages();
@@ -102,6 +93,7 @@ final class Collab extends JsonController
 
 	/**
 	 * @restMethod mobile.Collab.getSharingMessageText
+	 * @param string|mixed|null $languageCode
 	 * @return string
 	 */
 	public function getSharingMessageTextAction(string $languageCode = LANGUAGE_ID): string
@@ -112,7 +104,6 @@ final class Collab extends JsonController
 	/**
 	 * @restMethod mobile.Collab.getCreateSettings
 	 * @return array
-	 * @throws LoaderException
 	 */
 	public function getCreateSettingsAction(): array
 	{
@@ -122,11 +113,6 @@ final class Collab extends JsonController
 			'autoDeleteEnabledInPortalSettings' => null,
 			'security' => new CollabSecuritySettingsDto(),
 		];
-
-		if (!$this->isCollabToolEnabled())
-		{
-			return $result;
-		}
 
 		$user = $this->getCurrentUser();
 
@@ -150,16 +136,11 @@ final class Collab extends JsonController
 
 	/**
 	 * @restMethod mobile.Collab.getIsCollabNameExistsStatus
+	 * @param string $name
 	 * @return array
-	 * @throws LoaderException
 	 */
 	public function getIsCollabNameExistsStatusAction(string $name): array
 	{
-		if (!$this->isCollabToolEnabled())
-		{
-			return [];
-		}
-
 		return [
 			'isExists' => \Bitrix\Socialnetwork\Provider\GroupProvider::getInstance()->isExistingGroup($name),
 			'name' => $name,
@@ -172,21 +153,7 @@ final class Collab extends JsonController
 	public function isCollabToolEnabledAction(): array
 	{
 		return [
-			'isCollabToolEnabled' => $this->isCollabToolEnabled(),
+			'isCollabToolEnabled' => CollabAccessControl::isCollabToolEnabled(),
 		];
-	}
-
-	/**
-	 * @return bool
-	 * @throws LoaderException
-	 */
-	private function isCollabToolEnabled(): bool
-	{
-		if (Loader::includeModule('intranet'))
-		{
-			return ToolsManager::getInstance()->checkAvailabilityByToolId('collab');
-		}
-
-		return true;
 	}
 }

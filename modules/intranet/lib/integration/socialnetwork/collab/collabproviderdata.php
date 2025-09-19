@@ -5,6 +5,7 @@ namespace Bitrix\Intranet\Integration\Socialnetwork\Collab;
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\Collab\CollabCollection;
 use Bitrix\Socialnetwork\Collab\CollabFeature;
+use Bitrix\Socialnetwork\Collab\Control\Option\Type\AllowGuestsInvitationField;
 use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 use Bitrix\Socialnetwork\Collab\Requirement;
 
@@ -52,5 +53,33 @@ final class CollabProviderData
 		}
 
 		return $collection;
+	}
+
+	public function isAllowedGuestsInvitation(int $collabId): bool
+	{
+		if (!$this->isEnabled || !$this->available)
+		{
+			return false;
+		}
+
+		$collab = CollabProvider::getInstance()->getCollab($collabId);
+		if (!$collab)
+		{
+			return false;
+		}
+
+		if (!class_exists(AllowGuestsInvitationField::class))
+		{
+			return true;
+		}
+
+		$allowGuestsInvitation = $collab->getOptionValue(AllowGuestsInvitationField::DB_NAME);
+
+		if (!$allowGuestsInvitation)
+		{
+			return AllowGuestsInvitationField::DEFAULT_VALUE;
+		}
+
+		return $allowGuestsInvitation === 'Y';
 	}
 }

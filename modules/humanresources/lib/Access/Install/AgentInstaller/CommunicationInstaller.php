@@ -18,7 +18,7 @@ class CommunicationInstaller extends BaseInstaller
 	protected function run(): void
 	{
 		$permissionCollection = new PermissionCollection();
-		$permissionRepository = new PermissionRepository();
+		$permissionRepository = Container::getAccessPermissionRepository();
 
 		$targetPermissions = [
 			TeamPermissionMapper::makeTeamPermissionId(

@@ -23,6 +23,7 @@ class InstallerFactory
 			5 => UpdateAdminRoleInstaller::class,
 			6 => TeamRolesInstallerV2::class,
 			7 => CommunicationInstaller::class,
+			8 => CommunicationInstallerV2::class,
 		];
 	}
 

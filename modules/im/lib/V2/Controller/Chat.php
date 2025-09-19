@@ -17,6 +17,7 @@ use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Chat\OpenChat;
 use Bitrix\Im\V2\Chat\OpenLineChat;
 use Bitrix\Im\V2\Chat\Param\Params;
+use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Controller\Filter\DiskQuickAccessGrantor;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Chat\Update\UpdateFields;
@@ -50,8 +51,12 @@ class Chat extends BaseController
 					new CheckActionAccess(
 						Permission\GlobalAction::CreateChat,
 						fn (Base $filter) => [
-							'TYPE' => $this->getValidatedType($filter->getAction()->getArguments()['fields']['type'] ?? ''),
-							'ENTITY_TYPE' => $filter->getAction()->getArguments()['entityType'] ?? null,
+							'TYPE' => $this->getValidatedType(
+								$filter->getAction()->getArguments()['fields']['type'] ?? ''
+							),
+							'ENTITY_TYPE' => $this->getValidatedEntityType(
+								$filter->getAction()->getArguments()['fields']['entityType'] ?? null
+							),
 						]
 					),
 					new CheckFileAccess(['fields', 'avatar']),
@@ -378,6 +383,7 @@ class Chat extends BaseController
 	public function addAction(array $fields): ?array
 	{
 		$fields['type'] = $this->getValidatedType($fields['type'] ?? null);
+		$fields['entityType'] = $this->getValidatedEntityType($fields['entityType'] ?? null);
 
 		if (
 			!isset($fields['entityType'])
@@ -813,6 +819,14 @@ class Chat extends BaseController
 			'AI_ASSISTANT' => \Bitrix\Im\V2\Chat::IM_TYPE_AI_ASSISTANT,
 			default => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
 		};
+	}
+
+	private function getValidatedEntityType(?string $entityType): ?string
+	{
+		$convertedEntityType = (string)(new Converter(Converter::TO_UPPER))->process($entityType);
+		$extendedType = ExtendedType::tryFrom($convertedEntityType);
+
+		return $extendedType?->isInternal() ? null : $convertedEntityType;
 	}
 	//endregion
 	//endregion

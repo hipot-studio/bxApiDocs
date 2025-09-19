@@ -114,6 +114,6 @@ class MessageAnalytics extends ChatAnalytics
 			return null;
 		}
 
-		return (new MessageEvent($eventName, $this->chat));
+		return (new MessageEvent($eventName, $this->chat, $this->userId));
 	}
 }

@@ -621,6 +621,7 @@ abstract class Engine
 		{
 			$this->setCache(true);
 		}
+		$params = $this->makeRequestParams();
 		$this->queueJob = QueueJob::createWithinFromEngine($this)->register();
 
 		$url = $this->getCompletionsQueueUrl() . $this->getCompletionsQueueUrlPath();
@@ -641,7 +642,7 @@ abstract class Engine
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),
 			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
 			'url' => $this->getCompletionsUrl(),
-			'params' => $this->makeRequestParams(),
+			'params' => $params,
 			'authorization' => $this->getAuthorizationHeader(),
 			'additionalHeaders' => $this->getAdditionalHeaders() ?? null,
 		]));

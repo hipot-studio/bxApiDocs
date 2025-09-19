@@ -7,7 +7,7 @@ use Bitrix\Intranet\Settings\Tools\BIConstructor;
 use Bitrix\Intranet\Settings\Tools\Tasks;
 use Bitrix\Intranet\Settings\Tools\TeamWork;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
-use Bitrix\Main\Application;
+use Bitrix\BIConnector\Access;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Engine\CurrentUser;
@@ -162,7 +162,7 @@ class CollaborationSection
 	{
 		$shouldShowNewMenu = \Bitrix\Main\Config\Option::get('intranet', 'should_show_new_collaboration_menu', 'N') === 'Y';
 
-		return $shouldShowNewMenu && self::isBitrix24Cloud();
+		return $shouldShowNewMenu;
 	}
 
 	public static function isFeatureEnabled(string $feature): bool
@@ -228,7 +228,7 @@ class CollaborationSection
 			'menuData' => [
 				'menu_item_id' => 'menu_notifications',
 				'onclick' => "BX?.Messenger?.Public?.openNotifications();",
-				'counter_id' => 'notifications',
+				'counter_id' => 'notification',
 			],
 		];
 	}
@@ -252,11 +252,15 @@ class CollaborationSection
 	public static function getBIConstructor(): array
 	{
 		$biConstructor = new BIConstructor();
-
 		return [
 			'id' =>  $biConstructor->getId(),
 			'title' => $biConstructor->getName(),
-			'available' => $biConstructor->isAvailable(),
+			'available' => $biConstructor->isAvailable()
+				&& Loader::includeModule('biconnector')
+				&& ToolsManager::getInstance()->checkAvailabilityByMenuId($biConstructor->getMenuItemId())
+				&& Access\AccessController::getCurrent()->check(
+					Access\ActionDictionary::ACTION_BIC_ACCESS
+				),
 			'url' => $biConstructor->getLeftMenuPath(),
 			'menuData' => [
 				'menu_item_id' =>  $biConstructor->getMenuItemId(),
@@ -276,7 +280,7 @@ class CollaborationSection
 			'url' => str_replace('#USER_ID#', CurrentUser::get()->getId(), $tasks->getLeftMenuPath()),
 			'menuData' => [
 				'menu_item_id' => $tasks->getMenuItemId(),
-				'counter_id' => 'tasks',
+				'counter_id' => 'tasks_total',
 			],
 		];
 	}

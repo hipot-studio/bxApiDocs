@@ -13,6 +13,7 @@ use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
@@ -234,7 +235,8 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	 * @param bool $withAllChildNodes
 	 * @param bool $onlyActive *
 	 *
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
+	 * @return NodeMemberCollection
+	 * @throws WrongStructureItemException
 	 */
 	public function getAllEmployees(
 		int $nodeId,
@@ -323,14 +325,21 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	}
 
 	/**
+	 * @param NodeMember $nodeMember
+	 * @param Item\Node $node
+	 *
+	 * @return NodeMember
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SqlQueryException
+	 * @throws SystemException
 	 * @throws UpdateFailedException
+	 *
+	 * @deprecated use InternalContainer::getNodeMemberService()->moveMember instead
 	 */
 	public function moveMember(Item\NodeMember $nodeMember, Item\Node $node): Item\NodeMember
 	{
-		$nodeMember->nodeId = $node->id;
-		$this->nodeMemberRepository->update($nodeMember);
-
-		return $nodeMember;
+		return InternalContainer::getNodeMemberService()->moveMember($nodeMember, $node);
 	}
 
 	/**
@@ -682,6 +691,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 				entityIdFilter: new EntityIdFilter(new Type\IntegerCollection($employeeUserId)),
 				entityType: MemberEntityType::USER,
 				nodeFilter: $nodeFilter,
+				findRelatedMembers: true,
 			))
 			->addStructureRole($structureRole)
 			->setSort(new NodeSort(depth: SortDirection::Desc))

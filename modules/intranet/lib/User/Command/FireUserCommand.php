@@ -11,7 +11,6 @@ use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Bitrix\Main\Validation\ValidationResult;
 
 class FireUserCommand extends AbstractCommand
 {
@@ -21,19 +20,18 @@ class FireUserCommand extends AbstractCommand
 	{
 	}
 
-	protected function validate(): ValidationResult
+	protected function beforeRun(): ?Result
 	{
-		$result = new ValidationResult();
 		$isActionAvailable = ServiceContainer::getInstance()
 			->getUserService()
 			->isActionAvailableForUser($this->user, UserActionDictionary::FIRE);
 
 		if (!$isActionAvailable)
 		{
-			$result->addError(new Error('User already fired'));
+			return (new Result())->addError(new Error('User already fired'));
 		}
 
-		return $result;
+		return null;
 	}
 
 	protected function execute(): Result
@@ -43,7 +41,8 @@ class FireUserCommand extends AbstractCommand
 		try
 		{
 			$userRepository = ServiceContainer::getInstance()->userRepository();
-			$handler = new FireUserHandler($userRepository);
+			$userService = ServiceContainer::getInstance()->getUserService();
+			$handler = new FireUserHandler($userRepository, $userService);
 			$handler($this);
 
 			return $result;

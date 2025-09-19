@@ -561,7 +561,7 @@ class GeneralChat extends GroupChat
 		parent::sendMessageUserDelete($userId, $config);
 	}
 
-	protected function getMessageUserDeleteText(int $deletedUserId): string
+	public function getUserDeleteMessageText(int $deletedUserId): string
 	{
 		$user = User::getInstance($deletedUserId);
 

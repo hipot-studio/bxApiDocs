@@ -12,6 +12,7 @@ enum GlobalAction: string
 	case CreateChannel = 'CREATE_CHANNEL';
 	case CreateCollab = 'CREATE_COLLAB';
 	case CreateCopilot = 'CREATE_COPILOT';
+	case CreateAiAssistant = 'CREATE_AI_ASSISTANT';
 	case LeaveCollab = 'LEAVE_COLLAB';
 	case ChangeMessagesAutoDeleteDelay = 'CHANGE_MESSAGES_AUTO_DELETE_DELAY';
 }

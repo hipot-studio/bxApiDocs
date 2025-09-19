@@ -43,6 +43,8 @@ class DeleteOrFireUserHandler
 				$this->userRepository->update($user);
 			}
 
+			$this->userService->clearCache();
+
 			return;
 		}
 

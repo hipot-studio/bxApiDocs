@@ -3,9 +3,10 @@
 namespace Bitrix\Intranet\Entity;
 
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\Main\Entity\EntityInterface;
 use Bitrix\Main\Type\DateTime;
 
-class Department
+class Department implements EntityInterface
 {
 	public function __construct(
 		private string $name,

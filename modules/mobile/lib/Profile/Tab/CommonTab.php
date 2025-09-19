@@ -13,6 +13,8 @@ use Bitrix\Mobile\Profile\Enum\UserStatus;
 use Bitrix\Mobile\Profile\Provider\GratitudeProvider;
 use Bitrix\Mobile\Provider\CommonUserDto;
 use Bitrix\Mobile\Provider\UserRepository;
+use Bitrix\Tasks\Internals\Effective;
+use Bitrix\Tasks\Util\User as TasksUser;
 
 class CommonTab extends BaseProfileTab
 {
@@ -66,6 +68,7 @@ class CommonTab extends BaseProfileTab
 	{
 		// todo: check profile view permissions
 		$users = UserRepository::getByIds([$this->ownerId]);
+
 		if (!empty($users))
 		{
 			$statusData = $this->getOwnerStatusData($users[0]);
@@ -74,6 +77,7 @@ class CommonTab extends BaseProfileTab
 				'user' => $users[0],
 				'statusData' => $statusData,
 				'gratitude' => $this->getGratitudeData(),
+				'efficiency' => $this->getEfficiencyData(),
 			];
 		}
 
@@ -173,7 +177,8 @@ class CommonTab extends BaseProfileTab
 		{
 			return (new \DateTime())
 				->setTimestamp($absenceData['DATE_TO_TS'])
-				->format('d.m.Y');
+				->format('d.m.Y')
+			;
 		}
 
 		return '';
@@ -224,5 +229,36 @@ class CommonTab extends BaseProfileTab
 		$limit = 10;
 
 		return $gratitudeProvider->getBadges($this->ownerId, $limit);
+	}
+
+	private function getEfficiencyData(): ?array
+	{
+		if (!Loader::includeModule('tasks'))
+		{
+			return null;
+		}
+
+		$currentUser = TasksUser::getId();
+		$isAvailable = $currentUser === $this->ownerId
+			|| TasksUser::isSuper($currentUser)
+			|| TasksUser::isBossRecursively($currentUser, $this->ownerId);
+
+		if(!$isAvailable)
+		{
+			return null;
+		}
+
+		$datesRange = Effective::getDatesRange();
+		$tasksCounters = Effective::getCountersByRange(
+			dateFrom: $datesRange['FROM'],
+			dateTo: $datesRange['TO'],
+			userId: $this->ownerId,
+		);
+
+		return [
+			'completed' => $tasksCounters['COMPLETED'],
+			'violations' => $tasksCounters['VIOLATIONS'],
+			'inProgress' => $tasksCounters['IN_PROGRESS'],
+		];
 	}
 }

@@ -74,6 +74,7 @@ class DepartmentUserSearchService
 	 * @param int $userId
 	 *
 	 * @return NodeMember|null
+	 * @throws WrongStructureItemException
 	 */
 	public function findNearestHeadByUserId(int $userId): ?Item\NodeMember
 	{

@@ -4,13 +4,13 @@ namespace Bitrix\Im;
 use Bitrix\Im\Model\BlockUserTable;
 use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\EntityLink;
+use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Chat\GeneralChannel;
+use Bitrix\Im\V2\Chat\GeneralChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
-use Bitrix\Im\V2\Message\Counter\CounterType;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Message\ReadService;
-use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
@@ -46,74 +46,21 @@ class Chat
 	{
 		$messageType = $chatData["TYPE"] ?? $chatData["CHAT_TYPE"] ?? '';
 		$entityType = $chatData["ENTITY_TYPE"] ?? $chatData["CHAT_ENTITY_TYPE"] ?? '';
+		$chatId = $chatData['ID'] ?? $chatData['CHAT_ID'] ?? null;
 
 		$messageType = trim($messageType);
 		$entityType = trim($entityType);
 
-		$chatId = null;
-		if (isset($chatData['ID']))
-		{
-			$chatId = (int)$chatData['ID'];
-		}
-		else if (isset($chatData['CHAT_ID']))
-		{
-			$chatId = (int)$chatData['CHAT_ID'];
-		}
+		$type = ExtendedType::tryFromTypeLiteral($messageType);
 
-		if ($messageType == IM_MESSAGE_PRIVATE)
+		$result = match (true)
 		{
-			$result = 'PRIVATE';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT)
-		{
-			$result = 'COPILOT';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB)
-		{
-			$result = 'COLLAB';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_AI_ASSISTANT)
-		{
-			$result = 'AI_ASSISTANT';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_AI_ASSISTANT_ENTITY)
-		{
-			$result = 'AI_ASSISTANT_ENTITY';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL)
-		{
-			$result = 'CHANNEL';
-		}
-		else if (
-			($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL && $entityType === \Bitrix\Im\V2\Chat::ENTITY_TYPE_GENERAL_CHANNEL)
-			|| (isset($chatId) && $chatId === GeneralChannel::getGeneralChannelId())
-		)
-		{
-			$result = 'GENERAL_CHANNEL';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL)
-		{
-			$result = 'OPEN_CHANNEL';
-		}
-		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_COMMENT)
-		{
-			$result = 'COMMENT';
-		}
-		else if (!empty($entityType))
-		{
-			$result = $entityType;
-		}
-		else if (
-			($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN && $entityType === \Bitrix\Im\V2\Chat::ENTITY_TYPE_GENERAL)
-			|| ($chatId && $chatId === (int)\CIMChat::GetGeneralChatId())
-		)
-		{
-			$result = 'GENERAL';
-		}
-		else
-		{
-			$result = $messageType == IM_MESSAGE_OPEN? 'OPEN': 'CHAT';
-		}
+			self::isGeneralChannel($chatId, $messageType, $entityType) => ExtendedType::GeneralChannel->value,
+			self::isGeneralChat($chatId, $messageType, $entityType) => ExtendedType::General->value,
+			!in_array($type, [ExtendedType::Chat, ExtendedType::OpenChat], true) => $type->value,
+			!empty($entityType) => $entityType,
+			default => $type->value,
+		};
 
 		if ($camelCase)
 		{
@@ -121,6 +68,26 @@ class Chat
 		}
 
 		return htmlspecialcharsbx($result);
+	}
+
+	protected static function isGeneralChat(?int $chatId, string $typeLiteral, string $entityType): bool
+	{
+		return (
+				ExtendedType::tryFromTypeLiteral($typeLiteral) === ExtendedType::OpenChat
+				&& ExtendedType::tryFromEntityType($entityType) === ExtendedType::General
+			)
+			|| $chatId === (int)GeneralChat::getGeneralChatId()
+		;
+	}
+
+	protected static function isGeneralChannel(?int $chatId, string $typeLiteral, string $entityType): bool
+	{
+		return (
+				ExtendedType::tryFromTypeLiteral($typeLiteral) === ExtendedType::OpenChannel
+				&& ExtendedType::tryFromEntityType($entityType) === ExtendedType::GeneralChannel
+			)
+			|| $chatId === (int)GeneralChannel::getGeneralChannelId()
+		;
 	}
 
 	public static function getRelation($chatId, $params = [])

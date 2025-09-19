@@ -210,7 +210,7 @@ class CAllIMContactList
 			else
 			{
 				$select = array(
-					"ID", "LAST_NAME", "NAME", "LOGIN", "PERSONAL_PHOTO", "SECOND_NAME", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "WORK_PHONE", "PERSONAL_PHONE", "PERSONAL_MOBILE", "TIME_ZONE_OFFSET", "ACTIVE", "LAST_ACTIVITY_DATE",
+					"ID", "LAST_NAME", "NAME", "LOGIN", "PERSONAL_PHOTO", "SECOND_NAME", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "WORK_PHONE", "PERSONAL_PHONE", "PERSONAL_MOBILE", "ACTIVE", "LAST_ACTIVITY_DATE",
 					"COLOR" => "ST.COLOR", "STATUS" =>	"ST.STATUS", "IDLE" => "ST.IDLE", "MOBILE_LAST_DATE" => "ST.MOBILE_LAST_DATE", "DESKTOP_LAST_DATE" => "ST.DESKTOP_LAST_DATE",
 				);
 				if($bIntranetEnable)
@@ -338,7 +338,6 @@ class CAllIMContactList
 							'gender' => $arUser['PERSONAL_GENDER'] == 'F'? 'F': 'M',
 							'phone_device' => $bVoximplantEnable && $arUser['UF_VI_PHONE'] == 'Y',
 							'extranet' => self::IsExtranet($arUser),
-							'tz_offset' => intval($arUser['TIME_ZONE_OFFSET']),
 							'network' => ($userExternalAuthId === self::NETWORK_AUTH_ID) || ($userExternalAuthId === \Bitrix\Im\Bot::EXTERNAL_AUTH_ID) && ($botType === \Bitrix\Im\Bot::TYPE_NETWORK),
 							'bot' => $userExternalAuthId === \Bitrix\Im\Bot::EXTERNAL_AUTH_ID,
 							'profile' => CIMContactList::GetUserPath($arUser["ID"]),
@@ -557,7 +556,7 @@ class CAllIMContactList
 		}
 
 		$select = Array(
-			"ID", "LAST_NAME", "NAME", "SECOND_NAME", "LOGIN", "PERSONAL_PHOTO", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "TIME_ZONE_OFFSET", "ACTIVE", "UF_IM_SEARCH", "LAST_ACTIVITY_DATE",
+			"ID", "LAST_NAME", "NAME", "SECOND_NAME", "LOGIN", "PERSONAL_PHOTO", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "ACTIVE", "UF_IM_SEARCH", "LAST_ACTIVITY_DATE",
 			"COLOR" => "ST.COLOR", "STATUS" =>	"ST.STATUS", "IDLE" => "ST.IDLE", "MOBILE_LAST_DATE" => "ST.MOBILE_LAST_DATE", "DESKTOP_LAST_DATE" => "ST.DESKTOP_LAST_DATE",
 		);
 		if($bIntranetEnable)
@@ -619,7 +618,6 @@ class CAllIMContactList
 				'extranet' => self::IsExtranet($arUser),
 				'network' => $arUser['EXTERNAL_AUTH_ID'] == self::NETWORK_AUTH_ID || $arUser['EXTERNAL_AUTH_ID'] == \Bitrix\Im\Bot::EXTERNAL_AUTH_ID && $bots[$arUser["ID"]]['TYPE'] == \Bitrix\Im\Bot::TYPE_NETWORK,
 				'bot' => $arUser['EXTERNAL_AUTH_ID'] == \Bitrix\Im\Bot::EXTERNAL_AUTH_ID,
-				'tz_offset' => intval($arUser['TIME_ZONE_OFFSET']),
 				'profile' => CIMContactList::GetUserPath($arUser["ID"]),
 				'search_mark' => $searchText,
 				'external_auth_id' => $userExternalAuthId,
@@ -653,7 +651,6 @@ class CAllIMContactList
 						'birthday' => false,
 						'gender' => 'M',
 						'phone_device' => false,
-						'tz_offset' => 0,
 						'extranet' => true,
 						'network' => true,
 						'bot' => true,
@@ -935,7 +932,7 @@ class CAllIMContactList
 			}
 		}
 
-		$arSelect = array("ID", "LAST_NAME", "NAME", "EMAIL", "LOGIN", "PERSONAL_PHOTO", "SECOND_NAME", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "TIME_ZONE_OFFSET", "PERSONAL_WWW", "ACTIVE", "LAST_ACTIVITY_DATE"); // TODO , "TIME_ZONE_OFFSET"
+		$arSelect = array("ID", "LAST_NAME", "NAME", "EMAIL", "LOGIN", "PERSONAL_PHOTO", "SECOND_NAME", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "PERSONAL_WWW", "ACTIVE", "LAST_ACTIVITY_DATE");
 		if ($getPhones)
 		{
 			$arSelect[] = 'WORK_PHONE';
@@ -1037,7 +1034,6 @@ class CAllIMContactList
 				'phone_device' => $bVoximplantEnable && $arUser['UF_VI_PHONE'] == 'Y',
 				'phones' => $bVoximplantEnable && $arUser['UF_VI_PHONE'] == 'Y',
 				'extranet' => self::IsExtranet($arUser),
-				'tz_offset' => intval($arUser['TIME_ZONE_OFFSET']),
 				'network' => $arUser['EXTERNAL_AUTH_ID'] == self::NETWORK_AUTH_ID || $arUser['EXTERNAL_AUTH_ID'] == \Bitrix\Im\Bot::EXTERNAL_AUTH_ID && $bots[$arUser["ID"]]['TYPE'] == \Bitrix\Im\Bot::TYPE_NETWORK,
 				'bot' => $arUser['EXTERNAL_AUTH_ID'] == \Bitrix\Im\Bot::EXTERNAL_AUTH_ID,
 				'connector' => $arUser['EXTERNAL_AUTH_ID'] == "imconnector",
@@ -1619,8 +1615,7 @@ class CAllIMContactList
 				".$DB->DatetimeToTimestampFunction('U.LAST_ACTIVITY_DATE')." as LAST_ACTIVITY_DATE, 
 				U.PERSONAL_GENDER, 
 				U.EXTERNAL_AUTH_ID, 
-				U.WORK_POSITION, 
-				U.TIME_ZONE_OFFSET, 
+				U.WORK_POSITION,
 				U.ACTIVE,
 				ST.COLOR, 
 				ST.STATUS, 
@@ -1733,7 +1728,6 @@ class CAllIMContactList
 					'extranet' => false,
 					'network' => $arRes['EXTERNAL_AUTH_ID'] == self::NETWORK_AUTH_ID || $arRes['EXTERNAL_AUTH_ID'] == \Bitrix\Im\Bot::EXTERNAL_AUTH_ID && $bots[$arRes["ITEM_ID"]]['TYPE'] == \Bitrix\Im\Bot::TYPE_NETWORK,
 					'bot' => $arRes['EXTERNAL_AUTH_ID'] == \Bitrix\Im\Bot::EXTERNAL_AUTH_ID,
-					'tz_offset' => intval($arRes['TIME_ZONE_OFFSET']),
 					'phone_device' => false,
 					'profile' => CIMContactList::GetUserPath($arRes["ITEM_ID"]),
 					'external_auth_id' => $userExternalAuthId,

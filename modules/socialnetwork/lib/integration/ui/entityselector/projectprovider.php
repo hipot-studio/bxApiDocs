@@ -5,17 +5,21 @@ namespace Bitrix\Socialnetwork\Integration\UI\EntitySelector;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\Content;
 use Bitrix\Socialnetwork\Collab\CollabFeature;
+use Bitrix\Socialnetwork\Collab\Control\Option\Type\WhoCanInviteOption;
 use Bitrix\Socialnetwork\Collab\Integration\IM;
+use Bitrix\Socialnetwork\Collab\Internals\CollabOptionTable;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_Workgroup_Collection;
 use Bitrix\Socialnetwork\FeaturePermTable;
@@ -155,6 +159,12 @@ class ProjectProvider extends BaseProvider
 		if (isset($options['shouldSelectDialogId']) && is_bool($options['shouldSelectDialogId']))
 		{
 			$this->options['shouldSelectDialogId'] = $options['shouldSelectDialogId'];
+		}
+
+		$this->options['checkCollabInviteOption'] = false;
+		if (isset($options['checkCollabInviteOption']) && is_bool($options['checkCollabInviteOption']))
+		{
+			$this->options['checkCollabInviteOption'] = $options['checkCollabInviteOption'];
 		}
 
 		/**
@@ -479,6 +489,63 @@ class ProjectProvider extends BaseProvider
 					['join_type' => 'INNER']
 				)
 			);
+		}
+
+		if ($options['checkCollabInviteOption'] ?? false)
+		{
+			if ($currentUserModuleAdmin)
+			{
+				// include UserToGroupTable for admin, but don't include it twice for anyone else
+				$query->registerRuntimeField(
+					new Reference(
+						'MY_PROJECT',
+						UserToGroupTable::class,
+						Join::on('this.ID', 'ref.GROUP_ID')
+							->where('ref.USER_ID', $currentUserId),
+						['join_type' => Join::TYPE_INNER]
+					)
+				);
+			}
+
+			$query->registerRuntimeField(
+				new Reference(
+					'COLLAB_OPTIONS',
+					CollabOptionTable::class,
+					Join::on('this.ID', 'ref.COLLAB_ID')
+						->where('ref.NAME', WhoCanInviteOption::DB_NAME),
+					['join_type' => Join::TYPE_INNER]
+				)
+			);
+
+			$ownerRole = UserToGroupTable::ROLE_OWNER;
+			$managerRole = UserToGroupTable::ROLE_MODERATOR;
+			$userRole = UserToGroupTable::ROLE_USER;
+			$query->registerRuntimeField((new ExpressionField(
+				'NEED_ROLE_WEIGHT',
+				"CASE
+					WHEN %s = '{$ownerRole}' THEN 2
+					WHEN %s = '{$managerRole}' THEN 1
+					ELSE 0
+				END",
+				['COLLAB_OPTIONS.VALUE', 'COLLAB_OPTIONS.VALUE']
+			))->configureValueType(IntegerField::class));
+
+			$query->registerRuntimeField((new ExpressionField(
+				'ROLE_WEIGHT',
+				"CASE
+					WHEN %s = '{$ownerRole}' THEN 2
+					WHEN %s = '{$managerRole}' THEN 1
+					WHEN %s = '{$userRole}' THEN 0
+					ELSE -1
+				END",
+				['MY_PROJECT.ROLE', 'MY_PROJECT.ROLE', 'MY_PROJECT.ROLE']
+			))->configureValueType(IntegerField::class));
+
+			$query->where((new ExpressionField(
+				'HAS_ACCESS_BY_ROLE',
+				'%s >= %s',
+				['ROLE_WEIGHT', 'NEED_ROLE_WEIGHT']
+			))->configureValueType(BooleanField::class), 'expr', true);
 		}
 
 		$extranetSiteId = Option::get('extranet', 'extranet_site');

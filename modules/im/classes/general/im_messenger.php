@@ -4190,18 +4190,21 @@ class CIMMessenger
 				if ($params['FROM_USER_ID'] == $userId)
 					continue;
 
-				$arMessageFields = array(
-					"TO_USER_ID" => $userId,
-					"FROM_USER_ID" => $params['FROM_USER_ID'],
-					"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-					"NOTIFY_MODULE" => "im",
-					"NOTIFY_EVENT" => "mention",
-					"NOTIFY_TAG" => 'IM|MENTION|'.$params['CHAT_ID'],
-					"NOTIFY_SUB_TAG" => 'IM_MESS_'.$params['CHAT_ID'].'_'.$userId,
-					'NOTIFY_MESSAGE' => $notifyTextCallback,
-					'NOTIFY_MESSAGE_OUT' => $notifyMailCallback,
-				);
-				CIMNotify::Add($arMessageFields);
+				if($fromComment || self::shouldSendMentionNotification($params, $userId))
+				{
+					$arMessageFields = array(
+						"TO_USER_ID" => $userId,
+						"FROM_USER_ID" => $params['FROM_USER_ID'],
+						"NOTIFY_TYPE" => IM_NOTIFY_FROM,
+						"NOTIFY_MODULE" => "im",
+						"NOTIFY_EVENT" => "mention",
+						"NOTIFY_TAG" => 'IM|MENTION|'.$params['CHAT_ID'],
+						"NOTIFY_SUB_TAG" => 'IM_MESS_'.$params['CHAT_ID'].'_'.$userId,
+						'NOTIFY_MESSAGE' => $notifyTextCallback,
+						'NOTIFY_MESSAGE_OUT' => $notifyMailCallback,
+					);
+					CIMNotify::Add($arMessageFields);
+				}
 
 				if (!$fromComment)
 				{
@@ -4218,6 +4221,16 @@ class CIMMessenger
 			}
 		}
 		return true;
+	}
+
+	private static function shouldSendMentionNotification(array $params, int $userId): bool
+	{
+		$chatType = $params['CHAT_TYPE'];
+		$isChatTypeCorrect = in_array($chatType, [Chat::IM_TYPE_OPEN_CHANNEL, Chat::IM_TYPE_OPEN], true);
+
+		$isUserInChat = isset($params['CHAT_RELATION'][$userId]);
+
+		return $isChatTypeCorrect && !$isUserInChat;
 	}
 
 	private static function prepareUsersForMention(array $forUsers, $params): array

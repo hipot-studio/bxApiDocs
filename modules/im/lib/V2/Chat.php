@@ -437,7 +437,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return new Result();
 	}
 
-	protected function containsCollaber(): bool
+	public function containsCollaber(): bool
 	{
 		return (bool)$this->getChatParams()->get(Params::CONTAINS_COLLABER)?->getValue();
 	}
@@ -909,7 +909,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected function updateRelationsAfterMessageSend(Message $message): Result
 	{
 		$this->getRelations()
-			->getByUserId($message->getAuthorId(), $this->getId())
+			->getByUserId($message->getActionContextUserId(), $this->getId())
 			?->setLastId($message->getId())
 			?->setLastSendMessageId($message->getId())
 			?->save()
@@ -2961,7 +2961,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'PARAMS' => $params,
 			'PUSH' => 'N',
 			'SKIP_USER_CHECK' => 'Y',
-			'SKIP_COUNTER_INCREMENTS' => 'Y',
+			'SKIP_COUNTER_INCREMENTS' => $this->getEntityType() === self::ENTITY_TYPE_LINE ? 'N' : 'Y',
 		]);
 	}
 
@@ -2972,25 +2972,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
-		$pushMessage = [
-			'module_id' => 'im',
-			'command' => 'chatUserAdd',
-			'params' => [
-				'chatId' => $this->getChatId(),
-				'dialogId' => 'chat' . $this->getChatId(),
-				'chatTitle' => \Bitrix\Im\Text::decodeEmoji($this->getTitle() ?? ''),
-				'chatOwner' => $this->getAuthorId(),
-				'chatExtranet' => $this->getExtranet() ?? false,
-				'containsCollaber' => $this->containsCollaber(),
-				'users' => (new UserCollection($usersToAdd))->toRestFormat(['IDS_AS_KEY' => true]),
-				'newUsers' => array_values($usersToAdd),
-				'relations' => $this->getRelationsByUserIds($usersToAdd)->toRestFormat(),
-				'userCount' => $this->getUserCount(),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		];
-
-		$this->sendPushOnChangeUsers($oldRelations, $pushMessage);
+		(new Im\V2\Pull\Event\ChatUserAdd($this, $usersToAdd))->send();
 	}
 
 	protected function updateStateAfterRelationsAdd(array $usersToAdd): self
@@ -3240,7 +3222,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
-		$message = $this->getMessageUserDeleteText($userId);
+		$message = $this->getUserDeleteMessageText($userId);
 		if ($message === '')
 		{
 			return;
@@ -3297,7 +3279,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		CIMNotify::Add($notificationFields);
 	}
 
-	protected function getMessageUserDeleteText(int $deletedUserId): string
+	public function getUserDeleteMessageText(int $deletedUserId): string
 	{
 		$currentUser = $this->getContext()->getUser();
 		$currentUserId = $this->getContext()->getUserId();
@@ -3409,41 +3391,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
-		$pushMessage = [
-			'module_id' => 'im',
-			'command' => 'chatUserLeave',
-			'params' => [
-				'chatId' => $this->getChatId(),
-				'dialogId' => 'chat' . $this->getChatId(),
-				'chatTitle' => \Bitrix\Im\Text::decodeEmoji($this->getTitle() ?? ''),
-				'userId' => $userId,
-				'relations' => $this->getRelationsByUserIds([$userId])->toRestFormat(),
-				'message' => $userId === $this->getContext()->getUserId() ? '' : $this->getMessageUserDeleteText($userId),
-				'userCount' => $this->getUserCount(),
-				'chatExtranet' => $this->getExtranet() ?? false,
-				'containsCollaber' => (bool)$this->getChatParams()->get(Params::CONTAINS_COLLABER)?->getValue(),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		];
-
-		$this->sendPushOnChangeUsers($oldRelations, $pushMessage);
-	}
-
-	protected function sendPushOnChangeUsers(RelationCollection $relations, array $pushMessage): void
-	{
-		if (!\Bitrix\Main\Loader::includeModule('pull'))
-		{
-			return;
-		}
-
-		$userIds = $relations->getUserIds();
-
-		\Bitrix\Pull\Event::add(array_values($userIds), $pushMessage);
-
-		if ($this->needToSendPublicPull())
-		{
-			\CPullWatch::AddToStack('IM_PUBLIC_' . $this->getId(), $pushMessage);
-		}
+		(new Im\V2\Pull\Event\ChatUserLeave($this, $userId, $oldRelations))->send();
 	}
 
 	public function changeAuthor(): void

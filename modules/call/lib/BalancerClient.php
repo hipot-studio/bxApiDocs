@@ -20,10 +20,6 @@ class BalancerClient
 		'eu' => 'https://slb-de.webrtc.bitrix.info',
 		'us' => 'https://slb-us.webrtc.bitrix.info',
 	];
-	private const REGION_RU = ['ru', 'by', 'kz', 'uz'];
-	private const REGION_EU = ['de', 'eu', 'fr', 'it', 'pl', 'tr', 'uk'];
-
-	private array $httpClientParameters = [];
 
 	/**
 	 * Returns call balancer service endpoint url.
@@ -37,11 +33,11 @@ class BalancerClient
 
 		if (empty($endpoint))
 		{
-			if (in_array($region, self::REGION_RU, true))
+			if (in_array($region, Library::REGION_CIS, true))
 			{
 				$endpoint = self::BALANCER_MAP['ru'];
 			}
-			elseif (in_array($region, self::REGION_EU, true))
+			elseif (in_array($region, Library::REGION_EU, true))
 			{
 				$endpoint = self::BALANCER_MAP['eu'];
 			}

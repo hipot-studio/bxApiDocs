@@ -201,7 +201,7 @@ class ChatAnalytics extends AbstractAnalytics
 			return null;
 		}
 
-		return (new ChatEvent($eventName, $this->chat));
+		return (new ChatEvent($eventName, $this->chat, $this->userId));
 	}
 
 	protected function isFirstTimeEvent(string $eventName): bool

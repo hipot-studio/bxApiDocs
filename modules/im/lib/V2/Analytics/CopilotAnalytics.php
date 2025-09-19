@@ -17,6 +17,7 @@ class CopilotAnalytics extends AbstractAnalytics
 	protected const ADD_USER = 'add_user';
 	protected const DELETE_USER = 'delete_user';
 	protected const CHANGE_ROLE = 'change_role';
+	protected const CHANGE_MODEL = 'change_model';
 
 	public function addGenerate(Result $result, ?string $promptCode = null): void
 	{
@@ -37,10 +38,20 @@ class CopilotAnalytics extends AbstractAnalytics
 	{
 		$this->async(function () use ($oldRole) {
 
-			(new ChatEvent(self::CHANGE_ROLE, $this->chat))
+			(new ChatEvent(self::CHANGE_ROLE, $this->chat, $this->userId))
 				->setP1(null)
-				->setP2(null)
 				->setP3('oldRole_' . Event::convertUnderscore($oldRole))
+				->send()
+			;
+		});
+	}
+
+	public function addChangeEngine(string $oldEngineName): void
+	{
+		$this->async(function () use ($oldEngineName) {
+			(new ChatEvent(self::CHANGE_MODEL, $this->chat, $this->userId))
+				->setP1(null)
+				->setP3('oldProvider_' . Event::convertUnderscore($oldEngineName))
 				->send()
 			;
 		});
@@ -72,7 +83,7 @@ class CopilotAnalytics extends AbstractAnalytics
 			return null;
 		}
 
-		return (new CopilotEvent($eventName, $this->chat))
+		return (new CopilotEvent($eventName, $this->chat, $this->userId))
 			->setCopilotP1($promptCode)
 		;
 	}

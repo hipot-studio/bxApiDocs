@@ -11,7 +11,6 @@ use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Bitrix\Main\Validation\ValidationResult;
 
 class RestoreUserCommand extends AbstractCommand
 {
@@ -21,19 +20,18 @@ class RestoreUserCommand extends AbstractCommand
 	{
 	}
 
-	protected function validate(): ValidationResult
+	protected function beforeRun(): ?Result
 	{
-		$result = new ValidationResult();
 		$isActionAvailable = ServiceContainer::getInstance()
 			->getUserService()
 			->isActionAvailableForUser($this->user, UserActionDictionary::RESTORE);
 
 		if (!$isActionAvailable)
 		{
-			$result->addError(new Error('User already active'));
+			return (new Result())->addError(new Error('User already active'));
 		}
 
-		return $result;
+		return null;
 	}
 
 	protected function execute(): Result

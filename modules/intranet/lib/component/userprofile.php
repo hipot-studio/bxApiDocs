@@ -5,8 +5,11 @@ namespace Bitrix\Intranet\Component;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
 use Bitrix\Intranet\Internal\Repository\UserProfileRepository;
-use Bitrix\Intranet\Service\ServiceContainer;
+use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -437,6 +440,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		}
 
 		$ufReserved = $this->getFormInstance()->getReservedUfFields();
+
 		foreach ($data as $fieldName => $fieldValue)
 		{
 			if (in_array($fieldName, $ufReserved))
@@ -444,12 +448,8 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				unset($data[$fieldName]);
 			}
 		}
+
 		$USER_FIELD_MANAGER->EditFormAddFields('USER', $newFields, [ 'FORM' => $data ]);
-		if (!$USER->Update($this->arParams['ID'], $newFields))
-		{
-			$this->errorCollection[] = new Error($USER->LAST_ERROR);
-			return null;
-		}
 
 		if (
 			isset($newFields['UF_DEPARTMENT']) &&
@@ -457,15 +457,35 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			(int)$this->arParams['ID'] > 0
 		)
 		{
-			$departmentRepository = ServiceContainer::getInstance()
-				->departmentRepository();
+			$departmentRepository = new HrDepartmentRepository();
+			$newDepartmentCollection = $departmentRepository->findAllByIds($newFields['UF_DEPARTMENT']);
+			$departmentAssigner = new DepartmentAssigner($newDepartmentCollection);
+			$departmentAssigner->reassignUser(new User(id: (int)$this->arParams['ID']));
+			$assignedDepartments = $newFields['UF_DEPARTMENT'];
+			unset($newFields['UF_DEPARTMENT']);
+		}
+
+		if (!$USER->Update($this->arParams['ID'], $newFields))
+		{
+			$this->errorCollection[] = new Error($USER->LAST_ERROR);
+			return null;
+		}
+
+		if (
+			!empty($assignedDepartments)
+			&& (int)$this->arParams['ID'] > 0
+		)
+		{
+			$departmentRepository = new HrDepartmentRepository();
 			$departmentCollection = $departmentRepository->getDepartmentByHeadId((int)$this->arParams['ID']);
+
 			foreach ($departmentCollection as $department)
 			{
-				if (in_array($department->getId(), $newFields['UF_DEPARTMENT']))
+				if (in_array($department->getId(), $assignedDepartments))
 				{
 					continue;
 				}
+
 				$departmentRepository->unsetHead($department->getId());
 			}
 		}
@@ -482,6 +502,12 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		}
 
 		$this->arResult['User'] = $this->getUserData(true);
+
+		if (!empty($assignedDepartments))
+		{
+			$this->arResult['User']['UF_DEPARTMENT'] = $assignedDepartments;
+		}
+
 		return [
 			'ENTITY_DATA' => $this->getFormInstance()->getData($this->arResult),
 			'SUCCESS' => 'Y'
@@ -662,7 +688,11 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 
 			//managers
 			$user['MANAGERS'] = [];
-			$managers = \CIntranetUtils::GetDepartmentManager($user["UF_DEPARTMENT"], $user["ID"], true);
+			$iblockDepartmentIds = (new HrDepartmentRepository())
+				->findAllByIds(is_array($user['UF_DEPARTMENT']) ? $user['UF_DEPARTMENT'] : [])
+				->map(fn (Department $department) => $department->getIblockSectionId());
+			$managers = \CIntranetUtils::GetDepartmentManager($iblockDepartmentIds, $user["ID"], true);
+
 			foreach ($managers as $key => $manager)
 			{
 				if ((int)$manager["PERSONAL_PHOTO"] <= 0)

@@ -4,6 +4,7 @@ namespace Bitrix\Call\Integration\AI\Task;
 
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
+use Bitrix\Call\Library;
 use Bitrix\Call\Integration\AI\Outcome;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\CallAIError;
@@ -114,11 +115,7 @@ class TranscriptionInsights extends AITask
 	{
 		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
 
-		return match ($region)
-		{
-			'ru', 'by', 'kz' => self::PROMPT_ID_CIS,
-			default => self::PROMPT_ID,
-		};
+		return in_array($region, Library::REGION_CIS, true) ? self::PROMPT_ID_CIS : self::PROMPT_ID;
 	}
 
 	public function getAIEngineCategory(): string

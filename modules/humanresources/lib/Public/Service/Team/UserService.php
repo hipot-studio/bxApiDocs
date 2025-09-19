@@ -15,12 +15,23 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
+use Bitrix\HumanResources\Public\Service\Node\UserService as NodeUserService;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Type\StructureRole;
 
 class UserService
 {
+	private NodeUserService $nodeUserService;
+
+	public function __construct()
+	{
+		$this->nodeUserService = PublicContainer::getUserService();
+	}
+
 	/**
 	 * @param int $userId
+	 * @param Direction $orderDirection
 	 *
 	 * @return list<NodeCollection>
 	 * @throws WrongStructureItemException
@@ -86,5 +97,39 @@ class UserService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Returns true if user is head of any team
+	 *
+	 * @param int $userId
+	 *
+	 * @return bool
+	 */
+	public function isHeadOfTeam(int $userId): bool
+	{
+		$headMember = $this->nodeUserService->findByUserIdAndStructureRoles(
+			$userId,
+			[StructureRole::TEAM_HEAD],
+		);
+
+		return $headMember !== null;
+	}
+
+	/**
+	 * Returns true if user is head or deputy of any team
+	 *
+	 * @param int $userId
+	 *
+	 * @return bool
+	 */
+	public function isHeadOrDeputyOfTeam(int $userId): bool
+	{
+		$headMember = $this->nodeUserService->findByUserIdAndStructureRoles(
+			$userId,
+			[StructureRole::TEAM_HEAD, StructureRole::TEAM_DEPUTY_HEAD],
+		);
+
+		return $headMember !== null;
 	}
 }

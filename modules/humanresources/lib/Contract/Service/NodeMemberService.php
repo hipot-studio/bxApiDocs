@@ -15,6 +15,16 @@ interface NodeMemberService
 	public const MEMBER_TO_MEMBER_SUBORDINATE_CACHE_KEY = 'node_member/member_from/%d/member_to/%d';
 
 	public function getMemberInformation(int $memberId): Item\NodeMember;
+
+	/**
+	 * @param NodeMember $nodeMember
+	 * @param Item\Node $node
+	 *
+	 * @return NodeMember
+	 *
+	 * @throws UpdateFailedException
+	 *
+	 */
 	public function moveMember(Item\NodeMember $nodeMember, Item\Node $node): Item\NodeMember;
 
 	/**

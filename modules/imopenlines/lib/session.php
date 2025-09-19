@@ -1472,6 +1472,7 @@ class Session
 					}
 				}
 
+				$update['DATE_MODIFY'] = $currentDate;
 				$update['DATE_CLOSE'] = $currentDate;
 				if (
 					$this->session['TIME_CLOSE'] <= 0

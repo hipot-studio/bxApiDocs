@@ -91,21 +91,6 @@ class CommunicationSettings extends AbstractSettings
 			\COption::SetOptionString("im", "general_chat_message_leave", false);
 		}
 
-		if (
-			isset($this->data['isAutoDeleteMessagesEnabled'])
-			&& Option::get('im', 'isAutoDeleteMessagesEnabled', null) !== $this->data['isAutoDeleteMessagesEnabled']
-		)
-		{
-			if ($this->data['isAutoDeleteMessagesEnabled'] !== 'N')
-			{
-				Option::set('im', 'isAutoDeleteMessagesEnabled', 'Y');
-			}
-			else
-			{
-				Option::set('im', 'isAutoDeleteMessagesEnabled', 'N');
-			}
-		}
-
 		if (isset($this->data["url_preview_enable"]) && $this->data["url_preview_enable"] <> 'N')
 		{
 			\COption::SetOptionString("main", "url_preview_enable", "Y");
@@ -527,17 +512,6 @@ class CommunicationSettings extends AbstractSettings
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_LEAVE_MESSAGE'),
 				Option::get("im", "general_chat_message_leave") ? 'Y' : 'N',
 			);
-
-			$data['isAutoDeleteMessagesEnabled'] = new Switcher(
-				'settings-communication-field-isAutoDeleteMessagesEnabled',
-				'isAutoDeleteMessagesEnabled',
-				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_DELETE_TO_BE_ENABLED'),
-				Option::get('im', 'isAutoDeleteMessagesEnabled', 'Y'),
-				[
-					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_DELETE_TO_BE_ENABLED')
-				],
-				helpDesk: 'redirect=detail&code=24402288'
-			);
 		}
 
 		$data['url_preview_enable'] = new Switcher(
@@ -789,7 +763,6 @@ class CommunicationSettings extends AbstractSettings
 			'disk_allow_use_external_link' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_PUBLIC_LINK'),
 			'disk_object_lock_enabled' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_BLOCK_DOC'),
 			'disk_allow_use_extended_fulltext' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_SEARCH_DOC'),
-			'isAutoDeleteMessagesEnabled' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_DELETE_TO_BE_ENABLED'),
 		]);
 
 		return $searchEngine->find($query);

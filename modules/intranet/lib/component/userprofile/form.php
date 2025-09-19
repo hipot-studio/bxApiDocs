@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Intranet\Component\UserProfile;
 
-use Bitrix\Intranet\Service\ServiceContainer;
+use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
@@ -40,7 +40,7 @@ class Form
 
 		$departmentList = [];
 
-		$departmentRepository = ServiceContainer::getInstance()->departmentRepository();
+		$departmentRepository = new HrDepartmentRepository();
 		$departmentCollection = $departmentRepository->getAllTree();
 
 		foreach($departmentCollection as $department)
@@ -104,102 +104,94 @@ class Form
 			);
 		}
 
-		$fields = array(
-			array(
+		$fields = [
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_NAME"),
 				"name" => "NAME",
 				"type" => "text",
 				"editable" => true,
 				"showAlways" => true
-			),
-			array(
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_LAST_NAME"),
 				"name" => "LAST_NAME",
 				"type" => "text",
 				"editable" => true,
 				"showAlways" => true
-			),
-			array(
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_SECOND_NAME"),
 				"name" => "SECOND_NAME",
 				"type" => "text",
 				"editable" => true,
 				"showAlways" => true
-			),
-			array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_EMAIL_MSG_1"),
+			],
+			[
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_EMAIL_MSG_2"),
 				"name" => "EMAIL",
 				"type" => "link",
 				"data" => $emailHint,
 				"editable" => true
-			),
-			array(
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_WORK_POSITION"),
 				"name" => "WORK_POSITION",
 				"type" => "text",
 				"editable" => true
-			),
-			array(
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_BIRTHDAY"),
 				"name" => "PERSONAL_BIRTHDAY",
 				"type" => "datetime",
 				"editable" => true,
-				"data" =>  array(
+				"data" =>  [
 					"enableTime" => false,
 					"dateViewFormat" => $personalBirthdayFormat
-				)
-			),
-			array(
+				]
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_GENDER"),
 				"name" => "PERSONAL_GENDER",
 				"type" => "list",
-				'data' => array(
-					'items'=> array(
-						array("NAME" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_EMPTY"), "VALUE" => ""),
-						array('NAME' => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_GENDER_MALE"), 'VALUE' => "M"),
-						array('NAME' => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_GENDER_FEMALE"), 'VALUE' => "F"),
-					),
+				'data' => [
+					'items'=> [
+						["NAME" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_EMPTY"), "VALUE" => ""],
+						['NAME' => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_GENDER_MALE"), 'VALUE' => "M"],
+						['NAME' => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_GENDER_FEMALE"), 'VALUE' => "F"],
+					],
 					"class" => "ui-ctl-w50"
-				),
+				],
 				"editable" => true
-			),
-			array(
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_WWW"),
 				"name" => "PERSONAL_WWW",
 				"type" => "link",
-				"data" => array(
+				"data" => [
 					"target" => "_blank"
-				),
+				],
 				"editable" => true
-			),
+			],
 
-			array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_MOBILE"),
+			[
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_MOBILE_MSGVER_1"),
 				"name" => "PERSONAL_MOBILE",
 				"type" => "phone",
 				"editable" => true,
-			),
-			array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_WORK_PHONE"),
+			],
+			[
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_WORK_PHONE_MSGVER_1"),
 				"name" => "WORK_PHONE",
 				"type" => "text",
 				"editable" => true
-			),
-			/*
-			array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_UF_PHONE_INNER"),
-				"name" => "UF_PHONE_INNER",
-				"type" => "text",
-				"editable" => true
-			),
-			*/
-			array(
+			],
+			[
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_CITY"),
 				"name" => "PERSONAL_CITY",
 				"type" => "text",
 				"editable" => true
-			),
-		);
+			],
+		];
 
 		if(\CTimeZone::Enabled())
 		{
@@ -254,7 +246,7 @@ class Form
 		if (!$isExtranetUser)
 		{
 			$fields[] = array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_UF_DEPARTMENT"),
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_UF_DEPARTMENT_MSGVER_1"),
 				"name" => "UF_DEPARTMENT",
 				"type" => "multilist",
 				'data' => array(
@@ -287,6 +279,17 @@ class Form
 			)
 		);
 
+		$fields[] = array(
+			"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_COUNTRY"),
+			"name" => "PERSONAL_COUNTRY",
+			"type" => "list",
+			"editable" => true,
+			'data' => array(
+				'items'=> $personalCountryItems,
+				"class" => "ui-ctl-w50"
+			),
+		);
+
 		if (!ModuleManager::isModuleInstalled("bitrix24"))
 		{
 			$fields[] = array(
@@ -295,16 +298,6 @@ class Form
 				"type" => "text",
 				"editable" => true,
 				"visibilityPolicy" => "edit",
-			);
-			$fields[] = array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_COUNTRY"),
-				"name" => "PERSONAL_COUNTRY",
-				"type" => "list",
-				"editable" => true,
-				'data' => array(
-					'items'=> $personalCountryItems,
-					"class" => "ui-ctl-w50"
-				),
 			);
 			$fields[] = array(
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_FAX"),
@@ -437,7 +430,7 @@ class Form
 				"editable" => true
 			),
 			array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_EMAIL_MSG_1"),
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_EMAIL_MSG_2"),
 				"name" => "EMAIL",
 				"type" => "link",
 				"data" => array(
@@ -483,8 +476,6 @@ class Form
 			'UF_VI_BACKPHONE',
 			'UF_VI_PHONE',
 			'UF_VI_PHONE_PASSWORD',
-			'UF_SKYPE',
-			'UF_SKYPE_LINK',
 		];
 	}
 
@@ -627,38 +618,41 @@ class Form
 		}
 		return $results;
 	}
-	public function getConfig($editableFields = array())
+
+	public function getConfig($editableFields = [])
 	{
-		$elements = array();
+		$elements = [];
 
 		if (empty($editableFields) || ModuleManager::isModuleInstalled("bitrix24"))
 		{
-			$elements = array(
-				array('name' => 'NAME'),
-				array('name' => 'LAST_NAME'),
-				array('name' => 'EMAIL'),
-				array('name' => 'WORK_POSITION'),
-				array('name' => 'UF_DEPARTMENT'),
-				array('name' => 'SECOND_NAME'),
-				array('name' => 'PERSONAL_BIRTHDAY'),
-				array('name' => 'PERSONAL_GENDER'),
-				array('name' => 'PERSONAL_WWW'),
-				array('name' => 'PERSONAL_MOBILE'),
-				array('name' => 'WORK_PHONE'),
-				array('name' => 'UF_PHONE_INNER'),
-				array('name' => 'PERSONAL_WWW'),
-				array('name' => 'PERSONAL_CITY'),
-				array('name' => 'UF_EMPLOYMENT_DATE'),
-				array('name' => 'UF_ZOOM'),
-				array('name' => 'TIME_ZONE'),
-				array('name' => 'LANGUAGE_ID'),
-			);
+			$elements = [
+				['name' => 'NAME'],
+				['name' => 'LAST_NAME'],
+				['name' => 'EMAIL'],
+				['name' => 'WORK_POSITION'],
+				['name' => 'UF_DEPARTMENT'],
+				['name' => 'SECOND_NAME'],
+				['name' => 'PERSONAL_BIRTHDAY'],
+				['name' => 'PERSONAL_GENDER'],
+				['name' => 'PERSONAL_WWW'],
+				['name' => 'PERSONAL_MOBILE'],
+				['name' => 'WORK_PHONE'],
+				['name' => 'UF_PHONE_INNER'],
+				['name' => 'PERSONAL_WWW'],
+				['name' => 'PERSONAL_CITY'],
+				['name' => 'UF_EMPLOYMENT_DATE'],
+				['name' => 'UF_SKYPE'],
+				['name' => 'UF_SKYPE_LINK'],
+				['name' => 'UF_ZOOM'],
+				['name' => 'TIME_ZONE'],
+				['name' => 'LANGUAGE_ID'],
+			];
 		}
 		else
 		{
 			foreach ($editableFields as $key => $field)
 			{
-				$elements[] = array('name' => $field);
+				$elements[] = ['name' => $field];
 			}
 		}
 
@@ -668,8 +662,68 @@ class Form
 				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_CONTACT_TITLE"),
 				'type' => 'section',
 				'elements' => $elements,
-				'data' => ['isChangeable' => true, 'isRemovable' => false]
+				'data' => ['isChangeable' => true, 'isRemovable' => false, 'isDefault' => true]
 			]
+		];
+	}
+
+	// TODO: rename it to getConfig when new profile release
+	public function getNewConfig(): array
+	{
+		return [
+			[
+				'name' => 'info',
+				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_INFO"),
+				'type' => 'section',
+				'elements' => [
+					['name' => 'NAME'],
+					['name' => 'SECOND_NAME'],
+					['name' => 'LAST_NAME'],
+					['name' => 'WORK_POSITION'],
+					['name' => 'PERSONAL_BIRTHDAY'],
+					['name' => 'PERSONAL_GENDER'],
+				],
+				'data' => ['isChangeable' => true, 'isRemovable' => false]
+			],
+			[
+				'name' => 'contact',
+				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_CONTACTS"),
+				'type' => 'section',
+				'elements' => [
+					['name' => 'PERSONAL_MOBILE'],
+					['name' => 'WORK_PHONE'],
+					['name' => 'UF_PHONE_INNER'],
+					['name' => 'EMAIL'],
+					['name' => 'PERSONAL_WWW'],
+				],
+				'data' => ['isChangeable' => true, 'isRemovable' => false]
+			],
+			[
+				'name' => 'addition',
+				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_ADDITIONS"),
+				'type' => 'section',
+				'elements' => [
+					['name' => 'UF_DEPARTMENT'],
+					['name' => 'PERSONAL_CITY'],
+					['name' => 'UF_EMPLOYMENT_DATE'],
+					['name' => 'TIME_ZONE'],
+					['name' => 'LANGUAGE_ID'],
+				],
+				'data' => ['isChangeable' => true, 'isRemovable' => false, 'isDefault' => true]
+			],
+			[
+				'name' => 'social',
+				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_SOCIALS"),
+				'type' => 'section',
+				'elements' => [
+					['name' => 'UF_ZOOM'],
+					['name' => 'UF_FACEBOOK'],
+					['name' => 'UF_TWITTER'],
+					['name' => 'UF_XING'],
+					['name' => 'UF_LINKEDIN'],
+				],
+				'data' => ['isChangeable' => true, 'isRemovable' => false]
+			],
 		];
 	}
 
@@ -698,6 +752,8 @@ class Form
 			"UF_PHONE_INNER" => $result["User"]["UF_PHONE_INNER"],
 			"PERSONAL_CITY" => $result["User"]["PERSONAL_CITY"],
 			"EMAIL" => $result["User"]["EMAIL"],
+			"UF_SKYPE" => $result["User"]["UF_SKYPE"],
+			"UF_SKYPE_LINK" => $result["User"]["UF_SKYPE_LINK"],
 			"UF_ZOOM" => $result["User"]["UF_ZOOM"],
 			"TIME_ZONE" => [
 				"timeZone" => $result["User"]["TIME_ZONE"],

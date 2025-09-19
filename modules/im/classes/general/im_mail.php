@@ -448,46 +448,8 @@ class CIMMail
 		return true;
 	}
 
-	public static function GetUserOffset($params)
+	public static function GetUserOffset(array $params): int
 	{
-		$userOffset = 0;
-		$localOffset = 0;
-
-		if (!CTimeZone::OptionEnabled())
-			return 0;
-
-		try //possible DateTimeZone incorrect timezone
-		{
-			$localTime = new DateTime();
-			$localOffset = $localTime->getOffset();
-
-			$autoTimeZone = trim($params["AUTO_TIME_ZONE"]);
-			$userZone = $params["TIME_ZONE"];
-			$factOffset = $params["TIME_ZONE_OFFSET"];
-
-			if($autoTimeZone === "N")
-			{
-				$userTime = ($userZone !== ""? new DateTime(null, new DateTimeZone($userZone)) : $localTime);
-				$userOffset = $userTime->getOffset();
-			}
-			else
-			{
-				if(CTimeZone::IsAutoTimeZone($autoTimeZone))
-				{
-					return (int)$factOffset;
-				}
-
-				$serverZone = COption::GetOptionString("main", "default_time_zone", "");
-				$serverTime = ($serverZone !== ""? new DateTime(null, new DateTimeZone($serverZone)) : $localTime);
-				$userOffset = $serverTime->getOffset();
-			}
-		}
-		catch(Exception $e)
-		{
-			return 0;
-		}
-		return $userOffset - $localOffset;
+		return CTimeZone::getTimezoneOffset($params['TIME_ZONE'] ?? '');
 	}
 }
-
-?>

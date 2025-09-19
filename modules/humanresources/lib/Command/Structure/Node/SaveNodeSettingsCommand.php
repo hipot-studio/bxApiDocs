@@ -4,6 +4,7 @@ namespace Bitrix\HumanResources\Command\Structure\Node;
 
 use Bitrix\HumanResources\Command\AbstractCommand;
 use Bitrix\HumanResources\Command\Structure\Node\Handler\SaveNodeSettingsHandler;
+use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Type\NodeSettingsAuthorityType;
 use Bitrix\HumanResources\Type\NodeSettingsType;
 use Bitrix\Main\Result;
@@ -16,6 +17,13 @@ class SaveNodeSettingsCommand extends AbstractCommand
 
 	protected function validate(): bool
 	{
+		$isDeputyCheckRequired = !Feature::instance()->isDeputyApprovesBPAvailable();
+
+		$deputyTypes = $isDeputyCheckRequired ? [
+			NodeSettingsAuthorityType::DepartmentDeputy->value,
+			NodeSettingsAuthorityType::TeamDeputy->value,
+		] : [];
+
 		foreach ($this->settings as $type => $setting)
 		{
 			if (!NodeSettingsType::tryFrom($type) || !is_array($setting))
@@ -35,6 +43,13 @@ class SaveNodeSettingsCommand extends AbstractCommand
 				)
 			)
 			{
+				return false;
+			}
+
+			if (
+				$isDeputyCheckRequired
+				&& !empty(array_intersect($setting['values'], $deputyTypes))
+			) {
 				return false;
 			}
 		}

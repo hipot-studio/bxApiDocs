@@ -4,6 +4,10 @@ namespace Bitrix\Call;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Security\Cipher;
+use Bitrix\Main\Security\SecurityException;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Im;
 
 class Settings
@@ -21,7 +25,7 @@ class Settings
 			'callBetaIosEnabled' => Im\Call\Call::isIosBetaEnabled(),
 			'isAIServiceEnabled' => static::isAIServiceEnabled(),
 			'isNewMobileGridEnabled' => static::isNewMobileGridEnabled(),
-			'userJwt' => JwtCall::getUserJwt(),
+			'userJwt' => JwtCall::getUserJwt((int)CurrentUser::get()->getId()),
 			'callBalancerUrl' => static::getBalancerUrl(),
 			'jwtCallsEnabled' => static::isNewCallsEnabled(),
 			'jwtInPlainCallsEnabled' => static::isPlainCallsUseNewScheme(),
@@ -33,7 +37,7 @@ class Settings
 	{
 		Loader::includeModule('im');
 
-		$userId = (int)$GLOBALS['USER']->getId();
+		$userId = (int)CurrentUser::get()->getId();
 		$usersData = Im\Call\Util::getUsers([$userId]);
 
 		return [
@@ -61,7 +65,7 @@ class Settings
 		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
 		{
 			// box
-			return in_array($region, ['ru', 'by', 'kz'], true);
+			return in_array($region, Library::REGION_CIS, true);
 		}
 
 		return (bool)Option::get('call', 'call_ai_enabled', false);
@@ -84,6 +88,8 @@ class Settings
 	{
 		return (new BalancerClient())->getServiceUrl();
 	}
+
+	//region JWT
 
 	/**
 	 * @deprecated
@@ -142,6 +148,7 @@ class Settings
 
 		return (bool)\CUserOptions::GetOption('call', 'call_disable_camera_new_joined_users_enabled', false);
 	}
+	
 	/**
 	 * Enable/disable logs to Kibana.
 	 * @return bool
@@ -155,7 +162,7 @@ class Settings
 
 		return (bool)\CUserOptions::GetOption('call', 'call_kibana_logs_enabled', false);
 	}
-	
+
 	/**
 	 * Disable camera of new joined users feature is enabled.
 	 * @return int

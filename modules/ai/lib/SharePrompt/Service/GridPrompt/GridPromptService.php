@@ -18,6 +18,7 @@ use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Grid\Row\Assembler\Field\Helpers\UserPhoto;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -250,7 +251,7 @@ class GridPromptService
 	{
 		$userGroups = array_flip($this->userAccessRepository->getCodesForUserGroup($userId));
 		$accessRightsDataProvider = $this->getAccessRightsDataProvider();
-		$collabersAccessCodes = $this->getCollabersAccessCodes($codesInPrompt);
+		$collabersAccessCodes = Loader::includeModule('extranet') ? $this->getCollabersAccessCodes($codesInPrompt) : [];
 
 		foreach (array_unique($codesInPrompt) as $code)
 		{
