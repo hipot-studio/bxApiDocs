@@ -1,10 +1,10 @@
-<?php
+<?php /** @noinspection GlobalVariableUsageInspection */
 
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2025 Bitrix
  */
 
 use Bitrix\Main;
@@ -113,7 +113,7 @@ if (!defined("BX_COMP_MANAGED_CACHE") && COption::GetOptionString("main", "compo
 // global functions
 require_once __DIR__ . "/filter_tools.php";
 
-// ... //Do not remove this
+/**/ //Do not remove this
 
 // Component 2.0 template engines
 $GLOBALS['arCustomTemplateEngines'] = [];
@@ -220,7 +220,7 @@ if (
 	||
 	(
 		//session manually expired, e.g. in $User->LoginHitByHash
-		isSessionExpired()
+	isSessionExpired()
 	)
 )
 {
@@ -473,7 +473,10 @@ if (!defined("ADMIN_SECTION") || ADMIN_SECTION !== true)
 		define("SITE_TEMPLATE_ID", $siteTemplate);
 	}
 
-	define("SITE_TEMPLATE_PATH", getLocalPath('templates/'.SITE_TEMPLATE_ID, BX_PERSONAL_ROOT));
+	if (!defined('SITE_TEMPLATE_PATH'))
+	{
+		define("SITE_TEMPLATE_PATH", getLocalPath('templates/'.SITE_TEMPLATE_ID, BX_PERSONAL_ROOT));
+	}
 }
 else
 {
@@ -571,13 +574,13 @@ if ((!defined("NOT_CHECK_PERMISSIONS") || NOT_CHECK_PERMISSIONS !== true) && (!d
 
 	if (!$GLOBALS["USER"]->CanDoFileOperation('fm_view_file', [SITE_ID, $real_path]) || (defined("NEED_AUTH") && NEED_AUTH && !$GLOBALS["USER"]->IsAuthorized()))
 	{
-		if ($GLOBALS["USER"]->IsAuthorized() && $arAuthResult["MESSAGE"] == '')
+		if ($GLOBALS["USER"]->IsAuthorized() && empty($arAuthResult["MESSAGE"]))
 		{
 			$arAuthResult = ["MESSAGE" => GetMessage("ACCESS_DENIED").' '.GetMessage("ACCESS_DENIED_FILE", ["#FILE#" => $real_path]), "TYPE" => "ERROR"];
 
 			if (COption::GetOptionString("main", "event_log_permissions_fail", "N") === "Y")
 			{
-				CEventLog::Log("SECURITY", "USER_PERMISSIONS_FAIL", "main", $GLOBALS["USER"]->GetID(), $real_path);
+				CEventLog::Log(CEventLog::SEVERITY_SECURITY, "USER_PERMISSIONS_FAIL", "main", $GLOBALS["USER"]->GetID(), $real_path);
 			}
 		}
 
@@ -608,5 +611,5 @@ if ((!defined("NOT_CHECK_PERMISSIONS") || NOT_CHECK_PERMISSIONS !== true) && (!d
 	}
 }
 
-// ..... // Do not remove this
+/**/       //Do not remove this
 

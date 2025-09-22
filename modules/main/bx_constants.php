@@ -506,4 +506,6 @@ deine('SHORT_INSTALL_CHECK', true);
 define('DELAY_DB_CONNECT', true);
 
 define('LICENSE_KEY', 'DEMO');
+
+define('BX_PUBLIC_TOOLS', true);
 ?>
