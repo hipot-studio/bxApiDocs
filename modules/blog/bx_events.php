@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Класс-контейнер событий модуля <b>blogs</b>.
+ * Класс-контейнер событий модуля <b>blog</b>.
  */
-class bx_events
+class _CEventsBlog
 {
     /**
      * <p>Событие вызывается в методе <a href="http://dev.1c-bitrix.ru/api_help/blogs/classes/cblog/add.php">CBlog::Add</a> до вставки блога, и может быть использовано для отмены вставки или переопределения некоторых полей.</p>.

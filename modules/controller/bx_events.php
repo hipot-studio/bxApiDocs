@@ -3,7 +3,7 @@
 /**
  * Класс-контейнер событий модуля <b>controller</b>.
  */
-class bx_events
+class _CEventsController
 {
     /**
      * после отключения управляемого сайта.

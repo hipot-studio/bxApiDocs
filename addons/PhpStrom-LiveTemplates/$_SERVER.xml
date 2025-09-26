@@ -1,0 +1,58 @@
+<templateSet group="$_SERVER">
+  <template name="PHP_SELF" value="PHP_SELF" description="Имя файла скрипта, который сейчас выполняется, относительно корня документов. Например, $_SERVER['PHP_SELF'] в скрипте по адресу http://example.com/foo/bar.php будет /foo/bar.php. Константа __FILE__ содержит полный путь и имя файла текущего (то есть подключённого) файла. Если PHP запущен в командной строке, эта переменная содержит имя скрипта." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SERVER_NAME" value="SERVER_NAME" description="Имя хоста, на котором выполняется текущий скрипт. Если скрипт выполняется на виртуальном хосте, здесь будет содержатся имя, определённое для этого виртуального хоста.      Замечание: В Apache 2 необходимо установить UseCanonicalName = On и ServerName. В противном случае это значение отразит имя хоста, предоставленное клиентом, которое может быть подделано. Небезопасно полагаться на это значение в контексте, требующем безопасности." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="REQUEST_METHOD" value="REQUEST_METHOD" description="Какой метод был использован для запроса страницы; к примеру 'GET', 'HEAD', 'POST', 'PUT'.      Замечание:      PHP-скрипт завершается после отправки заголовков (то есть после того, как осуществляется любой вывод без буферизации вывода), если метод запроса был HEAD." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="QUERY_STRING" value="QUERY_STRING" description="Строка запроса, если есть, через которую была открыта страница." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="REQUEST_TIME_FLOAT" value="REQUEST_TIME_FLOAT" description="Временная метка начала запроса с точностью до микросекунд." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="REMOTE_ADDR" value="REMOTE_ADDR" description="IP-адрес, с которого пользователь просматривает текущую страницу." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="REMOTE_PORT" value="REMOTE_PORT" description="Порт на удалённой машине, который используется для связи с сервером." toReformat="false" toShortenFQNames="true" />
+  <template name="SCRIPT_FILENAME" value="SCRIPT_FILENAME" description="Абсолютный путь к исполняемому скрипту.          Замечание:          Если скрипт запускается в командной строке (CLI), используя относительный путь, такой как file.php или ../file.php, переменная $_SERVER['SCRIPT_FILENAME'] будет содержать относительный путь, указанный пользователем." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="REQUEST_URI" value="REQUEST_URI" description="URI, который был предоставлен для доступа к этой странице. Например, '/index.html'." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="AUTH_TYPE" value="AUTH_TYPE" description="При выполнении HTTP-аутентификации этой переменной присваивается тип аутентификации, который используется." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PHP_AUTH_USER" value="PHP_AUTH_USER" description="При выполнении HTTP-аутентификации этой переменной присваивается имя пользователя, предоставленное пользователем." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PHP_AUTH_PW" value="PHP_AUTH_PW" description="При выполнении HTTP-аутентификации этой переменной присваивается пароль, предоставленный пользователем." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+</templateSet>

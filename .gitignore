@@ -4,7 +4,6 @@
 *.zip
 /vendor/
 modules_*
-_tests
 *.min.js
 *.min.css
 .php-cs-fixer.cache

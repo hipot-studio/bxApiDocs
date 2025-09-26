@@ -14,37 +14,12 @@
       <option name="PHP" value="true" />
     </context>
   </template>
-  <template name="301 Moved Permanently" value="301 Moved Permanently" description="301 Moved Permanently" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="PHP String Literal" value="true" />
-    </context>
-  </template>
-  <template name="ajax_perform_bx" value="// performance fixs&#10;define(&quot;STOP_STATISTICS&quot;,       true);&#10;define(&quot;NO_KEEP_STATISTIC&quot;,     true);&#10;define(&quot;NO_AGENT_STATISTIC&quot;,    &quot;Y&quot;);&#10;define(&quot;NOT_CHECK_PERMISSIONS&quot;, true);&#10;define(&quot;DisableEventsCheck&quot;,    true);&#10;define(&quot;BX_SECURITY_SHOW_MESSAGE&quot;, true);" description="фиксы на аякс перед прологом" toReformat="false" toShortenFQNames="true">
+  <template name="b_sys_epilog" value="require $_SERVER[&quot;DOCUMENT_ROOT&quot;] . &quot;/bitrix/modules/main/include/epilog_after.php&quot;;" description="служебный эпилог" toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
     </context>
   </template>
-  <template name="b_invoice_vars" value="/**&#10; * @var int $ORDER_ID&#10; * @var array $arOrder&#10; * @var array $arParams&#10; *&#10; * @var array  $arOrderProps = [&quot;мнемонический код (или ID если мнемонический код пуст) свойства&quot; =&gt; &quot;значение свойства&quot;]&#10; * @var $arUser - массив из настроек пользователя, совершившего заказ&#10; */" description="b_invoice_vars" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="OTHER" value="true" />
-    </context>
-  </template>
-  <template name="b_page" value="&lt;?&#10;require($_SERVER[&quot;DOCUMENT_ROOT&quot;].&quot;/bitrix/header.php&quot;);&#10;$APPLICATION-&gt;SetTitle(&quot;О сервисе&quot;);&#10;?&gt;&#10;&#10;&lt;?require($_SERVER[&quot;DOCUMENT_ROOT&quot;].&quot;/bitrix/footer.php&quot;);?&gt;&#10;" description="" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="OTHER" value="true" />
-    </context>
-  </template>
-  <template name="b_sys_epilog" value="require $_SERVER[&quot;DOCUMENT_ROOT&quot;] . &quot;/bitrix/modules/main/include/epilog_after.php&quot;;" description="служебный пролог" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="PHP" value="true" />
-    </context>
-  </template>
-  <template name="b_sys_prolog" value="// performance fixs&#10;define(&quot;STOP_STATISTICS&quot;,       true);&#10;define(&quot;NO_KEEP_STATISTIC&quot;,     true);&#10;define(&quot;NO_AGENT_STATISTIC&quot;,    &quot;Y&quot;);&#10;define(&quot;NOT_CHECK_PERMISSIONS&quot;, true);&#10;define(&quot;DisableEventsCheck&quot;,    true);&#10;define(&quot;BX_SECURITY_SHOW_MESSAGE&quot;, true);&#10;// Виртуальная сессия&#10;if (PHP_SAPI == 'cli') {&#10;&#9;define('BX_SECURITY_SESSION_VIRTUAL', true);&#10;}&#10;require $_SERVER[&quot;DOCUMENT_ROOT&quot;] . &quot;/bitrix/modules/main/include/prolog_before.php&quot;;" description="" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="PHP" value="true" />
-    </context>
-  </template>
-  <template name="bprchk" value="if(!defined(&quot;B_PROLOG_INCLUDED&quot;) || B_PROLOG_INCLUDED!==true)die();" description="" toReformat="false" toShortenFQNames="true">
+  <template name="b_sys_prolog" value="// performance fixs&#10;define('BX_SKIP_SESSION_EXPAND', true);&#10;define('BX_SESSION_ID_CHANGE', false);&#10;define('BX_SKIP_POST_UNQUOTE', true);&#10;define('STOP_STATISTICS', true);&#10;define('NO_KEEP_STATISTIC', 'Y');&#10;define('NO_AGENT_STATISTIC', 'Y');&#10;define('STATISTIC_SKIP_ACTIVITY_CHECK', true);&#10;define('NO_AGENT_CHECK', true);&#10;define('NOT_CHECK_PERMISSIONS', true);&#10;define('DisableEventsCheck', true);&#10;define('BX_SECURITY_SHOW_MESSAGE', true);&#10;define('PERFMON_STOP', true);&#10;// Виртуальная сессия&#10;if (PHP_SAPI == 'cli') {&#10;&#9;define('BX_SECURITY_SESSION_VIRTUAL', true);&#10;}&#10;require $_SERVER[&quot;DOCUMENT_ROOT&quot;] . &quot;/bitrix/modules/main/include/prolog_before.php&quot;;" description="служебный пролог и оптимизационные константы" toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
     </context>
@@ -66,17 +41,6 @@
     </context>
   </template>
   <template name="bx_conn" value="\Bitrix\Main\Application::getConnection()?-&gt;" description="get db connection" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="PHP" value="true" />
-    </context>
-  </template>
-  <template name="bx_menu" value="&lt;?&#10;// @see https://dev.1c-bitrix.ru/user_help/components/sluzhebnie/navigation/menu.php&#10;$APPLICATION-&gt;IncludeComponent(&quot;bitrix:menu&quot;, &quot;.default&quot;, [&#10;&#9;// cache&#10;&#9;&quot;CACHE_TYPE&quot; =&gt; &quot;A&quot;,&#10;&#9;&quot;MENU_CACHE_TYPE&quot; =&gt; &quot;A&quot;,&#10;&#9;&quot;CACHE_TIME&quot; =&gt; 3600,&#10;&#9;&quot;MENU_CACHE_TIME&quot; =&gt; 3600,&#10;&#9;&quot;MENU_CACHE_USE_GROUPS&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;MENU_CACHE_GET_VARS&quot; =&gt; &quot;&quot;, // comma-separated GETs&#10;&#9;&quot;CACHE_SELECTED_ITEMS&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;MENU_CACHE_USE_USERS&quot; =&gt; &quot;N&quot;,&#10;&#9;// select&#10;&#9;&quot;ROOT_MENU_TYPE&quot; =&gt; &quot;catalog_left&quot;,&#10;&#9;&quot;CHILD_MENU_TYPE&quot; =&gt; &quot;catalog_left_dummy&quot;,&#10;&#9;&quot;MAX_LEVEL&quot; =&gt; 4, // max 4&#10;&#9;&quot;USE_EXT&quot; =&gt; &quot;Y&quot;,&#10;&#9;&quot;DELAY&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;ALLOW_MULTI_SELECT&quot; =&gt; &quot;N&quot;,&#10;]);?&gt;" description="подключение компонента меню" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="HTML" value="true" />
-      <option name="PHP" value="true" />
-    </context>
-  </template>
-  <template name="bx_print_r" value="\Bitrix\Main\Diag\Debug::dump($END$);" description="" toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
     </context>
@@ -112,11 +76,6 @@
     <context>
       <option name="PHP Expression" value="true" />
       <option name="PHP Statement" value="true" />
-    </context>
-  </template>
-  <template name="pri_" value="if (\Bitrix\Main\Engine\CurrentUser::get()?-&gt;isAdmin()) {&#10;&#9;echo '&lt;pre&gt;';&#10;&#9;\Bitrix\Main\Diag\Debug::dump($END$);&#10;&#9;echo '&lt;/pre&gt;';&#10;}" description="print_r if admin" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="PHP" value="true" />
     </context>
   </template>
   <template name="var_glob_arr" value="/** @var $GLOBALS array{'DB':\CDatabase, 'APPLICATION':\CMain, 'USER':\CUser, 'USER_FIELD_MANAGER':\CUserTypeManager, 'CACHE_MANAGER':\CCacheManager, 'stackCacheManager':\CStackCacheManager} */" description="$GLOBALS local keys" toReformat="false" toShortenFQNames="true">
@@ -259,6 +218,65 @@
   <template name="var_res_mod" value="// region var_res_mod&#10;/** &#10; * @var array $arParams&#10; * @var array $arResult &#10; * @global CMain $APPLICATION&#10; * @global CUser $USER&#10; * @global CDatabase $DB&#10; * @var CBitrixComponentTemplate $this&#10; */&#10;// endregion&#10;" description="variables in result_modifier.php" toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bprchk" value="if(!defined(&quot;B_PROLOG_INCLUDED&quot;) || B_PROLOG_INCLUDED!==true)die();" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="301 Moved Permanently" value="301 Moved Permanently" description="301 Moved Permanently" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="ajax_perform_bx" value="// performance fixs&#10;define(&quot;STOP_STATISTICS&quot;,       true);&#10;define(&quot;NO_KEEP_STATISTIC&quot;,     true);&#10;define(&quot;NO_AGENT_STATISTIC&quot;,    &quot;Y&quot;);&#10;define(&quot;NOT_CHECK_PERMISSIONS&quot;, true);&#10;define(&quot;DisableEventsCheck&quot;,    true);&#10;define(&quot;BX_SECURITY_SHOW_MESSAGE&quot;, true);" description="фиксы на аякс перед прологом" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="b_invoice_vars" value="/**&#10; * @var int $ORDER_ID&#10; * @var array $arOrder&#10; * @var array $arParams&#10; *&#10; * @var array  $arOrderProps = [&quot;мнемонический код (или ID если мнемонический код пуст) свойства&quot; =&gt; &quot;значение свойства&quot;]&#10; * @var $arUser - массив из настроек пользователя, совершившего заказ&#10; */" description="b_invoice_vars" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="OTHER" value="true" />
+    </context>
+  </template>
+  <template name="b_page" value="&lt;?&#10;require($_SERVER[&quot;DOCUMENT_ROOT&quot;].&quot;/bitrix/header.php&quot;);&#10;$APPLICATION-&gt;SetTitle(&quot;О сервисе&quot;);&#10;?&gt;&#10;&#10;&lt;?require($_SERVER[&quot;DOCUMENT_ROOT&quot;].&quot;/bitrix/footer.php&quot;);?&gt;&#10;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="OTHER" value="true" />
+    </context>
+  </template>
+  <template name="bx_menu" value="&lt;?&#10;// @see https://dev.1c-bitrix.ru/user_help/components/sluzhebnie/navigation/menu.php&#10;$APPLICATION-&gt;IncludeComponent(&quot;bitrix:menu&quot;, &quot;.default&quot;, [&#10;&#9;// cache&#10;&#9;&quot;CACHE_TYPE&quot; =&gt; &quot;A&quot;,&#10;&#9;&quot;MENU_CACHE_TYPE&quot; =&gt; &quot;A&quot;,&#10;&#9;&quot;CACHE_TIME&quot; =&gt; 3600,&#10;&#9;&quot;MENU_CACHE_TIME&quot; =&gt; 3600,&#10;&#9;&quot;MENU_CACHE_USE_GROUPS&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;MENU_CACHE_GET_VARS&quot; =&gt; &quot;&quot;, // comma-separated GETs&#10;&#9;&quot;CACHE_SELECTED_ITEMS&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;MENU_CACHE_USE_USERS&quot; =&gt; &quot;N&quot;,&#10;&#9;// select&#10;&#9;&quot;ROOT_MENU_TYPE&quot; =&gt; &quot;catalog_left&quot;,&#10;&#9;&quot;CHILD_MENU_TYPE&quot; =&gt; &quot;catalog_left_dummy&quot;,&#10;&#9;&quot;MAX_LEVEL&quot; =&gt; 4, // max 4&#10;&#9;&quot;USE_EXT&quot; =&gt; &quot;Y&quot;,&#10;&#9;&quot;DELAY&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;ALLOW_MULTI_SELECT&quot; =&gt; &quot;N&quot;,&#10;]);?&gt;" description="подключение компонента меню" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="HTML" value="true" />
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_print_r" value="\Bitrix\Main\Diag\Debug::dump($END$);" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="pri_" value="if ($USER-&gt;IsAdmin()) {&#10;&#9;echo '&lt;pre&gt;';&#10;&#9;print_r($arResult);&#10;&#9;echo '&lt;/pre&gt;';&#10;}" description="print_r if admin" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="hi_list" value="// new class extends Hipot\Components\IblockList {};&#10;$result = $APPLICATION-&gt;IncludeComponent('hipot:iblock.list', '', [&#10;&#9;'IBLOCK_ID'    =&gt; 0,&#10;&#9;'ORDER'        =&gt; ['SORT' =&gt; 'ASC', 'NAME' =&gt; 'ASC'],&#10;&#9;'FILTER'       =&gt; [],&#10;&#9;'SELECT'       =&gt; [],&#10;&#9;'GET_PROPERTY' =&gt; 'Y',&#10;&#9;'CACHE_TIME'   =&gt; 3600 * 3,&#10;&#9;'CACHE_GROUPS' =&gt; 'N',&#10;&#10;&#9;'NTOPCOUNT'               =&gt; 0,&#10;&#9;'PAGESIZE'                =&gt; 0,&#10;&#9;'NAV_TEMPLATE'            =&gt; '.default',&#10;&#9;'NAV_SHOW_ALWAYS'         =&gt; 'N',&#10;&#9;'NAV_SHOW_ALL'            =&gt; 'N',&#10;&#9;'NAV_PAGEWINDOW'          =&gt; 3,&#10;&#9;'SET_404'                 =&gt; 'Y',&#10;&#9;'ALWAYS_INCLUDE_TEMPLATE' =&gt; 'Y',&#10;&#9;'SELECT_CHAINS'           =&gt; 'N',&#10;&#9;'SELECT_CHAINS_DEPTH'     =&gt; 3,&#10;&#9;// CUSTOM:&#10;&#9;'VERSION'                 =&gt; '2.0',&#10;&#9;'IS_BETA_TESTER'          =&gt; IS_BETA_TESTER,&#10;&#9;'IS_CONTENT_MANAGER'      =&gt; IS_CONTENT_MANAGER,&#10;&#9;'IS_AJAX'                 =&gt; defined('IS_AJAX') &amp;&amp; IS_AJAX ? 'Y' : 'N',&#10;]);" description="hipot:iblock.list component" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Class Member" value="false" />
+      <option name="PHP Comment" value="false" />
+      <option name="PHP Interface Member" value="false" />
+      <option name="PHP String Literal" value="false" />
+      <option name="PHP Trait Member" value="false" />
+    </context>
+  </template>
+  <template name="hi_hlist" value="// new class extends Hipot\Components\HiblockList {};&#10;$result = $APPLICATION-&gt;IncludeComponent('hipot:hiblock.list', '', [&#10;&#9;'HLBLOCK_ID'   =&gt; 0, // or&#10;&#9;'HLBLOCK_CODE' =&gt; '',&#10;&#9;'ORDER'        =&gt; [&quot;ID&quot; =&gt; &quot;DESC&quot;],&#10;&#9;'SELECT'       =&gt; ['ID', 'UF_*'],&#10;&#9;'FILTER'       =&gt; [],&#10;&#9;'GROUP_BY'     =&gt; [],&#10;&#10;&#9;'PAGESIZE'                =&gt; 10, // or&#10;&#9;'NTOPCOUNT'               =&gt; 10, // (set both PAGESIZE and NTOPCOUNT has not sensed)&#10;&#9;'NAV_SHOW_ALWAYS'         =&gt; 'N',&#10;&#9;'NAV_TITLE'               =&gt; '',&#10;&#9;'NAV_TEMPLATE'            =&gt; '.default',&#10;&#9;'SET_404'                 =&gt; 'N',&#10;&#9;'ALWAYS_INCLUDE_TEMPLATE' =&gt; 'Y',&#10;&#10;&#9;'SET_CACHE_KEYS'     =&gt; [],&#10;&#9;'CACHE_TIME'         =&gt; 3600, // or&#10;&#9;'CACHE_TIME_ORM'     =&gt; 3600, // (use orm-getList cache)&#10;&#10;&#9;// CUSTOM:&#10;&#9;'VERSION'            =&gt; '2.0',&#10;&#9;'IS_BETA_TESTER'     =&gt; IS_BETA_TESTER,&#10;&#9;'IS_CONTENT_MANAGER' =&gt; IS_CONTENT_MANAGER,&#10;&#9;'IS_AJAX'            =&gt; defined('IS_AJAX') &amp;&amp; IS_AJAX ? 'Y' : 'N',&#10;]);" description="hipot:hiblock.list component" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Comment" value="false" />
+      <option name="PHP Interface Member" value="false" />
+      <option name="PHP Trait Member" value="false" />
     </context>
   </template>
 </templateSet>

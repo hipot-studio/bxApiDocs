@@ -31,15 +31,26 @@ Repo is just IDE-helper to write bitrix-based code.
 
 ![](docs/images/2025-02-13_23-25-22.png)
 
-3/ Config phpStorm to view bitrix js code hints:
+3/ Config phpStorm to view bitrix js code hints (add your D:\projects\bxApiDocs\js folder in my case):
 
 ![](docs/images/2025-02-13_23-23-02.png)
 
-4/ Import iblock default fields like phpStorm Live-templates
+More info see in [main repo](https://github.com/matiaspub/bxApiDocs).
+
+### 4/ Addons with Live Templates
+
+To write bitrix-based code I use some Live Templates: see all of them in forder [addons/PhpStrom-LiveTemplates](addons/PhpStrom-LiveTemplates)
+
+You can import and [use this live templates](https://www.jetbrains.com/help/phpstorm/sharing-live-templates.html) in your PhpStorm IDE
+
+Example:
+Import iblock default fields like phpStorm Live-templates
 see 'addons/iblock_fields_templates.xml' and 'addons/PHP bitrix.xml'
 
 ![](docs/images/2025-02-13_23-56-04.png)
 
-More info see in main repo.
+and see autocomplete for iblock fields in templates of component:
 
-Enjoy!
+![](docs/images/2025-09-26_18-39-27.png)
+
+### Thanks and Enjoy!

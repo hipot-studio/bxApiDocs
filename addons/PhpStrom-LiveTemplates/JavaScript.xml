@@ -1,0 +1,12 @@
+<templateSet group="JavaScript">
+  <template name="onCompositeReturn" value="if (window.frameCacheVars !== undefined)&#10;{&#10;    BX.addCustomEvent(&quot;onFrameDataReceived&quot; , function(json) {&#10;        // working&#10;    });&#10;} else {&#10;    BX.ready(function() {&#10;        // working&#10;    });&#10;}" description="onFrameDataReceived" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="JAVA_SCRIPT" value="true" />
+    </context>
+  </template>
+  <template name="bx_lang_id" value="BX.message('LANGUAGE_ID')" description="BX.message('LANGUAGE_ID')" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="JAVA_SCRIPT" value="true" />
+    </context>
+  </template>
+</templateSet>

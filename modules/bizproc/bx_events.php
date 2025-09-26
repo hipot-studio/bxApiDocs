@@ -3,7 +3,7 @@
 /**
  * Класс-контейнер событий модуля <b>bizproc</b>.
  */
-class bx_events
+class _CEventsBizproc
 {
     /**
      * перед добавлением записи в историю.

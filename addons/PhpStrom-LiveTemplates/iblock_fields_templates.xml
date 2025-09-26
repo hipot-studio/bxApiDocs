@@ -139,11 +139,6 @@
       <option name="PHP" value="true" />
     </context>
   </template>
-  <template name="CANONICAL_PAGE_URL" value="CANONICAL_PAGE_URL" description="Каноничная страница элемента (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
-    <context>
-      <option name="PHP" value="true" />
-    </context>
-  </template>
   <template name="SHOW_COUNTER" value="SHOW_COUNTER" description="Количество показов элемента (изменяется при вызове функции CIBlockElement::CounterInc)." toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
@@ -454,7 +449,7 @@
       <option name="PHP" value="true" />
     </context>
   </template>
-  <template name="ORDER_ID" value="ORDER_ID" description="Код заказа, в который вошла эта запись (товар). Для товаров, которые помещены в корзину, но ещё не заказаны, это поле равно NULL. " toReformat="false" toShortenFQNames="true">
+  <template name="ORDER_ID" value="ORDER_ID" description="Код заказа, в который вошла эта запись (товар). Для товаров, которые помещены в корзину, но ещё не заказаны, это поле равно NULL." toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
     </context>
@@ -515,6 +510,61 @@
     </context>
   </template>
   <template name="USER_DESCRIPTION" value="USER_DESCRIPTION" description="Описание заказа заказчиком." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="nTopCount" value="nTopCount" description="ограничить количество сверху" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="bShowAll" value="bShowAll" description="разрешить вывести все элементы при постраничной навигации" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="iNumPage" value="iNumPage" description="номер страницы при постраничной навигации" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="nPageSize" value="nPageSize" description="количество элементов на странице при постраничной навигации" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="nElementID" value="nElementID" description="ID элемента который будет выбран вместе со своими соседями." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="CACHE_TIME" value="CACHE_TIME" description="Время кеширования" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CACHE_TYPE" value="CACHE_TYPE" description="Тип кеширования" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PROPERTIES" value="PROPERTIES" description="&lt;abbreviation&gt;" toReformat="true" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="COMPATIBLE_MODE" value="COMPATIBLE_MODE" description="COMPATIBLE_MODE" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PROPERTY_VALUES" value="PROPERTY_VALUES" description="ключ значений свойств в событиях элементов инфоблока" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CANONICAL_PAGE_URL" value="CANONICAL_PAGE_URL" description="CANONICAL_PAGE_URL" toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
     </context>

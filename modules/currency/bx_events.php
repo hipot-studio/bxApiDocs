@@ -3,7 +3,7 @@
 /**
  * Класс-контейнер событий модуля <b>currency</b>.
  */
-class bx_events
+class _CEventsCurrency
 {
     /**
      * <p>OnBeforeCurrencyAdd - событие, вызываемое в методе <a href="http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__add.17dc7357.php">CCurrency::Add</a> перед добавлением валюты и перед проверкой полей. Позволяет изменить вносимые данные либо вообще отменить запись.</p>.

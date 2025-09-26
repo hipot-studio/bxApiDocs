@@ -3,7 +3,7 @@
 /**
  * Класс-контейнер событий модуля <b>catalog</b>.
  */
-class bx_events
+class _CEventsCatalog
 {
     /**
      * <p>OnBeforeDiscountAdd - событие, вызываемое в методе <a href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccatalogdiscount/ccatalogdiscount_add.php">CCatalogDiscount::Add</a> перед добавлением новой скидки. Позволяет изменить данные до вызова <b>CCatalogDiscount::CheckFields</b> или вообще отменить запись.</p>.
