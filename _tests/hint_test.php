@@ -30,6 +30,9 @@ $APPLICATION->IncludeFile();
 $APPLICATION->IncludeComponent();
 
 $APPLICATION->ShowTitle();
+
+AddEventHandler('abtest');
+\Bitrix\Main\EventManager::getInstance()->addEventHandler('workflow');
 ?>
 
 <script>
