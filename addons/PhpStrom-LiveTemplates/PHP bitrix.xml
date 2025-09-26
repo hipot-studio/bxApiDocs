@@ -230,7 +230,7 @@
       <option name="PHP String Literal" value="true" />
     </context>
   </template>
-  <template name="ajax_perform_bx" value="// performance fixs&#10;define(&quot;STOP_STATISTICS&quot;,       true);&#10;define(&quot;NO_KEEP_STATISTIC&quot;,     true);&#10;define(&quot;NO_AGENT_STATISTIC&quot;,    &quot;Y&quot;);&#10;define(&quot;NOT_CHECK_PERMISSIONS&quot;, true);&#10;define(&quot;DisableEventsCheck&quot;,    true);&#10;define(&quot;BX_SECURITY_SHOW_MESSAGE&quot;, true);" description="фиксы на аякс перед прологом" toReformat="false" toShortenFQNames="true">
+  <template name="ajax_perform_bx" value="// performance fixs&#10;define('BX_SKIP_SESSION_EXPAND', true);&#10;define('BX_SESSION_ID_CHANGE', false);&#10;define('BX_SKIP_POST_UNQUOTE', true);&#10;define('STOP_STATISTICS', true);&#10;define('NO_KEEP_STATISTIC', 'Y');&#10;define('NO_AGENT_STATISTIC', 'Y');&#10;define('STATISTIC_SKIP_ACTIVITY_CHECK', true);&#10;define('NO_AGENT_CHECK', true);&#10;define('NOT_CHECK_PERMISSIONS', true);&#10;define('DisableEventsCheck', true);&#10;define('BX_SECURITY_SHOW_MESSAGE', true);&#10;define('PERFMON_STOP', true);&#10;// Виртуальная сессия&#10;if (PHP_SAPI == 'cli') {&#10;&#9;define('BX_SECURITY_SESSION_VIRTUAL', true);&#10;}" description="фиксы на аякс перед прологом" toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
     </context>
