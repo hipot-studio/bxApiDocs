@@ -32,7 +32,7 @@ if (!defined('PUBLIC_MODE') || PUBLIC_MODE !== 1)
 {
 	if (!defined('ADMIN_SECTION'))
 	{
-		define("ADMIN_SECTION", true);
+		//define("ADMIN_SECTION", true);
 	}
 }
 

@@ -248,7 +248,7 @@ define('SM_VERSION_DATE', '');
  * </li></ul>
  * @var string|bool
  */
-define('ADMIN_SECTION', '');
+const ADMIN_SECTION = '';
 
 /*
  * <p>Данную константу необходимо инициализировать до
