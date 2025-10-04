@@ -42,9 +42,7 @@ class ResourceDialog extends BaseController
 		{
 			return $this->resourceProvider->getList(
 				gridParams: new Provider\Params\GridParams(
-					filter: new Provider\Params\Resource\ResourceFilter([
-						'IS_MAIN' => true,
-					]),
+					filter: new Provider\Params\Resource\ResourceFilter(['IS_MAIN' => true]),
 				),
 				userId: $this->userId,
 			);

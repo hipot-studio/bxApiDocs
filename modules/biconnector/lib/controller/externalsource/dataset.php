@@ -63,13 +63,22 @@ class Dataset extends Controller
 		return parent::processBeforeAction($action);
 	}
 
-	public function getPrimaryAutoWiredParameter()
+	public function getPrimaryAutoWiredParameter(): ExactParameter
 	{
 		return new ExactParameter(
 			ExternalSource\Internal\ExternalDataset::class,
 			'dataset',
-			function (string $className, int $id) {
-				$dataset = ExternalSource\DatasetManager::getById($id);
+			function($className, $id)
+			{
+				$datasetId = (int)$id;
+				if ($datasetId <= 0)
+				{
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR')));
+
+					return null;
+				}
+
+				$dataset = ExternalSource\DatasetManager::getById($datasetId);
 				if (!$dataset)
 				{
 					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR')));

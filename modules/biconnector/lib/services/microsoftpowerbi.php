@@ -5,6 +5,7 @@ use Bitrix\BIConnector\LimitManager;
 use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Service;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
 
@@ -94,6 +95,9 @@ class MicrosoftPowerBI extends Service
 
 		$connector->sendAnalytic();
 
+		$licenseLimit = $limitManager->getLimit();
+		$isBreakableOverLimit = $this->isBreakableOverlimitPrinting() && $licenseLimit > 0;
+
 		$queryResult = $connector->query($parameters, $limit, static::$dateFormats);
 		if ($connector->isFulfilledOutput())
 		{
@@ -115,6 +119,12 @@ class MicrosoftPowerBI extends Service
 					echo $output;
 					$size += strlen($output);
 					$firstLinePrinted = true;
+				}
+				elseif ($isBreakableOverLimit && $licenseLimit < $count)
+				{
+					$count++;
+
+					continue;
 				}
 
 				if (is_array($row))
@@ -150,6 +160,25 @@ class MicrosoftPowerBI extends Service
 				$output = "[\n" . Json::encode($fields, JSON_UNESCAPED_UNICODE) . "\n";
 				echo $output;
 				$size += strlen($output);
+			}
+
+			if ($isBreakableOverLimit && $licenseLimit < $count)
+			{
+				$overLimit = $count - $licenseLimit;
+				$errorRow = [
+					'error' => 'OVER_LIMIT',
+					'errorMessage' => Loc::getMessagePlural(
+						'BICONNECTOR_TABLE_OVER_LIMIT_ERROR',
+						$overLimit,
+						[
+							'#LIMIT#' => $licenseLimit,
+							'#OVERLIMIT_COUNT#' => $overLimit,
+						],
+					),
+				];
+
+				$output = ',' . Json::encode($errorRow, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_IGNORE) . "\n";
+				echo $output;
 			}
 
 			$output = ']';

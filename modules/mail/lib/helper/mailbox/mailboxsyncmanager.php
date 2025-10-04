@@ -328,6 +328,48 @@ class MailboxSyncManager
 	    return $userMailboxesIdsWithConnectionError[$userId];
 	}
 
+	/**
+	 * @param array $userIds
+	 * @return int[]
+	 */
+	public static function getMailboxesWithConnectionErrorForUsers(array $userIds): array
+	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$query = MailEntityOptionsTable::query()
+			->registerRuntimeField(
+				'MAILBOX',
+				[
+					'data_type' => MailboxTable::class,
+					'reference' => [
+						'=this.ENTITY_ID' => 'ref.ID',
+					],
+					'join_type' => 'INNER',
+				],
+			)
+			->setSelect([
+				'ENTITY_ID',
+			])
+			->where('ENTITY_TYPE', '=', MailEntityOptionsTable::MAILBOX_TYPE_NAME)
+			->where('PROPERTY_NAME', '=', MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME)
+			->where('VALUE', '>=', self::MAX_CONNECTION_ATTEMPTS_BEFORE_UNAVAILABLE)
+			->whereIn('MAILBOX.USER_ID', $userIds)
+		;
+
+		$result = $query->exec();
+
+		$mailboxIdsWithError = [];
+		while ($row = $result->fetch())
+		{
+			$mailboxIdsWithError[] = (int)$row['ENTITY_ID'];
+		}
+
+		return $mailboxIdsWithError;
+	}
+
 	public function getMailboxesSyncInfo(): array
 	{
 		static $mailboxesSyncInfo = null;

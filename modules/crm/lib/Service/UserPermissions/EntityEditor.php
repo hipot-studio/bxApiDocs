@@ -32,7 +32,7 @@ final class EntityEditor
 	 */
 	public function canSwitchToPersonalView(int $entityTypeId, ?int $categoryId): bool
 	{
-		if ($this->entityAdmin->isAdminForEntity($entityTypeId))
+		if ($this->entityAdmin->isAdminForEntity($entityTypeId, $categoryId))
 		{
 			return true;
 		}

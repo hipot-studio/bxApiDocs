@@ -9,7 +9,6 @@ use Bitrix\Crm\Integration\AI\Dto\SummarizeCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\TranscribeCallRecordingPayload;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Context;
-use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Http;
@@ -19,12 +18,10 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Form\FeedbackForm;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
+use Bitrix\Main\License\UrlProvider;
 
 final class Uploader
 {
-	private const ENDPOINT_GLOBAL = 'https://product-feedback.bitrix24.com/bitrix/services/main/ajax.php';
-	private const ENDPOINT_RU = 'https://product-feedback.bitrix24.ru/bitrix/services/main/ajax.php';
-
 	private const FORM_ID = 654;
 	private const SECURITY_CODE = 'so05ig';
 
@@ -185,11 +182,8 @@ final class Uploader
 
 	private function getRequestEndPoint(): string
 	{
-		$region = Application::getInstance()->getLicense()->getRegion();
-		
-		return in_array($region, ['ru', 'by', 'kz'], true)
-			? self::ENDPOINT_RU
-			: self::ENDPOINT_GLOBAL
-		;
+		$domain = (new UrlProvider())->getFeedbackDomain();
+
+		return "https://{$domain}/bitrix/services/main/ajax.php";
 	}
 }

@@ -19,7 +19,7 @@ class RemoveResourceTypeCommandHandler
 			limit: 1,
 			filter: (new ConditionTree())
 				->where('TYPE_ID', '=', $command->id),
-			select: new ResourceSelect(['*']),
+			select: new ResourceSelect(),
 		)->isEmpty();
 
 		if (!$hasResourcesOfType)

@@ -38,7 +38,6 @@ use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
 use Bitrix\Crm\Tour\CopilotInCall;
 use Bitrix\Crm\Tour\CopilotRunAutomatically;
 use Bitrix\Crm\Tour\CopilotRunManually;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber;
 use Bitrix\Main\Type\DateTime;
@@ -711,7 +710,6 @@ class Call extends Activity
 		$isPillVisible = AIManager::isAiCallProcessingEnabled()
 			&& $this->hasUpdatePermission()
 			&& $this->isCopilotScope()
-			&& $this->isCopilotMultiScenarioEnabled()
 			&& count($this->fetchAudioRecordList()) > 0
 		;
 
@@ -846,7 +844,6 @@ class Call extends Activity
 			$this->getContext(),
 			$this->getAssociatedEntityModel(),
 			$activityId,
-			$this->isCopilotMultiScenarioEnabled()
 		);
 	}
 
@@ -958,11 +955,6 @@ class Call extends Activity
 	private function isTranscribed(array $input): bool
 	{
 		return isset($input['HAS_TRANSCRIPT']) && $input['HAS_TRANSCRIPT'];
-	}
-
-	private function isCopilotMultiScenarioEnabled(): bool
-	{
-		return ($this->getDate()?->getTimestamp() ?? 0) > (int)Option::get('crm', 'b_crm_copilot_in_cal_grading_ts', 0);
 	}
 
 	private function isCopilotScope(): bool

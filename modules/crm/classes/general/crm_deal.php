@@ -69,6 +69,7 @@ class CAllCrmDeal
 	private static ?Crm\Entity\Compatibility\Adapter $lastActivityAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter $commentsAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter\Permissions $permissionsAdapter = null;
+	private static ?Crm\Entity\Compatibility\Adapter\StageHistory $stageHistoryAdapter = null;
 
 	/** @var \Bitrix\Crm\Entity\Compatibility\Adapter */
 	private $compatibilityAdapter;
@@ -184,6 +185,24 @@ class CAllCrmDeal
 		return self::$permissionsAdapter;
 	}
 
+	private static function getStageHistoryAdapter(): Crm\Entity\Compatibility\Adapter\StageHistory
+	{
+		if (!self::$stageHistoryAdapter)
+		{
+			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+
+			self::$stageHistoryAdapter = new Crm\Entity\Compatibility\Adapter\StageHistory(
+				$factory,
+				new Crm\History\StageHistory\DealStageHistory($factory),
+				new Crm\History\StageHistoryWithSupposed\DealStageHistoryWithSupposed(
+					new Crm\History\StageHistoryWithSupposed\TransitionsCalculator($factory),
+				),
+			);
+		}
+
+		return self::$stageHistoryAdapter;
+	}
+
 	// Service -->
 	public static function GetFieldCaption($fieldName)
 	{
@@ -209,6 +228,7 @@ class CAllCrmDeal
 
 		return is_string($result) ? $result : '';
 	}
+
 	// Get Fields Metadata
 	public static function GetFieldsInfo()
 	{
@@ -389,8 +409,15 @@ class CAllCrmDeal
 
 		self::$FIELD_INFOS += LastCommunicationTable::getLastStateFieldInfo();
 
+		$segmentTitleInfo = (new Crm\RepeatSale\Segment\Field())->getInfo();
+		if (!empty($segmentTitleInfo))
+		{
+			self::$FIELD_INFOS += $segmentTitleInfo;
+		}
+
 		return self::$FIELD_INFOS;
 	}
+
 	public static function GetFields($arOptions = null)
 	{
 		$companyJoin = 'LEFT JOIN b_crm_company CO ON L.COMPANY_ID = CO.ID';
@@ -573,7 +600,6 @@ class CAllCrmDeal
 			)
 		);
 
-		// add utm fields
 		$result = array_merge(
 			$result,
 			UtmTable::getFieldsDescriptionByEntityTypeId(CCrmOwnerType::Deal),
@@ -582,6 +608,7 @@ class CAllCrmDeal
 				'L'
 			),
 			LastCommunicationTable::getFieldsByEntityTypeId(CCrmOwnerType::Deal, true),
+			(new Crm\RepeatSale\Segment\Field())->getSqlInfo(\CCrmOwnerType::Deal),
 		);
 
 		// add uf fields
@@ -2160,7 +2187,8 @@ class CAllCrmDeal
 			{
 				DealSumStatisticEntry::register($ID, $arFields);
 				DealInvoiceStatisticEntry::synchronize($ID, $arFields);
-				DealStageHistoryEntry::register($ID, $arFields, array('IS_NEW' => true));
+
+				self::getStageHistoryAdapter()->performAdd($arFields, $options);
 			}
 
 			if(isset($arFields['LEAD_ID']) && $arFields['LEAD_ID'] > 0)
@@ -3072,7 +3100,10 @@ class CAllCrmDeal
 			}
 			//endregion
 
-			self::getLastActivityAdapter()->performUpdate((int)$ID, $arFields, $options);
+			self::getLastActivityAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->performUpdate((int)$ID, $arFields, $options)
+			;
 			self::getCommentsAdapter()
 				->setPreviousFields((int)$ID, $arRow)
 				->normalizeFields((int)$ID, $arFields)
@@ -3381,15 +3412,14 @@ class CAllCrmDeal
 			{
 				DealSumStatisticEntry::register($ID, $currentFields);
 
-				DealStageHistoryEntry::synchronize($ID, $currentFields);
 				DealInvoiceStatisticEntry::synchronize($ID, $currentFields);
 				DealActivityStatisticEntry::synchronize($ID, $currentFields);
 				DealChannelBinding::synchronize($ID, $currentFields);
 
-				if(isset($arFields['STAGE_ID']))
-				{
-					DealStageHistoryEntry::register($ID, $currentFields, array('IS_NEW' => false));
-				}
+				self::getStageHistoryAdapter()
+					->setPreviousFields($ID, $arRow)
+					->performUpdate($ID, $currentFields, $options)
+				;
 
 				$oldLeadID = isset($arRow['LEAD_ID']) ? (int)$arRow['LEAD_ID'] : 0;
 				$curLeadID = isset($arFields['LEAD_ID']) ? (int)$arFields['LEAD_ID'] : $oldLeadID;
@@ -3756,7 +3786,8 @@ class CAllCrmDeal
 				$item = Crm\Kanban\Entity::getInstance(self::$TYPE_NAME)
 					->createPullItem(array_merge($arRow, $arFields));
 
-				PullManager::getInstance()->sendItemUpdatedEvent(
+				Container::getInstance()->getPullEventsQueue()->scheduleItemUpdatedEvent(
+					new ItemIdentifier(\CCrmOwnerType::Deal, (int)$ID),
 					$item,
 					[
 						'TYPE' => self::$TYPE_NAME,
@@ -3764,7 +3795,7 @@ class CAllCrmDeal
 						'SKIP_CURRENT_USER' => ($userID !== 0),
 						'IGNORE_DELAY' => \CCrmBizProcHelper::isActiveDebugEntity(\CCrmOwnerType::Deal, $ID),
 						'EVENT_ID' => ($options['eventId'] ?? null),
-					]
+					],
 				);
 			}
 		}
@@ -3839,7 +3870,7 @@ class CAllCrmDeal
 		if($processBizproc)
 		{
 			$bizproc = new CCrmBizProc('DEAL');
-			$bizproc->ProcessDeletion($ID);
+			$bizproc->processDeletion($ID);
 		}
 
 		$enableRecycleBin = \Bitrix\Crm\Recycling\DealController::isEnabled()
@@ -3895,7 +3926,7 @@ class CAllCrmDeal
 
 			if(!isset($arOptions['REGISTER_STATISTICS']) || $arOptions['REGISTER_STATISTICS'] === true)
 			{
-				DealStageHistoryEntry::unregister($ID);
+				self::getStageHistoryAdapter()->performDelete($ID, $arOptions);
 				DealSumStatisticEntry::unregister($ID);
 				DealInvoiceStatisticEntry::unregister($ID);
 				DealActivityStatisticEntry::unregister($ID);
@@ -5001,7 +5032,7 @@ class CAllCrmDeal
 			array('ID' => $ID, 'CHECK_PERMISSIONS' => 'N'),
 			false,
 			false,
-			array('ID', 'CATEGORY_ID', 'STAGE_ID', 'ASSIGNED_BY_ID', 'OPENED')
+			array('ID', 'CATEGORY_ID', 'STAGE_ID', 'ASSIGNED_BY_ID', 'OPENED', 'BEGINDATE', 'CLOSEDATE')
 		);
 
 		$fields = $dbResult->Fetch();
@@ -5192,7 +5223,17 @@ class CAllCrmDeal
 
 		if(!isset($options['REGISTER_STATISTICS']) || $options['REGISTER_STATISTICS'] === true)
 		{
-			DealStageHistoryEntry::processCagegoryChange($ID);
+			$stageHistoryFields = [
+				'CATEGORY_ID' => $newCategoryID,
+				'STAGE_ID' => $newStageID,
+			];
+			self::getStageHistoryAdapter()
+				->setPreviousFields($ID, $fields)
+				->performUpdate(
+					$ID,
+					$stageHistoryFields,
+					[],
+				);
 			DealSumStatisticEntry::processCagegoryChange($ID);
 			DealInvoiceStatisticEntry::processCagegoryChange($ID);
 			DealActivityStatisticEntry::processCagegoryChange($ID);
@@ -5443,6 +5484,9 @@ class CAllCrmDeal
 			);
 		}
 	}
+	/**
+	 * @deprecated
+	 */
 	public static function RebuildStatistics(array $IDs, array $options = null)
 	{
 		$dbResult = self::GetListEx(
@@ -5468,7 +5512,6 @@ class CAllCrmDeal
 		}
 
 		$forced = isset($options['FORCED']) ? $options['FORCED'] : false;
-		$enableHistory = isset($options['ENABLE_HISTORY']) ? $options['ENABLE_HISTORY'] : true;
 		$enableSumStatistics = isset($options['ENABLE_SUM_STATISTICS']) ? $options['ENABLE_SUM_STATISTICS'] : true;
 		$enableInvoiceStatistics = isset($options['ENABLE_INVOICE_STATISTICS']) ? $options['ENABLE_INVOICE_STATISTICS'] : true;
 		$enableActivityStatistics = isset($options['ENABLE_ACTIVITY_STATISTICS']) ? $options['ENABLE_ACTIVITY_STATISTICS'] : true;
@@ -5476,54 +5519,6 @@ class CAllCrmDeal
 		while($fields = $dbResult->Fetch())
 		{
 			$ID = (int)$fields['ID'];
-			//--> History
-			if($enableHistory && ($forced || !DealStageHistoryEntry::isRegistered($ID)))
-			{
-				$created = isset($fields['DATE_CREATE']) ? $fields['DATE_CREATE'] : '';
-				$createdTime = null;
-				try
-				{
-					$createdTime = new Bitrix\Main\Type\DateTime(
-						$created,
-						Bitrix\Main\Type\DateTime::convertFormatToPhp(FORMAT_DATETIME));
-				}
-				catch(Bitrix\Main\ObjectException $e)
-				{
-				}
-
-				$modified = isset($fields['DATE_MODIFY']) ? $fields['DATE_MODIFY'] : '';
-				$modifiedTime = null;
-				if($modified !== '')
-				{
-					try
-					{
-						$modifiedTime = new Bitrix\Main\Type\DateTime(
-							$modified,
-							Bitrix\Main\Type\DateTime::convertFormatToPhp(FORMAT_DATETIME));
-					}
-					catch(Bitrix\Main\ObjectException $e)
-					{
-					}
-				}
-
-				if($createdTime && $modifiedTime && $createdTime->getTimestamp() !== $modifiedTime->getTimestamp())
-				{
-					DealStageHistoryEntry::register(
-						$ID,
-						$fields,
-						array('IS_NEW' => false, 'TIME' => $modifiedTime, 'FORCED' => $forced)
-					);
-				}
-				elseif($createdTime)
-				{
-					DealStageHistoryEntry::register(
-						$ID,
-						$fields,
-						array('IS_NEW' => true, 'TIME' => $createdTime, 'FORCED' => $forced)
-					);
-				}
-			}
-			//<-- History
 			//--> Statistics
 			if ($fields['IS_RECURRING'] !== 'Y')
 			{

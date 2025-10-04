@@ -62,6 +62,7 @@ class FavoritesRepository implements FavoritesRepositoryInterface
 					->whereIn('ID', new SqlExpression($addedResourceQuery))
 				)
 			)
+			->where('DATA.IS_DELETED', '=', 'N')
 			->exec()
 			->fetchCollection()
 		;

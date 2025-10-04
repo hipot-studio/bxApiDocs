@@ -128,13 +128,6 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 
 	private function loadRows(): void
 	{
-		if (\Bitrix\BIConnector\Superset\MarketDashboardManager::getInstance()->areInitialDashboardsInstalling())
-		{
-			$this->grid->setRawRows([]);
-
-			return;
-		}
-
 		$integrator = Bitrix\BIConnector\Integration\Superset\Integrator\Integrator::getInstance();
 		$pagination = $this->grid->getPagination();
 		$page = $pagination?->getCurrentPage();

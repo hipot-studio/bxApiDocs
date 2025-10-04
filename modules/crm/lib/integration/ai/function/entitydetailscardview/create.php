@@ -45,7 +45,7 @@ final class Create implements AIFunction
 			return Result::failModuleNotInstalled('ui');
 		}
 
-		if (!$this->permissions->isAdminForEntity($parameters->entityTypeId))
+		if (!$this->permissions->isAdminForEntity($parameters->entityTypeId, $parameters->categoryId))
 		{
 			return Result::failAccessDenied();
 		}

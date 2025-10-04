@@ -34,7 +34,11 @@ abstract class AbstractCommand implements CommandInterface
 		}
 		catch (\Exception $e)
 		{
-			throw new CommandException($this, 'Command has unprocessed exception', previous: $e);
+			throw new CommandException(
+				$this,
+				sprintf('Command has unprocessed exception: "%s". Code: "%s"', $e->getMessage(), $e->getCode()),
+				previous: $e
+			);
 		}
 
 		$this->afterRun();

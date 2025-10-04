@@ -32,7 +32,7 @@ use Psr\Log\LoggerInterface;
 class AIManager
 {
 	public const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
-	
+
 	public const SUPPORTED_ENTITY_TYPE_IDS = FillItemFieldsFromCallTranscription::SUPPORTED_TARGET_ENTITY_TYPE_IDS;
 	public const AI_LICENCE_FEATURE_NAME = 'ai_available_by_version';
 	public const AI_PACKAGES_EMPTY_COMMON_SLIDER_CODE = 'limit_boost_copilot';
@@ -62,21 +62,23 @@ class AIManager
 
 	public static function isAvailable(): bool
 	{
-		static $regionBlacklist = [
+		return self::isAvailableRegion() && Loader::includeModule('ai');
+	}
+
+	public static function isAvailableRegion(): bool
+	{
+		$regionBlacklist = [
 			'ua',
 			'cn',
 		];
 
 		$region = Application::getInstance()->getLicense()->getRegion();
-		if (
-			$region === null // block AI in unknown region just in case
-			|| in_array(mb_strtolower($region), $regionBlacklist, true)
-		)
+		if ($region === null)
 		{
-			return false;
+			return false; // block AI in unknown region just in case
 		}
 
-		return Loader::includeModule('ai');
+		return !in_array(mb_strtolower($region), $regionBlacklist, true);
 	}
 
 	public static function isEnabledInGlobalSettings(string|GlobalSetting $code = GlobalSetting::FillItemFromCall): bool
@@ -362,7 +364,7 @@ class AIManager
 
 		return $operation->launch();
 	}
-	
+
 	public static function launchFillRepeatSaleTips(int $activityId, ?int $userId = null, bool $isManualLaunch = false): Result
 	{
 		$result = new Result(FillRepeatSaleTips::TYPE_ID);

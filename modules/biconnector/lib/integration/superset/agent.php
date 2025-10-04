@@ -11,6 +11,8 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
+use Bitrix\BIConnector\Superset\SystemDashboardManager;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LanguageTable;
 
@@ -98,19 +100,21 @@ class Agent
 		}
 
 		AccessInstaller::install();
+		Option::set('biconnector', Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
+		SystemDashboardManager::actualizeSystemDashboards();
 
 		return '';
 	}
 
 	public static function reinstallRoles(): string
 	{
-		$isAccessRolesReinstalled = \Bitrix\Main\Config\Option::get('biconnector', self::IS_ACCESS_ROLES_REINSTALLED_OPTION, 'N');
+		$isAccessRolesReinstalled = Option::get('biconnector', self::IS_ACCESS_ROLES_REINSTALLED_OPTION, 'N');
 		if ($isAccessRolesReinstalled === 'Y')
 		{
 			return '';
 		}
 
-		\Bitrix\Main\Config\Option::set('biconnector', self::IS_ACCESS_ROLES_REINSTALLED_OPTION, 'Y');
+		Option::set('biconnector', self::IS_ACCESS_ROLES_REINSTALLED_OPTION, 'Y');
 		AccessInstaller::reinstall();
 
 		return '';
@@ -181,5 +185,15 @@ class Agent
 		$groupCollection->save();
 
 		return '';
+	}
+
+	public static function actualizeSystemDashboards(): string
+	{
+		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_DELETED)
+		{
+			SystemDashboardManager::actualizeSystemDashboards();
+		}
+
+		return __CLASS__ . '::' . __FUNCTION__ . '();';
 	}
 }

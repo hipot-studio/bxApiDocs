@@ -10,6 +10,7 @@ use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\ProductRowTable;
+use Bitrix\Crm\RepeatSale\Log\Entity\RepeatSaleLogTable;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Reservation;
 use Bitrix\Crm\Service\Container;
@@ -1007,5 +1008,15 @@ final class FieldRepository
 		}
 
 		return $communications;
+	}
+
+	public function getRepeatSaleSegmentId(int $entityTypeId): Relation
+	{
+		return new Reference(
+			RepeatSaleLogTable::REPEAT_SALE_SEGMENT_ID_NAME,
+			RepeatSaleLogTable::class,
+			Join::on('this.ID', 'ref.ENTITY_ID')
+				->where('ref.ENTITY_TYPE_ID', \CCrmOwnerType::Deal),
+		);
 	}
 }

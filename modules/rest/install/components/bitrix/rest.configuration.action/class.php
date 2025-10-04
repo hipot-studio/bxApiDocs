@@ -50,10 +50,10 @@ class CRestConfigurationActionComponent extends CBitrixComponent
 
 			if ($this->getTemplateName() === 'crm')
 			{
-				$item['title'] = Loc::getMessage('REST_CONFIGURATION_ACTION_IMPORT_CRM_TITLE');
-				$item['description'] = Loc::getMessage('REST_CONFIGURATION_ACTION_IMPORT_CRM_DESCRIPTION');
+				$item['title'] = Loc::getMessage('REST_CONFIGURATION_ACTION_IMPORT_CRM_TITLE_MSGVER_1');
+				$item['description'] = Loc::getMessage('REST_CONFIGURATION_ACTION_IMPORT_CRM_DESCRIPTION_MSGVER_1');
 				$item['action'] = Loc::getMessage('REST_CONFIGURATION_ACTION_IMPORT_CRM_ACTION');
-				$item['icon'] = '/bitrix/images/rest/configuration/rest-market-site-import-crm.svg';
+				$item['icon'] = '/bitrix/images/rest/configuration/rest-market-site-import-crm.png';
 				$result['ITEMS']['import'] = $item;
 			}
 			else
@@ -73,10 +73,10 @@ class CRestConfigurationActionComponent extends CBitrixComponent
 
 			if ($this->getTemplateName() === 'crm')
 			{
-				$item['title'] = Loc::getMessage('REST_CONFIGURATION_ACTION_EXPORT_CRM_TITLE');
-				$item['description'] = Loc::getMessage('REST_CONFIGURATION_ACTION_EXPORT_CRM_DESCRIPTION');
+				$item['title'] = Loc::getMessage('REST_CONFIGURATION_ACTION_EXPORT_CRM_TITLE_MSGVER_1');
+				$item['description'] = Loc::getMessage('REST_CONFIGURATION_ACTION_EXPORT_CRM_DESCRIPTION_MSGVER_1');
 				$item['action'] = Loc::getMessage('REST_CONFIGURATION_ACTION_EXPORT_CRM_ACTION');
-				$item['icon'] = '/bitrix/images/rest/configuration/rest-market-site-export-crm.svg';
+				$item['icon'] = '/bitrix/images/rest/configuration/rest-market-site-export-crm.png';
 				$result['ITEMS']['export'] = $item;
 			}
 			else

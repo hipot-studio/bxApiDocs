@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Iblock;
+
 class CIBlockPropertyEnumResult extends CDBResult
 {
 	function Fetch()
@@ -162,6 +164,8 @@ class CIBlockPropertyEnum
 		if (defined("BX_COMP_MANAGED_CACHE"))
 			$CACHE_MANAGER->ClearByTag("iblock_property_enum_".$arFields["PROPERTY_ID"]);
 
+		Iblock\PropertyEnumerationTable::cleanCache();
+
 		return $ID;
 	}
 
@@ -189,6 +193,8 @@ class CIBlockPropertyEnum
 		if (defined("BX_COMP_MANAGED_CACHE") && intval($arFields["PROPERTY_ID"]) > 0)
 			$CACHE_MANAGER->ClearByTag("iblock_property_enum_".$arFields["PROPERTY_ID"]);
 
+		Iblock\PropertyEnumerationTable::cleanCache();
+
 		return true;
 	}
 
@@ -201,6 +207,8 @@ class CIBlockPropertyEnum
 
 		if (defined("BX_COMP_MANAGED_CACHE"))
 			$CACHE_MANAGER->ClearByTag("iblock_property_enum_".$PROPERTY_ID);
+
+		Iblock\PropertyEnumerationTable::cleanCache();
 
 		return $DB->Query("
 			DELETE FROM b_iblock_property_enum
@@ -221,6 +229,8 @@ class CIBlockPropertyEnum
 			WHERE ID=".intval($ID)."
 			"
 		);
+
+		Iblock\PropertyEnumerationTable::cleanCache();
 
 		return true;
 	}

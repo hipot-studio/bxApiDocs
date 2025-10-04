@@ -22,7 +22,7 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 			$trade = [
 				'title' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_TRADE_TITLE'),
 				'description' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_TRADE_DESCRIPTION'),
-				'image' => '/bitrix/images/rest/solution/trade.svg',
+				'image' => '/bitrix/images/rest/solution/trade.png',
 				'tag' => 'продажи',
 			];
 			$result['tags'][] = $trade;
@@ -30,7 +30,7 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 			$furniture = [
 				'title' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_FURNITURE_TITLE'),
 				'description' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_FURNITURE_DESCRIPTION'),
-				'image' => '/bitrix/images/rest/solution/furniture.svg',
+				'image' => '/bitrix/images/rest/solution/furniture.png',
 				'tag' => 'мебель',
 			];
 			$result['tags'][] = $furniture;
@@ -38,17 +38,18 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 			$production = [
 				'title' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_PRODUCTION_TITLE'),
 				'description' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_PRODUCTION_DESCRIPTION'),
-				'image' => '/bitrix/images/rest/solution/production.svg',
+				'image' => '/bitrix/images/rest/solution/production.png',
 				'tag' => 'производство',
 			];
 			$result['tags'][] = $production;
 		}
+
 		else if (in_array($region, ['ru', 'by']))
 		{
 			$trade = [
 				'title' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_TRADE_TITLE'),
 				'description' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_TRADE_DESCRIPTION'),
-				'image' => '/bitrix/images/rest/solution/trade.svg',
+				'image' => '/bitrix/images/rest/solution/trade.png',
 				'tag' => 'продажи',
 			];
 			$result['tags'][] = $trade;
@@ -56,7 +57,7 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 			$build = [
 				'title' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_CONSTRUCTION_TITLE'),
 				'description' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_CONSTRUCTION_DESCRIPTION'),
-				'image' => '/bitrix/images/rest/solution/build.svg',
+				'image' => '/bitrix/images/rest/solution/build.png',
 				'tag' => 'строительство',
 			];
 			$result['tags'][] = $build;
@@ -64,13 +65,15 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 			$tourism = [
 				'title' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_TOURISM_TITLE'),
 				'description' => Loc::getMessage('REST_MARKETPLACE_SOLUTION_TOURISM_DESCRIPTION'),
-				'image' => '/bitrix/images/rest/solution/tourism.svg',
+				'image' => '/bitrix/images/rest/solution/tourism.png',
 				'tag' => 'туризм',
 			];
 			$result['tags'][] = $tourism;
 		}
 
 		$this->arResult = $result;
+
+		$this->arResult['CURRENT_LANG'] = \Bitrix\Main\Localization\Loc::getCurrentLang();
 	}
 
 	public function executeComponent(): void

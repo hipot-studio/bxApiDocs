@@ -682,6 +682,14 @@ class Client
 
 	public static function isSubscriptionDemoAvailable()
 	{
+		if (
+			Option::get('rest', 'can_use_demo_after_subscription') === 'N'
+			&& self::isSubscriptionUsed()
+		)
+		{
+			return false;
+		}
+
 		if (ModuleManager::isModuleInstalled('bitrix24'))
 		{
 			$used = Option::get('bitrix24', '~mp24_used_trial', 'N') === 'Y';
@@ -692,6 +700,11 @@ class Client
 		}
 
 		return !$used && static::isSubscriptionAccess();
+	}
+
+	public static function isSubscriptionUsed(): bool
+	{
+		return !is_null(self::getSubscriptionFinalDate());
 	}
 
 	/**

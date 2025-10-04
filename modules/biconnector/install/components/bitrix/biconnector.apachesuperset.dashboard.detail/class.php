@@ -9,7 +9,9 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Superset\Synchronizer;
+use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\ServiceLocation;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
@@ -34,10 +36,11 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	private SupersetController $supersetController;
 
 	private ?Dashboard $dashboard;
+	private int $dashboardId;
 
 	public function onPrepareComponentParams($arParams)
 	{
-		$arParams['DASHBOARD_ID'] = (int)($arParams['DASHBOARD_ID'] ?? 0);
+		$this->dashboardId = (int)($arParams['DASHBOARD_ID'] ?? 0);
 		$arParams['CODE'] = $arParams['CODE'] ?? '';
 		$arParams['URL_PARAMS'] = $this->getUrlParams();
 
@@ -91,8 +94,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			LocalRedirect('/bi/dashboard/');
 		}
 
-		$dashboardId = (int)$this->arParams['DASHBOARD_ID'];
-		$dashboard = SupersetDashboardTable::getByPrimary($dashboardId)->fetch();
+		$dashboard = SupersetDashboardTable::getByPrimary($this->dashboardId)->fetch();
 		if (!$dashboard)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_DETAIL_NOT_FOUND');
@@ -102,7 +104,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		$accessItem = DashboardAccessItem::createFromArray([
-			'ID' => $dashboardId,
+			'ID' => $this->dashboardId,
 			'TYPE' => $dashboard['TYPE'],
 			'OWNER_ID' => $dashboard['OWNER_ID'],
 		]);
@@ -126,6 +128,21 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			return;
 		}
 
+		if ($dashboard['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
+		{
+			$isSupersetReady = SupersetInitializer::isSupersetReady();
+			$this->showStartupTemplate($dashboard, firstStartup: !$isSupersetReady);
+			if (!$isSupersetReady)
+			{
+				Application::getInstance()->addBackgroundJob(function() {
+					SupersetInitializer::saveInitData($this->dashboardId);
+					SupersetInitializer::startupSuperset();
+				});
+			}
+
+			return;
+		}
+
 		$this->prepareResult();
 
 		if (SupersetInitializer::isSupersetReady())
@@ -142,6 +159,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		if (SupersetInitializer::isSupersetLoading())
 		{
 			$dashboard['STATUS'] = SupersetDashboardTable::DASHBOARD_STATUS_LOAD;
+			$this->arResult['PERIODIC_RELOAD'] = true; // Waiting for Superset to unfreeze
 			$this->showStartupTemplate($dashboard);
 
 			return;
@@ -149,7 +167,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		if (SupersetInitializer::isSupersetUnavailable())
 		{
-			$this->showStartupTemplate($dashboard, false);
+			$this->showStartupTemplate($dashboard);
 
 			return;
 		}
@@ -193,20 +211,32 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		$this->prepareUrlParams();
 
+		$this->arResult['IS_USE_EXTERNAL_DATASETS'] = $this->dashboard->isUseExternalDatasets();
 		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
 
 		$this->logDashboardApp();
 
+		if (!Feature::isCheckPermissionsByGroup())
+		{
+			Converter::updateToGroup(true);
+		}
+
 		$this->includeComponentTemplate();
+
+		Application::getInstance()->addBackgroundJob(function() {
+			MarketDashboardManager::getInstance()->updateApplications();
+		});
 	}
 
-	private function showStartupTemplate(array $dashboard, bool $supersetAvailable = true): void
+	private function showStartupTemplate(array $dashboard, bool $firstStartup = false): void
 	{
 		$this->arResult['DASHBOARD_TITLE'] = $dashboard['TITLE'];
 		$this->arResult['DASHBOARD_ID'] = $dashboard['ID'];
 		$this->arResult['DASHBOARD_STATUS'] = $dashboard['STATUS'];
+		$this->arResult['DASHBOARD_TYPE'] = $dashboard['TYPE'];
 
-		$this->arResult['IS_SUPERSET_AVAILABLE'] = $supersetAvailable;
+		$this->arResult['IS_FIRST_STARTUP'] = $firstStartup;
+		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 
 		$this->includeComponentTemplate('startup');
 	}
@@ -214,7 +244,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	private function initDashboard(): bool
 	{
 		$superset = $this->getSupersetController();
-		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID'], true);
+		$this->dashboard = $superset->getDashboardRepository()->getById($this->dashboardId, true);
 
 		if (!$this->dashboard)
 		{

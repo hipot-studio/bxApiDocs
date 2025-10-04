@@ -45,7 +45,15 @@ class Group extends Controller
 			'group',
 			function($className, $id)
 			{
-				$group = Model\SupersetDashboardGroupTable::getById($id)->fetchObject();
+				$groupId = (int)$id;
+				if ($groupId <= 0)
+				{
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ERROR_NOT_FOUND')));
+
+					return null;
+				}
+
+				$group = Model\SupersetDashboardGroupTable::getById($groupId)->fetchObject();
 				if (!$group)
 				{
 					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ERROR_NOT_FOUND')));
@@ -58,9 +66,16 @@ class Group extends Controller
 		);
 	}
 
-	public function loadSettingsDataAction(): ?array
+	public function loadSettingsDataAction(string $groupIdCode): ?array
 	{
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		$allowedGroups = array_flip(
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+		);
+
+		if (
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY)
+			|| !str_starts_with($groupIdCode, 'new_') && !isset($allowedGroups[PermissionDictionary::getDashboardGroupIdFromPermission($groupIdCode)])
+		)
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
 
@@ -69,6 +84,7 @@ class Group extends Controller
 
 		$resultGroups = [];
 		$resultDashboards = [];
+		$accessibleGroupIds = [];
 
 		$groups = SupersetDashboardGroupTable::getList([
 			'select' => ['ID', 'NAME', 'TYPE', 'DASHBOARDS', 'SCOPE', 'DASHBOARD_SCOPES' => 'DASHBOARDS.SCOPE'],
@@ -92,6 +108,8 @@ class Group extends Controller
 					'id' => $dashboardId,
 					'name' => $dashboard->getTitle(),
 					'type' => $dashboard->getType(),
+					'createdById' => $dashboard->getCreatedById(),
+					'ownerId' => $dashboard->getOwnerId(),
 					'scopes' => [],
 				];
 				foreach ($dashboard->getScope() as $scope)
@@ -103,8 +121,15 @@ class Group extends Controller
 				}
 			}
 
+			$groupId = PermissionDictionary::getDashboardGroupPermissionId($group->getId());
+
+			if (isset($allowedGroups[$group->getId()]))
+			{
+				$accessibleGroupIds[] = $groupId;
+			}
+
 			$resultGroups[] = [
-				'id' => PermissionDictionary::getDashboardGroupPermissionId($group->getId()),
+				'id' => $groupId,
 				'name' => $group->getName(),
 				'type' => $group->getType(),
 				'dashboardIds' => $group->getDashboards()->getIdList(),
@@ -115,13 +140,25 @@ class Group extends Controller
 		return [
 			'groups' => $resultGroups,
 			'dashboards' => $resultDashboards,
-			'isNeedShowDeletionWarningPopup' => DashboardGroupService::isNeedShowDeletionWarningPopup(),
+			'user' => [
+				'id' => AccessController::getCurrent()->getUser()->getUserId(),
+				'isAdmin' => AccessController::getCurrent()->getUser()->isAdmin(),
+				'hasAccessToPermission' => AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS),
+				'accessibleGroupIds' => $accessibleGroupIds,
+			],
 		];
 	}
 
 	public function deleteAction(Model\SupersetDashboardGroup $group): ?bool
 	{
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		$allowedGroups = array_flip(
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+		);
+
+		if (
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY)
+			|| !isset($allowedGroups[$group->getId()])
+		)
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_DELETE')));
 
@@ -148,7 +185,9 @@ class Group extends Controller
 
 	public function saveAction(array $group, array $dashboards = []): ?bool
 	{
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		$accessController = AccessController::getCurrent();
+
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
 
@@ -161,6 +200,17 @@ class Group extends Controller
 				: PermissionDictionary::getDashboardGroupIdFromPermission($group['id']),
 			'name' => $group['name'],
 		];
+
+		$allowedGroups = array_flip(
+			$accessController->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+		);
+
+		if ($groupInfo['id'] !== null && !isset($allowedGroups[$groupInfo['id']]))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
+
+			return null;
+		}
 
 		$scopeList = array_column($group['scopes'] ?? [], 'code');
 		if (!empty($group['dashboardIds']) && !empty($dashboards))

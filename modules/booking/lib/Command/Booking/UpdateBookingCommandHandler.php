@@ -60,8 +60,23 @@ class UpdateBookingCommandHandler
 			throw new UpdateBookingException('Booking not found');
 		}
 
+		$commandResources = clone $command->booking->getResourceCollection();
+		$loadedResources = $this->resourceService->loadResourceCollection($commandResources);
+
+		$notFoundIds = array_diff($commandResources->getEntityIds(), $loadedResources->getEntityIds());
+		if (!empty($notFoundIds))
+		{
+			throw new UpdateBookingException(
+				'Some resources were not found: ' . implode(', ', $notFoundIds)
+			);
+		}
+
+		$command->booking->setResourceCollection($loadedResources);
+
 		try
 		{
+			$this->bookingService->checkBookingBeforeUpdating($currentBooking, $command->booking);
+
 			$intersectionResult = $this->bookingService->checkIntersection(
 				booking: $command->booking,
 				allowOverbooking: $command->allowOverbooking,
@@ -72,11 +87,7 @@ class UpdateBookingCommandHandler
 			throw new UpdateBookingException($exception->getMessage());
 		}
 
-		$command->booking->setResourceCollection(
-			$this->resourceService->loadResourceCollection($command->booking->getResourceCollection())
-		);
-
-		return $this->transactionHandler->handle(
+		$booking = $this->transactionHandler->handle(
 			fn: function() use ($command, $currentBooking, $intersectionResult) {
 				$this->handleResources($command->booking, $currentBooking);
 				$this->handleClients($command, $currentBooking);
@@ -151,6 +162,17 @@ class UpdateBookingCommandHandler
 			},
 			errType: UpdateBookingException::class,
 		);
+
+		try
+		{
+			Container::getEventForBookingService()->onBookingUpdated($currentBooking, $booking);
+		}
+		catch (\Throwable $e)
+		{
+			// TODO: add error handling
+		}
+
+		return $booking;
 	}
 
 	private function handleResources(Entity\Booking\Booking $newBooking, Entity\Booking\Booking $currentBooking): void

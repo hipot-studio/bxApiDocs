@@ -31,6 +31,8 @@ use Bitrix\Main\ORM\Query\Join;
  */
 class RepeatSaleLogTable extends DataManager
 {
+	public const REPEAT_SALE_SEGMENT_ID_NAME = 'REPEAT_SALE_SEGMENT_ID';
+
 	public static function getTableName(): string
 	{
 		return 'b_crm_repeat_sale_log';

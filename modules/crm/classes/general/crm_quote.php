@@ -852,7 +852,10 @@ class CAllCrmQuote
 				$arFields['ID'] = $ID;
 			}
 
-			self::getLastActivityAdapter()->performUpdate((int)$ID, $arFields, $options);
+			self::getLastActivityAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->performUpdate((int)$ID, $arFields, $options)
+			;
 			self::getCommentsAdapter()
 				->setPreviousFields((int)$ID, $arRow)
 				->normalizeFields((int)$ID, $arFields)

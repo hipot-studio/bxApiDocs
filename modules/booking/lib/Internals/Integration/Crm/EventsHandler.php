@@ -134,7 +134,7 @@ class EventsHandler
 	{
 		$value = $event->getParameter('VALUE');
 
-		$resourcesIds = isset($value['resourcesIds']) && is_array($value['resourcesIds']) ? $value['resourcesIds'] : [];
+		$resources = isset($value['resources']) && is_array($value['resources']) ? $value['resources'] : [];
 		$crmEntityList = $event->getParameter('CRM_ENTITY_LIST');
 		$crmEntityList = is_array($crmEntityList) ? $crmEntityList : [];
 
@@ -158,10 +158,16 @@ class EventsHandler
 		}
 
 		$resourceCollection = new ResourceCollection();
-		foreach ($resourcesIds as $resourceId)
+		foreach ($resources as $resource)
 		{
-			$resourceCollection->add((new Resource())->setId($resourceId));
+			if (!isset($resource['id']))
+			{
+				continue;
+			}
+
+			$resourceCollection->add((new Resource())->setId((int)$resource['id']));
 		}
+
 		$booking->setResourceCollection($resourceCollection);
 
 		$timelineBindings = [];

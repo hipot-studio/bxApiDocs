@@ -6,11 +6,14 @@ namespace Bitrix\Booking\Internals;
 
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
+use Bitrix\Booking\Internals\Repository\ORM\DelayedTaskRepository;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ClientTypeMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\WaitListItemMapper;
+use Bitrix\Booking\Internals\Repository\ORM\ResourceLinkedEntityRepository;
 use Bitrix\Booking\Internals\Repository\WaitListItemRepositoryInterface;
 use Bitrix\Booking\Internals\Service\BookingService;
 use Bitrix\Booking\Internals\Service\ClientService;
+use Bitrix\Booking\Internals\Service\EventForBookingService;
 use Bitrix\Booking\Internals\Service\ExternalDataService;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Repository\AdvertisingResourceTypeRepository;
@@ -240,5 +243,20 @@ class Container
 	public static function getOverbookingService(): OverbookingService
 	{
 		return self::getService('booking.internals.overbooking.service');
+	}
+
+	public static function getEventForBookingService(): EventForBookingService
+	{
+		return self::getService('booking.internals.event_for_booking.service');
+	}
+
+	public static function getDelayedTaskRepository(): DelayedTaskRepository
+	{
+		return self::getService('booking.internals.delayed_task.repository');
+	}
+
+	public static function getResourceLinkedEntityRepository(): ResourceLinkedEntityRepository
+	{
+		return self::getService('booking.internals.resource_linked_entity.repository');
 	}
 }

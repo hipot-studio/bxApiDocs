@@ -53,6 +53,7 @@ class CAllCrmLead
 	private static ?\Bitrix\Crm\Entity\Compatibility\Adapter $lastActivityAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter $commentsAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter\Permissions $permissionsAdapter = null;
+	private static ?Crm\Entity\Compatibility\Adapter\StageHistory $stageHistoryAdapter = null;
 
 	/** @var \Bitrix\Crm\Entity\Compatibility\Adapter */
 	private $compatibilityAdapter;
@@ -183,6 +184,24 @@ class CAllCrmLead
 		}
 
 		return self::$permissionsAdapter;
+	}
+
+	private static function getStageHistoryAdapter(): Crm\Entity\Compatibility\Adapter\StageHistory
+	{
+		if (!self::$stageHistoryAdapter)
+		{
+			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Lead);
+
+			self::$stageHistoryAdapter = new Crm\Entity\Compatibility\Adapter\StageHistory(
+				$factory,
+				new Crm\History\StageHistory\LeadStageHistory($factory),
+				new Crm\History\StageHistoryWithSupposed\LeadStageHistoryWithSupposed(
+					new Crm\History\StageHistoryWithSupposed\TransitionsCalculator($factory),
+				),
+			);
+		}
+
+		return self::$stageHistoryAdapter;
 	}
 
 	// Service -->
@@ -1819,7 +1838,7 @@ class CAllCrmLead
 
 		//Statistics & History -->
 		Bitrix\Crm\Statistics\LeadSumStatisticEntry::register($ID, $arFields);
-		Bitrix\Crm\History\LeadStatusHistoryEntry::register($ID, $arFields, array('IS_NEW' => !$isRestoration));
+		self::getStageHistoryAdapter()->performAdd($arFields, $options);
 		if($arFields['STATUS_ID'] === 'CONVERTED')
 		{
 			Bitrix\Crm\Statistics\LeadConversionStatisticsEntry::register($ID, $arFields, array('IS_NEW' => !$isRestoration));
@@ -2338,7 +2357,7 @@ class CAllCrmLead
 
 			//region Synchronize CustomerType
 			if(self::GetSemanticID($statusID) !== Bitrix\Crm\PhaseSemantics::SUCCESS &&
-				!Bitrix\Crm\History\LeadStatusHistoryEntry::checkStatus($ID, 'CONVERTED')
+				self::GetSemanticID($arRow['STATUS_ID']) !== Crm\PhaseSemantics::SUCCESS
 			)
 			{
 				$effectiveCustomerType = CustomerType::GENERAL;
@@ -2370,7 +2389,10 @@ class CAllCrmLead
 			}
 			//endregion
 
-			self::getLastActivityAdapter()->performUpdate((int)$ID, $arFields, $options);
+			self::getLastActivityAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->performUpdate((int)$ID, $arFields, $options)
+			;
 			self::getCommentsAdapter()
 				->setPreviousFields((int)$ID, $arRow)
 				->normalizeFields((int)$ID, $arFields)
@@ -2763,8 +2785,13 @@ class CAllCrmLead
 
 			//region Statistics & History
 			Bitrix\Crm\Statistics\LeadSumStatisticEntry::register($ID, $currentFields);
-			Bitrix\Crm\History\LeadStatusHistoryEntry::synchronize($ID, $currentFields);
 			LeadChannelBinding::synchronize($ID, $currentFields);
+
+			self::getStageHistoryAdapter()
+				->setPreviousFields($ID, $arRow)
+				->performUpdate($ID, $currentFields, $options)
+			;
+
 			if(isset($arFields['STATUS_ID']))
 			{
 				$currentSemanticID = self::GetSemanticID($arFields['STATUS_ID']);
@@ -2779,8 +2806,6 @@ class CAllCrmLead
 					$converter->setEntityID($ID);
 					$converter->unbindChildEntities();
 				}
-
-				Bitrix\Crm\History\LeadStatusHistoryEntry::register($ID, $currentFields, array('IS_NEW' => false));
 
 				if(($arFields['STATUS_ID'] === 'CONVERTED' && $arRow['STATUS_ID'] !== 'CONVERTED')
 					|| ($arFields['STATUS_ID'] !== 'CONVERTED' && $arRow['STATUS_ID'] === 'CONVERTED'))
@@ -3115,13 +3140,14 @@ class CAllCrmLead
 				$item = Crm\Kanban\Entity::getInstance(self::$TYPE_NAME)
 					->createPullItem(array_merge($arRow, $arFields));
 
-				PullManager::getInstance()->sendItemUpdatedEvent(
+				Container::getInstance()->getPullEventsQueue()->scheduleItemUpdatedEvent(
+					new Crm\ItemIdentifier(\CCrmOwnerType::Lead, (int)$ID),
 					$item,
 					[
 						'TYPE' => self::$TYPE_NAME,
 						'SKIP_CURRENT_USER' => ($iUserId !== 0),
 						'EVENT_ID' => ($options['eventId'] ?? null),
-					]
+					],
 				);
 			}
 		}
@@ -3235,7 +3261,7 @@ class CAllCrmLead
 		if($processBizproc)
 		{
 			$bizproc = new CCrmBizProc('LEAD');
-			$bizproc->ProcessDeletion($ID);
+			$bizproc->processDeletion($ID);
 		}
 
 		$enableRecycleBin = \Bitrix\Crm\Recycling\LeadController::isEnabled()
@@ -3289,7 +3315,7 @@ class CAllCrmLead
 				Bitrix\Crm\Cleaning\CleaningManager::register(CCrmOwnerType::Lead, $ID);
 			}
 
-			Bitrix\Crm\History\LeadStatusHistoryEntry::unregister($ID);
+			self::getStageHistoryAdapter()->performDelete($ID, $arOptions);
 			Bitrix\Crm\Statistics\LeadSumStatisticEntry::unregister($ID);
 			Bitrix\Crm\Statistics\LeadActivityStatisticEntry::unregister($ID);
 			//Bitrix\Crm\Statistics\LeadProcessStatisticsEntry::unregister($ID);
@@ -4605,6 +4631,9 @@ class CAllCrmLead
 		}
 	}
 
+	/**
+	 * @deprecated
+	 */
 	public static function RebuildStatistics(array $IDs, array $options = null)
 	{
 		$dbResult = self::GetListEx(
@@ -4629,7 +4658,6 @@ class CAllCrmLead
 		}
 
 		$forced = isset($options['FORCED']) ? $options['FORCED'] : false;
-		$enableHistory = isset($options['ENABLE_HISTORY']) ? $options['ENABLE_HISTORY'] : true;
 		$enableSumStatistics = isset($options['ENABLE_SUM_STATISTICS']) ? $options['ENABLE_SUM_STATISTICS'] : true;
 		$enableActivityStatistics = isset($options['ENABLE_ACTIVITY_STATISTICS']) ? $options['ENABLE_ACTIVITY_STATISTICS'] : true;
 		$enableConversionStatistics = isset($options['ENABLE_CONVERSION_STATISTICS']) ? $options['ENABLE_CONVERSION_STATISTICS'] : true;
@@ -4678,18 +4706,6 @@ class CAllCrmLead
 				}
 
 				$isNew = $createdTime->getTimestamp() === $modifiedTime->getTimestamp();
-
-				//--> History
-				if($enableHistory && ($forced || !Bitrix\Crm\History\LeadStatusHistoryEntry::isRegistered($ID)))
-				{
-
-					Bitrix\Crm\History\LeadStatusHistoryEntry::register(
-						$ID,
-						$fields,
-						array('IS_NEW' => $isNew, 'TIME' => $isNew ? $createdTime : $modifiedTime)
-					);
-				}
-				//<-- History
 
 				//--> Statistics
 				if($enableConversionStatistics && $statusID === 'CONVERTED')

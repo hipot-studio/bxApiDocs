@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -144,12 +145,6 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.requestIntegrationFormOpen()',
 				'IS_DISABLED' => false,
 			],
-			[
-				'ID' => 'FEEDBACK',
-				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_FEEDBACK'),
-				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.feedbackFormOpen()',
-				'IS_DISABLED' => false,
-			],
 		];
 
 		if (!Feature::isExternalEntitiesEnabled())
@@ -163,7 +158,10 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 					JS,
 			];
 		}
-		elseif (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
+		elseif (
+			AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG)
+			&& SupersetInitializer::isSupersetExist()
+		)
 		{
 			$menuItems[] = [
 				'ID' => 'BI_ANALYTICS',
@@ -172,6 +170,13 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 				'IS_DISABLED' => false,
 			];
 		}
+
+		$menuItems[] = [
+			'ID' => 'FEEDBACK',
+			'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_FEEDBACK'),
+			'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.feedbackFormOpen()',
+			'IS_DISABLED' => false,
+		];
 
 		$settingsItems = [];
 		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_ACCESS))

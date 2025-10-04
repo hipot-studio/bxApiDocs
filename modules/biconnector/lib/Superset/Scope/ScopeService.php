@@ -4,7 +4,7 @@ namespace Bitrix\BIConnector\Superset\Scope;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardCollection;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable;
 use Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorFactory;
@@ -169,9 +169,9 @@ final class ScopeService
 	 * Returns ORM Dashboard collection by scope code.
 	 * @param string $scopeCode Code of scope.
 	 *
-	 * @return EO_SupersetDashboard_Collection
+	 * @return SupersetDashboardCollection
 	 */
-	public function getDashboardListByScope(string $scopeCode): EO_SupersetDashboard_Collection
+	public function getDashboardListByScope(string $scopeCode): SupersetDashboardCollection
 	{
 		$accessFilter = AccessController::getCurrent()->getEntityFilter(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
@@ -190,9 +190,20 @@ final class ScopeService
 		;
 	}
 
+	public function isDashboardsExist(string $scopeCode): bool
+	{
+		return SupersetDashboardTable::getCount(
+			[
+				'=SCOPE.SCOPE_CODE' => $scopeCode,
+			],
+			['ttl' => 86400],
+		) > 0;
+	}
+
 	/**
 	 * Get array of menu items to embed in zone top menu.
 	 * @param string $scopeCode Code of zone where BI Builder menu item will be added.
+	 * @param array $urlParams
 	 *
 	 * @return array
 	 */

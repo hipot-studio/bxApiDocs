@@ -54,6 +54,11 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 			$permission['hint'] = Loc::getMessage('HINT_BIC_DASHBOARD_EXPORT_MSGVER_2');
 		}
 
+		if ($permissionId === self::BIC_DELETE_ALL_UNUSED_ELEMENTS)
+		{
+			$permission['title'] = Loc::getMessage('BIC_DELETE_ALL_UNUSED_ELEMENTS_MSGVER_1');
+		}
+
 		if ($permission['type'] === Permission\PermissionDictionary::TYPE_TOGGLER)
 		{
 			$permission['minValue'] = '0';

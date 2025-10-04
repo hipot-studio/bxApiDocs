@@ -7,10 +7,7 @@ use Bitrix\Crm\EO_Status_Collection;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Security\AttributesProvider;
 use Bitrix\Crm\Security\EntityPermission\MyCompany;
-use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionConfig;
-use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionList;
-use Bitrix\Crm\Security\Role\Manage\Entity\ButtonConfig;
-use Bitrix\Crm\Security\Role\Manage\Entity\WebFormConfig;
+use Bitrix\Crm\Security\Role\Manage\Entity;
 use Bitrix\Crm\Security\Role\PermissionsManager;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\PermIdentifier;
 use Bitrix\Crm\Service\UserPermissions\Admin;
@@ -27,7 +24,9 @@ use Bitrix\Crm\Service\UserPermissions\EntityPermissions\SaleEntityItem;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Stage;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Type;
 use Bitrix\Crm\Service\UserPermissions\Exclusion;
+use Bitrix\Crm\Service\UserPermissions\InventoryManagementContractor;
 use Bitrix\Crm\Service\UserPermissions\Kanban;
+use Bitrix\Crm\Service\UserPermissions\Permission;
 use Bitrix\Crm\Service\UserPermissions\Product;
 use Bitrix\Crm\Service\UserPermissions\RepeatSale;
 use Bitrix\Crm\Service\UserPermissions\SaleTarget;
@@ -76,12 +75,14 @@ class UserPermissions
 	protected ?EntityEditor $entityEditorPermissions = null;
 	protected ?Category $entityCategoryPermissions = null;
 	protected ?Kanban $kanbanPermissions = null;
+	protected ?Permission $permissionPermissions = null;
 	protected ?WebForm $webFormPermissions = null;
 	protected ?SiteButton $siteButtonPermissions = null;
 	protected ?CopilotCallAssessment $copilotCallAssessmentPermissions = null;
 	protected ?Exclusion $exclusionPermissions = null;
 	protected ?SaleTarget $saleTargetPermissions = null;
 	protected ?RepeatSale $repeatSalePermissions = null;
+	protected ?InventoryManagementContractor $inventoryManagementContractorPermissions = null;
 
 	/**
 	 * @deprecated
@@ -129,7 +130,8 @@ class UserPermissions
 		{
 			$this->entityAdminPermissions = new UserPermissions\EntityPermissions\Admin(
 				$this->admin(),
-				$this->automatedSolution()
+				$this->automatedSolution(),
+				$this->inventoryManagementContractor(),
 			);
 		}
 
@@ -328,6 +330,27 @@ class UserPermissions
 	}
 
 	/**
+	 * Manage permissions for permissions
+	 * @return Permission
+	 */
+	public function permission(): Permission
+	{
+		if (!$this->permissionPermissions)
+		{
+			$this->permissionPermissions = new Permission(
+				$this->admin(),
+				$this->entityAdmin(),
+				$this->siteButton(),
+				$this->webForm(),
+				$this->automatedSolution(),
+				$this->inventoryManagementContractor(),
+			);
+		}
+
+		return $this->permissionPermissions;
+	}
+
+	/**
 	 * Manage permissions for web forms
 	 * @return WebForm
 	 */
@@ -426,6 +449,18 @@ class UserPermissions
 		return $this->saleTargetPermissions;
 	}
 
+	public function inventoryManagementContractor(): InventoryManagementContractor
+	{
+		if (!$this->inventoryManagementContractorPermissions)
+		{
+			$this->inventoryManagementContractorPermissions = new InventoryManagementContractor(
+				$this->getPermissionsManager(),
+			);
+		}
+
+		return $this->inventoryManagementContractorPermissions;
+	}
+
 	public function getAttributesProvider(): AttributesProvider
 	{
 		return $this->attributesProvider;
@@ -465,56 +500,12 @@ class UserPermissions
 	 * Is user an admin of entity
 	 *
 	 * @param int $entityTypeId
+	 * @param int|null $categoryId
 	 * @return bool
 	 */
-	public function isAdminForEntity(int $entityTypeId): bool
+	public function isAdminForEntity(int $entityTypeId, ?int $categoryId = null): bool
 	{
-		return $this->entityAdmin()->isAdminForEntity($entityTypeId);
-	}
-
-	public function canChangePermission(PermIdentifier $permission): bool
-	{
-		$entity = $permission->entityCode;
-		$buttonEntities = [
-			\Bitrix\Crm\Security\Role\Manage\Entity\Button::ENTITY_CODE,
-			ButtonConfig::CODE,
-		];
-		$webFormEntities = [
-			\Bitrix\Crm\Security\Role\Manage\Entity\WebForm::ENTITY_CODE,
-			WebFormConfig::CODE,
-		];
-		$automatedSolutionListEntities = [
-			AutomatedSolutionList::ENTITY_CODE,
-		];
-
-		if (in_array($entity, $buttonEntities, true))
-		{
-			return $this->siteButton()->canWriteConfig();
-		}
-
-		if (in_array($entity, $webFormEntities, true))
-		{
-			return $this->webForm()->canWriteConfig();
-		}
-
-		if (in_array($entity, $automatedSolutionListEntities, true))
-		{
-			return $this->automatedSolution()->isAllAutomatedSolutionsAdmin();
-		}
-
-		if (str_starts_with($entity, AutomatedSolutionConfig::ENTITY_CODE_PREFIX))
-		{
-			$automatedSolutionId = AutomatedSolutionConfig::decodeAutomatedSolutionId($entity);
-			if ($automatedSolutionId === null)
-			{
-				return false;
-			}
-
-			return $this->automatedSolution()->isAutomatedSolutionAdmin($automatedSolutionId);
-		}
-		$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($entity)?->getEntityTypeId();
-
-		return $this->isAdminForEntity((int)$entityTypeId);
+		return $this->entityAdmin()->isAdminForEntity($entityTypeId, $categoryId);
 	}
 
 	private function getPermissionsManager(): PermissionsManager

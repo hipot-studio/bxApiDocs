@@ -7,6 +7,7 @@ use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\Currency;
 use Bitrix\Crm\Integration\Main\UISelector;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Model\AssignedTable;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
@@ -21,6 +22,7 @@ use Bitrix\Main\Grid\Editor;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Text\StringHelper;
 
 class ItemDataProvider extends EntityDataProvider
@@ -794,14 +796,30 @@ class ItemDataProvider extends EntityDataProvider
 		)
 		{
 			$factory = Container::getInstance()->getFactory($this->getEntityTypeId());
-			$referenceClass = $factory?->getDataClass();
+			if ($fieldID === Item::FIELD_NAME_ASSIGNED && $this->canUseAssignedTableForUserProvider())
+			{
+				$referenceClass = AssignedTable::class;
+				$referenceFieldName = 'ASSIGNED_BY';
 
-			$params = [
-				'fieldName' => $fieldID,
-				'entityTypeId' => $this->getEntityTypeId(),
-				'module' => 'crm',
-				'referenceClass' => $fieldID !== Item::FIELD_NAME_OBSERVERS ? $referenceClass : null,
-			];
+				$params = [
+					'fieldName' => $referenceFieldName,
+					'referenceClass' => $referenceClass,
+					'referenceFieldName' => $referenceFieldName,
+					'referenceAdditionalFilter' => ['ENTITY_TYPE_ID' => $this->getEntityTypeId()],
+				];
+			}
+			else
+			{
+				$referenceClass = $factory?->getDataClass();
+
+				$params = [
+					'fieldName' => $fieldID,
+					'referenceClass' => $fieldID !== Item::FIELD_NAME_OBSERVERS ? $referenceClass : null,
+				];
+			}
+
+			$params['module'] = 'crm';
+			$params['entityTypeId'] = $this->getEntityTypeId();
 
 			if ($factory?->isCountersEnabled() && $fieldID === Item::FIELD_NAME_ASSIGNED)
 			{
@@ -810,18 +828,40 @@ class ItemDataProvider extends EntityDataProvider
 				$params['isEnableStructureNode'] = true;
 			}
 
-			if ($fieldID === 'ACTIVITY_RESPONSIBLE_IDS')
+			if ($fieldID === 'ACTIVITY_RESPONSIBLE_IDS' || $fieldID === Item::FIELD_NAME_OBSERVERS)
 			{
 				$params['referenceClass'] = null;
+				$params['referenceFieldName'] = null;
+				$params['referenceAdditionalFilter'] = null;
 				$params['isEnableAllUsers'] = true;
 				$params['isEnableOtherUsers'] = true;
 				$params['isEnableStructureNode'] = true;
 			}
 
-			return $this->getUserEntitySelectorParams(
-				EntitySelector::CONTEXT,
-				$params
-			);
+			$selectorParams = $this->getUserEntitySelectorParams(EntitySelector::CONTEXT, $params);
+
+			// @todo delete this after deploy main 25.700.0
+			if (
+				$this->canUseAssignedTableForUserProvider()
+				&& $fieldID === Item::FIELD_NAME_ASSIGNED
+			)
+			{
+				foreach ($selectorParams['params']['dialogOptions']['entities'] as $entityKey => $entity)
+				{
+					if ($entity['id'] === 'fired-user')
+					{
+						$referenceFieldName = 'ASSIGNED_BY';
+						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['fieldName'] = $referenceFieldName;
+						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['referenceClass'] = AssignedTable::class;
+						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['referenceFieldName'] = $referenceFieldName;
+						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['referenceAdditionalFilter'] = ['ENTITY_TYPE_ID' => $this->getEntityTypeId()];
+
+						break;
+					}
+				}
+			}
+
+			return $selectorParams;
 		}
 
 		if (in_array($fieldID, $this->getFieldNamesByType(static::TYPE_CRM_ENTITY, static::DISPLAY_IN_FILTER)))
@@ -959,6 +999,17 @@ class ItemDataProvider extends EntityDataProvider
 		}
 
 		return $result;
+	}
+
+	private function canUseAssignedTableForUserProvider(): bool
+	{
+		$socialNetworkVersion = ModuleManager::getVersion('socialnetwork');
+		if (!$socialNetworkVersion)
+		{
+			return false;
+		}
+
+		return version_compare($socialNetworkVersion, '25.100.0') >= 0;
 	}
 
 	/**

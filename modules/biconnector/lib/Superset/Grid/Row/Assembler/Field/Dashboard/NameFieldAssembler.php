@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DetailLinkFieldAssembler;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Json;
 
@@ -69,13 +70,26 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 					: 'ui-icon-file-air-folder-person'
 			;
 
+			$dashboardCount = $value['COUNT_DASHBOARDS'];
+			$subtitle = Loc::getMessagePlural('BI_GROUP_SUBTITLE', $dashboardCount, [
+				'#COUNT#' => $dashboardCount,
+			]);
+
 			$link = "
-				<a 
-					style='cursor: pointer; display: flex; align-items: flex-start;'
-					onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.handleGroupTitleClick($eventGroup)'
-				>
-					<div class='ui-icon {$iconClass}' style='min-width: 20px; max-width: 20px; margin-right: 8px; margin-top: -2px'><i style='margin-left: 0;'></i></div>{$title}
-				</a>
+				<div class ='biconnector-grid-group-name'>
+					<div class='ui-icon {$iconClass} biconnector-grid-group-icon'>
+						<i style='margin-left: 0;'></i>
+					</div>
+					<div>
+						<a
+							class ='biconnector-grid-group-name-link'
+							onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.handleGroupTitleClick($eventGroup)'
+						>
+							{$title}
+						</a>
+						<div class='biconnector-grid-group-name-subtitle'>{$subtitle}</div>
+					</div>
+				</div>
 			";
 		}
 		elseif (!$value['IS_ACCESS_ALLOWED'])

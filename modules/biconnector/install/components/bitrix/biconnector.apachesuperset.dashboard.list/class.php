@@ -2,11 +2,13 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
-	die;
+	die();
 }
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
@@ -17,7 +19,9 @@ use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -47,20 +51,40 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	public function executeComponent()
 	{
+		$dashboardsExist = SupersetDashboardTable::getList([
+			'select' => ['ID'],
+			'limit' => 1,
+			'cache' => ['ttl' => 864000],
+		])
+			->fetch()
+		;
+
+		if (!$dashboardsExist)
+		{
+			SystemDashboardManager::actualizeSystemDashboards();
+		}
+
+		if (!Feature::isCheckPermissionsByGroup())
+		{
+			Converter::updateToGroup(true);
+		}
+
 		$this->init();
 		$this->grid->processRequest();
-		$this->grid->setSupersetAvailability($this->getSupersetController()->isExternalServiceAvailable());
-
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_READY)
+		if (SupersetInitializer::isSupersetExist())
 		{
-			$manager = MarketDashboardManager::getInstance();
-			$manager->updateApplications();
+			$this->grid->setSupersetAvailability($this->getSupersetController()->isExternalServiceAvailable());
 		}
+
 		$this->loadRows();
 
 		$this->arResult['GRID'] = $this->grid;
 
 		$this->includeComponentTemplate();
+
+		Application::getInstance()->addBackgroundJob(function() {
+			MarketDashboardManager::getInstance()->updateApplications();
+		});
 	}
 
 	private function init(): void
@@ -73,6 +97,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
 		$this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_CREATE);
 		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY);
+		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 	}
 
 	private function initGrid(): void
@@ -211,14 +236,15 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 	private function getSupersetRows(array $ormParams): array
 	{
 		$superset = $this->getSupersetController();
-		$dashboardList = $superset->getUnionDashboardGroupRepository()->getList($ormParams, true);
+		$needLoadProxyData = SupersetInitializer::isSupersetExist();
+		$dashboardList = $superset->getUnionDashboardGroupRepository()->getList($ormParams, $needLoadProxyData);
 		if (!$dashboardList)
 		{
 			if ($ormParams['offset'] !== 0)
 			{
 				$ormParams['offset'] = 0;
 				$this->grid->getPagination()?->setCurrentPage(1);
-				$dashboardList = $superset->getUnionDashboardGroupRepository()->getList($ormParams, true);
+				$dashboardList = $superset->getUnionDashboardGroupRepository()->getList($ormParams, $needLoadProxyData);
 			}
 			else
 			{
@@ -279,7 +305,10 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		if (!isset($this->supersetController))
 		{
 			$this->supersetController = new SupersetController(Integrator::getInstance());
-			$this->supersetController->isExternalServiceAvailable();
+			if (SupersetInitializer::isSupersetExist())
+			{
+				$this->supersetController->isExternalServiceAvailable();
+			}
 		}
 
 		return $this->supersetController;

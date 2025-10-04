@@ -17,7 +17,7 @@ abstract class MobilePromoter extends Base
 
 	protected function canShow(): bool
 	{
-		return $this->canShowByLimits();
+		return \Bitrix\Main\Loader::includeModule('mobile') && $this->canShowByLimits();
 	}
 
 	protected function getComponentTemplate(): string
@@ -35,7 +35,7 @@ abstract class MobilePromoter extends Base
 			'title' => $this->getTitle(),
 			'content' => $this->getContent(),
 			'analytics' => $this->getAnalytics(),
-			'intent' => $this->getIntent(),
+			'link' => $this->getLink(),
 		];
 	}
 
@@ -125,5 +125,15 @@ abstract class MobilePromoter extends Base
 	protected function getIntent(): string
 	{
 		return 'preset_crm';
+	}
+
+	protected function getLink()
+	{
+		if (\Bitrix\Main\Loader::includeModule('mobile'))
+		{
+			return \Bitrix\Mobile\Deeplink::getAuthLink($this->getIntent());
+		}
+
+		return '';
 	}
 }

@@ -157,7 +157,7 @@ class RolePermission
 			return $result;
 		}
 		$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
-		$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
+		$rolesIdsInGroup = self::getRoleIdsByGroupCode($strictByRoleGroupCode);
 
 
 		foreach (self::getAll() as $roleId => $entities)
@@ -197,7 +197,7 @@ class RolePermission
 
 		$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
 		$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
-		$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
+		$rolesIdsInGroup = self::getRoleIdsByGroupCode($strictByRoleGroupCode);
 		$adminRolesIds = self::getAdminRolesIds($entityTypeId);
 
 		$role = new \CCrmRole();
@@ -250,7 +250,7 @@ class RolePermission
 		if ($needStrictByRoleGroupCode)
 		{
 			$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($categoryIdentifier->getEntityTypeId());
-			$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
+			$rolesIdsInGroup = self::getRoleIdsByGroupCode($strictByRoleGroupCode);
 			foreach ($rolesIdsInGroup as $roleId)
 			{
 				$emptyRoles[$roleId] = $roleId;
@@ -350,7 +350,7 @@ class RolePermission
 		return $result;
 	}
 
-	private static function getRolesByGroupCode(string $strictByRoleGroup): array
+	public static function getRoleIdsByGroupCode(string $strictByRoleGroup): array
 	{
 		$ct = new ConditionTree();
 		$ct->where('GROUP_CODE', $strictByRoleGroup);

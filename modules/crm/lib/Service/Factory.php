@@ -29,7 +29,6 @@ use Bitrix\Crm\UI\Filter\EntityHandler;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Localization\Loc;
@@ -90,7 +89,9 @@ abstract class Factory
 		{
 			$settings += UtmTable::getUtmFieldsInfo();
 		}
-		$settings += Container::getInstance()->getParentFieldManager()->getParentFieldsInfo($this->getEntityTypeId());
+
+		$container = Container::getInstance();
+		$settings += $container->getParentFieldManager()->getParentFieldsInfo($this->getEntityTypeId());
 
 		if (LastCommunicationAvailabilityChecker::getInstance()->isEnabled())
 		{
@@ -266,6 +267,7 @@ abstract class Factory
 			EditorAdapter::FIELD_OPPORTUNITY => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_OPPORTUNITY_WITH_CURRENCY'),
 			EditorAdapter::FIELD_UTM => Loc::getMessage('CRM_COMMON_UTM'),
 			EditorAdapter::FIELD_LAST_COMMUNICATION => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_LAST_COMMUNICATION_TIME'),
+			EditorAdapter::FIELD_REPEAT_SALE_SEGMENT_ID => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_REPEAT_SALE_SEGMENT_ID'),
 		];
 	}
 
@@ -1899,14 +1901,7 @@ abstract class Factory
 	 */
 	public function isLastActivityEnabled(): bool
 	{
-		if (!$this->isLastActivitySupported())
-		{
-			return false;
-		}
-
-		$isEnabled = Option::get('crm', 'enable_last_activity_for_' . mb_strtolower($this->getEntityName()), 'Y');
-
-		return ($isEnabled === 'Y');
+		return $this->isLastActivitySupported();
 	}
 
 	public function isSmartActivityNotificationEnabled(): bool

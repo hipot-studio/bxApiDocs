@@ -92,17 +92,7 @@ class SupersetDashboardProvider extends BaseProvider
 		{
 			if (DashboardTariffConfigurator::isAvailableDashboard($element->getAppId()))
 			{
-				if ($this->options['loadProxyData'])
-				{
-					if ($element->isSupersetDashboardDataLoaded())
-					{
-						$result[] = $this->makeItem($element);
-					}
-				}
-				else
-				{
-					$result[] = $this->makeItem($element);
-				}
+				$result[] = $this->makeItem($element);
 			}
 		}
 
@@ -132,6 +122,9 @@ class SupersetDashboardProvider extends BaseProvider
 			'customData' => [
 				'scopes' => $scopes,
 				'type' => $dashboard->getType(),
+				'createdById' => $dashboard->getOrmObject()->getCreatedById(),
+				'ownerId' => $dashboard->getOrmObject()->getOwnerId(),
+				'status' => $dashboard->getStatus(),
 			],
 		];
 

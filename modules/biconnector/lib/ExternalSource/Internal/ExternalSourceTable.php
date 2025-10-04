@@ -194,7 +194,7 @@ class ExternalSourceTable extends DataManager
 		$relations = ExternalSourceDatasetRelationTable::getBySourceId($sourceId);
 		if ($relations)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EXTERNAL_SOURCE_DELETE_RELATION_ERROR_MSGVER_1')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EXTERNAL_SOURCE_DELETE_RELATION_ERROR_MSGVER_1'), 409));
 		}
 
 		return $result;

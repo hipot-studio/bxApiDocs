@@ -47,7 +47,10 @@ class DashboardRepository
 		foreach ($dashboardList as $dashboard)
 		{
 			$externalId = $dashboard->getExternalId();
-			if (isset($additionalData[$externalId]) && $additionalData[$externalId] instanceof Dto\Dashboard)
+			if (
+				isset($additionalData[$externalId])
+				&& $additionalData[$externalId] instanceof Dto\Dashboard
+			)
 			{
 				$dashboardData = $additionalData[$externalId];
 				$this->synchronizeDashboard($dashboard, $dashboardData);

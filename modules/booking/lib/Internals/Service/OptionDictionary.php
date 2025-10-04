@@ -25,4 +25,5 @@ enum OptionDictionary: string
 	case AhaExpandGrid = 'aha_expand_grid';
 	case AhaSelectResources = 'aha_select_resources';
 	case AhaCyclePopup = 'aha_cycle_popup';
+	case AhaSearchNavigation = 'aha_search_navigation';
 }

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Badge;
 
 use Bitrix\Crm\Badge\Model\BadgeTable;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Result;
 
@@ -99,12 +100,19 @@ abstract class Badge
 			return new Result();
 		}
 
-		return BadgeTable::add(
+		$result = BadgeTable::add(
 			$this->prepareBadgeTableData(
 				$itemIdentifier,
 				$sourceItemIdentifier,
 			),
 		);
+
+		if ($result->isSuccess())
+		{
+			Container::getInstance()->getPullEventsQueue()->onBadgeChange($itemIdentifier);
+		}
+
+		return $result;
 	}
 
 	public function isBound(ItemIdentifier $itemIdentifier, SourceIdentifier $sourceItemIdentifier): bool
@@ -132,21 +140,26 @@ abstract class Badge
 	public function unbind(ItemIdentifier $itemIdentifier, SourceIdentifier $sourceItemIdentifier): void
 	{
 		BadgeTable::deleteByAllIdentifier($itemIdentifier, $sourceItemIdentifier, $this->getType(), $this->getValue());
+		Container::getInstance()->getPullEventsQueue()->onBadgeChange($itemIdentifier);
 	}
 
 	public function unbindWithAnyValue(ItemIdentifier $itemIdentifier, SourceIdentifier $sourceItemIdentifier): void
 	{
 		BadgeTable::deleteByIdentifiersAndType($itemIdentifier, $sourceItemIdentifier, $this->getType());
+		Container::getInstance()->getPullEventsQueue()->onBadgeChange($itemIdentifier);
 	}
 
 	public static function deleteByEntity(ItemIdentifier $itemIdentifier, string $type = null, string $value = null): void
 	{
 		BadgeTable::deleteByEntity($itemIdentifier, $type, $value);
+		Container::getInstance()->getPullEventsQueue()->onBadgeChange($itemIdentifier);
 	}
 
 	public static function deleteBySource(SourceIdentifier $sourceItemIdentifier): void
 	{
 		BadgeTable::deleteBySource($sourceItemIdentifier);
+		// no realtime here, we don't know targets :(
+		// for now it's okay, but it can change in the future
 	}
 
 	/**

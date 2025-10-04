@@ -14,7 +14,6 @@ use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\SupersetStatusOptionContainer;
-use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -63,6 +62,7 @@ final class Integrator
 	private const PROXY_ACTION_GET_DATASET_URL = '/dataset/getUrl';
 	private const PROXY_ACTION_GET_UNUSED_ELEMENTS = '/unusedElements/get';
 	private const PROXY_ACTION_DELETE_UNUSED_ELEMENTS = '/unusedElements/delete';
+	private const PROXY_ACTION_GET_DASHBOARD_DATASETS = '/dashboard/datasets';
 
 	static private self $instance;
 
@@ -1174,6 +1174,27 @@ final class Integrator
 		;
 	}
 
+	/**
+	 * Gets dataset list by dashboard id - datasets which are used in dashboard.
+	 *
+	 * @param int $dashboardId
+	 *
+	 * @return IntegratorResponse
+	 */
+	public function getDashboardDatasets(int $dashboardId): IntegratorResponse
+	{
+		$parameters = [
+			'id' => $dashboardId,
+		];
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_GET_DASHBOARD_DATASETS)
+				->setParams($parameters)
+				->perform()
+			;
+	}
+
 	// endregion
 
 	private function decode(string $data)
@@ -1186,53 +1207,5 @@ final class Integrator
 		{
 			return null;
 		}
-	}
-
-	/**
-	 * @param string $action
-	 * @return bool
-	 * @throws ArgumentException
-	 */
-	public static function isUserRequired(string $action): bool
-	{
-		$actions = [
-			self::PROXY_ACTION_PING_SUPERSET => false,
-			self::PROXY_ACTION_START_SUPERSET => false,
-			self::PROXY_ACTION_FREEZE_SUPERSET => false,
-			self::PROXY_ACTION_UNFREEZE_SUPERSET => false,
-			self::PROXY_ACTION_DELETE_SUPERSET => false,
-			self::PROXY_ACTION_CHANGE_BI_TOKEN_SUPERSET => false,
-			self::PROXY_ACTION_REFRESH_DOMAIN_CONNECTION => false,
-			self::PROXY_ACTION_CLEAR_CACHE => false,
-			self::PROXY_ACTION_LIST_DASHBOARD => false,
-			self::PROXY_ACTION_DASHBOARD_DETAIL => false,
-			self::PROXY_ACTION_GET_EMBEDDED_DASHBOARD_CREDENTIALS => false,
-			self::PROXY_ACTION_COPY_DASHBOARD => true,
-			self::PROXY_ACTION_EXPORT_DASHBOARD => false,
-			self::PROXY_ACTION_DELETE_DASHBOARD => false,
-			self::PROXY_ACTION_IMPORT_DASHBOARD => false,
-			self::PROXY_ACTION_CREATE_USER => true,
-			self::PROXY_ACTION_GET_LOGIN_URL => true,
-			self::PROXY_ACTION_UPDATE_DASHBOARD => false,
-			self::PROXY_ACTION_IMPORT_DATASET => false,
-			self::PROXY_ACTION_CREATE_EMPTY_DASHBOARD => true,
-			self::PROXY_ACTION_SET_DASHBOARD_OWNER => true,
-			self::PROXY_ACTION_CHANGE_DASHBOARD_OWNER => false,
-			self::PROXY_ACTION_LIST_DATASET => false,
-			self::PROXY_ACTION_GET_DATASET => false,
-			self::PROXY_ACTION_CREATE_DATASET => true,
-			self::PROXY_ACTION_UPDATE_DATASET => true,
-			self::PROXY_ACTION_DELETE_DATASET => true,
-			self::PROXY_ACTION_GET_UNUSED_ELEMENTS => false,
-			self::PROXY_ACTION_DELETE_UNUSED_ELEMENTS => false,
-		];
-		// TODO Add other actions and create middleware which will check action existing in this list.
-
-		if (!array_key_exists($action, $actions))
-		{
-			throw new ArgumentException('Action "' . $action . '" is not supported', 'action');
-		}
-
-		return $actions[$action];
 	}
 }

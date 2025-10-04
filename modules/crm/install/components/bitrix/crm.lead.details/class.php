@@ -2364,6 +2364,11 @@ class CCrmLeadDetailsComponent
 	{
 		$this->arResult['READ_ONLY'] = true;
 
+		if ($this->isReadOnlyForced())
+		{
+			return;
+		}
+
 		if ($this->isEditMode)
 		{
 			if ($this->userPermissionsService->item()->canUpdate(CCrmOwnerType::Lead, $this->entityID))
@@ -2375,6 +2380,13 @@ class CCrmLeadDetailsComponent
 		{
 			$this->arResult['READ_ONLY'] = false;
 		}
+	}
+
+	private function isReadOnlyForced(): bool
+	{
+		$isForcedReadonly = $this->request->get('FORCE_READONLY');
+
+		return $isForcedReadonly === 'Y';
 	}
 
 	private function initializeConfigId(): void

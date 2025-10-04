@@ -15,7 +15,7 @@ class CopilotCallAssessment extends Base
 
 	protected function canShow(): bool
 	{
-		if (!AIManager::isAvailable())
+		if (!AIManager::isAvailableRegion())
 		{
 			return false;
 		}

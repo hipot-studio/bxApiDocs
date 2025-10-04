@@ -180,14 +180,14 @@ class BookingFilter extends Filter
 			}
 		}
 
-		if (
-			isset($this->filter['CREATED_WITHIN']['FROM'])
-			&& isset($this->filter['CREATED_WITHIN']['TO'])
-		)
+		if (isset($this->filter['CREATED_WITHIN']['FROM']))
 		{
-			$result
-				->where('CREATED_AT', '>=', $this->filter['CREATED_WITHIN']['FROM'])
-				->where('CREATED_AT', '<', $this->filter['CREATED_WITHIN']['TO']);
+			$result->where('CREATED_AT', '>=', $this->filter['CREATED_WITHIN']['FROM']);
+		}
+
+		if (isset($this->filter['CREATED_WITHIN']['TO']))
+		{
+			$result->where('CREATED_AT', '<', $this->filter['CREATED_WITHIN']['TO']);
 		}
 
 		if (
@@ -203,21 +203,32 @@ class BookingFilter extends Filter
 					SELECT ID
 					FROM " . BookingTable::getTableName() . "
 					WHERE
-						DATE_FROM <= $periodDateTo
-						AND DATE_MAX > $periodDateTo
+						DATE_FROM < $periodDateTo
+						AND DATE_MAX >= $periodDateTo
+						AND IS_DELETED = 'N'
+					UNION
+					SELECT ID
+					FROM " . BookingTable::getTableName() . "
+					WHERE
+						DATE_FROM <= $periodDateFrom
+						AND DATE_MAX > $periodDateFrom
 						AND IS_DELETED = 'N'
 					UNION
 					SELECT ID
 					FROM " . BookingTable::getTableName() . "
 					WHERE
 						DATE_FROM >= $periodDateFrom
-						AND DATE_FROM < $periodDateTo
-						AND IS_DELETED = 'N'
+						AND DATE_MAX < $periodDateTo
+						AND IS_DELETED = 'N'	
 					")->fetchAll(),
 				'ID'
 			);
 
 			$result->whereIn('ID', empty($bookingIds) ? [0] : $bookingIds);
+		}
+		else if (isset($this->filter['WITHIN']['DATE_FROM']))
+		{
+			$result->where('DATE_FROM', '>=', $this->filter['WITHIN']['DATE_FROM']);
 		}
 
 		return $result;

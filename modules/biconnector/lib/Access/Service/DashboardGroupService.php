@@ -389,13 +389,6 @@ class DashboardGroupService
 		return $result;
 	}
 
-	public static function isNeedShowDeletionWarningPopup(): bool
-	{
-		$optionValue = \CUserOptions::getOption('biconnector', 'deleteDashboardFromGroupPopup') ?? [];
-
-		return $optionValue['needShow'] ?? true;
-	}
-
 	public static function getAdditionalScopeMap(): array
 	{
 		$scopes = ScopeService::getInstance()->getScopeList();

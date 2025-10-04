@@ -54,7 +54,7 @@ abstract class AbstractCreateUserField implements AIFunction
 			return Result::fail($parameters->getValidationErrors());
 		}
 
-		if (!$this->userPermissions->isAdminForEntity($parameters->entityTypeId))
+		if (!$this->userPermissions->isAdminForEntity($parameters->entityTypeId, $parameters->categoryId))
 		{
 			return Result::fail(ErrorCode::getAccessDeniedError());
 		}

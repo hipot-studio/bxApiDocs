@@ -718,4 +718,14 @@ class Container
 			ServiceLocator::getInstance()->addInstance($identifierById, $type);
 		}
 	}
+
+	public function getPullEventsQueue(): PullEventsQueue
+	{
+		return ServiceLocator::getInstance()->get('crm.service.pullEventsQueue');
+	}
+
+	public function getLastActivity(): LastActivity
+	{
+		return ServiceLocator::getInstance()->get('crm.service.lastActivity');
+	}
 }

@@ -19,33 +19,34 @@ class ResourceSelect implements SelectInterface
 	{
 		if (empty($this->select))
 		{
+			//@todo get rid of this behaviour!
 			return $this->getDefaultSelect();
 		}
 
 		$fields = ['*'];
 
-		if (isset($select['TYPE']))
+		if (in_array('TYPE', $this->select, true))
 		{
 			$fields[] = 'TYPE';
 			$fields[] = 'TYPE.NOTIFICATION_SETTINGS';
 		}
 
-		if (isset($select['DATA']))
+		if (in_array('DATA', $this->select, true))
 		{
 			$fields[] = 'DATA';
 		}
 
-		if (isset($select['SETTINGS']))
+		if (in_array('SETTINGS', $this->select, true))
 		{
 			$fields[] = 'SETTINGS';
 		}
 
-		if (isset($select['NOTIFICATION_SETTINGS']))
+		if (in_array('NOTIFICATION_SETTINGS', $this->select, true))
 		{
 			$fields[] = 'NOTIFICATION_SETTINGS';
 		}
 
-		if (isset($select['ENTITIES']))
+		if (in_array('ENTITIES', $this->select, true))
 		{
 			$fields[] = 'ENTITIES';
 		}

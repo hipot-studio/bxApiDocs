@@ -14,10 +14,13 @@ class EntityEditorOptionBuilder
 	private ?int $categoryId = null;
 	private int $customerType = CustomerType::UNDEFINED;
 
+	private readonly EntityEditorOptionMap $map;
+
 	public function __construct(
 		private readonly int $entityTypeId,
 	)
 	{
+		$this->map = new EntityEditorOptionMap();
 	}
 
 	public function setCategoryId(?int $categoryId = null): self
@@ -36,7 +39,7 @@ class EntityEditorOptionBuilder
 
 	public function build(): string
 	{
-		$option = $this->getMap()[$this->entityTypeId] ?? null;
+		$option = $this->map->option($this->entityTypeId);
 
 		if ($this->isLead())
 		{
@@ -63,50 +66,17 @@ class EntityEditorOptionBuilder
 			->getEditorConfigId($this->categoryId, $option ?? '', $this->useUpperCase());
 	}
 
-	private function buildDynamicOption(): ?string
+	public function buildDynamicOption(): ?string
 	{
-		$componentName = Container::getInstance()->getRouter()->getItemDetailComponentName($this->entityTypeId);
-		if (!$componentName)
+		$entityName = CCrmOwnerType::ResolveName($this->entityTypeId);
+		$guid = "{$entityName}_details";
+
+		if ($this->categoryId > 0)
 		{
-			return null;
+			$guid .= "_C{$this->categoryId}";
 		}
 
-		$componentClassName = CBitrixComponent::includeComponentClass($componentName);
-		if (!$componentClassName)
-		{
-			return null;
-		}
-
-		/** @var FactoryBased $component */
-		$component = new $componentClassName();
-		$component->initComponent($componentName);
-		$params = [
-			'ENTITY_TYPE_ID' => $this->entityTypeId,
-		];
-
-		$categoryId = $this->categoryId ?? 0;
-		if ($categoryId > 0)
-		{
-			$params['categoryId'] = $categoryId;
-		}
-
-		$component->arParams = $params;
-		$component->init();
-
-		return $component->getEditorConfigId();
-	}
-
-	private function getMap(): array
-	{
-		return [
-			CCrmOwnerType::Lead => 'lead_details',
-			CCrmOwnerType::Deal => 'deal_details',
-			CCrmOwnerType::Contact => 'contact_details',
-			CCrmOwnerType::Company => 'company_details',
-			CCrmOwnerType::Quote => 'QUOTE_details',
-			CCrmOwnerType::StoreDocument => 'store_document_details',
-			CCrmOwnerType::ShipmentDocument => 'realization_document_delivery_details', // or realization_document_shipment_details ?
-		];
+		return $guid;
 	}
 
 	private function getLeadOptionPrefix(): ?string

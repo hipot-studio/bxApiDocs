@@ -501,7 +501,7 @@ class Access
 				else
 				{
 					// choose subscription
-					$code = 'limit_subscription_market_marketpaid';
+					$code = 'limit_subscription_market_access_buy_marketplus';
 				}
 			}
 		}
@@ -654,7 +654,7 @@ class Access
 		}
 		elseif ($canBuySubscription)
 		{
-			$code = 'limit_subscription_market_access_buy_marketplus';
+			$code = 'limit_subscription_market_marketpaid_trialend';
 		}
 		elseif ($isB24 && $isDemo)
 		{

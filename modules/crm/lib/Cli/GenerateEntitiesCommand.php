@@ -15,9 +15,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class GenerateEntitiesCommand extends Command
 {
-	protected static $defaultName = 'crm:generate-entities';
-	protected static $defaultDescription = 'Generate multiple CRM entities';
-
 	public function isEnabled(): bool
 	{
 		return Loader::includeModule('crm');
@@ -27,6 +24,7 @@ final class GenerateEntitiesCommand extends Command
 	{
 		$this
 			->setName('crm:generate-entities')
+			->setDescription('Generate multiple CRM entities')
 			->addArgument(
 				'number',
 				InputArgument::REQUIRED,

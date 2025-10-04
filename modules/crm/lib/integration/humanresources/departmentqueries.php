@@ -139,4 +139,14 @@ class DepartmentQueries
 
 		return $result;
 	}
+
+	public function getDepartments(array $ids): array
+	{
+		return $this->hrServiceLocator::getNodeRepository()->findAllByIds($ids)->getValues();
+	}
+
+	public function getDepartmentByAccessCode(string $accessCode): ?HumanResources\Item\Node
+	{
+		return $this->hrServiceLocator::getNodeRepository()->getByAccessCode($accessCode);
+	}
 }

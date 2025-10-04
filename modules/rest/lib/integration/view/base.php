@@ -15,6 +15,11 @@ use Bitrix\Rest\Integration\Externalizer;
 
 abstract class Base
 {
+	protected const OPERATION_CONTEXT_MODIFY = 'modify';
+	protected const OPERATION_CONTEXT_GET = 'get';
+	protected const OPERATION_CONTEXT_FILTER = 'filter';
+	protected const OPERATION_CONTEXT_ORDER = 'order';
+
 	abstract public function getFields();
 
 	final public function prepareFieldInfos($fields): array
@@ -192,9 +197,11 @@ abstract class Base
 
 		return $this->internalizeFields(
 			$fields,
-			$this->getListFieldInfo(
-				$fieldsInfo,
-				['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN, Attributes::READONLY]]]
+			$this->setModifyOperation(
+				$this->getListFieldInfo(
+					$fieldsInfo,
+					['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN, Attributes::READONLY]]]
+				)
 			)
 		);
 	}
@@ -205,9 +212,11 @@ abstract class Base
 
 		return $this->internalizeFields(
 			$fields,
-			$this->getListFieldInfo(
-				$fieldsInfo,
-				['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN, Attributes::READONLY, Attributes::IMMUTABLE]]]
+			$this->setModifyOperation(
+				$this->getListFieldInfo(
+					$fieldsInfo,
+					['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN, Attributes::READONLY, Attributes::IMMUTABLE]]]
+				)
 			)
 		);
 	}
@@ -501,6 +510,7 @@ abstract class Base
 					],
 				]
 			);
+			$listFieldsInfo = $this->setFilterOperation($listFieldsInfo);
 
 			foreach ($fields as $rawName=>$value)
 			{
@@ -940,6 +950,21 @@ abstract class Base
 	//endregion
 
 	//region canonical
+	public function getCanonicalNames(): array
+	{
+		$result = [];
+		foreach ($this->getFields() as $fieldName => $field)
+		{
+			if (!isset($field['CANONICAL_NAME']))
+			{
+				continue;
+			}
+			$result[$fieldName] = $field['CANONICAL_NAME'];
+		}
+
+		return $result;
+	}
+
 	final protected function canonicalizeField($name, $info): string
 	{
 		$canonical = $info['CANONICAL_NAME'] ?? null;
@@ -977,4 +1002,71 @@ abstract class Base
 		return $alias;
 	}
 	//endregion
+
+	// region field context
+	protected function setOperationContext(array $fieldList, string $context): array
+	{
+		if (
+			$context === self::OPERATION_CONTEXT_MODIFY
+			|| $context === self::OPERATION_CONTEXT_GET
+			|| $context === self::OPERATION_CONTEXT_FILTER
+			|| $context === self::OPERATION_CONTEXT_ORDER
+		)
+		{
+			foreach (array_keys($fieldList) as $index)
+			{
+				$fieldList[$index]['OPERATION_CONTEXT'] = $context;
+			}
+		}
+
+		return $fieldList;
+	}
+
+	protected function setModifyOperation(array $fieldList): array
+	{
+		return $this->setOperationContext($fieldList, self::OPERATION_CONTEXT_MODIFY);
+	}
+
+	protected function setGetOperation(array $fieldList): array
+	{
+		return $this->setOperationContext($fieldList, self::OPERATION_CONTEXT_GET);
+	}
+
+	protected function setFilterOperation(array $fieldList): array
+	{
+		return $this->setOperationContext($fieldList, self::OPERATION_CONTEXT_FILTER);
+	}
+
+	protected function setOrderOperation(array $fieldList): array
+	{
+		return $this->setOperationContext($fieldList, self::OPERATION_CONTEXT_ORDER);
+	}
+
+	protected function getOperationContext(array $field): ?string
+	{
+		return $field['OPERATION_CONTEXT'] ?? null;
+	}
+
+	protected function isModifyOperation(array $field): bool
+	{
+		$operation = $this->getOperationContext($field);
+
+		return $operation === self::OPERATION_CONTEXT_MODIFY || $operation === null;
+	}
+
+	protected function isGetOperation(array $field): bool
+	{
+		return $this->getOperationContext($field) === self::OPERATION_CONTEXT_GET;
+	}
+
+	protected function isFilterOperation(array $field): bool
+	{
+		return $this->getOperationContext($field) === self::OPERATION_CONTEXT_FILTER;
+	}
+
+	protected function isOrderOperation(array $field): bool
+	{
+		return $this->getOperationContext($field) === self::OPERATION_CONTEXT_ORDER;
+	}
+	// endregion
 }

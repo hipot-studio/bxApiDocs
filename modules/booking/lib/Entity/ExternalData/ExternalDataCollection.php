@@ -7,7 +7,7 @@ namespace Bitrix\Booking\Entity\ExternalData;
 use Bitrix\Booking\Entity\BaseEntityCollection;
 
 /**
- * @method \Bitrix\Booking\Entity\ExternalData\ExternalDataItem|null getFirstCollectionItem()
+ * @method ExternalDataItem|null getFirstCollectionItem()
  * @method ExternalDataCollection[] getIterator()
  */
 class ExternalDataCollection extends BaseEntityCollection
@@ -36,5 +36,28 @@ class ExternalDataCollection extends BaseEntityCollection
 	public function diff(ExternalDataCollection $collectionToCompare): ExternalDataCollection
 	{
 		return new ExternalDataCollection(...$this->baseDiff($collectionToCompare));
+	}
+
+	public function getByModuleAndType(string $moduleId, string|null $entityType = null): ExternalDataCollection
+	{
+		$collection = new self();
+
+		/** @var ExternalDataItem $externalDataItem */
+		foreach ($this as $externalDataItem)
+		{
+			if ($externalDataItem->getModuleId() !== $moduleId)
+			{
+				continue;
+			}
+
+			if ($entityType && $externalDataItem->getEntityTypeId() !== $entityType)
+			{
+				continue;
+			}
+
+			$collection->add($externalDataItem);
+		}
+
+		return $collection;
 	}
 }

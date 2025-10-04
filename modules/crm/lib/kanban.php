@@ -733,10 +733,10 @@ abstract class Kanban
 						$filter['!' . $key] = $search['!' . $key];
 					}
 				}
-				elseif(isset($item['type']) && $item['type'] === 'number')
+				elseif (isset($item['type']) && $item['type'] === 'number')
 				{
 					$fltType = $search[$key . '_numsel'] ?? 'exact';
-					if(
+					if (
 						($fltType === 'exact' || $fltType === 'range')
 						&& isset($search[$fromFieldName], $search[$toFieldName])
 					)
@@ -744,29 +744,23 @@ abstract class Kanban
 						$filter['>=' . $key] = $search[$fromFieldName];
 						$filter['<=' . $key] = $search[$toFieldName];
 					}
-					elseif($fltType === 'exact' && isset($search[$fromFieldName]))
+					elseif ($fltType === 'exact' && isset($search[$fromFieldName]))
 					{
 						$filter[$key] = $search[$fromFieldName];
 					}
-					elseif(
-						$fltType === 'more'
-						&& isset($search[$fromFieldName])
-					)
+					elseif ($fltType === 'more' && isset($search[$fromFieldName]))
 					{
 						$filter['>' . $key] = $search[$fromFieldName];
 					}
-					elseif(
-						$fltType === 'less' &&
-						isset($search[$toFieldName])
-					)
+					elseif ($fltType === 'less' && isset($search[$toFieldName]))
 					{
 						$filter['<' . $key] = $search[$toFieldName];
 					}
-					elseif((isset($search[$key]) && $search[$key] === false))
+					elseif (isset($search[$key]) && $search[$key] === false)
 					{
 						$filter[$key] = $search[$key];
 					}
-					elseif((isset($search['!' . $key]) && $search['!' . $key] === false))
+					elseif (isset($search['!' . $key]) && $search['!' . $key] === false)
 					{
 						$filter['!' . $key] = $search['!' . $key];
 					}
@@ -989,6 +983,7 @@ abstract class Kanban
 			{
 				$this->order = [
 					Item::FIELD_NAME_LAST_ACTIVITY_TIME => $sortType,
+					Item::FIELD_NAME_ID => $sortType,
 				];
 			}
 			else
@@ -2009,12 +2004,14 @@ abstract class Kanban
 	}
 
 	/**
-	 * Current user is crm admin?
-	 * @return boolean
+	 * Current user is admin?
+	 * @return bool
 	 */
 	public function isCrmAdmin(): bool
 	{
-		return $this->getEntity()->getUserPermissions()->isAdminForEntity($this->getEntity()->getTypeId());
+		$entity = $this->getEntity();
+
+		return $entity->getUserPermissions()->isAdminForEntity($entity->getTypeId(), $entity->getCategoryId());
 	}
 
 	public function removeUserAdditionalSelectFields(): void

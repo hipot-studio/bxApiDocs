@@ -9,6 +9,7 @@ use Bitrix\Booking\Command\WaitListItem\RemoveWaitListItemCommand;
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingFromWaitListItemException;
+use Bitrix\Booking\Internals\Exception\Booking\UpdateBookingException;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Repository\WaitListItemRepositoryInterface;
@@ -53,6 +54,7 @@ class CreateBookingFromWaitListItemCommandHandler
 					$command->waitListItemId,
 					$command->createdBy
 				);
+
 				if (!$waitListItem)
 				{
 					throw new CreateBookingFromWaitListItemException('wait list item not found');
@@ -66,8 +68,18 @@ class CreateBookingFromWaitListItemCommandHandler
 					name: $command->name,
 				);
 
-				$resourceCollection = $newBooking->getResourceCollection();
-				$newBooking->setResourceCollection($this->resourceService->loadResourceCollection($resourceCollection));
+				$commandResources = $newBooking->getResourceCollection();
+				$loadedResources = $this->resourceService->loadResourceCollection($commandResources)->getNotDeleted();
+
+				$notFoundIds = array_diff($commandResources->getEntityIds(), $loadedResources->getEntityIds());
+				if (!empty($notFoundIds))
+				{
+					throw new UpdateBookingException(
+						'Some resources were not found: ' . implode(', ', $notFoundIds)
+					);
+				}
+
+				$newBooking->setResourceCollection($loadedResources);
 
 				$this->bookingService->checkBookingBeforeCreating($newBooking);
 				$intersectionResult = $this->bookingService->checkIntersection($newBooking, $command->allowOverbooking);

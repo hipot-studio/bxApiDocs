@@ -8,6 +8,7 @@ use Bitrix\Crm\Integrity\Volatile\FieldCategory;
 use Bitrix\Crm\Model\FieldMultiPhoneCountryTable;
 use Bitrix\Crm\Multifield;
 use Bitrix\Main;
+use Bitrix\Main\Web\Json;
 
 if (!defined('CACHED_b_field_multi')) define('CACHED_b_field_multi', 360000);
 
@@ -285,7 +286,9 @@ class CCrmFieldMulti
 					],
 				],
 			);
+			self::filterOldMessengers();
 		}
+
 		return self::$ENTITY_TYPES;
 	}
 
@@ -1788,6 +1791,25 @@ class CCrmFieldMulti
 
 		return $country ?? '';
 	}
-}
 
-?>
+	private static function filterOldMessengers(): void
+	{
+		$oldMessengers = Multifield\Type\Im::DEPRECATED_MESSENGERS;
+		$oldMessengersInUse = Json::decode(
+			Main\Config\Option::get('crm', 'old_messengers_in_use', '[]'),
+		);
+
+		if (!is_array($oldMessengersInUse))
+		{
+			$oldMessengersInUse = [];
+		}
+
+		$unusedOldMessengers = array_diff($oldMessengers, $oldMessengersInUse);
+		$unusedOldMessengers = array_flip($unusedOldMessengers);
+
+		self::$ENTITY_TYPES[Multifield\Type\Im::ID] = array_diff_key(
+			self::$ENTITY_TYPES[Multifield\Type\Im::ID],
+			$unusedOldMessengers,
+		);
+	}
+}

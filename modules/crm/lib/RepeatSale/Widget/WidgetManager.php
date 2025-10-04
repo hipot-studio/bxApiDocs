@@ -95,17 +95,8 @@ final class WidgetManager
 		{
 			$isNeedShowConfetti = (new Confetti())->isNeedShowConfetti();
 
-			$periodTypeId = null;
-			$options = CUserOptions::GetOption('crm', 'repeat-sale');
-			if ($options)
-			{
-				$periodTypeId = $options['statistics-period-type-id'] ?? null;
-			}
-
-			if ($periodTypeId === null)
-			{
-				$periodTypeId = PeriodType::Day30->value;
-			}
+			$periodTypeId = CUserOptions::GetOption('crm', 'repeat-sale')['statistics-period-type-id']
+				?? PeriodType::Day30->value;
 
 			return [
 				'type' => 'statistics',

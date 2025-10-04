@@ -89,7 +89,6 @@ class Compatible extends QueryBuilder
 		$entityListAttributes = $attributes->getByEntityType($permEntity);
 		$scopeRegex = $this->getScopeRegexForEntity($permEntity);
 
-		$enableCumulativeMode = \COption::GetOptionString('crm', 'enable_permission_cumulative_mode', 'Y') === 'Y';
 		$userAccessAttributes = Container::getInstance()
 			->getUserPermissions($attributes->getUserId())
 			->getAttributesProvider()
@@ -182,18 +181,6 @@ class Compatible extends QueryBuilder
 							'USER' => "'{$userAttr}'",
 							'CONCERNED_USER' => "'C{$userAttr}'",
 							'DEPARTMENTS' => [],
-							'OPENED_ONLY' => '',
-							'SCOPES' => [],
-						];
-					}
-
-					if ($enableCumulativeMode && !empty($intranetAttrs))
-					{
-						//OPENED ONLY mode - allow user department entities too.
-						$permissionSets[] = [
-							'USER' => '',
-							'CONCERNED_USER' => '',
-							'DEPARTMENTS' => array_unique(array_merge($intranetAttrs, $subIntranetAttrs)),
 							'OPENED_ONLY' => '',
 							'SCOPES' => [],
 						];

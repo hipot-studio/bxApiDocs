@@ -49,6 +49,16 @@ class ResourceFilter extends Filter
 			$result->where('IS_MAIN', '=', (bool)$this->filter['IS_MAIN']);
 		}
 
+		$includeDeleted = (
+			isset($this->filter['INCLUDE_DELETED'])
+			&& $this->filter['INCLUDE_DELETED'] === true
+		);
+
+		if (!$includeDeleted)
+		{
+			$result->where('DATA.IS_DELETED', '=', false);
+		}
+
 		if (isset($this->filter['TYPE_ID']))
 		{
 			if (is_array($this->filter['TYPE_ID']))

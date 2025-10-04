@@ -487,9 +487,9 @@ class Calendar
 		return array_unique($accessibility->getBusyUsersIds($userIds, $fromTs, $toTs));
 	}
 
-	public static function getChildEvents(int $parentEventId, int $userId): ?array
+	public static function getChildEvents(int $parentEventId, int $userId, array $selectFields = []): ?array
 	{
-		return \CCalendarEvent::GetList([
+		$params = [
 			'arFilter' => [
 				'PARENT_ID' => $parentEventId,
 				'CREATED_BY' => $userId,
@@ -500,6 +500,13 @@ class Calendar
 			'fetchAttendees' => true,
 			'checkPermissions' => false,
 			'setDefaultLimit' => false,
-		]);
+		];
+
+		if (!empty($selectFields))
+		{
+			$params['arSelect'] = $selectFields;
+		}
+
+		return \CCalendarEvent::GetList($params);
 	}
 }

@@ -109,7 +109,9 @@ trait ActivityTrait
 			return '';
 		}
 
-		return Container::getInstance()->getUserBroker()->getById($userId)['SHOW_URL'];
+		$user = Container::getInstance()->getUserBroker()->getById($userId);
+
+		return (string)($user['SHOW_URL'] ?? '');
 	}
 
 	private function getTask(AssociatedEntityModel $model, bool $withRelations = true): ?TaskObject

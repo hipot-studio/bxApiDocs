@@ -188,40 +188,23 @@ class Comment extends Base
 		return $this->update($id, $ownerTypeId, $ownerId, $content, $filesList, $bindings);
 	}
 
-	public function updateFilesAction(int $id, array $files, int $ownerTypeId, int $ownerId): ?array
-	{
+    public function updateFilesAction(int $id, array $files, int $ownerTypeId, int $ownerId): ?array
+    {
 		if (!$this->assertValidCommentRecord($id))
 		{
 			return null;
 		}
 
-		if (!$this->assertValidOwner($ownerId, $ownerTypeId))
-		{
-			return null;
-		}
-		if (!$this->hasUpdateCommentPermission($id, $ownerTypeId, $ownerId))
-		{
-			$this->addError(ErrorCode::getAccessDeniedError());
-			return null;
-		}
-
-		[$isBindingsExist, $bindings] = $this->detectBindings($id, $ownerId, $ownerTypeId);
-		if (!$isBindingsExist)
-		{
-			$this->addError(ErrorCode::getNotFoundError());
-
-			return null;
-		}
-
-		$filesList = $this->saveFilesToStorage($ownerTypeId, $ownerId, $files, $id);
-
 		$entity = $this->load($id);
-		$content = ($entity ? $entity->getComment() : null);
+		$fields = [
+			'COMMENT' => $entity?->getComment(),
+			'ATTACHMENTS' => $files,
+		];
 
-		$commentId = $this->update($id, $ownerTypeId, $ownerId, $content, $filesList, $bindings);
+		$commentId = $this->updateAction($id, $fields, $ownerTypeId, $ownerId);
 
 		return $commentId ? ['id' => $commentId] : null;
-	}
+    }
 
 	private function saveFilesToStorage(int $ownerTypeId, int $ownerId, array $fileUploaderIds, ?int $commentId = null): array
 	{
@@ -778,10 +761,13 @@ class Comment extends Base
 		}
 
 		$currentUserId = $this->getCurrentUser()->getId();
-		if (Container::getInstance()->getUserPermissions($currentUserId)->isAdminForEntity($entityTypeId))
+		$categoryId = Container::getInstance()->getFactory($entityTypeId)?->getItem($entityId)?->getCategoryId();
+
+		if (Container::getInstance()->getUserPermissions($currentUserId)->isAdminForEntity($entityTypeId, $categoryId))
 		{
 			return true;
 		}
+
 		return $this->isCurrentUserAuthor($commentId);
 	}
 	//endregion

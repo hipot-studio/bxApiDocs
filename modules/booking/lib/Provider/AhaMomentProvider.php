@@ -54,6 +54,7 @@ class AhaMomentProvider
 			AhaMoment::ExpandGrid => OptionDictionary::AhaExpandGrid,
 			AhaMoment::SelectResources => OptionDictionary::AhaSelectResources,
 			AhaMoment::CyclePopup => OptionDictionary::AhaCyclePopup,
+			AhaMoment::SearchNavigation => OptionDictionary::AhaSearchNavigation,
 		};
 	}
 }

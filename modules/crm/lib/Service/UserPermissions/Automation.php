@@ -28,7 +28,7 @@ final class Automation
 	 */
 	public function canEdit(int $entityTypeId, ?int $categoryId = null): bool
 	{
-		if ($this->entityAdmin->isAdminForEntity($entityTypeId))
+		if ($this->entityAdmin->isAdminForEntity($entityTypeId, $categoryId))
 		{
 			return true;
 		}

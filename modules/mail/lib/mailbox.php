@@ -537,7 +537,7 @@ class MailboxTable extends Entity\DataManager
 		);
 	}
 
-	private static function cleanOwnerCacheByUserId(int $userId): void
+	public static function cleanOwnerCacheByUserId(int $userId): void
 	{
 		unset(self::$ownerCache[$userId]);
 		unset(self::$onlyIdOwnerCache[$userId]);

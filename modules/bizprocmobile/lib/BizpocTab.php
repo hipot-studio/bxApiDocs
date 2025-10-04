@@ -88,6 +88,8 @@ class BizpocTab implements Tabable
 		);
 
 		return [
+			'id' => $this->getId(),
+			'section_code' => 'bizproc',
 			'title' => $this->getTitle(),
 			'useLetterImage' => true,
 			'min_api_version' => self::MINIMAL_API_VERSION,

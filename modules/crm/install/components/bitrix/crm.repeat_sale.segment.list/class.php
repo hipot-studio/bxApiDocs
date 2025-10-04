@@ -11,6 +11,7 @@ use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\RepeatSale\Job\Controller\RepeatSaleJobController;
 use Bitrix\Crm\RepeatSale\Log\LogReport;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
+use Bitrix\Crm\RepeatSale\Segment\DataFormatter;
 use Bitrix\Crm\RepeatSale\Segment\Entity\RepeatSaleSegment;
 use Bitrix\Crm\RepeatSale\Statistics\PeriodType;
 use Bitrix\Crm\RepeatSale\Widget\WidgetManager;
@@ -391,7 +392,7 @@ HTML;
 
 	private function getDetailsUri(int $id): Uri
 	{
-		return new Main\Web\Uri('/crm/repeat-sale-segment/details/' . $id . '/');
+		return DataFormatter::getInstance()->getUri($id);
 	}
 
 	private function getEditField(RepeatSaleSegment $segment): string

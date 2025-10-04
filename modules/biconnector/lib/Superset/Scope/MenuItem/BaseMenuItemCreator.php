@@ -7,8 +7,8 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Service;
-use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Superset\Scope\MarketCollectionUrlBuilder;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -27,13 +27,13 @@ abstract class BaseMenuItemCreator
 			return [];
 		}
 
-		$dashboards = ScopeService::getInstance()->getDashboardListByScope($this->getScopeCode());
-		if ($dashboards->isEmpty())
+		$scopeDashboardsCollection = ScopeService::getInstance()->getDashboardListByScope($this->getScopeCode());
+		if ($scopeDashboardsCollection->isEmpty())
 		{
 			return [];
 		}
 
-		return $this->getMenuItemData($dashboards, $urlParams);
+		return $this->getMenuItemData($scopeDashboardsCollection, $urlParams);
 	}
 
 	protected function getMenuItemTitle(): string
@@ -61,7 +61,9 @@ abstract class BaseMenuItemCreator
 	{
 		\Bitrix\Main\UI\Extension::load('biconnector.apache-superset-market-manager');
 		$isMarketExists = \Bitrix\Main\Loader::includeModule('market') ? 'true' : 'false';
-		$marketUrl = CUtil::JSEscape(MarketDashboardManager::getMarketCollectionUrl());
+		$marketUrl = (string)CUtil::JSEscape(
+			(new MarketCollectionUrlBuilder())->setScope($this->getScopeCode())->build()
+		);
 		$analyticSource = 'scope_menu_' . $this->getScopeCode();
 
 		return "BX.BIConnector.ApacheSupersetMarketManager.openMarket({$isMarketExists}, '{$marketUrl}', '{$analyticSource}')";

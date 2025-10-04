@@ -11,6 +11,7 @@ class CCrmActivity extends CAllCrmActivity
 	const USER_ACTIVITY_TABLE_NAME = 'b_crm_usr_act';
 	const FIELD_MULTI_TABLE_NAME = 'b_crm_field_multi';
 	const DB_TYPE = 'MYSQL';
+	private const BINDINGS_COUNT_TO_LOG = 10;
 
 	public static function DoSaveBindings($ID, &$arBindings, $registerBindingsChanges = true)
 	{
@@ -57,7 +58,7 @@ class CCrmActivity extends CAllCrmActivity
 				{
 					$monitor->onActivityRemoveIfSuitable(
 						new \Bitrix\Crm\ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']),
-						$ID
+						(int)$ID,
 					);
 				}
 			}
@@ -141,7 +142,7 @@ class CCrmActivity extends CAllCrmActivity
 			$itemIdentifier = \Bitrix\Crm\ItemIdentifier::createFromArray($binding);
 			if ($itemIdentifier)
 			{
-				$monitor->onActivityAddIfSuitable($itemIdentifier, $ID);
+				$monitor->onActivityAddIfSuitable($itemIdentifier, (int)$ID);
 			}
 		}
 
@@ -155,10 +156,12 @@ class CCrmActivity extends CAllCrmActivity
 			$itemIdentifier = \Bitrix\Crm\ItemIdentifier::createFromArray($binding);
 			if ($itemIdentifier)
 			{
-				$monitor->onActivityRemoveIfSuitable($itemIdentifier, $ID);
+				$monitor->onActivityRemoveIfSuitable($itemIdentifier, (int)$ID);
 				$lastCommunication->onActivityRemoveIfSuitable($itemIdentifier, $ID);
 			}
 		}
+
+		self::logActivityWithBindings($ID, $existedBindings, $arBindings);
 
 		return true;
 	}
@@ -495,5 +498,23 @@ class CCrmActivity extends CAllCrmActivity
 		$DB->Query(
 			"UPDATE {$tableName} SET ENTITY_SETTINGS = '{$settings}' WHERE ENTITY_SETTINGS IS NULL AND ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_ID = {$entityID}"
 		);
+	}
+
+	private static function logActivityWithBindings(
+		string $id,
+		array $existedBindings,
+		array $newBindings,
+	): void
+	{
+		$existedBindingsCount = count($existedBindings);
+		$newBindingsCount = count($newBindings);
+
+		if ($existedBindingsCount < self::BINDINGS_COUNT_TO_LOG && $newBindingsCount >= self::BINDINGS_COUNT_TO_LOG)
+		{
+			$logger = \Bitrix\Crm\Service\Container::getInstance()->getLogger('ScenarioInvestigation');
+			$logger->notice(
+				"Activity ID - {$id} changed number of bindings from {$existedBindingsCount} to {$newBindingsCount}\n"
+			);
+		}
 	}
 }

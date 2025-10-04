@@ -1945,7 +1945,10 @@ class CAllCrmCompany
 			}
 			//endregion
 
-			self::getLastActivityAdapter()->performUpdate((int)$ID, $arFields, $arOptions);
+			self::getLastActivityAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->performUpdate((int)$ID, $arFields, $arOptions)
+			;
 			self::getCommentsAdapter()
 				->setPreviousFields((int)$ID, $arRow)
 				->normalizeFields((int)$ID, $arFields)
@@ -2458,14 +2461,15 @@ class CAllCrmCompany
 				$filler->fill($arOptions['CURRENT_FIELDS'], $arFields);
 
 				$item = $this->createPullItem(array_merge($arRow, $arFields));
-				Crm\Integration\PullManager::getInstance()->sendItemUpdatedEvent(
+				Container::getInstance()->getPullEventsQueue()->scheduleItemUpdatedEvent(
+					new Crm\ItemIdentifier(\CCrmOwnerType::Company, (int)$ID),
 					$item,
 					[
 						'TYPE' => self::$TYPE_NAME,
 						'SKIP_CURRENT_USER' => ($iUserId !== 0),
 						'CATEGORY_ID' => ($arFields['CATEGORY_ID'] ?? 0),
 						'EVENT_ID' => ($arOptions['eventId'] ?? null),
-					]
+					],
 				);
 			}
 		}
@@ -2579,7 +2583,7 @@ class CAllCrmCompany
 		if($processBizproc)
 		{
 			$bizproc = new CCrmBizProc('COMPANY');
-			$bizproc->ProcessDeletion($ID);
+			$bizproc->processDeletion($ID);
 		}
 
 		$enableRecycleBin = \Bitrix\Crm\Recycling\CompanyController::isEnabled()

@@ -10,6 +10,7 @@ use Bitrix\Crm\Color\PhaseColorScheme;
 use Bitrix\Crm\Conversion\LeadConversionType;
 use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\Order;
+use Bitrix\Crm\RepeatSale\Segment\DataFormatter;
 use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline;
@@ -3514,6 +3515,26 @@ class CCrmViewHelper
 		}
 
 		return implode(',<br>'."\n", $result);
+	}
+
+	public static function renderRepeatSaleSegmentTitle(int $segmentId): string
+	{
+		if ($segmentId <= 0)
+		{
+			return '';
+		}
+
+		if (!Container::getInstance()->getUserPermissions()->repeatSale()->canRead())
+		{
+			return Loc::getMessage('CRM_COMMON_HIDDEN_ITEM');
+		}
+
+		$formatter = DataFormatter::getInstance();
+
+		return '<a
+			href="' . $formatter->getUri($segmentId) . '"
+			onclick="BX.Crm.Router.Instance.openRepeatSaleSegmentSlider(' . $segmentId . '); return false;"
+		>' . htmlspecialcharsbx($formatter->getTitle($segmentId)) . '</a>';
 	}
 
 	final public static function initGridSettings(

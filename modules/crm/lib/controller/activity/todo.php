@@ -72,7 +72,7 @@ class ToDo extends Base
 			$calendarEventId = (int)($activity['CALENDAR_EVENT_ID'] ?? 0);
 			if ($readOnly && $calendarEventId > 0)
 			{
-				$childEvents = \Bitrix\Crm\Integration\Calendar::getChildEvents($calendarEventId, $userId);
+				$childEvents = \Bitrix\Crm\Integration\Calendar::getChildEvents($calendarEventId, $userId, ['SECTION_ID']);
 				if (is_array($childEvents) && isset($childEvents[0]))
 				{
 					$crmSectionId = (int)$childEvents[0]['SECTION_ID'];

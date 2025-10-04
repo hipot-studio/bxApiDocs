@@ -11,6 +11,7 @@ use Bitrix\Booking\Internals\Repository\ORM\BookingResourceRepository;
 use Bitrix\Booking\Internals\Repository\ORM\ResourceLinkedEntityRepository;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceTypeRepositoryInterface;
+use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceLinkedEntitiesChangedData;
 use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 
@@ -20,6 +21,7 @@ class ResourceService
 		private readonly BookingResourceRepository $bookingResourceRepository,
 		private readonly ResourceRepositoryInterface $resourceRepository,
 		private readonly ResourceTypeRepositoryInterface $resourceTypeRepository,
+		private readonly ResourceLinkedEntityRepository $resourceLinkedEntityRepository,
 	)
 	{
 	}
@@ -36,37 +38,52 @@ class ResourceService
 	public function handleResourceEntities(
 		Entity\Resource\Resource $resource,
 		Entity\Resource\ResourceLinkedEntityCollection $newEntities
-	): void
+	): ResourceLinkedEntitiesChangedData|null
 	{
 		$currentEntities = $resource->getEntityCollection();
 
 		if ($newEntities->isEqual($currentEntities))
 		{
-			return;
+			return null;
 		}
 
 		if ($newEntities->isEmpty() && !$currentEntities->isEmpty())
 		{
-			(new ResourceLinkedEntityRepository())->unLink($resource, $currentEntities);
+			$this->resourceLinkedEntityRepository->unLink($resource, $currentEntities);
 
-			return;
+			return new ResourceLinkedEntitiesChangedData(
+				resourceId: $resource->getId(),
+				deleted: $currentEntities,
+				added: null,
+			);
 		}
 
 		$toDelete = $currentEntities->diff($newEntities);
 		if (!$toDelete->isEmpty())
 		{
-			(new ResourceLinkedEntityRepository())->unLink($resource, $toDelete);
+			$this->resourceLinkedEntityRepository->unLink($resource, $toDelete);
 		}
 
 		$toAdd = $newEntities->diff($currentEntities);
 		if (!$toAdd->isEmpty())
 		{
-			(new ResourceLinkedEntityRepository())->link($resource, $toAdd);
+			$this->resourceLinkedEntityRepository->link($resource, $toAdd);
 		}
+
+		if ($toDelete->isEmpty() && $toAdd->isEmpty())
+		{
+			return null;
+		}
+
+		return new ResourceLinkedEntitiesChangedData(
+			resourceId: $resource->getId(),
+			deleted: $toDelete->isEmpty() ? null : $toDelete,
+			added: $toAdd->isEmpty() ? null : $toAdd,
+		);
 	}
 
 	public function loadResourceCollection(
-		Entity\Resource\ResourceCollection $resourceCollection
+		Entity\Resource\ResourceCollection $resourceCollection,
 	): Entity\Resource\ResourceCollection
 	{
 		$resourceIds = $this->getExternalResourceIds($resourceCollection) ?? [];
@@ -85,10 +102,12 @@ class ResourceService
 
 		$resources = $this->resourceRepository->getList(
 			filter: (new ResourceFilter([
-				'ID' => $resourceIds
+				'ID' => $resourceIds,
+				'INCLUDE_DELETED' => true,
 			]))->prepareFilter(),
 			select: new ResourceSelect(),
 		);
+
 		$primaryResource = null;
 		foreach ($resources as $resource)
 		{
@@ -99,7 +118,8 @@ class ResourceService
 				break;
 			}
 		}
-		if ($primaryResourceId)
+
+		if ($primaryResourceId && $primaryResource)
 		{
 			$resources->setPrimary($primaryResource);
 		}

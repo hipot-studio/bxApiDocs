@@ -58,12 +58,12 @@ class Form
 	{
 		$this->params = self::$defaultParams;
 		$this->integration = new Options\Integration($this);
-		if($id)
+		if ($id)
 		{
 			$this->load($id);
 		}
 
-		if($params)
+		if ($params)
 		{
 			$this->set($params);
 		}
@@ -124,14 +124,14 @@ class Form
 		$idByCode = array();
 
 		$formCodePieces = explode('_', $formCode);
-		if(is_numeric($formCodePieces[0]))
+		if (is_numeric($formCodePieces[0]))
 		{
 			return (int) $formCodePieces[0];
 		}
 
 		$cacheId = 'crm_webform_getIdByCode_' . serialize($formCode);
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
-		if($cache->startDataCache(36000, $cacheId))
+		if ($cache->startDataCache(36000, $cacheId))
 		{
 			$formDb = Internals\FormTable::getList(array(
 				'select' => array('ID', 'CODE'),
@@ -143,9 +143,9 @@ class Form
 				$idByCode[$form['CODE']] = $form['ID'];
 			}
 
-			if(isset($idByCode[$formCode]))
+			if (isset($idByCode[$formCode]))
 			{
-				if(defined("BX_COMP_MANAGED_CACHE"))
+				if (defined("BX_COMP_MANAGED_CACHE"))
 				{
 					global $CACHE_MANAGER;
 					$CACHE_MANAGER->startTagCache($cache->getPath($cacheId));
@@ -155,9 +155,9 @@ class Form
 
 			$cache->endDataCache(array('CODE_BY_ID' => $idByCode));
 
-			if(isset($idByCode[$formCode]))
+			if (isset($idByCode[$formCode]))
 			{
-				if(defined("BX_COMP_MANAGED_CACHE"))
+				if (defined("BX_COMP_MANAGED_CACHE"))
 				{
 					global $CACHE_MANAGER;
 					$CACHE_MANAGER->endTagCache();
@@ -167,7 +167,7 @@ class Form
 		else
 		{
 			$cacheVars = $cache->getVars();
-			if(isset($cacheVars['CODE_BY_ID']))
+			if (isset($cacheVars['CODE_BY_ID']))
 			{
 				$idByCode = $cacheVars['CODE_BY_ID'];
 			}
@@ -185,14 +185,14 @@ class Form
 	public static function delete($formId, $forceSystem = false)
 	{
 		$form = Internals\FormTable::getRowById($formId);
-		if(!$form || (!$forceSystem && $form['IS_SYSTEM'] == 'Y'))
+		if (!$form || (!$forceSystem && $form['IS_SYSTEM'] == 'Y'))
 		{
 			return false;
 		}
 
 		(new self($formId))->getIntegration()->delete();
 		$deleteResult = Internals\FormTable::delete($formId);
-		if($deleteResult->isSuccess())
+		if ($deleteResult->isSuccess())
 		{
 			Webpack\Form::instance($formId)->delete();
 			static::cleanCacheByTag($formId);
@@ -233,12 +233,12 @@ class Form
 	{
 		$this->setId($id);
 		$result = Internals\FormTable::getRowById($id);
-		if(!$result)
+		if (!$result)
 		{
 			return false;
 		}
 
-		if(!is_array($result['FORM_SETTINGS']))
+		if (!is_array($result['FORM_SETTINGS']))
 		{
 			$result['FORM_SETTINGS'] = [];
 		}
@@ -270,7 +270,7 @@ class Form
 	public function load($id)
 	{
 		$this->setId($id);
-		if(count($this->params) == count(self::$defaultParams) && !$this->loadOnlyForm($this->id))
+		if (count($this->params) == count(self::$defaultParams) && !$this->loadOnlyForm($this->id))
 		{
 			return false;
 		}
@@ -438,18 +438,18 @@ class Form
 
 		$result['ENTITY_SCHEME'] = (string) $result['ENTITY_SCHEME'];
 
-		if($onlyCheck)
+		if ($onlyCheck)
 		{
 			/*INTEGRATION*/
 			$this->prepareResult('INTEGRATION',$this->getIntegration()->checkData());
 
-			if(!in_array($result['ENTITY_SCHEME'], $this->getAllowedEntitySchemes()))
+			if (!in_array($result['ENTITY_SCHEME'], $this->getAllowedEntitySchemes()))
 			{
 				$this->errors[] = Loc::getMessage('CRM_WEBFORM_FORM_ERROR_SCHEME');
 			}
 
 			// captcha
-			if($result['USE_CAPTCHA'] == 'Y')
+			if ($result['USE_CAPTCHA'] == 'Y')
 			{
 				$hasCaptchaKey = ReCaptcha::getKey(2) <> '' && ReCaptcha::getSecret(2) <> '';
 				$hasCaptchaDefaultKey = ReCaptcha::getDefaultKey(2) <> '' && ReCaptcha::getDefaultSecret(2) <> '';
@@ -464,16 +464,16 @@ class Form
 			Internals\FormTable::checkFields($formResult, $this->id, $result);
 			$this->prepareResult('FIELDS', $formResult);
 
-			foreach($presetFields as $presetField)
+			foreach ($presetFields as $presetField)
 			{
 				$presetField['FORM_ID'] = (int) $this->id;
 				$presetFieldResult = new Main\Entity\Result;
 				Internals\PresetFieldTable::checkFields($presetFieldResult, null, $presetField);
 				$replaceList = null;
-				if(!$presetFieldResult->isSuccess())
+				if (!$presetFieldResult->isSuccess())
 				{
 					$field = EntityFieldProvider::getField($presetField['ENTITY_NAME'] . '_' . $presetField['FIELD_NAME']);
-					if($field)
+					if ($field)
 					{
 						$replaceList = array('VALUE' => $field['caption']);
 					}
@@ -482,7 +482,7 @@ class Form
 			}
 
 			$fieldCodeList = array();
-			foreach($fields as $field)
+			foreach ($fields as $field)
 			{
 				$field['FORM_ID'] = (int) $this->id;
 
@@ -493,11 +493,11 @@ class Form
 				$fieldCodeList[] = $field['CODE'];
 			}
 
-			foreach($depGroups as $depGroup)
+			foreach ($depGroups as $depGroup)
 			{
 				$depGroup['FORM_ID'] = (int) $this->id;
 
-				if(!in_array($depGroup['IF_FIELD_CODE'], array_keys(Internals\FieldDepGroupTable::getDepGroupTypes())))
+				if (!in_array($depGroup['IF_FIELD_CODE'], array_keys(Internals\FieldDepGroupTable::getDepGroupTypes())))
 				{
 					continue;
 				}
@@ -507,16 +507,16 @@ class Form
 				$this->prepareResult('DEP_GROUPS', $depGroupResult);
 			}
 
-			foreach($dependencies as $dependency)
+			foreach ($dependencies as $dependency)
 			{
 				$dependency['FORM_ID'] = (int) $this->id;
 				$dependency['GROUP_ID'] = (int) ($dependency['GROUP_ID'] ?? 0);
 
-				if(!in_array($dependency['IF_FIELD_CODE'], $fieldCodeList))
+				if (!in_array($dependency['IF_FIELD_CODE'], $fieldCodeList))
 				{
 					continue;
 				}
-				if(!in_array($dependency['DO_FIELD_CODE'], $fieldCodeList))
+				if (!in_array($dependency['DO_FIELD_CODE'], $fieldCodeList))
 				{
 					continue;
 				}
@@ -526,7 +526,7 @@ class Form
 				$this->prepareResult('DEPENDENCIES', $dependencyResult);
 			}
 
-			foreach($agreements as $agreement)
+			foreach ($agreements as $agreement)
 			{
 				$agreement['FORM_ID'] = (int) $this->id;
 				$agreementResult = new Main\Entity\Result;
@@ -537,12 +537,12 @@ class Form
 			return;
 		}
 
-		if(!$this->check())
+		if (!$this->check())
 		{
 			return;
 		}
 
-		if($this->id)
+		if ($this->id)
 		{
 			unset($result['ID']);
 			$formResult = Internals\FormTable::update($this->id, $result);
@@ -556,7 +556,7 @@ class Form
 			$isAdded = true;
 		}
 
-		if(!$formResult->isSuccess())
+		if (!$formResult->isSuccess())
 		{
 			return;
 		}
@@ -568,7 +568,7 @@ class Form
 
 		/* PRESET FIELDS */
 		Internals\PresetFieldTable::delete(array('FORM_ID' => $this->id));
-		foreach($presetFields as $presetField)
+		foreach ($presetFields as $presetField)
 		{
 			$presetFieldResult = Internals\PresetFieldTable::add(array(
 				'ENTITY_NAME' => $presetField['ENTITY_NAME'],
@@ -594,12 +594,12 @@ class Form
 		}
 
 		$newFieldList = array();
-		foreach($fields as $field)
+		foreach ($fields as $field)
 		{
 			$field['FORM_ID'] = $this->id;
 			$fieldWithoutId = $field;
 			unset($fieldWithoutId['ID']);
-			if($field['ID'] > 0)
+			if ($field['ID'] > 0)
 			{
 				$fieldId = $field['ID'];
 				$fieldResult = Internals\FieldTable::update($fieldId, $fieldWithoutId);
@@ -614,7 +614,7 @@ class Form
 		}
 
 		$deleteFieldList = array_diff($existedFieldList, $newFieldList);
-		foreach($deleteFieldList as $deleteFieldId)
+		foreach ($deleteFieldList as $deleteFieldId)
 		{
 			Internals\FieldTable::delete($deleteFieldId);
 		}
@@ -637,7 +637,7 @@ class Form
 		}
 
 		$depGroupMap = [];
-		foreach($depGroups as $depGroup)
+		foreach ($depGroups as $depGroup)
 		{
 			$depGroupId = $depGroup['ID'];
 			$depGroup['FORM_ID'] = $this->id;
@@ -646,7 +646,7 @@ class Form
 			$this->prepareResult('DEP_GROUPS', $depGroupResult);
 			$depGroupMap[$depGroupId] = $depGroupResult->getId();
 		}
-		foreach($dependencies as $depIndex => $dependency)
+		foreach ($dependencies as $depIndex => $dependency)
 		{
 			$dependency['GROUP_ID'] = !empty($dependency['GROUP_ID']) ? $dependency['GROUP_ID'] : 0;
 			$dependency['FORM_ID'] = $this->id;
@@ -670,13 +670,13 @@ class Form
 		{
 			Internals\FieldDependenceTable::delete($fieldDep['ID']);
 		}
-		foreach($dependencies as $dependency)
+		foreach ($dependencies as $dependency)
 		{
-			if(!in_array($dependency['IF_FIELD_CODE'], $fieldCodeList))
+			if (!in_array($dependency['IF_FIELD_CODE'], $fieldCodeList))
 			{
 				continue;
 			}
-			if(!in_array($dependency['DO_FIELD_CODE'], $fieldCodeList))
+			if (!in_array($dependency['DO_FIELD_CODE'], $fieldCodeList))
 			{
 				continue;
 			}
@@ -692,7 +692,7 @@ class Form
 		{
 			Internals\AgreementTable::delete($agreement['ID']);
 		}
-		foreach($agreements as $agreement)
+		foreach ($agreements as $agreement)
 		{
 			$agreement['FORM_ID'] = $this->id;
 			$agreementResult = Internals\AgreementTable::add($agreement);
@@ -828,16 +828,16 @@ class Form
 
 	protected function prepareResult($sect, Main\Result $entityResult, $replaceList = null)
 	{
-		if($entityResult->isSuccess())
+		if ($entityResult->isSuccess())
 		{
 			return;
 		}
 
 		$errors = $entityResult->getErrors();
-		foreach($errors as $error)
+		foreach ($errors as $error)
 		{
 			$errorMessage = $error->getMessage();
-			if($replaceList)
+			if ($replaceList)
 			{
 				$errorMessage = str_replace(array_keys($replaceList), array_values($replaceList), $errorMessage);
 			}
@@ -932,7 +932,7 @@ class Form
 	public function getDependencies($opposites = true)
 	{
 		$dependencyList = array();
-		foreach($this->params['DEPENDENCIES'] as $dependency)
+		foreach ($this->params['DEPENDENCIES'] as $dependency)
 		{
 			$dependencyList[$dependency['DO_FIELD_CODE']][] = array(
 				'if' => array(
@@ -952,12 +952,12 @@ class Form
 			}
 
 			// add mirror dependency
-			if($dependency['IF_ACTION'] != 'change')
+			if ($dependency['IF_ACTION'] != 'change')
 			{
 				continue;
 			}
 
-			if(!in_array($dependency['DO_ACTION'], array('show', 'hide')))
+			if (!in_array($dependency['DO_ACTION'], array('show', 'hide')))
 			{
 				continue;
 			}
@@ -991,14 +991,14 @@ class Form
 		$currencyId = $this->getCurrencyId();
 
 		$fieldList = array();
-		foreach($fields as $field)
+		foreach ($fields as $field)
 		{
 			$preparedField = [
 				'id' => $field['ID'],
 				'type' => $field['TYPE'],
 				'name' => $field['CODE'],
 			];
-			if($field['TYPE'] == 'section')
+			if ($field['TYPE'] == 'section')
 			{
 				$preparedField += array(
 					'caption' => $field['CAPTION'],
@@ -1022,10 +1022,10 @@ class Form
 					'settings_data' => $field['SETTINGS_DATA']
 				);
 
-				if(isset($field['ITEMS']) && is_array($field['ITEMS']))
+				if (isset($field['ITEMS']) && is_array($field['ITEMS']))
 				{
 					$preparedField['items'] = array();
-					foreach($field['ITEMS'] as $item)
+					foreach ($field['ITEMS'] as $item)
 					{
 						$price = isset($item['PRICE']) ? $item['PRICE'] : null;
 						if ($price !== null && !is_numeric($price))
@@ -1061,7 +1061,7 @@ class Form
 				}
 			}
 
-			if(isset($dependencyList[$field['CODE']]))
+			if (isset($dependencyList[$field['CODE']]))
 			{
 				$preparedField['dependences'] = $dependencyList[$field['CODE']];
 				$preparedField['hidden'] = true;
@@ -1086,9 +1086,9 @@ class Form
 			'NAME' => $data['start']['name'],
 			'CODE' => $data['start']['code']
 		);
-		foreach($this->getFieldsMap() as $field)
+		foreach ($this->getFieldsMap() as $field)
 		{
-			if(Internals\FieldTable::isUiFieldType($field['type']))
+			if (Internals\FieldTable::isUiFieldType($field['type']))
 			{
 				continue;
 			}
@@ -1103,7 +1103,7 @@ class Form
 			'CODE' => $data['end']['code']
 		);
 
-		foreach($steps as $stepIndex => $step)
+		foreach ($steps as $stepIndex => $step)
 		{
 			$step['NAME'] = str_replace('%name%', $step['NAME'], $data['template']['name']);
 			$step['EVENT'] = str_replace(array('%code%', '%form_id%'), array($step['CODE'], (int) $this->getId()), $data['eventTemplate']['code']);
@@ -1183,7 +1183,7 @@ class Form
 	{
 		// copy form
 		$form = Internals\FormTable::getRowById($formId);
-		if(!$form)
+		if (!$form)
 		{
 			return null;
 		}
@@ -1195,7 +1195,7 @@ class Form
 		$form['ACTIVE_CHANGE_BY'] = $userId;
 		$form['DATE_CREATE'] = new Main\Type\DateTime();
 		$resultFormAdd = Internals\FormTable::add($form);
-		if(!$resultFormAdd->isSuccess())
+		if (!$resultFormAdd->isSuccess())
 		{
 			return null;
 		}
@@ -1275,12 +1275,12 @@ class Form
 	public static function activate($formId, $isActivate = true, $changeUserBy = null)
 	{
 		$updateFields = array('ACTIVE' => $isActivate ? 'Y' : 'N');
-		if($changeUserBy)
+		if ($changeUserBy)
 		{
 			$updateFields['ACTIVE_CHANGE_BY'] = $changeUserBy;
 		}
 		$updateResult = Internals\FormTable::update($formId, $updateFields);
-		if($updateResult->isSuccess())
+		if ($updateResult->isSuccess())
 		{
 			(new static($formId))->buildScript();
 			return true;
@@ -1336,15 +1336,15 @@ class Form
 		$sectionFields = array();
 		$currentSection = '';
 		$fieldsMap = $this->getFieldsMap();
-		foreach($fieldsMap as $field)
+		foreach ($fieldsMap as $field)
 		{
-			if($field['type'] == 'section')
+			if ($field['type'] == 'section')
 			{
 				$currentSection = $field['name'];
 				continue;
 			}
 
-			if(!$currentSection)
+			if (!$currentSection)
 			{
 				continue;
 			}
@@ -1354,16 +1354,16 @@ class Form
 
 		// format fields by name
 		$fields = array();
-		foreach($resultFields as $fieldKey => $field)
+		foreach ($resultFields as $fieldKey => $field)
 		{
 			$fields[$field['name']] = $field;
 		}
 
 		$hiddenFieldNames = array();
 		// set hidden flag
-		foreach($resultFields as $fieldKey => $field)
+		foreach ($resultFields as $fieldKey => $field)
 		{
-			if(!isset($field['dependences']))
+			if (!isset($field['dependences']))
 			{
 				$field['hidden'] = false;
 				$data['FIELDS'][$fieldKey] = $field;
@@ -1371,14 +1371,14 @@ class Form
 			}
 
 			$isHidden = false;
-			foreach($field['dependences'] as $dep)
+			foreach ($field['dependences'] as $dep)
 			{
-				if($dep['if']['action'] != 'change')
+				if ($dep['if']['action'] != 'change')
 				{
 					continue;
 				}
 
-				if(!isset($fields[$dep['if']['fieldname']]))
+				if (!isset($fields[$dep['if']['fieldname']]))
 				{
 					continue;
 				}
@@ -1396,7 +1396,7 @@ class Form
 						break;
 				}
 
-				if(!$isSuccess)
+				if (!$isSuccess)
 				{
 					continue;
 				}
@@ -1404,9 +1404,9 @@ class Form
 				$isHidden = $dep['do']['action'] == 'hide';
 			}
 
-			if($field['type'] == 'section')
+			if ($field['type'] == 'section')
 			{
-				foreach($sectionFields[$field['name']] as $sectionFieldName)
+				foreach ($sectionFields[$field['name']] as $sectionFieldName)
 				{
 					$hiddenFieldNames[$sectionFieldName][] = $isHidden;
 				}
@@ -1421,19 +1421,19 @@ class Form
 		$fieldEmailValue = null;
 		$fieldPhoneValue = null;
 		$fieldPhoneEntityTypeName = null;
-		foreach($resultFields as $fieldKey => $field)
+		foreach ($resultFields as $fieldKey => $field)
 		{
-			if(($field['entity_field_name'] == 'EMAIL' || $field['type'] == 'email') && $field['values'][0])
+			if (($field['entity_field_name'] == 'EMAIL' || $field['type'] == 'email') && $field['values'][0])
 			{
 				$fieldEmailValue = $field['values'][0];
 			}
-			if(($field['entity_field_name'] == 'PHONE' || $field['type'] == 'phone') && $field['values'][0])
+			if (($field['entity_field_name'] == 'PHONE' || $field['type'] == 'phone') && $field['values'][0])
 			{
 				$fieldPhoneEntityTypeName = $field['entity_name'];
 				$fieldPhoneValue = $field['values'][0];
 			}
 
-			if(!isset($hiddenFieldNames[$field['name']]))
+			if (!isset($hiddenFieldNames[$field['name']]))
 			{
 				continue;
 			}
@@ -1444,16 +1444,16 @@ class Form
 
 		$resultProducts = array();
 		$activityFields = array();
-		foreach($resultFields as $fieldKey => $field)
+		foreach ($resultFields as $fieldKey => $field)
 		{
 
-			if(!isset($field['values'][0]) || (!$field['values'][0] && $field['values'][0] !== '0'))
+			if (!isset($field['values'][0]) || (!$field['values'][0] && $field['values'][0] !== '0'))
 			{
 				continue;
 			}
 
 			$activityFieldValues = array();
-			if(is_array($field['items']) && count($field['items']) > 0)
+			if (is_array($field['items']) && count($field['items']) > 0)
 			{
 				if (!empty($field['values'][0]['id']))
 				{
@@ -1468,9 +1468,9 @@ class Form
 					$fieldValues = $field['values'];
 				}
 
-				foreach($field['items'] as $item)
+				foreach ($field['items'] as $item)
 				{
-					if(!in_array($item['value'], $fieldValues))
+					if (!in_array($item['value'], $fieldValues))
 					{
 						continue;
 					}
@@ -1502,74 +1502,50 @@ class Form
 				'value' => $activityFieldValues,
 			);
 
-
-			if($field['type'] != 'product')
+			if ($field['type'] === Booking::RESOURCE_FIELD_TYPE)
 			{
-				continue;
-			}
-
-			$productValues = [];
-			foreach ($field['values'] as $value)
-			{
-				$productValue = [
-					'id' => 0,
-					'quantity' => 1
-				];
-				if (is_array($value))
+				//@todo change format on frontend and remove this block
+				if (
+					is_array($field['values'][0])
+					&& !empty($field['values'][0])
+				)
 				{
-					$productValue['id'] = $value['id'] ?: 0;
-					$productValue['quantity'] = $value['quantity'] ?: 1;
-					$productValue['price'] = $value['price'] ?: null;
-				}
-				else
-				{
-					$productValue['id'] = $value;
-				}
+					$oldFieldValue = $field['values'][0];
 
-				$productValues[$productValue['id']] = $productValue;
-			}
+					$newFieldValue = [
+						'resources' => [],
+						'dateFromTs' => $oldFieldValue['dateFromTs'],
+						'dateToTs' => $oldFieldValue['dateToTs'],
+						'timezone' => $oldFieldValue['timezone'],
+					];
 
-			foreach($field['items'] as $item)
-			{
-				$productValue = $productValues[$item['value']];
-				if(!is_array($productValue))
-				{
-					continue;
-				}
-
-				$productId = is_numeric($item['value']) ? $item['value'] : 0;
-				$product = [
-					'ID' => $productId,
-					'NAME' => $item['title'],
-					'PRICE' => $item['changeablePrice'] && $productValue['price']
-						? $productValue['price']
-						: $item['price'],
-					'DISCOUNT' => $item['discount'] ?: 0,
-					'QUANTITY' => $productValue['quantity'],
-				];
-				if ($productId)
-				{
-					$iterator = \CCrmProduct::getList([], ['ID' => $productId], ['*'], ['nTopCount' => 1]);
-					$productData = $iterator->getNext();
-					if ($productData)
+					foreach ($oldFieldValue['resourcesIds'] as $i => $resourceId)
 					{
-						$product['TYPE'] = $productData['TYPE'];
-						$product['VAT_INCLUDED'] = $productData['VAT_INCLUDED'];
-						if ($productData['VAT_ID'])
-						{
-							$vatData = \CCrmVat::GetByID($productData['VAT_ID']);
-							if ($vatData && $vatData['RATE'])
-							{
-								$product['VAT_RATE'] = floatval($vatData['RATE']) / 100;
-							}
-						}
+						$skus = [];
+
+						// @todo example, remove later
+						/*$skus[] = [
+							'id' => 148,
+							'price' => 999.00,
+							'quantity' => 1,
+						];*/
+
+						$newFieldValue['resources'][] = [
+							'id' => $resourceId,
+							'skus' => $skus,
+						];
 					}
-					unset(
-						$productData,
-						$iterator
-					);
+
+					$field['values'][0] = $newFieldValue;
+					$resultFields[$fieldKey]['values'][0] = $newFieldValue;
 				}
-				$resultProducts[] = $product;
+
+				$this->addBookingFieldProducts($field, $resultProducts);
+			}
+
+			if ($field['type'] === Internals\FieldTable::TYPE_ENUM_PRODUCT)
+			{
+				$this->addProductFieldProducts($field, $resultProducts);
 			}
 		}
 
@@ -1603,13 +1579,13 @@ class Form
 		);
 		$result = new Result(null, $data);
 		$result->save();
-		if($result->hasErrors())
+		if ($result->hasErrors())
 		{
 			$this->errors = $result->getErrors();
 		}
 		else
 		{
-			if($fieldEmailValue)
+			if ($fieldEmailValue)
 			{
 				self::sendEventFormSent(array(
 						'RESULT_SUCCESS_TEXT' => $this->params['RESULT_SUCCESS_TEXT'],
@@ -1628,9 +1604,9 @@ class Form
 				$stopCallBack = true;
 			}
 
-			if($fieldPhoneValue && $this->isCallback())
+			if ($fieldPhoneValue && $this->isCallback())
 			{
-				if(Callback::hasPhoneNumbers())
+				if (Callback::hasPhoneNumbers())
 				{
 					Callback::sendCallEvent(array(
 						'CRM_ENTITY_TYPE' => $fieldPhoneEntityTypeName,
@@ -1659,7 +1635,7 @@ class Form
 
 			if (Booking::isResourceForm($resultFields))
 			{
-				$bookingValue = Booking::getResourceFieldValue($resultFields);
+				$bookingValue = Booking::getResourceFieldValueFromResultFields($resultFields);
 				if ($bookingValue)
 				{
 					$event = new Main\Event(
@@ -1672,6 +1648,7 @@ class Form
 							'CRM_ENTITY_ID' => $result->getResultEntity()->getEntityIdByTypeName($fieldPhoneEntityTypeName),
 							'PHONE_NUMBER' => $fieldPhoneValue,
 							'CRM_ENTITY_LIST' => $result->getResultEntity()->getResultEntities(),
+							'PRODUCTS' => $resultProducts,
 							'VALUE' => $bookingValue,
 						],
 					);
@@ -1695,7 +1672,7 @@ class Form
 				}
 			}
 
-			if($this->isPayable())
+			if ($this->isPayable())
 			{
 				$resultEntity = $result->getResultEntity();
 				if ($resultEntity)
@@ -1713,12 +1690,12 @@ class Form
 						);
 						$resultRedirectUrl = $urlInfo['url'] ?? null;
 					}
-					elseif($resultEntity->getInvoiceId())
+					elseif ($resultEntity->getInvoiceId())
 					{
 						$resultRedirectUrl = \CAllCrmInvoice::getPublicLink($resultEntity->getInvoiceId());
 					}
 
-					if($resultRedirectUrl)
+					if ($resultRedirectUrl)
 					{
 						$redirectUrl = new \Bitrix\Main\Web\Uri($resultRedirectUrl);
 						$redirectUrl->addParams(array('form_id' => $this->getId()));
@@ -1790,7 +1767,7 @@ class Form
 
 	public static function cleanCacheByTag($formId)
 	{
-		if(defined("BX_COMP_MANAGED_CACHE"))
+		if (defined("BX_COMP_MANAGED_CACHE"))
 		{
 			$taggedCache = Main\Application::getInstance()->getTaggedCache();
 			$taggedCache->clearByTag(static::getCacheTag($formId));
@@ -1805,11 +1782,11 @@ class Form
 		);
 		$entityList = Entity::getList();
 		$scheme = Entity::getSchemes($schemeId);
-		if($scheme)
+		if ($scheme)
 		{
-			foreach($entityList as $entityName => $entityCaption)
+			foreach ($entityList as $entityName => $entityCaption)
 			{
-				if(!in_array($entityName, $scheme['ENTITIES']))
+				if (!in_array($entityName, $scheme['ENTITIES']))
 				{
 					unset($entityList[$entityName]);
 				}
@@ -1822,9 +1799,9 @@ class Form
 
 		$entityFieldMap = Internals\FormCounterTable::getEntityFieldsMap();
 		$counters = Internals\FormCounterTable::getByFormId($formId);
-		foreach($counters as $counter => $value)
+		foreach ($counters as $counter => $value)
 		{
-			if(isset($entityFieldMap[$counter]))
+			if (isset($entityFieldMap[$counter]))
 			{
 				$entityName = $entityFieldMap[$counter];
 
@@ -1834,7 +1811,7 @@ class Form
 					$entityName = \CCrmOwnerType::resolveName($scheme['MAIN_ENTITY']) ?: $entityName;
 				}
 
-				if(!isset($entityList[$entityName]))
+				if (!isset($entityList[$entityName]))
 				{
 					continue;
 				}
@@ -1907,7 +1884,7 @@ class Form
 
 	public static function canRemoveCopyright()
 	{
-		if(!Main\Loader::includeModule('bitrix24'))
+		if (!Main\Loader::includeModule('bitrix24'))
 		{
 			return true;
 		}
@@ -1922,7 +1899,7 @@ class Form
 
 	public static function canActivateForm()
 	{
-		if(!Main\Loader::includeModule("bitrix24"))
+		if (!Main\Loader::includeModule("bitrix24"))
 		{
 			return true;
 		}
@@ -1933,7 +1910,7 @@ class Form
 
 	public static function actualizeFormsActiveState($maxActivated = null)
 	{
-		if(!$maxActivated)
+		if (!$maxActivated)
 		{
 			$maxActivated = self::getMaxActivatedFormLimit();
 		}
@@ -1945,7 +1922,7 @@ class Form
 		));
 		while($form = $formDb->fetch())
 		{
-			if($maxActivated > 0)
+			if ($maxActivated > 0)
 			{
 				--$maxActivated;
 				continue;
@@ -1954,7 +1931,7 @@ class Form
 			static::activate($form['ID'], false);
 		}
 
-		if(!self::canRemoveCopyright())
+		if (!self::canRemoveCopyright())
 		{
 			$connection = Main\Application::getConnection();
 			$connection->query("UPDATE b_crm_webform SET COPYRIGHT_REMOVED='N'");
@@ -1990,6 +1967,120 @@ class Form
 			}
 
 			self::actualizeFormsActiveState($maxActivated);
+		}
+	}
+
+	private function addProductFieldProducts(array $field, array &$resultProducts): void
+	{
+		$productValues = [];
+		foreach ($field['values'] as $value)
+		{
+			$productValue = [
+				'quantity' => 1
+			];
+			if (is_array($value))
+			{
+				$productValue['id'] = $value['id'] ?: 0;
+				$productValue['quantity'] = $value['quantity'] ?: 1;
+				$productValue['price'] = $value['price'] ?: null;
+			}
+			else
+			{
+				$productValue['id'] = $value;
+			}
+
+			$productValues[$productValue['id']] = $productValue;
+		}
+
+		foreach ($field['items'] as $item)
+		{
+			$productValue = $productValues[$item['value']];
+			if (!is_array($productValue))
+			{
+				continue;
+			}
+
+			$productId = is_numeric($item['value']) ? $item['value'] : 0;
+			$product = [
+				'ID' => $productId,
+				'NAME' => $item['title'],
+				'PRICE' => $item['changeablePrice'] && $productValue['price']
+					? $productValue['price']
+					: $item['price'],
+				'DISCOUNT' => $item['discount'] ?: 0,
+				'QUANTITY' => $productValue['quantity'],
+			];
+
+			$this->enrichProductData($productId, $product);
+
+			$resultProducts[] = $product;
+		}
+	}
+
+	private function addBookingFieldProducts(array $field, array &$resultProducts): void
+	{
+		$value = Booking::getResourceFieldValue($field);
+		if (!$value)
+		{
+			return;
+		}
+
+		foreach ($value['resources'] as $resource)
+		{
+			if (!is_array($resource['skus'] ?? null))
+			{
+				continue;
+			}
+
+			foreach ($resource['skus'] as $sku)
+			{
+				$skuId = (int)$sku['id'];
+
+				$product = [
+					'ID' => $skuId,
+					'PRICE' => $sku['price'],
+					'QUANTITY' => $sku['quantity'],
+				];
+
+				$this->enrichProductData($skuId, $product);
+
+				$resultProducts[] = $product;
+			}
+		}
+	}
+
+	private function enrichProductData(int $productId, array &$product): void
+	{
+		if (!$productId)
+		{
+			return;
+		}
+
+		$productData = \CCrmProduct::getList(
+			[],
+			[
+				'ID' => $productId,
+			],
+			['*'],
+			[
+				'nTopCount' => 1,
+			]
+		)->getNext();
+
+		if (!$productData)
+		{
+			return;
+		}
+
+		$product['TYPE'] = $productData['TYPE'];
+		$product['VAT_INCLUDED'] = $productData['VAT_INCLUDED'];
+		if ($productData['VAT_ID'])
+		{
+			$vatData = \CCrmVat::GetByID($productData['VAT_ID']);
+			if ($vatData && $vatData['RATE'])
+			{
+				$product['VAT_RATE'] = (float)$vatData['RATE'] / 100;
+			}
 		}
 	}
 }

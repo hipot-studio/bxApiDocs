@@ -28,6 +28,7 @@ class EditableDescription extends ContentBlock
 	protected string $copilotStatus = self::AI_NONE;
 	protected array $copilotSettings = [];
 	protected ?bool $useBBCodeEditor = null;
+	protected ?bool $allowFiles = null;
 
 	public function getRendererName(): string
 	{
@@ -142,6 +143,18 @@ class EditableDescription extends ContentBlock
 		return $this;
 	}
 
+	public function setAllowFiles(bool $isAllowed): self
+	{
+		$this->allowFiles = $isAllowed;
+
+		return $this;
+	}
+
+	public function getAllowFiles(): ?bool
+	{
+		return $this->allowFiles;
+	}
+
 	protected function getProperties(): array
 	{
 		return [
@@ -155,6 +168,7 @@ class EditableDescription extends ContentBlock
 			'copilotStatus' => $this->getCopilotStatus(),
 			'copilotSettings' => $this->getCopilotSettings(),
 			'useBBCodeEditor' => $this->getUseBBCodeEditor(),
+			'allowFiles' => $this->getAllowFiles(),
 		];
 	}
 }

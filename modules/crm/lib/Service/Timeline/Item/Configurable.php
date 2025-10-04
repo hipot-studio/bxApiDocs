@@ -708,7 +708,7 @@ abstract class Configurable extends Item
 	{
 		return Loader::includeModule('ui')
 			? Util::getArticleUrlByCode($code)
-			: 'https://helpdesk.bitrix24.ru/open/' . $code
+			: ''
 		;
 	}
 }

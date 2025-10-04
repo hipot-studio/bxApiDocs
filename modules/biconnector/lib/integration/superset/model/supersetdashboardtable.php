@@ -53,6 +53,7 @@ final class SupersetDashboardTable extends DataManager
 	public const DASHBOARD_STATUS_READY = 'R';
 	public const DASHBOARD_STATUS_DRAFT = 'D';
 	public const DASHBOARD_STATUS_FAILED = 'F';
+	public const DASHBOARD_STATUS_NOT_INSTALLED = 'N';
 
 	public static function getObjectClass()
 	{
@@ -93,6 +94,7 @@ final class SupersetDashboardTable extends DataManager
 					self::DASHBOARD_STATUS_READY,
 					self::DASHBOARD_STATUS_DRAFT,
 					self::DASHBOARD_STATUS_FAILED,
+					self::DASHBOARD_STATUS_NOT_INSTALLED,
 				])
 				->configureDefaultValue(self::DASHBOARD_STATUS_READY)
 			,

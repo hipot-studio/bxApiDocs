@@ -155,7 +155,7 @@ class SiteFormFileUploaderController extends UploaderController implements Custo
 	{
 		$request = Main\Application::getInstance()->getContext()->getRequest();
 
-		return ($request->getUserAgent() ?? "") . Main\Service\GeoIp\Manager::getRealIp();
+		return ($request->getUserAgent() ?? "");
 	}
 
 	public static function getSettings(): array

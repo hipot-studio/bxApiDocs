@@ -6,7 +6,6 @@ use Bitrix\Crm\Badge\SourceIdentifier;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query;
@@ -93,7 +92,7 @@ class ProviderManager
 		{
 			$providersList[Zoom::getId()] = Zoom::className();
 		}
-		
+
 		if (Feature::enabled(Feature\RepeatSale::class))
 		{
 			$providersList[RepeatSale::getId()] = RepeatSale::className();
@@ -257,12 +256,6 @@ class ProviderManager
 		}
 
 		$provider::syncBadges($activityId, $activityFields, $bindingsFiltered);
-		foreach ($bindingsFiltered as $singleBinding)
-		{
-			Monitor::getInstance()->onBadgesSync(
-				new ItemIdentifier((int)$singleBinding['OWNER_TYPE_ID'], (int)$singleBinding['OWNER_ID'])
-			);
-		}
 	}
 
 	final public static function syncBadgesOnBindingsChange(

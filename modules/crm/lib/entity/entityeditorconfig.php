@@ -376,7 +376,10 @@ class EntityEditorConfig
 			$effectiveSection = array(
 				'type' => 'section',
 				'name' => $data[$i]['name'],
-				'title' => isset($data[$i]['title']) ? $data[$i]['title'] : $data[$i]['name']
+				'title' =>
+					(isset($data[$i]['title']) && is_string($data[$i]['title']))
+						? $data[$i]['title']
+						: $data[$i]['name']
 			);
 
 			$effectiveElements = array();
@@ -445,7 +448,7 @@ class EntityEditorConfig
 				return false;
 			}
 
-			if(!(isset($data[$i]['title']) && trim($data[$i]['title']) !== ''))
+			if(!(isset($data[$i]['title']) && is_string($data[$i]['title'])))
 			{
 				$errors[] = "Section at index {$i} does not have title.";
 				return false;

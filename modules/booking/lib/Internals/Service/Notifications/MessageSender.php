@@ -15,6 +15,7 @@ use Bitrix\Booking\Internals\Model\BookingMessageFailureLogTable;
 use Bitrix\Booking\Internals\Model\BookingMessageTable;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\PushPull\PushPullCommandType;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 
 class MessageSender
@@ -46,6 +47,22 @@ class MessageSender
 			$this->logError($booking, $notificationType, $error);
 
 			return $result->addError($error);
+		}
+
+		if (Loader::includeModule('bitrix24'))
+		{
+			if (
+				!(
+					\CBitrix24::IsLicensePaid()
+					|| \CBitrix24::IsNfrLicense()
+				)
+			)
+			{
+				$error = ErrorBuilder::build('Sending messages is temporarily unavailable on your current plan');
+				$this->logError($booking, $notificationType, $error);
+
+				return $result->addError($error);
+			}
 		}
 
 		$result = $this->messageSender->send($booking, $message);

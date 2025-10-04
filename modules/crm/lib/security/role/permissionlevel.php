@@ -7,6 +7,7 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\AttributesProvider;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened;
 
 class PermissionLevel
 {
@@ -75,18 +76,31 @@ class PermissionLevel
 
 	public function hasPermission(): bool
 	{
-		// @todo also use $this->settingsToRoleRelations
-		if (empty($this->maxAttribute))
+		if (empty($this->maxAttribute) || max($this->maxAttribute) === UserPermissions::PERMISSION_NONE)
 		{
+			$variants = (new \Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened())->getPermissiveSettingsVariantsList();
+			foreach ($this->settingsValuesByField as $settings)
+			{
+				if (count(array_intersect($variants, array_values($settings))) > 0)
+				{
+					return true;
+				}
+			}
 			return false;
 		}
 
 		return max($this->maxAttribute) > UserPermissions::PERMISSION_NONE;
 	}
 
+	/**
+	 * Pay attention! This method is not compatible with permission stored in settings.
+	 * Can be used for attributes only.
+	 *
+	 * @param string $level
+	 * @return bool
+	 */
 	public function hasPermissionLevel(string $level): bool
 	{
-		// @todo also use $this->settingsToRoleRelations
 		if (empty($this->maxAttribute))
 		{
 			return false;
@@ -95,6 +109,44 @@ class PermissionLevel
 		return max($this->maxAttribute) >= $level;
 	}
 
+	public function hasMaxPermissionLevel(): bool
+	{
+		$hasMaxPermission =
+			isset($this->settingsValuesByField[self::EMPTY_FIELD_VALUE][UserDepartmentAndOpened::ALL])
+			|| $this->maxAttribute[self::EMPTY_FIELD_VALUE] === UserPermissions::PERMISSION_ALL
+		;
+		if (!$hasMaxPermission)
+		{
+			return false;
+		}
+
+		foreach ($this->attributeToRoleRelations as $fieldKey => $attributes)
+		{
+			if ($fieldKey === self::EMPTY_FIELD_VALUE)
+			{
+				continue;
+			}
+
+			if (max(array_keys($attributes)) !== UserPermissions::PERMISSION_ALL)
+			{
+				return false;
+			}
+		}
+		foreach ($this->settingsToRoleRelations as $fieldKey => $settings)
+		{
+			if ($fieldKey === self::EMPTY_FIELD_VALUE)
+			{
+				continue;
+			}
+
+			if (array_keys($settings) !== [UserDepartmentAndOpened::ALL])
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 
 	/**
 	 * @internal
@@ -151,59 +203,60 @@ class PermissionLevel
 
 	public function hasPermissionByEntityAttributes(array $entityAttributes): bool
 	{
-		return $this->getPermissionAttributeByEntityAttributes($entityAttributes) > UserPermissions::PERMISSION_NONE;
+		return $this->getValueByEntityAttributes($entityAttributes)->hasSomePermissions();
 	}
-
 
 	/**
 	 * @internal
-	 * @deprecated
-	 * Used in backward compatibility methods only
-	 * Will be removed soon!
 	 */
 	public function compareUserAttributesWithEntityAttributes(array $entityAttributes): bool
 	{
-		$entityAttributeForUser = $this->getPermissionAttributeByEntityAttributes($entityAttributes);
-		if ($entityAttributeForUser == UserPermissions::PERMISSION_NONE)
+		$permissionLevelValue = $this->getValueByEntityAttributes($entityAttributes);
+
+		if (!$permissionLevelValue->hasSomePermissions())
 		{
 			return false;
 		}
-		if ($entityAttributeForUser == UserPermissions::PERMISSION_ALL)
+
+		if ($permissionLevelValue->hasMaxPermissions())
 		{
 			return true;
 		}
-		if ($entityAttributeForUser == UserPermissions::PERMISSION_OPENED)
+
+		if (
+			$permissionLevelValue->hasOpenedPermissions()
+			&& in_array(UserPermissions::ATTRIBUTES_OPENED, $entityAttributes, true)
+		)
 		{
-			if((in_array(UserPermissions::ATTRIBUTES_OPENED, $entityAttributes) || in_array(UserPermissions::ATTRIBUTES_USER_PREFIX . $this->userId, $entityAttributes)))
-			{
-				return true;
-			}
+			return true;
 		}
 
-		if ($entityAttributeForUser >= UserPermissions::PERMISSION_SELF && in_array(UserPermissions::ATTRIBUTES_USER_PREFIX . $this->userId, $entityAttributes))
+		if (
+			$permissionLevelValue->hasSelfPermissions()
+			&& in_array(UserPermissions::ATTRIBUTES_USER_PREFIX . $this->userId, $entityAttributes, true)
+		)
 		{
 			return true;
 		}
 
 		$userAttributes = $this->attributesProvider->getUserAttributes();
 
-		if ($entityAttributeForUser >= UserPermissions::PERMISSION_DEPARTMENT && is_array($userAttributes['INTRANET']))
+		if (is_array($userAttributes['INTRANET']) && $permissionLevelValue->hasDepartmentPermissions())
 		{
-			// PERM_OPEN: user may access to not opened entities in his department
-			foreach ($userAttributes['INTRANET'] as $departmentId)
+			foreach ($userAttributes['INTRANET'] as $departmentAccessCode)
 			{
-				if (in_array($departmentId, $entityAttributes))
+				if (in_array($departmentAccessCode, $entityAttributes, true))
 				{
 					return true;
 				}
 			}
 		}
-		if ($entityAttributeForUser >= UserPermissions::PERMISSION_SUBDEPARTMENT && is_array($userAttributes['SUBINTRANET']))
+
+		if (is_array($userAttributes['SUBINTRANET']) && $permissionLevelValue->hasSubDepartmentsPermissions())
 		{
-			// PERM_OPEN: user may access to not opened entities in his intranet
-			foreach ($userAttributes['SUBINTRANET'] as $departmentId)
+			foreach ($userAttributes['SUBINTRANET'] as $departmentAccessCode)
 			{
-				if (in_array($departmentId, $entityAttributes))
+				if (in_array($departmentAccessCode, $entityAttributes, true))
 				{
 					return true;
 				}
@@ -215,11 +268,8 @@ class PermissionLevel
 
 	/**
 	 * @internal
-	 * @deprecated
-	 * Used in backward compatibility methods only
-	 * Will be removed soon!
 	 */
-	public function getEntityListAttributes(): array
+	public function getEntityAttributesToCheckInListMode(): array
 	{
 		$result = [];
 		if (!$this->hasPermission())
@@ -229,40 +279,44 @@ class PermissionLevel
 
 		$userAttributes = $this->attributesProvider->getUserAttributes();
 
-		$attributes = $this->attributeToRoleRelations[self::EMPTY_FIELD_VALUE] ?? null;
-		$defaultPermission = empty($attributes) ? UserPermissions::PERMISSION_NONE : max(array_keys($attributes));
+		$defaultPermissionValue = $this->getValueFromSavedAttrsAndSettings(self::EMPTY_FIELD_VALUE);
 
-		if (!is_null($attributes) && count($this->attributeToRoleRelations) == 1)
+		$availableFieldKeys = array_unique(array_merge(
+			array_keys($this->attributeToRoleRelations),
+			array_keys($this->settingsToRoleRelations),
+		));
+
+		if (
+			$availableFieldKeys === [self::EMPTY_FIELD_VALUE]
+			&& $defaultPermissionValue->hasSomePermissions()
+		)
 		{
-			$permission = $defaultPermission;
-
 			$result = array_merge(
 				$result,
-				$this->prepareAttributesByPermission($userAttributes, $permission)
+				$this->prepareAttributesByPermissionValue($userAttributes, $defaultPermissionValue)
 			);
 		}
-		$attributeToRoleRelationsForFields = [];
-		foreach ($this->attributeToRoleRelations as $fieldKey => $attributes)
+
+		$relationsForFields = [];
+		foreach ($availableFieldKeys as $fieldKey)
 		{
-			if ($fieldKey !== self::EMPTY_FIELD_VALUE)
+			if ($fieldKey === self::EMPTY_FIELD_VALUE)
 			{
-				$attributeToRoleRelationsForFields[$fieldKey] = $attributes;
+				continue;
 			}
+			$relationsForFields[$fieldKey] = $this->getValueFromSavedAttrsAndSettings($fieldKey);
 		}
 
-		if (!empty($attributeToRoleRelationsForFields))
+		if (!empty($relationsForFields))
 		{
 			$stageFieldKeys = $this->getEntityStageFieldKeys($this->permissionEntity);
 			foreach ($stageFieldKeys as $stageFieldKey)
 			{
-				$permission = $defaultPermission;
-				if (!empty($attributeToRoleRelationsForFields[$stageFieldKey]))
-				{
-					$permission = max(array_keys($attributeToRoleRelationsForFields[$stageFieldKey]));
-				}
+				$permissionValue = $relationsForFields[$stageFieldKey] ?? $defaultPermissionValue;
+
 				$result = array_merge(
 					$result,
-					$this->prepareAttributesByPermission($userAttributes, $permission, $stageFieldKey)
+					$this->prepareAttributesByPermissionValue($userAttributes, $permissionValue, $stageFieldKey)
 				);
 			}
 		}
@@ -272,7 +326,56 @@ class PermissionLevel
 
 	public function isPermissionLevelEqualsToByEntityAttributes(string $permissionAttribute, array $entityAttributes): bool
 	{
-		return $this->getPermissionAttributeByEntityAttributes($entityAttributes) === $permissionAttribute;
+		return $this->getValueByEntityAttributes($entityAttributes)->isEqualToPermissionAttribute($permissionAttribute);
+	}
+
+	protected function getValueByEntityAttributes(array $entityAttributes): PermissionLevelValue
+	{
+		if ($this->isAdmin)
+		{
+			return new PermissionLevelValue(UserPermissions::PERMISSION_ALL);
+		}
+
+		if (empty($this->attributeToRoleRelations) && empty($this->settingsToRoleRelations))
+		{
+			return new PermissionLevelValue(UserPermissions::PERMISSION_NONE);
+		}
+
+		if(
+			$this->permissionType === UserPermissions::OPERATION_READ
+			&& (
+				in_array( UserPermissions::ATTRIBUTES_READ_ALL, $entityAttributes, true)
+				|| in_array(UserPermissions::ATTRIBUTES_CONCERNED_USER_PREFIX.$this->userId, $entityAttributes, true)
+			)
+		)
+		{
+			return new PermissionLevelValue(UserPermissions::PERMISSION_ALL);
+		}
+
+		if (empty($entityAttributes))
+		{
+			return $this->getValueFromSavedAttrsAndSettings(self::EMPTY_FIELD_VALUE);
+		}
+
+		$availableFieldKeys = array_unique(array_merge(
+			array_keys($this->attributeToRoleRelations),
+			array_keys($this->settingsToRoleRelations),
+		));
+
+		foreach ($availableFieldKeys as $fieldKey)
+		{
+			if ($fieldKey === self::EMPTY_FIELD_VALUE)
+			{
+				continue;
+			}
+
+			if (in_array($fieldKey, $entityAttributes, true))
+			{
+				return $this->getValueFromSavedAttrsAndSettings($fieldKey);
+			}
+		}
+
+		return $this->getValueFromSavedAttrsAndSettings(self::EMPTY_FIELD_VALUE);
 	}
 
 	private function normalizeField(string $field): string
@@ -314,63 +417,72 @@ class PermissionLevel
 		return array_filter(array_values($result));
 	}
 
-	private function prepareAttributesByPermission(array $userAttributes, string $permission, $statusRestriction = null): array
+	private function prepareAttributesByPermissionValue(
+		array $userAttributes,
+		PermissionLevelValue $permissionLevelValue,
+		?string $statusRestriction = null
+	): array
 	{
 		$result = [];
 		$partOfResult = [];
 
-		if ($permission == UserPermissions::PERMISSION_NONE)
+		if (!$permissionLevelValue->hasSomePermissions())
 		{
 			return [];
 		}
-		elseif ($permission == UserPermissions::PERMISSION_OPENED)
+		elseif (!$permissionLevelValue->hasMaxPermissions())
 		{
-			$partOfResult[] = UserPermissions::ATTRIBUTES_OPENED;
-			foreach ($userAttributes['USER'] as $userId)
-			{
-
-				$result[] = $statusRestriction ? [$statusRestriction, $userId] : [$userId];
-			}
-		}
-		elseif ($permission != UserPermissions::PERMISSION_ALL)
-		{
-			if ($permission >= UserPermissions::PERMISSION_SELF)
+			if (
+				$permissionLevelValue->hasSelfPermissions()
+				|| $permissionLevelValue->hasDepartmentPermissions()
+				|| $permissionLevelValue->hasSubDepartmentsPermissions()
+				|| $permissionLevelValue->hasOpenedPermissions()
+			)
 			{
 				foreach ($userAttributes['USER'] as $userId)
 				{
 					$result[] =  $statusRestriction ? [$statusRestriction, $userId] : [$userId];
 				}
 			}
-			if ($permission >= UserPermissions::PERMISSION_DEPARTMENT && isset($userAttributes['INTRANET']))
+			if (isset($userAttributes['INTRANET'])
+				&& (
+					$permissionLevelValue->hasDepartmentPermissions()
+					|| $permissionLevelValue->hasSubDepartmentsPermissions()
+				)
+			)
 			{
-				foreach ($userAttributes['INTRANET'] as $departmentId)
+				foreach ($userAttributes['INTRANET'] as $departmentAccessCode)
 				{
 					//HACK: SKIP IU code it is not required for this method
-					if ($departmentId != '' && mb_substr($departmentId, 0, 2) === 'IU')
+					if ($departmentAccessCode != '' && mb_substr($departmentAccessCode, 0, 2) === 'IU')
 					{
 						continue;
 					}
 
-					if (!in_array($departmentId, $partOfResult))
+					if (!in_array($departmentAccessCode, $partOfResult))
 					{
-						$partOfResult[] = $departmentId;
+						$partOfResult[] = $departmentAccessCode;
 					}
 				}
 			}
-			if ($permission >= UserPermissions::PERMISSION_SUBDEPARTMENT && isset($userAttributes['SUBINTRANET']))
+			if (isset($userAttributes['SUBINTRANET']) && $permissionLevelValue->hasSubDepartmentsPermissions())
 			{
-				foreach ($userAttributes['SUBINTRANET'] as $departmentId)
+				foreach ($userAttributes['SUBINTRANET'] as $departmentAccessCode)
 				{
-					if ($departmentId != '' && mb_substr($departmentId, 0, 2) === 'IU')
+					if ($departmentAccessCode != '' && mb_substr($departmentAccessCode, 0, 2) === 'IU')
 					{
 						continue;
 					}
 
-					if (!in_array($departmentId, $partOfResult))
+					if (!in_array($departmentAccessCode, $partOfResult))
 					{
-						$partOfResult[] = $departmentId;
+						$partOfResult[] = $departmentAccessCode;
 					}
 				}
+			}
+			if ($permissionLevelValue->hasOpenedPermissions())
+			{
+				$result[] = $statusRestriction ? [$statusRestriction, UserPermissions::ATTRIBUTES_OPENED] : [UserPermissions::ATTRIBUTES_OPENED];
 			}
 		}
 		else //self::PERM_ALL
@@ -417,5 +529,39 @@ class PermissionLevel
 		$cache[$permissionEntityType] = $stageFieldKEys;
 
 		return $stageFieldKEys;
+	}
+
+	private function getValueFromSavedAttrsAndSettings(string $fieldName): PermissionLevelValue
+	{
+		$attributes = $this->attributeToRoleRelations[$fieldName] ?? [];
+		$settingsRoles = $this->settingsToRoleRelations[$fieldName] ?? [];
+
+		$excludeAttributesValuesForRoleIds = [];
+		foreach ($settingsRoles as $roleIds)
+		{
+			$excludeAttributesValuesForRoleIds = array_merge(
+				$excludeAttributesValuesForRoleIds,
+				$roleIds
+			);
+		}
+		foreach ($attributes as $attributeValue => $roleIds)
+		{
+			$roleIds = array_diff($roleIds, $excludeAttributesValuesForRoleIds); // remove roles which have settings form attributes to avoid value ambiguity
+			if (empty($roleIds))
+			{
+				unset($attributes[$attributeValue]);
+			}
+			else
+			{
+				$attributes[$attributeValue] = $roleIds;
+			}
+		}
+
+		$maxAttributeValue = empty($attributes) ? UserPermissions::PERMISSION_NONE : max(array_keys($attributes));
+
+		return new PermissionLevelValue(
+			$maxAttributeValue,
+			array_keys($settingsRoles)
+		);
 	}
 }

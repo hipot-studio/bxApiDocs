@@ -70,8 +70,10 @@ class ResourceMapper
 				->setName($ormResourceData->getName())
 				->setDescription($ormResourceData->getDescription())
 				->setCreatedBy($ormResourceData->getCreatedBy())
+				->setDeleted($ormResourceData->getIsDeleted())
 				->setCreatedAt($ormResourceData->getCreatedAt()->getTimestamp())
 				->setUpdatedAt($ormResourceData->getUpdatedAt()->getTimestamp())
+				->setDeletedAt($ormResourceData->getDeletedAt()?->getTimestamp())
 			;
 		}
 

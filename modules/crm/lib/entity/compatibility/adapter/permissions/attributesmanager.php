@@ -26,14 +26,14 @@ class AttributesManager
 
 	public function hasAccess(): bool
 	{
-		$currentUserAttributes = $this->getAttributes($this->userId);
+		$entityAttributes = $this->getAttributes($this->userId);
 		$permissionEntity = (new PermissionEntityTypeHelper($this->entityTypeId))
 			->getPermissionEntityTypeForCategory((int)$this->categoryId)
 		;
 
 		return PermissionsManager::getInstance($this->userId)
 			->getPermissionLevel($permissionEntity, $this->permissionType)
-			->hasPermissionByEntityAttributes($currentUserAttributes)
+			->hasPermissionByEntityAttributes($entityAttributes)
 		;
 	}
 

@@ -25,8 +25,7 @@ final class CopilotButton extends Button
 	public function __construct(
 		private readonly Context $context,
 		private readonly ?AssociatedEntityModel $model,
-		private readonly int $activityId,
-		private readonly bool $isMultiScenario
+		private readonly int $activityId
 	)
 	{
 		parent::__construct(
@@ -44,7 +43,7 @@ final class CopilotButton extends Button
 			->addActionParamInt('activityId', $this->activityId)
 			->addActionParamInt('ownerTypeId', $this->context->getEntityTypeId())
 			->addActionParamInt('ownerId', $this->context->getEntityId())
-			->addActionParamString('scenario', $this->isMultiScenario ? Scenario::FULL_SCENARIO : Scenario::FILL_FIELDS_SCENARIO)
+			->addActionParamString('scenario', Scenario::FULL_SCENARIO)
 			->addActionParamBoolean('isCopilotBannerNeedShow', $this->isCopilotBannerNeedShow())
 		;
 
@@ -73,11 +72,6 @@ final class CopilotButton extends Button
 
 	private function buildMenu(): array
 	{
-		if (!$this->isMultiScenario)
-		{
-			return [];
-		}
-
 		$fillFieldsScenarioState = Layout\Button::STATE_DEFAULT;
 		$callScoringScenarioState = Layout\Button::STATE_DEFAULT;
 		$fillFieldsScenarioAction = (clone $this->jsEventAction)
@@ -181,10 +175,7 @@ final class CopilotButton extends Button
 
 		$isFillFieldsScenarioSuccess = $this->operationState->isFillFieldsScenarioSuccess();
 		$isCallScoringScenarioSuccess = $this->operationState->isCallScoringScenarioSuccess();
-		$isAllSuccess = $this->isMultiScenario
-			? $isFillFieldsScenarioSuccess && $isCallScoringScenarioSuccess
-			: $isFillFieldsScenarioSuccess;
-		if ($isAllSuccess)
+		if ($isFillFieldsScenarioSuccess && $isCallScoringScenarioSuccess)
 		{
 			return true;
 		}
@@ -212,11 +203,7 @@ final class CopilotButton extends Button
 
 		$isFillFieldsScenarioError = $this->operationState->isFillFieldsScenarioErrorsLimitExceeded();
 		$isCallScoringScenarioError = $this->operationState->isCallScoringScenarioErrorsLimitExceeded();
-		$isAllError = $this->isMultiScenario
-			? $isFillFieldsScenarioError && $isCallScoringScenarioError
-			: $isFillFieldsScenarioError
-		;
-		if ($isAllError)
+		if ($isFillFieldsScenarioError && $isCallScoringScenarioError)
 		{
 			return true;
 		}

@@ -69,7 +69,7 @@ class BaseEntityCollection implements \IteratorAggregate, Arrayable, \Countable
 			}
 		}
 
-		return $result;
+		return array_unique($result);
 	}
 
 	protected function baseDiff(BaseEntityCollection $collectionToCompare): array

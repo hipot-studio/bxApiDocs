@@ -23,6 +23,8 @@ use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Superset\SystemDashboardManager;
+use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -32,9 +34,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Result;
-use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Uri;
 
 class Dashboard extends Controller
@@ -81,8 +81,16 @@ class Dashboard extends Controller
 			'dashboard',
 			function($className, $id)
 			{
+				$dashboardId = (int)$id;
+				if ($dashboardId <= 0)
+				{
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ERROR_NOT_FOUND')));
+
+					return null;
+				}
+
 				$superset = new SupersetController(Integrator::getInstance());
-				$dashboard = $superset->getDashboardRepository()->getById($id);
+				$dashboard = $superset->getDashboardRepository()->getById($dashboardId);
 				if (!$dashboard)
 				{
 					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ERROR_NOT_FOUND')));
@@ -346,14 +354,23 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		if ($dashboard->isSystemDashboard())
+		if (
+			!SystemDashboardManager::canDeleteSystemDashboard()
+			&& $dashboard->isSystemDashboard()
+		)
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_DELETE_ERROR_SYSTEM')));
 
 			return null;
 		}
 
-		if ($dashboard->isMarketDashboard())
+		if (
+			$dashboard->isMarketDashboard()
+			|| (
+				SystemDashboardManager::canDeleteSystemDashboard()
+				&&  $dashboard->isSystemDashboard()
+			)
+		)
 		{
 			$appCode = $dashboard->getAppId();
 			$marketManager = MarketDashboardManager::getInstance();
@@ -366,7 +383,7 @@ class Dashboard extends Controller
 			}
 		}
 
-		if ($dashboard->isEditable())
+		if ($dashboard->isCustomDashboard())
 		{
 			$externalDashboardId = $dashboard->getExternalId();
 			$response = Integrator::getInstance()->deleteDashboard([$externalDashboardId]);
@@ -469,6 +486,7 @@ class Dashboard extends Controller
 				'canExport' => $canExport,
 				'canEdit' => $canEdit,
 				'urlParams' => $urlParams,
+				'isUseExternalDatasets' => $dashboard->isUseExternalDatasets(),
 			],
 		];
 	}
@@ -504,8 +522,73 @@ class Dashboard extends Controller
 		}
 
 		return [
-			'urlParameters' =>	$result,
+			'urlParameters' => $result,
 		];
+	}
+
+	/**
+	 * @param Model\Dashboard $dashboard
+	 *
+	 * @return bool|null
+	 */
+	public function installDashboardAction(Model\Dashboard $dashboard): ?bool
+	{
+		if ($dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
+		{
+			return true;
+		}
+
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
+
+			return null;
+		}
+
+		if ($dashboard->isCustomDashboard())
+		{
+			$response = Integrator::getInstance()->createEmptyDashboard([
+				'name' => $dashboard->getTitle(),
+			]);
+
+			if ($response->getErrors())
+			{
+				$this->addError(new Error('Error creating dashboard'));
+
+				return null;
+			}
+
+			$responseData = $response->getData();
+
+			$dashboard
+				->getOrmObject()
+				->setExternalId((int)$responseData['body']['id'])
+				->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+				->save()
+			;
+
+			DashboardManager::notifyDashboardStatus($dashboard->getId(), SupersetDashboardTable::DASHBOARD_STATUS_DRAFT);
+
+			return true;
+		}
+
+		$appId = $dashboard->getAppId();
+		if (!$appId)
+		{
+			$this->addError(new Error('No app id in dashboard to install'));
+
+			return null;
+		}
+
+		$installResult = MarketDashboardManager::getInstance()->installApplication($appId);
+		if (!$installResult->isSuccess())
+		{
+			$this->addErrors($installResult->getErrors());
+
+			return null;
+		}
+
+		return true;
 	}
 
 	public function setDashboardTagsAction(Model\Dashboard $dashboard, array $tags = []): ?bool

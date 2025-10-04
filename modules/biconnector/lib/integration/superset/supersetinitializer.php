@@ -2,9 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset;
 
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTable;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
+use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
@@ -26,6 +24,7 @@ use Bitrix\BIConnector\ExternalSource\Source\Csv;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
@@ -39,6 +38,7 @@ final class SupersetInitializer
 	public const SUPERSET_STATUS_LOAD = 'LOAD';
 	public const SUPERSET_STATUS_READY = 'READY';
 	public const SUPERSET_STATUS_ERROR = 'ERROR';
+	public const SUPERSET_STATUS_LIMIT_EXCEEDED = 'LIMIT_EXCEEDED';
 	public const SUPERSET_STATUS_DELETED = 'DELETED';
 
 	public const FREEZE_REASON_TARIFF = 'TARIFF';
@@ -46,6 +46,9 @@ final class SupersetInitializer
 	public const ERROR_DELETE_INSTANCE_OPTION = 'error_superset_delete_instance';
 
 	private const SUPERSET_CLEAN_TIMESTAMP_OPTION = 'superset_clean_timestamp';
+
+	private const SUPERSET_CREATED_BY_OPTION = 'superset_created_by_user';
+	private const SUPERSET_INITIAL_DASHBOARD_OPTION = 'superset_initial_dashboard';
 
 	/**
 	 * Container for superset status. Used for tests mocking
@@ -78,7 +81,6 @@ final class SupersetInitializer
 		$touchStatuses = [
 			self::SUPERSET_STATUS_ERROR,
 			self::SUPERSET_STATUS_LOAD,
-			self::SUPERSET_STATUS_DOESNT_EXISTS,
 		];
 
 		if (!in_array($status, $touchStatuses))
@@ -94,13 +96,8 @@ final class SupersetInitializer
 	 */
 	private static function startSupersetInitialize(): string
 	{
-		self::preloadSystemDashboards();
-
 		if (self::getSupersetStatus() === self::SUPERSET_STATUS_DOESNT_EXISTS)
 		{
-			\Bitrix\BIConnector\Access\Install\AccessInstaller::reinstall();
-			Option::set('biconnector', \Bitrix\BIConnector\Configuration\Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
-
 			Application::getInstance()->addBackgroundJob(static function () {
 				self::makeSupersetCreateRequest();
 			});
@@ -136,59 +133,6 @@ final class SupersetInitializer
 		return $result;
 	}
 
-	private static function preloadSystemDashboards(): void
-	{
-		$marketManager = MarketDashboardManager::getInstance();
-		$systemDashboards = $marketManager->getSystemDashboardApps();
-		$existingDashboardInfoList = SupersetDashboardTable::getList([
-			'select' => ['ID', 'APP_ID', 'STATUS'],
-			'filter' => [
-				'=APP_ID' => array_column($systemDashboards, 'CODE'),
-			],
-		])->fetchAll();
-
-		$existingDashboardAppIds = array_column($existingDashboardInfoList, 'APP_ID');
-
-		foreach ($systemDashboards as $systemDashboard)
-		{
-			if (!in_array($systemDashboard['CODE'], $existingDashboardAppIds))
-			{
-				self::preloadSystemDashboard($systemDashboard['CODE'], $systemDashboard['NAME']);
-			}
-		}
-
-		if (count($existingDashboardInfoList) > 0)
-		{
-			$notifyList = [];
-			foreach ($existingDashboardInfoList as $dashboardInfo)
-			{
-				if ($dashboardInfo['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_FAILED)
-				{
-					SupersetDashboardTable::update($dashboardInfo['ID'], [
-						'STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_LOAD,
-					]);
-
-					$notifyList[] = [
-						'id' => $dashboardInfo['ID'],
-						'status' => SupersetDashboardTable::DASHBOARD_STATUS_LOAD,
-					];
-				}
-			}
-
-			DashboardManager::notifyBatchDashboardStatus($notifyList);
-		}
-	}
-
-	private static function preloadSystemDashboard(string $appId, string $appTitle): void
-	{
-		SupersetDashboardTable::add([
-			'TITLE' => $appTitle,
-			'APP_ID' => $appId,
-			'TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM,
-			'STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_LOAD,
-		]);
-	}
-
 	/**
 	 * @param string $supersetAddress Address of enabled superset. Used for logs. Not required
 	 * @return void
@@ -203,14 +147,19 @@ final class SupersetInitializer
 		self::setSupersetStatus(self::SUPERSET_STATUS_READY);
 		DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_READY);
 
+		DashboardManager::notifySupersetCreated(
+			(int)Option::get('biconnector', self::SUPERSET_CREATED_BY_OPTION),
+			(int)Option::get('biconnector', self::SUPERSET_INITIAL_DASHBOARD_OPTION),
+		);
+		Option::delete('biconnector', ['name' => self::SUPERSET_CREATED_BY_OPTION]);
+		Option::delete('biconnector', ['name' => self::SUPERSET_INITIAL_DASHBOARD_OPTION]);
+
 		$logParams = [];
 		if (!empty($supersetAddress))
 		{
 			$logParams['superset_address'] = $supersetAddress;
 		}
 		SupersetInitializerLogger::logInfo('Superset successfully started', $logParams);
-
-		\Bitrix\Main\Application::getInstance()->addBackgroundJob(fn() => self::installInitialDashboards());
 	}
 
 	public static function freezeSuperset(array $params = []): void
@@ -267,16 +216,26 @@ final class SupersetInitializer
 
 		$response = $proxyIntegrator->startSuperset($getKeyResult->getData()['ACCESS_KEY']);
 
+		$responseStatus = $response->getStatus();
+
 		$status = self::SUPERSET_STATUS_LOAD;
-		if ($response->getStatus() === IntegratorResponse::STATUS_CREATED)
+		if ($responseStatus === IntegratorResponse::STATUS_CREATED)
 		{
 			self::enableSuperset($response->getData()['superset_address'] ?? '');
 			$status = self::SUPERSET_STATUS_READY;
 		}
 		else if ($response->hasErrors())
 		{
-			self::onUnsuccessfulSupersetStartup(...$response->getErrors());
-			$status = self::SUPERSET_STATUS_ERROR;
+			if ($responseStatus === IntegratorResponse::STATUS_LIMIT_EXCEEDED)
+			{
+				self::onLimitExceeded(...$response->getErrors());
+				$status = self::SUPERSET_STATUS_LIMIT_EXCEEDED;
+			}
+			else
+			{
+				self::onUnsuccessfulSupersetStartup(...$response->getErrors());
+				$status = self::SUPERSET_STATUS_ERROR;
+			}
 		}
 
 		$responseData = $response->getData();
@@ -286,11 +245,6 @@ final class SupersetInitializer
 		}
 
 		return $status;
-	}
-
-	private static function installInitialDashboards(): Result
-	{
-		return MarketDashboardManager::getInstance()->installInitialDashboards();
 	}
 
 	public static function isSupersetReady(): bool
@@ -338,17 +292,22 @@ final class SupersetInitializer
 		DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_ERROR);
 	}
 
+	public static function onLimitExceeded(Error ...$errors): void
+	{
+		SupersetInitializerLogger::logErrors($errors, ['message' => 'error while startup superset']);
+
+		self::setSupersetStatus(self::SUPERSET_STATUS_LIMIT_EXCEEDED);
+		DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_LIMIT_EXCEEDED);
+	}
+
 	public static function onBitrix24LicenseChange(): void
 	{
-		if (self::getSupersetStatus() === self::SUPERSET_STATUS_DOESNT_EXISTS)
+		$status = self::getSupersetStatus();
+		if (
+			$status === self::SUPERSET_STATUS_DOESNT_EXISTS
+			|| $status === self::SUPERSET_STATUS_DELETED
+		)
 		{
-			return;
-		}
-
-		if (self::getSupersetStatus() === self::SUPERSET_STATUS_DELETED)
-		{
-			self::setSupersetStatus(self::SUPERSET_STATUS_DOESNT_EXISTS);
-
 			return;
 		}
 
@@ -426,8 +385,8 @@ final class SupersetInitializer
 		)
 		{
 			self::fixDeleteTimestamp();
-			SupersetInitializer::clearSupersetData();
-			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DELETED);
+			self::clearSupersetData();
+			self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
 
 			return $result;
 		}
@@ -448,12 +407,12 @@ final class SupersetInitializer
 
 	private static function fixDeleteTimestamp(): void
 	{
-		\Bitrix\Main\Config\Option::set('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, time());
+		Option::set('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, time());
 	}
 
 	private static function getDeleteTimestamp(): int
 	{
-		return (int)\Bitrix\Main\Config\Option::get('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, 0);
+		return (int)Option::get('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, 0);
 	}
 
 	public static function getAvailableToEnableSupersetTimestamp(): int
@@ -530,35 +489,37 @@ final class SupersetInitializer
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_PERIOD_OPTION_NAME]);
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_START_OPTION_NAME]);
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_END_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => SystemDashboardManager::OPTION_NEW_DASHBOARD_NOTIFICATION_LIST]);
 		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
+		Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
 
 		\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
 		\CUserOptions::DeleteOptionsByName('main.ui.filter.presets', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
+		\CUserOptions::DeleteOptionsByName('biconnector', 'draft_guide');
+		\CUserOptions::DeleteOptionsByName('biconnector', 'top_menu_dashboards');
+		\CUserOptions::DeleteOptionsByName('biconnector', 'grid_pinned_dashboards');
 
 		Registrar::getRegistrar()->clear();
 
 		SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);
-		SupersetDashboardGroupBindingTable::deleteByFilter(['>ID' => 0]);
 
-		$customGroups = SupersetDashboardGroupTable::getList([
-			'select' => ['ID'],
-			'filter' => ['=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM],
-		])
-			->fetchAll()
-		;
+		AccessInstaller::clearRelations();
+	}
 
-		$customGroupIds = array_column($customGroups, 'ID');
-		if (!empty($customGroupIds))
+	/**
+	 * Saves user id and dashboard id before superset initialization to send appropriate notification when instance is up.
+	 *
+	 * @param int|null $dashboardId Opened dashboard id.
+	 *
+	 * @return void
+	 */
+	public static function saveInitData(?int $dashboardId = null): void
+	{
+		$userId = CurrentUser::get()->getId();
+		Option::set('biconnector', self::SUPERSET_CREATED_BY_OPTION, $userId);
+		if ($dashboardId)
 		{
-			SupersetDashboardGroupScopeTable::deleteByFilter([
-				'=GROUP_ID' => $customGroupIds,
-			]);
-
-			SupersetDashboardGroupTable::deleteByFilter([
-				'=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM,
-			]);
+			Option::set('biconnector', self::SUPERSET_INITIAL_DASHBOARD_OPTION, $dashboardId);
 		}
 	}
 }

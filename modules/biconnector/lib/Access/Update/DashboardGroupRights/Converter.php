@@ -14,6 +14,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroup;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Application;
@@ -484,7 +485,7 @@ final class Converter
 				)
 			)
 			->setCode("user_converted_group_{$this->newGroupCounter}")
-			->setOwnerId($this->getAdminId())
+			->setOwnerId(Manager::getAdminId())
 		;
 	}
 
@@ -497,22 +498,6 @@ final class Converter
 				$group->addToDashboards($dashboard);
 			}
 		}
-	}
-
-	private function getAdminId(): int
-	{
-		$user = \Bitrix\Main\UserTable::getList([
-			'select' => ['ID'],
-			'filter' => [
-				'=GROUPS.GROUP_ID' => 1,
-				'=ACTIVE' => 'Y',
-			],
-			'limit' => 1,
-			'order' => ['ID' => 'ASC'],
-			'cache' => ['ttl' => 3600],
-		]);
-
-		return (int)$user->fetchObject()?->getId();
 	}
 
 	private function getDefaultLanguage(): ?string

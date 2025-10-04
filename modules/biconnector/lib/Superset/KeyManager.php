@@ -38,8 +38,14 @@ class KeyManager extends BIConnector\KeyManager
 
 	public static function createAccessKey(CurrentUser $user): Result
 	{
+		$userId = $user->getId();
+		if (!$userId)
+		{
+			$userId = BIConnector\Manager::getAdminId();
+		}
+
 		$keyParameters = [
-			'USER_ID' => $user->getId(),
+			'USER_ID' => $userId,
 			'ACTIVE' => true,
 			'SERVICE_ID' => ApacheSuperset::getServiceId(),
 		];
@@ -49,7 +55,7 @@ class KeyManager extends BIConnector\KeyManager
 
 	public static function deleteKey(string $key): void
 	{
-		$key = BIConnector\KeyTable::getList([
+		$keyObject = BIConnector\KeyTable::getList([
 			'select' => [
 				'ID',
 			],
@@ -64,10 +70,7 @@ class KeyManager extends BIConnector\KeyManager
 			->fetchObject()
 		;
 
-		if ($key)
-		{
-			$key->delete();
-		}
+		$keyObject?->delete();
 	}
 
 	public static function isActiveKey(string $key): bool

@@ -43,6 +43,7 @@ class ApacheSupersetExternalSourceListComponent extends CBitrixComponent
 
 		$this->grid->processRequest();
 		$rows = $this->loadRows();
+		$this->arResult['SOURCE_TITLE_LIST'] = $this->prepareSourceTitleList($rows);
 		$this->arResult['ENABLED_TRACKING_SOURCE_DATASET_INFO'] = in_array('CRM', array_column($rows, 'MODULE'), true);
 		$this->arResult['GRID'] = $this->grid;
 
@@ -211,5 +212,21 @@ class ApacheSupersetExternalSourceListComponent extends CBitrixComponent
 			);
 			$newOption->save();
 		}
+	}
+
+	private function prepareSourceTitleList(array $rows): array
+	{
+		$result = [];
+
+		foreach ($rows as $row)
+		{
+			if ($row['MODULE'] === 'BI')
+			{
+				$id = (int)$row['ID'];
+				$result[$id] = $row['TITLE'] ?? (string)$id;
+			}
+		}
+
+		return $result;
 	}
 }

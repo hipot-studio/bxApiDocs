@@ -177,7 +177,7 @@ final class DashboardGroupRepository extends DashboardRepository
 
 		$groupOrmParams = [
 			'filter' => ['ID' => $ids],
-			'select' => ['*', 'SCOPE'],
+			'select' => ['*', 'SCOPE', 'DASHBOARDS.ID'],
 		];
 
 		$groupRows = [];
@@ -215,6 +215,7 @@ final class DashboardGroupRepository extends DashboardRepository
 				"GROUPS" => [],
 				'OWNER_ID' => $group->getOwnerId(),
 				'ENTITY_TYPE' => self::TYPE_GROUP,
+				'COUNT_DASHBOARDS' => $group->getDashboards()->count(),
 			];
 
 			sort($row['SCOPE']);

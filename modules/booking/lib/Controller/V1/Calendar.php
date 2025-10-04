@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1;
 
+use Bitrix\Booking\Controller\V1\Response\CalendarGetBookingsDatesCountResponse;
 use Bitrix\Booking\Controller\V1\Response\CalendarGetResourceOccupationResponse;
 use Bitrix\Booking\Controller\V1\Response\CalendarGetBookingsDatesResponse;
 use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Entity\DateTimeCollection;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
+use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Provider\BookingProvider;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
@@ -23,10 +26,12 @@ use Bitrix\Main\Request;
 use DateTimeImmutable;
 use DateInterval;
 use DateTimeZone;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 
 class Calendar extends BaseController
 {
 	private BookingProvider $bookingProvider;
+	private BookingRepositoryInterface $bookingRepository;
 	private ResourceProvider $resourceProvider;
 
 	public function __construct(Request $request = null)
@@ -34,6 +39,7 @@ class Calendar extends BaseController
 		parent::__construct($request);
 
 		$this->bookingProvider = new BookingProvider();
+		$this->bookingRepository = Container::getBookingRepository();
 		$this->resourceProvider = new ResourceProvider();
 	}
 
@@ -116,6 +122,53 @@ class Calendar extends BaseController
 				dateTo: $dateTo,
 				withCounters: true,
 			),
+		);
+	}
+
+	public function getBookingsDatesCountAction(
+		string $timezone,
+		array $filter = []
+	): CalendarGetBookingsDatesCountResponse
+	{
+		$countRow = $this->bookingRepository
+			->getQuery(new BookingFilter($filter))
+			->setSelect([
+				'CNT',
+				'MIN_DATE_FROM',
+				'MAX_DATE_FROM',
+			])
+			->registerRuntimeField(
+				new ExpressionField('CNT', 'COUNT(*)')
+			)
+			->registerRuntimeField(
+				new ExpressionField('MIN_DATE_FROM', 'MIN(DATE_FROM)')
+			)
+			->registerRuntimeField(
+				new ExpressionField('MAX_DATE_FROM', 'MAX(DATE_FROM)')
+			)
+			->fetch()
+		;
+
+		$minDate =
+			$countRow['MIN_DATE_FROM'] === null
+				? null
+				: (new DateTimeImmutable('@' . $countRow['MIN_DATE_FROM']))
+				->setTimezone(new DateTimeZone($timezone))
+				->format('Y-m-d')
+		;
+
+		$maxDate =
+			$countRow['MAX_DATE_FROM'] === null
+				? null
+				: (new DateTimeImmutable('@' . $countRow['MAX_DATE_FROM']))
+				->setTimezone(new DateTimeZone($timezone))
+				->format('Y-m-d')
+		;
+
+		return new CalendarGetBookingsDatesCountResponse(
+			count: (int)$countRow['CNT'],
+			minDate: $minDate,
+			maxDate: $maxDate,
 		);
 	}
 

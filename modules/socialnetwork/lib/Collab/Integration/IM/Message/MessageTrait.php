@@ -103,7 +103,9 @@ trait MessageTrait
 			$userIds,
 			$collab->getOptionValue(ShowHistoryOption::DB_NAME) !== 'Y',
 			true,
-			true
+			true,
+			false,
+			false
 		);
 	}
 

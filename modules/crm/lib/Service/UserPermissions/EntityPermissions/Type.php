@@ -65,10 +65,9 @@ class Type
 		$permissionEntityType = (new PermissionEntityTypeHelper($entityTypeId))->getPermissionEntityTypeForCategory((int)$categoryId);
 
 		return $this->permissionsManager
-			->hasPermissionLevel(
+			->hasMaxPermissionLevel(
 				$permissionEntityType,
-				UserPermissions::OPERATION_READ,
-				UserPermissions::PERMISSION_ALL
+				UserPermissions::OPERATION_READ
 			)
 		;
 	}

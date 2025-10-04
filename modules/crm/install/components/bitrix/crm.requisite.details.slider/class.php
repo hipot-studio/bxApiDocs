@@ -187,8 +187,7 @@ class CrmRequisiteDetailsSliderComponent extends Bitrix\Crm\Component\Base
 		$sliderParams = [
 			'POPUP_COMPONENT_NAME' => 'bitrix:crm.requisite.details',
 			'POPUP_COMPONENT_PARAMS' => $this->getRequisiteComponentParams(),
-			'EDITABLE_TITLE_DEFAULT' => '',
-			'EDITABLE_TITLE_SELECTOR' => "[data-cid='NAME']",
+			'USE_UI_TOOLBAR' => 'Y',
 		];
 
 		if (!$this->isOpenInEntityDetails)
@@ -298,5 +297,12 @@ class CrmRequisiteDetailsSliderComponent extends Bitrix\Crm\Component\Base
 		$addBankDetailsItem = $this->request->get('addBankDetailsItem') ?? '';
 
 		return mb_strtoupper($addBankDetailsItem) === 'Y';
+	}
+
+	protected function getToolbarParameters(): array
+	{
+		return [
+			'isEditableTitle' => true,
+		] + parent::getToolbarParameters();
 	}
 }

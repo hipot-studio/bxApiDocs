@@ -2,8 +2,6 @@
 
 namespace Bitrix\Crm\WebForm;
 
-use Bitrix\Main\Event;
-
 class Booking
 {
 	public const RESOURCE_FIELD_TYPE = 'booking';
@@ -21,29 +19,31 @@ class Booking
 		return false;
 	}
 
-	public static function getResourceFieldValue(array $resultFields): ?array
+	public static function getResourceFieldValueFromResultFields(array $resultFields): ?array
 	{
 		foreach ($resultFields as $resultField)
 		{
-			if (
-				$resultField['type'] === self::RESOURCE_FIELD_TYPE
-				&& is_array($resultField['values'][0])
-				&& !empty($resultField['values'][0])
-			)
+			if ($resultField['type'] !== self::RESOURCE_FIELD_TYPE)
 			{
-				return $resultField['values'][0];
+				continue;
 			}
+
+			return self::getResourceFieldValue($resultField);
 		}
 
 		return null;
 	}
 
-	public static function sendEvent(array $eventParameters): void
+	public static function getResourceFieldValue(array $field): ?array
 	{
-		(new Event(
-			moduleId: 'crm',
-			type: 'OnCrmBookingFormSubmitted',
-			parameters: $eventParameters,
-		))->send();
+		if (
+			is_array($field['values'][0])
+			&& !empty($field['values'][0])
+		)
+		{
+			return $field['values'][0];
+		}
+
+		return null;
 	}
 }

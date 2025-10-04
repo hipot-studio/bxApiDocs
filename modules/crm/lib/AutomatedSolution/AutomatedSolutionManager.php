@@ -16,7 +16,6 @@ use Bitrix\Crm\Integration\Intranet\CustomSection;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Model\Dynamic\Type;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\DynamicTypesMap;
 use Bitrix\Main\Result;
 
 final class AutomatedSolutionManager
@@ -27,13 +26,6 @@ final class AutomatedSolutionManager
 	protected ?array $intranetCustomSections = null;
 
 	protected ?array $automatedSolutions = null;
-
-	private DynamicTypesMap $dynamicTypesMap;
-
-	public function __construct()
-	{
-		$this->dynamicTypesMap = Container::getInstance()->getDynamicTypesMap();
-	}
 
 	/**
 	 * @param array $fields
@@ -141,8 +133,8 @@ final class AutomatedSolutionManager
 			}
 		}
 
-		Container::getInstance()->getRouter()->reInit();
 		$this->cleanRuntimeCache();
+		Container::getInstance()->getRouter()->reInit();
 
 		return $overallResult;
 	}
@@ -170,12 +162,12 @@ final class AutomatedSolutionManager
 	{
 		$result = (new BindTypeToAutomatedSolution($type, $automatedSolutionId))->execute();
 
+		$this->cleanRuntimeCache();
+
 		if ($result->isSuccess())
 		{
 			Container::getInstance()->getRouter()->reInit();
 		}
-
-		$this->cleanRuntimeCache();
 
 		return $result;
 	}
@@ -184,12 +176,12 @@ final class AutomatedSolutionManager
 	{
 		$result = (new UnbindTypeFromAutomatedSolution($type, $automatedSolutionId))->execute();
 
+		$this->cleanRuntimeCache();
+
 		if ($result->isSuccess())
 		{
 			Container::getInstance()->getRouter()->reInit();
 		}
-
-		$this->cleanRuntimeCache();
 
 		return $result;
 	}
@@ -249,12 +241,12 @@ final class AutomatedSolutionManager
 
 		$result = $action->execute();
 
+		$this->cleanRuntimeCache();
+
 		if ($result->isSuccess())
 		{
 			Container::getInstance()->getRouter()->reInit();
 		}
-
-		$this->cleanRuntimeCache();
 
 		return $result;
 	}
@@ -320,5 +312,6 @@ final class AutomatedSolutionManager
 	{
 		$this->automatedSolutions = null;
 		$this->intranetCustomSections = null;
+		IntranetManager::clearCustomSectionRuntimeCache();
 	}
 }

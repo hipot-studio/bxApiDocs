@@ -9,13 +9,13 @@ use Bitrix\Booking\Command\Booking\UpdateBookingCommand;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Integration\Im\Chat;
 use Bitrix\Booking\Internals\Service\Agent\ComingSoonBookingAgentManager;
-use Bitrix\Booking\Internals\Service\Enum\EventType;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
+use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Entity;
 use Bitrix\Main\Event;
 use DateTimeImmutable;
@@ -111,11 +111,15 @@ class BookingEventProcessor implements EventProcessor
 				'ID' => $journalEvent->entityId,
 				'INCLUDE_DELETED' => true,
 			]),
+			select: (new BookingSelect([
+				'EXTERNAL_DATA',
+			]))->prepareSelect(),
 		);
 
 		if ($booking = $bookingCollection->getFirstCollectionItem())
 		{
 			(new ComingSoonBookingAgentManager())->unSchedule($booking);
+			Container::getEventForBookingService()->onBookingDeleted($booking);
 		}
 	}
 

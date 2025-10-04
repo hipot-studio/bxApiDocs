@@ -2,7 +2,7 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
-	die;
+	die();
 }
 
 use Bitrix\BIConnector\Access\AccessController;
@@ -10,8 +10,8 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -195,34 +195,42 @@ class ApacheSupersetDashboardCreateComponent
 			return null;
 		}
 
-		$integrator = Integrator::getInstance();
-		$response = $integrator->createEmptyDashboard([
-			'name' => $title,
-		]);
-
-		if ($response->getErrors())
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_ERROR'));
-
-			return null;
-		}
-
-		$responseData = $response->getData();
-		if (empty($responseData['body']))
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_ERROR'));
-
-			return null;
-		}
 		$dashboard = SupersetDashboardTable::createObject();
 		$dashboard
-			->setExternalId((int)$responseData['body']['id'])
-			->setTitle($responseData['body']['result']['dashboard_title'])
+			->setTitle($title)
 			->setType(SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
-			->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+			->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 			->setCreatedById((int)$user->getId())
 			->setOwnerId((int)$user->getId())
 		;
+
+		if (SupersetInitializer::isSupersetReady())
+		{
+			$integrator = Integrator::getInstance();
+			$response = $integrator->createEmptyDashboard([
+				'name' => $title,
+			]);
+
+			if ($response->getErrors())
+			{
+				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_ERROR'));
+
+				return null;
+			}
+
+			$responseData = $response->getData();
+			if (empty($responseData['body']))
+			{
+				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_ERROR'));
+
+				return null;
+			}
+
+			$dashboard
+				->setExternalId((int)$responseData['body']['id'])
+			;
+		}
+
 		$saveResult = $dashboard->save();
 
 		if (!$saveResult->isSuccess())
@@ -270,6 +278,7 @@ class ApacheSupersetDashboardCreateComponent
 
 			$data['id'] = $dashboard->getId();
 			$data['title'] = $dashboard->getTitle();
+			$data['detailUrl'] = $dashboard->getOrmObject()->getDetailUrl()->getUri();
 			$data['groupIds'] = $dashboard->getOrmObject()->getGroups()->getIdList();
 
 			$data['columns'] = $gridRow['columns'];

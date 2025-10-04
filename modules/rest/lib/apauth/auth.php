@@ -65,7 +65,7 @@ class Auth
 					'error' => 'OVERLOAD_LIMIT',
 					'error_description' => 'REST API is blocked due to overload.'
 				];
-					$error = true;
+				$error = true;
 			}
 
 			if (

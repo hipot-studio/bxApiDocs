@@ -1224,7 +1224,7 @@ class Form extends Main\Engine\JsonController
 	{
 		return Main\Loader::includeModule('ui')
 			? \Bitrix\UI\Util::getArticleUrlByCode($helpCenterId)
-			: 'https://helpdesk.bitrix24.ru/open/'.$helpCenterId
+			: ''
 		;
 	}
 

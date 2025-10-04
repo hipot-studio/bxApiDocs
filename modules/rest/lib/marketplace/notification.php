@@ -132,7 +132,9 @@ class Notification
 				return self::getNotificationAboutDemoEnd($option);
 			}
 
-			$message = Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_1');
+			$message = \Bitrix\Rest\Integration\Market\Label::isRenamedMarket()
+				? Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_1')
+				: Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_2');
 
 			if (!empty($message))
 			{
@@ -159,7 +161,9 @@ class Notification
 		return [
 			'BUTTON_TEXT' => Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_BTN_MSGVER_1'),
 			'PANEL_LINK' => Bitrix24::getInstance()->getBuyPath(),
-			'PANEL_MESSAGE' => Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_2')
+			'PANEL_MESSAGE' => \Bitrix\Rest\Integration\Market\Label::isRenamedMarket()
+				? Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_2')
+				: Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_1')
 		];
 	}
 

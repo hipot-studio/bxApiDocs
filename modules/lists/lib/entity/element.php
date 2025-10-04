@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Lists\Entity;
 
 use Bitrix\Lists\Service\Param;
@@ -272,21 +273,23 @@ class Element implements Controllable, Errorable
 			return false;
 		}
 
-		$elementObject = new \CIBlockElement;
-
 		global $APPLICATION;
 		$APPLICATION->resetException();
-
-		if ($elementObject->delete($this->elementId))
+		if (\CIBlockElement::delete($this->elementId))
 		{
 			return true;
 		}
 		else
 		{
-			if ($exception = $APPLICATION->getException())
+			$exception = $APPLICATION->getException();
+			if ($exception)
+			{
 				$this->errorCollection->setError(new Error($exception->getString(), self::ERROR_UPDATE_ELEMENT));
+			}
 			else
+			{
 				$this->errorCollection->setError(new Error("Unknown error", self::ERROR_UPDATE_ELEMENT));
+			}
 
 			return false;
 		}

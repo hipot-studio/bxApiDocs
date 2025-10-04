@@ -80,6 +80,14 @@ final class CrmEventViewComponent extends \Bitrix\Crm\Component\Base
 		return $events;
 	}
 
+	protected function isHideEventAddButton(): bool
+	{
+		$refererUri = new \Bitrix\Main\Web\Uri($this->request->getHeader('referer'));
+		$query = $refererUri->getQuery();
+
+		return str_contains($query, 'FORCE_READONLY=Y');
+	}
+
 	private function prepareBoundItemsInfo(array $events): array
 	{
 		$eventRelationIdToBoundItem = [];

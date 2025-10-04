@@ -29,7 +29,6 @@ class PullManager
 	protected $isEnabled = false;
 
 	private static $instance;
-	private static array $updatePullEvents = [];
 
 	public static function getInstance(): PullManager
 	{
@@ -98,20 +97,7 @@ class PullManager
 	 */
 	public function sendItemUpdatedEvent(array $item, ?array $params = null): bool
 	{
-		$hashParams = $params ?? [];
-		$hashItemData = $item['data'] ?? [];
-		$hash = md5(serialize($hashItemData + [
-			'TYPE' => $hashParams['TYPE'] ?? null,
-			'CATEGORY_ID' => $hashParams['CATEGORY_ID'] ?? null,
-		]));
-
-		if (!in_array($hash, self::$updatePullEvents, true))
-		{
-			self::$updatePullEvents[] = $hash;
-			$this->sendItemEvent(self::EVENT_ITEM_UPDATED, $item, $params);
-		}
-
-		return true;
+		return $this->sendItemEvent(self::EVENT_ITEM_UPDATED, $item, $params);
 	}
 
 	/**

@@ -20,17 +20,17 @@ class Category
 
 	public function canAdd(\Bitrix\Crm\Category\Entity\Category $category): bool
 	{
-		return $this->entityAdmin->isAdminForEntity($category->getEntityTypeId());
+		return $this->entityAdmin->isAdminForEntity($category->getEntityTypeId(), $category->getId());
 	}
 
 	public function canUpdate(\Bitrix\Crm\Category\Entity\Category $category): bool
 	{
-		return $this->entityAdmin->isAdminForEntity($category->getEntityTypeId());
+		return $this->entityAdmin->isAdminForEntity($category->getEntityTypeId(), $category->getId());
 	}
 
 	public function canDelete(\Bitrix\Crm\Category\Entity\Category $category): bool
 	{
-		return $this->entityAdmin->isAdminForEntity($category->getEntityTypeId());
+		return $this->entityAdmin->isAdminForEntity($category->getEntityTypeId(), $category->getId());
 	}
 
 	public function canReadItems(\Bitrix\Crm\Category\Entity\Category $category): bool

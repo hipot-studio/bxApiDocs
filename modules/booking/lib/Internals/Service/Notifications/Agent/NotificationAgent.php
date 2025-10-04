@@ -16,6 +16,8 @@ use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\DB;
+use DateTimeImmutable;
+use DateTimeZone;
 
 class NotificationAgent
 {
@@ -33,14 +35,8 @@ class NotificationAgent
 			self::$connection->query(self::getInfoSql())->fetchAll(),
 			NotificationType::Info
 		);
-		self::process(
-			self::$connection->query(self::getConfirmationSql())->fetchAll(),
-			NotificationType::Confirmation
-		);
-		self::process(
-			self::$connection->query(self::getReminderSql())->fetchAll(),
-			NotificationType::Reminder
-		);
+		self::processConfirmation();
+		self::processReminder();
 		self::process(
 			self::$connection->query(self::getDelayedSql())->fetchAll(),
 			NotificationType::Delayed
@@ -84,24 +80,26 @@ class NotificationAgent
 			  	AND b.DATE_FROM > $currentTimestamp
 				AND
 					" . self::$sqlHelper->addSecondsToDateTime(
-						'rns.INFO_DELAY',
-						'b.CREATED_AT'
-					) . "
+				'rns.INFO_DELAY',
+				'b.CREATED_AT'
+			) . "
 					<= $currentDateTime
 				AND NOT  " .  self::getMessageExistsSql(NotificationType::Info) . "
 				AND " . self::getClientExistsSql() . "
 		";
 	}
 
-	private static function getConfirmationSql(): string
+	private static function processConfirmation(): void
 	{
 		$currentTimestamp = time();
 		$twoWeeksAheadTimestamp = $currentTimestamp + Time::SECONDS_IN_DAY * 7 * 2;
-
 		$startSendTimestamp = "b.DATE_FROM - rns.CONFIRMATION_DELAY";
 
-		return "
-			SELECT b.ID
+		$sql = "
+			SELECT
+				b.ID,
+				b.TIMEZONE_FROM,
+				rns.CONFIRMATION_DELAY
 			FROM b_booking_booking b
 			" . self::getResourceSettingsJoinSql() . "
 			WHERE
@@ -111,10 +109,6 @@ class NotificationAgent
 			  	AND b.DATE_FROM < $twoWeeksAheadTimestamp
 				AND b.IS_CONFIRMED = 'N'
 				AND $startSendTimestamp <= $currentTimestamp
-				AND (
-					" . self::getIsNowWorkingHoursSql($currentTimestamp) . "
-					OR rns.CONFIRMATION_DELAY < " . self::getPreciseDelayForConfirmationAndDelayed() . "
-				)
 				AND " . self::getVisitStatusUnknownSql() . "
 				AND NOT EXISTS (
 					SELECT 1
@@ -123,10 +117,7 @@ class NotificationAgent
 						BOOKING_ID = b.ID
 						AND NOTIFICATION_TYPE = '" . self::$sqlHelper->forSql(NotificationType::Confirmation->value) . "'
 						AND
-							" . self::$sqlHelper->addSecondsToDateTime(
-								'rns.CONFIRMATION_REPETITIONS_INTERVAL',
-								'CREATED_AT'
-							) . "
+							" . self::$sqlHelper->addSecondsToDateTime('rns.CONFIRMATION_REPETITIONS_INTERVAL', 'CREATED_AT') . "
 							>= " . self::$localSqlHelper->makeDateTimeFromTimestamp($currentTimestamp) . "
 				)
 				AND NOT EXISTS (
@@ -141,9 +132,30 @@ class NotificationAgent
 				)
 				AND " . self::getClientExistsSql() . "
 		";
+
+		$bookingIds = [];
+		$list = self::$connection->query($sql)->fetchAll();
+		foreach ($list as $item)
+		{
+			$isNowWorkingHours = self::isNowWorkingHours($currentTimestamp, $item['TIMEZONE_FROM']);
+			$isPreciseDelay = (int)$item['CONFIRMATION_DELAY'] < self::getPreciseDelayForConfirmationAndDelayed();
+			if (!$isNowWorkingHours && !$isPreciseDelay)
+			{
+				continue;
+			}
+
+			$bookingIds[] = (int)$item['ID'];
+		}
+
+		(new BookingHandlerService())->handleBookings(
+			$bookingIds,
+			static function (Booking $booking) {
+				Container::getMessageSender()->send($booking, NotificationType::Confirmation);
+			}
+		);
 	}
 
-	private static function getReminderSql(): string
+	private static function processReminder(): void
 	{
 		$currentTimestamp = time();
 		$twoWeeksAheadTimestamp = $currentTimestamp + Time::SECONDS_IN_DAY * 7 * 2;
@@ -153,23 +165,12 @@ class NotificationAgent
 			)
 		);
 
-		$isMorningScenario = "
-			rns.REMINDER_DELAY = "
-			. self::$sqlHelper->forSql(ReminderNotificationDelay::Morning->value)
-		;
-		$overnightGap =
-			(
-				Time::HOURS_IN_DAY -
-				(
-					Time::DAYTIME_END_HOUR
-					- Time::DAYTIME_START_HOUR
-					- 1
-				)
-			) * Time::SECONDS_IN_HOUR
-		;
-
-		return "
-			SELECT b.ID
+		$sql = "
+			SELECT
+				b.ID,
+				b.DATE_FROM,
+				b.TIMEZONE_FROM,
+				rns.REMINDER_DELAY
 			FROM b_booking_booking b
 			" . self::getResourceSettingsJoinSql() . "
 			WHERE
@@ -177,20 +178,6 @@ class NotificationAgent
 				AND rns.IS_REMINDER_ON = 'Y'
 				AND b.DATE_FROM > $currentTimestamp
 			  	AND b.DATE_FROM < $twoWeeksAheadTimestamp
-				AND
-					CASE WHEN ($isMorningScenario) THEN
-						" . self::getIsSameDaySql($currentTimestamp) ." = 1
-						OR b.DATE_FROM - $currentTimestamp <= $overnightGap
-						ELSE
-							b.DATE_FROM - rns.REMINDER_DELAY <= $currentTimestamp
-						END
-				AND (
-					" . self::getIsNowWorkingHoursSql($currentTimestamp) . "
-					OR (
-						NOT $isMorningScenario
-						AND rns.REMINDER_DELAY < " . self::getPreciseDelayForConfirmationAndDelayed() . "
-					)
-				)
 				AND " . self::getVisitStatusUnknownSql() . "
 				AND NOT (
 					b.CREATED_AT > $oneHourBehindDateTime
@@ -209,18 +196,67 @@ class NotificationAgent
 						BOOKING_ID = b.ID
 						AND NOTIFICATION_TYPE = '" . self::$sqlHelper->forSql(NotificationType::Reminder->value) . "'
 						AND
-							CASE WHEN ($isMorningScenario) THEN
+							CASE WHEN (rns.REMINDER_DELAY = " . self::$sqlHelper->forSql(ReminderNotificationDelay::Morning->value) . ") THEN
 								CREATED_AT > " . self::$sqlHelper->addSecondsToDateTime(
-									'-' . Time::SECONDS_IN_DAY
-								) . "
+				'-' . Time::SECONDS_IN_DAY
+			) . "
 							ELSE
 								CREATED_AT > " . self::$sqlHelper->addSecondsToDateTime(
-									'-' . 'rns.REMINDER_DELAY'
-								) . "
+				'-' . 'rns.REMINDER_DELAY'
+			) . "
 							END
 				)
 				AND " . self::getClientExistsSql() . "
 		";
+
+		$bookingIds = [];
+		$list = self::$connection->query($sql)->fetchAll();
+		foreach ($list as $item)
+		{
+			$isMorningScenario = (int)$item['REMINDER_DELAY'] === ReminderNotificationDelay::Morning->value;
+			$isNowWorkingHours = self::isNowWorkingHours($currentTimestamp, $item['TIMEZONE_FROM']);
+			$isSameDay = self::isSameDay($currentTimestamp, (int)$item['DATE_FROM'], $item['TIMEZONE_FROM']);
+			$isPreciseDelay = (int)$item['REMINDER_DELAY'] < self::getPreciseDelayForConfirmationAndDelayed();
+			$isTimeToSend = (int)$item['DATE_FROM'] - (int)$item['REMINDER_DELAY'] <= $currentTimestamp;
+
+			if (!$isNowWorkingHours && !$isPreciseDelay)
+			{
+				continue;
+			}
+
+			if ($isMorningScenario)
+			{
+				$overnightGap =
+					(
+						Time::HOURS_IN_DAY -
+						(
+							Time::DAYTIME_END_HOUR
+							- Time::DAYTIME_START_HOUR
+							- 1
+						)
+					) * Time::SECONDS_IN_HOUR
+				;
+				$noTimeLeft = (int)$item['DATE_FROM'] - $currentTimestamp <= $overnightGap;
+
+				if (!$isSameDay && !$noTimeLeft)
+				{
+					continue;
+				}
+			}
+			elseif (!$isTimeToSend)
+			{
+				continue;
+			}
+
+			$bookingIds[] = (int)$item['ID'];
+		}
+
+		(new BookingHandlerService())->handleBookings(
+			$bookingIds,
+			static function (Booking $booking) {
+				Container::getMessageSender()->send($booking, NotificationType::Reminder);
+			}
+		);
 	}
 
 	private static function getDelayedSql(): string
@@ -300,41 +336,30 @@ class NotificationAgent
 		";
 	}
 
-	private static function getIsNowWorkingHoursSql(int $currentTimestamp): string
+	private static function isNowWorkingHours(int $currentTimestamp, string $timezone): bool
 	{
-		$currentHour = "
-			EXTRACT(HOUR FROM " . self::$sqlHelper->addSecondsToDateTime(
-				'b.TIMEZONE_FROM_OFFSET',
-				self::$localSqlHelper->makeDateTimeFromTimestamp($currentTimestamp)
-			) . ")
-		";
+		$currentDateTime = (new DateTimeImmutable('@' . $currentTimestamp))
+			->setTimezone(new DateTimeZone($timezone))
+		;
+		$currentHour = (int)$currentDateTime->format('H');
 
-		return "
-			(
-				$currentHour >= " . Time::DAYTIME_START_HOUR . "
-				AND " . $currentHour . " < " . Time::DAYTIME_END_HOUR . "
-			)
-		";
+		return (
+			$currentHour >= Time::DAYTIME_START_HOUR
+			&& $currentHour < Time::DAYTIME_END_HOUR
+		);
 	}
 
-	private static function getIsSameDaySql(int $currentTimestamp): string
+	private static function isSameDay(int $currentTimestamp, int $timestamp, string $timezone): bool
 	{
-		return "
-			CASE WHEN (
-				EXTRACT(DAY FROM " . self::$sqlHelper->addSecondsToDateTime(
-					'b.TIMEZONE_FROM_OFFSET',
-					self::$localSqlHelper->makeDateTimeFromTimestamp('b.DATE_FROM')
-				) . ")
-				=
-				EXTRACT(DAY FROM " . self::$sqlHelper->addSecondsToDateTime(
-					'b.TIMEZONE_FROM_OFFSET',
-				self::$localSqlHelper->makeDateTimeFromTimestamp($currentTimestamp)
-				) . ")
-			)
-			THEN 1
-			ELSE 0
-			END
-		";
+		$currentDateTime = (new DateTimeImmutable('@' . $currentTimestamp))
+			->setTimezone(new DateTimeZone($timezone))
+		;
+
+		$dateTime = (new DateTimeImmutable('@' . $timestamp))
+			->setTimezone(new DateTimeZone($timezone))
+		;
+
+		return $currentDateTime->format('Ymd') === $dateTime->format('Ymd');
 	}
 
 	/**

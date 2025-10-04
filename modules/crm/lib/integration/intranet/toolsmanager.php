@@ -44,6 +44,9 @@ final class ToolsManager
 	public const REPEAT_SALE_TOOL_ID = 'repeat_sale';
 	public const REPEAT_SALE_SLIDER_CODE = 'limit_v2_crm_repeat_sale_off';
 
+	public const INVENTORY_TOOL_ID = 'inventory_management';
+	public const INVENTORY_SLIDER_CODE = 'limit_store_inventory_management_off';
+
 
 	public function __construct()
 	{
@@ -212,5 +215,10 @@ final class ToolsManager
 			$this->check(self::REPEAT_SALE_TOOL_ID)
 			&& $this->checkCrmAvailability()
 		;
+	}
+
+	public function checkInventoryAvailability(): bool
+	{
+		return $this->check(self::INVENTORY_TOOL_ID);
 	}
 }

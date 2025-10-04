@@ -49,8 +49,6 @@ class DashboardActionDataProvider extends DataProvider
 
 	public function prepareControls(array $rawFields): array
 	{
-		$result = [];
-
 		$actions = [];
 		if ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
 		{
@@ -58,27 +56,39 @@ class DashboardActionDataProvider extends DataProvider
 		}
 		elseif ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_DASHBOARD)
 		{
+			$actions = $this->prepareDashboardActions();
 			$settings = $this->getSettings();
+
+			if ($rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
+			{
+				$actions = [
+					new OpenAction(),
+					new OpenSettingsAction(),
+					new AddToTopMenuAction(),
+					new DeleteFromTopMenuAction(),
+					new DeleteAction(),
+				];
+			}
+
 			if (
 				($settings !== null && !$settings->isSupersetAvailable())
-				|| SupersetInitializer::isSupersetLoading()
 				|| $rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_LOAD
 				|| !$rawFields['IS_ACCESS_ALLOWED']
+				|| SupersetInitializer::isSupersetLoading()
 			)
 			{
 				return [];
 			}
 
-			if ($rawFields['EDIT_URL'] === '')
+			if ($rawFields['EXTERNAL_ID'] && $rawFields['EDIT_URL'] === '')
 			{
 				$config = (new DeleteAction())->getControl($rawFields);
 
 				return isset($config) ? [$config] : [];
 			}
-
-			$actions = $this->prepareDashboardActions();
 		}
 
+		$result = [];
 		foreach ($actions as $actionsItem)
 		{
 			$actionConfig = $actionsItem->getControl($rawFields);

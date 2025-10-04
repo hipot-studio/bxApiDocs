@@ -104,7 +104,7 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 			!$isAdmin
 			&&
 			(
-				$presetData['ADMIN_ONLY'] === 'Y'
+				($presetData['ADMIN_ONLY'] ?? 'N') === 'Y'
 				|| $presetData['OPTIONS']['WIDGET_NEEDED'] !== 'D'
 				|| $presetData['OPTIONS']['APPLICATION_NEEDED'] !== 'D'
 			)
@@ -142,12 +142,12 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 			{
 				$result['QUERY_NEEDED'] = $presetData['OPTIONS']['QUERY_NEEDED'] ?? null;
 				$result['ERROR_MESSAGE'][] = Loc::getMessage(
-					'REST_INTEGRATION_EDIT_ATTENTION_USES_WEBHOOK',
+					'REST_INTEGRATION_EDIT_ATTENTION_USES_WEBHOOK_MSGVER_1',
 					[
-						'#URL#' =>
-							'<a href="'.\Bitrix\UI\Util::getArticleUrlByCode('12337906').'" >'
-							. Loc::getMessage('REST_INTEGRATION_EDIT_ATTENTION_USES_WEBHOOK_URL_MESSAGE')
-							. '</a>'
+						'[strong]' => '<strong>',
+						'[/strong]' => '</strong>',
+						'[article_link]' => '<a href="'.\Bitrix\UI\Util::getArticleUrlByCode('12337906').'" >',
+						'[/article_link]' => '</a>'
 					]
 				);
 			}

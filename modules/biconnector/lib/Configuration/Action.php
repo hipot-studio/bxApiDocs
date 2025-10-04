@@ -125,15 +125,6 @@ class Action
 			];
 		}
 
-		if (!SupersetInitializer::isSupersetReady())
-		{
-			return [
-				'ERROR_EXCEPTION' => [
-					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_NOT_READY_ERROR_MSGVER_1'),
-				],
-			];
-		}
-
 		if ((int)$content['DATA']['fileId'] > 0)
 		{
 			$contextUser = $event->getParameter('CONTEXT_USER');
@@ -162,11 +153,6 @@ class Action
 				if ($dashboard instanceof Model\SupersetDashboard)
 				{
 					$manager->applyDashboardSettings($dashboard, $content['DATA']['dashboardSettings'] ?? []);
-					if ($dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)
-					{
-						$isModification = $importResult->getData()['isExists'] ?? true;
-						SystemDashboardManager::notifyUserDashboardModification($dashboard, $isModification);
-					}
 				}
 			}
 			else

@@ -112,6 +112,10 @@ class LeadStatusHistoryEntry
 		$fields = $dbResult->fetch();
 		return is_array($fields) && isset($fields['ID']);
 	}
+
+	/**
+	 * @deprecated
+	 */
 	public static function register($ownerID, array $entityFields = null, array $options = null)
 	{
 		if(!is_int($ownerID))

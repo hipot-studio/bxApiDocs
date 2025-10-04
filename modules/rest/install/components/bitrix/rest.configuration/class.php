@@ -1,4 +1,4 @@
-<? if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+<?php if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
 }
@@ -8,7 +8,8 @@ use Bitrix\Rest\Configuration\Manifest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Loader;;
+use Bitrix\Main\Loader;
+use \Bitrix\Main;
 
 Loc::loadMessages(__FILE__);
 
@@ -154,12 +155,12 @@ class RestConfigurationComponent extends CBitrixComponent
 					$manifest = end($manifestList);
 					$variableList['MANIFEST_CODE'] = $manifest['CODE'];
 					$appTag[] = $manifest['CODE'];
-					$componentPage = 'section';
+					$componentPage = 'section_crm';
 				}
 				$analyticFrom .= '_' . mb_strtolower($code);
 			}
 		}
-		elseif ($componentPage == 'section')
+		elseif ($componentPage == 'section_crm')
 		{
 			if (!empty($variableList['MANIFEST_CODE']))
 			{
@@ -171,18 +172,21 @@ class RestConfigurationComponent extends CBitrixComponent
 			}
 		}
 		$variableList['ADDITIONAL_PARAMS'] = $this->request->get('additional') ?? [];
+		if (!empty($variableList['ADDITIONAL_PARAMS']))
+		{
+			foreach ($urlTemplateList as $url => $value)
+			{
+				$key = mb_strtoupper('PATH_TO_' . $url);
+				$this->arResult[$key] = rtrim($this->arResult[$key], '/') . (new Main\Web\Uri('/'))
+					->addParams(['additional' => $variableList['ADDITIONAL_PARAMS']])
+					->getUri()
+				;
+			}
+		}
 
 		if (!empty($this->request->get('from')))
 		{
 			$analyticFrom .= '_' . htmlspecialcharsbx($this->request->get('from'));
-		}
-
-		if (
-			$componentPage === 'section'
-			&& in_array(Application::getInstance()->getLicense()->getRegion(), ['ru', 'by', 'kz'])
-		)
-		{
-			$componentPage = 'section_crm';
 		}
 
 		$appTagBanner = $appTag;

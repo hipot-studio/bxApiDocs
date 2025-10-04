@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Entity\Resource;
 
 use Bitrix\Booking\Entity\BaseEntityCollection;
+use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 
 /**
  * @method ResourceLinkedEntity[] getIterator()
@@ -60,5 +61,31 @@ class ResourceLinkedEntityCollection extends BaseEntityCollection
 		}
 
 		return new self(...$filtered);
+	}
+
+	public function getByTypeAndId(
+		ResourceLinkedEntityType $entityType,
+		int|null $entityId = null,
+	): ResourceLinkedEntityCollection
+	{
+		$collection = new self();
+
+		/** @var ResourceLinkedEntity $resourceLinkedEntity */
+		foreach ($this as $resourceLinkedEntity)
+		{
+			if ($resourceLinkedEntity->getEntityType() !== $entityType)
+			{
+				continue;
+			}
+
+			if ($entityId && $resourceLinkedEntity->getEntityId() !== $entityId)
+			{
+				continue;
+			}
+
+			$collection->add($resourceLinkedEntity);
+		}
+
+		return $collection;
 	}
 }

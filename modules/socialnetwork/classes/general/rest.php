@@ -528,7 +528,8 @@ class CSocNetLogRestService extends IRestService
 
 		try
 		{
-			$postId = Helper::addBlogPost($arFields, \Bitrix\Main\Engine\Controller::SCOPE_REST);
+			$post = Helper::addBlogPost($arFields, \Bitrix\Main\Engine\Controller::SCOPE_REST);
+			$postId = is_array($post) && isset($post['id']) ? (int)$post['id'] : 0;
 			if ($postId <= 0)
 			{
 				$e = $APPLICATION->getException();
@@ -549,7 +550,8 @@ class CSocNetLogRestService extends IRestService
 
 		try
 		{
-			$postId = Helper::updateBlogPost($arFields, \Bitrix\Main\Engine\Controller::SCOPE_REST);
+			$post = Helper::updateBlogPost($arFields, \Bitrix\Main\Engine\Controller::SCOPE_REST);
+			$postId = is_array($post) && isset($post['id']) ? (int)$post['id'] : 0;
 			if ($postId <= 0)
 			{
 				$e = $APPLICATION->getException();

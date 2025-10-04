@@ -41,16 +41,7 @@ final class UserAccess extends Base
 			}
 		}
 
-		if (!$user && Integrator::isUserRequired($request->getAction()))
-		{
-			return new IntegratorResponse(
-				IntegratorResponse::STATUS_NOT_FOUND,
-				null,
-				[new Error('User not found', IntegratorResponse::STATUS_NOT_FOUND)]
-			);
-		}
-
-		if (SupersetInitializer::isSupersetReady() && $user)
+		if ($user && SupersetInitializer::isSupersetReady())
 		{
 			if (!$user->clientId)
 			{

@@ -72,9 +72,11 @@ class Transport
 	const METHOD_GET_SITE_ITEM = 'sites_item';
 
 	public const DICTIONARY_IMMUNE_LIST = 'immune_list';
+	public const DICTIONARY_BI_BUILDER_SYSTEM_DASHBOARDS = 'system_dashboards';
 
 	private const DICTIONARY_JSON_LIST = [
 		self::DICTIONARY_IMMUNE_LIST => 'market_immune.json',
+		self::DICTIONARY_BI_BUILDER_SYSTEM_DASHBOARDS => 'system_dashboards.json',
 	];
 
 	protected static $instance = null;

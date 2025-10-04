@@ -31,7 +31,6 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Timeline\Config;
-use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter;
@@ -868,8 +867,6 @@ class AI extends Activity
 		if ($currentUserId === $assignedById)
 		{
 			Badge::deleteByEntity($identifier, Badge::AI_CALL_FIELDS_FILLING_RESULT);
-
-			Monitor::getInstance()->onBadgesSync($identifier);
 		}
 	}
 }

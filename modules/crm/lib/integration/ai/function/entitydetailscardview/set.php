@@ -117,7 +117,7 @@ final class Set implements AIFunction
 	private function canSetConfigForOtherUsers(SetParameters $parameters): bool
 	{
 		return !empty($parameters->userIds)
-			&& $this->permissions->isAdminForEntity($parameters->entityTypeId);
+			&& $this->permissions->isAdminForEntity($parameters->entityTypeId, $parameters->categoryId);
 	}
 
 	private function isCustomScopeExists(SetParameters $parameters): bool

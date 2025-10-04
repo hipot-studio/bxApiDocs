@@ -7,7 +7,9 @@ namespace Bitrix\Booking\Internals\Service\Journal\EventProcessor\Resource;
 use Bitrix\Booking\Command\Resource\AddResourceCommand;
 use Bitrix\Booking\Command\Resource\RemoveResourceCommand;
 use Bitrix\Booking\Command\Resource\UpdateResourceCommand;
-use Bitrix\Booking\Internals\Service\Enum\EventType;
+use Bitrix\Booking\Internals\Service\DelayedTask\Data\DelayedTaskDataMapper;
+use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
+use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskType;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
@@ -71,6 +73,21 @@ class ResourceEventProcessor implements EventProcessor
 			type: 'onResourceUpdate',
 			parameters: ['resource' => $command->resource],
 		);
+
+		if ($resourceEntityChanges = $event->data['resourceEntityChanges'] ?? null)
+		{
+			(new DelayedTaskService())->create(
+				(string)$event->entityId,
+				DelayedTaskDataMapper::mapFromArray(
+			DelayedTaskType::ResourceLinkedEntitiesChanged,
+					[
+						'resourceId' => $event->entityId,
+						'deleted' => $resourceEntityChanges['deleted'] ?? null,
+						'added' => $resourceEntityChanges['added'] ?? null,
+					],
+				)
+			);
+		}
 	}
 
 	public function processResourceDeletedEvent(JournalEvent $event): void

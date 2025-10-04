@@ -122,7 +122,7 @@ class CRestProvider extends IRestService
 						),
 						'OnSubscriptionRenew' => [
 							'rest',
-							'onAfterSubscriptionRenew',
+							'onSubscriptionRenew',
 							[
 								__CLASS__,
 								'onSubscriptionRenew',

@@ -62,7 +62,7 @@ final class AccessInstaller
 		return new RoleMap($isNewPortal);
 	}
 
-	private static function clearRelations(): void
+	public static function clearRelations(): void
 	{
 		RoleRelationTable::deleteList(['>ID' => 0]);
 		RoleTable::deleteList(['>ID' => 0]);

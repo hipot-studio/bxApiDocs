@@ -1292,7 +1292,7 @@ class CAllCrmActivity
 				$itemIdentifier = Crm\ItemIdentifier::createFromArray($singleBinding);
 				if ($itemIdentifier)
 				{
-					$monitor->onActivityRemoveIfSuitable($itemIdentifier, $ID);
+					$monitor->onActivityRemoveIfSuitable($itemIdentifier, (int)$ID);
 				}
 			}
 		}
@@ -2237,7 +2237,7 @@ class CAllCrmActivity
 			if (\CCrmOwnerType::IsDefined($binding->getOwnerTypeId()) && $binding->getOwnerId() > 0)
 			{
 				$itemIdentifier = new Crm\ItemIdentifier($binding->getOwnerTypeId(), $binding->getOwnerId());
-				$monitor->onActivityRemoveIfSuitable($itemIdentifier, $activityID);
+				$monitor->onActivityRemoveIfSuitable($itemIdentifier, $activityID, (int)$activityID);
 				$lastCommunication->onActivityRemoveIfSuitable($itemIdentifier, $activityID);
 			}
 		}

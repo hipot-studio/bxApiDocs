@@ -6,8 +6,8 @@ namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Exception\Resource\CreateResourceException;
-use Bitrix\Booking\Internals\Exception\Resource\RemoveResourceException;
 use Bitrix\Booking\Internals\Exception\Resource\UpdateResourceException;
+use Bitrix\Booking\Internals\Model\ResourceDataTable;
 use Bitrix\Booking\Internals\Model\ResourceNotificationSettingsTable;
 use Bitrix\Booking\Internals\Model\ResourceTable;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ResourceDataMapper;
@@ -15,9 +15,12 @@ use Bitrix\Booking\Internals\Repository\ORM\Mapper\ResourceMapper;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 use Bitrix\Booking\Provider\Params\SelectInterface;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\QueryHelper;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\DateTime;
 
 class ResourceRepository implements ResourceRepositoryInterface
 {
@@ -40,7 +43,9 @@ class ResourceRepository implements ResourceRepositoryInterface
 	): Entity\Resource\ResourceCollection
 	{
 		$query = ResourceTable::query()
-			->setSelect($select ? $select->prepareSelect() : ['*'])
+			->setSelect(array_merge(
+				['*'], $select ? $select->prepareSelect() : []
+			))
 		;
 
 		if ($limit !== null)
@@ -117,11 +122,14 @@ class ResourceRepository implements ResourceRepositoryInterface
 
 	public function getById(int $id, int|null $userId = null): Entity\Resource\Resource|null
 	{
-		return $this->getList(
+		/** @var Entity\Resource\Resource $result */
+		$result = $this->getList(
 			limit: 1,
 			filter: (new ConditionTree())->where('ID', '=', $id),
 			select: new ResourceSelect(),
 		)->getFirstCollectionItem();
+
+		return $result;
 	}
 
 	public function save(Entity\Resource\Resource $resource): int
@@ -132,39 +140,22 @@ class ResourceRepository implements ResourceRepositoryInterface
 		;
 	}
 
+	/**
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
 	public function remove(int $resourceId): void
 	{
-		$ormResource = ResourceTable::getByPrimary($resourceId)->fetchObject();
-		if (!$ormResource)
-		{
-			throw new RemoveResourceException('Resource has not been found');
-		}
+		$currentDate = new DateTime();
 
-		$ormResourceData = $ormResource->fillData();
-		if ($ormResourceData)
-		{
-			$dataDeleteResult = $ormResourceData->delete();
-			if (!$dataDeleteResult->isSuccess())
-			{
-				throw new RemoveResourceException($dataDeleteResult->getErrors()[0]->getMessage());
-			}
-		}
-
-		$ormResourceNotificationSettings = $ormResource->fillNotificationSettings();
-		if ($ormResourceNotificationSettings)
-		{
-			$notificationSettingsDeleteResult = $ormResourceNotificationSettings->delete();
-			if (!$notificationSettingsDeleteResult->isSuccess())
-			{
-				throw new RemoveResourceException($notificationSettingsDeleteResult->getErrors()[0]->getMessage());
-			}
-		}
-
-		$deleteResult = $ormResource->delete();
-		if (!$deleteResult->isSuccess())
-		{
-			throw new RemoveResourceException($deleteResult->getErrors()[0]->getMessage());
-		}
+		ResourceDataTable::updateByFilter(
+			['RESOURCE_ID' => $resourceId],
+			[
+				'UPDATED_AT' => $currentDate,
+				'DELETED_AT' => $currentDate,
+				'IS_DELETED' => 'Y',
+			],
+		);
 	}
 
 	/**
@@ -230,7 +221,7 @@ class ResourceRepository implements ResourceRepositoryInterface
 			throw new CreateResourceException($resourceSaveResult->getErrors()[0]->getMessage());
 		}
 
-		$dataSaveResult = $this->resourceDataMapper->convertToOrm($resource)->save();
+		$dataSaveResult = $this->resourceDataMapper->convertToOrm($resource)->setUpdatedAt(new DateTime())->save();
 		if (!$dataSaveResult->isSuccess())
 		{
 			throw new UpdateResourceException($dataSaveResult->getErrors()[0]->getMessage());

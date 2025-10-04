@@ -762,6 +762,18 @@ class Message
 		}
 	}
 
+	/**
+	 * @param int $mailboxId
+	 * @param int $userId
+	 *
+	 * @return bool
+	 *
+	 * @use MailboxAccess::isMailboxOwner and
+	 * @use MailboxAccess::isMailboxSharedWithUser
+	 * @deprecated
+	 *
+	 * checked if the user has access to the mailbox by using getTheOwnersMailboxes and getTheSharedMailboxes from MailboxTable
+	 */
 	public static function isMailboxOwner(int $mailboxId, int $userId): bool
 	{
 		return (bool)MailboxTable::getUserMailbox($mailboxId, $userId);

@@ -77,7 +77,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 			$this->item->unset(Item\Quote::FIELD_NAME_NUMBER);
 		}
 
-		if (!\CCrmOwnerType::IsSliderEnabled($this->getEntityTypeID()))
+		if (!$this->isReadOnly() && !\CCrmOwnerType::IsSliderEnabled($this->getEntityTypeID()))
 		{
 			$url = Container::getInstance()->getRouter()->getItemDetailUrl($this->getEntityTypeID(), $this->getEntityID());
 
@@ -995,5 +995,12 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		];
 
 		return $extras;
+	}
+
+	protected function isReadOnly(): bool
+	{
+		$isForcedReadOnly = $this->request->get('FORCE_READONLY') === 'Y';
+
+		return $isForcedReadOnly || parent::isReadOnly();
 	}
 }

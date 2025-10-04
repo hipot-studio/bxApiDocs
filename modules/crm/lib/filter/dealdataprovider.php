@@ -601,6 +601,15 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 
 		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationField($this, $result);
 
+		if (Container::getInstance()->getUserPermissions()->repeatSale()->canRead())
+		{
+			$repeatSaleTitleConfig = (new Crm\RepeatSale\Segment\Field())->getInfoForFilter();
+			if (!empty($repeatSaleTitleConfig))
+			{
+				$result[Crm\Item::FIELD_NAME_REPEAT_SALE_SEGMENT_ID] = $this->createField(...$repeatSaleTitleConfig);
+			}
+		}
+
 		return $result;
 	}
 
@@ -612,21 +621,23 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 	 */
 	public function prepareFieldData($fieldID)
 	{
-		if($fieldID === 'CURRENCY_ID')
+		if ($fieldID === 'CURRENCY_ID')
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
 				'items' => \CCrmCurrencyHelper::PrepareListItems()
 			);
 		}
-		elseif($fieldID === 'TYPE_ID')
+
+		if ($fieldID === 'TYPE_ID')
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
 				'items' => \CCrmStatus::GetStatusList('DEAL_TYPE')
 			);
 		}
-		elseif(in_array($fieldID, ['ASSIGNED_BY_ID', 'CREATED_BY_ID', 'MODIFY_BY_ID', 'OBSERVER_IDS', 'ACTIVITY_RESPONSIBLE_IDS', 'MOVED_BY_ID'], true))
+
+		if (in_array($fieldID, ['ASSIGNED_BY_ID', 'CREATED_BY_ID', 'MODIFY_BY_ID', 'OBSERVER_IDS', 'ACTIVITY_RESPONSIBLE_IDS', 'MOVED_BY_ID'], true))
 		{
 			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
 
@@ -654,7 +665,8 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				]
 			);
 		}
-		elseif($fieldID === 'STAGE_ID' || $fieldID === 'STAGE_ID_FROM_HISTORY' || $fieldID === 'STAGE_ID_FROM_SUPPOSED_HISTORY')
+
+		if ($fieldID === 'STAGE_ID' || $fieldID === 'STAGE_ID_FROM_HISTORY' || $fieldID === 'STAGE_ID_FROM_SUPPOSED_HISTORY')
 		{
 			$categoryID = $this->getCategoryID();
 			return array(
@@ -662,28 +674,32 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'items' => DealCategory::getStageList(max($categoryID, 0))
 			);
 		}
-		elseif($fieldID === 'DELIVERY_STAGE')
+
+		if ($fieldID === 'DELIVERY_STAGE')
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
 				'items' => Crm\Order\DeliveryStage::getList()
 			);
 		}
-		elseif($fieldID === 'PAYMENT_STAGE')
+
+		if ($fieldID === 'PAYMENT_STAGE')
 		{
 			return array(
 				'params' => ['multiple' => 'Y'],
 				'items' => Crm\Workflow\PaymentStage::getMessages()
 			);
 		}
-		elseif($fieldID === 'STAGE_SEMANTIC_ID' || $fieldID === 'STAGE_SEMANTIC_ID_FROM_HISTORY')
+
+		if ($fieldID === 'STAGE_SEMANTIC_ID' || $fieldID === 'STAGE_SEMANTIC_ID_FROM_HISTORY')
 		{
 			return PhaseSemantics::getListFilterInfo(
 				\CCrmOwnerType::Deal,
 				array('params' => array('multiple' => 'Y'))
 			);
 		}
-		elseif($fieldID === 'CATEGORY_ID')
+
+		if ($fieldID === 'CATEGORY_ID')
 		{
 			$categoryAccess = $this->getCategoryAccessData();
 			return array(
@@ -692,14 +708,16 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 					? DealCategory::prepareSelectListItems($categoryAccess['READ']) : array()
 			);
 		}
-		elseif($fieldID === 'ACTIVITY_COUNTER')
+
+		if ($fieldID === 'ACTIVITY_COUNTER')
 		{
 			return EntityCounterType::getListFilterInfo(
 				array('params' => array('multiple' => 'Y')),
 				array('ENTITY_TYPE_ID' => \CCrmOwnerType::Deal)
 			);
 		}
-		elseif($fieldID === 'CONTACT_ID')
+
+		if ($fieldID === 'CONTACT_ID')
 		{
 			return array(
 				'alias' => 'ASSOCIATED_CONTACT_ID',
@@ -721,7 +739,8 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				)
 			);
 		}
-		elseif($fieldID === 'COMPANY_ID')
+
+		if ($fieldID === 'COMPANY_ID')
 		{
 			return array(
 				'params' => array(
@@ -742,18 +761,21 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				)
 			);
 		}
-		elseif($fieldID === 'ORIGINATOR_ID')
+
+		if ($fieldID === 'ORIGINATOR_ID')
 		{
 			return array(
 				'items' => array('' => Loc::getMessage('CRM_DEAL_FILTER_ALL'))
 					+ \CCrmExternalSaleHelper::PrepareListItems()
 			);
 		}
-		elseif($fieldID === 'EVENT_ID')
+
+		if ($fieldID === 'EVENT_ID')
 		{
 			return array('items' => array('' => '') + \CCrmStatus::GetStatusList('EVENT_TYPE'));
 		}
-		elseif($fieldID === 'PRODUCT_ROW_PRODUCT_ID')
+
+		if ($fieldID === 'PRODUCT_ROW_PRODUCT_ID')
 		{
 			return [
 				'params' => [
@@ -777,22 +799,26 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				],
 			];
 		}
-		elseif(Crm\Tracking\UI\Filter::hasField($fieldID))
+
+		if (Crm\Tracking\UI\Filter::hasField($fieldID))
 		{
 			return Crm\Tracking\UI\Filter::getFieldData($fieldID);
 		}
-		elseif($fieldID === 'WEBFORM_ID')
+
+		if ($fieldID === 'WEBFORM_ID')
 		{
 			return Crm\WebForm\Helper::getEntitySelectorParams(\CCrmOwnerType::Deal);
 		}
-		elseif($fieldID === 'SOURCE_ID')
+
+		if ($fieldID === 'SOURCE_ID')
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
 				'items' => \CCrmStatus::GetStatusList('SOURCE')
 			);
 		}
-		elseif($fieldID === 'ORDER_SOURCE')
+
+		if ($fieldID === 'ORDER_SOURCE')
 		{
 			$orderSourceItems = [];
 			$tradingPlatformIterator = Sale\TradingPlatform\Manager::getList([
@@ -810,7 +836,8 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'items' => $orderSourceItems,
 			);
 		}
-		elseif ($fieldID === 'ROBOT_DEBUGGER')
+
+		if ($fieldID === 'ROBOT_DEBUGGER')
 		{
 			return [
 				'params' => [
@@ -819,7 +846,13 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'items' => \Bitrix\Crm\Automation\Debugger\DebuggerFilter::getFilterItems(),
 			];
 		}
-		elseif (ParentFieldManager::isParentFieldName($fieldID))
+
+		if ($fieldID === Crm\Item::FIELD_NAME_REPEAT_SALE_SEGMENT_ID)
+		{
+			return (new Crm\RepeatSale\Segment\Field())->getPreparedDataForFilter();
+		}
+
+		if (ParentFieldManager::isParentFieldName($fieldID))
 		{
 			return Container::getInstance()->getParentFieldManager()->prepareParentFieldDataForFilterProvider(
 				\CCrmOwnerType::Deal,

@@ -25,6 +25,7 @@ class Resource implements EntityInterface
 	private RangeCollection $slotRanges;
 	private int $counter = 0;
 	private bool|null $isMain = null;
+	private bool|null $isDeleted = null;
 
 	private bool $isInfoNotificationOn = true;
 	private int $infoNotificationDelay = 0;
@@ -48,6 +49,7 @@ class Resource implements EntityInterface
 	private int|null $createdBy = null;
 	private int|null $createdAt = null;
 	private int|null $updatedAt = null;
+	private int|null $deletedAt = null;
 	private ResourceLinkedEntityCollection|null $entityCollection = null;
 
 	public function __construct()
@@ -415,6 +417,18 @@ class Resource implements EntityInterface
 		return $this;
 	}
 
+	public function getDeletedAt(): int|null
+	{
+		return $this->deletedAt;
+	}
+
+	public function setDeletedAt(int|null $deletedAt): self
+	{
+		$this->deletedAt = $deletedAt;
+
+		return $this;
+	}
+
 	public function getCounter(): int
 	{
 		return $this->counter;
@@ -452,6 +466,18 @@ class Resource implements EntityInterface
 		return $this;
 	}
 
+	public function isDeleted(): bool|null
+	{
+		return $this->isDeleted;
+	}
+
+	public function setDeleted(bool $isDeleted): self
+	{
+		$this->isDeleted = $isDeleted;
+
+		return $this;
+	}
+
 	public function getEntityCollection(): ResourceLinkedEntityCollection
 	{
 		return $this->entityCollection;
@@ -469,6 +495,7 @@ class Resource implements EntityInterface
 			'externalId' => $this->externalId,
 			'type' => $this->type?->toArray(),
 			'isMain' => $this->isMain,
+			'isDeleted' => $this->isDeleted,
 			'name' => $this->name,
 			'description' => $this->description,
 			'slotRanges' => $this->slotRanges->toArray(),
@@ -493,6 +520,7 @@ class Resource implements EntityInterface
 			'createdBy' => $this->createdBy,
 			'createdAt' => $this->createdAt,
 			'updatedAt' => $this->updatedAt,
+			'deletedAt' => $this->deletedAt,
 			'counter' => $this->counter,
 			'entities' => $this->entityCollection->toArray(),
 		];
@@ -517,6 +545,7 @@ class Resource implements EntityInterface
 			->setCreatedBy(isset($props['createdBy']) ? (int)$props['createdBy'] : null)
 			->setCreatedAt(isset($props['createdAt']) ? (int)$props['createdAt'] : null)
 			->setUpdatedAt(isset($props['updatedAt']) ? (int)$props['updatedAt'] : null)
+			->setDeletedAt(isset($props['deletedAt']) ? (int)$props['deletedAt'] : null)
 		;
 
 		if (isset($props['isInfoNotificationOn']))
@@ -556,7 +585,6 @@ class Resource implements EntityInterface
 		{
 			$resource->setConfirmationCounterDelay((int)$props['confirmationCounterDelay']);
 		}
-
 
 		if (isset($props['isReminderNotificationOn']))
 		{
@@ -600,6 +628,11 @@ class Resource implements EntityInterface
 		if (isset($props['isMain']))
 		{
 			$resource->setMain((bool)$props['isMain']);
+		}
+
+		if (isset($props['isDeleted']))
+		{
+			$resource->setDeleted((bool)$props['isDeleted']);
 		}
 
 		if (isset($props['entities']))

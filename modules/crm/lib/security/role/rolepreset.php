@@ -4,7 +4,7 @@ namespace Bitrix\Crm\Security\Role;
 
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
-use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserRoleAndHierarchy;
+use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened;
 use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
@@ -263,7 +263,7 @@ final class RolePreset {
 			{
 				$attr = (
 					$permission->variants()?->has(UserPermissions::PERMISSION_SELF) // permission supports 'A' value?
-					|| $permission->variants()?->has(UserRoleAndHierarchy::SELF) // permission supports 'SELF' value?
+					|| $permission->variants()?->has(UserDepartmentAndOpened::SELF) // permission supports 'SELF' value?
 				)
 					? UserPermissions::PERMISSION_SELF
 					: $permission->getDefaultAttribute()

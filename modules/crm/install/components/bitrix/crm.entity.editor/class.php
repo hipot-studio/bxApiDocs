@@ -14,6 +14,7 @@ use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\FieldContext\ContextManager;
 use Bitrix\Crm\FieldContext\Repository;
+use Bitrix\Crm\Integration\HumanResources\HumanResources;
 use Bitrix\Crm\Integration\UI\EntityEditor\MartaAIMarksRepository;
 use Bitrix\Crm\Integration\UI\EntitySelector\CountryProvider;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -50,12 +51,13 @@ class CCrmEntityEditorComponent extends UIFormComponent
 	/** @var int|null */
 	protected $categoryId;
 
-	private static function isAdminForEntity(mixed $entityTypeID): bool
+	private static function isAdminForEntity(mixed $entityTypeID, ?int $categoryId): bool
 	{
 		if (is_numeric($entityTypeID))
 		{
-			return Container::getInstance()->getUserPermissions()->isAdminForEntity((int)$entityTypeID);
+			return Container::getInstance()->getUserPermissions()->isAdminForEntity((int)$entityTypeID, $categoryId);
 		}
+
 		return false;
 	}
 
@@ -533,7 +535,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		//region CAN_UPDATE_PERSONAL_CONFIGURATION && CAN_UPDATE_COMMON_CONFIGURATION
 		$this->arResult['CAN_UPDATE_PERSONAL_CONFIGURATION'] = true;
-		$this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'] = self::isAdminForEntity($this->entityTypeID);
+		$this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'] = self::isAdminForEntity($this->entityTypeID, $this->categoryId);
 
 		if(!isset($this->arParams['~ENABLE_CONFIGURATION_UPDATE']))
 		{
@@ -630,7 +632,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		//region Attribute configuration
 		$this->arResult['ATTRIBUTE_CONFIG'] = null;
-		if(self::isAdminForEntity($this->entityTypeID))
+		if(self::isAdminForEntity($this->entityTypeID, $this->categoryId))
 		{
 			$arParamsAttributeConfig = $this->arParams['~ATTRIBUTE_CONFIG'] ?? null;
 			$this->arResult['ATTRIBUTE_CONFIG'] = is_array($arParamsAttributeConfig) ?
@@ -726,7 +728,10 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		$this->arResult['ENTITY_CONFIG_OPTIONS'] = $this->getEntityConfigOptions();
 
-		$this->arResult['EDITOR_OPTIONS'] = array('show_always' => 'Y');
+		$this->arResult['EDITOR_OPTIONS'] = [
+			'show_always' => 'Y',
+			'useHumanResourcesModule' => HumanResources::getInstance()->isUsed() ? 'Y' : 'N',
+		];
 		$this->arResult['ENTITY_CONFIG_CATEGORY_NAME'] = $this->getConfigurationCategoryName();
 
 		if ($this->arResult['READ_ONLY'])

@@ -201,15 +201,18 @@ class Fill
 
 						if (!$pendingFile->isValid())
 						{
+							$error = $pendingFile->getErrors()[0] ?? null;
+							$errorMessage = $error?->getMessage() ?? '';
 							$formId = $this->form->getId();
+
 							\Bitrix\Crm\Service\Container::getInstance()->getLogger('Webform')
-								->error("Failed to save file in form $formId for $fieldName", [
+								->error("Failed to save file in form $formId for $fieldName. $errorMessage", [
 									'formId' => $this->form->getId(),
 									'fieldName' => $fieldName,
 									'secCode' => $this->form->get()['SECURITY_CODE'] ?? '',
 									'fingerprint' => $fileController->getFingerprint(),
 									'token' => $fileData['token'],
-									'error' => $pendingFile->getErrors()[0] ?? null,
+									'error' => $error,
 								])
 							;
 

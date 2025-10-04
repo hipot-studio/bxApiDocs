@@ -135,6 +135,7 @@ class RepeatSaleLogController
 				'=ENTITY_TYPE_ID' => $itemIdentifier->getEntityTypeId(),
 				'=ENTITY_ID' => $itemIdentifier->getEntityId(),
 			])
+			->setLimit(1)
 			->fetchObject()
 		;
 	}

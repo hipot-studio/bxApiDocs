@@ -10,6 +10,7 @@ use Bitrix\Crm\Observer\Entity\EO_Observer;
 use Bitrix\Crm\Observer\Entity\EO_Observer_Collection;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\UserField\UserFieldFilterable;
 use Bitrix\Main\ArgumentException;
@@ -31,6 +32,7 @@ use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\StringHelper;
+use Bitrix\Main\Type\ArrayHelper;
 use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
@@ -216,6 +218,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	public const FIELD_NAME_LEAD_ID = 'LEAD_ID';
 	public const FIELD_NAME_FM = 'FM';
 	public const FIELD_LAST_COMMUNICATION_TIME = 'LAST_COMMUNICATION_TIME';
+	public const FIELD_NAME_REPEAT_SALE_SEGMENT_ID = 'REPEAT_SALE_SEGMENT_ID';
 
 	protected const SORT_OFFSET = 10;
 
@@ -858,6 +861,15 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		return null;
 	}
 
+	/**
+	 * @internal DON'T CALL THIS METHOD DIRECTLY!!! Use Operations!
+	 * @see Factory::getAddOperation()
+	 * @see Factory::getUpdateOperation()
+	 * @see Factory::getImportOperation()
+	 * ... and maybe other depending on your use case
+	 *
+	 * This method should only be used by crm module internals. Calling it directly leads to inconsistent state of the system.
+	 */
 	public function save(bool $isCheckUserFields = true): Result
 	{
 		$isNew = $this->isNew();
@@ -943,6 +955,12 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		$this->setFromCompatibleData($changedValues);
 	}
 
+	/**
+	 * @internal DON'T CALL THIS METHOD DIRECTLY!!! Use Operations!
+	 * @see Factory::getDeleteOperation()
+	 *
+	 * This method should only be used by crm module internals. Calling it directly leads to inconsistent state of the system.
+	 */
 	public function delete(): Result
 	{
 		return $this->entityObject->delete();
@@ -1118,9 +1136,10 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	protected function normalizeObserverIds($observerIds): array
 	{
 		$array = (array)$observerIds;
-		$arrayOfIntegers = array_map('intval', $array);
 
-		return array_filter($arrayOfIntegers);
+		ArrayHelper::normalizeArrayValuesByInt($array);
+
+		return $array;
 	}
 
 	protected function remindActualObservers(): array

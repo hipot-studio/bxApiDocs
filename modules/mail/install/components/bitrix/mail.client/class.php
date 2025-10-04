@@ -79,7 +79,8 @@ class CMailClientComponent extends CBitrixComponent
 				'msg_view'    => 'message/#id#',
 				'msg_list'    => 'list/#id#/#start_sync_with_showing_stepper#',
 				'config_dirs' => 'config/dirs',
-                'addressbook' => 'addressbook',
+				'addressbook' => 'addressbook',
+				'mbx_list' => 'mailbox-list',
 			);
 		}
 		else
@@ -94,7 +95,8 @@ class CMailClientComponent extends CBitrixComponent
 				'msg_view'    => 'page=msg_view&id=#id#',
 				'msg_list'    => 'page=msg_list&id=#id#&start_sync_with_showing_stepper=#start_sync_with_showing_stepper#',
 				'config_dirs' => 'page=config_dirs',
-                'addressbook' => 'page=addressbook',
+				'addressbook' => 'page=addressbook',
+				'mbx_list' => 'page=mailbox-list',
 			);
 		}
 
@@ -124,6 +126,11 @@ class CMailClientComponent extends CBitrixComponent
 
 		if (empty($componentPage) || !array_key_exists($componentPage, $defaultUrlTemplates))
 			$componentPage = 'home';
+
+		if ($componentPage === 'mbx_list' && !(Main\Config\Option::get('mail', 'enable_mailbox_list_grid_page', 'N') === 'Y'))
+		{
+			$componentPage = 'home';
+		}
 
 		$this->arResult['VARIABLES'] = $variables;
 

@@ -70,7 +70,7 @@ class Collection
 					$permissionsManager->getPermissionLevel(
 						$permissionEntityType,
 						$operation
-					)->getEntityListAttributes()
+					)->getEntityAttributesToCheckInListMode()
 				);
 			}
 		}

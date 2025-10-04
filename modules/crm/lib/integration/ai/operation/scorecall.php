@@ -29,7 +29,6 @@ use Bitrix\Crm\Integration\Analytics\Builder\AI\CallScoring;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MultiValueStoreService;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
 use Bitrix\Main;
 use CCrmActivity;
@@ -505,7 +504,6 @@ final class ScoreCall extends AbstractOperation
 		);
 
 		$badge->bind($itemIdentifier, $sourceIdentifier);
-		Monitor::getInstance()->onBadgesSync($itemIdentifier);
 	}
 
 	public static function generateJobCallAssessmentBindKey(int $jobId, int $activityId): string

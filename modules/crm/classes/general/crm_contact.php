@@ -2330,7 +2330,10 @@ class CAllCrmContact
 			}
 			//endregion
 
-			self::getLastActivityAdapter()->performUpdate((int)$ID, $arFields, $arOptions);
+			self::getLastActivityAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->performUpdate((int)$ID, $arFields, $arOptions)
+			;
 			self::getCommentsAdapter()
 				->setPreviousFields((int)$ID, $arRow)
 				->normalizeFields((int)$ID, $arFields)
@@ -2719,14 +2722,15 @@ class CAllCrmContact
 				$filler->fill($arOptions['CURRENT_FIELDS'], $arFields);
 
 				$item = $this->createPullItem(array_merge($arRow, $arFields));
-				Crm\Integration\PullManager::getInstance()->sendItemUpdatedEvent(
+				Container::getInstance()->getPullEventsQueue()->scheduleItemUpdatedEvent(
+					new Crm\ItemIdentifier(\CCrmOwnerType::Contact, (int)$ID),
 					$item,
 					[
 						'TYPE' => self::$TYPE_NAME,
 						'SKIP_CURRENT_USER' => ($iUserId !== 0),
 						'CATEGORY_ID' => ($arFields['CATEGORY_ID'] ?? 0),
 						'EVENT_ID' => ($arOptions['eventId'] ?? null),
-					]
+					],
 				);
 			}
 		}
@@ -2803,7 +2807,7 @@ class CAllCrmContact
 		if($processBizproc)
 		{
 			$bizproc = new CCrmBizProc('CONTACT');
-			$bizproc->ProcessDeletion($ID);
+			$bizproc->processDeletion($ID);
 		}
 
 		$enableRecycleBin = \Bitrix\Crm\Recycling\ContactController::isEnabled()

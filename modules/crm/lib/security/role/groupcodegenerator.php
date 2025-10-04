@@ -46,6 +46,11 @@ class GroupCodeGenerator
 		return 'CRM_BUTTON';
 	}
 
+	public static function getContractorGroupCode(): string
+	{
+		return 'CONTRACTOR';
+	}
+
 	public static function getAutomatedSolutionListCode(): string
 	{
 		return self::AUTOMATED_SOLUTION_LIST_GROUP_CODE;

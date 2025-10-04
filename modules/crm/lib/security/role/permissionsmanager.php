@@ -61,6 +61,16 @@ class PermissionsManager
 		return $this->load($entity, $permissionType)->hasPermissionLevel($level);
 	}
 
+	public function hasMaxPermissionLevel(string $entity, string $permissionType): bool
+	{
+		if ($this->isAdmin())
+		{
+			return true;
+		}
+
+		return $this->load($entity, $permissionType)->hasMaxPermissionLevel();
+	}
+
 	public function hasPermissionByEntityAttributes(string $entity, string $permissionType, array $entityAttributes): bool
 	{
 		if ($this->isAdmin())
@@ -81,11 +91,6 @@ class PermissionsManager
 		return $this->load($entity, $permissionType)->getPermissionAttributeByEntityAttributes($entityAttributes);
 	}
 
-	/**
-	 * @deprecated
-	 * Used in backward compatibility methods only
-	 * Will be removed soon!
-	 */
 	public function doUserAttributesMatchesToEntityAttributes(string $entity, string $permissionType, mixed $entityAttributes): bool
 	{
 		return $this->load($entity, $permissionType)->compareUserAttributesWithEntityAttributes($entityAttributes);

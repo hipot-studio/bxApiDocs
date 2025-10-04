@@ -23,11 +23,12 @@ use Bitrix\Crm\SequenceService;
 use Bitrix\Crm\Security\AccessAttribute\DynamicBasedAttrTableLifecycle;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\Dynamic;
+use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\Timeline\TimelineEntry;
-use Bitrix\Crm\Update\Entity\LastActivityFields;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ReferenceField;
@@ -417,7 +418,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 		$entityTypeId = (int)$typeData['ENTITY_TYPE_ID'];
 
-		LastActivityFields::onAfterTypeDelete($entityTypeId);
+		Option::delete('crm', ['name' => '~last_activity_columns_alter_success_' . $entityTypeId]);
 		FieldContentTypeTable::deleteByEntityTypeId($entityTypeId);
 		EventRelationsTable::deleteByEntityType(\CCrmOwnerType::ResolveName($entityTypeId));
 		TimelineEntry::deleteByAssociatedEntityType($entityTypeId);
@@ -453,6 +454,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		Container::getInstance()->getRestEventManager()->deleteDynamicItemEventsByEntityTypeId($type->getEntityTypeId());
 		Integration\Rest\AppPlacementManager::deleteAllHandlersForType($type->getEntityTypeId());
 		static::clearBindingMenuCache();
+		Monitor::getInstance()->onEntityTypeDelete($type->getEntityTypeId());
 
 		$parentResult = parent::onAfterDelete($event);
 		foreach($parentResult->getErrors() as $error)
@@ -982,7 +984,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		}
 
 		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
-		if (LastActivityFields::wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate((int)$type['ENTITY_TYPE_ID']))
+		if (self::wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate((int)$type['ENTITY_TYPE_ID']))
 		{
 			$entity->addField($fieldRepository->getLastActivityBy());
 			$entity->addField($fieldRepository->getLastActivityTime());
@@ -1213,5 +1215,12 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		}
 
 		return 'EntityTypeId should be more or equal than 128 and less than 192';
+	}
+
+	private static function wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate(int $entityTypeId): bool
+	{
+		$value = Option::get('crm', '~last_activity_columns_alter_success_' . $entityTypeId, 'Y');
+
+		return ($value === 'Y');
 	}
 }

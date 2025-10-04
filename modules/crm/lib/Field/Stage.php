@@ -134,6 +134,14 @@ class Stage extends Field
 				$needCheckStage = false;
 			}
 
+			if ($needCheckStage && $oldStageId === null) // item already not exist
+			{
+				$result = new Result();
+				$result->addError(new Error(Loc::getMessage('CRM_TYPE_ITEM_NOT_FOUND')));
+
+				return $result;
+			}
+
 			if ($needCheckStage && !$userPermissions->item()->canChangeStage(
 				ItemIdentifier::createByItem($item),
 				$oldStageId,

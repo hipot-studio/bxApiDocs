@@ -23,7 +23,6 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Timeline\ActivityController;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
 use Bitrix\Main\Application;
@@ -637,12 +636,12 @@ abstract class AbstractOperation
 
 		return $engine;
 	}
-	
+
 	protected function getStubPayload(): mixed
 	{
 		return StubFactory::build(static::TYPE_ID, $this->target)->makeStub();
 	}
-	
+
 	private function isAiMarketplaceAppsExist(): bool
 	{
 		if (!Loader::includeModule('rest'))
@@ -937,7 +936,6 @@ abstract class AbstractOperation
 			);
 
 			$badge->bind($itemIdentifier, $sourceIdentifier);
-			Monitor::getInstance()->onBadgesSync($itemIdentifier);
 		}
 	}
 
@@ -955,7 +953,6 @@ abstract class AbstractOperation
 		if (in_array($badgeType, $supportedTypes, true))
 		{
 			Badge\Badge::deleteByEntity($itemIdentifier, $badgeType);
-			Monitor::getInstance()->onBadgesSync($itemIdentifier);
 		}
 	}
 

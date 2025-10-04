@@ -40,20 +40,8 @@ class WaitListItemProvider
 
 	public function getById(int $id, int $userId, bool $withRelations = true): WaitListItem|null
 	{
-		$gridParams = new GridParams(
-			limit: 1,
-			filter: (new WaitListItemFilter(['ID' => $id])),
-			select: new WaitListItemSelect([
-				'CLIENTS',
-				'EXTERNAL_DATA',
-				'NOTE',
-			]),
-		);
+		$waitListItem = $this->repository->getById($id, $userId);
 
-		$collection = $this->getList($gridParams, $userId);
-
-		/** @var WaitListItem|null $waitListItem */
-		$waitListItem = $collection->getFirstCollectionItem();
 		if (!$waitListItem)
 		{
 			return null;

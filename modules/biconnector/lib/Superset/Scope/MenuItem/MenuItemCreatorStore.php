@@ -24,15 +24,6 @@ final class MenuItemCreatorStore extends BaseMenuItemCreator
 			];
 		}
 
-		if (!empty($menuItems))
-		{
-			$menuItems[] = [
-				'IS_DELIMITER' => true,
-			];
-
-			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
-		}
-
 		return [
 			'ID' => 'F',
 			'PARENT_ID' => '',

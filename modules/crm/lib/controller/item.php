@@ -553,6 +553,8 @@ class Item extends Base
 			return null;
 		}
 
+		unset($fields['ID']);
+
 		$fmValues = [];
 		if ($factory->isMultiFieldsEnabled())
 		{

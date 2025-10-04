@@ -8,6 +8,7 @@ use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 use Bitrix\Crm\Controller\Entity;
+use Bitrix\Crm\Entity\EntityEditorOptionBuilder;
 use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\Money;
@@ -450,8 +451,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	protected function getGuid(): string
 	{
-		$guid = $this->getEntityName().'_details';
-
 		$categoryId = 0;
 		if ($this->categoryId > 0)
 		{
@@ -466,12 +465,9 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$categoryId = $this->arParams['categoryId'];
 		}
 
-		if ($categoryId > 0)
-		{
-			$guid .= '_C' . $categoryId;
-		}
-
-		return $guid;
+		return (new EntityEditorOptionBuilder($this->entityTypeId))
+			->setCategoryId($categoryId)
+			->build();
 	}
 
 	protected function getJsParams(): array
@@ -1163,7 +1159,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	public function getEditorConfig(): array
 	{
 		$userFieldEntityId = $this->getUserFieldEntityId();
-		$isUserFieldCreationEnabled = Container::getInstance()->getUserPermissions($this->userID)->isAdminForEntity($this->entityTypeId);
+		$isUserFieldCreationEnabled = Container::getInstance()->getUserPermissions($this->userID)->isAdminForEntity($this->entityTypeId, $this->categoryId);
 		$editorGuid = $this->getEditorGuid();
 
 		/** @var \Bitrix\Crm\Integration\Analytics\Builder\BuilderContract $analyticsBuilder */

@@ -29,6 +29,7 @@ class BookingSelect implements SelectInterface
 			$result[] = 'RESOURCES.RESOURCE.TYPE.NOTIFICATION_SETTINGS';
 			$result[] = 'RESOURCES.RESOURCE.SETTINGS';
 			$result[] = 'RESOURCES.RESOURCE.NOTIFICATION_SETTINGS';
+			$result[] = 'RESOURCES.RESOURCE.ENTITIES';
 		}
 
 		if (in_array('CLIENTS', $this->select, true))

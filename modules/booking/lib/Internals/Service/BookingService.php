@@ -101,6 +101,63 @@ class BookingService
 		}
 	}
 
+	/**
+	 * @throws Exception
+	 */
+	public function checkBookingBeforeUpdating(
+		Entity\Booking\Booking $bookingBefore,
+		Entity\Booking\Booking $bookingAfter,
+	): void
+	{
+		$this->ensureNewResourcesAreNotDeleted($bookingBefore, $bookingAfter);
+		$this->ensureDateChangeIsValidForDeletedResources($bookingBefore, $bookingAfter);
+	}
+
+	/**
+	 * @throws Exception
+	 */
+	private function ensureNewResourcesAreNotDeleted(
+		Entity\Booking\Booking $bookingBefore,
+		Entity\Booking\Booking $bookingAfter,
+	): void
+	{
+		$resourceIdsBefore = $bookingBefore->getResourceCollection()->getEntityIds();
+		$resourcesAfter = $bookingAfter->getResourceCollection();
+
+		foreach ($resourcesAfter as $resource)
+		{
+			$isNew = !in_array($resource->getId(), $resourceIdsBefore, true);
+
+			if ($isNew && $resource->isDeleted())
+			{
+				throw new Exception("Resource {$resource->getId()} not found");
+			}
+		}
+	}
+
+	/**
+	 * @throws Exception
+	 */
+	private function ensureDateChangeIsValidForDeletedResources(
+		Entity\Booking\Booking $bookingBefore,
+		Entity\Booking\Booking $bookingAfter,
+	): void
+	{
+		$deletedResources = $bookingBefore->getResourceCollection()->getDeleted();
+		if ($deletedResources->isEmpty())
+		{
+			return;
+		}
+
+		$bookingTimestampTo = (int)$bookingAfter->getDatePeriod()?->getDateTo()?->getTimestamp();
+		$earliestDeletionTimestamp = (int)$deletedResources->getMinDeletedAt();
+
+		if ($bookingTimestampTo >= $earliestDeletionTimestamp)
+		{
+			throw new Exception('There is a deleted resource at the time of booking completed');
+		}
+	}
+
 	public function checkIntersection(Entity\Booking\Booking $booking, bool $allowOverbooking): IntersectionResult
 	{
 		if ($allowOverbooking)

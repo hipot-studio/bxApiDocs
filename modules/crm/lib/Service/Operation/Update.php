@@ -5,10 +5,8 @@ namespace Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Automation\Helper;
 use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Field\Collection;
-use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Integrity;
 use Bitrix\Crm\Item;
-use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Operation;
@@ -311,7 +309,11 @@ class Update extends Operation
 	{
 		parent::sendPullEvent();
 
-		PullManager::getInstance()->sendItemUpdatedEvent($this->pullItem, $this->pullParams);
+		Container::getInstance()->getPullEventsQueue()->scheduleItemUpdatedEvent(
+			$this->getItemIdentifier(),
+			$this->pullItem,
+			$this->pullParams,
+		);
 	}
 
 	protected function runAutomation(): Result

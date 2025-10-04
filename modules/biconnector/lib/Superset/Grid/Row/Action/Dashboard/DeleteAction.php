@@ -41,7 +41,8 @@ final class DeleteAction extends BaseAction
 		}
 
 		$dashboardId = (int)$rawFields['ID'];
-		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteDashboard({$dashboardId})";
+		$isCustom = $rawFields['TYPE'] === \Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM;
+		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteDashboard({$dashboardId}, {$isCustom})";
 
 		return parent::getControl($rawFields);
 	}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Entity\Resource;
 
 use Bitrix\Booking\Entity\BaseEntityCollection;
+use Bitrix\Booking\Entity\EntityInterface;
 use Bitrix\Booking\Entity\Slot\RangeCollection;
 use Bitrix\Booking\Internals\Exception\Exception;
 use DateTimeImmutable;
@@ -22,12 +23,27 @@ class ResourceCollection extends BaseEntityCollection
 		foreach ($resources as $resource)
 		{
 			$this->collectionItems[] = $resource;
+
+			if ($this->primary === null)
+			{
+				$this->setPrimary($resource);
+			}
+		}
+	}
+
+	public function add(EntityInterface $entity): void
+	{
+		$this->collectionItems[] = $entity;
+
+		if ($this->primary === null)
+		{
+			$this->setPrimary($entity);
 		}
 	}
 
 	/**
 	 * First check virtual is_primary property of resource properties.
-	 * Overwise explicitly set primary resource by rule "first resource is primary one"
+	 * Otherwise explicitly set primary resource by rule "first resource is primary one"
 	 */
 	public static function mapFromArray(array $props): self
 	{
@@ -79,6 +95,47 @@ class ResourceCollection extends BaseEntityCollection
 	public function diff(ResourceCollection $collectionToCompare): ResourceCollection
 	{
 		return new ResourceCollection(...$this->baseDiff($collectionToCompare));
+	}
+
+	public function getNotDeleted(): ResourceCollection
+	{
+		return $this->filterByDeleted(false);
+	}
+
+	public function getDeleted(): ResourceCollection
+	{
+		return $this->filterByDeleted(true);
+	}
+
+	private function filterByDeleted(bool $isDeleted): ResourceCollection
+	{
+		$items = array_filter(
+			$this->collectionItems,
+			static fn(Resource $resource): bool => $resource->isDeleted() === $isDeleted
+		);
+
+		return new ResourceCollection(...$items);
+	}
+
+	public function getMinDeletedAt(): int|null
+	{
+		$minDeletedAt = null;
+
+		/** @var Resource $resource */
+		foreach ($this->collectionItems as $resource)
+		{
+			if ($resource->getDeletedAt() === null)
+			{
+				continue;
+			}
+
+			$minDeletedAt = ($minDeletedAt === null)
+				? $resource->getDeletedAt()
+				: min($minDeletedAt, $resource->getDeletedAt())
+			;
+		}
+
+		return $minDeletedAt;
 	}
 
 	public function mergeSlotRanges(DateTimeImmutable $date): RangeCollection

@@ -537,7 +537,7 @@ class ElementType extends BaseType
 				return;
 			}
 		}
-		$filter['ACTIVE'] = $userField['SETTINGS']['ACTIVE_FILTER'] === 'Y';
+		$filter['ACTIVE'] = (($userField['SETTINGS']['ACTIVE_FILTER'] ?? 'N') === 'Y');
 
 		$elements = self::getElements(
 			(int)$userField['SETTINGS']['IBLOCK_ID'],

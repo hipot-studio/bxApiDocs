@@ -14,7 +14,6 @@ use Bitrix\Crm\Dto\Booking\Message\MessageStatusEnum;
 use Bitrix\Crm\Dto\Booking\Message\MessageTypeEnum;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Monitor;
 
 class BookingBadge
 {
@@ -108,8 +107,6 @@ class BookingBadge
 			$itemIdentifier = new ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']);
 
 			$badge->upsert($itemIdentifier, $sourceIdentifier);
-
-			Monitor::getInstance()->onBadgesSync($itemIdentifier);
 		}
 
 		return true;

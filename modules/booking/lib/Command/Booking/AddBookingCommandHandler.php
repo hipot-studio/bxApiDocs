@@ -8,9 +8,11 @@ use Bitrix\Booking\Command\Booking\Trait\BookingChangesTrait;
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Booking\UpdateBookingException;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Service\BookingService;
+use Bitrix\Booking\Internals\Service\EventForBookingService;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
@@ -27,6 +29,7 @@ class AddBookingCommandHandler
 	private BookingService $bookingService;
 	private OverbookingService $overbookingService;
 	private BookingRepositoryInterface $bookingRepository;
+	private EventForBookingService $eventForBookingService;
 
 	public function __construct()
 	{
@@ -36,16 +39,25 @@ class AddBookingCommandHandler
 		$this->bookingService = Container::getBookingService();
 		$this->overbookingService = Container::getOverbookingService();
 		$this->bookingRepository = Container::getBookingRepository();
+		$this->eventForBookingService = Container::getEventForBookingService();
 	}
 
 	public function __invoke(AddBookingCommand $command): Entity\Booking\Booking
 	{
 		$this->transactionHandler->handle(
 			fn: function () use ($command) {
-				$resourceCollection = clone $command->booking->getResourceCollection();
-				$command->booking->setResourceCollection(
-					$this->resourceService->loadResourceCollection($resourceCollection)
-				);
+				$commandResources = clone $command->booking->getResourceCollection();
+				$loadedResources = $this->resourceService->loadResourceCollection($commandResources)->getNotDeleted();
+
+				$notFoundIds = array_diff($commandResources->getEntityIds(), $loadedResources->getEntityIds());
+				if (!empty($notFoundIds))
+				{
+					throw new UpdateBookingException(
+						'Some resources were not found: ' . implode(', ', $notFoundIds)
+					);
+				}
+
+				$command->booking->setResourceCollection($loadedResources);
 			},
 			errType: CreateBookingException::class,
 		);
@@ -63,7 +75,7 @@ class AddBookingCommandHandler
 			throw new CreateBookingException($exception->getMessage());
 		}
 
-		return $this->transactionHandler->handle(
+		$booking = $this->transactionHandler->handle(
 			fn: function () use ($command, $intersectionResult) {
 				$booking = $this->bookingService->create($command->booking, $command->createdBy);
 
@@ -96,6 +108,17 @@ class AddBookingCommandHandler
 			},
 			errType: CreateBookingException::class,
 		);
+
+		try
+		{
+			$this->eventForBookingService->onBookingCreated($booking);
+		}
+		catch (\Throwable $e)
+		{
+			// TODO: add error handling
+		}
+
+		return $booking;
 	}
 
 	protected function getOverbookingService(): OverbookingService

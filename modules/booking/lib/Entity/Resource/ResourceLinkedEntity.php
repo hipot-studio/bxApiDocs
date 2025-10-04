@@ -6,7 +6,6 @@ namespace Bitrix\Booking\Entity\Resource;
 
 use Bitrix\Booking\Entity\EntityInterface;
 use Bitrix\Booking\Entity\Resource\ResourceLinkedEntityData\ResourceLinkedEntityDataInterface;
-use Bitrix\Booking\Entity\Resource\ResourceLinkedEntityData\ResourceLinkedEntityDataMapper;
 use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 
 class ResourceLinkedEntity implements EntityInterface
@@ -77,29 +76,32 @@ class ResourceLinkedEntity implements EntityInterface
 		return $this;
 	}
 
-	public static function mapFromArray(array $props): ResourceLinkedEntity
-	{
-		$entityType = $props['entityType'] ? ResourceLinkedEntityType::from($props['entityType']) : null;
-
-		return (new self())
-			->setId($props['id'] ?? null)
-			->setEntityId($props['entityId'] ?? null)
-			->setEntityType($entityType)
-			->setCreatedAt($props['createdAt'] ?? null)
-//			->setData(
-//				($props['data'] ?? null) && $entityType
-//					? (new ResourceLinkedEntityDataMapper())->mapFromArray($entityType, $props['data'])
-//					: null
-//			)
-			->setData(null)
-		;
-	}
-
 	public function toArray(): array
 	{
 		return [
 			'entityId' => $this->entityId,
 			'entityType' => $this->entityType->value,
 		];
+	}
+
+	public static function mapFromArray(array $props): EntityInterface
+	{
+		$linkedEntity = new self();
+
+		if ($props['entityId'] ?? null)
+		{
+			$linkedEntity->setEntityId($props['entityId']);
+		}
+
+		if ($props['entityType'] ?? null)
+		{
+			$type = ResourceLinkedEntityType::tryFrom($props['entityType']);
+			if ($type)
+			{
+				$linkedEntity->setEntityType($type);
+			}
+		}
+
+		return $linkedEntity;
 	}
 }

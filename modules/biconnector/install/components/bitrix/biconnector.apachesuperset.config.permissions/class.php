@@ -84,6 +84,11 @@ class ApacheSupersetConfigPermissionsComponent
 	{
 		$resultGroups = [];
 		$resultDashboards = [];
+		$accessibleGroupIds = [];
+
+		$allowedGroups = array_flip(
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+		);
 
 		$groups = SupersetDashboardGroupTable::getList([
 			'select' => ['ID', 'NAME', 'TYPE', 'DASHBOARDS', 'SCOPE', 'DASHBOARD_SCOPES' => 'DASHBOARDS.SCOPE'],
@@ -112,6 +117,7 @@ class ApacheSupersetConfigPermissionsComponent
 					'id' => $dashboardId,
 					'name' => $dashboard->getTitle(),
 					'type' => $dashboard->getType(),
+					'createdById' => $dashboard->getCreatedById(),
 					'scopes' => [],
 				];
 				foreach ($dashboard->getScope() as $scope)
@@ -123,8 +129,15 @@ class ApacheSupersetConfigPermissionsComponent
 				}
 			}
 
+			$groupId = PermissionDictionary::getDashboardGroupPermissionId($group->getId());
+
+			if (isset($allowedGroups[$group->getId()]))
+			{
+				$accessibleGroupIds[] = $groupId;
+			}
+
 			$resultGroups[] = [
-				'id' => PermissionDictionary::getDashboardGroupPermissionId($group->getId()),
+				'id' => $groupId,
 				'name' => $group->getName(),
 				'type' => $group->getType(),
 				'dashboardIds' => $group->getDashboards()->getIdList(),
@@ -134,6 +147,12 @@ class ApacheSupersetConfigPermissionsComponent
 
 		$this->arResult['DASHBOARD_GROUPS'] = $resultGroups;
 		$this->arResult['DASHBOARDS'] = $resultDashboards;
+		$this->arResult['USER_DATA'] = [
+			'id' => AccessController::getCurrent()->getUser()->getUserId(),
+			'isAdmin' => AccessController::getCurrent()->getUser()->isAdmin(),
+			'hasAccessToPermission' => AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS),
+			'accessibleGroupIds' => $accessibleGroupIds,
+		];
 	}
 
 	/**
