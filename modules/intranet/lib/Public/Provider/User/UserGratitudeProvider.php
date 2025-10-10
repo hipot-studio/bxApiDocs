@@ -4,22 +4,27 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Public\Provider\User;
 
-use Bitrix\Intranet\Internal\Entity\UserProfile\GratitudeCollection;
-use Bitrix\Intranet\Internal\Entity\UserProfile\GratitudeBadgeCollection;
-use Bitrix\Intranet\Internal\Service\UserProfileService;
+use Bitrix\Intranet\Component\UserProfile\Grats;
+use Bitrix\Intranet\Internal\Entity\User\Profile\BaseInfoCollection;
+use Bitrix\Intranet\Internal\Entity\User\Profile\GratitudeCollection;
+use Bitrix\Intranet\Internal\Entity\User\Profile\GratitudeBadgeCollection;
+use Bitrix\Intranet\Internal\Repository\User\Profile\GratitudeRepository;
+use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
 use Bitrix\Main\Provider\Params\GridParams;
 
 class UserGratitudeProvider
 {
 	public function __construct(
-		private UserProfileService $profileService,
+		private GratitudeRepository $gratitudeRepository,
+		private ProfileRepository $profileRepository,
 	)
 	{}
 
 	public static function createByDefault(): UserGratitudeProvider
 	{
 		return new UserGratitudeProvider(
-			UserProfileService::createByDefault(),
+			new GratitudeRepository(),
+			ProfileRepository::createByDefault(),
 		);
 	}
 
@@ -28,17 +33,47 @@ class UserGratitudeProvider
 		GridParams $gridParams
 	): GratitudeCollection
 	{
-		return $this->profileService->getUserGratitudeCollection(
-			userId: $userId,
-			limit: $gridParams->getLimit(),
-			offset: $gridParams->getOffset(),
+		$limit = $gridParams->getLimit();
+		$offset = $gridParams->getOffset();
+
+		if ($limit <= 0 || $offset < 0)
+		{
+			return new GratitudeCollection();
+		}
+
+		$userGrats = new Grats([
+			'profileId' => $userId,
+			'pageSize' => $limit,
+		]);
+
+		$page = (int)floor($offset / $limit) + 1;
+		$userGratsData = $userGrats->getGratitudePostListAction([
+			'pageSize' => $limit,
+			'pageNum' => $page,
+		]);
+		$authorCollection = new BaseInfoCollection();
+
+		foreach ($userGratsData['AUTHORS'] as $author)
+		{
+			$authorCollection->add(
+				$this->profileRepository->getUserBaseInfoByUserData($author),
+			);
+		}
+
+		return $this->gratitudeRepository->createGratitudeCollectionFromGratsPostsDataAndAuthorCollection(
+			$userGratsData['POSTS'],
+			$authorCollection,
 		);
 	}
 
 	public function getProfileBadges(int $userId): GratitudeBadgeCollection
 	{
-		return $this->profileService->getGratitudeBadges(
-			userId: $userId,
+		$userGrats = new Grats([
+			'profileId' => $userId,
+		]);
+
+		return $this->gratitudeRepository->createGratitudeBadgesFromGratsBadgesData(
+			$userGrats->getGratitudes()['BADGES'],
 		);
 	}
 }

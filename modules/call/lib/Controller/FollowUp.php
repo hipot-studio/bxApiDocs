@@ -353,11 +353,11 @@ class FollowUp extends Engine\Controller
 	}
 
 	/**
-	 * @restMethod call.FollowUp.clearDebug
+	 * @restMethod call.FollowUp.debugClear
 	 * @param int $callId
 	 * @return array|null
 	 */
-	public function clearDebugAction(int $callId): ?array
+	public function debugClearAction(int $callId): ?array
 	{
 		$call = $this->getCall($callId);
 		if (!$call)

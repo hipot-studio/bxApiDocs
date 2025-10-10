@@ -288,6 +288,16 @@ class Call extends JwtController
 				return null;
 			}
 
+			if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED) {
+				$this->addError(new Error('Call already finished', 'call_finished'));
+				return null;
+			}
+
+			if (!$call->hasActiveUsers(false)) {
+				$this->addError(new Error('Call has no active users', 'call_inactive'));
+				return null;
+			}
+
 			if ($pushRequest->requestId)
 			{
 				Idempotence::addKey($pushRequest->requestId);
@@ -644,6 +654,8 @@ class Call extends JwtController
 
 			$call->getSignaling()->sendDisconnectedUsers($callUserRequest->disconnectedUsers);
 		}
+
+		\Bitrix\Call\Call::updateCallCache($call->getId());
 	}
 
 	/**
@@ -683,6 +695,8 @@ class Call extends JwtController
 		}
 
 		$this->setUserStateReady($childCall, $currentUserId, $callRequest->legacyMobile);
+
+		\Bitrix\Call\Call::updateUserActiveCallsCache($currentUserId);
 
 		$users = array_diff($childCall->getAssociatedEntity()->getUsers(), [$currentUserId]);
 

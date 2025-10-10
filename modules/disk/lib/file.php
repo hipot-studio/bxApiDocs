@@ -16,6 +16,7 @@ use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Internals\TrackedObjectTable;
+use Bitrix\Disk\Internals\UniqueCode;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\Realtime\Events\UserRecentsEvent;
 use Bitrix\Disk\Security\ParameterSigner;
@@ -27,6 +28,7 @@ use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
@@ -121,6 +123,11 @@ class File extends BaseObject
 			unset($data['PARENT']);
 		}
 
+		if (!isset($data['UNIQUE_CODE']))
+		{
+			$data['UNIQUE_CODE'] = (new UniqueCode())->generateForNewFile();
+		}
+
 		/** @var File $file */
 		$file = parent::add($data, $errorCollection);
 		if($file)
@@ -171,6 +178,18 @@ class File extends BaseObject
 		$filter['TYPE'] = ObjectTable::TYPE_FILE;
 
 		return parent::load($filter, $with);
+	}
+
+	/**
+	 * @param string $uniqueCode
+	 * @param array $with
+	 * @return File|null
+	 * @noinspection PhpDocMissingThrowsInspection
+	 */
+	public static function loadByUniqueCode(string $uniqueCode, array $with = []): ?static
+	{
+		/** @noinspection PhpUnhandledExceptionInspection */
+		return static::load(['=UNIQUE_CODE' => $uniqueCode], $with);
 	}
 
 	protected static function getClassNameModel(array $row)

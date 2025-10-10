@@ -5,6 +5,9 @@ namespace Bitrix\Intranet\Settings;
 use Bitrix\Intranet\Integration;
 use Bitrix\Intranet\MainPage;
 use Bitrix\Main\Result;
+use Bitrix\UI\Form\FormProvider;
+use Bitrix\UI\Form\UrlProvider;
+use Bitrix\Main\Loader;
 
 class MainPageSettings extends AbstractSettings
 {
@@ -27,14 +30,16 @@ class MainPageSettings extends AbstractSettings
 			$component = new $componentClass;
 			$feedbackParams =
 				$component
-					? $component->getFeedbackParameters('general')
+					? $component->getFeedbackParameters('partner')
 					: []
 			;
+			$feedbackParams['PRESETS']['SOURCE'] = 'MainPageSettings';
+			$isUiLoaded = Loader::includeModule('ui');
 			$feedbackParams = [
 				'id' => $feedbackParams['ID'] ?? 'mainpage_feedback',
-				'forms' => $feedbackParams['FORMS'] ?? [],
-				'presets' => $feedbackParams['PRESETS'] ?? [],
-				'portalUri' => $feedbackParams['PORTAL_URI'] ?? null,
+				'forms' => $isUiLoaded ? (new FormProvider)->getPartnerFormList() : [],
+				'presets' => $feedbackParams['PRESETS'],
+				'portalUri' => $isUiLoaded ? (new UrlProvider())->getPartnerPortalUrl() : null,
 			];
 		}
 

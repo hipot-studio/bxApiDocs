@@ -38,6 +38,8 @@ class Notification extends Base
 		'PUSH' => 4,
 	];
 
+	private static array $typeKeys = ['SITE', 'MAIL', 'XMPP', 'PUSH'];
+
 	/**
 	 * @param string $module
 	 * @param string $name
@@ -416,7 +418,7 @@ class Notification extends Base
 		{
 			foreach ($moduleSchema['NOTIFY'] as $eventName => $eventSchema)
 			{
-				foreach (['SITE', 'MAIL', 'XMPP', 'PUSH'] as $type)
+				foreach (self::$typeKeys as $type)
 				{
 					if ($eventSchema['DISABLED'][$type])
 					{
@@ -524,7 +526,7 @@ class Notification extends Base
 			foreach ($defaultModuleSettings['NOTIFY'] ?? [] as $notifyKey => $notifyValue)
 			{
 				$defaultModuleSettings['NOTIFY'][$notifyKey] =
-					array_replace_recursive($notifyValue, $moduleSettings[$notifyKey] ?? [])
+					array_replace_recursive($notifyValue, self::getSettingByNotifyKey($moduleSettings, $notifyKey))
 				;
 			}
 
@@ -532,6 +534,21 @@ class Notification extends Base
 		}
 
 		return $result;
+	}
+
+	private static function getSettingByNotifyKey(array $moduleSettings, string $notifyKey): array
+	{
+		$setting = [];
+
+		foreach ($moduleSettings[$notifyKey] ?? [] as $name => $value)
+		{
+			if (in_array($name, self::$typeKeys, true))
+			{
+				$setting[$name] = $value;
+			}
+		}
+
+		return $setting;
 	}
 
 	/**

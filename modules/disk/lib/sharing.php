@@ -4,7 +4,6 @@ namespace Bitrix\Disk;
 
 
 use Bitrix\Disk\Controller\DocumentService;
-use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Collab\CollabService;
@@ -620,7 +619,8 @@ final class Sharing extends Internals\Model
 			&& $sharingModel->getLinkObject()->getTypeFile() == TypeFile::FLIPCHART
 		)
 		{
-			$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(),false, 'disk_page');
+			// $uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(),false, 'disk_page');
+			$uri = self::getBoardLink($sharingModel->getLinkObject());
 		}
 		else
 		{
@@ -660,7 +660,8 @@ final class Sharing extends Internals\Model
 
 					if ($isBoard)
 					{
-						$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
+						// $linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
+						$linkToViewDocument = self::getBoardLink($sharingModel->getLinkObject());
 					}
 					else
 					{
@@ -1547,7 +1548,8 @@ final class Sharing extends Internals\Model
 
 			if ($isBoard)
 			{
-				$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
+				//$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
+				$linkToViewDocument = self::getBoardLink($sharingModel->getLinkObject());
 			}
 			else
 			{
@@ -1618,5 +1620,10 @@ final class Sharing extends Internals\Model
 		}
 
 		return $model;
+	}
+
+	private static function getBoardLink(File $file): string
+	{
+		return Driver::getInstance()->getUrlManager()->getUrlForViewBoard($file,false, 'disk_page');
 	}
 }

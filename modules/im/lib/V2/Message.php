@@ -933,8 +933,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getQuotedMessage(?int $messageSize = null): string
 	{
-		$user = $this->getAuthor();
-		$userName = $user?->getName() ?? '';
 		$date = FormatDate('X', $this->getDateCreate(), time() + \CTimeZone::GetOffset());
 		$contextTag = $this->getContextTag();
 		$quoteDelimiter = '------------------------------------------------------';
@@ -943,13 +941,20 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		$quotedMessage =
 			$quoteDelimiter
 			. "\n"
-			. "{$userName} [{$date}] $contextTag\n"
+			. "{$this->getUserNameForQuotedMessage()} [{$date}] $contextTag\n"
 			. $messageContent
 			. "\n"
 			. $quoteDelimiter
 		;
 
 		return $quotedMessage;
+	}
+
+	protected function getUserNameForQuotedMessage(): string
+	{
+		$userName = $this->isSystem() ? Loc::getMessage("IM_MESSAGE_SYSTEM") : $this->getAuthor()?->getName();
+
+		return $userName ?? '';
 	}
 
 	// formatted rich message to output
@@ -1973,8 +1978,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		if ($chat instanceof Im\V2\Chat\CopilotChat)
 		{
 			$engineManager = new Im\V2\Integration\AI\EngineManager();
-			$engineCode = $chat->getEngineCode() ?: null;
-			$engineName = isset($engineCode) ? $engineManager->getEngineNameByCode($engineCode) : null;
+			$engineCode = $chat->getEngineCode();
+			$engineName = $engineManager->getEngineNameByCode($engineCode);
 
 			$chatRole = $roleManager->getMainRole($this->getChatId());
 			$roles[] = $chatRole;

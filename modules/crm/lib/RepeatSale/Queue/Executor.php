@@ -2,8 +2,10 @@
 
 namespace Bitrix\Crm\RepeatSale\Queue;
 
+use Bitrix\Crm\Copilot\AiQueueBuffer\Consumer;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\RepeatSale\AgentsManager;
+use Bitrix\Crm\RepeatSale\AllowedAgentsTimeManager;
 use Bitrix\Crm\RepeatSale\AvailabilityChecker;
 use Bitrix\Crm\RepeatSale\Job\Controller\RepeatSaleJobController;
 use Bitrix\Crm\RepeatSale\Logger;
@@ -167,6 +169,11 @@ final class Executor
 				->setIsOnlyCalc($item->isOnlyCalc())
 				->execute()
 			;
+
+			if (AllowedAgentsTimeManager::getInstance()->isUseTimeLimit())
+			{
+				Consumer::getInstance()->execute();
+			}
 		}
 		catch (\Exception $e)
 		{
@@ -181,7 +188,7 @@ final class Executor
 		return $result;
 	}
 
-	private function getLimit(bool $isOnlyCalc): int
+	public function getLimit(bool $isOnlyCalc): int
 	{
 		if ($isOnlyCalc)
 		{

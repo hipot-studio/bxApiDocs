@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Link\Calendar\CalendarCollection;
 use Bitrix\Im\V2\Link\Calendar\CalendarService;
 use Bitrix\Im\V2\Link\Task\TaskCollection;
 use Bitrix\Im\V2\Link\Task\TaskService;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Sync\Event;
 use Bitrix\Main\Application;
@@ -308,5 +309,11 @@ class CompleteDeletionStrategy extends DeletionStrategy
 	{
 		$this->logToSync(Event::COMPLETE_DELETE_EVENT);
 		$this->deleteFiles();
+		$this->chat->onAfterMessagesDelete($this->messages, $this->getDeletionMode());
+	}
+
+	protected function getDeletionMode(): DeletionMode
+	{
+		return DeletionMode::Complete;
 	}
 }

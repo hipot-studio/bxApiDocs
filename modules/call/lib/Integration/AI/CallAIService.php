@@ -51,20 +51,11 @@ final class CallAIService
 		{
 			$logger->error('Unable process track. Module AI is unavailable. TrackId:'.$track->getId());
 
-			return $result->addError(new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR));
-		}
-		/*
-		if (!CallAISettings::isAutoStartRecordingEnable())
-		{
-			if (!CallAISettings::isBaasServiceHasPackage())
-			{
-				$logger->error('Unable process track. It is not enough baas packages. TrackId:' . $track->getId());
+			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR);
+			$error->allowRecover();
 
-				return $result->addError(new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR,
-					'It is not enough baas packages'));
-			}
+			return $result->addError($error);
 		}
-		*/
 
 		$resultTask = $this->buildTaskByTrack($track);
 		if (!$resultTask->isSuccess())
@@ -118,19 +109,13 @@ final class CallAIService
 	{
 		$result = new Result;
 
-		/** @var Task\AITask $taskToLaunch */
-		$taskToLaunch = [];
-
-		if ($outcome->getType() == SenseType::TRANSCRIBE->value)
-		{
-			$taskToLaunch[] = Task\TranscriptionSummary::class;
-			$taskToLaunch[] = Task\TranscriptionInsights::class;
-			$taskToLaunch[] = Task\TranscriptionOverview::class;
-		}
+		$taskToLaunch = $this->getTaskToLaunchByOutcome($outcome);
 
 		$tasks = [];
-		foreach ($taskToLaunch as $taskClass)
+		foreach ($taskToLaunch as $taskSenseType)
 		{
+			$taskClass = $taskSenseType->getTaskClass();
+
 			$task = new $taskClass();
 			$dbResult = $task
 				->setPayload($outcome)
@@ -148,6 +133,24 @@ final class CallAIService
 		}
 
 		return $result->setData(['tasks' => $tasks]);
+	}
+
+	/**
+	 * @return SenseType[]
+	 */
+	private function getTaskToLaunchByOutcome(Outcome $outcome): array
+	{
+		$taskToLaunch = [];
+		if ($outcome->getType() == SenseType::TRANSCRIBE->value)
+		{
+			$taskToLaunch = [
+				SenseType::OVERVIEW,
+				SenseType::INSIGHTS,
+				SenseType::SUMMARY,
+			];
+		}
+
+		return $taskToLaunch;
 	}
 
 	/**
@@ -225,7 +228,7 @@ final class CallAIService
 		if (!($engine instanceof \Bitrix\AI\Engine))
 		{
 			$log && $logger->error('AI engine is unavailable');
-			$result->addError(new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR));
+			$result->addError((new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR))->allowRecover());
 		}
 		else
 		{
@@ -264,6 +267,7 @@ final class CallAIService
 						use (&$result, &$task)
 						{
 							$error = CallAIError::constructTaskError(CallAIError::AI_TASK_START_FAIL, $processingError, $task);
+							$error->allowRecover();
 
 							$task
 								->setStatus($task::STATUS_FAILED)
@@ -296,6 +300,78 @@ final class CallAIService
 		return $result;
 	}
 
+	/**
+	 * @param int $callId
+	 * @return Result
+	 */
+	public function restartCallAiTask(int $callId): Result
+	{
+		$result = new Result();
+
+		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId);
+
+		// Check transcribe
+		$transcribe = $outcomeCollection?->getOutcomeByType(SenseType::TRANSCRIBE->value);
+		if (!$transcribe)
+		{
+			// Check transcribe Task
+			$transcribeTask = AITask::getTaskForCall($callId, SenseType::TRANSCRIBE);
+			if ($transcribeTask)
+			{
+				if ($transcribeTask->isPending())
+				{
+					return $result;// wait more
+				}
+			}
+
+			// Check track_pack
+			$trackPack = Track::getTrackForCall($callId, Track::TYPE_TRACK_PACK);
+			if (!$trackPack)
+			{
+				return $result->addError(new CallAIError(CallAIError::AI_TRACKPACK_NOT_RECEIVED));
+			}
+
+			return $this->processTrack($trackPack);
+		}
+
+		$taskToLaunch = $this->getTaskToLaunchByOutcome($transcribe);
+		foreach ($taskToLaunch as $taskSenseType)
+		{
+			$outcome = $outcomeCollection?->getOutcomeByType($taskSenseType->value);
+			if (!$outcome)
+			{
+				// Check Task
+				$task = AITask::getTaskForCall($callId, $taskSenseType);
+				if ($task)
+				{
+					if ($task->isPending() || $task->isFinished())
+					{
+						continue;// wait more
+					}
+				}
+
+				$taskClass = $taskSenseType->getTaskClass();
+
+				$task = new $taskClass();
+				$dbResult = $task
+					->setPayload($transcribe)
+					->setLanguageId($this->getLanguageId())
+					->save()
+				;
+				if ($dbResult->isSuccess())
+				{
+					$launchResult = $this->launchTask($task);
+					if (!$launchResult->isSuccess())
+					{
+						$result->addErrors($launchResult->getErrors());
+						break;
+					}
+				}
+			}
+		}
+
+		return $result;
+	}
 
 	/**
 	 * Success AI callback handler.
@@ -460,6 +536,7 @@ final class CallAIService
 
 		$processingError = $event->getParameter('error');
 		$error = CallAIError::constructTaskError(CallAIError::AI_TASK_FAILED, $processingError, $task);
+		$error->allowRecover();
 
 		$task
 			->setStatus(AITask::STATUS_FAILED)
@@ -497,11 +574,17 @@ final class CallAIService
 		$checkResult = new Result;
 		if (!$engine->isAvailableByTariff())
 		{
-			$checkResult->addError(new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR));// AI service unavailable by tariff
+			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR);// AI service unavailable by tariff
+			$error->allowRecover();
+
+			$checkResult->addError($error);
 		}
 		elseif (!$engine->isAvailableByAgreement())
 		{
-			$checkResult->addError(new CallAIError(CallAIError::AI_AGREEMENT_ERROR));// AI service agreement must be accepted
+			$error = new CallAIError(CallAIError::AI_AGREEMENT_ERROR);// AI service agreement must be accepted
+			$error->allowRecover();
+
+			$checkResult->addError($error);
 		}
 
 		return $checkResult;
@@ -677,56 +760,42 @@ final class CallAIService
 			}
 		};
 
-		// Check call overview
-		$overview = Outcome::getOutcomeForCall($callId, SenseType::OVERVIEW);
-		if ($overview)
+		// Check all followup tasks
+		$taskCompleted = 0;
+		$waitForTasks = [SenseType::OVERVIEW, SenseType::INSIGHTS, SenseType::SUMMARY, SenseType::TRANSCRIBE];
+		/** @var SenseType $senseType */
+		foreach ($waitForTasks as $senseType)
 		{
-			return $result; // ok
+			$taskOutcome = Outcome::getOutcomeForCall($callId, $senseType);
+			if ($taskOutcome)
+			{
+				$taskCompleted ++;
+				continue;// ok
+			}
+
+			$task = AITask::getTaskForCall($callId, $senseType);
+			if ($task)
+			{
+				if ($task->isPending())
+				{
+					$log("Check ai task: Call #{$callId}, {$senseType->value} is still pending.");
+
+					return $result->setData(['repeat' => true]);// wait more
+				}
+				if (!$task->isFinished())
+				{
+					$log("Check ai task: Call #{$callId}, {$senseType->value} task has failed.");
+
+					$error = new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR);
+					$error->allowRecover();
+
+					return $result->addError($error);
+				}
+			}
 		}
-
-		// Check overview Task
-		$overviewTask = AITask::getTaskForCall($callId, SenseType::OVERVIEW);
-		if ($overviewTask)
+		if ($taskCompleted == count($waitForTasks))
 		{
-			if ($overviewTask->isPending())
-			{
-				$log("Check ai task: Call #{$callId}, Overview is still pending.");
-
-				return $result->setData(['repeat' => true]);// wait more
-			}
-			if (!$overviewTask->isFinished())
-			{
-				$log("Check ai task: Call #{$callId}, Overview task has failed.");
-
-				return $result->addError(new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR));
-			}
-		}
-
-		// Check transcribe
-		$transcribe = Outcome::getOutcomeForCall($callId, SenseType::TRANSCRIBE);
-		if ($transcribe)
-		{
-			$log("Check ai task: Call #{$callId}, Overview task has failed.");
-
-			return $result->addError(new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR));
-		}
-
-		// Check transcribe Task
-		$transcribeTask = AITask::getTaskForCall($callId, SenseType::TRANSCRIBE);
-		if ($transcribeTask)
-		{
-			if ($transcribeTask->isPending())
-			{
-				$log("Check ai task: Call #{$callId}, Transcription is still pending.");
-
-				return $result->setData(['repeat' => true]);// wait more
-			}
-			if ($transcribeTask->isFinished())
-			{
-				$log("Check ai task: Call #{$callId}, Transcription task has failed.");
-
-				return $result->addError(new CallAIError(CallAIError::AI_TRANSCRIBE_TASK_ERROR));
-			}
+			return $result;//ок
 		}
 
 		// Check track_pack
@@ -735,7 +804,10 @@ final class CallAIService
 		{
 			$log("Check ai task: Call #{$callId}, Transcription task has failed.");
 
-			return $result->addError(new CallAIError(CallAIError::AI_TRANSCRIBE_TASK_ERROR));
+			$error = new CallAIError(CallAIError::AI_TRANSCRIBE_TASK_ERROR);
+			$error->allowRecover();
+
+			return $result->addError($error);
 		}
 
 		$log("Check ai task: Call #{$callId}, Trackpack not received.");
@@ -777,6 +849,7 @@ final class CallAIService
 		}
 
 		$trackList = CallTrackTable::query()
+			->setSelect(['FILE_ID', 'DISK_FILE_ID', 'EXTERNAL_TRACK_ID'])
 			->where('CALL_ID', $callId)
 			->exec()
 		;

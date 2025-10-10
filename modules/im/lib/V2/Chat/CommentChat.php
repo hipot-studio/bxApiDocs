@@ -165,7 +165,10 @@ class CommentChat extends GroupChat
 
 	public function onAfterMessageUpdate(Message $message): Result
 	{
-		return $this->subscribeUsers(true, $message->getUserIdsFromMention(), $message->getPrevId());
+		$result = $this->subscribeUsers(true, $message->getUserIdsFromMention(), $message->getPrevId());
+		$parentResult = parent::onAfterMessageUpdate($message);
+
+		return Result::merge($parentResult, $result);
 	}
 
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void

@@ -46,6 +46,7 @@ class User extends Internals\Model
 	private $isExternalAuthEmail;
 	/** @var bool */
 	private $isCrmEmail;
+	private $isExternalBotUser = false;
 
 	/** @var User[] */
 	protected static $loadedUsers;
@@ -116,6 +117,12 @@ class User extends Internals\Model
 			if (isset($attributes['UF_DEPARTMENT']))
 			{
 				$userModel->setIsIntranetUser($attributes);
+			}
+
+			/** @see \Bitrix\Im\Bot::EXTERNAL_AUTH_ID */
+			if (isset($attributes['EXTERNAL_AUTH_ID']) &&  $attributes['EXTERNAL_AUTH_ID'] === 'bot')
+			{
+				$userModel->setIsBotUser(true);
 			}
 
 			self::$loadedUsers[$id] = $userModel;
@@ -375,6 +382,20 @@ class User extends Internals\Model
 	public function isExternalAuthEmail()
 	{
 		return !$this->isIntranetUser() && $this->isExternalAuthEmail;
+	}
+
+	/**
+	 * Checks is a bot user.
+	 * @return bool
+	 */
+	public function isBotUser():bool
+	{
+		return (bool)$this->isExternalBotUser;
+	}
+
+	public function setIsBotUser($value)
+	{
+		$this->isExternalBotUser = (bool)$value;
 	}
 
 	/**

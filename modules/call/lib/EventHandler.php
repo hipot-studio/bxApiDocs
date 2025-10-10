@@ -66,7 +66,7 @@ class EventHandler
 	}
 
 	/**
-	 * Handles call finished event to clear active calls cache
+	 * Handles call finished event: update active calls cache for all participants
 	 *
 	 * @event 'call:onCallFinished'
 	 * @param Event $event
@@ -80,9 +80,7 @@ class EventHandler
 			return;
 		}
 
-		ActiveCallsCache::clearCallCache($call->getId());
-
-		// Terminate all other calls in the same chat when this call finishes
+		\Bitrix\Call\Call::updateCallCache($call->getId());
 		\Bitrix\Call\Call::terminateAllCallsInChat($call->getChatId(), $call->getId());
 	}
 }

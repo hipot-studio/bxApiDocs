@@ -220,7 +220,6 @@ class Signaling
 				'notificationsToCancel' => ['IM_CALL_'.$this->call->getId()],
 				'isVoip' => true,
 				'callkit' => true,
-				'filterCallback' => [static::class, 'filterPushesForApple'],
 			]
 		];
 

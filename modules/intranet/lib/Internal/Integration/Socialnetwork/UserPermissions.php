@@ -24,7 +24,7 @@ class UserPermissions
 
 		return \CSocNetUser::canProfileView(
 			$user->getId(),
-			$targetUser->toArray(),
+			$targetUser->getId(),
 			SITE_ID,
 			ComponentHelper::getUrlContext()
 		);

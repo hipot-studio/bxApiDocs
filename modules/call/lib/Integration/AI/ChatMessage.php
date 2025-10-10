@@ -17,6 +17,7 @@ use Bitrix\Call\Integration\AI\Task\AITask;
 use Bitrix\Call\Integration\AI\Outcome\Overview;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 use Bitrix\Main\SiteTable;
+use Bitrix\Call\Integration\Im\CallFollowupBot;
 
 
 class ChatMessage
@@ -69,7 +70,7 @@ class ChatMessage
 				break;
 
 			case CallAIError::AI_MODULE_ERROR:
-				$errorMessage = Loc::getMessage('ERROR_AI_MODULE_ERROR');
+				$errorMessage = self::getMessage('ERROR_AI_MODULE_ERROR');
 				break;
 
 			case CallAIError::AI_UNAVAILABLE_ERROR:
@@ -378,9 +379,8 @@ class ChatMessage
 		return $message;
 	}
 
-	public static function generateTaskStartMessage(AITask $task, Chat $chat): ?Message
+	public static function generateTaskStartMessage(int $callId, Chat $chat): ?Message
 	{
-		$callId = $task->getCallId();
 		$linkMess = self::makeCallStartMessageLink($callId, $chat->getId());
 
 		$message = new Message();
@@ -391,6 +391,10 @@ class ChatMessage
 			])
 		);
 		$message->markAsSystem(true);
+		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
+			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_START,
+			'CALL_ID' => $callId,
+		]);
 
 		return $message;
 	}
@@ -413,13 +417,33 @@ class ChatMessage
 		}
 
 		$message = new Message();
-		$message->setMessage($mess);
 		$message->markAsSystem(true);
 
 		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_FAILED,
 			'CALL_ID' => $callId,
 		]);
+
+		if (
+			$error instanceof CallAIError
+			&& $error->recoverable()
+		)
+		{
+			/*
+			$continueLink = \Bitrix\Call\Library::getCallSliderUrl($callId, ['followup' => 'restart']);
+			$mess .= "[br][url={$continueLink}]". Loc::getMessage('CALL_NOTIFY_COPILOT_CONTINUE').'[/url]';
+			*/
+			$keyboard = new \Bitrix\Im\Bot\Keyboard(CallFollowupBot::getBotId());
+			$button = [
+				'COMMAND' => CallFollowupBot::COMMAND_CONTINUE_FOLLOWUP,
+				'COMMAND_PARAMS' => 'CALL_ID:' . $callId,
+				'TEXT' => self::getMessage('CALL_NOTIFY_COPILOT_CONTINUE'),
+			];
+			$keyboard->addButton($button);
+			$message->getParams()->get(Params::KEYBOARD)->setValue($keyboard);
+		}
+
+		$message->setMessage($mess);
 
 		return $message;
 	}

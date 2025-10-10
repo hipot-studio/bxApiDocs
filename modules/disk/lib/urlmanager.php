@@ -11,11 +11,15 @@ use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\FolderTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\ParameterSigner;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration as UnifiedLinkConfiguration;
+use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
 use Bitrix\Disk\View\Video;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Result;
 
 class UrlManager implements IErrorable
 {
@@ -23,6 +27,7 @@ class UrlManager implements IErrorable
 	protected $errorCollection;
 	/** @var  BaseComponent */
 	protected $component;
+	private UrlGenerator $unifiedUrlGenerator;
 
 	/**
 	 * Constructor UrlManager
@@ -30,6 +35,8 @@ class UrlManager implements IErrorable
 	public function __construct()
 	{
 		$this->errorCollection = new ErrorCollection;
+
+		$this->unifiedUrlGenerator = new UrlGenerator($this->getHostUrl());
 	}
 
 	/**
@@ -655,18 +662,41 @@ class UrlManager implements IErrorable
 		return '/company/personal/user/'.$userId.'/disk/boards/' . $get;
 	}
 
-	public function getUrlForViewBoard(int $fileId, $absolute = false, $c_element = null)
+	public function getUrlForViewBoard(File $file, $absolute = false, $c_element = null): string
 	{
-		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $fileId . '/open' . ($c_element ? '?c_element=' . $c_element : '');
+		if (UnifiedLinkConfiguration::supportsUnifiedLink($file))
+		{
+			return $this->getUnifiedLink($file, [
+				'absolute' => $absolute,
+			]);
+		}
+
+		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $file->getId() . '/open' . ($c_element ? '?c_element=' . $c_element : '');
 	}
 
-	public function getUrlForViewBoardVersion(int $fileId, int $versionId, $absolute = false)
+	public function getUrlForViewBoardVersion(File $file, int $versionId, $absolute = false): string
 	{
-		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $fileId . '/open?versionId=' . $versionId;
+		if (UnifiedLinkConfiguration::supportsUnifiedLink($file))
+		{
+			return $this->getUnifiedLink($file, [
+				'absolute' => $absolute,
+				'versionId' => $versionId,
+			]);
+		}
+
+		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $file->getId() . '/open?versionId=' . $versionId;
 	}
 
-	public function getUrlForViewAttachedBoard(int $attachedFileId, $absolute = false, $c_element = null)
+	public function getUrlForViewAttachedBoard(File $file, int $attachedFileId, $absolute = false, $c_element = null): string
 	{
+		if (UnifiedLinkConfiguration::supportsUnifiedLink($file))
+		{
+			return $this->getUnifiedLink($file, [
+				'absolute' => $absolute,
+				'attachedId' => $attachedFileId,
+			]);
+		}
+
 		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $attachedFileId . '/openAttached' . ($c_element ? '?c_element=' . $c_element : '');
 	}
 
@@ -998,6 +1028,47 @@ class UrlManager implements IErrorable
 	}
 
 	/**
+	 * @param File $file
+	 * @param array{absolute: bool, attachedId: ?int, versionId: ?int, noRedirect: bool} $options
+	 * @return string
+	 */
+	public function getUnifiedLink(File $file, array $options = []): string
+	{
+		return $this->buildUnifiedLink($file, false, $options);
+	}
+
+	/**
+	 * @param File $file
+	 * @param array{absolute: bool, attachedId: ?int, versionId: ?int, noRedirect: bool} $options
+	 * @return string
+	 */
+	public function getUnifiedEditLink(File $file, array $options = []): string
+	{
+		return $this->buildUnifiedLink($file, true, $options);
+	}
+
+	/**
+	 * @param File $file
+	 * @param bool $editMode
+	 * @param array{absolute: bool, attachedId: ?int, versionId: ?int, noRedirect: bool} $options
+	 * @return string
+	 */
+	private function buildUnifiedLink(File $file, bool $editMode, array $options): string
+	{
+		$absolute = $options['absolute'] ?? false;
+		$attachedId = $options['attachedId'] ?? null;
+		$versionId = $options['versionId'] ?? null;
+		$noRedirect = $options['noRedirect'] ?? false;
+
+		return $this->unifiedUrlGenerator
+			->forEditing($editMode)
+			->asAbsolute($absolute)
+			->withoutRedirect($noRedirect)
+			->build($file, $attachedId, $versionId)
+		;
+	}
+
+	/**
 	 * Getting array of errors.
 	 * @return Error[]
 	 */
@@ -1246,5 +1317,92 @@ class UrlManager implements IErrorable
 		}
 
 		return implode('/', $pathItems) . '/';
+	}
+
+	/**
+	 * @param string $entityType
+	 * @param string $entityId
+	 * @param string $path
+	 * @param ?CurrentUser $currentUser
+	 * @return Result
+	 */
+	public function resolveFolderPath(string $entityType, string $entityId, string $path, ?CurrentUser $currentUser = null)
+	{
+		$result = new Result();
+
+		$storage = $this->getStorageByType($entityType, $entityId);
+		if (!$storage)
+		{
+			$result->addError(new Error('Could not find storage.'));
+
+			return $result;
+		}
+
+		$securityContext = $storage->getSecurityContext($currentUser ?? CurrentUser::get());
+
+		if ($path === '/')
+		{
+			$result->setData([
+				'targetFolder' => $storage->getRootObject(),
+				'breadcrumbs' => [],
+			]);
+
+			return $result;
+		}
+
+		$resolvedData = $this->resolvePathUnderRootObject($storage->getRootObject(), $path);
+		if (empty($resolvedData['RELATIVE_ITEMS']))
+		{
+			$result->addError(new Error('Could not resolve path.'));
+
+			return $result;
+		}
+
+		[
+			'RELATIVE_ITEMS' => $breadcrumbs,
+			'OBJECT_ID' => $currentFolderId,
+		] = $resolvedData;
+
+		$folder = Folder::loadById($currentFolderId);
+		if (!$folder)
+		{
+			$result->addError(new Error('Could not find folder by id.'));
+
+			return $result;
+		}
+
+		if (!$folder->canRead($securityContext))
+		{
+			$result->addError(new Error('Access denied.'));
+
+			return $result;
+		}
+
+		$reformattedBreadcrumbs = [];
+		foreach ($breadcrumbs as $crumb)
+		{
+			$reformattedBreadcrumbs[] = [
+				'id' => (int)$crumb['ID'],
+				'name' => $crumb['NAME'],
+			];
+		}
+
+		$result->setData([
+			'targetFolder' => $folder,
+			'breadcrumbs' => $reformattedBreadcrumbs,
+		]);
+
+		return $result;
+	}
+
+	private function getStorageByType(string $entityType, $entityId): ?Storage
+	{
+		return match($entityType)
+		{
+			'user' => Driver::getInstance()->getStorageByUserId((int)$entityId),
+			'group' => Driver::getInstance()->getStorageByGroupId((int)$entityId),
+			'common' => Driver::getInstance()->getStorageByCommonId($entityId),
+			default => null,
+		};
 	}
 }

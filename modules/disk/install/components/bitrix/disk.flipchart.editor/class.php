@@ -5,6 +5,7 @@ use Bitrix\Disk\Document\Flipchart\Configuration;
 use Bitrix\Disk\Document\Flipchart\JwtService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\GuestUser;
+use Bitrix\Disk\document\SharingControlType;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Integration\Bitrix24Manager;
@@ -19,19 +20,27 @@ use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Context;
 
-if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die();
+if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die;
 
 Loc::loadMessages(__FILE__);
 
 class CDiskFlipchartViewerComponent extends DiskComponent
 {
 
+	const DISPLAY_VARIANTS = [
+		'desktop',
+		'mobile',
+	];
+
+	const DEFAULT_DISPLAY_VARIANT = 'desktop';
+
 	private bool $isExternalLinkMode = false;
+	private bool $isUnifiedLinkMode = false;
 	private bool $isViewMode = false;
 	private bool $isEditMode = false;
 	private ?DocumentSession $session = null;
 
-	private function convertDocumentId(int | string $documentId, $versionId = null): string
+	private function convertDocumentId(int|string $documentId, $versionId = null): string
 	{
 		return BoardService::convertDocumentIdToExternal($documentId, $versionId);
 	}
@@ -66,6 +75,17 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		);
 	}
 
+	private function getDisplayVariant()
+	{
+		$variant = $this->arParams['DISPLAY_VARIANT'] ?? $_GET['variant'] ?? null;
+		if (!in_array($variant, self::DISPLAY_VARIANTS))
+		{
+			$variant = self::DEFAULT_DISPLAY_VARIANT;
+		}
+
+		return $variant;
+	}
+
 	private function prepareSdkParams(): void
 	{
 		$session = $this->session;
@@ -91,6 +111,10 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		$this->arResult['SHOULD_BLOCK_EXTERNAL_LINK_FEATURE'] = (bool)$featureBlocker;
 		$this->arResult['BLOCKER_EXTERNAL_LINK_FEATURE'] = $featureBlocker;
 		$this->arResult['SHOULD_SHOW_SHARING_BUTTON'] = $this->isEditMode && !$this->isExternalLinkMode;
+		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType()->value;
+		$this->arResult['DISPLAY_VARIANT'] = $this->getDisplayVariant();
+		$this->arResult['IS_UNIFIED_LINK_MODE'] = $this->isUnifiedLinkMode;
+		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
 	}
 
 	protected function prepareParams(): void
@@ -101,6 +125,7 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		{
 			$this->session = $this->arParams['DOCUMENT_SESSION'];
 			$this->isExternalLinkMode = (bool)($this->arParams['EXTERNAL_LINK_MODE'] ?? false);
+			$this->isUnifiedLinkMode = (bool)($this->arParams['UNIFIED_LINK_MODE'] ?? false);
 			$this->isViewMode = $this->session->getType() === DocumentSession::TYPE_VIEW;
 			$this->isEditMode = $this->session->getType() === DocumentSession::TYPE_EDIT;
 		}
@@ -109,7 +134,6 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 			throw new ArgumentException('DOCUMENT_SESSION is a required parameter!');
 		}
 	}
-
 
 	protected function processActionDefault(): void
 	{
@@ -123,14 +147,15 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 	{
 		/** @var ?File $originalFile */
 		$originalFile = $this->arParams['ORIGINAL_FILE'];
-		return $originalFile && time() - $originalFile->getCreateTime()->getTimestamp() < 30;;
+
+		return $originalFile && time() - $originalFile->getCreateTime()->getTimestamp() < 30;
 	}
 
 	protected function sendAnalytics(): void
 	{
 		$isNewElement = $this->isNewElement();
 
-		Application::getInstance()->addBackgroundJob(function() use ($isNewElement){
+		Application::getInstance()->addBackgroundJob(function () use ($isNewElement) {
 			$event = new AnalyticsEvent('open', 'boards', 'boards');
 			if ($_GET['c_element'] ?? null)
 			{
@@ -182,4 +207,29 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		return GuestUser::create();
 	}
 
+	private function getSharingControlType(): SharingControlType
+	{
+		$currentUser = CurrentUser::get();
+		$canUserChangeRights = $this->session->canUserChangeRights($currentUser);
+		$canUserShare = $this->session->canUserShare($currentUser);
+
+		// todo: block by feature?
+
+		if (!$canUserChangeRights && !$canUserShare)
+		{
+			return SharingControlType::WithoutEdit;
+		}
+
+		if ($canUserChangeRights)
+		{
+			return SharingControlType::WithChangeRights;
+		}
+
+		if ($canUserShare)
+		{
+			return SharingControlType::WithSharing;
+		}
+
+		return SharingControlType::WithoutEdit;
+	}
 }

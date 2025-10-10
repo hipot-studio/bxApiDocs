@@ -207,6 +207,7 @@ class Comment
 				'FROM_USER_ID' => $fromUserId,
 				'NOTIFY_TYPE' => IM_NOTIFY_FROM,
 				'NOTIFY_MODULE' => Driver::MODULE_ID,
+				'NOTIFY_EVENT' => 'mention',
 				'NOTIFY_TAG' => 'RPA|MESSAGE_TIMELINE_MENTION|' . $id,
 				'NOTIFY_MESSAGE' => $message,
 			]);

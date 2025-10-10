@@ -43,7 +43,7 @@ class RepeatSaleForceMode extends BaseFeature
 
 		if (!Feature::enabled(Feature\RepeatSale::class))
 		{
-			(new Logger())->info('The repeat sales feature is not enabled on the portal');
+			(new Logger())->info('The repeat sales feature is not enabled on the portal', []);
 
 			return;
 		}

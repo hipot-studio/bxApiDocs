@@ -62,6 +62,7 @@ use CGlobalCounter;
 use CIMContactList;
 use CIMNotify;
 use CPushManager;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 
 /**
  * Chat version #2
@@ -717,6 +718,39 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function onAfterMessageUpdate(Message $message): Result
 	{
+		Sync\Logger::getInstance()->add(
+			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::UPDATED_MESSAGE_ENTITY, $message->getId()),
+			fn () => $this->getRelations()->getUserIds(),
+			$this
+		);
+
+		return new Result();
+	}
+
+	public function onAfterMessagesDelete(MessageCollection $messages, DeletionMode $deletionMode): Result
+	{
+		return new Result();
+	}
+
+	public function onAfterMessagesRead(MessageCollection $messages, int $readerId): Result
+	{
+		Sync\Logger::getInstance()->add(
+			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $this->getChatId()),
+			$readerId,
+			$this
+		);
+
+		return new Result();
+	}
+
+	public function onAfterAllMessagesRead(int $readerId): Result
+	{
+		Sync\Logger::getInstance()->add(
+			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $this->getChatId()),
+			$readerId,
+			$this
+		);
+
 		return new Result();
 	}
 

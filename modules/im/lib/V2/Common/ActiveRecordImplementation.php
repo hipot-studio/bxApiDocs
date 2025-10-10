@@ -341,7 +341,7 @@ trait ActiveRecordImplementation
 
 			if (
 				isset($field['field'])
-				&& (isset($this->{$field['field']}) || $field['nullable'] === true)
+				&& (isset($this->{$field['field']}) || ($field['nullable'] ?? false) === true)
 			)
 			{
 				if (

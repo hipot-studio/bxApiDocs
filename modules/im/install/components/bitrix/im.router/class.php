@@ -202,8 +202,6 @@ class ImRouterComponent extends \CBitrixComponent
 
 	private function isChatEmbeddedOnPage(): bool
 	{
-		$application = Locator::getMessenger()->getApplication();
-
-		return $application->isAirDesignEnabled() && $application->shouldHideQuickAccess();
+		return Locator::getMessenger()->getApplication()->shouldHideQuickAccess();
 	}
 }

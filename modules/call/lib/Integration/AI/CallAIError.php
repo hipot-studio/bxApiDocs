@@ -25,18 +25,19 @@ class CallAIError extends \Bitrix\Call\Error
 		AI_OVERVIEW_TASK_ERROR = 'AI_OVERVIEW_TASK_ERROR'
 	;
 
+	protected bool $recoverable = false;
+
 	/**
 	 * Checks if error fired by ai module.
 	 * @see \Bitrix\AI\Engine\Engine::onResponseError
 	 */
 	public function isAiGeneratedError(): bool
 	{
-		// Errors comes from AI module are started with prefix AI_ENGINE_ERROR_
 		return
 			str_starts_with($this->getCode(), 'AI_ENGINE_ERROR')
 			|| str_starts_with($this->getCode(), 'LIMIT_IS_EXCEEDED')
 			|| str_starts_with($this->getCode(), 'CLOUD_REGISTRATION')
-			|| $this->getCode() == 'RATE_LIMIT'
+			|| $this->getCode() === 'RATE_LIMIT'
 		;
 	}
 
@@ -53,7 +54,7 @@ class CallAIError extends \Bitrix\Call\Error
 		if ($processingError instanceof \Bitrix\Main\Error)
 		{
 			$error->code = $processingError->getCode();
-			$error->message = $processingError->getMessage();
+			$error->message = static::htmlToBbCodeLink($processingError->getMessage());
 		}
 
 		if (
@@ -72,7 +73,32 @@ class CallAIError extends \Bitrix\Call\Error
 			}
 		}
 
+		if (
+			$error->isAiGeneratedError()
+			|| $error->code !== 'HASH_EXPIRED'
+		)
+		{
+			$error->allowRecover();
+		}
+
 		return $error;
+	}
+
+	public function recoverable(): bool
+	{
+		return $this->recoverable;
+	}
+
+	public function allowRecover(): self
+	{
+		$this->recoverable = true;
+		return $this;
+	}
+
+	public function disallowRecover(): self
+	{
+		$this->recoverable = false;
+		return $this;
 	}
 
 	private static function detectRowError(string $againstError, AITask $task): string
@@ -108,7 +134,7 @@ class CallAIError extends \Bitrix\Call\Error
 					&& !str_starts_with(ltrim($row['RESULT_TEXT']), '{')
 				)
 				{
-					return $row['RESULT_TEXT'];
+					return static::htmlToBbCodeLink($row['RESULT_TEXT']);
 				}
 			}
 		}

@@ -1,19 +1,15 @@
 <?php
 
 use Bitrix\Disk;
-use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Type\DocumentGridVariant;
 use Bitrix\Disk\TypeFile;
-use Bitrix\Disk\User;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Engine\Contract\Controllerable;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\UiTour;
-use Bitrix\Main\Web\Uri;
 
 if(!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
@@ -144,7 +140,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				'EXT' => $file->getExtension(),
 				'TYPE' => $file->getType(),
 				'object' => $file,
-				'OPEN_DOCUMENT_LINK' => $this->getUrlManager()->getUrlForViewBoard($file->getId(), false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page'),
+				'OPEN_DOCUMENT_LINK' => $this->getUrlManager()->getUrlForViewBoard($file, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page'),
 			];
 
 			$sourceUri = new Main\Web\Uri($urlManager->getUrlForDownloadFile($file));
@@ -183,12 +179,13 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			{
 				if ($file->getExtra()->get('ATTACHED_OBJECT_ID'))
 				{
-					$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewAttachedBoard($file->getExtra()->get('ATTACHED_OBJECT_ID'), false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page');
-				}
-				else
+					$attachedId = (int)$file->getExtra()->get('ATTACHED_OBJECT_ID');
+					$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewAttachedBoard($file, $attachedId, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page');
+				} else
 				{
-					$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($fileId, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page');
+					$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($file, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page');
 				}
+
 				$attr->addAction([
 					'type' => 'open',
 					'buttonIconClass' => ' ',

@@ -141,6 +141,7 @@ final class TrackService
 				$log && $logger->error('Unable process track. Module AI is unavailable. TrackId:'.$track->getId());
 
 				$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR);
+				$error->allowRecover();
 
 				$call = Registry::getCallWithId($track->getCallId());
 				NotifyService::getInstance()->sendTaskFailedMessage($error, $call);

@@ -55,10 +55,13 @@ class CIMNotifySchema
 						"DISABLED" => [IM_NOTIFY_FEATURE_SITE, IM_NOTIFY_FEATURE_XMPP, IM_NOTIFY_FEATURE_MAIL],
 					],
 					"openChat" => [
-						"NAME" => GetMessage('IM_NS_OPEN_NEW_MSGVER_1'),
+						"NAME" => GetMessage('IM_NS_OPEN_NEW_MSGVER_2'),
 						"MAIL" => 'N',
 						"PUSH" => 'Y',
 						"DISABLED" => [IM_NOTIFY_FEATURE_SITE, IM_NOTIFY_FEATURE_XMPP, IM_NOTIFY_FEATURE_MAIL],
+					],
+					"like" => [
+						"NAME" => GetMessage('IM_NS_LIKE_MSGVER_1'),
 					],
 					"mention" => [
 						"NAME" => GetMessage('IM_NS_MENTION_2'),

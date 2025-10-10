@@ -1434,7 +1434,7 @@ class CIntranetUtils
 
 		if ($supportNew && Loader::includeModule('humanresources'))
 		{
-			$structure = StructureBackwardAdapter::getStructure();
+			$structure = StructureBackwardAdapter::getStructure(null, null);
 
 			if (!empty($structure) && !empty($structure['DATA']))
 			{

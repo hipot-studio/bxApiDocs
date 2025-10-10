@@ -46,11 +46,14 @@ class EventService
 			CallAIService::getInstance()->setupExpectation($call->getId());
 
 			$chat = Chat::getInstance($call->getChatId());
-			$message = ChatMessage::generateCallFinishedMessage($call, $chat);
-			if ($message)
+			if ($chat->getId() == $call->getChatId())
 			{
-				$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
-				NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
+				$message = ChatMessage::generateCallFinishedMessage($call, $chat);
+				if ($message)
+				{
+					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
+				}
 			}
 
 			(new FollowUpAnalytics($call))->addStopRecording();
@@ -67,22 +70,22 @@ class EventService
 			return;
 		}
 
+		/*
 		$task = $event->getParameters()['task'] ?? null;
 
 		if ($task instanceof \Bitrix\Call\Integration\AI\Task\TranscribeCallRecord)
 		{
-			/*
 			$chat = Chat::getInstance($task->fillCall()->getChatId());
 
-			$message = ChatMessage::generateTaskStartMessage($task, $chat);
+			$message = ChatMessage::generateTaskStartMessage($task->getCallId(), $chat);
 			if ($message)
 			{
 				//$chat->sendMessage($message);
 				$notifyService = \Bitrix\Call\NotifyService::getInstance();
 				$notifyService->sendMessageDeferred($chat, $message);
 			}
-			*/
 		}
+		*/
 	}
 
 	/**
@@ -107,16 +110,18 @@ class EventService
 			{
 				$call = $outcome->fillCall();
 				$chat = Chat::getInstance($call->getChatId());
-
-				$messageOutcome = ChatMessage::generateOverviewMessage($outcome->getCallId(), $outcomeCollection, $chat);
-				if ($messageOutcome)
+				if ($chat->getId() == $call->getChatId())
 				{
-					NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome);
+					$messageOutcome = ChatMessage::generateOverviewMessage($outcome->getCallId(), $outcomeCollection, $chat);
+					if ($messageOutcome)
+					{
+						NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome);
 
-					CallAIService::getInstance()->removeExpectation($call->getId());
+						CallAIService::getInstance()->removeExpectation($call->getId());
 
-					$callInstance = \Bitrix\Im\Call\Registry::getCallWithId($call->getId());
-					(new FollowUpAnalytics($callInstance))->addFollowUpResultMessage();
+						$callInstance = \Bitrix\Im\Call\Registry::getCallWithId($call->getId());
+						(new FollowUpAnalytics($callInstance))->addFollowUpResultMessage();
+					}
 				}
 			}
 		}

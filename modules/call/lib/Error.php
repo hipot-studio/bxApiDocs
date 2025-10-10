@@ -84,4 +84,15 @@ class Error extends \Bitrix\Main\Error
 	{
 		return Loc::getMessage("ERROR_{$code}_DESC", $replacements) ?? '';
 	}
+
+	protected static function htmlToBbCodeLink(string $html): string
+	{
+		return preg_replace(
+			[
+				"#<a[^>]+href\\s*=\\s*('|\")(.+?)(?:\\1)[^>]*>(.*?)</a[^>]*>#isu",
+				"#<a[^>]+href(\\s*=\\s*)([^'\">]+)>(.*?)</a[^>]*>#isu"
+			],
+			"[url=\\2]\\3[/url]", $html
+		);
+	}
 }

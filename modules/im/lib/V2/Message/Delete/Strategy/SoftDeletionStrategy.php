@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Message\Delete\Strategy;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\NullChat;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Sync\Event;
 use Bitrix\Main\Localization\Loc;
@@ -46,6 +47,7 @@ class SoftDeletionStrategy extends DeletionStrategy
 	{
 		$this->logToSync(Event::DELETE_EVENT);
 		$this->deleteFiles();
+		$this->chat->onAfterMessagesDelete($this->messages, $this->getDeletionMode());
 	}
 
 	private function getMessageOut(Message $message): string
@@ -53,5 +55,10 @@ class SoftDeletionStrategy extends DeletionStrategy
 		$date = $message->getDateCreate()?->toString();
 
 		return Loc::getMessage('IM_MESSAGE_DELETED_OUT', ['#DATE#' => $date]) ?? '';
+	}
+
+	protected function getDeletionMode(): DeletionMode
+	{
+		return DeletionMode::Soft;
 	}
 }

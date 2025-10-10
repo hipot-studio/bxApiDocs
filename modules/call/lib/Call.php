@@ -63,8 +63,8 @@ class Call
 		while ($row = $callList->fetch())
 		{
 			$call = CallFactory::createWithArray($row['PROVIDER'], $row);
-			self::callsCache()->updateCallCache($call->getId());
 			$call->finish();
+			self::callsCache()->updateCallCache($call->getId());
 		}
 	}
 

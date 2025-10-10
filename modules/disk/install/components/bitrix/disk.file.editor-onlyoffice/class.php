@@ -3,6 +3,7 @@
 use Bitrix\Disk;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
+use Bitrix\Disk\document\SharingControlType;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals\BaseComponent;
@@ -301,7 +302,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 		$this->arResult['EDITOR_JSON'] = Json::encode($editorConfigData);
 
-		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType($documentSession);
+		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType($documentSession)?->value;
 		$this->arResult['PULL_CONFIG'] = null;
 		$publicPullConfigurator = new Disk\Document\Online\PublicPullConfigurator();
 		if ($publicPullConfigurator->getErrors())
@@ -396,7 +397,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		);
 	}
 
-	protected function getSharingControlType(Disk\Document\Models\DocumentSession $documentSession): ?string
+	protected function getSharingControlType(Disk\Document\Models\DocumentSession $documentSession): ?SharingControlType
 	{
 		if ($this->arResult['EXTERNAL_LINK_MODE'] || !$documentSession->getObject())
 		{
@@ -408,24 +409,24 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			&& !Bitrix24Manager::isFeatureEnabled('disk_onlyoffice_edit')
 		)
 		{
-			return 'blocked-by-feature';
+			return SharingControlType::BlockedByFeature;
 		}
 
 		$currentUser = CurrentUser::get();
 		if (!$documentSession->canUserChangeRights($currentUser) && !$documentSession->canUserShare($currentUser))
 		{
-			return 'without-edit';
+			return SharingControlType::WithoutEdit;
 		}
 		if ($documentSession->canUserChangeRights($currentUser))
 		{
-			return 'with-change-rights';
+			return SharingControlType::WithChangeRights;
 		}
 		if ($documentSession->canUserShare($currentUser))
 		{
-			return 'with-sharing';
+			return SharingControlType::WithSharing;
 		}
 
-		return 'without-edit';
+		return SharingControlType::WithoutEdit;
 	}
 
 	protected function processSavingTemplate(Disk\Document\Models\DocumentSession $documentSession): void

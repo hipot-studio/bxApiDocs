@@ -8,7 +8,9 @@ use Bitrix\Intranet\Integration\Main\Culture;
 class UserNameFormatter
 {
 	public function __construct(
-		private readonly User $user
+		private readonly User $user,
+		private readonly bool $useLogin = false,
+		private readonly bool $useHtmlSpec = true,
 	)
 	{
 	}
@@ -28,13 +30,15 @@ class UserNameFormatter
 	public function formatByTemplate(string $template): string
 	{
 		return \CUser::FormatName(
-			$template,
-			[
+			NAME_TEMPLATE: $template,
+			arUser: [
 				'NAME' => $this->user->getName(),
 				'LAST_NAME' => $this->user->getLastName(),
 				'SECOND_NAME' => $this->user->getSecondName(),
 				'LOGIN' => $this->user->getLogin(),
-			]
+			],
+			bUseLogin: $this->useLogin,
+			bHTMLSpec: $this->useHtmlSpec,
 		);
 	}
 }

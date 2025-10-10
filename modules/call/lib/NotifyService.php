@@ -54,7 +54,7 @@ class NotifyService
 		return self::$service;
 	}
 
-	public function sendTaskFailedMessage(\Bitrix\Main\Error $error, Call $call): void
+	public function sendTaskFailedMessage(\Bitrix\Main\Error $error, Call $call, int $checkDuplicateDepth = 3): void
 	{
 		if (isset($this->shownMessage[self::MESSAGE_TYPE_AI_FAILED][$call->getId()]))
 		{
@@ -66,7 +66,11 @@ class NotifyService
 
 		if ($chat->getId() > 0)
 		{
-			if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, 3) === null)
+			if (
+				$checkDuplicateDepth <= 0
+				||
+				$this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, $checkDuplicateDepth) === null
+			)
 			{
 				$message = ChatMessage::generateTaskFailedMessage($call->getId(), $error, $chat);
 				if ($message)
@@ -81,7 +85,7 @@ class NotifyService
 		}
 	}
 
-	public function sendCallError(\Bitrix\Main\Error $error, Call $call): void
+	public function sendCallError(\Bitrix\Main\Error $error, Call $call, int $checkDuplicateDepth = 3): void
 	{
 		if (isset($this->shownMessage[self::MESSAGE_TYPE_AI_FAILED][$call->getId()]))
 		{
@@ -91,17 +95,20 @@ class NotifyService
 
 		$chat = Chat::getInstance($call->getChatId());
 
-		if (
-			$chat->getId()
-			&& $this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, 3) === null
-		)
+		if ($chat->getId())
 		{
-			$errorMessage = ChatMessage::generateErrorMessage($error, $chat, $call);
-			if ($errorMessage)
+			if (
+				$checkDuplicateDepth <= 0
+				|| $this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, $checkDuplicateDepth) === null
+			)
 			{
-				$this->sendError($chat, $errorMessage);
+				$errorMessage = ChatMessage::generateErrorMessage($error, $chat, $call);
+				if ($errorMessage)
+				{
+					$this->sendError($chat, $errorMessage);
 
-				(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+				}
 			}
 		}
 	}

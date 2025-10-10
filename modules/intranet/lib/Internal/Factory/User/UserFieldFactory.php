@@ -1,26 +1,35 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Intranet\Internal\Factory\User;
 
 use Bitrix\Intranet\Exception\UserFieldTypeException;
-use Bitrix\Intranet\Internal\Entity\UserField\EmailField;
-use Bitrix\Intranet\Internal\Entity\UserField\MultiSelectField;
-use Bitrix\Intranet\Internal\Entity\UserField\PhoneField;
-use Bitrix\Intranet\Internal\Entity\UserField\UserField;
-use Bitrix\Intranet\Internal\Entity\UserField\DateField;
-use Bitrix\Intranet\Internal\Entity\UserField\SelectField;
-use Bitrix\Intranet\Internal\Entity\UserField\StringField;
+use Bitrix\Intranet\Internal\Entity\User\Field\Field;
+use Bitrix\Intranet\Internal\Entity\User\Field\MultipleField;
+use Bitrix\Intranet\Internal\Entity\User\Field\SingleField;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\ObjectException;
-use Bitrix\Main\Type\Date;
 
 class UserFieldFactory
 {
+	public function __construct(
+		private UserFieldTypeMapper $typeMapper,
+	)
+	{
+	}
+
+	public static function createByDefault(): UserFieldFactory
+	{
+		return new UserFieldFactory(
+			new UserFieldTypeMapper(),
+		);
+	}
+
 	/**
 	 * @throws ArgumentException
 	 * @throws UserFieldTypeException
 	 */
-	public function createUserFieldByArray(array $fieldInfo, mixed $value = null): UserField
+	public function createUserFieldByArray(array $fieldInfo, mixed $value = null): Field
 	{
 		if (
 			empty($fieldInfo['type'])
@@ -33,143 +42,69 @@ class UserFieldFactory
 
 		if ($fieldInfo['type'] === 'userField')
 		{
-			$userFieldInfo = $fieldInfo['data']['fieldInfo'];
+			$userFieldInfo = $fieldInfo['data']['fieldInfo'] ?? [];
+			$value = $this->getValueFromUserFieldValue($value);
+
+			$isMultiple = isset($userFieldInfo['MULTIPLE']) && $userFieldInfo['MULTIPLE'] === 'Y';
 
 			return $this->createUserFieldByArray(
 				[
-					'type' => $userFieldInfo['USER_TYPE_ID'],
-					'name' => $userFieldInfo['FIELD'],
+					'type' => $userFieldInfo['USER_TYPE_ID'] ?? '',
+					'name' => $userFieldInfo['FIELD'] ?? '',
 					'title' => $fieldInfo['title'],
 					'editable' => $fieldInfo['editable'] ?? false,
 					'showAlways' => $fieldInfo['showAlways'] ?? false,
+					'data' => $fieldInfo['data'] ?? [],
+					'multiple' => $isMultiple,
 				],
-				$value['VALUE'] ?? null,
+				$value,
 			);
 		}
 
-		$fieldClassName = $this->getUserFieldClassByName($fieldInfo['name'])
-			?? $this->getUserFieldClassByType($fieldInfo['type']);
+		$singleField = $this->createSingleFieldByArray($fieldInfo, $value);
 
-		if ($fieldClassName === SelectField::class)
+		if (isset($fieldInfo['multiple']) && $fieldInfo['multiple'])
 		{
-			return $this->createSelectField($fieldInfo, $value);
+			return new MultipleField($singleField);
 		}
 
-		if ($fieldClassName === MultiSelectField::class)
-		{
-			return $this->createMultiSelectField($fieldInfo, $value);
-		}
-
-		if ($fieldClassName === DateField::class)
-		{
-			return $this->createDateField($fieldInfo, $value);
-		}
-
-		return new $fieldClassName(
-			id: $fieldInfo['name'],
-			value: $value,
-			title: $fieldInfo['title'],
-			isEditable: $fieldInfo['editable'] ?? false,
-			isShowAlways: $fieldInfo['showAlways'] ?? false,
-		);
-	}
-
-	/**
-	 * @return class-string<UserField>
-	 * @throws UserFieldTypeException
-	 */
-	private function getUserFieldClassByType(string $type): string
-	{
-		return match($type)
-		{
-			'text', 'link', 'string', 'string_formatted' => StringField::class,
-			'phone' => PhoneField::class,
-			'date', 'datetime' => DateField::class,
-			'list' => SelectField::class,
-			'multilist' => MultiSelectField::class,
-			default => throw new UserFieldTypeException("Wrong user field type: $type"),
-		};
-	}
-
-	private function getUserFieldClassByName(string $name): ?string
-	{
-		return match ($name)
-		{
-			'EMAIL' => EmailField::class,
-			default => null,
-		};
+		return $singleField;
 	}
 
 	/**
 	 * @throws ArgumentException
+	 * @throws UserFieldTypeException
 	 */
-	private function createSelectField(array $fieldInfo, mixed $value): SelectField
+	protected function createSingleFieldByArray(array $fieldInfo, mixed $value): SingleField
 	{
-		if (empty($fieldInfo['data']['items']))
+		$fieldClassName = $this->typeMapper->getClassByFieldInfo($fieldInfo);
+
+		if (!isset($fieldClassName))
 		{
-			throw new ArgumentException("Selectable user field required items");
+			$type = $fieldInfo['type'];
+			throw new UserFieldTypeException("Wrong user field type: $type");
 		}
 
-		$items = [];
-
-		foreach ($fieldInfo['data']['items'] as $item)
-		{
-			$items[$item['VALUE']] = $item['NAME'];
-		}
-
-		return new SelectField(
-			id: $fieldInfo['name'],
-			title: $fieldInfo['title'],
-			isEditable: $fieldInfo['editable'] ?? false,
-			isShowAlways: $fieldInfo['showAlways'] ?? false,
-			items: $items,
-			value: $value,
-		);
+		return $fieldClassName::createByData($fieldInfo, $value);
 	}
 
-	private function createMultiSelectField(array $fieldInfo, mixed $value): MultiSelectField
+	protected function getValueFromUserFieldValue(mixed $value): mixed
 	{
-		if (empty($fieldInfo['data']['items']))
+		if (!is_array($value))
 		{
-			throw new ArgumentException("Selectable user field required items");
+			return $value;
 		}
 
-		$items = [];
-
-		foreach ($fieldInfo['data']['items'] as $item)
+		if (isset($value['IS_EMPTY']) && $value['IS_EMPTY'])
 		{
-			$items[$item['VALUE']] = $item['NAME'];
+			return null;
 		}
 
-		return new MultiSelectField(
-			id: $fieldInfo['name'],
-			title: $fieldInfo['title'],
-			isEditable: $fieldInfo['editable'] ?? false,
-			isShowAlways: $fieldInfo['showAlways'] ?? false,
-			items: $items,
-			value: $value,
-		);
-	}
-
-	private function createDateField(array $fieldInfo, mixed $value): DateField
-	{
-		if (is_string($value) && !empty($value))
+		if (isset($value['VALUE']))
 		{
-			try
-			{
-				$value = new Date($value);
-			}
-			catch (ObjectException)
-			{
-			}
+			return $value['VALUE'];
 		}
 
-		return new DateField(
-			id: $fieldInfo['name'],
-			title: $fieldInfo['title'],
-			isEditable: $fieldInfo['editable'] ?? false,
-			isShowAlways: $fieldInfo['showAlways'] ?? false,
-			value: $value,
-		);
+		return $value;
 	}
 }

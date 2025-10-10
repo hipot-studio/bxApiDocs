@@ -211,7 +211,7 @@ class PinService
 		$messageId = \CIMChat::AddMessage([
 			'DIALOG_ID' => $dialogId,
 			'SYSTEM' => 'Y',
-			'MESSAGE' => $this->getMessageText($pin),
+			'MESSAGE' => $this->getPinMessageText($pin),
 			'FROM_USER_ID' => $authorId,
 			'PARAMS' => [
 				'CLASS' => 'bx-messenger-content-item-system',
@@ -233,7 +233,7 @@ class PinService
 		return $result;
 	}
 
-	protected function getMessageText(PinItem $pin): string
+	protected function getPinMessageText(PinItem $pin): string
 	{
 		if (Chat::getInstance($pin->getChatId()) instanceof Chat\ChannelChat)
 		{

@@ -2,7 +2,6 @@
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Configuration;
-use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Document\GoogleHandler;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
@@ -12,7 +11,6 @@ use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Disk\Ui\FileAttributes;
-use Bitrix\Disk\UrlManager;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
@@ -531,7 +529,9 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				if ($attachedModel->getObject()->getTypeFile() == TypeFile::FLIPCHART && $attachedModel->canRead($userId))
 				{
-					$openUrl = $this->getUrlManager()->getUrlForViewAttachedBoard($attachedModel->getId(), false, 'docs_attach');
+					$board = $attachedModel->getObject();
+					$openUrl = $this->getUrlManager()->getUrlForViewAttachedBoard($board, (int)$attachedModel->getId(), false, 'docs_attach');
+
 					$attr->addAction([
 						'type' => 'open',
 						'buttonIconClass' => ' ',
@@ -541,6 +541,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 							'url' => $openUrl,
 						],
 					]);
+
 					$attr->addAction([
 						'type' => 'edit',
 						'buttonIconClass' => ' ',

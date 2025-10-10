@@ -8,7 +8,7 @@ use Bitrix\HumanResources\Service\Container;
 use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
-use Bitrix\Intranet\Internal\Repository\UserProfileRepository;
+use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
 use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Event;
@@ -275,7 +275,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			return $this->userData;
 		}
 
-		$user = (new UserProfileRepository())->getUserDataById($this->arParams['ID']);
+		$user = ProfileRepository::createByDefault()->getUserDataById($this->arParams['ID']);
 
 		foreach ($user as $field => $value)
 		{
@@ -289,6 +289,11 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				$user["LAST_ACTIVITY_DATE_FROM_DB"] = $value;
 				$user[$field] = DateTime::createFromTimestamp(MakeTimeStamp($value, 'YYYY-MM-DD HH:MI:SS'));
 				$user[$field] = FormatDateFromDB($user[$field]);
+			}
+
+			if (in_array($field, ['DEPARTMENT_HEAD', 'TEAM']) && empty($value))
+			{
+				$user[$field] = '';
 			}
 		}
 

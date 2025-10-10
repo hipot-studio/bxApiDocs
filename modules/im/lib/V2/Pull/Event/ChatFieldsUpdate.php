@@ -31,4 +31,9 @@ class ChatFieldsUpdate extends BaseChatEvent
 
 		return $this->updateFields;
 	}
+
+	public function shouldSendImmediately(): bool
+	{
+		return true;
+	}
 }

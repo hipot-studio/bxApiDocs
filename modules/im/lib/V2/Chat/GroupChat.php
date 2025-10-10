@@ -668,10 +668,11 @@ class GroupChat extends Chat implements PopupDataAggregatable
 	{
 		$this->getChatParams()->addParamByName(Chat\Param\Params::IS_COPILOT, true, false);
 
+		$engineManager = new EngineManager();
 		$context ??= new Context();
-		$engineCode = (new EngineManager())->getLastSelectedEngineCode($context->getUserId());
+		$engineCode = $engineManager->getLastSelectedEngineCode($context->getUserId());
 
-		if (isset($engineCode))
+		if ($engineManager->validateEngineCode($engineCode))
 		{
 			$this->setEngineCode($engineCode);
 		}
@@ -684,7 +685,14 @@ class GroupChat extends Chat implements PopupDataAggregatable
 			return null;
 		}
 
-		return $this->getChatParams()->get(Chat\Param\Params::COPILOT_ENGINE_CODE)?->getValue();
+		$engineManager = new EngineManager();
+		$engineCode = $this->getChatParams()->get(Chat\Param\Params::COPILOT_ENGINE_CODE)?->getValue();
+
+		return
+			$engineManager->validateEngineCode($engineCode)
+				? $engineCode
+				: $engineManager::getDefaultEngineCode()
+		;
 	}
 
 	public function setEngineCode(?string $code): self

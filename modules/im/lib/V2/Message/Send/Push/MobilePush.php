@@ -66,8 +66,12 @@ class MobilePush
 			$preparedPush['push']['advanced_params']['senderMessage'] = $this->message->getPushMessage();
 		}
 
+		$chat = $this->message->getChat();
+		$relation = $chat->getRelationByUserId($userId);
+		$isNotifyBlocked = $relation && $relation->getNotifyBlock();
+
 		$preparedPush['push']['advanced_params']['counter'] = $push['params']['counter'];
-		if ($userId === $this->message->getAuthorId())
+		if ($userId === $this->message->getAuthorId() || $isNotifyBlocked)
 		{
 			$preparedPush = array_merge_recursive($preparedPush, [
 				'push' => [
@@ -326,6 +330,7 @@ class MobilePush
 		$messageText = preg_replace("/\[PCH=([0-9]{1,})\](.*?)\[\/PCH\]/i", "$2", $messageText);
 		$messageText = preg_replace_callback("/\[ICON\=([^\]]*)\]/i", ['\Bitrix\Im\Text', 'modifyIcon'], $messageText);
 		$messageText = preg_replace_callback('/\[TIMESTAMP=(\d+) FORMAT=([^\]]*)\]/i', [Text::class, 'modifyTimestampCode'], $messageText);
+		$messageText = preg_replace_callback('/\[IMG SIZE=([a-z]+)\](.*?)\[\/IMG\]/i', [Text::class, 'modifyImageCode'], $messageText);
 		$messageText = preg_replace('#\-{54}.+?\-{54}#s', ' '.$quoteIcon.' ', str_replace('#BR#', ' ', $messageText));
 		$messageText = preg_replace('/^(>>(.*)(\n)?)/mi', ' '.$quoteIcon.' ', str_replace('#BR#', ' ', $messageText));
 		$messageText = preg_replace("/\\[color\\s*=\\s*([^\\]]+)\\](.*?)\\[\\/color\\]/isu", "$2", $messageText);

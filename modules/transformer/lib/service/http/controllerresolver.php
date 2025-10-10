@@ -102,8 +102,7 @@ final class ControllerResolver
 	{
 		$domain = (new \Bitrix\Main\License\UrlProvider())->getTechDomain();
 
-		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
-		if (in_array($region, ['ru', 'by', 'kz'], true))
+		if (\Bitrix\Main\Application::getInstance()->getLicense()->isCis())
 		{
 			$domain = 'transformer-ru-boxes.' . $domain;
 		}

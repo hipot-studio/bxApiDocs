@@ -1424,8 +1424,13 @@ class CIMMessage
 		{
 			$chat = Chat::getInstance($chatId);
 			$engineManager = new EngineManager();
-			$engineCode = $chat instanceof Chat\CopilotChat ? $chat->getEngineCode() : null;
-			$engineName = isset($engineCode) ? $engineManager->getEngineNameByCode($engineCode) : null;
+			$engineCode = match (true)
+			{
+				$chat instanceof Chat\CopilotChat => $chat->getEngineCode(),
+				default => null,
+			};
+
+			$engineName = $engineManager->getEngineNameByCode($engineCode);
 
 			$chatData = [[
 				'dialogId' => \Bitrix\Im\Dialog::getDialogId($chatId),

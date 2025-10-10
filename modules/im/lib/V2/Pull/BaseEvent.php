@@ -156,4 +156,9 @@ abstract class BaseEvent implements Event
 	{
 		return false;
 	}
+
+	public function shouldSendImmediately(): bool
+	{
+		return false;
+	}
 }

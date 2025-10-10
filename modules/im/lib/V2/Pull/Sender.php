@@ -53,6 +53,11 @@ class Sender
 			}
 		}
 
+		if ($event->shouldSendImmediately())
+		{
+			\Bitrix\Pull\Event::send();
+		}
+
 		return Result::merge(...$results);
 	}
 

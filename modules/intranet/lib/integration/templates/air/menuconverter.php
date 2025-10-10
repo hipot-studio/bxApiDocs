@@ -116,10 +116,10 @@ class MenuConverter
 
 	private function canConvert(): bool
 	{
-		return ((defined('AIR_SITE_TEMPLATE') && AIR_SITE_TEMPLATE) || Option::get('intranet', 'use_air_site_template', false))
-			&& (ModuleManager::isModuleInstalled('bitrix24') || Option::get('intranet', 'can_converted_menu_box', 'N') === 'Y')
+		return (
+			(ModuleManager::isModuleInstalled('bitrix24') || Option::get('intranet', 'can_converted_menu_box', 'N') === 'Y')
 			&& Option::get('intranet', 'menu_converted_for_air_template', 'N') !== 'Y'
-			&& ToolsManager::getInstance()->checkAvailabilityByToolId('instant_messenger')
+			&& ToolsManager::getInstance()->checkAvailabilityByToolId('instant_messenger'))
 		;
 	}
 

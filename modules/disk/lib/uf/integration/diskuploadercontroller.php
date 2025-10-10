@@ -444,7 +444,8 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 			if ($viewerAttrs->getViewerType() === Board::JS_TYPE_BOARD && Disk\Document\Flipchart\Configuration::isBoardsEnabled())
 			{
-				$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($fileModel->getObjectId(), false, 'disk_page');
+				$urlManager = Driver::getInstance()->getUrlManager();
+				$uri = $urlManager->getUrlForViewBoard($fileModel->getFile(), false, 'disk_page');
 
 				$viewerAttrs->addAction([
 					'type' => 'open',

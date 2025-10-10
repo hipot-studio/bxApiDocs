@@ -27,4 +27,9 @@ abstract class BaseBbCode implements BbCode
 
 		return $result;
 	}
+
+	public function toPlaceholder(): string
+	{
+		return $this->toPlain();
+	}
 }

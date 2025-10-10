@@ -31,21 +31,14 @@ class TextFieldEnabled
 			return $this;
 		}
 
-		$isChanged = false;
-
 		if (!$value && $this->params->get(Params::TEXT_FIELD_ENABLED) === null)
 		{
 			$this->params->addParamByName(Params::TEXT_FIELD_ENABLED, false);
-			$isChanged = true;
+			$this->sendPush();
 		}
 		elseif ($value && $this->params->get(Params::TEXT_FIELD_ENABLED) !== null)
 		{
 			$this->params->deleteParam(Params::TEXT_FIELD_ENABLED);
-			$isChanged = true;
-		}
-
-		if ($isChanged)
-		{
 			$this->sendPush();
 		}
 
@@ -54,8 +47,16 @@ class TextFieldEnabled
 
 	protected function sendPush(): void
 	{
-		$chat = Chat::getInstance($this->chatId);
-		$updateField = ['textFieldEnabled' => $this->get()];
-		(new ChatFieldsUpdate($chat, $updateField))->send();
+		try
+		{
+			$chat = Chat::getInstance($this->chatId);
+			$updateField = ['textFieldEnabled' => $this->get()];
+			(new ChatFieldsUpdate($chat, $updateField))->send();
+		}
+		catch (\Exception $exception)
+		{
+			$this->params->deleteParam(Params::TEXT_FIELD_ENABLED);
+			throw $exception;
+		}
 	}
 }

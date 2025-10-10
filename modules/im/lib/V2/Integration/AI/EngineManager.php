@@ -34,14 +34,21 @@ class EngineManager
 
 	protected function getAvailableEngineCodes(): array
 	{
-		$codes = [];
+		static $availableEngineCodes = null;
 
-		foreach ($this->getAvailableEngines() as $engine)
+		if (!isset($availableEngineCodes))
 		{
-			$codes[] = $engine->getCode();
+			$codes = [];
+
+			foreach ($this->getAvailableEngines() as $engine)
+			{
+				$codes[] = $engine->getCode();
+			}
+
+			$availableEngineCodes = $codes;
 		}
 
-		return $codes;
+		return $availableEngineCodes;
 	}
 
 	/**
@@ -97,7 +104,7 @@ class EngineManager
 			return $result->addError($error);
 		}
 
-		$oldEngineName = $this->getEngineNameByCode($chat->getEngineCode() ?? self::getDefaultEngineCode());
+		$oldEngineName = $this->getEngineNameByCode($chat->getEngineCode());
 		/**
 		 * @var Chat\CopilotChat $chat
 		 */

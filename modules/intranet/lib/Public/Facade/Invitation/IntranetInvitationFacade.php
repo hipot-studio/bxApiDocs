@@ -53,10 +53,12 @@ class IntranetInvitationFacade extends InvitationFacade
 			},
 		);
 
-		EventManager::getInstance()->addEventHandler(
-			'intranet',
-			'onAfterUserRegistration',
-			[$this, 'onAfterUserRegistration'],
+		EventManager::getInstance()->addEventHandlerCompatible(
+			'main',
+			'OnAfterUserAdd',
+			[$this, 'onAfterUserAdd'],
+			false,
+			10,
 		);
 
 		EventManager::getInstance()->addEventHandler(
@@ -86,9 +88,13 @@ class IntranetInvitationFacade extends InvitationFacade
 		}
 	}
 
-	public function onAfterUserRegistration(Event $event): void
+	public function onAfterUserAdd($fields): void
 	{
-		$user = $event->getParameter('user');
+		if (!is_array($fields) || empty($fields['ID']))
+		{
+			return;
+		}
+		$user = User::initByArray($fields);
 		$departmentAssigner = new DepartmentAssigner($this->departmentCollection);
 		$departmentAssigner->assignUser($user);
 

@@ -535,7 +535,9 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 			if ($viewerType->getViewerType() === Board::JS_TYPE_BOARD && Configuration::isBoardsEnabled())
 			{
-				$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($diskFile->getId(), false, 'chat');
+				$urlManager = Driver::getInstance()->getUrlManager();
+				$uri = $urlManager->getUrlForViewBoard($diskFile, false, 'chat');
+
 				$viewerType->addAction([
 					'type' => 'open',
 					'buttonIconClass' => ' ',

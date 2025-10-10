@@ -13,24 +13,13 @@ class SchedulerAgent extends AgentBase
 	public static function doRun(): bool
 	{
 		$availabilityChecker = Container::getInstance()->getRepeatSaleAvailabilityChecker();
-		$instance = new self();
-
 		if ($availabilityChecker->isItemsCountsLessThenLimit())
 		{
-			if ($availabilityChecker->isAllowedTime() || $availabilityChecker->isSegmentsInitializationProgress())
-			{
-				$instance->setExecutionPeriod(3600 * 4);
-				Scheduler::getInstance()->execute();
-			}
-			else
-			{
-				$instance->setExecutionPeriod(3600);
-			}
+			Scheduler::getInstance()->execute();
 		}
-		else
-		{
-			$instance->setExecutionPeriod(86400);
-		}
+
+		$instance = new self();
+		$instance->setExecutionPeriod(86400);
 
 		return self::PERIODICAL_AGENT_RUN_LATER;
 	}

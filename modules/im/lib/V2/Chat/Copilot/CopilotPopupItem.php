@@ -139,7 +139,7 @@ class CopilotPopupItem implements PopupDataItem
 
 		foreach ($this->getChats() as $chat)
 		{
-			$engineCode = $chat->getEngineCode() ?: EngineManager::getDefaultEngineCode();
+			$engineCode = $chat->getEngineCode();
 
 			$result[] = [
 				'dialogId' => $chat->getDialogId(),
@@ -197,7 +197,7 @@ class CopilotPopupItem implements PopupDataItem
 
 			foreach ($this->getChats() as $chat)
 			{
-				$engineCode = $chat->getEngineCode() ?: EngineManager::getDefaultEngineCode();
+				$engineCode = $chat->getEngineCode();
 
 				if (isset($engineCode))
 				{

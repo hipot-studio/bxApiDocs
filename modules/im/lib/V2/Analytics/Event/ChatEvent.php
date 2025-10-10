@@ -152,7 +152,7 @@ class ChatEvent extends Event
 	{
 		if ($this->chat instanceof CopilotChat)
 		{
-			$engineCode = $this->chat->getEngineCode() ?? EngineManager::getDefaultEngineCode();
+			$engineCode = $this->chat->getEngineCode();
 			$engineName = (new EngineManager())->getEngineNameByCode($engineCode) ?? '';
 
 			$this->p2 = 'provider_' . Event::convertUnderscore($engineName);

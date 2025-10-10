@@ -84,17 +84,17 @@ class Menu
 	protected function getSavedUserMenuItems(): array
 	{
 		return [
-			MenuItem\ItemAdminShared::class      =>
+			MenuItem\ItemAdminShared::class =>
 				unserialize(
 					\COption::GetOptionString('intranet', 'left_menu_items_to_all_'.$this->getSiteId())
 					, ['allowed_classes' => false]
 				),
-			MenuItem\ItemRestApplication::class      =>
+			MenuItem\ItemRestApplication::class =>
 				unserialize(
 					\COption::GetOptionString('intranet', 'left_menu_items_marketplace_'.$this->getSiteId())
 					, ['allowed_classes' => false]
 				),
-			MenuItem\ItemUserSelf::class          =>
+			MenuItem\ItemUserSelf::class =>
 				\CUserOptions::GetOption('intranet', 'left_menu_self_items_'.$this->getSiteId()),
 			MenuItem\ItemUserFavorites::class =>
 				\CUserOptions::GetOption('intranet', 'left_menu_standard_items_'.$this->getSiteId()),
@@ -112,11 +112,7 @@ class Menu
 				return;
 			}
 
-			if (
-				defined('AIR_SITE_TEMPLATE')
-				&& AIR_SITE_TEMPLATE
-				&& $id === 'menu_configs_sect'
-			)
+			if ($id === 'menu_configs_sect')
 			{
 				return;
 			}
@@ -204,13 +200,6 @@ class Menu
 						$item->getId(),
 						$item->getParent()->getId()
 					);
-				}
-				else if (
-					!$this->mainPage->isAvailable()
-					&& $item->getLink() === FirstPage::getInstance()->getLink()
-				)
-				{
-					$sort = 1;
 				}
 
 				$item->setSort($sort);

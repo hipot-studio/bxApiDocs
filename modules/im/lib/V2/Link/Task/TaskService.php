@@ -191,7 +191,6 @@ class TaskService
 		]);
 
 		$data['LINK'] = $link->getUri();
-
 		$data['PARAMS']['RESPONSIBLE_ID'] = $userId;
 		$data['PARAMS']['IM_CHAT_ID'] = $chat->getChatId();
 
@@ -243,6 +242,19 @@ class TaskService
 			$data['PARAMS']['IM_MESSAGE_ID'] = $message->getMessageId();
 		}
 
+		$data['PARAMS']['is_tasks_v2'] = $this->isTasksV2Form();
+
+		if ($data['PARAMS']['is_tasks_v2'])
+		{
+			$data['PARAMS']['entityId'] = $chat->getChatId();
+			$data['PARAMS']['subEntityId'] = $data['PARAMS']['IM_MESSAGE_ID'] ?? null;
+			$data['PARAMS']['ta_sec'] = 'chat';
+			$data['PARAMS']['ta_el'] = 'comment_context_menu';
+			$data['PARAMS']['description'] = $data['PARAMS']['DESCRIPTION'] ?? null;
+			$data['PARAMS']['auditors'] = $data['PARAMS']['AUDITORS'] ?? null;
+			$data['PARAMS']['groupId'] = $data['PARAMS']['GROUP_ID'] ?? null;
+		}
+
 		return $result->setResult($data);
 	}
 
@@ -255,7 +267,7 @@ class TaskService
 		$messageId = \CIMChat::AddMessage([
 			'DIALOG_ID' => $dialogId,
 			'SYSTEM' => 'Y',
-			'MESSAGE' => $this->getMessageText($taskLink),
+			'MESSAGE' => $this->getTaskMessageText($taskLink),
 			'FROM_USER_ID' => $authorId,
 			'PARAMS' => ['CLASS' => "bx-messenger-content-item-system"],
 			'URL_PREVIEW' => 'N',
@@ -351,7 +363,7 @@ class TaskService
 		return $filesForPrepare;
 	}
 
-	protected function getMessageText(TaskItem $task): string
+	protected function getTaskMessageText(TaskItem $task): string
 	{
 		$genderModifier = ($this->getContext()->getUser()->getGender() === 'F') ? '_F' : '';
 
@@ -378,5 +390,12 @@ class TaskService
 				'#TASK_TITLE#' => $task->getEntity()->getTitle(),
 			]
 		);
+	}
+
+	private function isTasksV2Form(): bool
+	{
+		return class_exists(\Bitrix\Tasks\V2\FormV2Feature::class)
+			&& \Bitrix\Tasks\V2\FormV2Feature::isOn()
+		;
 	}
 }

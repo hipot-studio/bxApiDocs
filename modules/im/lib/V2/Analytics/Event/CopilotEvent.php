@@ -89,7 +89,7 @@ class CopilotEvent extends Event
 
 		if ($this->chat instanceof CopilotChat)
 		{
-			$engineCode = $this->chat->getEngineCode() ?? EngineManager::getDefaultEngineCode();
+			$engineCode = $this->chat->getEngineCode();
 			$engineName = (new EngineManager())->getEngineNameByCode($engineCode);
 		}
 

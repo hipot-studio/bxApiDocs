@@ -54,91 +54,44 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 		$this->arResult['show_time'] = false;
 		$this->arResult['mode'] = '';
 
-		if ($this->shouldShow())
+		$this->arResult['show_time'] = true;
+		$this->arResult['options'] = $this->getOptions();
+
+		// First set a new theme
+		if ($this->getSliderModeCnt() === -1)
 		{
-			$this->arResult['show_time'] = true;
-			$this->arResult['options'] = $this->getOptions();
-
-			// First set a new theme
-			if ($this->getSliderModeCnt() === -1)
+			$this->incSliderModeCnt();
+			if ($this->setDefaultTheme() && Loader::includeModule('intranet'))
 			{
-				$this->incSliderModeCnt();
-				if ($this->setDefaultTheme())
-				{
-					if (Loader::includeModule('intranet'))
-					{
-						\Bitrix\Intranet\Composite\CacheProvider::deleteUserCache();
-					}
-
-					$this->enableAirTemplate();
-					LocalRedirect($GLOBALS['APPLICATION']->getCurUri());
-				}
-
-				if ($this->enableAirTemplate())
-				{
-					LocalRedirect($GLOBALS['APPLICATION']->getCurUri());
-				}
+				\Bitrix\Intranet\Composite\CacheProvider::deleteUserCache();
 			}
 
-			// Show Slider for the first hit
-			if ($this->getSliderModeCnt() === 0)
+			$this->enableAirTemplate();
+			LocalRedirect($GLOBALS['APPLICATION']->getCurUri());
+		}
+
+		// Show Slider for the first hit
+		if ($this->getSliderModeCnt() === 0)
+		{
+			$this->arResult['mode'] = 'slider';
+			$this->incSliderModeCnt();
+		}
+		else if ($this->getSliderModeCnt() === 1)
+		{
+			// Repeat after one day
+			$lastShowTime = $this->getLastShowTime();
+			if ((time() - $lastShowTime) > 24 * 3600)
 			{
 				$this->arResult['mode'] = 'slider';
 				$this->incSliderModeCnt();
 			}
-			else if ($this->getSliderModeCnt() === 1)
-			{
-				// Repeat after one day
-				$lastShowTime = $this->getLastShowTime();
-				if ((time() - $lastShowTime) > 24 * 3600)
-				{
-					$this->arResult['mode'] = 'slider';
-					$this->incSliderModeCnt();
-				}
-			}
-		}
-		else
-		{
-			$this->tryEnableAirTemplate();
 		}
 
 		$this->includeComponentTemplate();
 	}
 
-	protected function tryEnableAirTemplate(): void
-	{
-		if (defined('AIR_SITE_TEMPLATE'))
-		{
-			return;
-		}
-
-		$release = $this->getRelease();
-		if (!$release)
-		{
-			$release = $this->getRelease('en');
-		}
-
-		$now = time();
-		$customDate = $this->getCustomReleaseDate();
-		$startDate = $customDate === null ? static::createDate($release['releaseDate']) : $customDate;
-		if ($now < $startDate)
-		{
-			return;
-		}
-
-		if ($this->enableAirTemplate())
-		{
-			LocalRedirect($GLOBALS['APPLICATION']->getCurUri());
-		}
-	}
-
 	protected function enableAirTemplate(): bool
 	{
-		if (defined('AIR_SITE_TEMPLATE'))
-		{
-			return false;
-		}
-
 		$useSiteTemplateOption = Option::get('intranet', 'use_air_site_template', null);
 		if ($useSiteTemplateOption === '')
 		{

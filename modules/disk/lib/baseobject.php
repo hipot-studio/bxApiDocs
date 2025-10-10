@@ -83,6 +83,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	protected $deletedBy;
 	/** @var  User */
 	protected $deleteUser;
+	/** @var string|null */
+	protected $uniqueCode;
 
 	/**
 	 * Returns the fully qualified name of table class which belongs to current model.
@@ -267,6 +269,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function getDeleteTime()
 	{
 		return $this->deleteTime;
+	}
+
+	public function getUniqueCode(): ?string
+	{
+		return $this->uniqueCode;
 	}
 
 	/**
@@ -1702,6 +1709,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			'DELETED_BY' => 'deletedBy',
 			'DELETE_USER' => 'deleteUser',
 			'HAS_SUBFOLDERS' => null,
+			'UNIQUE_CODE' => 'uniqueCode',
 		);
 	}
 
@@ -1758,6 +1766,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			'createdBy' => $this->getCreatedBy(),
 			'updatedBy' => $this->getUpdatedBy(),
 			'deletedBy' => $this->getDeletedBy(),
+			'uniqueCode' => $this->getUniqueCode(),
 		];
 	}
 }

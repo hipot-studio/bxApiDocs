@@ -328,7 +328,7 @@ class Track extends Engine\Controller
 		}
 
 		$currentUserId = $this->getCurrentUser()?->getId();
-		if (!$currentUserId || !$call->checkAccess($currentUserId))
+		if (!$currentUserId || !$this->checkCallAccess($call, $currentUserId))
 		{
 			$this->addError(new Error("access_denied", "You do not have access to this call"));
 			return null;
@@ -352,7 +352,7 @@ class Track extends Engine\Controller
 	protected function sendSwitchTrackRecordStatus(Call $call, bool $isTrackRecordOn)
 	{
 		$currentUserId = $this->getCurrentUser()?->getId();
-		if (!$currentUserId || !$call->checkAccess($currentUserId))
+		if (!$currentUserId || !$this->checkCallAccess($call, $currentUserId))
 		{
 			$this->addError(new Error("access_denied", "You do not have access to this call"));
 			return null;

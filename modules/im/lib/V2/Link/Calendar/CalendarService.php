@@ -214,7 +214,7 @@ class CalendarService
 		$messageId = \CIMChat::AddMessage([
 			'DIALOG_ID' => $dialogId,
 			'SYSTEM' => 'Y',
-			'MESSAGE' => $this->getMessageText($calendarLink),
+			'MESSAGE' => $this->getCalendarMessageText($calendarLink),
 			'FROM_USER_ID' => $authorId,
 			'PARAMS' => ['CLASS' => "bx-messenger-content-item-system"],
 			'URL_PREVIEW' => 'N',
@@ -247,7 +247,7 @@ class CalendarService
 		return $filesForPrepare;
 	}
 
-	protected function getMessageText(CalendarItem $calendar): string
+	protected function getCalendarMessageText(CalendarItem $calendar): string
 	{
 		$genderModifier = ($this->getContext()->getUser()->getGender() === 'F') ? '_F' : '';
 

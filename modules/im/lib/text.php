@@ -1,7 +1,8 @@
 <?php
 namespace Bitrix\Im;
 
-use Bitrix\Im\Integration\Socialnetwork\Extranet;
+use Bitrix\Im\V2\Message\Text\BbCode\Image;
+use Bitrix\Im\V2\Message\Text\BbCode\Image\Size;
 use Bitrix\Im\V2\Message\Text\BbCode\Timestamp;
 use Bitrix\Im\V2\Message\Text\BbCode\Timestamp\DateFormat;
 use Bitrix\Main\Localization\Loc;
@@ -329,6 +330,7 @@ class Text
 		$text = preg_replace("/\[color=#([0-9a-f]{3}|[0-9a-f]{6})](.*?)\[\/color]/i", "$2", $text);
 		$text = preg_replace_callback("/\[ICON\=([^\]]*)\]/i", Array('\Bitrix\Im\Text', 'modifyIcon'), $text);
 		$text = preg_replace_callback('/\[TIMESTAMP=(\d+) FORMAT=([^\]]*)\]/i', [__CLASS__, 'modifyTimestampCode'], $text);
+		$text = preg_replace_callback('/\[IMG SIZE=([a-z]+)\](.*?)\[\/IMG\]/i', [__CLASS__, 'modifyImageCode'], $text);
 		$text = preg_replace('#\-{54}.+?\-{54}#s', " [".Loc::getMessage('IM_QUOTE')."] ", str_replace(array("#BR#"), Array(" "), $text));
 		$text = trim($text);
 
@@ -368,6 +370,14 @@ class Text
 		}
 
 		return Timestamp::build($date, $formatCode)->toPlain();
+	}
+
+	public static function modifyImageCode(array $matches): string
+	{
+		$size = Size::tryFrom($matches[1]) ?? Size::Medium;
+		$link = $matches[2] ?? '';
+
+		return Image::build($link, $size)->toPlaceholder();
 	}
 
 	public static function encodeEmoji($text)

@@ -3004,6 +3004,22 @@ class CAllCrmInvoice
 		$errMsg = array();
 		$bError = false;
 
+		$recreateJobExecutorAgent = '~CRM_RECREATE_JOB_EXECUTOR_AGENT';
+		if ((string)COption::GetOptionString('crm', $recreateJobExecutorAgent, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $recreateJobExecutorAgent, 'Y');
+
+			\CAgent::AddAgent(
+				'Bitrix\Crm\Agent\RepeatSale\JobExecutorRecreatorAgent::run();',
+				'crm',
+				'N',
+				600,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 1200, 'FULL'),
+			);
+		}
+
 		$cleanOldEventLogEmail = '~CRM_CLEAN_OLD_EVENT_LOG_EMAIL_V2';
 		if ((string)COption::GetOptionString('crm', $cleanOldEventLogEmail, 'N') === 'N')
 		{

@@ -145,4 +145,5 @@ abstract class DeletionStrategy
 			return $result;
 		}
 	}
+	abstract protected function getDeletionMode(): DeletionMode;
 }

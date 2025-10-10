@@ -16,49 +16,11 @@ final class AirTemplate
 	public static function isEnabled(): bool
 	{
 		return true;
-//		if (self::$enabled === null)
-//		{
-//			self::$enabled = self::shouldBeEnabled();
-//		}
-//
-//		return self::$enabled;
 	}
 
 	private static function shouldBeEnabled(): bool
 	{
 		return true;
-//		if (defined('USE_AIR_SITE_TEMPLATE') && USE_AIR_SITE_TEMPLATE === true)
-//		{
-//			return true;
-//		}
-//
-//		$useSiteTemplateOption = (bool)Option::get('intranet', 'use_air_site_template', false);
-//		if ($useSiteTemplateOption)
-//		{
-//			return true;
-//		}
-//
-//		$userOption = \CUserOptions::getOption('intranet', 'use_air_site_template', false);
-//		if ($userOption)
-//		{
-//			return true;
-//		}
-//
-//		$configuration = Configuration::getValue('intranet');
-//		if (is_array($configuration) && isset($configuration['air_template']))
-//		{
-//			if (isset($configuration['air_template']['enable']) && $configuration['air_template']['enable'] === true)
-//			{
-//				return true;
-//			}
-//
-//			if (isset($configuration['air_template']['users']) && is_array($configuration['air_template']['users']))
-//			{
-//				return in_array($GLOBALS['USER']->getId(), $configuration['air_template']['users']);
-//			}
-//		}
-//
-//		return false;
 	}
 
 	public static function isApplied(): bool
@@ -70,14 +32,6 @@ final class AirTemplate
 	public static function tryApply(): bool
 	{
 		return true;
-//		if (self::isEnabled())
-//		{
-//			self::apply();
-//
-//			return true;
-//		}
-//
-//		return false;
 	}
 
 	public static function getWorkAreaContent(): string
@@ -256,30 +210,4 @@ final class AirTemplate
 		return $goTopButton;
 	}
 
-	private static function apply(): void
-	{
-		return;
-
-//		if (self::$applied)
-//		{
-//			return;
-//		}
-//
-//		if (!defined('AIR_SITE_TEMPLATE'))
-//		{
-//			define('AIR_SITE_TEMPLATE', true);
-//		}
-//
-//		if  (!defined('SITE_TEMPLATE_PATH'))
-//		{
-//			define('SITE_TEMPLATE_PATH', '/bitrix/templates/air');
-//		}
-//
-//		if (!defined('DEFAULT_COMPONENT_TEMPLATE_ID'))
-//		{
-//			define('DEFAULT_COMPONENT_TEMPLATE_ID', 'air');
-//		}
-//
-//		self::$applied = true;
-	}
 }

@@ -73,19 +73,16 @@ class ReadService
 		$maxId = max($messages->getIds());
 		$this->setLastIdForRead($maxId, $chat->getChatId());
 		$this->counterService->deleteTo($messages[$maxId]);
+		$userId = $this->getContext()->getUserId();
 		$counter = $this->counterService->getByChat($chat->getChatId());
 		$messagesToView = $messages
-			->withContextUser($this->getContext()->getUserId())
+			->withContextUser($userId)
 			->fillViewed()
 			->filter(fn (Message $message) => !$message->isViewed())
 		;
 		$this->viewedService->add($messagesToView);
+		$chat->onAfterMessagesRead($messagesToView, $userId);
 		$this->updateDateRecent($chat->getChatId());
-		Sync\Logger::getInstance()->add(
-			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chat->getChatId()),
-			$this->getContext()->getUserId(),
-			$chat
-		);
 
 		return (new Result())->setResult(['COUNTER' => $counter, 'VIEWED_MESSAGES' => $messagesToView]);
 	}
@@ -126,16 +123,12 @@ class ReadService
 		$counter = 0;
 		//$this->viewedController->addAllFromChat($chatId);
 		$this->updateDateRecent($chatId);
+		$userId = $this->getContext()->getUserId();
 		$chat = Chat::getInstance($chatId);
-		Sync\Logger::getInstance()->add(
-			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
-			$this->getContext()->getUserId(),
-			$chat
-		);
+		$chat->onAfterAllMessagesRead($userId);
 
 		if ($chat instanceof Chat\ChannelChat)
 		{
-			$userId = $this->getContext()->getUserId();
 			Application::getInstance()->addBackgroundJob(fn () => $this->withContextUser($userId)->readChildren($chat));
 		}
 

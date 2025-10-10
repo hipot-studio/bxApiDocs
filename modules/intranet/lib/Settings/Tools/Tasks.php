@@ -83,11 +83,6 @@ class Tasks extends Tool
 
 		foreach (self::TASKS_SUBGROUP_ID as $id => $menuId)
 		{
-			if ($id === 'flows' && Loader::includeModule('tasks'))
-			{
-				continue;
-			}
-
 			$result[$id] = [
 				'name' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TASKS_SUBGROUP_' . strtoupper($id)),
 				'id' => $id,

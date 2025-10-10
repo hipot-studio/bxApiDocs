@@ -102,15 +102,23 @@ class ActiveCallsCache
 	 */
 	public static function updateCallCache(int $callId): void
 	{
-		\Bitrix\Main\Loader::includeModule('im');
-		$callInstance = Registry::getCallWithId($callId);
-		if (!$callInstance)
+		if (!\Bitrix\Main\Loader::includeModule('im'))
 		{
 			return;
 		}
 
-		$users = $callInstance->getUsers();
-		foreach ($users as $userId)
+		$userRows = \Bitrix\Im\Model\CallUserTable::query()
+			->addSelect('USER_ID')
+			->where('CALL_ID', $callId)
+			->fetchAll();
+
+		if (!$userRows)
+		{
+			return;
+		}
+
+		$userIds = array_map('intval', array_column($userRows, 'USER_ID'));
+		foreach ($userIds as $userId)
 		{
 			self::updateUserActiveCallsCache($userId);
 		}

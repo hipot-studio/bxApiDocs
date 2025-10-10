@@ -83,38 +83,37 @@ abstract class AITask
 
 	public static function buildBySource(EO_CallAITask $source): self
 	{
-		$class = match ($source->getType())
+		$taskSenseType = SenseType::tryFrom($source->getType());
+		if ($taskSenseType)
 		{
-			SenseType::TRANSCRIBE->value => TranscribeCallRecord::class,
-			SenseType::SUMMARY->value => TranscriptionSummary::class,
-			SenseType::OVERVIEW->value => TranscriptionOverview::class,
-			SenseType::INSIGHTS->value => TranscriptionInsights::class,
-			default => ''
-		};
-		if (!$class)
-		{
-			return new class($source) extends AITask
-			{
-				public function setPayload($payload): AITask
-				{
-					return $this;
-				}
-				public function getAIPayload(): Result
-				{
-					return new Result;
-				}
-				public function getAIEngineCategory(): string
-				{
-					return '';
-				}
-				public function getAISenseType(): string
-				{
-					return '';
-				}
-			};
+			$class = $taskSenseType->getTaskClass();
+
+			return new $class($source);
 		}
 
-		return new $class($source);
+		return new class($source) extends AITask
+		{
+			public function setPayload($payload): AITask
+			{
+				return $this;
+			}
+			public function getAIPayload(): Result
+			{
+				return new Result;
+			}
+			public function getAIEngineCategory(): string
+			{
+				return '';
+			}
+			public function getAISenseType(): string
+			{
+				return '';
+			}
+			public function allowNotifyTaskFailed(): bool
+			{
+				return false;
+			}
+		};
 	}
 
 	public static function getTaskForCall(int $callId, SenseType $senseType): ?self
@@ -212,10 +211,7 @@ abstract class AITask
 	 * Allows to output thw chat error message then task failed.
 	 * @return bool
 	 */
-	public function allowNotifyTaskFailed(): bool
-	{
-		return false;
-	}
+	abstract public function allowNotifyTaskFailed(): bool;
 
 	/**
 	 * Check pending state of the task.

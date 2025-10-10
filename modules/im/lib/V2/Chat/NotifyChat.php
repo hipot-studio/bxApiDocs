@@ -127,6 +127,10 @@ class NotifyChat extends Chat
 				'ENTITY_ID' => $row['ENTITY_ID'],
 			]);
 		}
+		else
+		{
+			$result->addError(new ChatError(ChatError::NOT_FOUND));
+		}
 
 		return $result;
 	}

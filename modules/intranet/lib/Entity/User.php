@@ -187,9 +187,12 @@ class User
 			&& \Bitrix\Extranet\Service\ServiceContainer::getInstance()->getCollaberService()->isCollaberById($this->id);
 	}
 
-	public function getFormattedName(): string
+	public function getFormattedName(
+		bool $useLogin = false,
+		bool $useHtmlSpec = true,
+	): string
 	{
-		return (new UserNameFormatter($this))->formatByCulture();
+		return (new UserNameFormatter($this, $useLogin, $useHtmlSpec))->formatByCulture();
 	}
 
 	public function isEmail(): bool

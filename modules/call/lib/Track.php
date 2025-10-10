@@ -123,7 +123,7 @@ class Track extends EO_CallTrack
 		{
 			if (Loader::includeModule('im'))
 			{
-				\Bitrix\Im\V2\Link\File\FileItem::getByDiskFileId($this->getDiskFileId())?->delete();
+				(new \Bitrix\Im\V2\Link\File\FileService())->deleteFilesByDiskFileId($this->getDiskFileId());
 			}
 			if (Loader::includeModule('disk'))
 			{
@@ -268,7 +268,7 @@ class Track extends EO_CallTrack
 	public static function getTrackForCall(int $callId, string $type): ?self
 	{
 		return CallTrackTable::getList([
-			'select' => ['ID'],
+			'select' => ['*'],
 			'filter' => [
 				'=CALL_ID' => $callId,
 				'=TYPE' => $type,

@@ -34,9 +34,14 @@ class Library
 		return "/online/?IM_DIALOG=chat{$chatId}&IM_MESSAGE={$messageId}";
 	}
 
-	public static function getCallSliderUrl(int $callId): string
+	public static function getCallSliderUrl(int $callId, array $params = []): string
 	{
-		return "/call/detail/{$callId}";
+		$url = "/call/detail/{$callId}";
+		if ($params)
+		{
+			$url .= '?'. http_build_query($params);
+		}
+		return $url;
 	}
 
 	public static function getCallAiFeedbackUrl(int $callId): string

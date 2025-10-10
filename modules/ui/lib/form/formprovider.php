@@ -45,12 +45,12 @@ class FormProvider
 			['zones' => $westZones, 'id' => 106, 'lang' => 'ru', 'sec' => 'j1h7w4'],
 			['zones' => $westZones, 'id' => 34, 'lang' => 'ua', 'sec' => '940xiq'],
 			['zones' => $westZones, 'id' => 34, 'lang' => 'kz', 'sec' => '940xiq'],
-			['zones' => ['ru'], 'id' => 3282, 'sec' => '8x81lp'],
-			['zones' => ['by'], 'id' => 3, 'sec' => 'kde6g5'],
+			['zones' => ['ru'], 'id' => 3282, 'lang' => 'ru', 'sec' => '8x81lp'],
+			['zones' => ['by'], 'id' => 3, 'lang' => 'ru', 'sec' => 'kde6g5'],
 			['zones' => ['kz'], 'id' => 4, 'lang' => 'kz', 'sec' => 'id3qfm'],
 			['zones' => ['kz'], 'id' => 2, 'lang' => 'ru', 'sec' => 'po3skw'],
 			['zones' => ['kz'], 'id' => 6, 'lang' => 'en', 'sec' => 'gozt5o'],
-			['zones' => ['uz'], 'id' => 7, 'sec' => 'xjkuqu'],
+			['zones' => ['uz'], 'id' => 7, 'lang' => 'ru', 'sec' => 'xjkuqu'],
 		];
 	}
 }

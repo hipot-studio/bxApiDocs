@@ -170,7 +170,7 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 
 			if ($this->file->getTypeFile() == TypeFile::FLIPCHART)
 			{
-				$openUrl = $this->getUrlManager()->getUrlForViewBoardVersion($this->file->getId(), $version->getId());
+				$openUrl = $this->getUrlManager()->getUrlForViewBoardVersion($this->file, (int)$version->getId());
 				$attr->addAction([
 					'type' => 'open',
 					'buttonIconClass' => ' ',

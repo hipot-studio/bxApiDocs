@@ -24,4 +24,5 @@ interface Event
 	public function isGlobal(): bool;
 	public function shouldSendToOnlySpecificRecipients(): bool;
 	public function shouldSendMobilePush(): bool;
+	public function shouldSendImmediately(): bool;
 }

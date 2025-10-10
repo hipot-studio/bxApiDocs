@@ -3,13 +3,12 @@
 namespace Bitrix\Intranet\Settings\Tools;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\Internal\Integration\Bitrix24\Module;
 use Bitrix\Intranet\Site\Sections\AutomationSection;
 use Bitrix\Main;
-use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
-use Bitrix\Main\Config\Option;
 
 class Automation extends Tool
 {
@@ -103,12 +102,7 @@ class Automation extends Tool
 		{
 			if ($this->getSubgroupCode('lists') === $code && !ModuleManager::isModuleInstalled('lists'))
 			{
-				ModuleManager::add('lists');
-				$event = new Event('bitrix24', 'OnManualModuleAddDelete', [
-					'modulesList' => ['lists' => 'Y'],
-				]);
-				$event->send();
-				Option::set('bitrix24', 'feature_lists', 'Y');
+				(new Module\Installer('lists'))->install();
 			}
 		}
 
@@ -126,12 +120,7 @@ class Automation extends Tool
 		{
 			if ($this->getSubgroupCode('lists') === $code && ModuleManager::isModuleInstalled('lists'))
 			{
-				ModuleManager::delete('lists');
-				$event = new Event('bitrix24', 'OnManualModuleAddDelete', [
-					'modulesList' => ['lists' => 'N'],
-				]);
-				$event->send();
-				Option::set('bitrix24', 'feature_lists', 'N');
+				(new Module\Deleter('lists'))->delete();
 			}
 		}
 

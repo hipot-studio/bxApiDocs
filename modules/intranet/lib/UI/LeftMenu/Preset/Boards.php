@@ -54,31 +54,25 @@ class Boards extends Social
 			'menu_knowledge',
 			'menu_conference',
 			'menu_configs_sect',
-		]
+		],
 	];
 
 	public function getStructure(): array
 	{
 		$structure = parent::getStructure();
 
-		if (
-			defined('AIR_SITE_TEMPLATE')
-			&& AIR_SITE_TEMPLATE
-		)
-		{
-			$structure['shown']['menu_teamwork'] = [
-				'menu_boards',
-				'menu_im_messenger',
-				'menu_live_feed',
-				'menu_im_collab',
-				'menu_calendar',
-				'menu_documents',
-				'menu_files',
-				'menu_external_mail',
-				'menu_all_groups',
-				'menu_all_spaces',
-			];
-		}
+		$structure['shown']['menu_teamwork'] = [
+			'menu_boards',
+			'menu_im_messenger',
+			'menu_live_feed',
+			'menu_im_collab',
+			'menu_calendar',
+			'menu_documents',
+			'menu_files',
+			'menu_external_mail',
+			'menu_all_groups',
+			'menu_all_spaces',
+		];
 
 		return $structure;
 	}

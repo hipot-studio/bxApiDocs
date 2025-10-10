@@ -10,4 +10,6 @@ interface BbCode
 	public function toPlain(): string;
 
 	public static function getName(): string;
+
+	public function toPlaceholder(): string;
 }

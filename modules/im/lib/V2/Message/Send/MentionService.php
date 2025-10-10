@@ -167,6 +167,7 @@ class MentionService
 		$pushMessage = preg_replace("/\[PCH=([0-9]{1,})\](.*?)\[\/PCH\]/i", "$2", $pushMessage);
 		$pushMessage = preg_replace_callback("/\[ICON\=([^\]]*)\]/i", ['\Bitrix\Im\Text', 'modifyIcon'], $pushMessage);
 		$pushMessage = preg_replace_callback('/\[TIMESTAMP=(\d+) FORMAT=([^\]]*)\]/i', [Text::class, 'modifyTimestampCode'], $pushMessage);
+		$pushMessage = preg_replace_callback('/\[IMG SIZE=([a-z]+)\](.*?)\[\/IMG\]/i', [Text::class, 'modifyImageCode'], $pushMessage);
 		$pushMessage = preg_replace('#\-{54}.+?\-{54}#s', " [".Loc::getMessage('IM_MESSAGE_QUOTE')."] ", str_replace('#BR#', ' ', $pushMessage));
 		$pushMessage = preg_replace('/^(>>(.*)(\n)?)/mi', " [".Loc::getMessage('IM_MESSAGE_QUOTE')."] ", str_replace('#BR#', ' ', $pushMessage));
 

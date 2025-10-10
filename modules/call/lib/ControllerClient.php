@@ -15,7 +15,7 @@ use Bitrix\Call\Call\ConferenceCall;
 class ControllerClient extends BaseSender
 {
 	private const SERVICE_MAP = [
-		'ru' => 'https://videocalls.bitrix.info',
+		'ru' => 'https://videocalls.bitrix24.tech',
 		'eu' => 'https://videocalls-de.bitrix.info',
 		'us' => 'https://videocalls-us.bitrix.info',
 	];

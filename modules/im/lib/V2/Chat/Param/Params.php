@@ -544,6 +544,7 @@ class Params extends Registry
 
 			ChatParamTable::deleteBatch($filter);
 
+			$this->unsetByKeys([$paramName]);
 			self::cleanCache($this->getChatId());
 		}
 

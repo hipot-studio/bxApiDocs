@@ -164,4 +164,29 @@ class Configuration
 
 		return (string)Option::get('disk', 'flipchart.default_language', $default);
 	}
+
+	public static function isForceHttpForDocumentUrl(): bool
+	{
+		$default = self::getFromSettings('force_http_for_document_url', 'N');
+
+		return Option::get('disk', 'flipchart.force_http_for_document_url', $default) === 'Y';
+	}
+
+	public static function isReloadBoardAfterInactivityEnabled(): bool
+	{
+		$default = self::getFromSettings('reload_board_after_inactivity', 'Y');
+
+		return Option::get('disk', 'flipchart.reload_board_after_inactivity', $default) === 'Y';
+	}
+
+	/**
+	 * @return int Delay in ms (15 minutes by default)
+	 */
+	public static function getReloadBoardAfterInactivityDelay(): int
+	{
+		$default = self::getFromSettings('reload_board_after_inactivity_delay', 1000 * 60 * 15);
+
+		return (int)Option::get('disk', 'flipchart.reload_board_after_inactivity_delay', $default);
+	}
+
 }

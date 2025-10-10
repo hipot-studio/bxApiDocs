@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Message\Text\BbCode;
 
 use Bitrix\Im\V2\Message\Text\BbCode\Image\Size;
 use Bitrix\Im\V2\Message\Text\ClosedBbCode;
+use Bitrix\Main\Localization\Loc;
 
 class Image extends ClosedBbCode
 {
@@ -25,6 +26,16 @@ class Image extends ClosedBbCode
 	protected function getValue(): ?string
 	{
 		return null;
+	}
+
+	public function toPlain(): string
+	{
+		return trim($this->innerText);
+	}
+
+	public function toPlaceholder(): string
+	{
+		return ' [' . Loc::getMessage('IM_MESSAGE_BB_CODE_IMAGE_PLACEHOLDER') . ']';
 	}
 
 	protected function getAdditionalParams(): array

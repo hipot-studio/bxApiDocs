@@ -26,7 +26,7 @@ class Form
 		$this->userFieldDispatcher = Main\UserField\Dispatcher::instance();
 	}
 
-	public function getFieldInfo($user, $availableFields = [], $componentParams = [])
+	public function getFieldInfo($user, $availableFields = [], $componentParams = [], $useUFDepartment = true)
 	{
 		global $USER;
 
@@ -243,7 +243,7 @@ class Form
 		}
 
 
-		if (!$isExtranetUser)
+		if (!$isExtranetUser && $useUFDepartment)
 		{
 			$fields[] = array(
 				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_UF_DEPARTMENT_MSGVER_1"),
@@ -255,6 +255,28 @@ class Form
 				),
 				"editable" => $isAdminRights ? true : false
 			);
+		}
+
+		if (!empty($user['DEPARTMENT']))
+		{
+			if (!$useUFDepartment)
+			{
+				$fields[] = [
+					'title' => Loc::getMessage('INTRANET_USER_PROFILE_FIELD_UF_DEPARTMENT_MSGVER_1'),
+					'name' => 'DEPARTMENT',
+					'type' => 'text',
+					'editable' => false,
+					'multiple' => true,
+				];
+			}
+
+			$fields[] = [
+				'title' => Loc::getMessage('INTRANET_USER_PROFILE_FIELD_DEPARTMENT_HEAD'),
+				'name' => 'DEPARTMENT_HEAD',
+				'type' => 'text',
+				'editable' => false,
+				'multiple' => true,
+			];
 		}
 
 		$fields[] = array(
@@ -502,6 +524,8 @@ class Form
 			}
 		}
 
+		$this->userFields = $userFields;
+
 		return(
 			$userFields
 		);
@@ -631,6 +655,7 @@ class Form
 				['name' => 'EMAIL'],
 				['name' => 'WORK_POSITION'],
 				['name' => 'UF_DEPARTMENT'],
+				['name' => 'DEPARTMENT_HEAD'],
 				['name' => 'SECOND_NAME'],
 				['name' => 'PERSONAL_BIRTHDAY'],
 				['name' => 'PERSONAL_GENDER'],
@@ -673,7 +698,7 @@ class Form
 		return [
 			[
 				'name' => 'info',
-				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_INFO"),
+				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_INFO_MSGVER_1"),
 				'type' => 'section',
 				'elements' => [
 					['name' => 'NAME'],
@@ -703,7 +728,8 @@ class Form
 				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_ADDITIONS"),
 				'type' => 'section',
 				'elements' => [
-					['name' => 'UF_DEPARTMENT'],
+					['name' => 'DEPARTMENT'],
+					['name' => 'DEPARTMENT_HEAD'],
 					['name' => 'PERSONAL_CITY'],
 					['name' => 'UF_EMPLOYMENT_DATE'],
 					['name' => 'TIME_ZONE'],
@@ -721,6 +747,7 @@ class Form
 					['name' => 'UF_TWITTER'],
 					['name' => 'UF_XING'],
 					['name' => 'UF_LINKEDIN'],
+					['name' => 'UF_SKYPE'],
 				],
 				'data' => ['isChangeable' => true, 'isRemovable' => false]
 			],
@@ -747,6 +774,8 @@ class Form
 			"PERSONAL_GENDER" => $result["User"]["PERSONAL_GENDER"],
 			"PERSONAL_WWW" => $result["User"]["PERSONAL_WWW"],
 			"UF_DEPARTMENT" => $result["User"]["UF_DEPARTMENT"],
+			'DEPARTMENT' => $result['User']['DEPARTMENT'],
+			"DEPARTMENT_HEAD" => $result["User"]["DEPARTMENT_HEAD"],
 			"PERSONAL_MOBILE" => $result["User"]["PERSONAL_MOBILE"],
 			"WORK_PHONE" => $result["User"]["WORK_PHONE"],
 			"UF_PHONE_INNER" => $result["User"]["UF_PHONE_INNER"],

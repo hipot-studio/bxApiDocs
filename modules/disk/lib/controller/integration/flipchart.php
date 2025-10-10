@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Controller\Integration;
 
-use Bitrix\Disk;
-use Bitrix\Disk\Bitrix24Disk\TmpFile;
 use Bitrix\Disk\AttachedObject;
-use Bitrix\Disk\Document\Flipchart\BoardApiService;
 use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Document\Flipchart\Configuration;
 use Bitrix\Disk\Document\Flipchart\SessionManager;
@@ -18,11 +15,9 @@ use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
-use Bitrix\Disk\Flipchart\Models\FlipchartWebhookLogTable;
-use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\Error\Error;
-use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Type\JwtHolder;
+use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\OldBoardUrlToUnifiedRedirect;
 use Bitrix\Disk\User;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
@@ -30,19 +25,12 @@ use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Disk\Controller\Integration\Filter\JwtFilter;
 use Bitrix\Disk\Internals\Engine\Controller;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
-use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\HttpResponse;
-use Bitrix\Main\Type\Date;
 use Bitrix\Main\UserTable;
-use Bitrix\Main\Web\Http\Method;
-use Bitrix\Main\Web\HttpClient;
-use Bitrix\Main\Web\Http\Request;
-use Bitrix\Main\Web\MimeType;
-use Bitrix\Main\Web\Uri;
 
 final class Flipchart extends Controller implements JwtHolder
 {
@@ -50,6 +38,7 @@ final class Flipchart extends Controller implements JwtHolder
 	private const NEW_BOARD_MAX_SIZE = 500;
 
 	private ?object $jwtData;
+
 	public function setJwtData(?object $data): void
 	{
 		$this->jwtData = $data;
@@ -62,12 +51,14 @@ final class Flipchart extends Controller implements JwtHolder
 
 	public function configureActions(): array
 	{
+		$oldBoardUrlToUnifiedRedirect = new OldBoardUrlToUnifiedRedirect();
+
 		return [
 			'webhook' => [
 				'+prefilters' => [
 					new JwtFilter(
 						Configuration::getJwtSecret(),
-						$this
+						$this,
 					),
 				],
 				'-prefilters' => [
@@ -82,13 +73,25 @@ final class Flipchart extends Controller implements JwtHolder
 				],
 			],
 			'openDocument' => [
+				'+prefilters' => [
+					$oldBoardUrlToUnifiedRedirect,
+				],
 				'-prefilters' => [
 					Csrf::class,
 				],
+				'+postfilters' => [
+					$oldBoardUrlToUnifiedRedirect,
+				],
 			],
 			'openAttachedDocument' => [
+				'+prefilters' => [
+					$oldBoardUrlToUnifiedRedirect,
+				],
 				'-prefilters' => [
 					Csrf::class,
+				],
+				'+postfilters' => [
+					$oldBoardUrlToUnifiedRedirect,
 				],
 			],
 			'viewDocument' => [
@@ -104,14 +107,14 @@ final class Flipchart extends Controller implements JwtHolder
 		return [
 			new Parameter(
 				DocumentSession::class,
-				function($className, $sessionId): ?DocumentSession
-				{
+				function ($className, $sessionId): ?DocumentSession {
 					return (new SessionManager())
 						->setExternalHash($sessionId)
 						->setUserId((int)$this->getCurrentUser()?->getId())
 						->setSessionType(DocumentSession::TYPE_EDIT)
-						->findSession();
-				}
+						->findSession()
+					;
+				},
 			),
 		];
 	}
@@ -144,7 +147,8 @@ final class Flipchart extends Controller implements JwtHolder
 		}
 		$manager = new SessionManager();
 		$manager->setExternalHash($sessionId);
-		if(!is_null($userId)){
+		if (!is_null($userId))
+		{
 			$manager->setUserId((int)$userId);
 		}
 
@@ -177,7 +181,7 @@ final class Flipchart extends Controller implements JwtHolder
 			case WebhookEventType::UserEntry->value:
 				if ($session->getUserId() > 0)
 				{
-					Application::getInstance()->addBackgroundJob(function() use ($session, $editAllowed) {
+					Application::getInstance()->addBackgroundJob(function () use ($session, $editAllowed) {
 						$event = new AnalyticsEvent('session_start', 'boards', 'boards');
 						$event->setType($editAllowed ? 'edit' : 'view');
 						$event->setUserId((int)$session->getUserId());
@@ -186,6 +190,7 @@ final class Flipchart extends Controller implements JwtHolder
 						$event->send();
 					});
 				}
+
 				break;
 
 			case WebhookEventType::WasModified->value:
@@ -196,7 +201,7 @@ final class Flipchart extends Controller implements JwtHolder
 				{
 					$boardService->saveDocument();
 
-					Application::getInstance()->addBackgroundJob(function() use ($isNewBoard, $cElement) {
+					Application::getInstance()->addBackgroundJob(function () use ($isNewBoard, $cElement) {
 						$event = new AnalyticsEvent('save_changes', 'boards', 'boards');
 						if ($isNewBoard)
 						{
@@ -219,10 +224,11 @@ final class Flipchart extends Controller implements JwtHolder
 			case WebhookEventType::UserLeft->value:
 				$boardService->closeSession();
 
-				if ($editAllowed){
+				if ($editAllowed)
+				{
 					$boardService->saveDocument();
 
-					Application::getInstance()->addBackgroundJob(function() use ($isNewBoard, $cElement) {
+					Application::getInstance()->addBackgroundJob(function () use ($isNewBoard, $cElement) {
 						$event = new AnalyticsEvent('save_changes', 'boards', 'boards');
 						if ($isNewBoard)
 						{
@@ -242,7 +248,7 @@ final class Flipchart extends Controller implements JwtHolder
 
 				if ($session->getUserId() > 0)
 				{
-					Application::getInstance()->addBackgroundJob(function() use ($session, $editAllowed) {
+					Application::getInstance()->addBackgroundJob(function () use ($session, $editAllowed) {
 						$event = new AnalyticsEvent('session_end', 'boards', 'boards');
 						$event->setType($editAllowed ? 'edit' : 'view');
 						$event->setUserId((int)$session->getUserId());
@@ -261,7 +267,7 @@ final class Flipchart extends Controller implements JwtHolder
 					{
 						$boardService->saveDocument();
 
-						Application::getInstance()->addBackgroundJob(function() use ($isNewBoard, $cElement) {
+						Application::getInstance()->addBackgroundJob(function () use ($isNewBoard, $cElement) {
 							$event = new AnalyticsEvent('save_changes', 'boards', 'boards');
 							if ($isNewBoard)
 							{
@@ -537,12 +543,15 @@ final class Flipchart extends Controller implements JwtHolder
 			return null;
 		}
 
-		$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($res->getData()['file']->getId(), false, $cElement);
+		$urlManager = Driver::getInstance()->getUrlManager();
+
+		$openUrl = $urlManager->getUrlForViewBoard($res->getData()['file'], false, $cElement);
+
 		$res->setData(
 			[
 				'viewUrl' => $openUrl,
 			]
-			+ $res->getData()
+			+ $res->getData(),
 		);
 
 		return $res->getData();
@@ -562,6 +571,11 @@ final class Flipchart extends Controller implements JwtHolder
 			],
 			true,
 		);
+
+		if (Configuration::isForceHttpForDocumentUrl())
+		{
+			$documentUrl = str_replace('https://', 'http://', (string)$documentUrl);
+		}
 
 		if (
 			($session->isEdit() && !$session->canUserEdit($currentUser))
@@ -612,7 +626,7 @@ final class Flipchart extends Controller implements JwtHolder
 				'IFRAME_MODE' => true,
 				'PREVENT_LOADING_WITHOUT_IFRAME' => false,
 				'USE_PADDING' => false,
-			]
+			],
 		);
 
 		$response = new HttpResponse();
@@ -635,7 +649,7 @@ final class Flipchart extends Controller implements JwtHolder
 				'IFRAME_MODE' => true,
 				'PREVENT_LOADING_WITHOUT_IFRAME' => false,
 				'USE_PADDING' => true,
-			]
+			],
 		);
 
 		$response = new HttpResponse();

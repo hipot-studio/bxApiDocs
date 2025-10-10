@@ -1,7 +1,6 @@
 <?php
 
 use Bitrix\Disk\Configuration;
-use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Integration\Socialnetwork\Context\Context;
 use Bitrix\Disk\Document\DocumentHandler;
@@ -13,7 +12,7 @@ use Bitrix\Disk\Storage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\Avatar;
 use Bitrix\Disk\Ui\FileAttributes;
-use Bitrix\Disk\UrlManager;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration as UnifiedLinkConfiguration;
 use Bitrix\Disk\ZipNginx;
 use Bitrix\Disk\Document\Contract;
 use Bitrix\Disk\Document\LocalDocumentController;
@@ -46,7 +45,6 @@ use Bitrix\Main\UI\UiTour;
 use Bitrix\Main\UI\Viewer\ItemAttributes;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork;
-use Bitrix\Disk\QuickAccess;
 use Bitrix\Main\DI\ServiceLocator;
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
@@ -593,7 +591,8 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 				}
 				elseif ($object->getTypeFile() == TypeFile::FLIPCHART)
 				{
-					$openUrl = $this->getUrlManager()->getUrlForViewBoard($objectId, false, 'disk_page');
+					$openUrl = $this->getUrlManager()->getUrlForViewBoard($object, false, 'disk_page');
+
 					$openAction = [
 						'id' => 'open',
 						'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_OPEN'),
@@ -677,6 +676,10 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 				if ($isFolder)
 				{
 					$internalLink = $urlManager->getUrlFocusController('openFolderList', array('folderId' => $object->getId()), true);
+				}
+				elseif (UnifiedLinkConfiguration::supportsUnifiedLink($object))
+				{
+					$internalLink = $urlManager->getUnifiedLink($object, ['absolute' => true]);
 				}
 				else
 				{
@@ -1075,7 +1078,8 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 
 				if ($object->getTypeFile() == TypeFile::FLIPCHART)
 				{
-					$openUrl = $this->getUrlManager()->getUrlForViewBoard($objectId, false, 'disk_page');
+					$openUrl = $this->getUrlManager()->getUrlForViewBoard($object, false, 'disk_page');
+
 					$attr->addAction(
 						[
 							'type' => 'open',

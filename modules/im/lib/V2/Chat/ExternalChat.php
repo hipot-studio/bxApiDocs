@@ -7,13 +7,22 @@ use Bitrix\Im\V2\Chat\ExternalChat\Config;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterCreateEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeCreateEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeUsersAddEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterDeleteMessagesEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\FilterUsersByAccessEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\GetUsersForRecentEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadAllMessagesEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadMessagesEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterSendMessageEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterUpdateMessageEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
+use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Send\SendingService;
+use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\ExternalChatRelations;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 
 class ExternalChat extends GroupChat
 {
@@ -124,5 +133,40 @@ class ExternalChat extends GroupChat
 	protected function needToSendMessageUserDelete(): bool
 	{
 		return false;
+	}
+
+	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
+	{
+		(new AfterSendMessageEvent($this, $message))->send();
+
+		parent::onAfterMessageSend($message, $sendingService);
+	}
+
+	public function onAfterMessageUpdate(Message $message): Result
+	{
+		(new AfterUpdateMessageEvent($this, $message))->send();
+
+		return parent::onAfterMessageUpdate($message);
+	}
+
+	public function onAfterMessagesDelete(MessageCollection $messages, DeletionMode $deletionMode): Result
+	{
+		(new AfterDeleteMessagesEvent($this, $messages, $deletionMode))->send();
+
+		return parent::onAfterMessagesDelete($messages, $deletionMode);
+	}
+
+	public function onAfterMessagesRead(MessageCollection $messages, int $readerId): Result
+	{
+		(new AfterReadMessagesEvent($this, $messages, $readerId))->send();
+
+		return parent::onAfterMessagesRead($messages, $readerId);
+	}
+
+	public function onAfterAllMessagesRead(int $readerId): Result
+	{
+		(new AfterReadAllMessagesEvent($this, $readerId))->send();
+
+		return parent::onAfterAllMessagesRead($readerId);
 	}
 }

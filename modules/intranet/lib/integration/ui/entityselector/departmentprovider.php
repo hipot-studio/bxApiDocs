@@ -367,7 +367,7 @@ class DepartmentProvider extends BaseProvider
 						'title' => $department->getName(),
 						'entityId' => 'department',
 						'nodeOptions' => [
-							'title' => Loc::getMessage('INTRANET_ENTITY_SELECTOR_ALL_EMPLOYEES_SUBDIVISIONS_MSGVER_1'),
+							'title' => Loc::getMessage('INTRANET_ENTITY_SELECTOR_ALL_EMPLOYEES_SUBDIVISIONS_MSGVER_2'),
 							'avatar' => '/bitrix/js/intranet/entity-selector/src/images/department-option.svg',
 							'renderMode' => 'override',
 						],

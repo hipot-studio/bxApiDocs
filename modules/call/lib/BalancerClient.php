@@ -16,7 +16,7 @@ use Bitrix\Main\Web\Uri;
 class BalancerClient
 {
 	private const BALANCER_MAP = [
-		'ru' => 'https://slb.webrtc.bitrix.info',
+		'ru' => 'https://slb.bitrix24.tech',
 		'eu' => 'https://slb-de.webrtc.bitrix.info',
 		'us' => 'https://slb-us.webrtc.bitrix.info',
 	];

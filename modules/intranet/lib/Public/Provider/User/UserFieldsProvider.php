@@ -2,23 +2,23 @@
 
 namespace Bitrix\Intranet\Public\Provider\User;
 
-use Bitrix\Intranet\Internal\Entity\UserField\UserFieldCollection;
-use Bitrix\Intranet\Internal\Repository\UserProfileRepository;
+use Bitrix\Intranet\Internal\Entity\User\Field\FieldCollection;
+use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
 
 class UserFieldsProvider
 {
 	public function __construct(
-		private UserProfileRepository $userProfileRepository,
+		private ProfileRepository $userProfileRepository,
 	) {}
 
 	public static function createByDefault(): UserFieldsProvider
 	{
 		return new UserFieldsProvider(
-			new UserProfileRepository(),
+			ProfileRepository::createByDefault(),
 		);
 	}
 
-	public function getByUserData(array $userData): UserFieldCollection
+	public function getByUserData(array $userData): FieldCollection
 	{
 		return $this->userProfileRepository->getUserFieldsByUserData($userData);
 	}

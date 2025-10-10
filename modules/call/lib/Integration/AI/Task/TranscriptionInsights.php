@@ -10,6 +10,7 @@ use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Integration\AI\Outcome\Transcription;
 
 class TranscriptionInsights extends AITask
 {
@@ -105,10 +106,83 @@ class TranscriptionInsights extends AITask
 			$content .= sprintf('"%s-%s", "%s", "%s"', $row->start, $row->end, $userName, $text). "\n";
 		}
 
+		$speakersList = $this->buildSpeakersList($transcription, $callId);
+
 		$payload = new \Bitrix\AI\Payload\Prompt($this->getPromptCode());
-		$payload->setMarkers(['transcripts' => $content, 'json_call' => static::getAIPromptFields()]);
+		$markers = [
+			'transcripts' => $content,
+			'json_call' => static::getAIPromptFields()
+		];
+
+		if (!empty($speakersList))
+		{
+			$markers['speakers_list'] = $speakersList;
+		}
+
+		$payload->setMarkers($markers);
 
 		return $result->setData(['payload' => $payload]);
+	}
+
+	/**
+	 * Builds speakers list for participants who spoke more than 30 seconds
+	 * @param \Bitrix\Call\Integration\AI\Outcome\Transcription $transcription
+	 * @param int $callId
+	 * @return string
+	 */
+	protected function buildSpeakersList(Transcription $transcription, int $callId): string
+	{
+		/** @var MentionService $mentionService */
+		$mentionService = MentionService::getInstance();
+		$speakerTimes = [];
+
+		foreach ($transcription->transcriptions as $row)
+		{
+			$startSeconds = $this->timeToSeconds($row->start);
+			$endSeconds = $this->timeToSeconds($row->end);
+			$duration = $endSeconds - $startSeconds;
+
+			if (!isset($speakerTimes[$row->userId]))
+			{
+				$speakerTimes[$row->userId] = [
+					'totalTime' => 0,
+					'userName' => $mentionService->getAIMention($row->userId, $callId)
+				];
+			}
+
+			$speakerTimes[$row->userId]['totalTime'] += $duration;
+		}
+
+		$activeSpeakers = [];
+		foreach ($speakerTimes as $data)
+		{
+			if ($data['totalTime'] > 30)
+			{
+				$activeSpeakers[] = $data['userName'];
+			}
+		}
+
+		return implode(",\n", $activeSpeakers);
+	}
+
+	/**
+	 * Converts time format MM:SS to seconds
+	 * @param string $time
+	 * @return int
+	 */
+	protected function timeToSeconds(string $time): int
+	{
+		$parts = explode(':', $time);
+		if (count($parts) === 2)
+		{
+			return (int)$parts[0] * 60 + (int)$parts[1];
+		}
+		elseif (count($parts) === 3)
+		{
+			return (int)$parts[0] * 3600 + (int)$parts[1] * 60 + (int)$parts[2];
+		}
+
+		return 0;
 	}
 
 	protected function getPromptCode(): string
@@ -196,5 +270,14 @@ class TranscriptionInsights extends AITask
 		})($jsonData);
 
 		return $jsonData;
+	}
+
+	/**
+	 * Allows to output thw chat error message then task failed.
+	 * @return bool
+	 */
+	public function allowNotifyTaskFailed(): bool
+	{
+		return true;
 	}
 }
