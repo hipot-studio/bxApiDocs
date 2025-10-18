@@ -126,7 +126,7 @@ class AISetting extends Intranet\Settings\AbstractSettings
 	{
 		return [
 			'link' => '/market/collection/ai_provider_partner_crm/',
-			'text' => Loc::getMessage('AI_SETTINGS_INTERNAL_MARKET_LINK'),
+			'text' => Loc::getMessage('AI_SETTINGS_INTERNAL_MARKET_LINK_MSGVER_1'),
 			'icon' => [
 				'code' => '--market-1',
 				'set' => 'ui.icon-set.main',

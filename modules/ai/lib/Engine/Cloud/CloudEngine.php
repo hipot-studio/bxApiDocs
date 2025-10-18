@@ -3,23 +3,21 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Engine\Cloud;
 
-use Bitrix\AI\Container;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Engine\IEngine;
-use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Payload\Text;
 use Bitrix\AI\QueueJob;
 use Bitrix\AI\Result;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
-use Bitrix\UI\Util;
-use Bitrix\Main\Loader;
+use Bitrix\AI\Engine\Cloud\EngineCloudError\Service\ExceededLimitService;
 use function call_user_func;
 use function is_callable;
 
@@ -29,15 +27,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 
 	protected const AGREEMENT_CODE = 'AI_BOX_AGREEMENT';
 
-	protected const SLIDER_CODE_REQUESTS = 'limit_copilot_requests_box';
-	protected const SLIDER_CODE_BOOST = 'limit_boost_copilot_box';
-	protected const SLIDER_CODE_BOX = 'limit_copilot_box';
-
-	protected const ERROR_CODE_LIMIT_STANDARD = 'LIMIT_IS_EXCEEDED_MONTHLY';
-	protected const ERROR_CODE_LIMIT_BAAS = 'LIMIT_IS_EXCEEDED_BAAS';
-	protected const ERROR_CODE_RATE_LIMIT = 'RATE_LIMIT';
-
-	protected const RATE_LIMIT_HELP_CODE = '24736310';
+	abstract protected function getDefaultModel(): string;
 
 	public function checkLimits(): bool
 	{
@@ -191,112 +181,14 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 	{
 		$this->queueJob->cancel();
 
-		[$showSliderWithMsg, $sliderCode, $errorCode, $msgForIm] = $this->getErrorsLimitRules($errorLimit);
-
-		$error = new Error(
-			$errorCode === static::ERROR_CODE_RATE_LIMIT
-			? Loc::getMessage(
-				'AI_ENGINE_ERROR_RATE_LIMIT_IS_EXCEEDED',
-				[
-					'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp() . '" target="blank">',
-					'[/helpdesklink]' => '</a>',
-				]
-			)
-			: Loc::getMessage('AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED'),
-			$errorCode,
-			[
-				'sliderCode' => $sliderCode,
-				'showSliderWithMsg' => $showSliderWithMsg,
-				'msgForIm' => $msgForIm,
-			]
-		);
-
 		call_user_func(
 			$this->onErrorCallback,
-			$error
+			$this->getExceededLimitService()->mapExceededLimitError($errorLimit)
 		);
 	}
 
-	/**
-	 * @param Error $errorLimit
-	 * @return array
-	 */
-	protected function getErrorsLimitRules(Error $errorLimit): array
+	protected function getExceededLimitService()
 	{
-		$errorData = $errorLimit->getCustomData();
-		$isAvailableBaas = $this->isAvailableBaas();
-		$errorCode = $this->getErrorCode($errorData, $isAvailableBaas);
-		$sliderCode = static::SLIDER_CODE_REQUESTS;
-
-		$msgForIm = Loc::getMessage(
-			'AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED_WITH_MORE',
-			[
-				'#LINK#' => '/online/?FEATURE_PROMOTER=' . $sliderCode,
-			]
-		);
-
-		if (empty($errorData['baasAvailable'])) {
-			return [false, $sliderCode, $errorCode, $msgForIm];
-		}
-
-		$sliderCode = $isAvailableBaas ? static::SLIDER_CODE_BOOST : static::SLIDER_CODE_BOX;
-
-		$msgForIm = Loc::getMessage(
-			'AI_ENGINE_ERROR_LIMIT_BAAS',
-			[
-				'#LINK#' => '/online/?FEATURE_PROMOTER=' . $sliderCode,
-			]
-		);
-
-		if ($errorCode === static::ERROR_CODE_RATE_LIMIT)
-		{
-			$msgForIm = Loc::getMessage(
-				'AI_ENGINE_ERROR_IM_RATE_LIMIT_IS_EXCEEDED',
-				[
-					'#LINK#' => $this->getLinkOnHelp(),
-				]
-			);
-
-			$sliderCode = 'redirect=detail&code=' . static::RATE_LIMIT_HELP_CODE;
-		}
-
-		return [!$isAvailableBaas, $sliderCode, $errorCode, $msgForIm];
+		return ServiceLocator::getInstance()->get(ExceededLimitService::class);
 	}
-
-	protected function isAvailableBaas(): bool
-	{
-		/** @var BaasTokenService $baasTokenService */
-		$baasTokenService = Container::init()->getItem(BaasTokenService::class);
-
-		return $baasTokenService->isAvailable();
-	}
-
-	protected function getErrorCode(array $errorData, bool $isAvailableBaas)
-	{
-		if (empty($errorData['errorLimitType']))
-		{
-			return static::ERROR_CODE_LIMIT_STANDARD;
-		}
-
-		if ($errorData['errorLimitType'] === static::ERROR_CODE_RATE_LIMIT)
-		{
-			return static::ERROR_CODE_RATE_LIMIT;
-		}
-
-		if ($isAvailableBaas)
-		{
-			return static::ERROR_CODE_LIMIT_BAAS;
-		}
-
-		return $errorData['errorLimitType'];
-	}
-
-	private function getLinkOnHelp(): string
-	{
-		return Loader::includeModule('ui')
-			? Util::getArticleUrlByCode(static::RATE_LIMIT_HELP_CODE)
-			: 'https://helpdesk.bitrix24.ru/open/' . static::RATE_LIMIT_HELP_CODE;
-	}
-
-	abstract protected function getDefaultModel(): string;
 }

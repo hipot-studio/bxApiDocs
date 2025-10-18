@@ -270,6 +270,7 @@ class WorktimeService extends BaseService
 				$workTimeAction = $tmUserObject->openAction();
 				$workTimeAction = ($workTimeAction === false) ? '' : $workTimeAction;
 			}
+			$currentInfo = $tmUserObject->GetCurrentInfo();
 
 			(new PushService())->sendEvent(
 				new PushEvent(
@@ -279,6 +280,10 @@ class WorktimeService extends BaseService
 						'info' => [
 							'state' => $workTimeState,
 							'action' => $workTimeAction,
+							'dateStart' => $currentInfo['DATE_START'] ? (MakeTimeStamp($currentInfo['DATE_START']) - \CTimeZone::GetOffset()) : '',
+							'dateFinish' => $currentInfo['DATE_FINISH'] ? (MakeTimeStamp($currentInfo['DATE_FINISH']) - \CTimeZone::GetOffset()) : '',
+							'timeLeaks' => $currentInfo['TIME_LEAKS'],
+							'lastPause' => $currentInfo['LAST_PAUSE'],
 						],
 					],
 					entityId: $actualRecord->getId(),

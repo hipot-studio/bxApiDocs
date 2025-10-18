@@ -60,6 +60,16 @@ class BitrixAudio extends CloudEngine implements IQueueOptional
 		return !empty(array_intersect($quality->getRequired(), $prefer));
 	}
 
+	public function hasQuality(Quality $quality): bool
+	{
+		$supportedQualities = [
+			Quality::QUALITIES['transcribe'],
+			Quality::QUALITIES['transcribe_chat_voice_messages'],
+		];
+
+		return !empty(array_intersect($supportedQualities, $quality->getRequired()));
+	}
+
 	protected function getCompletionsUrl(): string
 	{
 		return $this->getAiUrlManager()->getAudioCompletionsUrl();

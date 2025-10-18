@@ -46,4 +46,18 @@ final class ItSolutionAudio extends CloudEngine implements IQueueOptional
 
 		return new Result($rawResult, $prettyResult, $cached);
 	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function hasQuality(Quality $quality): bool
+	{
+		$requiredQualities = $quality->getRequired();
+		if (in_array('transcribe_chat_voice_messages', $requiredQualities, true))
+		{
+			return false;
+		}
+
+		return true;
+	}
 }

@@ -448,7 +448,8 @@ class ObjectTable extends DataManager
 
 		/** @var EO_Object $object */
 		$object = $event->getParameter('object');
-		if ($object->remindActual('UNIQUE_CODE') !== null)
+		$isSetUniqueCodeField = isset(static::getMap()['UNIQUE_CODE']);
+		if ($isSetUniqueCodeField && $object->remindActual('UNIQUE_CODE') !== null)
 		{
 			$result->unsetField('UNIQUE_CODE');
 		}

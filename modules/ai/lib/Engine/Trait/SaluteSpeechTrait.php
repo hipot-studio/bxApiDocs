@@ -48,7 +48,12 @@ trait SaluteSpeechTrait
 
 	public function hasQuality(Quality $quality): bool
 	{
-		return in_array(Quality::QUALITIES['transcribe'], $quality->getRequired(), true);
+		$supportedQualities = [
+			Quality::QUALITIES['transcribe'],
+			Quality::QUALITIES['transcribe_chat_voice_messages'],
+		];
+
+		return !empty(array_intersect($supportedQualities, $quality->getRequired()));
 	}
 
 	protected function getQueryParams(): array

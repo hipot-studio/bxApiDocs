@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\SystemException;
 
 Loc::loadMessages(__FILE__);
 
@@ -1602,7 +1603,10 @@ class BizprocDocument extends CIBlockDocument
 
 			if (!\CLists::isBpFeatureEnabled($iblockTypeId))
 			{
-				throw new \CBPNotSupportedException(Loc::getMessage('LISTS_BIZPROC_RESUME_RESTRICTED'));
+				throw new SystemException(
+					Loc::getMessage('LISTS_BIZPROC_RESUME_RESTRICTED'),
+					CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED
+				);
 			}
 		}
 	}

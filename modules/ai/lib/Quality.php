@@ -26,6 +26,8 @@ class Quality
 		// support meeting processing in video and audio calls
 		'meeting_processing' => 'meeting_processing',
 		'scoring' => 'scoring',
+		// can transcribe voice messages in chat
+		'transcribe_chat_voice_messages' => 'transcribe_chat_voice_messages',
 	];
 
 	private array|string $qualities;
