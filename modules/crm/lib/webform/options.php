@@ -8,6 +8,7 @@
 namespace Bitrix\Crm\WebForm;
 
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 
 /**
  * Class Options
@@ -117,9 +118,19 @@ class Options
 				),
 			],
 			'captcha' => [
-				'key' => ReCaptcha::getKey(2),
-				'secret' => ReCaptcha::getSecret(2),
-				'hasDefaults' => ReCaptcha::getDefaultKey(2) && ReCaptcha::getDefaultSecret(2)
+				'service' => Option::get('crm', 'crm_form_captcha_service'),
+				'recaptcha' => [
+					'key' => ReCaptcha::getKey(2),
+					'secret' => ReCaptcha::getSecret(2),
+					'hasDefaults' => ReCaptcha::getDefaultKey(2) && ReCaptcha::getDefaultSecret(2),
+					'use' => $formData['USE_CAPTCHA'] === 'Y',
+				],
+				'yandexCaptcha' => [
+					'key' => YandexCaptcha::getKey(),
+					'secret' => YandexCaptcha::getSecret(),
+					'hasDefaults' => YandexCaptcha::getDefaultKey() && YandexCaptcha::getDefaultSecret(),
+					'use' => $formData['USE_CAPTCHA'] === 'Y',
+				],
 			],
 			'document' => [
 				'scheme' => $formData['ENTITY_SCHEME'],
@@ -329,6 +340,8 @@ class Options
 			'IS_CALLBACK_FORM' => $options['callback']['use'] ? 'Y' : 'N',
 			'CALL_FROM' => $options['callback']['from'],
 			'CALL_TEXT' => $options['callback']['text'],
+
+			'CAPTCHA_SERVICE' => $options['captcha']['service'] ?? 'google',
 		];
 	}
 

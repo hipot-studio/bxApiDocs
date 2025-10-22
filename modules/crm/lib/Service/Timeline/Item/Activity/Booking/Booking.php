@@ -24,6 +24,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
 class Booking extends Activity
 {
@@ -277,26 +278,41 @@ class Booking extends Activity
 	{
 		$result = [];
 
+		$isToolAvailable = $this->isToolAvailable();
+
 		foreach ($messageMenuItems as $messageMenuItem)
 		{
-			$action = (new RunAjaxJsonAction(BookingActivity::getSendBookingMessageEndpoint()))
-				->addActionParamInt('bookingId', $bookingId)
-				->setAnimation(Animation::showLoaderForBlock())
-			;
-			$params = (isset($messageMenuItem['params']) && is_array($messageMenuItem['params']))
-				? $messageMenuItem['params']
-				: []
-			;
-			foreach ($params as $paramName => $paramValue)
-			{
-				$action->addActionParamString($paramName, $paramValue);
-			}
-
 			$result[$messageMenuItem['code'] ?? ''] = (new MenuItem($messageMenuItem['name'] ?? ''))
-				->setAction($action);
+				->setAction(
+					$this->getMessageMenuItemAction($bookingId, $messageMenuItem, $isToolAvailable)
+				);
 		}
 
 		return $result;
+	}
+
+	private function getMessageMenuItemAction(int $bookingId, array $messageMenuItem, bool $isToolAvailable): Action
+	{
+		if (!$isToolAvailable)
+		{
+			return (new Action\JsEvent($this->getType() . ':ShowInfoHelper'))
+				->addActionParamString('code', 'limit_automation_off');
+		}
+
+		$action = (new RunAjaxJsonAction(BookingActivity::getSendBookingMessageEndpoint()))
+			->addActionParamInt('bookingId', $bookingId)
+			->setAnimation(Animation::showLoaderForBlock())
+		;
+		$params = (isset($messageMenuItem['params']) && is_array($messageMenuItem['params']))
+			? $messageMenuItem['params']
+			: []
+		;
+		foreach ($params as $paramName => $paramValue)
+		{
+			$action->addActionParamString($paramName, $paramValue);
+		}
+
+		return $action;
 	}
 
 	public function needShowNotes(): bool
@@ -589,5 +605,19 @@ class Booking extends Activity
 			status: $this->getStatus(),
 			statusUpdated: (int)($this->getAssociatedEntityModel()->get('SETTINGS')['STATUS_UPDATED'] ?? 0),
 		);
+	}
+
+	private function isToolAvailable(): bool
+	{
+		$result = true;
+
+		if (
+			Loader::includeModule('intranet')
+			&& !ToolsManager::getInstance()->checkAvailabilityByToolId('booking')
+		) {
+			$result = false;
+		}
+
+		return $result;
 	}
 }

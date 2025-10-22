@@ -94,15 +94,18 @@ class Dynamic extends Kanban\Entity
 
 	protected function getDefaultAdditionalSelectFields(): array
 	{
-		$fields = [];
-		$fields[Item::FIELD_NAME_TITLE] = '';
+		$fields = [
+			Item::FIELD_NAME_TITLE => '',
+			'LAST_ACTIVITY_BY_TIME' => '',
+			'LAST_ACTIVITY_BY_USER_AVATAR' => '',
+		];
 
-		if($this->factory->isLinkWithProductsEnabled())
+		if ($this->factory->isLinkWithProductsEnabled())
 		{
 			$fields[Item::FIELD_NAME_OPPORTUNITY] = '';
 		}
 
-		if($this->factory->isClientEnabled())
+		if ($this->factory->isClientEnabled())
 		{
 			$fields['CLIENT'] = '';
 		}
@@ -596,5 +599,10 @@ class Dynamic extends Kanban\Entity
 		}
 
 		return $fields;
+	}
+
+	public function isRecurringSupported(): bool
+	{
+		return $this->factory->isRecurringEnabled();
 	}
 }

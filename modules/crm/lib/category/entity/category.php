@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Category\Entity;
 
+use Bitrix\Crm\Category\CategoryPullManager;
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Event;
@@ -145,5 +146,10 @@ abstract class Category implements \JsonSerializable
 		$maxSort = empty($sortList) ? 0 : max($sortList);
 
 		return $this->setSort($maxSort + static::SORT_INCREMENT);
+	}
+
+	protected function sendEventCategoriesUpdated(): bool
+	{
+		return CategoryPullManager::getInstance()->sendEventCategoriesUpdated($this->getEntityTypeId());
 	}
 }

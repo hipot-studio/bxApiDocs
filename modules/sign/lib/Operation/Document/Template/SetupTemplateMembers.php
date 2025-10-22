@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Operation\Document\Template;
 
 use Bitrix\Main;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Contract\Operation;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Member;
@@ -29,6 +30,8 @@ class SetupTemplateMembers implements Operation
 		private readonly ?int $sendFromUserId = null,
 		private readonly ?int $representativeUserId = null,
 		private readonly ?MemberCollection $memberList = null,
+		private readonly bool $excludeRejected = true,
+		private readonly bool $hasSetupSigners = true,
 	)
 	{
 		$this->memberService = Container::instance()->getMemberService();
@@ -43,26 +46,29 @@ class SetupTemplateMembers implements Operation
 		$members = $this->getMemberList($document);
 		$signerMember = $members->filter(fn (Member $member): bool => $member->role === Role::SIGNER)->getFirst();
 
-		if ($signerMember === null)
+		if ($signerMember === null && $this->hasSetupSigners)
 		{
 			return (new Main\Result())->addError(new Error('Signer member not found'));
 		}
 
 		$parties = [];
 
-		foreach ($members as $member)
+		if ($this->hasSetupSigners)
 		{
-			if ($member === null)
+			foreach ($members as $member)
 			{
-				continue;
-			}
+				if ($member === null)
+				{
+					continue;
+				}
 
-			$parties[] = $member->party;
+				$parties[] = $member->party;
 
-			$prepareDataResult = $this->prepareMemberData($member, $document, $signerMember);
-			if (!$prepareDataResult->isSuccess())
-			{
-				return $prepareDataResult;
+				$prepareDataResult = $this->prepareMemberData($member, $document, $signerMember);
+				if (!$prepareDataResult->isSuccess())
+				{
+					return $prepareDataResult;
+				}
 			}
 		}
 
@@ -71,7 +77,13 @@ class SetupTemplateMembers implements Operation
 			$document->representativeId = $this->representativeUserId;
 		}
 
-		$result = $this->memberService->setupB2eMembers($document->uid, $members, $document->representativeId, true);
+		$result = $this->memberService->setupB2eMembers(
+			documentUid: $document->uid,
+			memberCollection: $members,
+			representativeId: $document->representativeId,
+			skipPermissionCheck: true,
+			excludeRejected: $this->excludeRejected,
+		);
 		if (!$result->isSuccess())
 		{
 			return $result;
@@ -158,7 +170,16 @@ class SetupTemplateMembers implements Operation
 
 		if ($userIdFromRole < 1)
 		{
-			return $result->addError(new Error('Can not find member with role'));
+			$userName = $this->memberService->getUserRepresentedName($firstSignerMember->entityId);
+			return $result->addError(new Error(
+				Loc::getMessage(
+					'SIGN_B2E_SETUP_TEMPLATE_MEMBER_WITH_ROLE_NOT_FOUND',
+					[
+						'#ROLE#' => mb_strtolower((string)$this->structureNodeService->getRoleTitleById($roleId)),
+						'#NAME#' => trim($userName),
+					]
+				) ?? '',
+			));
 		}
 
 		if ($member->role === Role::ASSIGNEE)

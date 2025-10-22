@@ -59,7 +59,7 @@ final class Deal extends Factory
 		return true;
 	}
 
-	public function isBizProcEnabled(): bool
+	public function isBizProcSupported(): bool
 	{
 		return true;
 	}
@@ -633,6 +633,10 @@ final class Deal extends Factory
 					new Reservation\Actions\CheckProductsOnAdd()
 				)
 				->addAction(
+					Operation::ACTION_BEFORE_SAVE,
+					new Reservation\Actions\PrepareReservationFields()
+				)
+				->addAction(
 					Operation::ACTION_AFTER_SAVE,
 					new Reservation\Actions\SynchronizeReservesOnAdd()
 				)
@@ -699,6 +703,10 @@ final class Deal extends Factory
 			$synchronizeReserveOperation = new Reservation\Actions\SynchronizeReservesOnUpdate();
 
 			$operation
+				->addAction(
+					Operation::ACTION_BEFORE_SAVE,
+					new Reservation\Actions\PrepareReservationFields()
+				)
 				->addAction(
 					Operation::ACTION_BEFORE_SAVE,
 					$synchronizeReserveOperation

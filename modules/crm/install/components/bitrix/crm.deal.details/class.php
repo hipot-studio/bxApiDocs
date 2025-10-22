@@ -27,7 +27,7 @@ use Bitrix\Crm\Settings\LayoutSettings;
 use Bitrix\Crm\Tracking;
 use Bitrix\Currency;
 use Bitrix\Main;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\SalesCenter\Integration\LandingManager;
 
@@ -670,6 +670,7 @@ class CCrmDealDetailsComponent
 									'ENABLE_TOOLBAR' => true,
 									'PRESERVE_HISTORY' => true,
 									'ADD_EVENT_NAME' => 'CrmCreateQuoteFromDeal',
+									'EXTENDED_INTERNAL_MODE' => true,
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
 										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
@@ -1201,6 +1202,8 @@ class CCrmDealDetailsComponent
 		{
 			$recurringViewText  =  Loc::getMessage("CRM_DEAL_FIELD_RECURRING_NOTHING_SELECTED");
 		}
+
+		$dealRecurringRestriction = null;
 		if (!$this->isEnableRecurring)
 		{
 			$dealRecurringRestriction = RestrictionManager::getDealRecurringRestriction();
@@ -1511,21 +1514,20 @@ class CCrmDealDetailsComponent
 				'enableAttributes' => false,
 				"enableRecurring" => $this->isEnableRecurring,
 				"elements" => $this->prepareRecurringElements(),
-				"data" => array(
-					'loaders' => array(
-						'action' => 'GET_DEAL_HINT',
-						'url' => '/bitrix/components/bitrix/crm.interface.form.recurring/ajax.php?'.bitrix_sessid_get()
-					),
-					"view" => array(
-						'text' => $recurringViewText
-					),
-					"fieldData" => [
+				'data' => [
+					'loaders' => [
+						'url' => UrlManager::getInstance()->create('crm.recurring.hint.get')->getUri(),
+					],
+					'view' => [
+						'text' => $recurringViewText,
+					],
+					'fieldData' => [
 						'MULTIPLE_EXECUTION' => Recurring\Manager::MULTIPLY_EXECUTION,
 						'SINGLE_EXECUTION' => Recurring\Manager::SINGLE_EXECUTION,
 						'NON_ACTIVE' => Recurring\Calculator::SALE_TYPE_NON_ACTIVE_DATE,
 					],
-					"restrictScript" => (!$this->isEnableRecurring && !empty($dealRecurringRestriction)) ? $dealRecurringRestriction->prepareInfoHelperScript() : ""
-				)
+					'restrictScript' => (!$this->isEnableRecurring && $dealRecurringRestriction !== null) ? $dealRecurringRestriction->prepareInfoHelperScript() : '',
+				],
 			),
 			[
 				'name' => 'MOVED_BY_ID',
@@ -2654,25 +2656,25 @@ class CCrmDealDetailsComponent
 		{
 			$entityId = $this->entityID;
 			$item = null;
-			if($this->conversionWizard !== null)
+			if ($this->conversionWizard !== null)
 			{
 				$entityId = $this->conversionWizard->converter->getEntityID();
-				if($entityId > 0)
+				if ($entityId > 0)
 				{
 					$entityTypeId = $this->conversionWizard->converter->getEntityTypeID();
-					$item = Container::getInstance()->getFactory($entityTypeId)->getItem($entityId);
+					$item = Container::getInstance()->getFactory($entityTypeId)?->getItem($entityId);
 				}
 			}
-			else if($entityId > 0)
+			elseif ($entityId > 0)
 			{
 				$item = $this->factory->getItem($entityId, $this->editorAdapter->getProductRowSummaryItemFieldsToSelect());
 			}
 
-			if(!$item)
+			if (!$item)
 			{
 				$item = $this->factory->createItem();
+				$item->setCategoryId((int)($this->arResult['CATEGORY_ID'] ?? 0));
 			}
-
 
 			$mode = $this->getComponentMode();
 			$productRowSummaryData = $this->editorAdapter->getProductRowSummaryDataByItem($item, $mode);

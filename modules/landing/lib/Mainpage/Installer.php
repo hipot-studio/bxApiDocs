@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Mainpage;
 use Bitrix\AI\Integration;
 use Bitrix\Landing;
 use Bitrix\Landing\Site\Type;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Configuration\Action\Import;
@@ -57,6 +58,12 @@ class Installer
 			return null;
 		}
 
+		$metrika = new Metrika\Metrika(
+			Metrika\Categories::Vibe,
+			Metrika\Events::createTemplateApi,
+		);
+		$metrika->setParam(1, 'templateCode', $code->value);
+
 		$app = AppTable::getByClientId($appCode);
 		$isAppInstalled =
 			!empty($app['ACTIVE'])
@@ -72,6 +79,8 @@ class Installer
 				|| isset($installResult['error'])
 			)
 			{
+				$metrika->setError($installResult['error'], Metrika\Statuses::ErrorMarket)->send();
+
 				return null;
 			}
 		}
@@ -83,6 +92,8 @@ class Installer
 		$zipId = (int)($appSite['ITEMS'][0]['ID'] ?? 0);
 		if ($zipId <= 0)
 		{
+			$metrika->setError('Wrong_zip_id', Metrika\Statuses::ErrorMarket)->send();
+
 			return null;
 		}
 
@@ -137,6 +148,8 @@ class Installer
 				break;
 			}
 		}
+
+		$metrika->send();
 
 		return $newLandingId;
 	}

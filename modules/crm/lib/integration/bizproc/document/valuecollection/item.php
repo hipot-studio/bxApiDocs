@@ -153,7 +153,7 @@ class Item extends Base
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 		$this->loadUserFieldValues();
 
-		if (in_array('CONTACTS', $this->select, true))
+		if (!$this->optimizationEnabled || in_array('CONTACTS', $this->select, true))
 		{
 			$this->loadContacts();
 		}

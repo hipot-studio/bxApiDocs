@@ -893,19 +893,19 @@ class CBPWorkflowTemplateLoader
 
 	public static function checkWorkflowParameters($arTemplateParameters, $arPossibleValues, $documentType, &$arErrors)
 	{
-		$arErrors = array();
-		$arWorkflowParameters = array();
+		$arErrors = [];
+		$arWorkflowParameters = [];
 
 		if (count($arTemplateParameters) <= 0)
-			return array();
+		{
+			return [];
+		}
 
-		$runtime = CBPRuntime::GetRuntime();
-		$runtime->StartRuntime();
-		$documentService = $runtime->GetService("DocumentService");
+		$documentService = CBPRuntime::getRuntime()->getDocumentService();
 
 		foreach ($arTemplateParameters as $parameterKey => $arParameter)
 		{
-			$arErrorsTmp = array();
+			$arErrorsTmp = [];
 
 			$arWorkflowParameters[$parameterKey] = $documentService->GetFieldInputValue(
 				$documentType,
@@ -915,16 +915,27 @@ class CBPWorkflowTemplateLoader
 				$arErrorsTmp
 			);
 
-			if (CBPHelper::getBool($arParameter['Required']) && CBPHelper::isEmptyValue($arWorkflowParameters[$parameterKey]))
+			if (
+				CBPHelper::getBool($arParameter['Required'] ?? null)
+				&& CBPHelper::isEmptyValue($arWorkflowParameters[$parameterKey] ?? null)
+			)
 			{
-				$arErrorsTmp[] = array(
-					"code" => "RequiredValue",
-					"message" => str_replace("#NAME#", $arParameter["Name"], GetMessage("BPCGWTL_INVALID8")),
-					"parameter" => $parameterKey,
-				);
+				$arErrorsTmp[] = [
+					'code' => 'RequiredValue',
+					'message' => Loc::getMessage('BPCGWTL_INVALID8', ['#NAME#' => $arParameter['Name']]),
+					'parameter' => $parameterKey,
+				];
 			}
 
-			$arErrors = array_merge($arErrors, $arErrorsTmp);
+			if ($arErrorsTmp)
+			{
+				$arErrors[] = $arErrorsTmp;
+			}
+		}
+
+		if ($arErrors)
+		{
+			$arErrors = array_merge(...$arErrors);
 		}
 
 		return $arWorkflowParameters;

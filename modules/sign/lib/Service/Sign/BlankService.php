@@ -157,6 +157,11 @@ class BlankService
 				$pendingFiles->makePersistent();
 				$file = $pendingFiles->get($fileId);
 				$persistentFileId = $file->getFileId();
+
+				if ($persistentFileId === null)
+				{
+					return (new AddResult())->addError(new Error('Failed to save uploaded file'));
+				}
 			}
 
 			$signFile = new \Bitrix\Sign\File((int)($persistentFileId ?: $fileId));

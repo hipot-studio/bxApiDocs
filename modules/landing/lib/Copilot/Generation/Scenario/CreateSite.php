@@ -47,6 +47,11 @@ class CreateSite extends BaseScenario
 		return 20;
 	}
 
+	public function getAnalyticCategory(): Metrika\Categories
+	{
+		return Metrika\Categories::SiteGeneration;
+	}
+
 	/**
 	 * @inheritdoc
 	 */

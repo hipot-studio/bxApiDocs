@@ -13,8 +13,6 @@ interface DataProviderInterface
 
 	public function getBaseCurrencyId(): string|null;
 
-	public function loadDataForCollection(...$externalDataCollections): void;
-
 	public function setClientsData(ClientCollection $clientCollection, ...$externalDataCollections): void;
 
 	public function updateBindings(Booking $updatedBooking, Booking $prevBooking): void;

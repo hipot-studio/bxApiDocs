@@ -7,6 +7,7 @@ namespace Bitrix\Booking\Internals\Repository\ORM;
 use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceLinkedEntityCollection;
 use Bitrix\Booking\Internals\Model\ResourceLinkedEntityTable;
+use Bitrix\Main\Web\Json;
 
 class ResourceLinkedEntityRepository
 {
@@ -24,7 +25,7 @@ class ResourceLinkedEntityRepository
 
 			if ($linkedEntity->getData())
 			{
-				$props['DATA'] = $linkedEntity->getData();
+				$props['DATA'] = Json::encode($linkedEntity->getData()->toArray());
 			}
 
 			$data[] = $props;

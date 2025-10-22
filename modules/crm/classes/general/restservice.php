@@ -21,14 +21,18 @@ use Bitrix\Crm\Requisite;
 use Bitrix\Crm\Rest;
 use Bitrix\Crm\Security\EntityAuthorization;
 use Bitrix\Crm\Service;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\RestSettings;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\WebForm;
 use Bitrix\Iblock;
+use Bitrix\Iblock\Public\Service\RestValidator as IblockRestValidator;
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\StringHelper;
@@ -4014,6 +4018,23 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 			unset($descriptionType, $description, $isNeedSanitize);
 		}
 
+		if (class_exists('\Bitrix\Iblock\Public\Service\RestValidator\Format\SimplePropertyValueValidator'))
+		{
+			$validator = IblockRestValidator\Format\SimplePropertyValueValidator::getInstance();
+			$validator->setFileValidator(new IblockRestValidator\Format\Type\IblockFile());
+			$validator->setIblockId($catalogID);
+			$internalResult = $validator->run($fields);
+			if (!$internalResult->isSuccess())
+			{
+				foreach ($internalResult->getErrorMessages() as $message)
+				{
+					$errors[] = $message;
+				}
+
+				return false;
+			}
+		}
+
 		// Product properties
 		$this->initializePropertiesInfo($catalogID);
 		$propertyValues = array();
@@ -4023,8 +4044,10 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 				$propertyValues[$property['ID']] = $fields[$propId];
 			unset($fields[$propId]);
 		}
-		if(count($propertyValues) > 0)
+		if (!empty($propertyValues))
+		{
 			$fields['PROPERTY_VALUES'] = $propertyValues;
+		}
 
 		$conn = Application::getConnection();
 		$conn->startTransaction();
@@ -4424,6 +4447,23 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 			unset($descriptionType, $description, $isNeedSanitize);
 		}
 
+		if (class_exists('\Bitrix\Iblock\Public\Service\RestValidator\Format\SimplePropertyValueValidator'))
+		{
+			$validator = IblockRestValidator\Format\SimplePropertyValueValidator::getInstance();
+			$validator->setFileValidator(new IblockRestValidator\Format\Type\IblockFile());
+			$validator->setIblockId($catalogID);
+			$internalResult = $validator->run($fields);
+			if (!$internalResult->isSuccess())
+			{
+				foreach ($internalResult->getErrorMessages() as $message)
+				{
+					$errors[] = $message;
+				}
+
+				return false;
+			}
+		}
+
 		// Product properties
 		$this->initializePropertiesInfo($catalogID);
 		$propertyValues = array();
@@ -4433,7 +4473,7 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 				$propertyValues[$property['ID']] = $fields[$propId];
 			unset($fields[$propId]);
 		}
-		if(!empty($propertyValues))
+		if (!empty($propertyValues))
 		{
 			$fields['PROPERTY_VALUES'] = $propertyValues;
 			$rsProperties = CIBlockElement::GetProperty(
@@ -4489,6 +4529,7 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+
 	protected function innerDelete($ID, &$errors, array $params = null)
 	{
 		if(!CModule::IncludeModule('iblock'))
@@ -4548,6 +4589,7 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 		$bindings[CRestUtil::EVENTS]['onCrmProductUpdate'] = self::createEventInfo('crm', 'OnAfterCrmProductUpdate', $callback);
 		$bindings[CRestUtil::EVENTS]['onCrmProductDelete'] = self::createEventInfo('iblock', 'OnAfterIBlockElementDelete', $callback);
 	}
+
 	public static function processEvent(array $arParams, array $arHandler)
 	{
 		$eventName = $arHandler['EVENT_NAME'];
@@ -4981,6 +5023,21 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 			return false;
 		}
 
+		if (class_exists('\Bitrix\Iblock\Public\Service\RestValidator\Format\PropertyScalarFilterValidator'))
+		{
+			$validator = IblockRestValidator\Format\PropertyScalarFilterValidator::getInstance();
+			$internalResult = $validator->run($filter);
+			if (!$internalResult->isSuccess())
+			{
+				foreach ($internalResult->getErrorMessages() as $message)
+				{
+					$errors[] = $message;
+
+					return false;
+				}
+			}
+		}
+
 		$userTypes = CCrmProductPropsHelper::GetPropsTypesByOperations(false, 'rest');
 
 		$filter['IBLOCK_ID'] = intval(CCrmCatalog::EnsureDefaultExists());
@@ -5088,15 +5145,37 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 			$fields['MULTIPLE'] = 'N';
 		}
 
-		$property = new CIBlockProperty;
-		$result = $property->Update($id, $fields);
-
+		$conn = Application::getConnection();
+		$conn->startTransaction();
+		$internalError = '';
+		$result = false;
+		try
+		{
+			$property = new CIBlockProperty;
+			$result = $property->Update($id, $fields);
+			if (!$result)
+			{
+				$internalError = $property->getLastError();
+				if (!$internalError)
+				{
+					$exception = $APPLICATION->GetException();
+					if ($exception)
+					{
+						$internalError = $exception->GetString();
+					}
+					unset(
+						$exception,
+					);
+				}
+			}
+		}
+		catch (SqlQueryException)
+		{
+			$internalError = 'Internal error updating property. Try updating again.';
+		}
 		if (!$result)
 		{
-			if (!empty($property->LAST_ERROR))
-				$errors[] = $property->LAST_ERROR;
-			else if($e = $APPLICATION->GetException())
-				$errors[] = $e->GetString();
+			$errors[] = $internalError;
 		}
 
 		return $result;
@@ -6057,6 +6136,18 @@ class CCrmLeadRestProxy extends CCrmRestProxyBase
 			$actualRows[] = $row;
 		}
 
+		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Lead);
+		$currencyId = $factory?->getItem($ID, [\Bitrix\Crm\Item::FIELD_NAME_CURRENCY_ID])?->getCurrencyId();
+		$checkCatalogRightsResult = Container::getInstance()->getProductRowChecker()->checkCatalogRights(
+			CCrmOwnerType::Lead,
+			$actualRows,
+			$currencyId,
+		);
+		if (!$checkCatalogRightsResult->isSuccess())
+		{
+			throw new RestException($checkCatalogRightsResult->getError()->getMessage());
+		}
+
 		$result = CCrmLead::SaveProductRows($ID, $actualRows, true, true, true);
 		if(!$result)
 		{
@@ -6492,6 +6583,18 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 			}
 
 			$actualRows[] = $row;
+		}
+
+		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+		$currencyId = $factory?->getItem($ID, [\Bitrix\Crm\Item::FIELD_NAME_CURRENCY_ID])?->getCurrencyId();
+		$checkCatalogRightsResult = Container::getInstance()->getProductRowChecker()->checkCatalogRights(
+			CCrmOwnerType::Deal,
+			$actualRows,
+			$currencyId,
+		);
+		if (!$checkCatalogRightsResult->isSuccess())
+		{
+			throw new RestException($checkCatalogRightsResult->getError()->getMessage());
 		}
 
 		$result = CCrmDeal::SaveProductRows($ID, $actualRows, true, true, true);
@@ -11940,6 +12043,18 @@ class CCrmQuoteRestProxy extends CCrmRestProxyBase
 			$actualRows[] = $row;
 		}
 
+		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Quote);
+		$currencyId = $factory?->getItem($ID, [\Bitrix\Crm\Item::FIELD_NAME_CURRENCY_ID])?->getCurrencyId();
+		$checkCatalogRightsResult = Container::getInstance()->getProductRowChecker()->checkCatalogRights(
+			CCrmOwnerType::Quote,
+			$actualRows,
+			$currencyId,
+		);
+		if (!$checkCatalogRightsResult->isSuccess())
+		{
+			throw new RestException($checkCatalogRightsResult->getError()->getMessage());
+		}
+
 		$result = CCrmQuote::SaveProductRows($ID, $actualRows, true, true, true);
 		if(!$result)
 		{
@@ -15428,15 +15543,44 @@ class CCrmMeasureRestProxy extends CCrmRestProxyBase
 		}
 		else
 		{
-			$result = CCatalogMeasure::add($fields);
-			if($result <= 0)
+			$conn = Application::getConnection();
+			$conn->startTransaction();
+			$result = false;
+			$internalError = '';
+			try
 			{
-				if($exception = $APPLICATION->GetException())
-					$errors[] = $exception->GetString();
-				else
-					$errors[] = 'Unknown error when creating unit of measurement.';
+				$result = CCatalogMeasure::add($fields);
+				if ($result === false)
+				{
+					$exception = $APPLICATION->GetException();
+					if ($exception)
+					{
+						$internalError = $exception->GetString();
+					}
+					else
+					{
+						$internalError = 'Unknown error when creating unit of measurement.';
+					}
+				}
+			}
+			catch (DuplicateEntryException)
+			{
+				$internalError = 'A unit of measurement with the CODE "'.$code.'" already exists.';
+			}
+			catch (SqlQueryException)
+			{
+				$internalError = 'Internal error adding measure. Try adding again.';
+			}
+
+			if ($result === false)
+			{
+				$conn->rollbackTransaction();
+				$errors[] = $internalError;
+
 				return false;
 			}
+
+			$conn->commitTransaction();
 		}
 
 		return $result;

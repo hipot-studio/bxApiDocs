@@ -410,6 +410,38 @@ class MemberRepository
 		return $this->listByDocumentIdWithRole($documentId, $role, 1)->getFirst();
 	}
 
+	public function isUserMemberOrInitiatorWithDoneStatus(int $userId): bool
+	{
+		$filter =
+			(new ConditionTree())
+				->where('SIGNED', MemberStatus::DONE)
+				->where('DOCUMENT.ENTITY_TYPE', \Bitrix\Sign\Type\Document\EntityType::SMART_B2E)
+				->where(
+					(new ConditionTree())
+						->logic(ConditionTree::LOGIC_OR)
+						->where(
+							(new ConditionTree())
+								->where('ENTITY_TYPE', EntityType::USER)
+								->where('ENTITY_ID', $userId)
+						)
+						->where(
+							(new ConditionTree())
+								->logic(ConditionTree::LOGIC_OR)
+								->where('DOCUMENT.CREATED_BY_ID', $userId)
+								->where('DOCUMENT.REPRESENTATIVE_ID', $userId)
+						)
+				)
+		;
+
+		$query = Internal\MemberTable
+			::query()
+			->setSelect(['ID'])
+			->where($filter)
+		;
+
+		return (int)$query->queryCountTotal() > 0;
+	}
+
 	public function isDocumentHasReviewer(int $documentId): bool
 	{
 		return $this->isDocumentHasMemberWithRoles($documentId, [Role::REVIEWER]);

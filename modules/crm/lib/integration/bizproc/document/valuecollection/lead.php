@@ -36,9 +36,10 @@ class Lead extends Base
 		}
 
 		$this->prepareFieldGroups();
+		$this->addCustomerField();
 		$this->addContactCompanyFields();
 
-		if (in_array('CONTACT_IDS', $this->select, true))
+		if (!$this->optimizationEnabled || in_array('CONTACT_IDS', $this->select, true))
 		{
 			$this->document['CONTACT_IDS'] = Crm\Binding\LeadContactTable::getLeadContactIDs($this->id);
 		}
@@ -68,7 +69,7 @@ class Lead extends Base
 			$this->select = array_merge($this->select, ['CONTACT_ID']);
 		}
 
-		if (in_array('COMPANY_TITLE', $this->select, true))
+		if (!$this->optimizationEnabled || in_array('COMPANY_TITLE', $this->select, true))
 		{
 			$this->loadCompanyTitle();
 		}
@@ -76,7 +77,8 @@ class Lead extends Base
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 		$this->appendDefaultUserPrefixes();
 
-		if (!empty(array_intersect($this->select, $customerFields)))
+		$hasCustomerFields = !empty(array_intersect($this->select, $customerFields));
+		if (!$this->optimizationEnabled || $hasCustomerFields)
 		{
 			$this->appendCustomerFields();
 		}
@@ -144,6 +146,14 @@ class Lead extends Base
 					}
 				}
 			}
+		}
+	}
+
+	protected function addCustomerField(): void
+	{
+		if (!in_array('IS_RETURN_CUSTOMER', $this->select, true))
+		{
+			$this->select[] = 'IS_RETURN_CUSTOMER';
 		}
 	}
 }

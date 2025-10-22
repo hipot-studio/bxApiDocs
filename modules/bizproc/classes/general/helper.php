@@ -2525,4 +2525,16 @@ class CBPHelper
 
 		return !Bizproc\WorkflowInstanceTable::exists($workflowId);
 	}
+
+	public static function normalizeComplexDocumentId(array $complexId): ?array
+	{
+		try
+		{
+			return self::parseDocumentId($complexId);
+		}
+		catch (\CBPArgumentNullException $exception)
+		{
+			return null;
+		}
+	}
 }

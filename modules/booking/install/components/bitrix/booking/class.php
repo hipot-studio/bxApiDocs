@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Enum\AhaMoment;
 use Bitrix\Booking\Provider\OptionProvider;
 use Bitrix\Booking\Service\BookingFeature;
@@ -29,10 +30,16 @@ class BookingComponent extends CBitrixComponent
 		if (
 			!Loader::includeModule('booking')
 			|| !Loader::includeModule('crm')
-			|| !BookingFeature::isOn()
 		)
 		{
 			ShowError('Mandatory modules are not installed: booking, crm');
+
+			return;
+		}
+
+		if (Container::getIntranetBookingTool()->isDisabled())
+		{
+			$this->includeComponentTemplate('tool_disabled');
 
 			return;
 		}

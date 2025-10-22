@@ -554,7 +554,6 @@ class HrBotMessageService
 	{
 		if ($whoStoppedUserId === null)
 		{
-			// no need to notify if signing finished
 			return new Result();
 		}
 

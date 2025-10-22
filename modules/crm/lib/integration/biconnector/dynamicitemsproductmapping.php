@@ -1,7 +1,7 @@
 <?php
 
 namespace Bitrix\Crm\Integration\BiConnector;
-
+//date_create from iblock_element productId<>iblock_element.id
 use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Main\DB\MysqliSqlHelper;
 use Bitrix\Main\DB\PgsqlSqlHelper;

@@ -52,33 +52,21 @@ class CrmForm extends Controller
 
 		return [
 			'getResources' => $publicFilter,
-			'searchResources' => $publicFilter,
 			'getOccupancy' => $publicFilter,
 			'getAutoSelectionData' => $publicFilter,
 		];
 	}
 
-	public function getResourcesAction(): array|null
+	public function getResourcesAction(array $ids = []): array|null
 	{
 		try
 		{
-			return $this->getResources();
-		}
-		catch (Exception $e)
-		{
-			$this->addError(ErrorBuilder::buildFromException($e));
+			$filter = empty($ids)
+				? null
+				: new Provider\Params\Resource\ResourceFilter(['ID' => $ids])
+			;
 
-			return null;
-		}
-	}
-
-	public function searchResourcesAction(string $query): array|null
-	{
-		try
-		{
-			return $this->getResources(new Provider\Params\Resource\ResourceFilter([
-				'SEARCH_QUERY' => $query,
-			]));
+			return $this->getResources($filter);
 		}
 		catch (Exception $e)
 		{
@@ -192,7 +180,6 @@ class CrmForm extends Controller
 	{
 		$resources = $this->resourceProvider->getList(
 			gridParams: new Provider\Params\GridParams(
-				limit: 20,
 				filter: $filter,
 			),
 			userId: 0,

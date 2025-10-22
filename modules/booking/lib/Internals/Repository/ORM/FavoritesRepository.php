@@ -48,6 +48,7 @@ class FavoritesRepository implements FavoritesRepositoryInterface
 				'DATA',
 				'SETTINGS',
 				'NOTIFICATION_SETTINGS',
+				'ENTITIES',
 			])
 			->where(Query::filter()
 				->logic('OR')

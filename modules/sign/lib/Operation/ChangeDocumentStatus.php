@@ -37,8 +37,6 @@ final class ChangeDocumentStatus implements Contract\Operation
 	private readonly UserService $userService;
 	private readonly AnalyticService $analyticService;
 
-	private ?int $initiatorUserId = null;
-
 	public function __construct(
 		private Item\Document $document,
 		private readonly string $status,
@@ -103,18 +101,23 @@ final class ChangeDocumentStatus implements Contract\Operation
 
 		if (Type\DocumentScenario::isB2EScenario($this->document->scenario ?? ''))
 		{
+			$initiatorUserId = $this->initiatorMember
+				? $this->memberService->getUserIdForMember($this->initiatorMember, $this->document)
+				: $this->document->stoppedById
+			;
+
 			$this->legalLogService->registerDocumentChangedStatus($this->document, $this->initiatorMember);
 
 			$sendMessageResult = $this->hrBotMessageService->handleDocumentStatusChangedMessage(
 				$this->document,
 				$this->status,
-				$this->getInitiatorUser(),
+				$initiatorUserId,
 			);
 			$result->addErrors($sendMessageResult->getErrors());
 
 			$this->eventHandlerService->handleCurrentDocumentStatus(
 				$this->document,
-					$this->getInitiatorUser() ?? $this->document->stoppedById
+				$initiatorUserId,
 			);
 
 			$members = $this->memberRepository->listByDocumentId($this->document->id);
@@ -143,9 +146,7 @@ final class ChangeDocumentStatus implements Contract\Operation
 					return $updateMyDocumentsCounterResult;
 				}
 
-				$setDocumentStoppedByResult = $this->setDocumentStoppedBy(
-					$this->getInitiatorUser() ?? $this->document->stoppedById ?? $this->getResponsibleUserFromCompanySide()
-				);
+				$setDocumentStoppedByResult = $this->updateDocumentStoppedByValue($initiatorUserId);
 				if (!$setDocumentStoppedByResult->isSuccess())
 				{
 					return $setDocumentStoppedByResult;
@@ -256,13 +257,18 @@ final class ChangeDocumentStatus implements Contract\Operation
 		return new Main\Result();
 	}
 
-	private function setDocumentStoppedBy(?int $initiatorUserId): Main\Result
+	private function updateDocumentStoppedByValue(?int $initiatorUserId): Main\Result
 	{
 		$result = new Main\Result();
 
 		if ($initiatorUserId === null)
 		{
-			return $result->addError(new Main\Error('Can not find user'));
+			return $result;
+		}
+
+		if ($this->document->stoppedById === $initiatorUserId)
+		{
+			return $result;
 		}
 
 		$this->document->stoppedById = $initiatorUserId;
@@ -295,42 +301,5 @@ final class ChangeDocumentStatus implements Contract\Operation
 				$member,
 			);
 		}
-	}
-
-	private function getResponsibleUserFromCompanySide(): ?int
-	{
-		if ($this->document->isInitiatedByEmployee())
-		{
-			return
-				$this->document->representativeId
-				?? $this->getAssigneeUserId()
-			;
-		}
-
-		return
-			$this->document->createdById
-			?? $this->document->representativeId
-			?? $this->getAssigneeUserId()
-		;
-	}
-
-	private function getInitiatorUser(): ?int
-	{
-		if ($this->initiatorUserId === null && $this->initiatorMember !== null)
-		{
-			$this->initiatorUserId = $this->memberService->getUserIdForMember($this->initiatorMember, $this->document);
-		}
-
-		return $this->initiatorUserId;
-	}
-
-	private function getAssigneeUserId(): ?int
-	{
-		$assignee = $this->memberService->getAssignee($this->document);
-
-		return $assignee
-			? $this->memberService->getUserIdForMember($assignee)
-			: null
-		;
 	}
 }

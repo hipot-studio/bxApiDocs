@@ -77,6 +77,7 @@ final class FillRepeatSaleTips extends AbstractOperation
 		}
 
 		$result = PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
+			->setEncodedMarkers(['segment_data', 'crm_data'])
 			->setMarkers([])
 			->getResult()
 		;
@@ -206,7 +207,11 @@ final class FillRepeatSaleTips extends AbstractOperation
 
 		$activityId = $result->getTarget()?->getEntityId();
 		$saveResult = CCrmActivity::Update($activityId, [
-			'DESCRIPTION' => RepeatSale::createDescriptionFromPayload($payload),
+			'DESCRIPTION' => RepeatSale::createDescriptionFromPayload(
+				$payload,
+				false,
+				$context?->getLanguage()?->getCode()
+			),
 		]);
 		if ($saveResult)
 		{

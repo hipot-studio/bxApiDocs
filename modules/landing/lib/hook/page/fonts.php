@@ -66,6 +66,11 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 	];
 
 	/**
+	 * Default domain for Google Fonts.
+	 */
+	public const DEFAULT_DOMAIN = 'fonts.googleapis.com';
+
+	/**
 	 * Set fonts on the page.
 	 * @var array
 	 */
@@ -211,7 +216,8 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 	 */
 	public static function generateFontTags(string $fontName): string
 	{
-		$fontUrl = "https://fonts.bitrix24.ru/css2?family="
+		$proxyDomain = self::getProxyDomain();
+		$fontUrl = "https://{$proxyDomain}/css2?family="
 			. str_replace(' ', '+', $fontName)
 			. ":wght@100;200;300;400;500;600;700;800;900";
 		$fontClass = strtolower(str_replace(' ', '-', $fontName));
@@ -221,7 +227,7 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 			<link rel="preload" href="$fontUrl" data-font="g-font-$fontClass" onload="this.removeAttribute('onload');this.rel='stylesheet'" as="style">
 			<style data-id="g-font-$fontClass">.g-font-$fontClass { font-family: "$fontName", sans-serif; }</style>
 		HTML;
-}
+	}
 
 	/**
 	 * Proxy font url to bitrix servers
@@ -230,16 +236,28 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 	 */
 	protected static function proxyFontUrl(string $fontString): string
 	{
-		$defaultDomain = 'fonts.googleapis.com';
-		$proxyDomain = $defaultDomain;
-		if (Loader::includeModule('ui'))
-		{
-			$proxyDomain = UI\Fonts\Proxy::resolveDomain(Manager::getZone());
-		}
+		$defaultDomain = self::DEFAULT_DOMAIN;
+		$proxyDomain = self::getProxyDomain();
 
 		return ($defaultDomain !== $proxyDomain)
 			? str_replace($defaultDomain, $proxyDomain, $fontString)
 			: $fontString
 		;
+	}
+
+	/**
+	 * Returns the proxy domain for fonts, depending on the current zone and UI module.
+	 *
+	 * @return string
+	 */
+	private static function getProxyDomain(): string
+	{
+		$proxyDomain = self::DEFAULT_DOMAIN;
+		if (Loader::includeModule('ui'))
+		{
+			$proxyDomain = UI\Fonts\Proxy::resolveDomain(Manager::getZone());
+		}
+
+		return $proxyDomain;
 	}
 }

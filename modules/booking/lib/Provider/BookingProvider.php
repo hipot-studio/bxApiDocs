@@ -10,18 +10,24 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
+use Bitrix\Booking\Internals\Service\ExternalDataService;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmLink;
 use Bitrix\Booking\Provider\Params\GridParams;
+use Bitrix\Booking\Provider\Trait\ExternalDataTrait;
 
 class BookingProvider
 {
-	private BookingRepositoryInterface $repository;
-	private BookingMessageRepositoryInterface $messageRepository;
+	use ExternalDataTrait;
 
-	public function __construct()
+	public function __construct(
+		private BookingRepositoryInterface|null $repository = null,
+		private BookingMessageRepositoryInterface|null $messageRepository = null,
+		private ExternalDataService|null $externalDataService = null,
+	)
 	{
-		$this->repository = Container::getBookingRepository();
-		$this->messageRepository = Container::getBookingMessageRepository();
+		$this->repository = $repository ?? Container::getBookingRepository();
+		$this->messageRepository = $messageRepository ?? Container::getBookingMessageRepository();
+		$this->externalDataService = $this->externalDataService ?? Container::getExternalDataService();
 	}
 
 	public function getList(GridParams $gridParams, int $userId): BookingCollection
@@ -87,22 +93,6 @@ class BookingProvider
 		return $this;
 	}
 
-	public function withExternalData(BookingCollection $bookingCollection): self
-	{
-		$externalDataCollections = [];
-
-		foreach ($bookingCollection as $booking)
-		{
-			$externalDataCollections[] = $booking->getExternalDataCollection();
-		}
-
-		Container::getProviderManager()::getCurrentProvider()
-			?->getDataProvider()
-			?->loadDataForCollection(...$externalDataCollections);
-
-		return $this;
-	}
-
 	public function withMessages(BookingCollection $bookingCollection): self
 	{
 		$messageCollection = $this->messageRepository->getByBookingIds($bookingCollection->getEntityIds());
@@ -122,9 +112,21 @@ class BookingProvider
 		return $this->repository->getIntersectionsList($booking, $userId);
 	}
 
-	public function getById(int $userId, int $id): Booking|null
+	public function getById(
+		int $userId,
+		int $id,
+		bool $withCounters = true,
+		bool $withClientsData = true,
+		bool $withExternalData = true,
+	): Booking|null
 	{
-		return $this->repository->getById($id, $userId);
+		return $this->repository->getById(
+			id: $id,
+			userId: $userId,
+			withCounters: $withCounters,
+			withClientsData: $withClientsData,
+			withExternalData: $withExternalData,
+		);
 	}
 
 	public function getBookingForManager(int $id): Booking|null
@@ -135,5 +137,10 @@ class BookingProvider
 	public function getByHash(string $hash): Booking
 	{
 		return (new BookingConfirmLink())->getBookingByHash($hash);
+	}
+
+	protected function getExternalDataService(): ExternalDataService
+	{
+		return $this->externalDataService;
 	}
 }

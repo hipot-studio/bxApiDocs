@@ -92,6 +92,8 @@ class Order extends Entity
 			'DATE_INSERT' => '',
 			'CLIENT' => '',
 			'ORDER_STAGE' => '',
+			'LAST_ACTIVITY_BY_TIME' => '',
+			'LAST_ACTIVITY_BY_USER_AVATAR' => '',
 		];
 	}
 

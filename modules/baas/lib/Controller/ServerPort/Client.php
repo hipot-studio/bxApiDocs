@@ -44,6 +44,7 @@ class Client extends Main\Engine\Controller
 	{
 		$packageCode = (string)$this->request->getJsonList()->get('packageCode');
 		$purchaseCode = (string)$this->request->getJsonList()->get('purchaseCode');
+
 		$balanceData = $this->request->getJsonList()->get('balanceData');
 
 		if (empty($balanceData))
@@ -66,10 +67,7 @@ class Client extends Main\Engine\Controller
 		if ($result->isSuccess())
 		{
 			$this->purchaseService->notifyAboutPurchase($packageCode, $purchaseCode);
-		}
 
-		if ($result->isSuccess())
-		{
 			return Main\Engine\Response\AjaxJson::createSuccess(['OK']);
 		}
 

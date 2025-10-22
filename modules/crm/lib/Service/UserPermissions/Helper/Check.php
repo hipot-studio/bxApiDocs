@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\UserPermissions\Helper;
 
 use Bitrix\Main\Loader;
+use Bitrix\Crm\ItemIdentifier;
 
 class Check
 {
@@ -16,5 +17,12 @@ class Check
 		}
 
 		return 0;
+	}
+
+	public static function getBoundIdentifierByEntityId(int $id): ?ItemIdentifier
+	{
+		$orderId = self::getOrderIdByCheckId($id);
+
+		return $orderId > 0 ? Order::getBoundIdentifierByOrderId($orderId) : null;
 	}
 }

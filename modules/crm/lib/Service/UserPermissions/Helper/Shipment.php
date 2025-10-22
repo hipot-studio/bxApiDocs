@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Service\UserPermissions\Helper;
 
+use Bitrix\Crm\ItemIdentifier;
+
 class Shipment
 {
 	public static function getOrderIdByShipmentId(int $shipmentId): int
@@ -30,5 +32,12 @@ class Shipment
 		}
 
 		return 0;
+	}
+
+	public static function getBoundIdentifierByEntityId(int $id): ?ItemIdentifier
+	{
+		$orderId = self::getOrderIdByShipmentId($id);
+
+		return $orderId > 0 ? Order::getBoundIdentifierByOrderId($orderId) : null;
 	}
 }

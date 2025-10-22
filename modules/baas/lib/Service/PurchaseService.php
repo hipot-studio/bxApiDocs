@@ -71,6 +71,16 @@ class PurchaseService extends LocalService implements Contract\PurchaseService
 		);
 	}
 
+	public function notifyAboutUnnotifiedPurchases(): void
+	{
+		$purchases = $this->purchaseRepository->getPurchasesToNotifyAbout();
+
+		foreach ($purchases as $purchase)
+		{
+			$this->notifyAboutPurchase($purchase->getPurchasedPackage()->getPackageCode(), $purchase->getCode());
+		}
+	}
+
 	public static function getInstance(): static
 	{
 		if (!isset(self::$instance))

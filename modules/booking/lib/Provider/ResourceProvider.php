@@ -30,7 +30,7 @@ class ResourceProvider
 		return $this->repository->getList(
 			limit: $gridParams->limit,
 			offset: $gridParams->offset,
-			filter: $gridParams->getFilter(),
+			filter: $gridParams->filter,
 			sort: $gridParams->getSort(),
 			select: $gridParams->getSelect() ?: new ResourceSelect(),
 			userId: $userId,

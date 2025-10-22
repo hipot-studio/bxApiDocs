@@ -65,7 +65,7 @@ class Manager
 	 */
 	public function saveControlValue(string $code, $value): void
 	{
-		Option::set('bizproc', $code, $value);
+		Option::set('bizproc', $code, \CBPHelper::stringify($value));
 	}
 
 	public function getControlValue(string $code): ?string

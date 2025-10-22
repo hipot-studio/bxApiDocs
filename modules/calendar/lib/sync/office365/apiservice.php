@@ -382,14 +382,14 @@ class ApiService
 	 * @throws GoneException
 	 * @throws NotFoundException
 	 */
-	public function addSectionSubscription(string $vendorSectionId, string $state = ''): array
+	public function addSectionSubscription(string $vendorSectionId, string $channelId = ''): array
 	{
 		$data = [
 			'changeType' => 'created,updated,deleted',
 			'notificationUrl' => $this->getNotificationUrl(),
 			'resource' => "me/calendars/$vendorSectionId/events",
 			'expirationDateTime' => $this->getExpirationDateTime(),
-			'clientState' => $state,
+			'clientState' => $channelId,
 			'latestSupportedTlsVersion' => 'v1_2',
 		];
 

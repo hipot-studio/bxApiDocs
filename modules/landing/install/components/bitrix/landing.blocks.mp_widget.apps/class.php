@@ -59,6 +59,7 @@ class LandingBlocksMainpageWidgetApps extends LandingBlocksMainpageWidgetBase
 	{
 		$this->arResult['TITLE_MOBILE'] = $this->arParams['TITLE_MOBILE'];
 		$this->arResult['TITLE_DESKTOP'] = $this->arParams['TITLE_DESKTOP'];
+		$this->arResult['TYPE'] = $this->arParams['TYPE'] ?? '1';
 
 		$os = $this->getOS();
 		if ($os !== null)

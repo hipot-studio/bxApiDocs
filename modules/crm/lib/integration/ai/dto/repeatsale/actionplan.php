@@ -12,6 +12,7 @@ final class ActionPlan extends Dto
 	public ?string $bestWayToContact = null;
 	public ?string $salesOpportunity = null;
 	public ?string $serviceImprovementSuggestions = null;
+	public ?string $thinkBeforeServiceImprovementSuggestions = null;
 
 	protected function getValidators(array $fields): array
 	{
@@ -24,6 +25,7 @@ final class ActionPlan extends Dto
 						empty($fields['bestWayToContact'])
 						&& empty($fields['salesOpportunity'])
 						&& empty($fields['serviceImprovementSuggestions'])
+						&& empty($fields['thinkBeforeServiceImprovementSuggestions'])
 					)
 					{
 						$result->addError(ErrorCode::getInvalidPayloadError());

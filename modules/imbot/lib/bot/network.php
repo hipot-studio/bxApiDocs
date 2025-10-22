@@ -80,6 +80,7 @@ class Network extends Base implements NetworkBot
 	protected const CACHE_DIR_IMBOT_MULTIDIALOG = '/imbot/multidialog/';
 	protected const CACHE_KEY_IMBOT_MULTIDIALOG_CHATS = 'multidialog_chats_';
 	protected const CACHE_KEY_IMBOT_MULTIDIALOG_BOT = 'multidialog_bot_';
+	protected const HELPDESK_CODE = 26177956;
 
 	/** @var \Bitrix\ImBot\Http */
 	protected static $httpClient;
@@ -2434,7 +2435,20 @@ class Network extends Base implements NetworkBot
 			}
 			else
 			{
-				$message = Loc::getMessage('IMBOT_NETWORK_ERROR_NOT_FOUND');
+				if (!Loader::includeModule('ui'))
+				{
+					$message = Loc::getMessage('IMBOT_NETWORK_ERROR_NOT_FOUND');
+				}
+
+				if (empty($message))
+				{
+					$helpdeskLink = \Bitrix\UI\Util::getArticleUrlByCode(self::HELPDESK_CODE);
+					$placeholders = [
+						'[helpdesklink]' => "[URL={$helpdeskLink}]",
+						'[/helpdesklink]' => '[/URL]',
+					];
+					$message = Loc::getMessage('IMBOT_NETWORK_ERROR_NOT_FOUND_MSGVER_1', $placeholders);
+				}
 			}
 
 			Im\Bot::addMessage(['BOT_ID' => $messageFields['BOT_ID']], [

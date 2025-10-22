@@ -220,6 +220,16 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 		return $this->filter(static fn(Member $member): bool => !in_array($member->role, $roles, true));
 	}
 
+	public function filterByEntityTypes(string... $entityTypes): static
+	{
+		return $this->filter(static fn(Member $member) => in_array($member->entityType, $entityTypes, true));
+	}
+
+	public function filterExcludeEntityTypes(string... $entityTypes): static
+	{
+		return $this->filter(static fn(Member $member) => !in_array($member->entityType, $entityTypes, true));
+	}
+
 	public function setQueryTotal(int $total): static
 	{
 		$this->queryTotal = $total;

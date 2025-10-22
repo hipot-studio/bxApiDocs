@@ -225,7 +225,7 @@ class LandingViewComponent extends LandingBaseComponent
 				'widget_general' => \Bitrix\Landing\Help::getHelpData('WIDGET_GENERAL', 'ru')
 			],
 			'feedback' => [
-				'forms' => Bitrix\UI\Form\FormsProvider::getForms(),
+				'forms' => (new Bitrix\UI\Form\FormProvider)->getPartnerFormList(),
 				'portalUri' => (new Bitrix\UI\Form\UrlProvider)->getPartnerPortalUrl()
 			],
 		];

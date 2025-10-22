@@ -9,12 +9,11 @@ use Bitrix\Main\Service\MicroService\BaseSender;
 class ApiClient extends BaseSender
 {
 	protected const SERVICE_ENDPOINT_OPTION = 'service_endpoint';
-	protected const DEFAULT_ENDPOINT = 'https://unc.bitrix24.tech';
 	protected const ENDPOINTS = [
 		'ru' => 'https://unc.bitrix24.tech',
 		'en' => 'https://unc-eu.bitrix.info',
 	];
-	protected const RU_REGIONS = ['ru', 'by', 'kz', 'uz'];
+	protected const RU_REGIONS = ['ru', 'kz', 'by', 'uz', 'am', 'az', 'ge', 'kg'];
 
 	protected $customEndpoint;
 
@@ -66,6 +65,16 @@ class ApiClient extends BaseSender
 			"notificationservice.Template.listAuto",
 			[
 				'languageId' => $langId
+			]
+		);
+	}
+
+	public function getFileProxyUrl(string $url): Result
+	{
+		return $this->performRequest(
+			'notificationservice.File.create',
+			[
+				'url' => $url,
 			]
 		);
 	}

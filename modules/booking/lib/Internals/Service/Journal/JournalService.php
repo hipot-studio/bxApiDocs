@@ -51,7 +51,7 @@ final class JournalService implements JournalServiceInterface
 		}
 
 		(new BookingEventProcessor())->process($eventCollection);
-		(new ResourceEventProcessor())->process($eventCollection);
+		(new ResourceEventProcessor(Container::getDelayedTaskService()))->process($eventCollection);
 		(new ResourceTypeEventProcessor())->process($eventCollection);
 		(new WaitListItemEventProcessor())->process($eventCollection);
 		(new CounterEventProcessor())->process($eventCollection);

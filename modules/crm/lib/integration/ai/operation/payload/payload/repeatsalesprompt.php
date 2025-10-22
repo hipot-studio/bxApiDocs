@@ -44,8 +44,12 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 		}
 
 		return [
-			'segment_data' => Json::encode(['client_segment' => $segmentData]),
-			'crm_data' => Json::encode($crmData),
+			'segment_data' => in_array('segment_data', $this->encodedMarkers, true)
+				? Json::encode(['client_segment' => $segmentData])
+				: ['client_segment' => $segmentData],
+			'crm_data' => in_array('crm_data', $this->encodedMarkers, true)
+				? Json::encode($crmData)
+				: $crmData,
 			'crm_data_sufficient' => $this->isCrmDataSufficient($crmData),
 		];
 	}

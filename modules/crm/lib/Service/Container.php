@@ -9,6 +9,7 @@ use Bitrix\Crm\Conversion;
 use Bitrix\Crm\FieldContext\ContextManager;
 use Bitrix\Crm\Filter;
 use Bitrix\Crm\Integration;
+use Bitrix\Crm\Integration\Catalog\Access\ProductRowChecker;
 use Bitrix\Crm\Integration\Im\ImService;
 use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Model\Dynamic\Type;
@@ -435,6 +436,29 @@ class Container
 		return ServiceLocator::getInstance()->get('crm.service.broker.quote');
 	}
 
+	public function getRecurringBroker(int $entityTypeId): ?Broker\Recurring
+	{
+		$factory = $this->getFactory($entityTypeId);
+		if ($factory === null)
+		{
+			return null;
+		}
+
+		$identifier = static::getIdentifierByClassName(Broker\Recurring::class, [$entityTypeId]);
+		if (!ServiceLocator::getInstance()->has($identifier))
+		{
+			$instance = $this->createRecurringBroker($entityTypeId);
+			ServiceLocator::getInstance()->addInstance($identifier, $instance);
+		}
+
+		return ServiceLocator::getInstance()->get($identifier);
+	}
+
+	private function createRecurringBroker(int $entityTypeId): Broker\Recurring
+	{
+		return new Broker\Recurring($entityTypeId);
+	}
+
 	public function getStageBroker(int $entityTypeId): ?Broker\Stage
 	{
 		$factory = $this->getFactory($entityTypeId);
@@ -684,6 +708,11 @@ class Container
 	public function getRepeatSaleAvailabilityChecker(): AvailabilityChecker
 	{
 		return ServiceLocator::getInstance()->get('crm.repeatSale.availabilityChecker');
+	}
+
+	public function getProductRowChecker(): ProductRowChecker
+	{
+		return ServiceLocator::getInstance()->get('crm.integration.catalog.access.productRowChecker');
 	}
 
 	public function getLogger(string $loggerId): LoggerInterface

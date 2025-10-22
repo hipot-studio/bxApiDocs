@@ -20,6 +20,7 @@ final class RepeatSalesPrompt implements StubInterface
 			'best_wayTo_contact' => "Call Larisa on the phone, as she prefers to discuss orders and details by voice. This will allow you to quickly resolve all issues and clarify the details of the order.",
 			'sales_opportunity' => "Offer Larisa the opportunity to pre-order a cake for upcoming holidays or events. Considering her preferences, focus on the classic Napoleon and new flavor variations.",
 			'service_improvement_suggestions' => "Provide Larisa a discount on her next order or free delivery to compensate for the inconvenience associated with previous orders. This will help strengthen customer loyalty.",
+			'think_before_service_improvement_suggestions' => "Consider offering a loyalty program for regular customers like Larisa, which will include discounts and special offers. This will encourage her to continue ordering from your bakery.",
 		];
 
 		return Json::encode([

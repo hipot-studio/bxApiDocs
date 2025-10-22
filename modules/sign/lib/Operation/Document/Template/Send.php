@@ -210,7 +210,19 @@ final class Send implements Contract\Operation
 			return (new Result())->addError(new Error('Employee member not found'));
 		}
 
-		return new SendResult($newDocument, $employeeMember);
+		$assigneeMember = $this->memberRepository->getByDocumentIdWithRole($newDocument->id, Role::ASSIGNEE);
+		if ($assigneeMember === null)
+		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
+
+			return (new Result())->addError(new Error('Assignee member not found'));
+		}
+
+		return new SendResult($newDocument, $employeeMember, $assigneeMember);
 	}
 
 	private function setSmartDocumentAssignedById(Document $document): Main\Result

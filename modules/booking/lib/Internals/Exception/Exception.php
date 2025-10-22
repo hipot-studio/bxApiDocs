@@ -45,6 +45,14 @@ class Exception extends SystemException
 	public const CODE_WAIT_LIST_ITEM_NOT_FOUND = 1040;
 	public const CODE_BOOKING_CONFIRMATION_ALREADY_CONFIRMED = 1041;
 
+	public const CODE_YANDEX_SERVICE_NOT_FOUND = 2001;
+	public const CODE_YANDEX_RESOURCE_NOT_FOUND = 2002;
+	public const CODE_YANDEX_BOOKING_CANCEL_FORBIDDEN = 2003;
+	public const CODE_YANDEX_BOOKING_CREATE_FORBIDDEN = 2004;
+	public const CODE_YANDEX_SLOT_UNAVAILABLE = 2005;
+	public const CODE_YANDEX_BOOKING_NOT_FOUND = 2006;
+	public const CODE_YANDEX_INTERNAL_ERROR = 2100;
+
 	private bool $isPublic = false;
 
 	public function setIsPublic(bool $isPublic): self

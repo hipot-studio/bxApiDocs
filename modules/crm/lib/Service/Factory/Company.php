@@ -71,7 +71,7 @@ final class Company extends Service\Factory
 		return false;
 	}
 
-	public function isBizProcEnabled(): bool
+	public function isBizProcSupported(): bool
 	{
 		return true;
 	}

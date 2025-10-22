@@ -147,8 +147,8 @@ class CCrmFieldMulti
 					Multifield\Type\Web::VALUE_TYPE_VK => [
 						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_VK'),
 						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_VK_SHORT'),
-						'TEMPLATE' => '<a href="https://vk.com/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
-						'LINK' => 'https://vk.com/#VALUE_URL#',
+						'TEMPLATE' => '<a href="https://vk.ru/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://vk.ru/#VALUE_URL#',
 					],
 					Multifield\Type\Web::VALUE_TYPE_LIVEJOURNAL => [
 						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_LIVEJOURNAL'),
@@ -211,8 +211,8 @@ class CCrmFieldMulti
 					Multifield\Type\Im::VALUE_TYPE_VK => [
 						'FULL' => GetMessage('CRM_FM_ENTITY_IM_VK'),
 						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_VK_SHORT'),
-						'TEMPLATE' => '<a href="https://vk.com/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
-						'LINK' => 'https://vk.com/#VALUE_URL#',
+						'TEMPLATE' => '<a href="https://vk.ru/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://vk.ru/#VALUE_URL#',
 					],
 					Multifield\Type\Im::VALUE_TYPE_SKYPE => [
 						'FULL' => GetMessage('CRM_FM_ENTITY_IM_SKYPE'),

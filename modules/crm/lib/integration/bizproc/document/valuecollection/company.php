@@ -48,7 +48,7 @@ class Company extends Base
 	{
 		$this->appendDefaultUserPrefixes();
 
-		if (in_array('CONTACT_ID', $this->select, true))
+		if (!$this->optimizationEnabled || in_array('CONTACT_ID', $this->select, true))
 		{
 			$this->document['CONTACT_ID'] = Crm\Binding\ContactCompanyTable::getCompanyContactIDs($this->id);
 		}

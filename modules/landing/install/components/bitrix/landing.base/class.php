@@ -31,6 +31,7 @@ class LandingBaseComponent extends \CBitrixComponent
 	const B24_DEFAULT_DNS_IP = '52.59.124.117';
 
 	protected const MODULE_ID = 'landing';
+	private const FEEDBACK_KEY_PREFIX = 'landing-feedback-';
 
 	/**
 	 * Http status OK.
@@ -192,21 +193,38 @@ class LandingBaseComponent extends \CBitrixComponent
 	 * Returns feedback parameters.
 	 * @param string $id Feedback code.
 	 * @param array $presets Additional params.
+	 *
 	 * @return array|null
 	 */
 	public function getFeedbackParameters(string $id, array $presets = []): ?array
 	{
-		$id = 'landing-feedback-' . $id;
+		$key = self::FEEDBACK_KEY_PREFIX . $id;
 
-		$portalUri = null;
-		$generalForms = [];
-		if (Loader::includeModule('ui'))
+		$data = $this->getPresetFeedbackData();
+		$feedbackParameters = $data[$key] ?? null;
+
+		if (!$feedbackParameters)
 		{
-			$portalUri = (new Bitrix\UI\Form\UrlProvider)->getPartnerPortalUrl();
-			$generalForms = Bitrix\UI\Form\FormsProvider::getForms();
+			$data = $this->getPartnerFeedbackData();
+			$feedbackParameters = $data[$key] ?? null;
 		}
 
-		$data = [
+		if ($presets && $feedbackParameters)
+		{
+			$feedbackParameters['PRESETS'] += $presets;
+		}
+
+		return $feedbackParameters;
+	}
+
+	/**
+	 * Returns preset feedback data array.
+	 *
+	 * @return array
+	 */
+	private function getPresetFeedbackData(): array
+	{
+		return [
 			'landing-feedback-designblock' => [
 				'ID' => 'landing-feedback-designblock',
 				'VIEW_TARGET' => null,
@@ -237,24 +255,32 @@ class LandingBaseComponent extends \CBitrixComponent
 					'from_domain' => defined('BX24_HOST_NAME') ? BX24_HOST_NAME : $_SERVER['SERVER_NAME']
 				]
 			],
-			'landing-feedback-general' => [
-				'ID' => 'landing-feedback-general',
+		];
+	}
+
+	/**
+	 * Returns general feedback data array.
+	 *
+	 * @return array
+	 */
+	private function getPartnerFeedbackData(): array
+	{
+		if (!Loader::includeModule('ui'))
+		{
+			return [];
+		}
+
+		return [
+			'landing-feedback-partner' => [
+				'ID' => 'landing-feedback-partner',
 				'VIEW_TARGET' => null,
-				'FORMS' => $generalForms,
+				'FORMS' => (new Bitrix\UI\Form\FormProvider)->getPartnerFormList(),
 				'PRESETS' => [
 					'source' => self::MODULE_ID,
 				],
-				'PORTAL_URI' => $portalUri,
-			]
+				'PORTAL_URI' => (new Bitrix\UI\Form\UrlProvider)->getPartnerPortalUrl(),
+			],
 		];
-
-		$data = $data[$id] ?? null;
-		if ($presets)
-		{
-			$data['PRESETS'] += $presets;
-		}
-
-		return $data;
 	}
 
 	/**

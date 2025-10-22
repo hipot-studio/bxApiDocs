@@ -7,12 +7,12 @@
  */
 namespace Bitrix\Crm\Tracking;
 
-use Bitrix\Main\Loader;
+use Bitrix\Crm\Communication;
+use Bitrix\Crm\Integration;
+use Bitrix\Crm\Integration\Bitrix24\Product;
 use Bitrix\Intranet;
 use Bitrix\Landing;
-use Bitrix\Crm\Communication;
-use Bitrix\Crm\Integration\Bitrix24\Product;
-use Bitrix\Crm\Integration;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 /**
@@ -254,7 +254,7 @@ class Provider
 				'ADVERTISABLE' => true,
 				'HAS_PATH_TO_LIST' => true,
 				'REF_DOMAIN' => Settings::isSocialRefDomainUsed()
-					? ['www.ads.vk.com', 'ads.vk.com']
+					? ['www.ads.vk.ru', 'ads.vk.ru']
 					: [],
 			];
 			$list[] = [
@@ -265,7 +265,7 @@ class Provider
 				'ADVERTISABLE' => true,
 				'HAS_PATH_TO_LIST' => true,
 				'REF_DOMAIN' => Settings::isSocialRefDomainUsed()
-					? ['www.vk.com', 'vk.com']
+					? ['www.vk.ru', 'vk.ru']
 					: [],
 			];
 			$list[] = [

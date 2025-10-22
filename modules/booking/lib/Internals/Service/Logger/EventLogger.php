@@ -6,7 +6,11 @@ namespace Bitrix\Booking\Internals\Service\Logger;
 
 class EventLogger
 {
-	public function log(LogLevelEnum $level, string $message, EventTypeEnum $eventType = EventTypeEnum::Common): void
+	public function log(
+		LogLevelEnum $level,
+		string $message,
+		EventTypeEnum $eventType = EventTypeEnum::Common
+	): void
 	{
 		\CEventLog::Add([
 			'SEVERITY' => $level->value,

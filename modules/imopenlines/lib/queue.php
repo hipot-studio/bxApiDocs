@@ -798,7 +798,6 @@ class Queue
 				}
 				else
 				{
-					$tmUser->GetCurrentInfo(true); // need for reload cache
 					$tmUserStatus = $tmUser->getCurrentRecordStatus();
 					if ($tmUserStatus === 'OPENED')
 					{

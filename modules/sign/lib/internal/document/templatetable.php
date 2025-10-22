@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Internal\Document;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -85,6 +86,10 @@ class TemplateTable extends Entity\DataManager
 			(new IntegerField('FOLDER_ID'))
 				->configureTitle('Folder ID')
 				->configureNullable()
+			,
+			(new BooleanField('HIDDEN'))
+				->configureRequired()
+				->configureDefaultValue(false)
 			,
 			(new Entity\ReferenceField(
 				'DOCUMENT',

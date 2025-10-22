@@ -32,8 +32,12 @@ use Throwable;
 
 class PushManager
 {
+	// @todo Duplicates Dictionary value?
 	public const TYPE_CONNECTION = 'CONNECTION';
+
+	// @todo Duplicates Dictionary value?
 	public const TYPE_SECTION_CONNECTION = 'SECTION_CONNECTION';
+	// @todo Unused value in add
 	public const TYPE_SECTION = 'SECTION';
 
 	private const LOCK_CONNECTION_TIME = 20;
@@ -51,6 +55,8 @@ class PushManager
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
+	 *
+	 * @deprecated Use \Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository::getById
 	 */
 	public function getPush(string $entityType, int $entityId): ?Push
 	{
@@ -76,6 +82,8 @@ class PushManager
 	 *
 	 * @throws ObjectException
 	 * @throws Exception
+	 *
+	 * @deprecated Use \Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository::add
 	 */
 	public function addPush(string $entityType, int $entityId, array $data): Result
 	{
@@ -143,20 +151,17 @@ class PushManager
 	 * @return void
 	 *
 	 * @throws Exception
+	 *
+	 * @deprecated Use \Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository::update
 	 */
 	public function updatePush(Push $pushChannel): void
 	{
 		$data = [
 			'CHANNEL_ID' => $pushChannel->getChannelId(),
 			'RESOURCE_ID' => $pushChannel->getResourceId(),
-			'EXPIRES' => $pushChannel->getExpireDate()
-				? $pushChannel->getExpireDate()->getDate()
-				: null
-			,
+			'EXPIRES' => $pushChannel->getExpireDate()?->getDate(),
 			'NOT_PROCESSED' => $pushChannel->getProcessStatus(),
-			'FIRST_PUSH_DATE' => $pushChannel->getFirstPushDate()
-				? $pushChannel->getFirstPushDate()->getDate()
-				: null
+			'FIRST_PUSH_DATE' => $pushChannel->getFirstPushDate()?->getDate()
 		];
 		PushTable::update(
 			[
@@ -171,6 +176,8 @@ class PushManager
 	 * @param Push $push
 	 * @return void
 	 * @throws Exception
+	 *
+	 * @deprecated Use \Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository::delete
 	 */
 	public function deletePush(Push $push): void
 	{
@@ -323,7 +330,7 @@ class PushManager
 			}
 			catch(BaseException $e)
 			{
-			    $this->markPushSuccess($push, false);
+				$this->markPushSuccess($push, false);
 			}
 			finally
 			{
@@ -431,7 +438,7 @@ class PushManager
 		{
 			return $this->blockPush($push);
 		}
-		catch (Exception $e)
+		catch (Exception)
 		{
 			return false;
 		}
@@ -471,6 +478,8 @@ class PushManager
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 * @throws Exception
+	 *
+	 * @deprecated
 	 */
 	public function setUnblockPush(?Push $push): void
 	{

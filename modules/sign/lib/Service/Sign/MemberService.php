@@ -4,13 +4,15 @@ namespace Bitrix\Sign\Service\Sign;
 
 use Bitrix\Bizproc\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
-use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Connector\MemberDataPicker;
 use Bitrix\Sign\File;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Integration\CRM;
+use Bitrix\Sign\Item\Document;
+use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Operation\Member\GetSignedB2eFileUrlForDownload;
 use Bitrix\Sign\Repository\DocumentRepository;
@@ -25,6 +27,9 @@ use Bitrix\Sign\Service;
 use Bitrix\Sign\Service\Sign\Member\CommunicationService;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\DocumentScenario;
+use Bitrix\Sign\Type\DocumentStatus;
+use Bitrix\Sign\Type\Member\ChannelType;
+use Bitrix\Sign\Type\Member\ChannelValue;
 use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
@@ -38,6 +43,7 @@ class MemberService
 	private FileRepository $fileRepository;
 	private readonly Service\Integration\HumanResources\NodeService $nodeService;
 	private Service\Integration\Crm\B2eDocumentService $b2eDocumentService;
+	private Service\SignersListService $signersListService;
 
 	private const ALLOWED_ENTITY_TYPES = [
 		EntityType::COMPANY,
@@ -67,6 +73,7 @@ class MemberService
 		?FileRepository $fileRepository = null,
 		?Service\Integration\Crm\B2eDocumentService $b2eDocumentService = null,
 		?Service\UserService $userService = null,
+		Service\SignersListService $signersListService = null,
 	)
 	{
 		$container = Container::instance();
@@ -80,6 +87,7 @@ class MemberService
 		$this->nodeService = $container->getHumanResourcesNodeService();
 		$this->accessControllerFactory = $container->getAccessControllerFactory();
 		$this->userService = $userService ?? $container->getUserService();
+		$this->signersListService = $signersListService ?? $container->getSignersListService();
 	}
 
 	public function addForDocument(
@@ -273,6 +281,7 @@ class MemberService
 		Item\MemberCollection $memberCollection,
 		int $representativeId,
 		bool $skipPermissionCheck = false,
+		bool $excludeRejected = true,
 	): Main\Result
 	{
 		$document = $this->documentRepository->getByUid($documentUid);
@@ -349,7 +358,7 @@ class MemberService
 			if (!in_array($member?->entityType, EntityType::getEntitySelectorTypes()))
 			{
 				return $result->addError(
-					new Main\Error('All signers `entityType` must be `user`, `department`, or `department_flat`')
+					new Main\Error('All signers `entityType` must be one of known entity types'),
 				);
 			}
 		}
@@ -365,7 +374,7 @@ class MemberService
 		{
 			// count with department members
 			$entityCollection = Item\Hr\EntitySelector\EntityCollection::fromMemberCollection($signers);
-			$signersCountResult = $this->getUniqueSignersCount($entityCollection);
+			$signersCountResult = $this->getUniqueSignersCount($entityCollection, $excludeRejected);
 			if (!$signersCountResult->isSuccess())
 			{
 				return $signersCountResult;
@@ -412,7 +421,7 @@ class MemberService
 			{
 				$member->documentId = $document->id;
 				$member->channelType = Type\Member\ChannelType::IDLE;
-				$member->channelValue = 'stub@at.com';
+				$member->channelValue = Type\Member\ChannelValue::IDLE_VALUE;
 				$userMembers->add($member);
 			}
 			else
@@ -479,7 +488,7 @@ class MemberService
 		return new Main\Result();
 	}
 
-	public function getUniqueSignersCount(Item\Hr\EntitySelector\EntityCollection $entityCollection): Main\Result
+	public function getUniqueSignersCount(Item\Hr\EntitySelector\EntityCollection $entityCollection, bool $excludeRejected = true): Main\Result
 	{
 		$uniqUsers = [];
 
@@ -489,6 +498,7 @@ class MemberService
 			if (
 				!$entity->entityType->isDepartment()
 				&& !$entity->entityType->isDocument()
+				&& !$entity->entityType->isSignersList()
 			)
 			{
 				$uniqUsers[$entity->entityId] = true;
@@ -509,6 +519,17 @@ class MemberService
 				continue;
 			}
 
+			if ($entity->entityType->isSignersList())
+			{
+				$users = $this->signersListService->listSigners($entity->entityId)->getUserIds();
+				foreach ($users as $userId)
+				{
+					$uniqUsers[$userId] = true;
+				}
+
+				continue;
+			}
+
 			if (!$this->nodeService->isNodeExists($entity->entityId))
 			{
 				return (new Main\Result())->addError(
@@ -519,6 +540,15 @@ class MemberService
 			foreach ($this->nodeService->getAllEmployeesByEntitySelector($entity) ?? [] as $deptMember)
 			{
 				$uniqUsers[$deptMember->entityId] = true;
+			}
+		}
+
+		if ($excludeRejected)
+		{
+			$rejectedUsers = $this->signersListService->listRejectedSigners();
+			foreach ($rejectedUsers as $rejectedUser)
+			{
+				unset($uniqUsers[$rejectedUser->userId]);
 			}
 		}
 
@@ -1174,5 +1204,34 @@ class MemberService
 		$userIds = $this->memberRepository->listUniqueUserIdsByDocumentIds($documentIds);
 
 		return array_unique(array_merge($userIds, $representatives));
+	}
+
+	public function makeAssigneeByDocumentAndEntityId(Document $document, int $entityId): Member
+	{
+		return new Member(
+			documentId: $document->id,
+			channelType: ChannelType::IDLE,
+			channelValue: ChannelValue::IDLE_VALUE,
+			entityType: EntityType::COMPANY,
+			entityId: $entityId,
+			role: Role::ASSIGNEE,
+		);
+	}
+
+	public function makeSignerByDocumentAndEntityId(Document $document, int $entityId): Member
+	{
+		return new Member(
+			documentId: $document->id,
+			channelType: ChannelType::IDLE,
+			channelValue: ChannelValue::IDLE_VALUE,
+			entityType: EntityType::USER,
+			entityId: $entityId,
+			role: Role::SIGNER,
+		);
+	}
+
+	public function isUserMemberOrInitiatorWithDoneStatus(int $userId): bool
+	{
+		return $this->memberRepository->isUserMemberOrInitiatorWithDoneStatus($userId);
 	}
 }

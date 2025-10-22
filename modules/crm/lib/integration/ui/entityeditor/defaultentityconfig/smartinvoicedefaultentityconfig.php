@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig;
 
 use Bitrix\Crm\Integration\UI\EntityEditor\AbstractDefaultEntityConfig;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
@@ -91,6 +92,19 @@ final class SmartInvoiceDefaultEntityConfig extends AbstractDefaultEntityConfig
 
 		$sections[] = $sectionAdditional;
 
+		$factory = Container::getInstance()->getFactory(\CCrmOwnerType::SmartInvoice);
+		if ($factory?->isRecurringEnabled())
+		{
+			$sections[] = [
+				'name' => 'recurring',
+				'title' => self::getRecurringSectionTitle(),
+				'type' => 'section',
+				'elements' => [
+					['name' => RecurringFieldEditorAdapter::FIELD_RECURRING],
+				],
+			];
+		}
+
 		return $sections;
 	}
 
@@ -106,5 +120,10 @@ final class SmartInvoiceDefaultEntityConfig extends AbstractDefaultEntityConfig
 		return Container::getInstance()
 			->getRelationManager()
 			->areTypesBound($identifier);
+	}
+
+	public static function getRecurringSectionTitle(): string
+	{
+		return Loc::getMessage('CRM_INVOICE_DETAILS_COMPONENT_RECURRING_SECTION') ?? '';
 	}
 }

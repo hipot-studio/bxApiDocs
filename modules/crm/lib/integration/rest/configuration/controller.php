@@ -16,6 +16,7 @@ class Controller
 	private static $entityList = [
 		Entity\Lead::ENTITY_CODE => 200,
 		Entity\Deal::ENTITY_CODE => 200,
+		Entity\AutomatedSolution::ENTITY_CODE => 200,
 		Entity\DynamicTypes::ENTITY_CODE => 200,
 		Entity\Status::ENTITY_CODE => 300,
 		Entity\Field::ENTITY_CODE => 400,
@@ -76,6 +77,9 @@ class Controller
 						break;
 					case Entity\DynamicTypes::ENTITY_CODE:
 						$result = Entity\DynamicTypes::getInstance()->export($data);
+						break;
+					case Entity\AutomatedSolution::ENTITY_CODE:
+						$result = Entity\AutomatedSolution::getInstance()->export($data);
 						break;
 				}
 			}
@@ -183,6 +187,9 @@ class Controller
 						break;
 					case Entity\DynamicTypes::ENTITY_CODE:
 						$result = Entity\DynamicTypes::getInstance()->import($data);
+						break;
+					case Entity\AutomatedSolution::ENTITY_CODE:
+						$result = Entity\AutomatedSolution::getInstance()->import($data);
 						break;
 				}
 			}

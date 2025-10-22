@@ -177,6 +177,8 @@ class Item extends Base
 			unset($parameters['filter']['CONTACT_IDS']);
 		}
 
+		// @todo ***recurring need?
+
 		if (is_array($order))
 		{
 			$parameters['order'] = $this->convertFieldNamesToUpper($order, $isUseOriginalFieldNames);
@@ -718,7 +720,10 @@ class Item extends Base
 			'ENTITY_TYPE_ID' => $entityTypeId,
 			'ENTITY_ID' => $id,
 			'categoryId' => $categoryId,
-			'skipFields' => [$factory->getEntityFieldNameByMap(\Bitrix\Crm\Item::FIELD_NAME_STAGE_ID)],
+			'skipFields' => [
+				$factory->getEntityFieldNameByMap(\Bitrix\Crm\Item::FIELD_NAME_STAGE_ID),
+				$factory->getEntityFieldNameByMap(\Bitrix\Crm\Item::FIELD_NAME_RECURRING),
+			],
 		];
 		//@codingStandardsIgnoreEnd
 

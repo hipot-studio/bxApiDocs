@@ -943,7 +943,7 @@ abstract class Kanban
 			}
 		}
 
-		//invoice
+		//invoice, smart-invoice, etc.
 		if($entity->isRecurringSupported())
 		{
 			$filter['=IS_RECURRING'] = 'N';

@@ -23,6 +23,7 @@ class RegisterDocumentByTemplate implements Operation
 		private readonly Template $template,
 		private readonly int $sendFromUserId,
 		private readonly InitiatedByType $onlyInitiatedByType,
+		private readonly bool $excludeRejected = true,
 	)
 	{
 		$this->documentService = Container::instance()->getDocumentService();
@@ -67,6 +68,7 @@ class RegisterDocumentByTemplate implements Operation
 		$createResult = (new \Bitrix\Sign\Operation\Document\Copy(
 			document: $templateDocument,
 			createdByUserId: $this->sendFromUserId,
+			excludeRejected: $this->excludeRejected,
 		))->launch();
 		if (!$createResult instanceof CreateDocumentResult)
 		{

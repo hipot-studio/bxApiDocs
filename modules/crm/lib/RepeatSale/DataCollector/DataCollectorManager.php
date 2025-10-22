@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\RepeatSale\DataCollector;
 
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\RepeatSale\DataCollector\Activity\ActivityType;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
 use Psr\Log\LoggerInterface;
@@ -79,6 +80,7 @@ final class DataCollectorManager
 				'client_info' => $clientInfo,
 				'deals_list' => $dealsList ?? [],
 				'orders_summary' => $ordersSummary ?? [],
+				'preferred_communication_channel' => $this->getPreferredCommunicationChannel($dealsList),
 			];
 		}
 		catch (\Throwable $exception)
@@ -113,5 +115,31 @@ final class DataCollectorManager
 		}
 
 		return $this->dealCollector;
+	}
+
+	private function getPreferredCommunicationChannel(array $dealsList): string
+	{
+		$counts = array_reduce(
+			array_filter(array_column($dealsList, 'communication_data')),
+			static function($counts, $arr)
+			{
+				foreach ($arr as $type => $items)
+				{
+					if (ActivityType::isCommunicationChannel($type))
+					{
+						$counts[$type] = ($counts[$type] ?? 0) + count($items);
+					}
+				}
+
+				return $counts;
+			},
+			[]
+		);
+
+		$channel = empty($counts)
+			? ''
+			: array_keys($counts, max($counts))[0] ?? '';
+
+		return ActivityType::mapCommunicationChannel($channel);
 	}
 }

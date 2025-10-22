@@ -207,7 +207,13 @@ class ItemCategory extends Category
 
 	public function save(): Result
 	{
-		return $this->entityObject->save();
+		$result = $this->entityObject->save();
+		if ($result->isSuccess())
+		{
+			$this->sendEventCategoriesUpdated();
+		}
+
+		return $result;
 	}
 
 	public function delete(): Result
@@ -217,6 +223,7 @@ class ItemCategory extends Category
 		{
 			SegmentManager::onCategoryDelete(new CategoryIdentifier($this->getEntityTypeId(), $this->getId()));
 			$this->processDeletedEvent();
+			$this->sendEventCategoriesUpdated();
 		}
 
 		return $result;

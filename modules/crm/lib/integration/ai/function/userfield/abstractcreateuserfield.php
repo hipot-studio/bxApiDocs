@@ -14,6 +14,7 @@ use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\UserField\FieldNameGenerator;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use CCrmOwnerType;
 use CLanguage;
@@ -93,12 +94,29 @@ abstract class AbstractCreateUserField implements AIFunction
 			...$this->getLabelFields($parameters->label),
 		];
 
+		$compatibilityMode = !method_exists(\CAllUserTypeEntity::class, 'syncColumnsAgent');
+		$connection = Application::getConnection();
+
+		$lockKey = 'crm_uf_add_' . $entityId;
+		if ($compatibilityMode)
+		{
+			$connection->lock($lockKey, -1);
+		}
+
 		$userTypeEntity = new CUserTypeEntity();
 		$id = $userTypeEntity->Add($fields);
+
+		$this->cleanUfCache($entityId);
+		if ($compatibilityMode)
+		{
+			$connection->unlock($lockKey);
+		}
+
 		if ($id === false)
 		{
 			return Result::failFromApplication();
 		}
+
 
 		return Result::success(id: $id, fields: $fields);
 	}
@@ -174,5 +192,24 @@ abstract class AbstractCreateUserField implements AIFunction
 		}
 
 		return $ids;
+	}
+
+	private function cleanUfCache(string $entityId): void
+	{
+		$filter = [
+			'ENTITY_ID' => $entityId,
+		];
+		$sort = [];
+		$cacheId = 'b_user_type' . md5(serialize($sort) . "." . serialize($filter));
+		$GLOBALS['CACHE_MANAGER']->Clean($cacheId, 'b_user_field');
+
+		$filter = [
+			'ENTITY_ID' => $entityId,
+			'LANG' => LANGUAGE_ID,
+		];
+		$cacheId = 'b_user_type' . md5(serialize($sort) . "." . serialize($filter));
+		$GLOBALS['CACHE_MANAGER']->Clean($cacheId, 'b_user_field');
+
+		$GLOBALS['CACHE_MANAGER']->CleanDir('b_user_field');
 	}
 }

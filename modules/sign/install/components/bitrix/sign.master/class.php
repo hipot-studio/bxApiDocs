@@ -533,8 +533,10 @@ class SignMasterComponent extends SignBaseComponent
 			return $this->documentItem;
 		}
 
+		/** @var Document|null $document */
 		$document = $this->getResult('DOCUMENT');
-		if ($document === null)
+
+		if ($document?->getUid() === null)
 		{
 			return null;
 		}

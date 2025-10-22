@@ -1106,7 +1106,7 @@ class Manager
 	{
 		if (!defined('LANDING_PREVIEW_URL'))
 		{
-			define('LANDING_PREVIEW_URL', self::getRegionPreviewDomain());
+			define('LANDING_PREVIEW_URL', self::getPreviewDomain());
 		}
 
 		return LANDING_PREVIEW_URL;
@@ -1121,7 +1121,7 @@ class Manager
 	{
 		if (!defined('LANDING_PREVIEW_WEBHOOK'))
 		{
-			$host = self::getRegionPreviewDomain();
+			$host = self::getPreviewDomain();
 			define('LANDING_PREVIEW_WEBHOOK', $host . '/rest/1/gvsn3ngrn7vb4t1m/');
 		}
 
@@ -1546,7 +1546,7 @@ class Manager
 	 * Get preview domain based on region.
 	 * @return string
 	 */
-	private static function getRegionPreviewDomain(): string
+	private static function getPreviewDomain(): string
 	{
 		$region = Application::getInstance()->getLicense()->getRegion();
 

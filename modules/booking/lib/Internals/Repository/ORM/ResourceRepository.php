@@ -13,6 +13,8 @@ use Bitrix\Booking\Internals\Model\ResourceTable;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ResourceDataMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ResourceMapper;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
+use Bitrix\Booking\Provider\Params\FilterInterface;
+use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 use Bitrix\Booking\Provider\Params\SelectInterface;
 use Bitrix\Main\ArgumentException;
@@ -36,7 +38,7 @@ class ResourceRepository implements ResourceRepositoryInterface
 	public function getList(
 		int|null $limit = null,
 		int|null $offset = null,
-		ConditionTree|null $filter = null,
+		FilterInterface $filter = null,
 		array|null $sort = null,
 		SelectInterface|null $select = null,
 		int|null $userId = null,
@@ -58,10 +60,13 @@ class ResourceRepository implements ResourceRepositoryInterface
 			$query->setOffset($offset);
 		}
 
-		if ($filter !== null)
+		if ($filter === null)
 		{
-			$query->where($filter);
+			$filter = new ResourceFilter();
 		}
+
+		$filter->prepareQuery($query);
+		$query->where($filter->prepareFilter());
 
 		if ($sort !== null)
 		{
@@ -125,7 +130,7 @@ class ResourceRepository implements ResourceRepositoryInterface
 		/** @var Entity\Resource\Resource $result */
 		$result = $this->getList(
 			limit: 1,
-			filter: (new ConditionTree())->where('ID', '=', $id),
+			filter: new ResourceFilter(['ID' => $id]),
 			select: new ResourceSelect(),
 		)->getFirstCollectionItem();
 

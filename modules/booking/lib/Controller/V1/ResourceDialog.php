@@ -22,6 +22,7 @@ use DateTimeImmutable;
 class ResourceDialog extends BaseController
 {
 	private int $resourcesLimit = 20;
+	private int $doSearchResourcesLimit = 50;
 
 	private int $userId;
 	private Provider\BookingProvider $bookingProvider;
@@ -103,17 +104,32 @@ class ResourceDialog extends BaseController
 		}
 	}
 
-	public function doSearchAction(string $query, int $dateTs): ResourceDialogResponse|null
+	public function doSearchAction(
+		int $dateTs,
+		string|null $query = null,
+		array $typeIds = [],
+	): ResourceDialogResponse|null
 	{
 		try
 		{
 			$resources = new Entity\Resource\ResourceCollection();
-			if (!empty($query))
+			if (!empty($query) || !empty($typeIds))
 			{
-				$resources = $this->getResources([
+				$filterFields = [
 					'MODULE_ID' => 'booking',
-					'SEARCH_QUERY' => $query,
-				]);
+				];
+
+				if ($query)
+				{
+					$filterFields['SEARCH_QUERY'] = $query;
+				}
+
+				if ($typeIds)
+				{
+					$filterFields['TYPE_ID'] = $typeIds;
+				}
+
+				$resources = $this->getResources($filterFields, $this->doSearchResourcesLimit);
 			}
 
 			return $this->prepareResponse($resources, $dateTs);
@@ -126,11 +142,13 @@ class ResourceDialog extends BaseController
 		}
 	}
 
-	private function getResources(array $filter): Entity\Resource\ResourceCollection
+	private function getResources(array $filter, int|null $limit = null): Entity\Resource\ResourceCollection
 	{
+		$limit = $limit ?? $this->resourcesLimit;
+
 		return $this->resourceProvider->getList(
 			gridParams: new Provider\Params\GridParams(
-				limit: $this->resourcesLimit,
+				limit: $limit,
 				filter: new Provider\Params\Resource\ResourceFilter($filter),
 			),
 			userId: $this->userId,

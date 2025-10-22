@@ -4238,7 +4238,7 @@ class CCrmLiveFeed
 			$messageAuthorId = $arMessage['AUTHOR_ID'];
 		}
 
-		$occurAsUserId = CTasksTools::getOccurAsUserId();
+		$occurAsUserId = \Bitrix\Tasks\Util\User::getOccurAsId();
 		if (!$occurAsUserId)
 		{
 			$occurAsUserId = ($messageAuthorId ?: 1);

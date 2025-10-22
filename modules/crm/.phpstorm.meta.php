@@ -91,6 +91,7 @@ namespace PHPSTORM_META
 		'crm.integration.sign',
 		'crm.summary.summaryFactory',
 		'crm.repeatSale.availabilityChecker',
+		'crm.integration.catalog.access.productRowChecker',
 	);
 
 	expectedArguments(\Bitrix\Main\DI\ServiceLocator::get(), 0, argumentsSet('bitrix_crm_serviceLocator_codes'));
@@ -187,5 +188,6 @@ namespace PHPSTORM_META
 		'crm.service.communication.rankingFactory' => \Bitrix\Crm\Service\Communication\Search\Ranking\RankingFactory::class,
 		'crm.service.integration.im' => \Bitrix\Crm\Integration\Im\ImService::class,
 		'crm.repeatSale.availabilityChecker' => \Bitrix\Crm\RepeatSale\AvailabilityChecker::class,
+		'crm.integration.catalog.access.productRowChecker' => \Bitrix\Crm\Integration\Catalog\Access\ProductRowChecker::class,
 	]));
 }

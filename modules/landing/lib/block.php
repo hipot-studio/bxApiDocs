@@ -4447,8 +4447,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 					if ($resultNode)
 					{
-						 $contentBefore = $resultNode->getOuterHTML();
-						if ((int)$resultNode->getNodeType() === $resultNode::ELEMENT_NODE)
+						$contentBefore = $resultNode->getOuterHTML();
+						if (
+							isset($data[$relativeSelector]['classList'])
+							&& is_array($data[$relativeSelector]['classList'])
+							&& (int)$resultNode->getNodeType() === $resultNode::ELEMENT_NODE
+						)
 						{
 							$resultNode->setClassName(
 								implode(' ', $data[$relativeSelector]['classList'])

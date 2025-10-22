@@ -10,7 +10,9 @@ use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Scenario\IScenario;
 use Bitrix\Landing\Copilot\Generation\Scenario\Scenarist;
 use Bitrix\Landing\Copilot\Generation\Timer;
+use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Model\GenerationsTable;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Query\Query;
@@ -19,6 +21,7 @@ use Bitrix\Main\Web\Json;
 
 /**
  * This class is responsible for generating site content using various managers and connectors.
+ * It manages the generation process, scenario execution, metrika analytics, and error handling.
  */
 class Generation
 {
@@ -27,6 +30,8 @@ class Generation
 	private const EVENT_GENERATION_CREATE = 'onGenerationCreate';
 	private const EVENT_GENERATION_ERROR = 'onGenerationError';
 	private const EVENT_GENERATION_FINISH = 'onGenerationFinish';
+
+	private const DATA_METRIKA_KEY = 'metrikaFields';
 
 	private int $id;
 	private ?int $chatId = null;
@@ -38,18 +43,28 @@ class Generation
 
 	private Scenarist $scenarist;
 	private Timer $timer;
-	protected ?Generation\Event $event = null;
+	private ?Generation\Event $event = null;
+	private ?Metrika\FieldsDto $metrikaFields = null;
+	private Metrika\MetrikaProviderParamService $metrikaProviderParamService;
 
+
+	/**
+	 * Generation constructor.
+	 * Initializes authorId, siteData, and timer.
+	 */
 	public function __construct()
 	{
 		$this->authorId = Landing\Manager::getUserId();
 
 		$this->siteData = new Data\Site();
 		$this->timer = new Timer();
+
+		$this->metrikaProviderParamService = new Metrika\MetrikaProviderParamService();
 	}
 
 	/**
-	 * ID of user who created the site
+	 * Returns the ID of the user who created the site.
+	 *
 	 * @return int
 	 */
 	public function getAuthorId(): int
@@ -58,8 +73,10 @@ class Generation
 	}
 
 	/**
-	 * If generation start by chat - set ID
-	 * @param int $chatId
+	 * Sets the chat ID if generation is started by chat.
+	 *
+	 * @param int $chatId Chat ID.
+	 *
 	 * @return Generation
 	 */
 	public function setChatId(int $chatId): self
@@ -73,7 +90,8 @@ class Generation
 	}
 
 	/**
-	 * If generation started by chat - get ID
+	 * Gets the chat ID if generation is started by chat.
+	 *
 	 * @return int|null
 	 */
 	public function getChatId(): ?int
@@ -82,7 +100,10 @@ class Generation
 	}
 
 	/**
+	 * Sets the scenario for this generation.
+	 *
 	 * @param IScenario $scenario
+	 *
 	 * @return Generation
 	 */
 	public function setScenario(IScenario $scenario): self
@@ -93,6 +114,8 @@ class Generation
 	}
 
 	/**
+	 * Gets the scenario for this generation.
+	 *
 	 * @return IScenario|null
 	 */
 	public function getScenario(): ?IScenario
@@ -100,6 +123,13 @@ class Generation
 		return $this->scenario ?? null;
 	}
 
+	/**
+	 * Sets the site data for this generation.
+	 *
+	 * @param Data\Site $siteData
+	 *
+	 * @return Generation
+	 */
 	public function setSiteData(Data\Site $siteData): self
 	{
 		$this->siteData = $siteData;
@@ -107,15 +137,22 @@ class Generation
 		return $this;
 	}
 
+	/**
+	 * Gets the site data for this generation.
+	 *
+	 * @return Data\Site
+	 */
 	public function getSiteData(): Data\Site
 	{
 		return $this->siteData;
 	}
 
 	/**
-	 * Get custom data for generations
-	 * @param string|null $key
-	 * @return mixed|null - null if key not set
+	 * Gets custom data for this generation.
+	 *
+	 * @param string|null $key Optional key to retrieve a specific value.
+	 *
+	 * @return mixed|null Returns the value for the given key, all data if key is null, or null if not set.
 	 */
 	public function getData(?string $key = null): mixed
 	{
@@ -128,9 +165,11 @@ class Generation
 	}
 
 	/**
-	 * Set custom data for generations
-	 * @param string $key
-	 * @param mixed $data
+	 * Sets custom data for this generation.
+	 *
+	 * @param string $key Data key.
+	 * @param mixed $data Data value.
+	 *
 	 * @return void
 	 */
 	public function setData(string $key, mixed $data): void
@@ -144,8 +183,10 @@ class Generation
 	}
 
 	/**
-	 * Delete one key from data
-	 * @param string $key
+	 * Deletes a key from the custom data.
+	 *
+	 * @param string $key Data key to delete.
+	 *
 	 * @return void
 	 */
 	public function deleteData(string $key): void
@@ -156,6 +197,13 @@ class Generation
 		}
 	}
 
+	/**
+	 * Sets the wishes for the site data.
+	 *
+	 * @param Data\Wishes $wishes
+	 *
+	 * @return Generation
+	 */
 	public function setWishes(Data\Wishes $wishes): self
 	{
 		$this->siteData->setWishes($wishes);
@@ -163,27 +211,118 @@ class Generation
 		return $this;
 	}
 
+	/**
+	 * Gets the generation ID.
+	 *
+	 * @return int|null
+	 */
 	public function getId(): ?int
 	{
 		return $this->id ?? null;
 	}
 
+	/**
+	 * Gets the current step of the generation.
+	 *
+	 * @return int|null
+	 */
 	public function getStep(): ?int
 	{
 		return $this->step ?? null;
 	}
 
+	/**
+	 * Gets the timer object for this generation.
+	 *
+	 * @return Timer
+	 */
 	public function getTimer(): Timer
 	{
 		return $this->timer;
 	}
 
 	/**
-	 * Try to find exists generation and init current by them data
+	 * Sets metrika fields for analytics and stores them in custom data.
 	 *
-	 * @param int $generationId
+	 * @param Metrika\FieldsDto $fields
 	 *
-	 * @return bool
+	 * @return Generation
+	 */
+	public function setMetrikaFields(Metrika\FieldsDto $fields): self
+	{
+		$this->metrikaFields = $fields;
+		$this->setData(self::DATA_METRIKA_KEY, $this->metrikaFields->toArray());
+
+		return $this;
+	}
+
+	/**
+	 * Gets metrika fields for analytics.
+	 *
+	 * @return Metrika\FieldsDto|null
+	 */
+	private function getMetrikaFields(): ?Metrika\FieldsDto
+	{
+		$saved =
+			$this->getData(self::DATA_METRIKA_KEY)
+				? Metrika\FieldsDto::fromArray($this->getData(self::DATA_METRIKA_KEY))
+				: null
+		;
+		if (!$saved)
+		{
+			return $this->metrikaFields;
+		}
+
+		return $saved->addFields($this->metrikaFields);
+	}
+
+	/**
+	 * Gets the Metrika analytics object for the given event.
+	 *
+	 * @param Metrika\Events $event
+	 *
+	 * @return Metrika\Metrika
+	 */
+	public function getMetrika(Metrika\Events $event): Metrika\Metrika
+	{
+		$metrika = new Metrika\Metrika(
+			$this->scenario->getAnalyticCategory(),
+			$event,
+			Metrika\Tools::ai
+		);
+
+		$this->metrikaProviderParamService->setParams($metrika, $event);
+
+		$fields = $this->getMetrikaFields();
+		if (isset($fields))
+		{
+			foreach ($fields->params ?? [] as $param)
+			{
+				if (count($param) === 3)
+				{
+					$metrika->setParam(
+						(int)$param[0],
+						(string)$param[1],
+						(string)$param[2],
+					);
+				}
+			}
+
+			if (isset($fields->subSection))
+			{
+				$metrika->setSubSection($this->metrikaFields->subSection);
+			}
+		}
+
+		return $metrika;
+	}
+
+	/**
+	 * Tries to find an existing generation by ID and initializes this instance with its data.
+	 *
+	 * @param int $generationId Generation ID.
+	 *
+	 * @return bool True if found and initialized, false otherwise.
 	 */
 	public function initById(int $generationId): bool
 	{
@@ -201,11 +340,12 @@ class Generation
 	}
 
 	/**
-	 * Try to find exists generation by site ID and init current by them data
+	 * Tries to find an existing generation by site ID and scenario, and initializes this instance with its data.
 	 *
-	 * @param int $siteId
-	 * @param IScenario $scenario
-	 * @return bool
+	 * @param int $siteId Site ID.
+	 * @param IScenario $scenario Scenario instance.
+	 *
+	 * @return bool True if found and initialized, false otherwise.
 	 */
 	public function initBySiteId(int $siteId, IScenario $scenario): bool
 	{
@@ -218,6 +358,12 @@ class Generation
 		return $this->initExists($filter);
 	}
 
+	/**
+	 * Initializes this instance with data from an existing generation matching the filter.
+	 * @param Filter\ConditionTree $filter ORM filter for the query.
+	 *
+	 * @return bool True if found and initialized, false otherwise.
+	 */
 	private function initExists(Filter\ConditionTree $filter): bool
 	{
 		$generation = GenerationsTable::query()
@@ -275,8 +421,9 @@ class Generation
 	}
 
 	/**
-	 * Run process.
-	 * @return bool - false if error while executing
+	 * Runs the generation process.
+	 *
+	 * @return bool False if an error occurs while executing, true otherwise.
 	 */
 	public function execute(): bool
 	{
@@ -319,6 +466,7 @@ class Generation
 		}
 		catch (GenerationException $e)
 		{
+			$this->sendMetrikaError($e);
 			$this->scenario->getChatbot()?->sendErrorMessage(new ChatBotMessageDto(
 				$this->getChatId() ?? 0,
 				$this->id,
@@ -351,6 +499,11 @@ class Generation
 		return true;
 	}
 
+	/**
+	 * Checks if the generation is executable (all required properties are set).
+	 *
+	 * @return bool
+	 */
 	private function isExecutable(): bool
 	{
 		return isset(
@@ -360,23 +513,39 @@ class Generation
 		);
 	}
 
+	/**
+	 * Gets the lock name for this generation.
+	 *
+	 * @return string
+	 */
 	private function getLockName(): string
 	{
 		return 'landing_copilot_generation_' . ($this->id ?? 0);
 	}
 
+	/**
+	 * Schedules an agent to retry execution.
+	 *
+	 * @return void
+	 */
 	private function setAgent(): void
 	{
 		Agent::addUniqueAgent('executeGeneration', [$this->id], 60, 10);
 	}
 
+	/**
+	 * Removes the scheduled agent for this generation.
+	 *
+	 * @return void
+	 */
 	private function deleteAgent(): void
 	{
 		Agent::deleteUniqueAgent('executeGeneration', [$this->id]);
 	}
 
 	/**
-	 * Finish all generation processed, mark as completed
+	 * Finishes the generation process and marks it as completed.
+	 *
 	 * @return void
 	 */
 	public function finish(): void
@@ -391,7 +560,8 @@ class Generation
 	}
 
 	/**
-	 * Check if scenario execute all steps
+	 * Checks if the scenario has executed all steps.
+	 *
 	 * @return bool
 	 */
 	public function isFinished(): bool
@@ -404,13 +574,19 @@ class Generation
 		return $this->scenarist->isFinished();
 	}
 
+	/**
+	 * Handles actions to perform when the generation is finished.
+	 *
+	 * @return void
+	 */
 	private function onFinish(): void
 	{
 		$this->getEvent()->send(self::EVENT_GENERATION_FINISH);
 	}
 
 	/**
-	 * Check if at least one scenario step has error and not execute
+	 * Checks if at least one scenario step has an error and was not executed.
+	 *
 	 * @return bool
 	 */
 	public function isError(): bool
@@ -424,7 +600,8 @@ class Generation
 	}
 
 	/**
-	 * Prepare scenario to restart generation after error
+	 * Prepares the scenario to restart generation after an error by clearing errors.
+	 *
 	 * @return $this
 	 */
 	public function clearErrors(): self
@@ -437,6 +614,11 @@ class Generation
 		return $this;
 	}
 
+	/**
+	 * Initializes the Scenarist object for this generation.
+	 *
+	 * @return bool True if successfully initialized, false otherwise.
+	 */
 	private function initScenarist(): bool
 	{
 		if (!isset(
@@ -459,6 +641,11 @@ class Generation
 		return true;
 	}
 
+	/**
+	 * Saves the current generation state to the database.
+	 *
+	 * @return bool True on success, false otherwise.
+	 */
 	private function save(): bool
 	{
 		if (!isset(
@@ -503,7 +690,8 @@ class Generation
 	}
 
 	/**
-	 * Get object for send front and backend events
+	 * Gets the event object for sending front-end and back-end events.
+	 *
 	 * @return Generation\Event
 	 */
 	public function getEvent(): Generation\Event
@@ -524,6 +712,13 @@ class Generation
 		return $this->event;
 	}
 
+	/**
+	 * Checks if a generation with the given ID exists.
+	 *
+	 * @param int $id Generation ID.
+	 *
+	 * @return bool True if exists, false otherwise.
+	 */
 	public static function checkExists(int $id): bool
 	{
 		static $generations = [];
@@ -540,6 +735,13 @@ class Generation
 		return $generations[$id];
 	}
 
+	/**
+	 * Gets block data for the given blocks as a JSON string.
+	 *
+	 * @param array $blocks Array of block objects.
+	 *
+	 * @return string JSON-encoded block data, or empty string on error.
+	 */
 	public function getBlocksData(array $blocks): string
 	{
 		$siteData = $this->getSiteData();
@@ -565,5 +767,53 @@ class Generation
 		}
 
 		return $blockDataEncoded;
+	}
+
+	/**
+	 * Sends metrika analytics for an error during generation.
+	 *
+	 * @param GenerationException $e
+	 *
+	 * @return void
+	 */
+	private function sendMetrikaError(GenerationException $e): void
+	{
+		$errorCode = $e->getErrorCode();
+		/**
+		 * @var Metrika\Statuses $status
+		 */
+		$status = match ($errorCode)
+		{
+			GenerationErrors::requestQuotaExceeded => $e->getParams()['metrikaStatus'] ?? Metrika\Statuses::ErrorB24,
+			GenerationErrors::restrictedRequest => Metrika\Statuses::ErrorContentPolicy,
+			GenerationErrors::notExistResponse,
+			GenerationErrors::notFullyResponse,
+			GenerationErrors::notCorrectResponse => Metrika\Statuses::ErrorProvider,
+			default => Metrika\Statuses::ErrorB24,
+		};
+
+		$scenario = $this->getScenario();
+		if ($scenario)
+		{
+			$stepsMap = $scenario->getMap();
+			if (isset($stepsMap[$this->step]))
+			{
+				$step = $stepsMap[$this->step];
+			}
+		}
+
+		if (isset($step))
+		{
+			$analyticEvent = $step->getAnalyticEvent();
+		}
+
+		if (!isset($analyticEvent))
+		{
+			$analyticEvent = Metrika\Events::unknown;
+		}
+
+		$metrika = $this->getMetrika($analyticEvent);
+		$metrika->setStatus($status);
+		$metrika->send();
 	}
 }

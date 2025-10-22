@@ -573,20 +573,24 @@ class CBPDocument
 		{
 			Bizproc\Workflow\Entity\WorkflowInstanceTable::delete($workflowId);
 			CBPTaskService::DeleteByWorkflow($workflowId);
-			CBPStateService::DeleteWorkflow($workflowId);
-			Bizproc\Workflow\Entity\WorkflowMetadataTable::deleteByWorkflowId($workflowId);
-			Bizproc\Result\Entity\ResultTable::deleteByWorkflowId($workflowId);
-
-			if (!Bizproc\Debugger\Session\Manager::isDebugWorkflow($workflowId))
-			{
-				CBPTrackingService::DeleteByWorkflow($workflowId);
-			}
-
-			$event = new Event('bizproc', 'onAfterWorkflowKill', ['ID' => $workflowId]);
-			EventManager::getInstance()->send($event);
+			self::killCompletedWorkflowWithoutTasks($workflowId);
 		}
 
 		return $errors;
+	}
+
+	public static function killCompletedWorkflowWithoutTasks($workflowId): void
+	{
+		CBPStateService::deleteWorkflow($workflowId);
+		Bizproc\Workflow\Entity\WorkflowMetadataTable::deleteByWorkflowId($workflowId);
+		Bizproc\Result\Entity\ResultTable::deleteByWorkflowId($workflowId);
+		if (!Bizproc\Debugger\Session\Manager::isDebugWorkflow($workflowId))
+		{
+			CBPTrackingService::deleteByWorkflow($workflowId);
+		}
+
+		$event = new Event('bizproc', 'onAfterWorkflowKill', ['ID' => $workflowId]);
+		EventManager::getInstance()->send($event);
 	}
 
 	/**

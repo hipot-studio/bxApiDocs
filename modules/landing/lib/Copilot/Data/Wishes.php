@@ -12,6 +12,8 @@ class Wishes
 	private array $wishes = [];
 	private ?string $company = null;
 
+	protected bool $isDemo = false;
+
 	/**
 	 * Replace all wishes to passed array. Empty strings will be skipped
 	 * @param array $wishes
@@ -48,8 +50,18 @@ class Wishes
 	public function setDemoWishes(): self
 	{
 		$this->wishes = [self::getDemoWish()];
+		$this->isDemo = true;
 
 		return $this;
+	}
+
+	/**
+	 * Check is demo wishes used
+	 * @return bool
+	 */
+	public function isDemoWishes(): bool
+	{
+		return $this->isDemo;
 	}
 
 	private static function getDemoWish(): string

@@ -1639,7 +1639,14 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 							$urls['LANDING'][$lid] = \htmlspecialcharsbx($urls['LANDING'][$lid]);
 						}
 						$urls['LANDING'][$lid] .= ($isIframe ? '?IFRAME=Y' : '');
-						$urls['BLOCK'][$bid] = $urls['LANDING'][$lid] . '#' . $anchorsPublicId[$bid];
+						if (Site\Type::getCurrentScopeId() === Site\Type::SCOPE_CODE_MAINPAGE)
+						{
+							$urls['BLOCK'][$bid] = '#' . $anchorsPublicId[$bid];
+						}
+						else
+						{
+							$urls['BLOCK'][$bid] = $urls['LANDING'][$lid] . '#' . $anchorsPublicId[$bid];
+						}
 					}
 					else
 					{
@@ -2281,11 +2288,6 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public function addBlock(string $code, array $data = array(), bool $saveInLastUsed = false)
 	{
-		$metrika = new Metrika\Metrika(
-			Metrika\Categories::getBySiteType(self::$siteType),
-			Metrika\Events::addWidget,
-		);
-
 		if (!$this->canEdit())
 		{
 			$this->error->addError(
@@ -2293,12 +2295,9 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
 			);
 
-			if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
+			if ($saveInLastUsed)
 			{
-				$metrika
-					->setError('ACCESS_DENIED')
-					->send()
-				;
+				$this->sendAddBlockErrorMetrika('ACCESS_DENIED');
 			}
 
 			return false;
@@ -2316,6 +2315,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			if ($saveInLastUsed)
 			{
 				Block::markAsUsed($code);
+				$this->sendAddBlockMetrika($block, $data);
 			}
 
 			$this->touch();
@@ -2327,23 +2327,67 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				$history->push('ADD_BLOCK', ['block' => $block]);
 			}
 
-			if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
-			{
-				$this->parametrizeMetrikaByBlock($metrika, $block)->send();
-			}
-
 			return $block->getId();
 		}
 
-		if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
+		$this->error->addError(
+			'BLOCK_NOT_FOUND',
+			Loc::getMessage('LANDING_BLOCK_NOT_FOUND')
+		);
+
+		if ($saveInLastUsed)
 		{
-			$metrika
-				->setError('BLOCK_NOT_FOUND')
-				->send()
-			;
+			$this->sendAddBlockErrorMetrika('BLOCK_NOT_FOUND');
 		}
 
 		return false;
+	}
+
+	/**
+	 * Creates a Metrika object for the addWidget event.
+	 *
+	 * @param Metrika\Events $event The event name for which the Metrika object is created.
+	 *
+	 * @return Metrika\Metrika The created Metrika object.
+	 */
+	protected function createMetrika(Metrika\Events $event): Metrika\Metrika
+	{
+		return new Metrika\Metrika(
+			Metrika\Categories::getBySiteType(self::$siteType),
+			$event,
+		);
+	}
+
+	/**
+	 * Send add block metrika if needed.
+	 *
+	 * @param array $data
+	 * @param Block $block
+	 *
+	 * @return void
+	 */
+	private function sendAddBlockMetrika(Block $block, array $data): void
+	{
+		$metrika = $this->createMetrika(Metrika\Events::addWidget);
+
+		$metrika->setSubSection($data['CATEGORY'] ?? '');
+		$this->parametrizeMetrikaByBlock($metrika, $block)->send();
+
+		$metrika->send();
+	}
+
+	/**
+	 * Sends a Metrika event for an error that occurred while adding a block.
+	 *
+	 * @param string $error The error code or message to be sent to Metrika.
+	 *
+	 * @return void
+	 */
+	private function sendAddBlockErrorMetrika(string $error): void
+	{
+		$metrika = $this->createMetrika(Metrika\Events::addWidget);
+
+		$metrika->setError($error)->send();
 	}
 
 	/**
@@ -2393,10 +2437,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			$this->blocks[$id] = new Block($id);
 		}
 
-		$metrika = new Metrika\Metrika(
-			Metrika\Categories::getBySiteType(self::$siteType),
-			Metrika\Events::deleteWidget,
-		);
+		$metrika = $this->createMetrika(Metrika\Events::deleteWidget);
 
 		if (
 			isset($this->blocks[$id]) &&
@@ -2415,13 +2456,10 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				}
 				if ($this->blocks[$id]->save())
 				{
-					if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
-					{
-						$this
-							->parametrizeMetrikaByBlock($metrika, $this->blocks[$id])
-							->send()
-						;
-					}
+					$this
+						->parametrizeMetrikaByBlock($metrika, $this->blocks[$id])
+						->send()
+					;
 
 					if ($mark)
 					{
@@ -2449,13 +2487,10 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 						$this->blocks[$id]->getError()
 					);
 
-					if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
-					{
-						$metrika
-							->setError('SAVE_ERROR')
-							->send()
-						;
-					}
+					$metrika
+						->setError('SAVE_ERROR')
+						->send()
+					;
 				}
 			}
 			else
@@ -2464,13 +2499,10 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 					'ACCESS_DENIED',
 					Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
 				);
-				if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
-				{
-					$metrika
-						->setError('ACCESS_DENIED')
-						->send()
-					;
-				}
+				$metrika
+					->setError('ACCESS_DENIED')
+					->send()
+				;
 
 				return false;
 			}
@@ -2481,13 +2513,10 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				'BLOCK_NOT_FOUND',
 				Loc::getMessage('LANDING_BLOCK_NOT_FOUND')
 			);
-			if (self::$siteType === Type::SCOPE_CODE_MAINPAGE)
-			{
-				$metrika
-					->setError('BLOCK_NOT_FOUND')
-					->send()
-				;
-			}
+			$metrika
+				->setError('BLOCK_NOT_FOUND')
+				->send()
+			;
 
 			return false;
 		}
@@ -2497,9 +2526,6 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 
 	protected function parametrizeMetrikaByBlock(Metrika\Metrika $metrika, Block $block): Metrika\Metrika
 	{
-		// todo: Now method callsed just for widget
-		// todo: If need for all types - add self::$siteType === Type::SCOPE_CODE_MAINPAGE checking
-
 		if ($block->getRepoId())
 		{
 			$metrika->setType(Types::widgetPartner);
@@ -2529,6 +2555,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		$metrika->setParam(2, 'widgetId', $block->getCode());
+		$metrika->setParam(3, 'siteId', $this->siteId);
 
 		return $metrika;
 	}

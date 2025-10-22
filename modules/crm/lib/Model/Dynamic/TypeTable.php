@@ -5,12 +5,12 @@ namespace Bitrix\Crm\Model\Dynamic;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Automation\Trigger\Entity\TriggerTable;
 use Bitrix\Crm\Binding\EntityContactTable;
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Conversion\Entity\EntityConversionMapTable;
 use Bitrix\Crm\EventRelationsTable;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\IntranetManager;
-use Bitrix\Crm\Integration\Recyclebin;
 use Bitrix\Crm\Model\AssignedTable;
 use Bitrix\Crm\Model\FieldContentTypeTable;
 use Bitrix\Crm\Model\ItemCategoryTable;
@@ -19,8 +19,9 @@ use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\Recycling\DynamicController;
 use Bitrix\Crm\Relation\EntityRelationTable;
-use Bitrix\Crm\SequenceService;
 use Bitrix\Crm\Security\AccessAttribute\DynamicBasedAttrTableLifecycle;
+use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
+use Bitrix\Crm\SequenceService;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\Dynamic;
 use Bitrix\Crm\Service\Timeline\Monitor;
@@ -50,9 +51,8 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserField;
-use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
-use Bitrix\Crm\Category\PermissionEntityTypeHelper;
-use Bitrix\Crm\Feature;
+
+//use Bitrix\Main\UserField\Internal\Type;
 
 /**
  * Class TypeTable
@@ -201,6 +201,11 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->configureDefaultValue('N')
 			->configureRequired()
 			->configureTitle(Loc::getMessage('CRM_TYPE_TYPE_IS_OBSERVERS_ENABLED_TITLE'));
+		$fieldsMap[] = (new ORM\Fields\BooleanField('IS_RECURRING_ENABLED'))
+			->configureStorageValues('N', 'Y')
+			->configureDefaultValue('N')
+			->configureRequired()
+			->configureTitle(Loc::getMessage('CRM_TYPE_TYPE_IS_RECURRING_ENABLED_TITLE'));
 		$fieldsMap[] = (new ORM\Fields\BooleanField('IS_RECYCLEBIN_ENABLED'))
 			->configureStorageValues('N', 'Y')
 			->configureDefaultValue('N')
@@ -449,12 +454,18 @@ class TypeTable extends UserField\Internal\TypeDataManager
 				}
 				$category->delete();
 			}
+
+			if ($factory->isRecurringAvailable())
+			{
+				RecurringTable::deleteByEntityTypeId($factory->getEntityTypeId());
+			}
 		}
 
 		Container::getInstance()->getRestEventManager()->deleteDynamicItemEventsByEntityTypeId($type->getEntityTypeId());
 		Integration\Rest\AppPlacementManager::deleteAllHandlersForType($type->getEntityTypeId());
 		static::clearBindingMenuCache();
 		Monitor::getInstance()->onEntityTypeDelete($type->getEntityTypeId());
+		Container::getInstance()->getPullEventsQueue()->onEntityTypeDelete($type->getEntityTypeId());
 
 		$parentResult = parent::onAfterDelete($event);
 		foreach($parentResult->getErrors() as $error)
@@ -579,11 +590,6 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		$result = new Result();
 
 		$entity = static::compileItemFieldsContextEntity($type);
-		if (!$entity)
-		{
-			return $result;
-		}
-
 		$tableName = $entity->getDBTableName();
 		$connection = Application::getConnection();
 
@@ -798,7 +804,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 	protected static function prepareItemIndexTableName(string $typeTableName): string
 	{
-		return $typeTableName.'_index';
+		return $typeTableName . '_index';
 	}
 
 	public static function compileItemFieldsContextEntity($type): ORM\Entity
@@ -821,10 +827,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		if (empty($type))
 		{
 			throw new SystemException(
-				sprintf(
-					'Invalid type description `%s`.',
-					mydump($rawType)
-				)
+				sprintf('Invalid type description `%s`.', mydump($rawType)),
 			);
 		}
 
@@ -834,7 +837,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 	protected static function buildEntity(
 		string $entityName,
 		string $entityTableName,
-		string $dataClass
+		string $dataClass,
 	): Entity
 	{
 		$entityClassName = $entityName . 'Table';
@@ -854,7 +857,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 	protected static function prepareItemFieldsContextTableName(string $typeTableName): string
 	{
-		return $typeTableName.'_fields_context';
+		return $typeTableName . '_fields_context';
 	}
 
 	protected static function createIndexes($type): void
@@ -1173,6 +1176,10 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			'IS_OBSERVERS_ENABLED' => [
 				'TYPE' => Field::TYPE_BOOLEAN,
 				'TITLE' => Loc::getMessage('CRM_TYPE_TYPE_IS_OBSERVERS_ENABLED_TITLE'),
+			],
+			'IS_RECURRING_ENABLED' => [
+				'TYPE' => Field::TYPE_BOOLEAN,
+				'TITLE' => Loc::getMessage('CRM_TYPE_TYPE_IS_RECURRING_ENABLED_TITLE'),
 			],
 			'IS_RECYCLEBIN_ENABLED' => [
 				'TYPE' => Field::TYPE_BOOLEAN,

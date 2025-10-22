@@ -20,6 +20,12 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web;
 use Exception;
 
+/**
+ * Class Request
+ *
+ * Handles the lifecycle of a single AI request within a generation step,
+ * including sending, result/error processing, persistence, and status management.
+ */
 class Request
 {
 	// todo: get individual time from step
@@ -39,6 +45,12 @@ class Request
 	private Type\RequestStatus $status = Type\RequestStatus::New;
 	private RequestLimiter $requestLimiter;
 
+	/**
+	 * Request constructor.
+	 *
+	 * @param int $generationId The ID of the generation this request belongs to.
+	 * @param int $stepId The step ID within the generation.
+	 */
 	public function __construct(int $generationId, int $stepId)
 	{
 		$this->generationId = $generationId;
@@ -46,11 +58,14 @@ class Request
 	}
 
 	/**
-	 * Send request to AI provider
-	 * @param Prompt $prompt
-	 * @param IConnector $connector
-	 * @return bool
-	 * @throws GenerationException
+	 * Sends a request to the AI provider using the given prompt and connector.
+	 *
+	 * @param Prompt $prompt The prompt to send.
+	 * @param IConnector $connector The AI connector to use.
+	 *
+	 * @return bool True on successful send and save, false otherwise.
+	 *
+	 * @throws GenerationException If the request fails or a quota/limit is exceeded.
 	 */
 	public function send(Prompt $prompt, IConnector $connector): bool
 	{
@@ -115,9 +130,13 @@ class Request
 	}
 
 	/**
-	 * @param Main\Error|null $error
+	 * Processes an error from the AI provider and throws a GenerationException.
+	 *
+	 * @param Main\Error|null $error The error object from the provider.
+	 *
 	 * @return void
-	 * @throws GenerationException
+	 *
+	 * @throws GenerationException Always throws; either for quota exceeded or generic request error.
 	 */
 	private function processError(?Main\Error $error): void
 	{
@@ -126,18 +145,23 @@ class Request
 			throw new GenerationException(GenerationErrors::notSendRequest);
 		}
 
-		$errorText = $this->getRequestLimiter()->getTextFromError($error);
-
-		if ($errorText)
+		if ($this->getRequestLimiter()->checkError($error))
 		{
-			$params = [
-				'errorText' => $errorText,
-			];
-
-			throw new GenerationException(GenerationErrors::requestQuotaExceeded, $error->getMessage(), $params);
+			$message = $this->getRequestLimiter()->getCheckResultMessage();
+			if (is_string($message))
+			{
+				throw new GenerationException(
+					GenerationErrors::requestQuotaExceeded,
+					$error->getMessage(),
+					[
+						'errorText' => $message,
+						'metrikaStatus' => $this->getRequestLimiter()->getCheckResult()?->getMetrikaStatus(),
+					]
+				);
+			}
 		}
 
-		throw new GenerationException(GenerationErrors::errorInRequest, $error->getMessage(), null);
+		throw new GenerationException(GenerationErrors::errorInRequest, $error->getMessage());
 	}
 
 	/**
@@ -155,6 +179,11 @@ class Request
 		return $this->requestLimiter;
 	}
 
+	/**
+	 * Marks the request as applied to the step, updating the status and persistence.
+	 *
+	 * @return bool True if successfully applied, false otherwise.
+	 */
 	public function setApplied(): bool
 	{
 		if ($this->status->value < Type\RequestStatus::Received->value)
@@ -186,9 +215,11 @@ class Request
 	}
 
 	/**
-	 * Save result of AI request
-	 * @param array $result - data array
-	 * @return bool
+	 * Saves the result of the AI request.
+	 *
+	 * @param array $result The result data array.
+	 *
+	 * @return bool True on success, false otherwise.
 	 */
 	public function saveResult(array $result): bool
 	{
@@ -205,9 +236,11 @@ class Request
 	}
 
 	/**
-	 * Save error code and message
-	 * @param Generation\Error $error
-	 * @return bool
+	 * Saves an error code and message for this request.
+	 *
+	 * @param Generation\Error $error The error DTO.
+	 *
+	 * @return bool True on success, false otherwise.
 	 */
 	public function saveError(Generation\Error $error): bool
 	{
@@ -223,12 +256,22 @@ class Request
 		return $this->save();
 	}
 
+	/**
+	 * Marks this request as deleted and persists the change.
+	 *
+	 * @return void
+	 */
 	public function setDeleted(): void
 	{
 		$this->isDeleted = true;
 		$this->save();
 	}
 
+	/**
+	 * Saves the current state of the request to the database.
+	 *
+	 * @return bool True on success, false otherwise.
+	 */
 	private function save(): bool
 	{
 		if ($this->status->value < Type\RequestStatus::Sent->value)
@@ -286,8 +329,9 @@ class Request
 	}
 
 	/**
-	 * Return ID of current generation
-	 * @return int
+	 * Returns the ID of the current generation.
+	 *
+	 * @return int Generation ID.
 	 */
 	public function getGenerationId(): int
 	{
@@ -295,8 +339,9 @@ class Request
 	}
 
 	/**
-	 * If request received - return result data. Else - return null
-	 * @return array|null
+	 * Returns the result data if the request was received, or null otherwise.
+	 *
+	 * @return array|null Result data array or null.
 	 */
 	public function getResult(): ?array
 	{
@@ -304,8 +349,9 @@ class Request
 	}
 
 	/**
-	 * If request finish with error - get error DTO
-	 * @return ?Generation\Error
+	 * Returns the error DTO if the request finished with an error, or null otherwise.
+	 *
+	 * @return Generation\Error|null Error DTO or null.
 	 */
 	public function getError(): ?Generation\Error
 	{
@@ -313,7 +359,8 @@ class Request
 	}
 
 	/**
-	 * If request receive answer
+	 * Returns true if the request has received an answer (result or error).
+	 *
 	 * @return bool
 	 */
 	public function isReceived(): bool
@@ -322,7 +369,8 @@ class Request
 	}
 
 	/**
-	 * If request answer was applied to step
+	 * Returns true if the request answer was applied to the step.
+	 *
 	 * @return bool
 	 */
 	public function isApplied(): bool
@@ -331,8 +379,9 @@ class Request
 	}
 
 	/**
-	 * ID in DB
-	 * @return int|null
+	 * Returns the database ID of this request.
+	 *
+	 * @return int|null Request ID or null if not persisted.
 	 */
 	public function getId(): ?int
 	{
@@ -340,9 +389,12 @@ class Request
 	}
 
 	/**
-	 * @param int $generationId
-	 * @param int $stepId
-	 * @return array<Request> - array of exists requests
+	 * Returns all existing requests for a given generation and step.
+	 *
+	 * @param int $generationId Generation ID.
+	 * @param int $stepId Step ID.
+	 *
+	 * @return Request[] Array of existing Request objects.
 	 */
 	public static function getByGeneration(int $generationId, int $stepId): array
 	{
@@ -356,6 +408,13 @@ class Request
 		return self::getExists($filter);
 	}
 
+	/**
+	 * Returns the request by its hash, or null if not found.
+	 *
+	 * @param string $hash Request hash.
+	 *
+	 * @return Request|null The found Request object or null.
+	 */
 	public static function getByHash(string $hash): ?self
 	{
 		$filter =
@@ -368,6 +427,13 @@ class Request
 		return array_shift($exists);
 	}
 
+	/**
+	 * Returns the request by its database ID, or null if not found.
+	 *
+	 * @param int $id Request ID.
+	 *
+	 * @return Request|null The found Request object or null.
+	 */
 	public static function getById(int $id): ?self
 	{
 		$filter =
@@ -381,8 +447,11 @@ class Request
 	}
 
 	/**
-	 * @param Filter\ConditionTree $filter - ORM filter object
-	 * @return Request[]
+	 * Returns all existing requests matching the given ORM filter.
+	 *
+	 * @param Filter\ConditionTree $filter ORM filter object.
+	 *
+	 * @return Request[] Array of Request objects.
 	 */
 	private static function getExists(Filter\ConditionTree $filter): array
 	{
@@ -431,6 +500,13 @@ class Request
 		return $exists;
 	}
 
+	/**
+	 * Initializes the Request object from an EO_Requests entity.
+	 *
+	 * @param EO_Requests $request The ORM entity object.
+	 *
+	 * @return self The initialized Request object.
+	 */
 	private function initByEntity(EO_Requests $request): self
 	{
 		$this->id = $request->getId();
@@ -477,6 +553,11 @@ class Request
 		return $this;
 	}
 
+	/**
+	 * Checks if the request has exceeded the maximum expected time without a result or error.
+	 *
+	 * @return bool True if time is over, false otherwise.
+	 */
 	private function isTimeIsOver(): bool
 	{
 		if (

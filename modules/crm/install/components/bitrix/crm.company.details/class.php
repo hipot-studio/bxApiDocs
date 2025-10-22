@@ -20,7 +20,6 @@ use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 
 if (!Main\Loader::includeModule('crm'))
@@ -332,6 +331,7 @@ class CCrmCompanyDetailsComponent
 									'ENABLE_TOOLBAR' => true,
 									'PRESERVE_HISTORY' => true,
 									'ADD_EVENT_NAME' => 'CrmCreateDealFromCompany',
+									'EXTENDED_INTERNAL_MODE' => true,
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
 										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
@@ -364,6 +364,7 @@ class CCrmCompanyDetailsComponent
 									'ENABLE_TOOLBAR' => true,
 									'PRESERVE_HISTORY' => true,
 									'ADD_EVENT_NAME' => 'CrmCreateQuoteFromCompany',
+									'EXTENDED_INTERNAL_MODE' => true,
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
 										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
@@ -581,7 +582,7 @@ class CCrmCompanyDetailsComponent
 						);
 					}
 				}
-				
+
 				if (!$this->isMyCompany() && !$this->arResult['CATEGORY_ID'])
 				{
 					$relationManager = Crm\Service\Container::getInstance()->getRelationManager();
@@ -1707,7 +1708,7 @@ class CCrmCompanyDetailsComponent
 		{
 			$this->entityData['CATEGORY_ID'] = (int)($this->arResult['CATEGORY_ID'] ?? 0);
 		}
-		
+
 		//region User Fields
 		foreach ($this->userFields as $fieldName => $userField)
 		{
@@ -1717,7 +1718,7 @@ class CCrmCompanyDetailsComponent
 			{
 				continue;
 			}
-			
+
 			$isEmptyField = true;
 			$fieldParams = $fieldData['data']['fieldInfo'];
 
@@ -1737,7 +1738,7 @@ class CCrmCompanyDetailsComponent
 				$fieldParams['VALUE'] = $fieldValue;
 				$isEmptyField = false;
 			}
-			
+
 			$fieldSignature = $this->userFieldDispatcher->getSignature($fieldParams);
 			if ($isEmptyField)
 			{
@@ -1753,7 +1754,7 @@ class CCrmCompanyDetailsComponent
 					'SIGNATURE' => $fieldSignature,
 					'IS_EMPTY' => false,
 				];
-				
+
 				if ($fieldData['data']['fieldInfo']['USER_TYPE_ID'] === 'file')
 				{
 					$values = is_array($fieldValue) ? $fieldValue : [$fieldValue];

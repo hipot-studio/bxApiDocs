@@ -127,8 +127,11 @@ class Copy extends Operation
 
 		$copy->setFromCompatibleData($originalData);
 
-		// if stages are disabled, it doesn't present in a compatible data
-		$copy->setStageId($original->getStageId());
+		if ($original->hasField('STAGE_ID'))
+		{
+			// if stages are disabled, it doesn't present in compatible data
+			$copy->setStageId($original->getStageId());
+		}
 
 		$factory = Container::getInstance()->getFactory($this->item->getEntityTypeId());
 		if ($factory)

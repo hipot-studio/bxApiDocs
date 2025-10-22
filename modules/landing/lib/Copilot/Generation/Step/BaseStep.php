@@ -7,6 +7,7 @@ use Bitrix\Landing\Copilot\Data;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
+use Bitrix\Landing\Metrika;
 
 abstract class BaseStep implements IStep
 {
@@ -97,5 +98,15 @@ abstract class BaseStep implements IStep
 	protected function getEvent(): Generation\Event
 	{
 		return $this->generation->getEvent();
+	}
+
+	/**
+	 * Step may, or not may send analytic event.
+	 * The Scenarist decides when to send the event.
+	 * @return Metrika\Events|null
+	 */
+	public function getAnalyticEvent(): ?Metrika\Events
+	{
+		return null;
 	}
 }

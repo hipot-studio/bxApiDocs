@@ -841,6 +841,7 @@ protected function getEntityConfigOptions(): array
 		return  (new \Bitrix\UI\Form\EntityEditorConfigSigner($this->configID))->sign([
 			'CAN_UPDATE_COMMON_CONFIGURATION' => $this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'],
 			'CAN_UPDATE_PERSONAL_CONFIGURATION' => $this->arResult['CAN_UPDATE_PERSONAL_CONFIGURATION'],
+			'MODULE_ID' => $this->arParams['MODULE_ID'] ?? '',
 		]);
 	}
 }

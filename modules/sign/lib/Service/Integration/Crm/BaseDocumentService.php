@@ -119,7 +119,7 @@ class BaseDocumentService implements DocumentService
 
 		if ($isNew && Storage::instance()->isNewSignEnabled())
 		{
-			$createBlankResult = $this->blankService->createFromFileIds([$cFile['ID']]);
+			$createBlankResult = $this->blankService->createFromFileIds([(int)$cFile['ID']]);
 			if (!$createBlankResult->isSuccess())
 			{
 				return $createBlankResult;

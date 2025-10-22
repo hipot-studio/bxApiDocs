@@ -12,6 +12,7 @@ use Bitrix\Landing\Copilot\Generation\Markers;
 use Bitrix\Landing\Copilot\Generation\Type\Errors;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
+use Bitrix\Landing\Metrika;
 
 class RequestSiteData extends RequestSingle
 {
@@ -38,6 +39,11 @@ class RequestSiteData extends RequestSingle
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto
 	{
 		return new RequestQuotaDto(self::getConnectorClass(), 1);
+	}
+
+	public function getAnalyticEvent(): ?Metrika\Events
+	{
+		return Metrika\Events::dataGeneration;
 	}
 
 	protected function getPrompt(): Prompt

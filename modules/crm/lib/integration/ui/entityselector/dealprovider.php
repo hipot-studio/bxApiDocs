@@ -27,6 +27,11 @@ class DealProvider extends EntityProvider
 		return $ids;
 	}
 
+	protected function getTabIcon(): string
+	{
+		return 'o-handshake';
+	}
+
 	protected function getEntityTypeId(): int
 	{
 		return CCrmOwnerType::Deal;

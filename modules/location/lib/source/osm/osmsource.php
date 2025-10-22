@@ -6,10 +6,9 @@ use Bitrix\Location\Entity\Source;
 use Bitrix\Location\Repository\Location\IRepository;
 use Bitrix\Location\Source\Osm\Api\Api;
 use Bitrix\Location\StaticMap\ISourceStaticMapService;
-use Bitrix\Main\Application;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Context;
-use Bitrix\Main\License\UrlProvider;
+use Bitrix\Main\Config\Option;
 
 /**
  * Class OsmSource
@@ -20,12 +19,10 @@ final class OsmSource extends Source
 {
 	public const API_PATH = '/api';
 
-	private UrlProvider $urlProvider;
 	private TokenRequester $tokenRequester;
 
 	public function __construct()
 	{
-		$this->urlProvider = new UrlProvider();
 		$this->tokenRequester = (new TokenRequester())->setSource($this);
 	}
 
@@ -67,7 +64,7 @@ final class OsmSource extends Source
 		return [
 			'serviceUrl' => $this->getOsmApiUrl(),
 			'mapServiceUrl' => $this->getOsmMapServiceUrl(),
-			'token' => $token ? $token->getToken() : null,
+			'token' => $token?->getToken(),
 			'useGeocodingService' => true,
 			'hostName' => $this->getOsmHostName()
 		];
@@ -125,22 +122,12 @@ final class OsmSource extends Source
 
 	public function getOsmServiceUrl(): ?string
 	{
-		if (defined('LOCATION_OSM_SERVICE_URL') && LOCATION_OSM_SERVICE_URL)
-		{
-			return (string)LOCATION_OSM_SERVICE_URL;
-		}
-
-		return 'https://osm-' . $this->getSubDomainSuffix() . '-002.' . $this->urlProvider->getTechDomain();
+		return Option::get('location', 'osm_service_url');
 	}
 
 	public function getOsmMapServiceUrl(): ?string
 	{
-		if (defined('LOCATION_OSM_MAP_SERVICE_URL') && LOCATION_OSM_MAP_SERVICE_URL)
-		{
-			return (string)LOCATION_OSM_MAP_SERVICE_URL;
-		}
-
-		return 'https://osm-' . $this->getSubDomainSuffix() . '-001.' . $this->urlProvider->getTechDomain();
+		return Option::get('location', 'osm_map_service_url');
 	}
 
 	public function getOsmToken(): ?Token
@@ -157,12 +144,5 @@ final class OsmSource extends Source
 		}
 
 		return !$this->tokenRequester->hasLicenseIssues();
-	}
-
-	private function getSubDomainSuffix(): string
-	{
-		$region = Application::getInstance()->getLicense()->getRegion();
-
-		return in_array($region, ['ru', 'by', 'kz', 'uz'], true) ? 'ru' : 'de';
 	}
 }

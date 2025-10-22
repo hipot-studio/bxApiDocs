@@ -16,6 +16,7 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\ActivityController;
 use Bitrix\Im;
+use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\ImOpenLines\Session;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -272,7 +273,7 @@ class Chat
 
 		if($currentOwnerID > 0 || $currentTitle !== '' || !empty($removedObserverIDs))
 		{
-			$chat = new \CIMChat(0);
+			$chat = new \CIMChat();
 			if($currentOwnerID > 0)
 			{
 				$chat->AddUser($chatID, [ $currentOwnerID ], false, false);
@@ -575,8 +576,18 @@ class Chat
 			$chatFields['AVATAR_ID'] = $crmEntityAvatarId;
 		}
 
-		$chat = new \CIMChat(0);
-		$chatId = $chat->add($chatFields);
+		$result = ChatFactory::getInstance()->addChat($chatFields);
+		if (!$result->isSuccess())
+		{
+			return false;
+		}
+
+		$chatId = $result->getResult()['CHAT_ID'];
+
+		if ($chatId <= 0)
+		{
+			return false;
+		}
 
 		$users = [];
 		foreach ($joinUserList as $uid)

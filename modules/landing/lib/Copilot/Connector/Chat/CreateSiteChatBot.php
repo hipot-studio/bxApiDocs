@@ -12,6 +12,7 @@ use Bitrix\AI\Chatbot\Message\SystemMessage;
 use Bitrix\Landing\Copilot\Data\Wishes;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Data;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
@@ -162,6 +163,13 @@ class CreateSiteChatBot extends CopilotChatBot
 				->setScenario(new Generation\Scenario\CreateSite())
 				->setChatId($chatId)
 				->setWishes($wishes)
+				->setMetrikaFields(new Metrika\FieldsDto(
+					params: [[
+						3,
+						'context',
+						$wishes->isDemoWishes() ? 'no' : 'user'
+					]],
+				))
 				->execute()
 		)
 		{

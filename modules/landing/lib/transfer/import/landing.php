@@ -1197,7 +1197,9 @@ class Landing
 					{
 						if (array_key_exists('data-end-date', $attrItem))
 						{
-							$neededAttr = $attrItem['data-end-date'] / 1000;
+							$neededAttr = is_numeric($attrItem['data-end-date'])
+								? (int)$attrItem['data-end-date'] / 1000
+								: 0;
 							$currenDate = time();
 							if ($neededAttr < $currenDate)
 							{

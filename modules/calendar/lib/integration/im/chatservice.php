@@ -22,13 +22,10 @@ final class ChatService
 			return false;
 		}
 
-		$chat = new \CIMChat(0);
-
-		return $chat->DeleteUser(
+		return (new \CIMChat(0))->DeleteUser(
 			chatId: $chatId,
 			userId: $userId,
 			checkPermission: false,
-			skipMessage: false,
 			additionalParams: ['SKIP_RIGHTS' => true],
 		);
 	}
@@ -40,13 +37,10 @@ final class ChatService
 			return false;
 		}
 
-		$chat = new \CIMChat(0);
-
-		return $chat->AddUser(
+		return (new \CIMChat(0))->AddUser(
 			chatId: $chatId,
 			userId: $userId,
-			hideHistory: false,
-			skipMessage: false,
+			hideHistory: true,
 		);
 	}
 

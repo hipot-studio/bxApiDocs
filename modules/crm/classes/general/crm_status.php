@@ -1202,7 +1202,13 @@ class CCrmStatus
 				'NAME' => GetMessage('CRM_STATUS_TYPE_SOURCE_OTHER'),
 				'STATUS_ID' => 'OTHER',
 				'SORT' => 80,
-			]
+			],
+			[
+				'NAME' => Loc::getMessage('CRM_STATUS_TYPE_SOURCE_BOOKING'),
+				'STATUS_ID' => 'BOOKING',
+				'SORT' => 81,
+				'SYSTEM' => 'Y'
+			],
 		];
 	}
 

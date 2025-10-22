@@ -91,12 +91,12 @@ class Deal extends Base
 			$this->document['STAGE_ID_PRINTABLE'] = Crm\Category\DealCategory::getStageName($stageId, $categoryId);
 		}
 
-		if (in_array('CONTACT_IDS', $this->select, true))
+		if (!$this->optimizationEnabled || in_array('CONTACT_IDS', $this->select, true))
 		{
 			$this->document['CONTACT_IDS'] = Crm\Binding\DealContactTable::getDealContactIDs($this->id);
 		}
 
-		if (in_array('ORDER_IDS', $this->select, true))
+		if (!$this->optimizationEnabled || in_array('ORDER_IDS', $this->select, true))
 		{
 			$this->loadOrderIdValues();
 		}

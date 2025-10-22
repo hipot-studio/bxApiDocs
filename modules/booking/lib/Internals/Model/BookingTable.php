@@ -107,6 +107,9 @@ final class BookingTable extends DataManager
 			(new StringField('VISIT_STATUS'))
 				->addValidator(new LengthValidator(1, 20)),
 
+			(new StringField('SOURCE'))
+				->addValidator(new LengthValidator(1, 20)),
+
 			(new IntegerField('CREATED_BY'))
 				->configureRequired(),
 

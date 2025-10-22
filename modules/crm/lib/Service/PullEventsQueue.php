@@ -39,6 +39,11 @@ final class PullEventsQueue
 		$this->enqueue($itemBoundToActivity);
 	}
 
+	public function onEntityTypeDelete(int $entityTypeId): void
+	{
+		unset($this->generalQueue[$entityTypeId], $this->itemUpdatesQueue[$entityTypeId]);
+	}
+
 	public function scheduleItemUpdatedEvent(ItemIdentifier $item, array $pullItem, array $pullParams = []): void
 	{
 		if (isset($this->generalQueue[$item->getEntityTypeId()][$item->getEntityId()]))

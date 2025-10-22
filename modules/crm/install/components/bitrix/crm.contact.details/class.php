@@ -20,7 +20,6 @@ use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 
 if (!Main\Loader::includeModule('crm'))
@@ -325,6 +324,7 @@ class CCrmContactDetailsComponent
 								'ENABLE_TOOLBAR' => true,
 								'PRESERVE_HISTORY' => true,
 								'ADD_EVENT_NAME' => 'CrmCreateDealFromContact',
+								'EXTENDED_INTERNAL_MODE' => true,
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal
 									'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
@@ -356,6 +356,7 @@ class CCrmContactDetailsComponent
 								'NAME_TEMPLATE' => $this->arResult['NAME_TEMPLATE'] ?? '',
 								'ENABLE_TOOLBAR' => true,
 								'PRESERVE_HISTORY' => true,
+								'EXTENDED_INTERNAL_MODE' => true,
 								'ADD_EVENT_NAME' => 'CrmCreateQuoteFromContact',
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal

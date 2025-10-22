@@ -17,7 +17,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
-use Bitrix\UI\Form\UrlProvider;
 
 class OnecStartComponent extends CBitrixComponent
 {
@@ -299,11 +298,6 @@ class OnecStartComponent extends CBitrixComponent
 						],
 					]
 				];
-
-				$this->arResult['FORM_PORTAL_URI'] = Loader::includeModule('ui')
-					? (new UrlProvider())->getPartnerPortalUrl()
-					: null
-				;
 
 				break;
 

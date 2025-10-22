@@ -7,19 +7,16 @@ namespace Bitrix\Booking\Internals\Service;
 use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataItem;
-use Bitrix\Booking\Entity\Resource\Resource;
+use Bitrix\Booking\Entity\ExternalData\ItemType\CalendarEventItemType;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
-use Bitrix\Booking\Entity\Resource\ResourceLinkedEntityCollection;
 use Bitrix\Booking\Internals\Integration\Calendar\CalendarEvent;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
+use Bitrix\Booking\Internals\Model\ResourceLinkedEntityData\CalendarData;
 use Bitrix\Booking\Internals\Repository\ORM\BookingExternalDataRepository;
 
 class EventForBookingService
 {
-	private const CALENDAR_MODULE_ID = 'calendar';
-	private const EVENT_ENTITY_TYPE = 'EVENT';
-
 	private CalendarEvent $calendarEventService;
 
 	public function __construct(
@@ -37,27 +34,23 @@ class EventForBookingService
 			return;
 		}
 
-		if ($booking->getClientCollection()->isEmpty())
-		{
-			return;
-		}
-
-		$linkedUserEntities = $this->getLinkedUsers($booking->getResourceCollection());
-		if ($linkedUserEntities->isEmpty())
+		$calendarIntegrationConfig = $this->getCombinedCalendarIntegrationConfig($booking->getResourceCollection());
+		if (!$calendarIntegrationConfig)
 		{
 			return;
 		}
 
 		$primaryClient = $booking->getClientCollection()->getPrimaryClient();
-		if (!$primaryClient)
-		{
-			return;
-		}
+		$primaryResource = $booking->getResourceCollection()->getPrimary();
 
 		$eventId = $this->calendarEventService->create(
+			creatorId: $booking->getCreatedBy(),
+			userIds: $calendarIntegrationConfig->getUserIds(),
 			datePeriod: $booking->getDatePeriod(),
-			linkedUserEntities: $linkedUserEntities,
+			resource: $primaryResource,
 			client: $primaryClient,
+			locationId: $calendarIntegrationConfig->getLocationId(),
+			reminders: $calendarIntegrationConfig->getReminders(),
 		);
 		if (!$eventId)
 		{
@@ -77,19 +70,21 @@ class EventForBookingService
 			return;
 		}
 
-		if ($this->isClientsChanged($prevBooking, $currentBooking))
+		$currentCalendarIntegrationConfig = $this->getCombinedCalendarIntegrationConfig(
+			$currentBooking->getResourceCollection()
+		);
+		if (!$currentCalendarIntegrationConfig)
 		{
 			$this->calendarEventService->delete((int)$linkedEvent->getValue());
-			$this->unlinkFromBooking($prevBooking->getId(), $linkedEvent);
-			$this->onBookingCreated($currentBooking);
+			$this->unlinkFromBooking($currentBooking, $linkedEvent);
 
 			return;
 		}
 
-		$linkedUserEntities = $this->getLinkedUsers($currentBooking->getResourceCollection());
-		if ($linkedUserEntities->isEmpty())
+		if ($this->isLinkedUsersChanged($prevBooking, $currentBooking))
 		{
-			$this->onBookingDeleted($currentBooking);
+			$this->onBookingDeleted($prevBooking);
+			$this->onBookingCreated($currentBooking);
 
 			return;
 		}
@@ -100,9 +95,12 @@ class EventForBookingService
 		}
 
 		$this->calendarEventService->update(
-			(int)$linkedEvent->getValue(),
-			$currentBooking->getDatePeriod(),
-			$linkedUserEntities,
+			eventId: (int)$linkedEvent->getValue(),
+			newDatePeriod: $currentBooking->getDatePeriod(),
+			resource: $currentBooking->getResourceCollection()->getPrimary(),
+			client: $currentBooking->getClientCollection()->getPrimaryClient(),
+			locationId: $currentCalendarIntegrationConfig->getLocationId(),
+			reminders: $currentCalendarIntegrationConfig->getReminders(),
 		);
 	}
 
@@ -115,12 +113,12 @@ class EventForBookingService
 		}
 
 		$this->calendarEventService->delete((int)$linkedEvent->getValue());
+		$this->unlinkFromBooking($booking, $linkedEvent);
 	}
 
-	public function onBookingResourceUpdated(Booking $booking): void
+	public function onResourceIntegrationUpdated(Booking $booking): void
 	{
 		$linkedEvent = $this->getLinkedEvent($booking);
-
 		if (!$linkedEvent)
 		{
 			$this->onBookingCreated($booking);
@@ -128,56 +126,90 @@ class EventForBookingService
 			return;
 		}
 
-		$linkedUserEntities = $this->getLinkedUsers($booking->getResourceCollection());
-		if ($linkedUserEntities->isEmpty())
+		$calendarIntegrationConfig = $this->getCombinedCalendarIntegrationConfig(
+			$booking->getResourceCollection()
+		);
+
+		if (!$calendarIntegrationConfig)
 		{
 			$this->onBookingDeleted($booking);
 
 			return;
 		}
 
+		$shouldChangeCalendarEventHost = $this->shouldChangeHost($linkedEvent, $calendarIntegrationConfig);
+
+		if ($shouldChangeCalendarEventHost)
+		{
+			$this->onBookingDeleted($booking);
+			$this->onBookingCreated($booking);
+
+			return;
+		}
+
 		$this->calendarEventService->update(
-			(int)$linkedEvent->getValue(),
-			$booking->getDatePeriod(),
-			$linkedUserEntities,
+			eventId: (int)$linkedEvent->getValue(),
+			newDatePeriod: $booking->getDatePeriod(),
+			resource: $booking->getResourceCollection()->getPrimary(),
+			client: $booking->getClientCollection()->getPrimaryClient(),
+			userIds: $calendarIntegrationConfig->getUserIds(),
+			locationId: $calendarIntegrationConfig->getLocationId(),
+			reminders: $calendarIntegrationConfig->getReminders(),
 		);
 	}
 
 	private function getLinkedEvent(Booking $booking): ExternalDataItem|null
 	{
 		return $booking->getExternalDataCollection()
-			->getByModuleAndType(self::CALENDAR_MODULE_ID, self::EVENT_ENTITY_TYPE)
+			->filterByType((new CalendarEventItemType())->buildFilter())
 			->getFirstCollectionItem()
 		;
 	}
 
-	private function getLinkedUsers(ResourceCollection $resourceCollection): ResourceLinkedEntityCollection
+	private function getCombinedCalendarIntegrationConfig(ResourceCollection $resourceCollection): CalendarData|null
 	{
-		$userEntities = [];
+		$combinedConfig = new CalendarData();
 
-		/** @var Resource $resource */
-		foreach ($resourceCollection as $resource)
+		/** @var CalendarData $primaryResourceConfig */
+		$primaryResourceConfig = $resourceCollection->getPrimary()?->getEntityCollection()
+			->getByTypeAndId(ResourceLinkedEntityType::Calendar)
+			->getFirstCollectionItem()
+			?->getData()
+		;
+
+		if ($primaryResourceConfig)
 		{
-			$linkedEntities = $resource->getEntityCollection();
-			foreach ($linkedEntities as $linkedEntity)
-			{
-				if ($linkedEntity->getEntityType() !== ResourceLinkedEntityType::User)
-				{
-					continue;
-				}
-				$userEntities[$linkedEntity->getEntityId()] = $linkedEntity;
-			}
+			$combinedConfig
+				->setLocationId($primaryResourceConfig->getLocationId())
+				->setReminders($primaryResourceConfig->getReminders())
+				->setCheckAvailability($primaryResourceConfig->getCheckAvailability())
+			;
 		}
 
-		return new ResourceLinkedEntityCollection(...$userEntities);
+		foreach ($resourceCollection as $resource)
+		{
+			$calendarIntegrationConfig = $resource->getEntityCollection()
+				->getByTypeAndId(ResourceLinkedEntityType::Calendar)
+				->getFirstCollectionItem()
+				?->getData()
+			;
+			if (!$calendarIntegrationConfig)
+			{
+				continue;
+			}
+
+			$combinedConfig->setUserIds([
+				...$combinedConfig->getUserIds(),
+				...$calendarIntegrationConfig->getUserIds(),
+			]);
+		}
+
+		return $combinedConfig->getUserIds() ? $combinedConfig : null;
 	}
 
 	private function linkToBooking(int $eventId, Booking $booking): void
 	{
-		$linkedEvent = new ExternalDataItem();
-		$linkedEvent->setModuleId(self::CALENDAR_MODULE_ID);
-		$linkedEvent->setEntityTypeId(self::EVENT_ENTITY_TYPE);
-		$linkedEvent->setValue((string)$eventId);
+		$linkedEvent = (new CalendarEventItemType())->createItem()->setValue((string)$eventId);
 
 		$booking->getExternalDataCollection()->add($linkedEvent);
 		$this->externalDataRepository->link(
@@ -187,12 +219,20 @@ class EventForBookingService
 		);
 	}
 
-	private function unlinkFromBooking(int $bookingId, ExternalDataItem $linkedEvent): void
+	private function unlinkFromBooking(Booking $booking, ExternalDataItem $linkedEvent): void
 	{
 		$this->externalDataRepository->unLink(
-			entityId: $bookingId,
+			entityId: $booking->getId(),
 			entityType: EntityType::Booking,
 			collection: new ExternalDataCollection($linkedEvent),
+		);
+
+		$booking->setExternalDataCollection(
+			$booking->getExternalDataCollection()
+				->filterByType(
+					(new CalendarEventItemType())->buildFilter(),
+					true
+				)
 		);
 	}
 
@@ -210,16 +250,47 @@ class EventForBookingService
 			return true;
 		}
 
-		return !$this->getLinkedUsers($prevBooking->getResourceCollection())
-			->isEqual($this->getLinkedUsers($currentBooking->getResourceCollection()))
-		;
+		if ($this->isClientsChanged($prevBooking, $currentBooking))
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	private function isClientsChanged(Booking $prevBooking, Booking $currentBooking): bool
 	{
+		if ($prevBooking->getClientCollection()->count() !== $currentBooking->getClientCollection()->count())
+		{
+			return true;
+		}
+
 		return !$prevBooking->getClientCollection()
 			->diff($currentBooking->getClientCollection())
 			->isEmpty()
 		;
+	}
+
+	private function isLinkedUsersChanged(Booking $prevBooking, Booking $currentBooking): bool
+	{
+		$prevCalendarConfig = $this->getCombinedCalendarIntegrationConfig($prevBooking->getResourceCollection());
+		$newCalendarConfig = $this->getCombinedCalendarIntegrationConfig($currentBooking->getResourceCollection());
+
+		return !empty(
+			array_diff(
+				$prevCalendarConfig?->getUserIds() ?? [],
+				$newCalendarConfig?->getUserIds() ?? []
+			)
+		);
+	}
+
+	private function shouldChangeHost(
+		ExternalDataItem $linkedEvent,
+		CalendarData $calendarData,
+	): bool
+	{
+		$currentHost = $this->calendarEventService->getEventHostId((int)$linkedEvent->getValue());
+
+		return !in_array($currentHost, $calendarData->getUserIds(), true);
 	}
 }

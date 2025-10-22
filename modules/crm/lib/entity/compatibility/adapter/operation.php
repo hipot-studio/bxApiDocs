@@ -462,17 +462,14 @@ final class Operation extends Adapter
 		$operation = $this->factory->getDeleteOperation($item);
 
 		$this->prepareOperation($operation, $compatibleOptions);
-		// force bizproc deletion regardless of adapter settings
-		$processBizproc = (bool)($compatibleOptions['PROCESS_BIZPROC'] ?? true);
-		if ($processBizproc)
+
+		if (isset($compatibleOptions['PROCESS_BIZPROC']) && (bool)$compatibleOptions['PROCESS_BIZPROC'] === false)
 		{
-			$operation->enableBizProc();
-			$operation->enableAutomation();
-		}
-		else
-		{
-			$operation->disableBizProc();
-			$operation->disableAutomation();
+			// bizproc entities are supposed to have been deleted beforehand
+			$operation->removeAction(
+				Service\Operation::ACTION_AFTER_SAVE,
+				Service\Operation\Action\DeleteBizProc::class,
+			);
 		}
 
 		$result = $operation->launch();

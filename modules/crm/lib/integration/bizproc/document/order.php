@@ -456,8 +456,17 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 		);
 	}
 
-	public static function createAutomationTarget($documentType)
+	public static function createAutomationTarget($documentType, string|int|null $documentId = null)
 	{
+		if (is_string($documentId))
+		{
+			[$entityTypeId, $entityId] = \CCrmBizProcHelper::resolveEntityIdByDocumentId($documentId);
+			if ($entityId > 0 && $entityTypeId === \CCrmOwnerType::Order)
+			{
+				return \Bitrix\Crm\Automation\Factory::getTarget(\CCrmOwnerType::Order, $entityId);
+			}
+		}
+
 		return \Bitrix\Crm\Automation\Factory::createTarget(\CCrmOwnerType::Order);
 	}
 

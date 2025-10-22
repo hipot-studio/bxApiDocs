@@ -8,6 +8,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Config\Option;
 
 if (!Loader::includeModule('bizproc'))
 {
@@ -20,9 +21,13 @@ abstract class Base extends ValueCollection
 	protected $id;
 	protected array $select = [];
 	protected array $fieldGroups;
+	protected bool $optimizationEnabled;
 
 	public function __construct(int $typeId, int $id, array $select = ['*'])
 	{
+		$defaultValue = \Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24') ? 'Y' : 'N';
+		$this->optimizationEnabled = Option::get('bizproc', 'enable_getdocument_select', $defaultValue) === 'Y';
+
 		$this->typeId = $typeId;
 		$this->id = $id;
 		$this->select = $select;
@@ -414,7 +419,22 @@ abstract class Base extends ValueCollection
 
 		return array_values(
 			array_unique(
-				array_map(static fn($item) => explode('.', $item)[0], $fields)
+				array_map(static function ($item)
+				{
+					$fieldName = explode('.', $item)[0];
+
+					if (mb_strtoupper(mb_substr($fieldName, -10)) === '_PRINTABLE')
+					{
+						$fieldName = mb_substr($fieldName, 0, -10);
+					}
+
+					if (mb_strtoupper(mb_substr($fieldName, -7)) === '_XML_ID')
+					{
+						$fieldName = mb_substr($fieldName, 0, -7);
+					}
+
+					return $fieldName;
+				}, $fields)
 			)
 		);
 	}

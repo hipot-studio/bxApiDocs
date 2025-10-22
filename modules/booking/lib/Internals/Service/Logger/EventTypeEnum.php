@@ -4,6 +4,7 @@ namespace Bitrix\Booking\Internals\Service\Logger;
 
 enum EventTypeEnum: string
 {
-	case DelayedTask = 'delayed_task';
-	case Common = 'common';
+	case DelayedTask = 'DELAYED_TASK';
+	case YandexCompanyFeedSender = 'YANDEX_COMPANY_FEED_SENDER';
+	case Common = 'COMMON';
 }

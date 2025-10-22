@@ -7,10 +7,10 @@ namespace Bitrix\Booking\Internals\Service;
 use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Entity\DatePeriodCollection;
 use Bitrix\Booking\Internals\Exception\InvalidArgumentException;
-use Bitrix\Booking\Internals\Service\Recurr\DateExclusion;
-use Bitrix\Booking\Internals\Service\Recurr\Rule;
-use Bitrix\Booking\Internals\Service\Recurr\Transformer\ArrayTransformer;
-use Bitrix\Booking\Internals\Service\Recurr\Transformer\ArrayTransformerConfig;
+use Recurr\DateExclusion;
+use Recurr\Rule;
+use Recurr\Transformer\ArrayTransformer;
+use Recurr\Transformer\ArrayTransformerConfig;
 use DateTimeImmutable;
 
 class Rrule
@@ -20,7 +20,7 @@ class Rrule
 	 */
 	private const VIRTUAL_LIMIT = 1000;
 
-	private Recurr\Rule $rrule;
+	private Rule $rrule;
 
 	private DatePeriod $datePeriod;
 	private ?array $datePeriodSequence = null;
@@ -30,7 +30,7 @@ class Rrule
 		DatePeriod $datePeriod
 	)
 	{
-		$this->rrule = new Recurr\Rule(
+		$this->rrule = new Rule(
 			$rrule,
 			$datePeriod->getDateFrom(),
 			$datePeriod->getDateTo(),
@@ -98,7 +98,7 @@ class Rrule
 		}
 	}
 
-	public function getRrule(): Recurr\Rule
+	public function getRrule(): Rule
 	{
 		return $this->rrule;
 	}

@@ -84,6 +84,8 @@ class DealCategory extends Category
 				$id = \Bitrix\Crm\Category\DealCategory::add($fields);
 				$this->entityObject = DealCategoryTable::getById($id)->fetchObject();
 			}
+
+			$this->sendEventCategoriesUpdated();
 		}
 		catch (EntryException $exception)
 		{
@@ -110,6 +112,7 @@ class DealCategory extends Category
 		{
 			SegmentManager::onCategoryDelete(new CategoryIdentifier($this->getEntityTypeId(), $this->getId()));
 			$this->processDeletedEvent();
+			$this->sendEventCategoriesUpdated();
 		}
 
 		return $result;

@@ -25,9 +25,12 @@ use Bitrix\Crm\Format\PersonNameFormatter;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Order;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Security\EntityAuthorization;
 use Bitrix\Crm\Security\PermissionToken;
+use Bitrix\Crm\Service\EditorAdapter\Normalizer\FieldValueNormalizer;
+use Bitrix\Crm\Service\EditorAdapter\Normalizer\UserFieldValueNormalizer;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\UI\EntitySelector;
 use Bitrix\Currency\CurrencyTable;
@@ -36,8 +39,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Main\Result;
-use Bitrix\Main\UserField\Dispatcher;
-use Bitrix\Main\UserField\Types\BooleanType;
 use Bitrix\Main\Web\Json;
 use CCrmComponentHelper;
 use CCrmOwnerType;
@@ -87,11 +88,14 @@ class EditorAdapter
 	protected $entityData;
 	protected $processedEntityFields;
 	protected $clientEntityData;
+
 	/** @var array[]|null */
 	protected $srcItemProductsEntityData;
 	protected $context = [];
+	protected ?array $createCategoriesList = null;
 
 	private bool $isSearchHistoryEnabled = true;
+	private RecurringFieldEditorAdapter $recurringEditorAdapter;
 
 	private Item $item;
 
@@ -99,6 +103,8 @@ class EditorAdapter
 	{
 		$this->fieldsCollection = $fieldsCollection;
 		$this->dependantFieldsMap = $dependantFieldsMap;
+
+		$this->recurringEditorAdapter = new RecurringFieldEditorAdapter($fieldsCollection);
 	}
 
 	public function enableSearchHistory(bool $state): EditorAdapter
@@ -305,6 +311,7 @@ class EditorAdapter
 		}
 
 		$this->fillMyCompanyDataForEmbeddedEditorField($item);
+		$this->fillRecurringDataForEmbeddedEditorField($item, $componentName);
 
 		return $this;
 	}
@@ -695,6 +702,10 @@ class EditorAdapter
 				);
 			}
 		}
+		elseif ($type === Field::TYPE_RECURRING && $this->recurringEditorAdapter->isUsed($this->item))
+		{
+			$field = $this->recurringEditorAdapter->prepareFieldByInfo($this->item, $field);
+		}
 
 		if ($name === Item::FIELD_NAME_TITLE)
 		{
@@ -840,6 +851,7 @@ class EditorAdapter
 			Item::FIELD_NAME_OPPORTUNITY,
 			Item::FIELD_NAME_STAGE_ID,
 			Item::FIELD_NAME_OBSERVERS,
+			Item::FIELD_NAME_RECURRING,
 		];
 
 		$isDefaultlyNotMergeable = in_array($name, $defaultlyNotMergeable, true);
@@ -1363,89 +1375,14 @@ class EditorAdapter
 		return $entityUserFields;
 	}
 
-	protected function normalizeFieldValue($value, string $fieldType)
+	protected function normalizeFieldValue($value, string $fieldType): mixed
 	{
-		if (is_array($value))
-		{
-			$result = [];
-			foreach ($value as $singleValue)
-			{
-				$result[] = $this->prepareSingleValue($singleValue, $fieldType);
-			}
-		}
-		else
-		{
-			$result = $this->prepareSingleValue($value, $fieldType);
-		}
-
-		return $result;
-	}
-
-	protected function prepareSingleValue($value, string $type)
-	{
-		if(is_float($value))
-		{
-			$value = sprintf('%f', $value);
-			$value = rtrim($value, '0');
-			$value = rtrim($value, '.');
-		}
-		elseif (is_numeric($value))
-		{
-			$value = (string)$value;
-		}
-		elseif(is_object($value) && method_exists($value, '__toString'))
-		{
-			$value = $value->__toString();
-		}
-		elseif ($type === Field::TYPE_BOOLEAN)
-		{
-			if ($value !== 'Y' && $value !== 'N')
-			{
-				$value = $value ? 'Y' : 'N';
-			}
-		}
-		elseif($value === false)
-		{
-			$value = '';
-		}
-
-		return $value;
+		return (new FieldValueNormalizer($fieldType))->normalize($value);
 	}
 
 	protected function normalizeUserFieldValue($fieldValue, bool $isValueEmpty, array $fieldParams): array
 	{
-		if (!$isValueEmpty)
-		{
-			if (is_array($fieldValue))
-			{
-				$fieldValue = array_values($fieldValue);
-			}
-			elseif ($fieldParams['USER_TYPE_ID'] === BooleanType::USER_TYPE_ID)
-			{
-				$fieldValue = $fieldValue ? '1' : '0';
-			}
-
-			$fieldParams['VALUE'] = $fieldValue;
-		}
-
-		$fieldSignature = Dispatcher::instance()->getSignature($fieldParams);
-		if ($isValueEmpty)
-		{
-			$result = [
-				'SIGNATURE' => $fieldSignature,
-				'IS_EMPTY' => true,
-			];
-		}
-		else
-		{
-			$result = [
-				'VALUE' => $fieldValue,
-				'SIGNATURE' => $fieldSignature,
-				'IS_EMPTY' => false,
-			];
-		}
-
-		return $result;
+		return (new UserFieldValueNormalizer($isValueEmpty, $fieldParams))->normalize($fieldValue);
 	}
 
 	protected function prepareEntityDataForFieldsWithUsers(array $entityFields, array $entityData): array
@@ -2707,8 +2644,22 @@ class EditorAdapter
 		return $requisiteBinding;
 	}
 
+	protected function fillRecurringDataForEmbeddedEditorField(Item $item): void
+	{
+		if ($this->recurringEditorAdapter->isUsed($item))
+		{
+			$recurringEntityData = $this->recurringEditorAdapter->getEntityData($item);
+			$this->entityData = array_merge($this->entityData, $recurringEntityData);
+		}
+	}
+
 	public function getAdditionalField(string $fieldName): ?array
 	{
 		return $this->additionalFields[$fieldName] ?? null;
+	}
+
+	public function saveRecurringData(Item $item, array $recurringData): Result
+	{
+		return $this->recurringEditorAdapter->saveRecurringData($item, $recurringData);
 	}
 }

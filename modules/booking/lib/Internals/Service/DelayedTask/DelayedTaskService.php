@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\DelayedTask;
 
-use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\ORM\DelayedTaskRepository;
 use Bitrix\Booking\Internals\Service\DelayedTask\Data\DataInterface;
-use Bitrix\Booking\Internals\Service\DelayedTask\Processor\ProcessorInterface;
-use Bitrix\Booking\Internals\Service\DelayedTask\Processor\ResourceLinkedEntitiesChangedProcessor;
+use Bitrix\Booking\Internals\Service\DelayedTask\Processor\ResourceCalendarDataChangedProcessor;
 use Bitrix\Booking\Internals\Service\Logger\EventLogger;
 use Bitrix\Booking\Internals\Service\Logger\EventTypeEnum;
 use Bitrix\Booking\Internals\Service\Logger\LogLevelEnum;
@@ -20,13 +18,13 @@ class DelayedTaskService
 	private const LOCK_KEY_TPL = 'booking.dt_proc_%s_%s';
 	private const PROCESSING_BATCH = 10;
 	private const LOCK_TIMEOUT_SEC = 10;
-	private DelayedTaskRepository $delayedTaskRepository;
 	private Connection $connection;
 	private EventLogger $logger;
 
-	public function __construct()
+	public function __construct(
+		private readonly DelayedTaskRepository $delayedTaskRepository,
+	)
 	{
-		$this->delayedTaskRepository = Container::getDelayedTaskRepository();
 		$this->connection = Application::getConnection();
 		$this->logger = new EventLogger();
 	}
@@ -36,11 +34,6 @@ class DelayedTaskService
 		DataInterface $data,
 	): void
 	{
-		if (!$this->checkData($data))
-		{
-			return;
-		}
-
 		$lockKey = $this->getLockKey($code, $data->getType());
 		if (!$this->connection->lock($lockKey, self::LOCK_TIMEOUT_SEC))
 		{
@@ -126,15 +119,7 @@ class DelayedTaskService
 	{
 		return match ($type)
 		{
-			DelayedTaskType::ResourceLinkedEntitiesChanged => ResourceLinkedEntitiesChangedProcessor::class,
+			DelayedTaskType::ResourceCalendarDataChanged => ResourceCalendarDataChangedProcessor::class,
 		};
-	}
-
-	private function checkData(DataInterface $data): bool
-	{
-		/** @var ProcessorInterface $processorClass */
-		$processorClass = $this->getProcessorClass($data->getType());
-
-		return $processorClass::checkData($data);
 	}
 }

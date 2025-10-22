@@ -25,6 +25,8 @@ use Bitrix\Catalog;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\ShipmentDocumentRealization;
 use Bitrix\Crm\Integration\Catalog\WarehouseOnboarding;
+use Bitrix\Sale\Internals\ShipmentTable;
+use Bitrix\Sale\Shipment;
 
 if (!Main\Loader::includeModule('crm'))
 {
@@ -206,7 +208,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 
 		if ($this->getEntityID() > 0)
 		{
-			$this->shipment = Sale\Repository\ShipmentRepository::getInstance()->getById($this->entityID);
+			$this->shipment = $this->getShipmentEntityById();
 			if ($this->shipment)
 			{
 				$this->order = $this->shipment->getOrder();
@@ -1697,6 +1699,56 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 
 
 		return $tourData;
+	}
+
+	private function getShipmentEntityById(): ?Shipment
+	{
+		/** @var Shipment $shipmentClass */
+		$shipmentClass = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER)->getShipmentClassName();
+
+		$filer = [
+			'=ID' => $this->getEntityID(),
+		];
+		$accessStoreFilter = AccessController::getCurrent()->getEntityFilter(
+			ActionDictionary::ACTION_STORE_VIEW,
+			ShipmentTable::class
+		);
+		if ($accessStoreFilter)
+		{
+			$filer[] = $accessStoreFilter;
+		}
+		$shipmentRow = $shipmentClass::getList([
+			'select' => ['ID', 'ORDER_ID'],
+			'filter' => $filer,
+		])->fetch();
+		if (!$shipmentRow)
+		{
+			return null;
+		}
+
+		$orderClassName = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER)->getOrderClassName();
+
+		/** @var Sale\Order $orderClassName */
+		$order = $orderClassName::load($shipmentRow['ORDER_ID']);
+		if ($order === null)
+		{
+			return null;
+		}
+
+		$shipmentCollection = $order->getShipmentCollection();
+
+		/** @var Shipment $shipment */
+		foreach ($shipmentCollection as $shipment)
+		{
+			if ($shipment->getId() !== (int)$shipmentRow['ID'])
+			{
+				continue;
+			}
+
+			return $shipment;
+		}
+
+		return null;
 	}
 
 	private function checkDocumentReadRight(): bool

@@ -72,12 +72,16 @@ class Desktop extends Kanban
 				$params['categoryId'] ?? null,
 			);
 
+			$fieldsList = $entity->getDisplayedFieldsList();
+
 			$result = array_merge(
 				$result,
 				[
 					'pingSettings' => $pingSettingsInfo[$params['categoryId']] ?? null,
 					'calendarSettings' => (new CalendarSettingsProvider())->fetchForJsComponent(),
 					'colorSettings' => (new ColorSettingsProvider())->fetchForJsComponent(),
+					'showLastActivityTime' => isset($fieldsList['LAST_ACTIVITY_BY_TIME']),
+					'showLastActivityUserAvatar' => isset($fieldsList['LAST_ACTIVITY_BY_USER_AVATAR']),
 				],
 			);
 		}

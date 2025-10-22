@@ -5,6 +5,8 @@ namespace Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Automation\Helper;
 use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Field\Collection;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integrity;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -320,21 +322,14 @@ class Update extends Operation
 	{
 		$result = parent::runAutomation();
 
-		if($result->isSuccess())
+		if($result->isSuccess() && isset($result->getData()['runData'], $result->getData()['newStarter']))
 		{
-			/** @var \Bitrix\Crm\Automation\Starter $starter */
-			$starter = $result->getData()['starter'];
+			/** @var CrmStarter $starter */
+			$starter = $result->getData()['newStarter'];
+			/** @var RunDataDto $runData */
+			$runData = $result->getData()['runData'];
 
-			return $starter->runOnUpdate(
-				Helper::prepareCompatibleData(
-					$this->itemBeforeSave->getEntityTypeId(),
-					$this->itemBeforeSave->getCompatibleData(Values::CURRENT)
-				),
-				Helper::prepareCompatibleData(
-					$this->itemBeforeSave->getEntityTypeId(),
-					$this->itemBeforeSave->getCompatibleData(Values::ACTUAL)
-				)
-			);
+			return $starter->runAutomation($runData, \CCrmBizProcEventType::Edit);
 		}
 
 		return $result;

@@ -165,6 +165,8 @@ class Lead extends Entity
 			'ORDER_STAGE' => '',
 			'CLIENT' => '',
 			'PROBLEM_NOTIFICATION' => '',
+			'LAST_ACTIVITY_BY_TIME' => '',
+			'LAST_ACTIVITY_BY_USER_AVATAR' => '',
 		];
 	}
 

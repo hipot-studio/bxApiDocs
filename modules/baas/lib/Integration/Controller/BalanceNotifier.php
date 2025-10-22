@@ -9,6 +9,8 @@ use Bitrix\Main;
 
 class BalanceNotifier
 {
+	private const TOO_EARLY_MESSAGE = 'TooEarly';
+
 	/**
 	 * @param string $packageCode
 	 * @param string $purchaseCodeOrPurchasedPackage
@@ -24,7 +26,7 @@ class BalanceNotifier
 		}
 		catch (Main\SystemException $e)
 		{
-			if ($e->getMessage() === 'TooEarly')
+			if ($e->getMessage() === self::TOO_EARLY_MESSAGE)
 			{
 				(new DeferredBalanceNotifier($packageCode, $purchaseCodeOrPurchasedPackage))->bind();
 			}
@@ -36,9 +38,6 @@ class BalanceNotifier
 	}
 
 	/**
-	 * @param string $packageCode
-	 * @param string $purchaseCodeOrPurchasedPackage
-	 * @return void
 	 * @throws Main\LoaderException
 	 * @throws Main\SystemException
 	 */
@@ -53,7 +52,7 @@ class BalanceNotifier
 			return;
 		}
 
-		throw new Main\SystemException('TooEarly');
+		throw new Main\SystemException(self::TOO_EARLY_MESSAGE);
 	}
 
 	protected function findPurchase(string $purchaseCodeOrPurchasedPackage): ?Baas\Model\EO_Purchase

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Rest\V1;
 
+use Bitrix\Booking\Rest\V1\Controller\Filter\BookingDisabled;
 use Bitrix\Booking\Rest\V1\View\ViewManager;
 use Bitrix\Main;
 use Bitrix\Main\Engine\Action;
@@ -35,6 +36,7 @@ class Controller extends Main\Engine\Controller
 		return [
 			...parent::getDefaultPreFilters(),
 			new Main\Engine\ActionFilter\Scope(Main\Engine\ActionFilter\Scope::REST),
+			new BookingDisabled(),
 		];
 	}
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Baas\UseCase\Internal;
 
 use \Bitrix\Baas;
+use Bitrix\Baas\UseCase\Internal\Request\NotifyAboutPurchaseRequest;
 use \Bitrix\Main;
 
 class NotifyAboutPurchase
@@ -13,21 +14,20 @@ class NotifyAboutPurchase
 	{
 	}
 
-	public function __invoke(Request\NotifyAboutPurchaseRequest $request): Main\Result
+	public function __invoke(NotifyAboutPurchaseRequest $request): Main\Result
 	{
 		$packageCode = $request->packageCode;
 		$purchaseCode = $request->purchaseCode;
 
 		$servicesInAPurchase = $this->purchaseRepository->getServicesInPurchase(
-			$packageCode,
 			$purchaseCode,
 		);
 		if (empty($servicesInAPurchase))
 		{
 			Main\Application::getInstance()->getExceptionHandler()->writeToLog(
 				new Main\SystemException(
-				'Baas is notified about empty purchase: package: ' . $packageCode. ', purchase: ' . $purchaseCode
-				)
+					'Baas is notified about empty purchase: package: ' . $packageCode . ', purchase: ' . $purchaseCode,
+				),
 			);
 		}
 		if (!empty($servicesInAPurchase) && ($purchaseInfo = reset($servicesInAPurchase)))
@@ -55,6 +55,10 @@ class NotifyAboutPurchase
 			}
 			Baas\Internal\Diag\Logger::getInstance()->info('NotifyAboutPurchase', $eventData);
 			(new Main\Event('baas', 'onPackagePurchased', $eventData))->send();
+
+			$purchase = $this->purchaseRepository->findPurchaseByCode($purchaseCode);
+			$purchase?->setNotified(true);
+			$purchase?->save();
 		}
 
 		return new Main\Result();

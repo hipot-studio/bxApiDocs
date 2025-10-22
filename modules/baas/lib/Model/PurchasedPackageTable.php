@@ -74,6 +74,12 @@ class PurchasedPackageTable extends ORM\Data\DataManager
 				['=this.PACKAGE_CODE' => 'ref.CODE'],
 				['join_type' => 'LEFT'],
 			),
+			new Main\ORM\Fields\Relations\Reference(
+				'SERVICE_IN_PURCHASED_PACKAGE',
+				ServiceInPurchasedPackageTable::class,
+				['=this.CODE' => 'ref.PURCHASED_PACKAGE_CODE'],
+				['join_type' => 'LEFT'],
+			),
 			(new Main\ORM\Fields\ExpressionField(
 				'ACTUAL',
 				'CASE WHEN %s <= ' . $sqlHelper->getCurrentDateFunction()

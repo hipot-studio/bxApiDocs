@@ -38,6 +38,7 @@ class AppConfiguration
 	private static $accessManifest = [
 		'total',
 		'bizproc_crm',
+		'automated_solution',
 	];
 
 	public static function getEntityList()
@@ -48,11 +49,12 @@ class AppConfiguration
 	public static function onEventExportController(Event $event)
 	{
 		$result = null;
+
 		$code = $event->getParameter('CODE');
 		$itemCode = $event->getParameter('ITEM_CODE');
 		if (!static::$entityList[$code])
 		{
-			return $result;
+			return null;
 		}
 
 		$option = $event->getParameters();
@@ -61,15 +63,24 @@ class AppConfiguration
 			&& !Manifest::isEntityAvailable('', $option, static::$accessManifest)
 		)
 		{
-			return $result;
+			return null;
+		}
+
+		// Checking automated solution mode before initializing crm helper.
+		$manifestCode = $option['MANIFEST']['CODE'] ?? '';
+		$isAutomatedSolutionMode = str_starts_with($manifestCode, 'automated_solution');
+		if ($isAutomatedSolutionMode && !static::isCrmModuleIncluded())
+		{
+			return null;
 		}
 
 		if (
 			$code === self::ENTITY_BIZPROC_SCRIPT
 			&& !Manifest::isEntityAvailable('', $option, ['bizproc_script'])
+			&& !$isAutomatedSolutionMode
 		)
 		{
-			return $result;
+			return null;
 		}
 
 		try
@@ -77,16 +88,26 @@ class AppConfiguration
 			if (static::checkRequiredParams($code))
 			{
 				$step = $event->getParameter('STEP');
+
+				// Check automated solution mode params
+				if ($isAutomatedSolutionMode)
+				{
+					if (!(new Helper())->checkAutomatedSolutionModeExportParams($option))
+					{
+						return null;
+					}
+				}
+
 				switch ($code)
 				{
 					case self::ENTITY_BIZPROC_MAIN:
-						$result = static::exportBizproc($step);
+						$result = static::exportBizproc($step, $option);
 						break;
 					case self::ENTITY_BIZPROC_CRM_TRIGGER:
-						$result = static::exportCrmTrigger($step);
+						$result = static::exportCrmTrigger($step, $option);
 						break;
 					case self::ENTITY_BIZPROC_SCRIPT:
-						$result = static::exportScript($step, $event->getParameter('NEXT'), $itemCode);
+						$result = static::exportScript($step, $event->getParameter('NEXT'), $itemCode, $option);
 						break;
 				}
 			}
@@ -114,6 +135,11 @@ class AppConfiguration
 			return null;
 		}
 		$option = $event->getParameters();
+
+		if (!static::checkAutomatedSolutionModeClearParams($option))
+		{
+			return null;
+		}
 
 		if (
 			$code !== self::ENTITY_BIZPROC_SCRIPT
@@ -174,6 +200,11 @@ class AppConfiguration
 			return null;
 		}
 		$data = $event->getParameters();
+
+		if (!static::checkAutomatedSolutionModeImportParams($data))
+		{
+			return null;
+		}
 
 		if (
 			$code !== self::ENTITY_BIZPROC_SCRIPT
@@ -244,7 +275,6 @@ class AppConfiguration
 	 */
 	private static function checkRequiredParams($type)
 	{
-		$return = true;
 		if ($type == self::ENTITY_BIZPROC_CRM_TRIGGER)
 		{
 			if (!static::isCrmModuleIncluded())
@@ -253,10 +283,10 @@ class AppConfiguration
 			}
 		}
 
-		return $return;
+		return true;
 	}
 
-	private static function exportCrmDynamicTypesInfo(): array
+	private static function exportCrmDynamicTypesInfo(array $params = []): array
 	{
 		$result = [];
 
@@ -266,80 +296,130 @@ class AppConfiguration
 		}
 
 		$helper = new Helper();
-		$result = $helper->exportCrmDynamicTypesInfo();
+		$result = $helper->exportCrmDynamicTypesInfo(['automatedSolutionModeParams' => $params]);
 
 		return $result;
 	}
 
-	private static function getDynamicTypeCustomSectionIdByEntityTypeId(int $entityTypeId): int
+	private static function checkAutomatedSolutionModeClearParams(array $params): bool
 	{
-		$result = 0;
+		if (self::isCrmModuleIncluded())
+		{
+			return (new Helper())->checkAutomatedSolutionModeClearParams($params);
+		}
+		else
+		{
+			$manifestCode = $params['IMPORT_MANIFEST']['CODE'] ?? '';
+			$isAutomatedSolutionMode = str_starts_with($manifestCode, 'automated_solution');
+			if ($isAutomatedSolutionMode)
+			{
+				return false;
+			}
+		}
 
+		return true;
+	}
+
+	private static function checkAutomatedSolutionModeImportParams(array $params): bool
+	{
+		if (self::isCrmModuleIncluded())
+		{
+			return (new Helper())->checkAutomatedSolutionModeImportParams($params);
+		}
+		else
+		{
+			$manifestCode = $params['IMPORT_MANIFEST']['CODE'] ?? '';
+			$isAutomatedSolutionMode = str_starts_with($manifestCode, 'automated_solution');
+			if ($isAutomatedSolutionMode)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function getDynamicTypeCheckParamsByDocumentType(string $documentType): array
+	{
+
+		return  static::getDynamicTypeCheckParamsByEntityTypeId(
+			static::getDynamicEntityTypeIdByDocumentType($documentType)
+		);
+	}
+
+	private static function getDynamicTypeCheckParamsByEntityTypeId(int $entityTypeId): array
+	{
 		if (!static::isCrmModuleIncluded())
 		{
-			return $result;
+			return [
+				'isDynamicType' => false,
+				'isDynamicTypeExists' => false,
+				'dynamicTypeCustomSectionId' => 0,
+			];
 		}
 
-		$helper = new Helper();
-		$result = $helper->getDynamicTypeCustomSectionIdByEntityTypeId($entityTypeId);
-
-		return $result;
+		return (new Helper())->getDynamicTypeCheckExportParamsByEntityTypeId($entityTypeId);
 	}
 
-	private static function isDynamicDocumentType(string $documentType): bool
+	private static function checkDynamicTypeExportConditions(array $params): bool
 	{
-		if (static::getDynamicEntityTypeIdByDocumentType($documentType) > 0)
+		if (self::isCrmModuleIncluded())
 		{
-			return true;
+			return (new Helper())->checkDynamicTypeExportConditions($params);
+		}
+
+		return true;
+	}
+
+	private static function getAutomatedSolutionModeParams(array $params): array
+	{
+		if (self::isCrmModuleIncluded())
+		{
+			return (new Helper())->getAutomatedSolutionModeParams($params);
+		}
+
+		return [
+			'isAutomatedSolutionMode' => false,
+			'isSingleAutomatedSolutionMode' => false,
+			'customSectionId' => 0,
+		];
+	}
+	
+	private static function getAutomatedSolutionModeImportParams(array $params): array
+	{
+		if (self::isCrmModuleIncluded())
+		{
+			return (new Helper())->getAutomatedSolutionModeImportParams($params);
+		}
+
+		return [
+			'isAutomatedSolutionMode' => false,
+			'isSingleAutomatedSolutionMode' => false,
+		];
+	}
+
+	private static function checkDynamicTypeImportConditions(int $dynamicEntityTypeId, array $importData): bool
+	{
+		if (self::isCrmModuleIncluded() && $dynamicEntityTypeId > 0)
+		{
+			return (new Helper())->checkDynamicTypeImportConditions($dynamicEntityTypeId, $importData);
 		}
 
 		return false;
-	}
-
-	private static function isDynamicEntityType(int $entityTypeId): bool
-	{
-		if (static::isCrmModuleIncluded() && CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
-		{
-			return true;
-		}
-
-		return false;
-	}
-
-	private static function getDynamicTypeCustomSectionIdByDocumentType(string $documentType): int
-	{
-		$dynamicEntityTypeId = static::getDynamicEntityTypeIdByDocumentType($documentType);
-
-		return static::getDynamicTypeCustomSectionIdByEntityTypeId($dynamicEntityTypeId);
-	}
-
-	private static function checkDynamicTypeByEntityType(int $entityTypeId): bool
-	{
-		if (static::isDynamicEntityType($entityTypeId))
-		{
-			$helper = new Helper();
-
-			return $helper->checkDynamicTypeByEntityType($entityTypeId);
-		}
-
-		return false;
-	}
-
-	private static function checkDynamicTypeByDocumentType(string $documentType): bool
-	{
-		$dynamicEntityTypeId = static::getDynamicEntityTypeIdByDocumentType($documentType);
-
-		return static::checkDynamicTypeByEntityType($dynamicEntityTypeId);
 	}
 
 	//region bizproc
-	private static function exportBizproc($step)
+	private static function exportBizproc($step, array $options = [])
 	{
 		$result = [
 			'FILE_NAME' => '',
 			'CONTENT' => [],
 			'NEXT' => false,
 		];
+
+		$helper = new Helper();
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($options);
+
 		$res = WorkflowTemplateTable::getList(
 			[
 				'order' => [
@@ -360,10 +440,11 @@ class AppConfiguration
 			{
 				$documentType = $tpl->getDocumentType();
 				if (
-					!static::isDynamicDocumentType($documentType)
-					|| (
-						static::checkDynamicTypeByDocumentType($documentType)
-						&& static::getDynamicTypeCustomSectionIdByDocumentType($documentType) <= 0
+					$helper->checkDynamicTypeExportConditions(
+						array_merge(
+							$automatedSolutionModeParams,
+							static::getDynamicTypeCheckParamsByDocumentType($documentType)
+						)
 					)
 				)
 				{
@@ -374,7 +455,7 @@ class AppConfiguration
 						'ID' => $tpl->getId(),
 						'MODULE_ID' => $tpl->getModuleId(),
 						'ENTITY' => $tpl->getEntity(),
-						'DOCUMENT_TYPE' => $tpl->getDocumentType(),
+						'DOCUMENT_TYPE' => $documentType,
 						'DOCUMENT_STATUS' => $tpl->getDocumentStatus(),
 						'NAME' => $tpl->getName(),
 						'AUTO_EXECUTE' => $tpl->getAutoExecute(),
@@ -385,10 +466,13 @@ class AppConfiguration
 						'TEMPLATE_DATA' => $data,
 					];
 				}
+
 				if (static::isCrmModuleIncluded() && $step === 0)
 				{
 					$result['FILE_NAME'] = $step;
-					$result['CONTENT']['CRM_DYNAMIC_TYPES_INFO'] = static::exportCrmDynamicTypesInfo();
+					$result['CONTENT']['CRM_DYNAMIC_TYPES_INFO'] =
+						static::exportCrmDynamicTypesInfo($automatedSolutionModeParams)
+					;
 				}
 			}
 		}
@@ -405,6 +489,8 @@ class AppConfiguration
 		$clearFull = $option['CLEAR_FULL'];
 		$prefix = $option['PREFIX_NAME'];
 		$pattern = '/^\(' . $prefix . '\)/';
+
+		$automatedSolutionModeParams = static::getAutomatedSolutionModeParams($option);
 
 		$res = WorkflowTemplateTable::getList(
 			[
@@ -433,7 +519,15 @@ class AppConfiguration
 					? $item['DOCUMENT_TYPE']
 					: ''
 			;
-			if (static::getDynamicTypeCustomSectionIdByDocumentType($documentType) > 0)
+
+			if (
+				!static::checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						static::getDynamicTypeCheckParamsByDocumentType($documentType)
+					)
+				)
+			)
 			{
 				continue;
 			}
@@ -568,36 +662,12 @@ class AppConfiguration
 
 	private static function getDynamicEntityTypeIdByDocumentType(string $dynamicEntityTypeName): int
 	{
-		$entityTypeId = 0;
 		if (static::isCrmModuleIncluded())
 		{
-			$dynamicTypePrefix = CCrmOwnerType::DynamicTypePrefixName;
-			$dynamicTypeRegExp = "/$dynamicTypePrefix(\\d+)/u";
-			$matches = [];
-
-			if (preg_match($dynamicTypeRegExp, $dynamicEntityTypeName, $matches))
-			{
-				$entityTypeId = (int)$matches[1];
-			}
+			return (new Helper())->getDynamicEntityTypeIdByEntityTypeName($dynamicEntityTypeName);
 		}
 
-		return $entityTypeId;
-	}
-
-	private static function getDynamicEntityTypeIdByOldEntityTypeId(int $oldDynamicEntityTypeId, $importData): int
-	{
-		$newDynamicEntityTypeId = 0;
-
-		if (static::isCrmModuleIncluded())
-		{
-			$isSetRatio = (isset($importData['RATIO']) && is_array($importData['RATIO']));
-			$newDynamicEntityTypeId = (new Helper())->getDynamicEntityTypeIdByOldEntityTypeId(
-				$oldDynamicEntityTypeId,
-				$isSetRatio ? $importData['RATIO'] : []
-			);
-		}
-
-		return $newDynamicEntityTypeId;
+		return 0;
 	}
 
 	private static function importBizproc($importData)
@@ -620,20 +690,26 @@ class AppConfiguration
 			{
 				$oldDynamicEntityTypeId = static::getDynamicEntityTypeIdByDocumentType($item['DOCUMENT_TYPE']);
 				$isDynamicType = ($oldDynamicEntityTypeId > 0);
+
+				$automatedSolutionModeParams = static::getAutomatedSolutionModeImportParams($importData);
+				if (!$isDynamicType && $automatedSolutionModeParams['isAutomatedSolutionMode'])
+				{
+					return $result;
+				}
+
 				if ($isDynamicType)
 				{
-					$newDynamicEntityTypeId = static::getDynamicEntityTypeIdByOldEntityTypeId(
+					$crmHelper = new Helper();
+					$isSetRatio = (isset($importData['RATIO']) && is_array($importData['RATIO']));
+					$newDynamicEntityTypeId = $crmHelper->getDynamicEntityTypeIdByOldEntityTypeId(
 						$oldDynamicEntityTypeId,
-						$importData
+						$isSetRatio ? $importData['RATIO'] : []
 					);
-
 					if (
 						!empty($dynamicTypesInfo)
-						&& self::isCrmModuleIncluded()
-						&& static::checkDynamicTypeByEntityType($newDynamicEntityTypeId)
+						&& static::checkDynamicTypeImportConditions($newDynamicEntityTypeId, $importData)
 					)
 					{
-						$isSetRatio = (isset($importData['RATIO']) && is_array($importData['RATIO']));
 						$replacementLists = static::getDynamicTypeReplacementLists(
 							$dynamicTypesInfo,
 							$isSetRatio ? $importData['RATIO'] : []
@@ -752,13 +828,16 @@ class AppConfiguration
 	//end region bizproc
 
 	//region trigger
-	private static function exportCrmTrigger($step)
+	private static function exportCrmTrigger($step, array $options = [])
 	{
 		$result = [
 			'FILE_NAME' => '',
 			'CONTENT' => [],
 			'NEXT' => false,
 		];
+
+		$helper = new Helper();
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($options);
 
 		$res = TriggerTable::getList(
 			[
@@ -774,22 +853,25 @@ class AppConfiguration
 		if ($item = $res->Fetch())
 		{
 			$result['NEXT'] = $step;
-			$entityTypeId = (int)($item['ENTITY_TYPE_ID'] ?? 0);
 			if (
-				!static::isDynamicEntityType($entityTypeId)
-				|| (
-					static::checkDynamicTypeByEntityType($entityTypeId)
-					&& static::getDynamicTypeCustomSectionIdByEntityTypeId($entityTypeId) <= 0
+				$helper->checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						static::getDynamicTypeCheckParamsByEntityTypeId((int)($item['ENTITY_TYPE_ID'] ?? 0))
+					)
 				)
 			)
 			{
 				$result['FILE_NAME'] = $step;
 				$result['CONTENT'] = $item;
 			}
+
 			if (static::isCrmModuleIncluded() && $step === 0)
 			{
 				$result['FILE_NAME'] = $step;
-				$result['CONTENT']['CRM_DYNAMIC_TYPES_INFO'] = static::exportCrmDynamicTypesInfo();
+				$result['CONTENT']['CRM_DYNAMIC_TYPES_INFO'] =
+					static::exportCrmDynamicTypesInfo($automatedSolutionModeParams)
+				;
 			}
 		}
 
@@ -802,6 +884,8 @@ class AppConfiguration
 			'NEXT' => false,
 		];
 		$clearFull = $option['CLEAR_FULL'];
+
+		$automatedSolutionModeParams = static::getAutomatedSolutionModeParams($option);
 
 		$res = TriggerTable::getList(
 			[
@@ -817,8 +901,14 @@ class AppConfiguration
 		while ($item = $res->Fetch())
 		{
 			$result['NEXT'] = $item['ID'];
-
-			if (static::getDynamicTypeCustomSectionIdByEntityTypeId((int)($item['ENTITY_TYPE_ID'] ?? 0)) > 0)
+			if (
+				!static::checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						static::getDynamicTypeCheckParamsByEntityTypeId((int)($item['ENTITY_TYPE_ID'] ?? 0))
+					)
+				)
+			)
 			{
 				continue;
 			}
@@ -865,21 +955,26 @@ class AppConfiguration
 			if (isset($importData['RATIO']['CRM_STATUS']))
 			{
 				$crmHelper = new Helper();
-
 				$isSetRatio = (isset($importData['RATIO']) && is_array($importData['RATIO']));
 				$oldDynamicEntityTypeId = (int)$item['ENTITY_TYPE_ID'];
-				$newDynamicEntityTypeId = static::getDynamicEntityTypeIdByOldEntityTypeId(
+				$newDynamicEntityTypeId = $crmHelper->getDynamicEntityTypeIdByOldEntityTypeId(
 					$oldDynamicEntityTypeId,
-					$importData
+					$isSetRatio ? $importData['RATIO'] : []
 				);
 				$isDynamicType = ($newDynamicEntityTypeId > 0);
+
+				$automatedSolutionModeParams = static::getAutomatedSolutionModeImportParams($importData);
+				if (!$isDynamicType && $automatedSolutionModeParams['isAutomatedSolutionMode'])
+				{
+					return $result;
+				}
+
 				if ($isDynamicType)
 				{
 					$item['ENTITY_TYPE_ID'] = $newDynamicEntityTypeId;
 					if (
 						!empty($dynamicTypesInfo)
-						&& self::isCrmModuleIncluded()
-						&& static::checkDynamicTypeByEntityType($newDynamicEntityTypeId)
+						&& static::checkDynamicTypeImportConditions($newDynamicEntityTypeId, $importData)
 					)
 					{
 						$replacementLists = static::getDynamicTypeReplacementLists(
@@ -953,7 +1048,7 @@ class AppConfiguration
 	//end region trigger
 
 	//region script
-	private static function exportScript($step, $nextId, $docType)
+	private static function exportScript($step, $nextId, $docType, array $options = [])
 	{
 		$result = [
 			'FILE_NAME' => '',
@@ -973,6 +1068,9 @@ class AppConfiguration
 			$filter['=DOCUMENT_TYPE'] = $docType;
 		}
 
+		$helper = new Helper();
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($options);
+
 		$res = ScriptTable::getList(
 			[
 				'order' => [
@@ -985,20 +1083,19 @@ class AppConfiguration
 		);
 		if ($tpl = $res->fetch())
 		{
-			$result['NEXT'] = $step;
+			$result['NEXT'] = $tpl['ID'];
 			$data = Script\Manager::exportScript($tpl['ID']);
 			if ($data)
 			{
 				$documentType =
-					(isset($data['DOCUMENT_TYPE']) && is_string($data['DOCUMENT_TYPE']))
-						? $data['DOCUMENT_TYPE']
-						: ''
+					(isset($data['DOCUMENT_TYPE']) && is_string($data['DOCUMENT_TYPE'])) ? $data['DOCUMENT_TYPE'] : ''
 				;
 				if (
-					!static::isDynamicDocumentType($documentType)
-					|| (
-						static::checkDynamicTypeByDocumentType($documentType)
-						&& static::getDynamicTypeCustomSectionIdByDocumentType($documentType) <= 0
+					$helper->checkDynamicTypeExportConditions(
+						array_merge(
+							$automatedSolutionModeParams,
+							static::getDynamicTypeCheckParamsByDocumentType($documentType)
+						)
 					)
 				)
 				{
@@ -1006,10 +1103,13 @@ class AppConfiguration
 					$result['CONTENT'] = $data;
 				}
 			}
+
 			if (static::isCrmModuleIncluded() && $step === 0)
 			{
 				$result['FILE_NAME'] = $step;
-				$result['CONTENT']['CRM_DYNAMIC_TYPES_INFO'] = static::exportCrmDynamicTypesInfo();
+				$result['CONTENT']['CRM_DYNAMIC_TYPES_INFO'] =
+					static::exportCrmDynamicTypesInfo($automatedSolutionModeParams)
+				;
 			}
 		}
 
@@ -1028,6 +1128,8 @@ class AppConfiguration
 			return $result;
 		}
 
+		$automatedSolutionModeParams = static::getAutomatedSolutionModeParams($option);
+
 		$res = ScriptTable::getList(
 			[
 				'order' => [
@@ -1038,14 +1140,13 @@ class AppConfiguration
 					'=MODULE_ID' => static::$accessModules,
 				],
 				'limit' => 1,
-				'select' => ['ID'],
+				'select' => ['ID', 'DOCUMENT_TYPE'],
 			]
 		);
 
 		while ($item = $res->Fetch())
 		{
 			$result['NEXT'] = $item['ID'];
-
 			$documentType =
 				(
 					isset($item['DOCUMENT_TYPE'])
@@ -1055,7 +1156,15 @@ class AppConfiguration
 					? $item['DOCUMENT_TYPE']
 					: ''
 			;
-			if (static::getDynamicTypeCustomSectionIdByDocumentType($documentType) > 0)
+
+			if (
+				!static::checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						static::getDynamicTypeCheckParamsByDocumentType($documentType)
+					)
+				)
+			)
 			{
 				continue;
 			}
@@ -1100,16 +1209,24 @@ class AppConfiguration
 				{
 					$oldDynamicEntityTypeId = static::getDynamicEntityTypeIdByDocumentType($item['DOCUMENT_TYPE']);
 					$isDynamicType = ($oldDynamicEntityTypeId > 0);
+
+					$automatedSolutionModeParams = static::getAutomatedSolutionModeImportParams($importData);
+					if (!$isDynamicType && $automatedSolutionModeParams['isAutomatedSolutionMode'])
+					{
+						return $result;
+					}
+
 					if ($isDynamicType)
 					{
-						$newDynamicEntityTypeId = static::getDynamicEntityTypeIdByOldEntityTypeId(
+						$crmHelper = new Helper();
+						$isSetRatio = (isset($importData['RATIO']) && is_array($importData['RATIO']));
+						$newDynamicEntityTypeId = $crmHelper->getDynamicEntityTypeIdByOldEntityTypeId(
 							$oldDynamicEntityTypeId,
-							$importData
+							$isSetRatio ? $importData['RATIO'] : []
 						);
 						if (
 							!empty($dynamicTypesInfo)
-							&& self::isCrmModuleIncluded()
-							&& static::checkDynamicTypeByEntityType($newDynamicEntityTypeId)
+							&& static::checkDynamicTypeImportConditions($newDynamicEntityTypeId, $importData)
 						)
 						{
 							$isSetRatio = (isset($importData['RATIO']) && is_array($importData['RATIO']));

@@ -635,6 +635,7 @@ class DocumentRepository
 		$models = Internal\DocumentTable::query()
 			->setSelect(['*'])
 			->whereIn('TEMPLATE_ID', $templateIds)
+			->where('TEMPLATE.HIDDEN', false)
 			->fetchCollection()
 		;
 

@@ -10,7 +10,7 @@ use Bitrix\Main\Event;
 
 class AllowByFeature extends Base
 {
-	public function onBeforeAction(Event $event)
+	public function onBeforeAction(Event $event): EventResult|null
 	{
 		if (!BookingFeature::isFeatureEnabled())
 		{

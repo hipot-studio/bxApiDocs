@@ -14,6 +14,7 @@ use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\ORM\Query\Query;
 
 class RequestImages extends RequestMultiple
@@ -46,6 +47,11 @@ class RequestImages extends RequestMultiple
 			self::getConnectorClass(),
 			self::getImagesQuota($siteData)
 		);
+	}
+
+	public function getAnalyticEvent(): ?Metrika\Events
+	{
+		return Metrika\Events::imagesGeneration;
 	}
 
 	/**

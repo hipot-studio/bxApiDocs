@@ -26,7 +26,13 @@ interface BookingRepositoryInterface
 		int|null $limit = null
 	): Entity\Booking\BookingCollection;
 
-	public function getById(int $id, int $userId = 0): Entity\Booking\Booking|null;
+	public function getById(
+		int $id,
+		int $userId = 0,
+		bool $withCounters = true,
+		bool $withClientsData = true,
+		bool $withExternalData = true,
+	): Entity\Booking\Booking|null;
 
 	public function getByIdForManager(int $id): Entity\Booking\Booking|null;
 

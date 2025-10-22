@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
+use Bitrix\Landing\Metrika;
+
 abstract class BaseScenario implements IScenario
 {
 	/**
@@ -11,6 +13,13 @@ abstract class BaseScenario implements IScenario
 	 * @return int
 	 */
 	abstract public function getQuotaCalculateStep(): int;
+
+	abstract public function getAnalyticCategory(): Metrika\Categories;
+
+	public function getAsyncRelations(): ?array
+	{
+		return null;
+	}
 
 	/**
 	 * @inheritdoc

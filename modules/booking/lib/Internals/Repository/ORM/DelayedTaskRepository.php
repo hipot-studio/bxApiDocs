@@ -12,8 +12,8 @@ use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTask;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskCollection;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskStatus;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskType;
-use Bitrix\Main\Entity\AddResult;
-use Bitrix\Main\Entity\UpdateResult;
+use Bitrix\Main\ORM\Data\AddResult;
+use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 

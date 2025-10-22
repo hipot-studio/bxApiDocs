@@ -81,10 +81,7 @@ abstract class RequestMultiple extends AIStep
 	{
 		foreach ($this->getEntitiesToRequest() as $entity)
 		{
-			if (
-				isset($entity->requestId)
-				&& isset($this->requests[$entity->requestId])
-			)
+			if (isset($entity->requestId, $this->requests[$entity->requestId]))
 			{
 				return true;
 			}

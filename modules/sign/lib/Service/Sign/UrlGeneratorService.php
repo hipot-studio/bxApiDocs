@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Service\Sign;
 
 use Bitrix\Main\Web\Uri;
+use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item;
 
 class UrlGeneratorService
@@ -25,6 +26,43 @@ class UrlGeneratorService
 	public function makeMySafeUrl(): string
 	{
 		return '/sign/b2e/mysafe/';
+	}
+
+	public function makeSignersListsUrl(): string
+	{
+		return '/sign/b2e/signers/';
+	}
+
+	public function makeEditSignersListUrl(int $listId): string
+	{
+		$uri = new Uri('/sign/b2e/signers/'.$listId.'/');
+		$uri->addParams([
+			'noRedirect' => 'Y',
+		]);
+
+		return $uri->getUri();
+	}
+
+	public function makeAddSignerUrl(int $listId): string
+	{
+		$uri = new Uri('/sign/b2e/signers/'.$listId.'/signer/0/');
+		return $uri->getUri();
+	}
+
+	public function makeSignersListRejectedUrl(): ?string
+	{
+		$rejectedListId = Storage::instance()->getSignersListRejectedId();
+		if ($rejectedListId)
+		{
+			return '/sign/b2e/signers/'.$rejectedListId.'/';
+		}
+
+		return null;
+	}
+
+	public function makeProfileUrl(int $userId): string
+	{
+		return '/company/personal/user/'.$userId.'/';
 	}
 
 	public function makeProfileSafeUrl(int $userId): string

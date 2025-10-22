@@ -8,5 +8,6 @@ interface PayloadInterface
 {
 	public function getPayloadCode(): string;
 	public function setMarkers(array $markers): self;
+	public function setEncodedMarkers(array $encodedMarkers): PayloadInterface;
 	public function getResult(): Result;
 }

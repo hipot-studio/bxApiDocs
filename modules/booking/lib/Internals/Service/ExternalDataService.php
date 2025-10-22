@@ -13,6 +13,7 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\BookingClientRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\BookingExternalDataRepository;
+use Bitrix\Booking\Internals\Service\DataLoader\ExternalDataLoader;
 
 class ExternalDataService
 {
@@ -20,8 +21,10 @@ class ExternalDataService
 		private readonly BookingClientRepositoryInterface $bookingClientRepository,
 		private readonly BookingExternalDataRepository $bookingExternalDataRepository,
 		private readonly ClientService $clientService,
+		private ExternalDataLoader|null $externalDataLoader = null,
 	)
 	{
+		$this->externalDataLoader = $externalDataLoader ?? new ExternalDataLoader();
 	}
 
 	public function handleExternalDataRelations(
@@ -101,11 +104,8 @@ class ExternalDataService
 		}
 	}
 
-	public function loadExternalData(ExternalDataCollection $externalDataCollection): void
+	public function loadExternalData(ExternalDataCollection ...$externalDataCollection): void
 	{
-		Container::getProviderManager()::getCurrentProvider()
-			?->getDataProvider()
-			?->loadDataForCollection($externalDataCollection)
-		;
+		$this->externalDataLoader->loadForCollections(...$externalDataCollection);
 	}
 }

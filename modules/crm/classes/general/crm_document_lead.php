@@ -761,8 +761,17 @@ class CCrmDocumentLead extends CCrmDocument
 		);
 	}
 
-	public static function createAutomationTarget($documentType)
+	public static function createAutomationTarget($documentType, string|int|null $documentId = null)
 	{
+		if (is_string($documentId))
+		{
+			[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityIdByDocumentId($documentId);
+			if ($entityId > 0 && $entityTypeId === CCrmOwnerType::Lead)
+			{
+				return Crm\Automation\Factory::getTarget(CCrmOwnerType::Lead, $entityId);
+			}
+		}
+
 		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Lead);
 	}
 }

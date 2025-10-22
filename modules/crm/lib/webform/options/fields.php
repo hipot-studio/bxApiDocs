@@ -12,6 +12,7 @@ use Bitrix\Main;
 use Bitrix\Catalog;
 use Bitrix\Crm;
 use Bitrix\Crm\WebForm;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 
 /**
@@ -568,7 +569,12 @@ final class Fields
 			$result[] = self::getTabletFormattedField($field);
 		}
 
-		$this->form->merge(['FIELDS' => $result]);
+		$processedResult = ServiceLocator::getInstance()
+			->get('crm.service.webform.defaultvalueprovider')
+			->applyForFields($result)
+		;
+
+		$this->form->merge(['FIELDS' => $processedResult]);
 
 		return $this;
 	}

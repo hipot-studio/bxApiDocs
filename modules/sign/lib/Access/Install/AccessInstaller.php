@@ -84,6 +84,10 @@ class AccessInstaller
 							'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATE_DELETE,
 							'value' => UserPermissions::PERMISSION_SELF,
 						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_REFUSED,
+							'value' => UserPermissions::PERMISSION_NONE,
+						],
 					],
 				],
 			],
@@ -137,6 +141,10 @@ class AccessInstaller
 						[
 							'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATE_DELETE,
 							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_REFUSED,
+							'value' => UserPermissions::PERMISSION_NONE,
 						],
 					],
 				],

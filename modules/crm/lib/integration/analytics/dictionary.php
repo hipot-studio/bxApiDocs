@@ -36,6 +36,7 @@ final class Dictionary
 	public const EVENT_ENTITY_CONVERT_OPEN = 'entity_convert_open';
 	public const EVENT_ENTITY_CLOSE = 'entity_close';
 	public const EVENT_ENTITY_COMPLETE = 'entity_complete';
+	public const EVENT_CHANGE_STAGE = 'entity_change_stage';
 
 	public const EVENT_ENTITY_SOCIAL = 'entity_social';
 

@@ -6,7 +6,6 @@ namespace Bitrix\Landing\Copilot\Generation\Step;
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
 use Bitrix\Landing\Copilot\Converter;
-use Bitrix\Landing\Copilot\Data\Block\Operator;
 use Bitrix\Landing\Copilot\Data\Type\NodeType;
 use Bitrix\Landing\Copilot\Generation\Error;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
@@ -15,6 +14,7 @@ use Bitrix\Landing\Copilot\Generation\Type\Errors;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Data\Site;
+use Bitrix\Landing\Metrika;
 use Bitrix\Landing;
 use Bitrix\Landing\Rights;
 
@@ -43,6 +43,11 @@ class RequestBlockContent extends RequestSingle
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto
 	{
 		return new RequestQuotaDto(self::getConnectorClass(), 1);
+	}
+
+	public function getAnalyticEvent(): ?Metrika\Events
+	{
+		return Metrika\Events::textsGeneration;
 	}
 
 	protected function getPrompt(): Prompt

@@ -1,7 +1,7 @@
 <?php
 
-use Bitrix\Landing\Manager;
 use Bitrix\Main\Loader;
+use Bitrix\UI\Form\FormProvider;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -22,7 +22,7 @@ class LandingBlocksMainpageVibeAuto extends LandingBlocksMainpageWidgetBase
 	public function executeComponent(): void
 	{
 		$this->initializeParams();
-		$this->getData();
+		$this->prepareResult();
 		parent::executeComponent();
 	}
 
@@ -34,35 +34,27 @@ class LandingBlocksMainpageVibeAuto extends LandingBlocksMainpageWidgetBase
 		}
 	}
 
-	protected function getData(): void
+	protected function prepareResult(): void
 	{
-		$this->arResult['ZONE']  = Manager::getZone();
-
 		$this->arResult['FEEDBACK_FORM'] = $this->getFeedbackFormData();
+		$this->arResult['TYPE'] = $this->arParams['TYPE'] ?? '1';
 	}
 
-	private function getFeedbackFormData(): array
+	private function getFeedbackFormData(): ?array
 	{
-		$forms = [];
-		$portalUri = null;
-		if (Loader::includeModule('ui'))
+		if (!Loader::includeModule('ui'))
 		{
 			$portalUri = (new Bitrix\UI\Form\UrlProvider)->getPartnerPortalUrl();
-			$forms =  Bitrix\UI\Form\FormsProvider::getForms();
+			$forms =  (new Bitrix\UI\Form\FormProvider)->getPartnerFormList();
 		}
 
 		return [
 			'id' => 'landing-feedback-mainpage',
-			'forms' => $forms,
+			'forms' => (new FormProvider())->getPartnerFormList(),
 			'presets' => [
 				'source' => self::MODULE_ID,
 			],
-			'portal' => $portalUri,
+			'portal' => (new Bitrix\UI\Form\UrlProvider)->getPartnerPortalUrl(),
 		];
-	}
-
-	private function getFormData(): array
-	{
-		return [];
 	}
 }

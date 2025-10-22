@@ -581,6 +581,8 @@ abstract class Entity
 			'OPPORTUNITY' => '',
 			'DATE_CREATE' => '',
 			'CLIENT' => '',
+			'LAST_ACTIVITY_BY_TIME' => '',
+			'LAST_ACTIVITY_BY_USER_AVATAR' => '',
 		];
 	}
 
@@ -1968,6 +1970,19 @@ abstract class Entity
 				'LABEL' =>  Loc::getMessage('CRM_KANBAN_FIELD_OPPORTUNITY_WITH_CURRENCY'),
 			];
 		}
+		elseif ($viewType === static::VIEW_TYPE_VIEW)
+		{
+			$fields['LAST_ACTIVITY_BY_TIME'] = [
+				'ID' => 'LAST_ACTIVITY_BY_TIME',
+				'NAME' => 'LAST_ACTIVITY_BY_TIME',
+				'LABEL' => Loc::getMessage('CRM_KANBAN_ENTITY_LAST_ACTIVITY_TIME'),
+			];
+			$fields['LAST_ACTIVITY_BY_USER_AVATAR'] = [
+				'ID' => 'LAST_ACTIVITY_BY_USER_AVATAR',
+				'NAME' => 'LAST_ACTIVITY_BY_USER_AVATAR',
+				'LABEL' => Loc::getMessage('CRM_KANBAN_ENTITY_LAST_ACTIVITY_USER_AVATAR'),
+			];
+		}
 
 		return $fields;
 	}
@@ -2412,15 +2427,30 @@ abstract class Entity
 			$companies = [];
 			foreach ($items as $itemId => $item)
 			{
-				if (isset($item['contactId']) && $item['contactId'] > 0)
+				if (isset($item['contactId']))
 				{
 					$contacts[$itemId] = $item['contactId'];
 				}
-				if (isset($item['companyId']) && $item['companyId'] > 0)
+				if (isset($item['companyId']))
 				{
 					$companies[$itemId] = $item['companyId'];
 				}
 			}
+
+			$accessItem = Container::getInstance()->getUserPermissions()->item();
+			$accessItem->preloadPermissionAttributes(\CCrmOwnerType::Contact, $contacts);
+			$accessItem->preloadPermissionAttributes(\CCrmOwnerType::Company, $companies);
+
+			$contacts = array_filter(
+				$contacts,
+				static fn ($contactId) => $accessItem->canRead(\CCrmOwnerType::Contact, $contactId),
+			);
+
+			$companies = array_filter(
+				$companies,
+				static fn ($companyId) => $accessItem->canRead(\CCrmOwnerType::Company, $companyId),
+			);
+
 			$items = $this->addClientMultiFieldValues($items, $allowedTypes, $contacts, \CCrmOwnerType::Contact);
 			$items = $this->addClientMultiFieldValues($items, $allowedTypes, $companies, \CCrmOwnerType::Company);
 		}

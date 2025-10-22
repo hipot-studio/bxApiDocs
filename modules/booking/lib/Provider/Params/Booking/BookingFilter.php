@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Provider\Params\Booking;
 
 use Bitrix\Booking\Entity\Booking\BookingVisitStatus;
+use Bitrix\Booking\Entity\ExternalData\ExternalDataItem;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Model\BookingClientTable;
 use Bitrix\Booking\Internals\Model\BookingResourceTable;
@@ -109,6 +110,19 @@ class BookingFilter extends Filter
 				$result->where('VISIT_STATUS', '=', $this->filter['VISIT_STATUS']);
 			}
 		}
+
+		if (isset($this->filter['SOURCE']))
+		{
+			if (is_array($this->filter['SOURCE']))
+			{
+				$result->whereIn('SOURCE', $this->filter['SOURCE']);
+			}
+			else
+			{
+				$result->where('SOURCE', '=', $this->filter['SOURCE']);
+			}
+		}
+
 
 		$this->applyIsDelayedFilter($result);
 		$this->applyHasResourcesFilter($result);
@@ -229,6 +243,20 @@ class BookingFilter extends Filter
 		else if (isset($this->filter['WITHIN']['DATE_FROM']))
 		{
 			$result->where('DATE_FROM', '>=', $this->filter['WITHIN']['DATE_FROM']);
+		}
+
+		if (
+			isset($this->filter['EXTERNAL_DATA_ITEM'])
+			&& $this->filter['EXTERNAL_DATA_ITEM'] instanceof ExternalDataItem
+		)
+		{
+			$externalDataItem = $this->filter['EXTERNAL_DATA_ITEM'];
+
+			$result
+				->where('EXTERNAL_DATA.MODULE_ID', $externalDataItem->getModuleId())
+				->where('EXTERNAL_DATA.ENTITY_TYPE_ID', $externalDataItem->getEntityTypeId())
+				->where('EXTERNAL_DATA.VALUE', $externalDataItem->getValue())
+			;
 		}
 
 		return $result;

@@ -196,13 +196,7 @@ class UserDepartmentAndOpened
 	 */
 	public function getPermissiveSettingsVariantsList(): array
 	{
-		return [
-			self::SELF,
-			self::OPEN,
-			self::SUBDEPARTMENTS,
-			self::DEPARTMENT,
-			self::ALL,
-		];
+		return $this->getVariants()->getPermissiveValues();
 	}
 
 	/**

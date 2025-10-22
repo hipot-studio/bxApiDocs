@@ -9,6 +9,7 @@ use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 
 /**
  * @method ResourceLinkedEntity[] getIterator()
+ * @method ResourceLinkedEntity getFirstCollectionItem()
  */
 class ResourceLinkedEntityCollection extends BaseEntityCollection
 {

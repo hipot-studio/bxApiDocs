@@ -7,14 +7,15 @@ use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Attribute\Access\LogicAnd;
 use Bitrix\Sign\Attribute\Access\LogicOr;
 use Bitrix\Sign\Attribute\ActionAccess;
-use Bitrix\Sign\Item\Collection;
 use Bitrix\Sign\Item\Document\TemplateCollection;
 use Bitrix\Sign\Item\Document\TemplateFolderCollection;
 use Bitrix\Sign\Item\DocumentCollection;
+use Bitrix\Sign\Item\SignersListCollection;
 use Bitrix\Sign\Repository\Document\TemplateFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\SignersListService;
 use BItrix\Sign\Type\Access\AccessibleItemType;
 
 final class AccessCheck extends Main\Engine\ActionFilter\Base
@@ -30,6 +31,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	private array $logicRules = [];
 	private readonly TemplateRepository $templateRepository;
 	private readonly TemplateFolderRepository $templateFolderRepository;
+	private readonly SignersListService $signersListService;
 
 	public function __construct()
 	{
@@ -39,6 +41,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		$this->documentRepository = Container::instance()->getDocumentRepository();
 		$this->templateRepository = Container::instance()->getDocumentTemplateRepository();
 		$this->templateFolderRepository = Container::instance()->getTemplateFolderRepository();
+		$this->signersListService = Container::instance()->getSignersListService();
 	}
 
 	public function addRuleFromAttribute(ActionAccess|LogicOr|LogicAnd $attribute): self
@@ -178,6 +181,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			AccessibleItemType::DOCUMENT => $this->getDocumentByIds($idsOrUids),
 			AccessibleItemType::TEMPLATE => $this->getTemplatesByIds($idsOrUids),
 			AccessibleItemType::TEMPLATE_FOLDER => $this->getTemplateFoldersByIds($idsOrUids),
+			AccessibleItemType::SIGNERS_LIST => $this->getSignersListsByIds($idsOrUids),
 			default => null,
 		};
 
@@ -302,6 +306,25 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		}
 
 		return new TemplateFolderCollection();
+	}
+
+	private function getSignersListsByIds(array $idsOrUids): SignersListCollection
+	{
+		$firstIdOrUid = $idsOrUids[array_key_first($idsOrUids)] ?? null;
+
+		if (empty($firstIdOrUid))
+		{
+			return new SignersListCollection();
+		}
+
+		if (is_numeric($firstIdOrUid))
+		{
+			$ids = array_map(static fn(mixed $value) => (int)$value, $idsOrUids);
+
+			return $this->signersListService->listByIds($ids);
+		}
+
+		return new SignersListCollection();
 	}
 
 	/**

@@ -171,10 +171,10 @@ class UpdateEventHandler implements CommandHandler
 		$params = [
 			'ID' => $eventId,
 			'SKIP_TIME' => $entryFields['SKIP_TIME'] ?? ($entryFields['DT_SKIP_TIME'] === 'Y'),
-			'DATE_FROM' => $entryFields['DATE_FROM'],
-			'DATE_TO' => $entryFields['DATE_TO'],
-			'TZ_FROM' => $entryFields['TZ_FROM'],
-			'TZ_TO' => $entryFields['TZ_TO'],
+			'DATE_FROM' => $command->getDateFrom(),
+			'DATE_TO' => $command->getDateTo(),
+			'TZ_FROM' => $command->getTimeZoneFrom(),
+			'TZ_TO' => $command->getTimeZoneTo(),
 		];
 		$isLocationBusy = !AccessibilityManager::checkAccessibility($command->getLocation(), ['fields' => $params]);
 		if ($isLocationBusy)

@@ -1765,16 +1765,7 @@ class CCrmDocument
 			if (!isset(static::$b24employeeGroupId))
 			{
 				$siteID = CSite::GetDefSite();
-				$dbResult = CGroup::GetList(
-					'',
-					'',
-					[
-						'STRING_ID' => 'EMPLOYEES_' . $siteID,
-						'STRING_ID_EXACT_MATCH' => 'Y',
-					]
-				);
-				$arEmployeeGroup = $dbResult->fetch();
-				static::$b24employeeGroupId = (int) ($arEmployeeGroup['ID'] ?? 0);
+				static::$b24employeeGroupId = (int)CGroup::GetIDByCode('EMPLOYEES_' . $siteID);
 			}
 
 			if(!in_array(static::$b24employeeGroupId, $arGroupsID, true))
@@ -2909,5 +2900,30 @@ class CCrmDocument
 		}
 
 		return null;
+	}
+
+	public static function getTriggerByCode(string $code, array $complexDocumentType): ?string
+	{
+		[$moduleId, $entity, $documentType] = $complexDocumentType;
+
+		$entityTypeId = CCrmOwnerType::ResolveID($documentType);
+
+		$trigger = Crm\Automation\Factory::getTriggerByCode($code);
+		if (
+			$trigger
+			&& (in_array($entityTypeId, [CCrmOwnerType::Contact, CCrmOwnerType::Company], true)
+				|| $trigger::isSupported($entityTypeId)
+			)
+		)
+		{
+			return $trigger;
+		}
+
+		return null;
+	}
+
+	public static function getStarterModuleSettings(array $complexDocumentType): ?Crm\Integration\BizProc\Starter\CrmModuleSettings
+	{
+		return new Crm\Integration\BizProc\Starter\CrmModuleSettings($complexDocumentType);
 	}
 }

@@ -10,6 +10,7 @@ class BaseTrigger
 {
 	protected $target;
 	protected $returnValues;
+	protected $inputData;
 
 	/**
 	 * @return string the fully qualified name of this class.
@@ -65,8 +66,6 @@ class BaseTrigger
 
 	public function send()
 	{
-		$this->runWorkflowTriggers();
-
 		$applied = false;
 		$triggers = $this->getPotentialTriggers();
 		if ($triggers)
@@ -84,49 +83,6 @@ class BaseTrigger
 		}
 
 		return $applied;
-	}
-
-	protected function runWorkflowTriggers(): void
-	{
-		if (
-			!\CBPRuntime::isFeatureEnabled()
-			|| !\Bitrix\Main\Config\Option::get('bizproc', 'bp_triggers', false)
-		)
-		{
-			return;
-		}
-
-		try
-		{
-			[$module, $entity, $documentType] = \CBPHelper::parseDocumentId($this->target->getDocumentType());
-		}
-		catch (\CBPArgumentNullException $exception)
-		{
-			return;
-		}
-
-		$code = static::getCode();
-		$triggers =
-			WorkflowTemplateSettingsTable::query()
-				->setSelect(['TEMPLATE', 'TEMPLATE_ID'])
-				->where('NAME', "TRIGGER_$code")
-				->where('VALUE', 'Y')
-				->where('TEMPLATE.MODULE_ID', $module)
-				->where('TEMPLATE.ENTITY', $entity)
-				->where('TEMPLATE.DOCUMENT_TYPE', $documentType)
-				->exec()
-				->fetchCollection()
-		;
-
-		if ($triggers)
-		{
-			$complexDocumentId = $this->target->getComplexDocumentId();
-			foreach ($triggers as $trigger)
-			{
-				$errors = [];
-				\CBPDocument::startWorkflow($trigger->getTemplateId(), $complexDocumentId, [], $errors);
-			}
-		}
 	}
 
 	protected function applyTrigger(array $trigger)
@@ -197,6 +153,23 @@ class BaseTrigger
 		}
 
 		return array_merge(...$triggers);
+	}
+
+	public function setInputData($data)
+	{
+		$this->inputData = $data;
+
+		return $this;
+	}
+
+	public function getInputData($key = null)
+	{
+		if ($key !== null)
+		{
+			return $this->inputData[$key] ?? null;
+		}
+
+		return $this->inputData;
 	}
 
 	public function checkApplyRules(array $trigger)

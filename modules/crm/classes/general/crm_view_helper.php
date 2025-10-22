@@ -9,6 +9,7 @@ use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Color\PhaseColorScheme;
 use Bitrix\Crm\Conversion\LeadConversionType;
 use Bitrix\Crm\Integration\OpenLineManager;
+use Bitrix\Crm\ItemMiniCard\Builder\MiniCardHtmlBuilder;
 use Bitrix\Crm\Order;
 use Bitrix\Crm\RepeatSale\Segment\DataFormatter;
 use Bitrix\Crm\Security\StagePermissions;
@@ -37,102 +38,30 @@ class CCrmViewHelper
 	{
 		return self::PrepareEntityBaloonHtml($arParams);
 	}
+
 	public static function PrepareEntityBaloonHtml($arParams)
 	{
-		if(!is_array($arParams))
+		if (!is_array($arParams))
 		{
 			return '';
 		}
 
-		$entityTypeID = isset($arParams['ENTITY_TYPE_ID']) ? intval($arParams['ENTITY_TYPE_ID']) : 0;
-		$entityID = isset($arParams['ENTITY_ID']) ? intval($arParams['ENTITY_ID']) : 0;
-		$prefix = isset($arParams['PREFIX']) ? $arParams['PREFIX'] : '';
-		$className = isset($arParams['CLASS_NAME']) ? $arParams['CLASS_NAME'] : '';
+		$entityTypeID = isset($arParams['ENTITY_TYPE_ID']) ? (int)$arParams['ENTITY_TYPE_ID'] : 0;
+		$entityID = isset($arParams['ENTITY_ID']) ? (int)$arParams['ENTITY_ID'] : 0;
+		$className = $arParams['CLASS_NAME'] ?? '';
+		$isCheckPermissions = ($arParams['CHECK_PERMISSIONS'] ?? null) === 'N';
 
 		if($entityTypeID <= 0 || $entityID <= 0)
 		{
 			return '';
 		}
 
-		$showPath = isset($arParams['SHOW_URL']) ? $arParams['SHOW_URL'] : '';
-
-		if($entityTypeID === CCrmOwnerType::Company)
-		{
-			if($showPath === '')
-			{
-				$showPath = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Company, $entityID, false);
-			}
-
-			$title = isset($arParams['TITLE']) ? $arParams['TITLE'] : '';
-			if($title === '')
-			{
-				$title = CCrmOwnerType::GetCaption(CCrmOwnerType::Company, $entityID, (isset($arParams['CHECK_PERMISSIONS']) && $arParams['CHECK_PERMISSIONS'] == 'N' ? false : true));
-			}
-
-			return '<a href="'.htmlspecialcharsbx($showPath).'"'.($className !== '' ? ' class="'.htmlspecialcharsbx($className).'"' : '').' bx-tooltip-user-id="COMPANY_'.$entityID.'" bx-tooltip-loader="'.htmlspecialcharsbx('/bitrix/components/bitrix/crm.company.show/card.ajax.php').'" bx-tooltip-classname="crm_balloon_company">'.htmlspecialcharsbx($title).'</a>';
-		}
-		elseif($entityTypeID === CCrmOwnerType::Contact)
-		{
-			if($showPath === '')
-			{
-				$showPath = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Contact, $entityID, false);
-			}
-
-			$title = isset($arParams['TITLE']) ? $arParams['TITLE'] : '';
-			if($title === '')
-			{
-				$title = CCrmOwnerType::GetCaption(CCrmOwnerType::Contact, $entityID, (isset($arParams['CHECK_PERMISSIONS']) && $arParams['CHECK_PERMISSIONS'] == 'N' ? false : true));
-			}
-
-			return '<a href="'.htmlspecialcharsbx($showPath).'"'.($className !== '' ? ' class="'.htmlspecialcharsbx($className).'"' : '').' bx-tooltip-user-id="CONTACT_'.$entityID.'" bx-tooltip-loader="'.htmlspecialcharsbx('/bitrix/components/bitrix/crm.contact.show/card.ajax.php').'" bx-tooltip-classname="crm_balloon_contact">'.htmlspecialcharsbx($title).'</a>';
-		}
-		elseif($entityTypeID === CCrmOwnerType::Lead)
-		{
-			if($showPath === '')
-			{
-				$showPath = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Lead, $entityID, false);
-			}
-
-			$title = isset($arParams['TITLE']) ? $arParams['TITLE'] : '';
-			if($title === '')
-			{
-				$title = CCrmOwnerType::GetCaption(CCrmOwnerType::Lead, $entityID, (isset($arParams['CHECK_PERMISSIONS']) && $arParams['CHECK_PERMISSIONS'] == 'N' ? false : true));
-			}
-
-			return '<a href="'.htmlspecialcharsbx($showPath).'" '.($className !== '' ? ' class="'.htmlspecialcharsbx($className).'"' : '').' bx-tooltip-user-id="LEAD_'.$entityID.'" bx-tooltip-loader="'.htmlspecialcharsbx('/bitrix/components/bitrix/crm.lead.show/card.ajax.php').'" bx-tooltip-classname="crm_balloon_no_photo">'.htmlspecialcharsbx($title).'</a>';
-		}
-		elseif($entityTypeID === CCrmOwnerType::Deal)
-		{
-			if($showPath === '')
-			{
-				$showPath = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Deal, $entityID, false);
-			}
-
-			$title = isset($arParams['TITLE']) ? $arParams['TITLE'] : '';
-			if($title === '')
-			{
-				$title = CCrmOwnerType::GetCaption(CCrmOwnerType::Deal, $entityID, (isset($arParams['CHECK_PERMISSIONS']) && $arParams['CHECK_PERMISSIONS'] == 'N' ? false : true));
-			}
-
-			return '<a href="'.htmlspecialcharsbx($showPath).'" '.($className !== '' ? ' class="'.htmlspecialcharsbx($className).'"' : '').' bx-tooltip-user-id="DEAL_'.$entityID.'" bx-tooltip-loader="'.htmlspecialcharsbx('/bitrix/components/bitrix/crm.deal.show/card.ajax.php').'" bx-tooltip-classname="crm_balloon_no_photo">'.htmlspecialcharsbx($title).'</a>';
-
-		}
-		elseif($entityTypeID === CCrmOwnerType::Quote)
-		{
-			if($showPath === '')
-			{
-				$showPath = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Quote, $entityID, false);
-			}
-
-			$title = isset($arParams['TITLE']) ? $arParams['TITLE'] : '';
-			if($title === '')
-			{
-				$title = CCrmOwnerType::GetCaption(CCrmOwnerType::Quote, $entityID, (isset($arParams['CHECK_PERMISSIONS']) && $arParams['CHECK_PERMISSIONS'] == 'N' ? false : true));
-			}
-
-			return '<a href="'.htmlspecialcharsbx($showPath).'" '.($className !== '' ? ' class="'.htmlspecialcharsbx($className).'"' : '').' bx-tooltip-user-id="QUOTE_'.$entityID.'" bx-tooltip-loader="'.htmlspecialcharsbx('/bitrix/components/bitrix/crm.quote.show/card.ajax.php').'" bx-tooltip-classname="crm_balloon_no_photo">'.htmlspecialcharsbx($title).'</a>';
-		}
-		return '';
+		return (new MiniCardHtmlBuilder($entityTypeID, $entityID))
+			->setTitle($arParams['TITLE'] ?? '')
+			->setLinkClassName($className)
+			->setIsRenderScript($arParams['IS_RENDER_SCRIPT'] ?? true)
+			->build()
+		;
 	}
 
 	public static function PrepareUserBaloonHtml($arParams)

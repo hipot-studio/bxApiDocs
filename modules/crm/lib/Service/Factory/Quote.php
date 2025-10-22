@@ -625,7 +625,7 @@ class Quote extends Factory
 		return true;
 	}
 
-	public function isBizProcEnabled(): bool
+	public function isBizProcSupported(): bool
 	{
 		return true;
 	}

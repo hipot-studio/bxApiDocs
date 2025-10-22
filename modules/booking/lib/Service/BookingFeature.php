@@ -15,9 +15,16 @@ final class BookingFeature
 	private const FEATURE_ID = 'booking';
 	private const TRIAL_DAYS = 30;
 
+	/**
+	 * @return bool
+	 *
+	 * @deprecated
+	 *
+	 * Keep the method to avoid dependency on intranet 25.1300.0
+	 */
 	public static function isOn(): bool
 	{
-		return self::isOptionEnabled();
+		return true;
 	}
 
 	public static function isFeatureEnabled(): bool
@@ -76,17 +83,7 @@ final class BookingFeature
 		]);
 		Feature::trialFeature(self::FEATURE_ID);
 
-		Feature::setFeatureTrialable('notifications', [
-			'days' => self::TRIAL_DAYS,
-		]);
-		Feature::trialFeature('notifications');
-
 		self::setTrialOption();
-	}
-
-	private static function isOptionEnabled(): bool
-	{
-		return true;
 	}
 
 	private static function setTrialOption(): void

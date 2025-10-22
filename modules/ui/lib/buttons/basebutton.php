@@ -35,6 +35,8 @@ class BaseButton implements Contract\Renderable
 	protected $link;
 	/** @var integer|string */
 	protected $counter;
+	/** @var CounterStyle */
+	protected $counterStyle;
 	/** @var array */
 	protected $events = [];
 	/** @var ButtonAttributes */
@@ -112,6 +114,11 @@ class BaseButton implements Contract\Renderable
 		if (!empty($params['counter']))
 		{
 			$this->setCounter($params['counter']);
+		}
+
+		if (!empty($params['counterStyle']))
+		{
+			$this->setCounterStyle($params['counterStyle']);
 		}
 
 		if (!empty($params['id']))
@@ -258,9 +265,10 @@ class BaseButton implements Contract\Renderable
 
 			if ($counter !== null)
 			{
+				$counterStyle = $this->getCounterStyle() ?? CounterStyle::FILLED_ALERT;
 				$counter = new Counter(
 					useAirDesign: true,
-					style: CounterStyle::FILLED_ALERT,
+					style: $counterStyle,
 					value: (int)$counter,
 				);
 
@@ -641,5 +649,34 @@ class BaseButton implements Contract\Renderable
 		unset($this->events);
 
 		return $this;
+	}
+
+	/**
+	 * @return $this
+	 */
+	public function setCounterStyle(CounterStyle | string $style): self
+	{
+		if ($style instanceof CounterStyle)
+		{
+			$this->counterStyle = $style;
+			return $this;
+		}
+
+		$styleFromEnum = CounterStyle::tryFrom($style);
+
+		if (!is_null($styleFromEnum))
+		{
+			$this->counterStyle = $styleFromEnum;
+			return $this;
+		}
+
+		$this->counterStyle = CounterStyle::FILLED_ALERT;
+
+		return $this;
+	}
+
+	public function getCounterStyle(): ?CounterStyle
+	{
+		return $this->counterStyle;
 	}
 }

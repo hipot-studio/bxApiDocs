@@ -11,8 +11,12 @@ class BillingSynchronizationService
 {
 	use Baas\Internal\Trait\SingletonConstructor;
 
+	private const LOCK_NAME = 'baas_sync_where_appropriate';
+	private const LOCK_LIMIT = 0;
+
 	private Baas\Config\Client $configs;
 	private Baas\Service\BillingService $billingService;
+	private PurchaseService $purchaseService;
 
 	private static bool $synchronized = false;
 
@@ -27,13 +31,33 @@ class BillingSynchronizationService
 
 	public function syncIfNeeded(): Main\Result
 	{
+		$result = new Main\Result();
 		if (self::$synchronized === false && $this->isTimeToSynchronize())
 		{
 			self::$synchronized = true;
-			return $this->sync();
+
+			try
+			{
+				$connection = Main\Application::getConnection();
+				$locked = $connection->lock(
+					self::LOCK_NAME,
+					self::LOCK_LIMIT,
+				);
+				if ($locked && $this->isTimeToSynchronize())
+				{
+					$result = $this->sync();
+				}
+			}
+			finally
+			{
+				if (isset($connection) && isset($locked) && $locked)
+				{
+					$connection->unlock(self::LOCK_NAME);
+				}
+			}
 		}
 
-		return new Main\Result();
+		return $result;
 	}
 
 	public function sync(): Main\Result
@@ -41,6 +65,8 @@ class BillingSynchronizationService
 		try
 		{
 			$syncResult = $this->billingService->synchronizeWithBilling();
+
+			PurchaseService::getInstance()->notifyAboutUnnotifiedPurchases();
 		}
 		catch (Baas\UseCase\BaasException $e)
 		{

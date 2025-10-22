@@ -6,6 +6,7 @@ use Bitrix\Crm\Service\UserPermissions\Helper\Payment;
 use Bitrix\Crm\Service\UserPermissions\Helper\Shipment;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Crm\Service\UserPermissions\Helper\Check;
+use Bitrix\Crm\ItemIdentifier;
 
 /**
  * @internal
@@ -28,23 +29,40 @@ final class SaleEntityItem
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		return $entityType->canAddItems(\CCrmOwnerType::Order); // always check permissions for order
+		return
+			\CCrmSaleHelper::isWithOrdersMode()
+				? $entityType->canAddItems(\CCrmOwnerType::Order)
+				: $entityType->canAddItems(\CCrmOwnerType::Deal)
+		;
 	}
 
-	public function canUpdate(Item $item, int $entityTypeId, int $id): bool
+	public function canUpdate(Item $item, Type $entityType, int $entityTypeId, int $id): bool
 	{
 		if (!self::isSaleEntity($entityTypeId))
 		{
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		$orderId = $this->getOrderIdByEntityId($entityTypeId, $id);
-		if ($orderId <= 0)
+		if (\CCrmSaleHelper::isWithOrdersMode())
 		{
-			return false;
-		}
+			$orderId = $this->getOrderIdByEntityId($entityTypeId, $id);
+			if ($orderId <= 0)
+			{
+				return false;
+			}
 
-		return $item->canUpdate(\CCrmOwnerType::Order, $orderId);
+			return $item->canUpdate(\CCrmOwnerType::Order, $orderId);
+		}
+		else
+		{
+			$identifier = $this->getBoundIdentifierByEntityId($entityTypeId, $id);
+			if (!$identifier) // order without bindings
+			{
+				return $entityType->canUpdateItems(\CCrmOwnerType::Deal);
+			}
+
+			return $item->canUpdateItemIdentifier($identifier);
+		}
 	}
 
 	public function canUpdateItems(Type $entityType, int $entityTypeId): bool
@@ -54,23 +72,40 @@ final class SaleEntityItem
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		return $entityType->canUpdateItems(\CCrmOwnerType::Order);
+		return
+			\CCrmSaleHelper::isWithOrdersMode()
+				? $entityType->canUpdateItems(\CCrmOwnerType::Order)
+				: $entityType->canUpdateItems(\CCrmOwnerType::Deal)
+			;
 	}
 
-	public function canRead(Item $item, int $entityTypeId, int $id): bool
+	public function canRead(Item $item, Type $entityType, int $entityTypeId, int $id): bool
 	{
 		if (!self::isSaleEntity($entityTypeId))
 		{
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		$orderId = $this->getOrderIdByEntityId($entityTypeId, $id);
-		if ($orderId <= 0)
+		if (\CCrmSaleHelper::isWithOrdersMode())
 		{
-			return false;
-		}
+			$orderId = $this->getOrderIdByEntityId($entityTypeId, $id);
+			if ($orderId <= 0)
+			{
+				return false;
+			}
 
-		return $item->canRead(\CCrmOwnerType::Order, $orderId);
+			return $item->canRead(\CCrmOwnerType::Order, $orderId);
+		}
+		else
+		{
+			$identifier = $this->getBoundIdentifierByEntityId($entityTypeId, $id);
+			if (!$identifier) // order without bindings
+			{
+				return $entityType->canReadItems(\CCrmOwnerType::Deal);
+			}
+
+			return $item->canReadItemIdentifier($identifier);
+		}
 	}
 
 	public function canReadItems(Type $entityType, int $entityTypeId): bool
@@ -80,23 +115,39 @@ final class SaleEntityItem
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		return $entityType->canReadItems(\CCrmOwnerType::Order);
+		return \CCrmSaleHelper::isWithOrdersMode()
+			? $entityType->canReadItems(\CCrmOwnerType::Order)
+			: $entityType->canReadItems(\CCrmOwnerType::Deal)
+		;
 	}
 
-	public function canDelete(Item $item, int $entityTypeId, int $id): bool
+	public function canDelete(Item $item, Type $entityType, int $entityTypeId, int $id): bool
 	{
 		if (!self::isSaleEntity($entityTypeId))
 		{
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		$orderId = $this->getOrderIdByEntityId($entityTypeId, $id);
-		if ($orderId <= 0)
+		if (\CCrmSaleHelper::isWithOrdersMode())
 		{
-			return false;
-		}
+			$orderId = $this->getOrderIdByEntityId($entityTypeId, $id);
+			if ($orderId <= 0)
+			{
+				return false;
+			}
 
-		return $item->canDelete(\CCrmOwnerType::Order, $orderId);
+			return $item->canDelete(\CCrmOwnerType::Order, $orderId);
+		}
+		else
+		{
+			$identifier = $this->getBoundIdentifierByEntityId($entityTypeId, $id);
+			if (!$identifier) // order without bindings
+			{
+				return $entityType->canDeleteItems(\CCrmOwnerType::Deal);
+			}
+
+			return $item->canDeleteItemIdentifier($identifier);
+		}
 	}
 
 	public function canDeleteItems(Type $entityType, int $entityTypeId): bool
@@ -106,7 +157,10 @@ final class SaleEntityItem
 			throw new ArgumentOutOfRangeException('entityTypeId', self::SALE_ENTITIES);
 		}
 
-		return$entityType->canDeleteItems(\CCrmOwnerType::Order);
+		return \CCrmSaleHelper::isWithOrdersMode()
+			? $entityType->canDeleteItems(\CCrmOwnerType::Order)
+			: $entityType->canDeleteItems(\CCrmOwnerType::Deal)
+		;
 	}
 
 	private function getOrderIdByEntityId(int $entityTypeId, int $id): int
@@ -117,6 +171,17 @@ final class SaleEntityItem
 			\CCrmOwnerType::OrderShipment => Shipment::getOrderIdByShipmentId($id),
 			\CCrmOwnerType::OrderCheck => Check::getOrderIdByCheckId($id),
 			default => 0,
+		};
+	}
+
+	private function getBoundIdentifierByEntityId(int $entityTypeId, int $id): ?ItemIdentifier
+	{
+		return match($entityTypeId)
+		{
+			\CCrmOwnerType::OrderPayment => Payment::getBoundIdentifierByEntityId($id),
+			\CCrmOwnerType::OrderShipment => Shipment::getBoundIdentifierByEntityId($id),
+			\CCrmOwnerType::OrderCheck => Check::getBoundIdentifierByEntityId($id),
+			default => null,
 		};
 	}
 }

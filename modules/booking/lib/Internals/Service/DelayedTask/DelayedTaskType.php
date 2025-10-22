@@ -6,5 +6,5 @@ namespace Bitrix\Booking\Internals\Service\DelayedTask;
 
 enum DelayedTaskType: string
 {
-	case ResourceLinkedEntitiesChanged = 'resourceLinkedEntitiesChanged';
+	case ResourceCalendarDataChanged = 'resourceCalendarDataChanged';
 }

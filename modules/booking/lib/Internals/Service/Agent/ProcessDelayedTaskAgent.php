@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\Agent;
 
-use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
+use Bitrix\Booking\Internals\Container;
 
 class ProcessDelayedTaskAgent
 {
 	public static function execute(): string
 	{
-		(new DelayedTaskService())->processPending();
+		Container::getDelayedTaskService()->processPending();
 
 		return '\\' . self::class . '::execute();';
 	}

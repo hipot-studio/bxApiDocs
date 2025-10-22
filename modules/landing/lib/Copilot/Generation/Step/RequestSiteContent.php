@@ -14,6 +14,7 @@ use Bitrix\Landing\Copilot\Generation\PromptGenerator;
 use Bitrix\Landing\Copilot\Generation\PromptTemplateProvider;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\Web;
 use Exception;
 
@@ -42,6 +43,11 @@ class RequestSiteContent extends RequestSingle
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto
 	{
 		return new RequestQuotaDto(self::getConnectorClass(), 1);
+	}
+
+	public function getAnalyticEvent(): ?Metrika\Events
+	{
+		return Metrika\Events::textsGeneration;
 	}
 
 	/**
@@ -206,7 +212,7 @@ class RequestSiteContent extends RequestSingle
 
 				if ($countPromptTexts !== $countPlaceholders)
 				{
-					$diffCount =  $countPlaceholders - $countPromptTexts;
+					$diffCount = $countPlaceholders - $countPromptTexts;
 					if ($diffCount > 0)
 					{
 						for ($i = 0; $i < $diffCount; $i++)

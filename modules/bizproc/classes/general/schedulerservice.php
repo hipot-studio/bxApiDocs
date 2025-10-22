@@ -361,17 +361,16 @@ class CBPSchedulerService extends CBPRuntimeService
 		}
 		catch (Exception $e)
 		{
-			if ($e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_NOT_FOUND)
+			if (
+				$e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_NOT_FOUND
+				|| $e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED
+			)
 			{
 				SchedulerEventTable::delete($event['ID']);
 			}
 			elseif ($e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_LOCKED)
 			{
 				self::addEventRepeatAgent($event, $counter);
-			}
-			else if ($e->getCode() === \CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED)
-			{
-				throw $e;
 			}
 			else
 			{

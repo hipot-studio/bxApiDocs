@@ -487,9 +487,74 @@ class ItemDataProvider extends EntityDataProvider
 			];
 		}
 
+		if ($this->factory->isRecurringMode())
+		{
+			$this->appendRecurringFields($fields);
+		}
+
 		$this->addParentFieldsInfo($fields);
 
 		return $fields;
+	}
+
+	protected function appendRecurringFields(array &$fields): void
+	{
+		$fields[Item::FIELD_NAME_RECURRING_ACTIVE] = [
+			'type' => static::TYPE_BOOLEAN,
+			'displayGrid' => true,
+			'displayFilter' => true,
+			'defaultGrid' => true,
+			'defaultFilter' => false,
+			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_ACTIVE_TITLE'),
+			'filterOptionPreset' => static::PRESET_BOOLEAN,
+		];
+
+		$code = 'CRM_FILTER_ITEMDATAPROVIDER_RECURRING_COUNTER_REPEAT';
+		if ($this->getEntityTypeId() === \CCrmOwnerType::SmartInvoice)
+		{
+			$code .= '_INVOICE';
+		}
+
+		$fields[Item::FIELD_NAME_RECURRING_COUNTER_REPEAT] = [
+			'type' => static::TYPE_NUMBER,
+			'displayGrid' => true,
+			'displayFilter' => true,
+			'defaultGrid' => true,
+			'defaultFilter' => false,
+			'customCaption' => Loc::getMessage($code),
+		];
+		$fields[Item::FIELD_NAME_RECURRING_NEXT_EXECUTION] = [
+			'type' => static::TYPE_DATE,
+			'displayGrid' => true,
+			'displayFilter' => true,
+			'defaultGrid' => true,
+			'defaultFilter' => false,
+			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_NEXT_EXECUTION'),
+		];
+		$fields[Item::FIELD_NAME_RECURRING_START_DATE] = [
+			'type' => static::TYPE_DATE,
+			'displayGrid' => true,
+			'displayFilter' => true,
+			'defaultGrid' => true,
+			'defaultFilter' => false,
+			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_START_DATE'),
+		];
+		$fields[Item::FIELD_NAME_RECURRING_LIMIT_DATE] = [
+			'type' => static::TYPE_DATE,
+			'displayGrid' => true,
+			'displayFilter' => true,
+			'defaultGrid' => true,
+			'defaultFilter' => false,
+			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_LIMIT_DATE'),
+		];
+		$fields[Item::FIELD_NAME_RECURRING_LIMIT_REPEAT] = [
+			'type' => static::TYPE_NUMBER,
+			'displayGrid' => true,
+			'displayFilter' => true,
+			'defaultGrid' => true,
+			'defaultFilter' => false,
+			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_LIMIT_REPEAT'),
+		];
 	}
 
 	/**

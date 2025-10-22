@@ -72,6 +72,19 @@ class BaseEntityCollection implements \IteratorAggregate, Arrayable, \Countable
 		return array_unique($result);
 	}
 
+	public function getByEntityId(int|string $id): EntityInterface|null
+	{
+		foreach ($this->collectionItems as $entity)
+		{
+			if ($entity->getId() === $id)
+			{
+				return $entity;
+			}
+		}
+
+		return null;
+	}
+
 	protected function baseDiff(BaseEntityCollection $collectionToCompare): array
 	{
 		return array_udiff(

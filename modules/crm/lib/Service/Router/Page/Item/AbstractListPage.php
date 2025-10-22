@@ -8,7 +8,6 @@ use Bitrix\Crm\Service\Router\Contract;
 use Bitrix\Crm\Service\Router\Enum\Scope;
 use Bitrix\Crm\Service\Router\PageValidator\EntityTypeAvailabilityValidator;
 use Bitrix\Main\HttpRequest;
-use Bitrix\Main\Request;
 
 abstract class AbstractListPage extends AbstractPage
 {

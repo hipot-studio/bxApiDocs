@@ -55,6 +55,7 @@ class Booking implements
 	private Booking|null $parent = null;
 
 	private BookingVisitStatus|null $visitStatus = null;
+	private BookingSource|null $source = null;
 
 	private int|null $createdBy = null;
 	private int|null $createdAt = null;
@@ -143,7 +144,7 @@ class Booking implements
 		return $url ?? '#';
 	}
 
-	public function setClientCollection(ClientCollection $clientCollection): Booking
+	public function setClientCollection(ClientCollection $clientCollection): self
 	{
 		$this->clientCollection = $clientCollection;
 
@@ -360,6 +361,18 @@ class Booking implements
 		return $this;
 	}
 
+	public function getSource(): BookingSource
+	{
+		return $this->source ?? BookingSource::Internal;
+	}
+
+	public function setSource(BookingSource $source): self
+	{
+		$this->source = $source;
+
+		return $this;
+	}
+
 	public function isDelayed(): bool
 	{
 		$now = time();
@@ -412,6 +425,7 @@ class Booking implements
 			'counters' => $this->counters,
 			'note' => $this->note,
 			'visitStatus' => $this->getVisitStatus()->value,
+			'source' => $this->getSource()->value,
 		];
 	}
 
@@ -517,6 +531,15 @@ class Booking implements
 			$result->setVisitStatus(
 				BookingVisitStatus::tryFrom(
 					(string)$props['visitStatus']
+				)
+			);
+		}
+
+		if (isset($props['source']))
+		{
+			$result->setSource(
+				BookingSource::tryFrom(
+					(string)$props['source']
 				)
 			);
 		}

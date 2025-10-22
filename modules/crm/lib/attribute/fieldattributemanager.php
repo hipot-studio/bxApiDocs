@@ -952,8 +952,16 @@ class FieldAttributeManager
 			return;
 		}
 
+		$ufEntityId = $fields['ENTITY_ID'] ?? '';
+		$entityTypeId = CCrmOwnerType::ResolveIDByUFEntityID($ufEntityId);
+		if (!$entityTypeId)
+		{
+			return;
+		}
+
 		$filter = [
 			'=FIELD_NAME' => $fieldName,
+			'=ENTITY_TYPE_ID' => $entityTypeId,
 		];
 		self::delete($filter);
 	}

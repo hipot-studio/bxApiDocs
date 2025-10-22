@@ -6940,9 +6940,6 @@ class CAllCrmActivity
 				"DELETE FROM {$tableName} WHERE USER_ID = {$userID} AND OWNER_TYPE_ID = {$ownerTypeID} AND OWNER_ID = {$ownerID}"
 			);
 		}
-
-		$counter = new CCrmUserCounter($userID, CCrmUserCounter::CurrentActivies);
-		$counter->Synchronize();
 	}
 	public static function MakeRawFiles($storageTypeID, array $arFileIDs)
 	{

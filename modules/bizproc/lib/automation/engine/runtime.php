@@ -229,7 +229,6 @@ class Runtime
 	/**
 	 * Document creation handler.
 	 *
-	 * @return void
 	 * @throws InvalidOperationException
 	 */
 	public function onDocumentAdd(?Context $context = null)
@@ -256,13 +255,12 @@ class Runtime
 			$this->writeCategoryTracking($preGeneratedWorkflowId);
 		}
 
-		$this->runDocumentStatus($preGeneratedWorkflowId);
+		return $this->runDocumentStatus($preGeneratedWorkflowId);
 	}
 
 	/**
 	 * Document status changed handler.
 	 *
-	 * @return void
 	 * @throws InvalidOperationException
 	 */
 	public function onDocumentStatusChanged()
@@ -288,7 +286,7 @@ class Runtime
 			}
 		}
 
-		$this->runDocumentStatus($preGeneratedWorkflowId);
+		return $this->runDocumentStatus($preGeneratedWorkflowId);
 	}
 
 	public function runDocumentStatus(string $preGeneratedWorkflowId = null): ?string

@@ -6,6 +6,6 @@ namespace Bitrix\Booking\Internals\Model\Enum;
 
 enum ResourceLinkedEntityType: string
 {
-	case User = 'user';
 	case Sku = 'sku';
+	case Calendar = 'calendar';
 }

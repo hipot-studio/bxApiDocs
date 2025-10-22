@@ -82,7 +82,7 @@ class Item
 		}
 		if (SaleEntityItem::isSaleEntity($itemIdentifier->getEntityTypeId()))
 		{
-			return $this->saleEntityItem->canRead($this, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
+			return $this->saleEntityItem->canRead($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 		}
 
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_READ);
@@ -101,7 +101,7 @@ class Item
 		}
 		if (SaleEntityItem::isSaleEntity($itemIdentifier->getEntityTypeId()))
 		{
-			return $this->saleEntityItem->canUpdate($this, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
+			return $this->saleEntityItem->canUpdate($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 		}
 
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_UPDATE);
@@ -120,7 +120,7 @@ class Item
 		}
 		if (SaleEntityItem::isSaleEntity($itemIdentifier->getEntityTypeId()))
 		{
-			return $this->saleEntityItem->canDelete($this, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
+			return $this->saleEntityItem->canDelete($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 		}
 
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_DELETE);

@@ -3,7 +3,6 @@
 namespace Bitrix\Crm\Integration\Rest\Configuration\Entity;
 
 use Bitrix\Crm\Integration\Rest\Configuration\Helper;
-use Bitrix\Crm\Service\Container;
 use Bitrix\Rest;
 use Bitrix\Crm;
 use CCrmOwnerType;
@@ -20,6 +19,7 @@ class WebForm
 
 	private $accessManifest = [
 		'crm_form',
+		'automated_solution',
 	];
 
 	/**
@@ -37,35 +37,6 @@ class WebForm
 		return self::$instance;
 	}
 
-	private function getDynamicTypeCustomSectionIdBySchemeValue(int $schemeValue): int
-	{
-		$result = 0;
-
-		$dynamicEntityTypeId = $this->getDynamicEntityTypeIdBySchemeValue($schemeValue);
-		if (
-			CCrmOwnerType::IsDefined($dynamicEntityTypeId)
-			&& CCrmOwnerType::isPossibleDynamicTypeId($dynamicEntityTypeId)
-		)
-		{
-			$type = Container::getInstance()->getTypeByEntityTypeId($dynamicEntityTypeId);
-			if ($type)
-			{
-				$customSectionId = $type->getCustomSectionId();
-				if ($customSectionId > 0)
-				{
-					$result = $customSectionId;
-				}
-			}
-		}
-
-		return $result;
-	}
-
-	private function getDynamicTypeCustomSectionIdByFormOptions(array $formOptions): int
-	{
-		return $this->getDynamicTypeCustomSectionIdBySchemeValue($this->getSchemeValue($formOptions));
-	}
-
 	/**
 	 * Export.
 	 *
@@ -80,9 +51,19 @@ class WebForm
 		}
 
 		$helper = new Helper();
+
+		if (!$helper->checkAutomatedSolutionModeExportParams($option))
+		{
+			return null;
+		}
+
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($option);
+
 		$content = [
 			'list' => [],
-			'dynamicTypesInfo' => $helper->exportCrmDynamicTypesInfo(),
+			'dynamicTypesInfo' => $helper->exportCrmDynamicTypesInfo(
+				['automatedSolutionModeParams' => $automatedSolutionModeParams]
+			),
 		];
 		$list = Crm\WebForm\Internals\FormTable::getDefaultTypeList([
 			'select' => ['ID'],
@@ -93,10 +74,21 @@ class WebForm
 		]);
 		foreach ($list as $item)
 		{
-			$options = self::cleanFormOptions(Crm\WebForm\Options::create($item['ID'])->getArray());
-			if ($this->getDynamicTypeCustomSectionIdByFormOptions($options) <= 0)
+			$formOptions = Crm\WebForm\Options::create($item['ID'])->getArray();
+			$formOptions = self::cleanFormOptions($formOptions);
+
+			if (
+				$helper->checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						$helper->getDynamicTypeCheckExportParamsByEntityTypeId(
+							$this->getDynamicEntityTypeIdBySchemeValue($this->getSchemeValue($formOptions))
+						)
+					)
+				)
+			)
 			{
-				$content['list'][] = $options;
+				$content['list'][] = $formOptions;
 			}
 		}
 
@@ -119,7 +111,18 @@ class WebForm
 			return null;
 		}
 
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeClearParams($option))
+		{
+			return null;
+		}
+
 		$result = [];
+
+		$helper = new Helper();
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($option);
+
+
 		if ($option['CLEAR_FULL'])
 		{
 			$list = Crm\WebForm\Internals\FormTable::getDefaultTypeList([
@@ -130,7 +133,16 @@ class WebForm
 			]);
 			foreach ($list as $item)
 			{
-				if ($this->getDynamicTypeCustomSectionIdBySchemeValue((int)($item['ENTITY_SCHEME'] ?? 0)) <= 0)
+				if (
+					$helper->checkDynamicTypeExportConditions(
+						array_merge(
+							$automatedSolutionModeParams,
+							$helper->getDynamicTypeCheckExportParamsByEntityTypeId(
+								$this->getDynamicEntityTypeIdBySchemeValue((int)($item['ENTITY_SCHEME'] ?? 0))
+							)
+						)
+					)
+				)
 				{
 					Crm\WebForm\Form::delete($item['ID']);
 				}
@@ -153,7 +165,14 @@ class WebForm
 			return null;
 		}
 
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeImportParams($import))
+		{
+			return null;
+		}
+
 		$result = [];
+
 		if(empty($import['CONTENT']['DATA']))
 		{
 			return $result;
@@ -168,6 +187,16 @@ class WebForm
 		foreach ($data['list'] as $options)
 		{
 			$options = self::cleanFormOptions($options);
+
+			$newDynamicEntityTypeId = $this->getNewDynamicEntityTypeIdByScheme($options, $import);
+			if (
+				$newDynamicEntityTypeId > 0
+				&& !$helper->checkDynamicTypeImportConditions($newDynamicEntityTypeId, $import)
+			)
+			{
+				continue;
+			}
+
 			$options = $this->prepareFormOptions($options, $import);
 			$options = Crm\WebForm\Options::createFromArray($options);
 			$options->getForm()->merge([

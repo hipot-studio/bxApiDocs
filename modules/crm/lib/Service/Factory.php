@@ -49,6 +49,7 @@ abstract class Factory
 	protected $userType;
 	protected $editorAdapter;
 	protected $isParentFieldsAdded = false;
+	protected bool $isRecurringMode = false;
 	protected $itemsCategoryCache = [];
 	private array $itemsStageCache = [];
 
@@ -200,6 +201,16 @@ abstract class Factory
 			$item->addImplementation(new Item\FieldImplementation\File($entityObject, $fileFields, $this->getFieldsMap()));
 		}
 
+		if ($this->isRecurringEnabled())
+		{
+			$item->addImplementation(
+				new Item\FieldImplementation\Recurring(
+					$this->getEntityTypeId(),
+					$item->getId(),
+				),
+			);
+		}
+
 		if ($item->isCategoriesSupported())
 		{
 			$item->refreshCategoryDependentDisabledFields();
@@ -268,6 +279,7 @@ abstract class Factory
 			EditorAdapter::FIELD_UTM => Loc::getMessage('CRM_COMMON_UTM'),
 			EditorAdapter::FIELD_LAST_COMMUNICATION => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_LAST_COMMUNICATION_TIME'),
 			EditorAdapter::FIELD_REPEAT_SALE_SEGMENT_ID => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_REPEAT_SALE_SEGMENT_ID'),
+			Item::FIELD_NAME_RECURRING => Loc::getMessage('CRM_TYPE_DYNAMIC_FIELD_RECURRING'),
 		];
 	}
 
@@ -522,9 +534,10 @@ abstract class Factory
 			{
 				$categoryIDs = (array)($operationInfo['CONDITION']);
 
-				foreach($categoryIDs as $categoryId)
+				foreach ($categoryIDs as $categoryId)
 				{
-					if($categoryId >= 0)
+					$categoryId = (int)$categoryId;
+					if ($categoryId >= 0)
 					{
 						$entityTypes[] = $permissionEntityTypeHelper->getPermissionEntityTypeForCategory($categoryId);
 					}
@@ -610,6 +623,11 @@ abstract class Factory
 
 		$params = $this->replaceCommonFieldNames(['filter' => $filter]);
 		$normalizedFilter = $params['filter'] ?? [];
+
+		if ($this->isRecurringEnabled())
+		{
+			$normalizedFilter['IS_RECURRING'] = 'N';
+		}
 
 		$cache = [];
 		if ($ttl > 0)
@@ -759,7 +777,9 @@ abstract class Factory
 			$select[] = Item::FIELD_NAME_PRODUCTS . '.PRODUCT_ROW_RESERVATION';
 		}
 
-		return $select;
+		$selectWithoutRecurring = array_diff($select, [Item::FIELD_NAME_RECURRING]);
+
+		return $selectWithoutRecurring;
 	}
 
 	private function prepareFilter(array $filter): array
@@ -1440,6 +1460,14 @@ abstract class Factory
 			$operation->disableSaveToHistory();
 		}
 
+		if ($this->isBizProcSupported())
+		{
+			$operation->addAction(
+				Operation::ACTION_AFTER_SAVE,
+				new Operation\Action\DeleteBizProc(),
+			);
+		}
+
 		return $operation;
 	}
 
@@ -1753,6 +1781,16 @@ abstract class Factory
 		return true;
 	}
 
+	public function isRecurringAvailable(): bool
+	{
+		return false;
+	}
+
+	public function isRecurringEnabled(): bool
+	{
+		return false;
+	}
+
 	/**
 	 * Returns true if this entity supports 'SOURCE_ID' and 'SOURCE_DESCRIPTION' fields for its elements
 	 *
@@ -1795,11 +1833,21 @@ abstract class Factory
 	}
 
 	/**
-	 * Returns true if this entity supported by business processes designer.
+	 * Returns true if this entity supported by business processes designer and business process integration is enabled.
 	 *
 	 * @return bool
 	 */
 	public function isBizProcEnabled(): bool
+	{
+		return $this->isBizProcSupported();
+	}
+
+	/**
+	 * Returns true if this entity supported by business processes designer.
+	 *
+	 * @return bool
+	 */
+	public function isBizProcSupported(): bool
 	{
 		return false;
 	}
@@ -2188,5 +2236,22 @@ abstract class Factory
 	public function hasCustomPermissionsUI(): bool
 	{
 		return false;
+	}
+
+	public function setIsRecurringMode(bool $isRecurringMode): self
+	{
+		if (!$this->isRecurringAvailable())
+		{
+			throw new \RuntimeException('Entity type ' . $this->getEntityName() . ' does not support recurring mode');
+		}
+
+		$this->isRecurringMode = $isRecurringMode;
+
+		return $this;
+	}
+
+	public function isRecurringMode(): bool
+	{
+		return $this->isRecurringEnabled() && $this->isRecurringMode;
 	}
 }

@@ -448,7 +448,10 @@ abstract class BaseComponent extends Crm\Component\Base
 	//todo remove overwritten method in the child and inline this method after complete refactoring
 	protected function initializeConversionWizardFromRequest(Main\Request $request): ?Conversion\EntityConversionWizard
 	{
-		return Conversion\ConversionManager::loadWizardByRequest($request);
+		$wizard = Conversion\ConversionManager::loadWizardByRequest($request);
+		$wizard?->converter->getConfig()->setUseTemporaryFilesForUF(false);
+
+		return $wizard;
 	}
 
 	protected function isPreviewItemBeforeCopyMode(): bool

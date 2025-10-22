@@ -4,11 +4,13 @@ namespace Bitrix\Crm\RepeatSale\DataCollector;
 
 use Bitrix\Crm\Item;
 use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\RepeatSale\DataCollector\Activity\ActivityDataCollector;
+use Bitrix\Crm\RepeatSale\DataCollector\Activity\StrategyFactory;
 use Bitrix\Crm\RepeatSale\DataCollector\Mapper\SystemFieldsMapper;
 use Bitrix\Crm\RepeatSale\DataCollector\Mapper\UserFieldsMapper;
 use CCrmOwnerType;
 
-final class EntityDataCollector extends AbstractDataCollector
+final class EntityDataCollector extends BaseDataCollector
 {
 	protected const DEFAULT_LIMIT = 5;
 	protected const SUPPORTED_ENTITY_TYPES = [
@@ -61,7 +63,10 @@ final class EntityDataCollector extends AbstractDataCollector
 	{
 		$systemFieldsMapper = new SystemFieldsMapper($this->entityTypeId);
 		$userFieldsMapper = new UserFieldsMapper($this->entityTypeId);
-		$activityCollector = new ActivityDataCollector($this->entityTypeId);
+
+		// by default create StrategyFactory with all supported strategies,
+		// but you can create your own StrategyFactory with only needed strategies
+		$activityCollector = new ActivityDataCollector($this->entityTypeId, new StrategyFactory());
 
 		$result = [];
 		foreach ($items as $item)

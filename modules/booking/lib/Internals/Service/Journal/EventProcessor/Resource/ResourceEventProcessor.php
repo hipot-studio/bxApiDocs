@@ -7,9 +7,10 @@ namespace Bitrix\Booking\Internals\Service\Journal\EventProcessor\Resource;
 use Bitrix\Booking\Command\Resource\AddResourceCommand;
 use Bitrix\Booking\Command\Resource\RemoveResourceCommand;
 use Bitrix\Booking\Command\Resource\UpdateResourceCommand;
-use Bitrix\Booking\Internals\Service\DelayedTask\Data\DelayedTaskDataMapper;
+use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
+use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceCalendarDataChanged;
+use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceLinkedEntitiesChangedData;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
-use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskType;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
@@ -20,6 +21,12 @@ use Bitrix\Main\Update\Stepper;
 
 class ResourceEventProcessor implements EventProcessor
 {
+	public function __construct(
+		private readonly DelayedTaskService $delayedTaskService,
+	)
+	{
+	}
+
 	public function process(JournalEventCollection $eventCollection): void
 	{
 		/** @var JournalEvent $event */
@@ -74,20 +81,7 @@ class ResourceEventProcessor implements EventProcessor
 			parameters: ['resource' => $command->resource],
 		);
 
-		if ($resourceEntityChanges = $event->data['resourceEntityChanges'] ?? null)
-		{
-			(new DelayedTaskService())->create(
-				(string)$event->entityId,
-				DelayedTaskDataMapper::mapFromArray(
-			DelayedTaskType::ResourceLinkedEntitiesChanged,
-					[
-						'resourceId' => $event->entityId,
-						'deleted' => $resourceEntityChanges['deleted'] ?? null,
-						'added' => $resourceEntityChanges['added'] ?? null,
-					],
-				)
-			);
-		}
+		$this->processResourceLinkedEntitiesChanged($event->entityId, $event->data);
 	}
 
 	public function processResourceDeletedEvent(JournalEvent $event): void
@@ -107,5 +101,37 @@ class ResourceEventProcessor implements EventProcessor
 			type: $type,
 			parameters: $parameters,
 		))->send();
+	}
+
+	private function processResourceLinkedEntitiesChanged(int $entityId, array $eventData): void
+	{
+		if (!($resourceEntityChanges = $eventData['resourceEntityChanges'] ?? null))
+		{
+			return;
+		}
+
+		// for now process only calendar integration config changes
+		$resourceLinkedEntityDataChanged = ResourceLinkedEntitiesChangedData::mapFromArray($resourceEntityChanges);
+		if (
+			!(
+				$calendarDataDiff = $resourceLinkedEntityDataChanged
+					->diffResult
+					->getByType(ResourceLinkedEntityType::Calendar)
+			)
+		)
+		{
+			return;
+		}
+
+		$delayedTaskData = new ResourceCalendarDataChanged($entityId, $calendarDataDiff);
+		if (!$delayedTaskData->diffResult)
+		{
+			return;
+		}
+
+		$this->delayedTaskService->create(
+			(string)$entityId,
+			$delayedTaskData,
+		);
 	}
 }

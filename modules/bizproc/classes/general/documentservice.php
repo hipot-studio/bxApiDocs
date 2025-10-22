@@ -322,11 +322,13 @@ class CBPDocumentService extends CBPRuntimeService
 
 	public function getDocumentType($parameterDocumentId)
 	{
-		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);
+		[$moduleId, $entity, $documentId] = CBPHelper::parseDocumentId($parameterDocumentId);
 
-		$k = $moduleId."@".$entity."@".$documentId;
+		$k = $moduleId . '@' . $entity . '@' . $documentId;
 		if (isset($this->documentTypesCache[$k]))
+		{
 			return $this->documentTypesCache[$k];
+		}
 
 		if ($moduleId)
 		{
@@ -335,7 +337,8 @@ class CBPDocumentService extends CBPRuntimeService
 
 		if (class_exists($entity) && method_exists($entity, "GetDocumentType"))
 		{
-			$this->documentTypesCache[$k] = [$moduleId, $entity, call_user_func_array([$entity, "GetDocumentType"], [$documentId])];
+			$this->documentTypesCache[$k] = [$moduleId, $entity, call_user_func_array([$entity, 'GetDocumentType'], [$documentId])];
+
 			return $this->documentTypesCache[$k];
 		}
 
@@ -1726,21 +1729,59 @@ EOS;
 		return;
 	}
 
-	public function createAutomationTarget($parameterDocumentType)
+	public function createAutomationTarget($parameterDocumentType, string|int|null $documentId = null)
 	{
 		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentType);
 
 		if ($moduleId)
 		{
-			CModule::IncludeModule($moduleId);
+			Loader::includeModule($moduleId);
 		}
 
-		if (class_exists($entity) && method_exists($entity, "createAutomationTarget"))
+		if (class_exists($entity) && method_exists($entity, 'createAutomationTarget'))
 		{
 			/** @var \Bitrix\Bizproc\Automation\Target\BaseTarget $target */
-			$target = call_user_func_array([$entity, "createAutomationTarget"], [$documentType]);
+			$target = call_user_func([$entity, 'createAutomationTarget'], $documentType, $documentId);
 
 			return $target;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws CBPArgumentNullException
+	 */
+	public function getTriggerByCode(string $code, array $complexDocumentType): ?string
+	{
+		[$moduleId, $entity, $documentType] = CBPHelper::parseDocumentId($complexDocumentType);
+
+		if ($moduleId)
+		{
+			Loader::includeModule($moduleId);
+		}
+
+		if (class_exists($entity) && method_exists($entity,'getTriggerByCode'))
+		{
+			return call_user_func([$entity, 'getTriggerByCode'], $code, $complexDocumentType);
+		}
+
+		return null;
+	}
+
+	public function getStarterModuleSettings(array $complexDocumentType): ?Bizproc\Starter\ModuleSettings
+	{
+		[$moduleId, $entity, $documentType] = CBPHelper::parseDocumentId($complexDocumentType);
+
+		if ($moduleId)
+		{
+			Loader::includeModule($moduleId);
+		}
+
+		if (class_exists($entity) && method_exists($entity,'getStarterModuleSettings'))
+		{
+			return call_user_func([$entity, 'getStarterModuleSettings'], $complexDocumentType);
 		}
 
 		return null;

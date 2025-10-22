@@ -4,6 +4,7 @@ namespace Bitrix\Baas\Model;
 
 use Bitrix\Main;
 use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Fields\BooleanField;
 
 /**
  * Class PurchaseTable
@@ -25,6 +26,8 @@ class PurchaseTable extends ORM\Data\DataManager
 {
 	use Traits\DeleteBatch;
 	use Traits\InsertIgnore;
+	use Traits\InsertUpdate;
+	use Traits\UpdateBatch;
 
 	public static function getTableName(): string
 	{
@@ -51,6 +54,14 @@ class PurchaseTable extends ORM\Data\DataManager
 				['=this.CODE' => 'ref.PURCHASE_CODE'],
 				['join_type' => 'LEFT'],
 			),
+			(new BooleanField('PURGED'))
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue('N')
+			,
+			(new BooleanField('NOTIFIED'))
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue('N')
+			,
 		];
 	}
 }

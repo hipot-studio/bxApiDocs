@@ -708,8 +708,17 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 		);
 	}
 
-	public static function createAutomationTarget($documentType)
+	public static function createAutomationTarget($documentType, string|int|null $documentId = null)
 	{
+		if (is_string($documentId))
+		{
+			[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityIdByDocumentId($documentId);
+			if ($entityId > 0 && $entityTypeId === CCrmOwnerType::Contact)
+			{
+				return Crm\Automation\Factory::getTarget(CCrmOwnerType::Contact, $entityId);
+			}
+		}
+
 		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Contact);
 	}
 }

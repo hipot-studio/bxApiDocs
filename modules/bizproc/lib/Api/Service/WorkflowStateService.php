@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Api\Service;
 
+use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateFilter;
 use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateToGet;
 use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CanViewTimelineRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRequest;
@@ -19,11 +20,13 @@ use Bitrix\Bizproc\Workflow\Entity\EO_WorkflowState_Collection;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Bizproc\Workflow\Task\EO_Task_Collection;
 use Bitrix\Bizproc\Workflow\Task\TaskTable;
 use Bitrix\Bizproc\Workflow\Timeline;
 use Bitrix\Bizproc\Workflow\WorkflowState;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 
@@ -43,17 +46,38 @@ class WorkflowStateService
 		$query = WorkflowUserTable::query()
 			->addSelect('WORKFLOW_ID')
 			->addSelect('MODIFIED')
+			->addSelect('WORKFLOW_STATE.STARTED', 'WORKFLOW_STARTED')
 			->setFilter($toGet->getOrmFilter())
-			->setOrder($toGet->getOrder())
-			->setLimit($toGet->getLimit())
-			->setOffset($toGet->getOffset())
 			->countTotal($toGet->isCountingTotal())
 		;
-		$runtimeField = $toGet->getOrmRuntime();
-
-		if ($runtimeField)
+		if ($toGet->getFilterSearchQuery())
 		{
-			$query->registerRuntimeField($runtimeField);
+			$query->addSelect('SEARCH_CONTENT');
+		}
+
+		if ($toGet->getFilterPresetId() === WorkflowStateFilter::PRESET_IN_WORK)
+		{
+			$unionQuery =
+				WorkflowUserTable::query()
+					->setSelect($query->getSelect())
+					->setFilter($this->applyStatusFilter($query->getFilter()))
+			;
+
+			$query
+				->setFilter($this->applyCommentsFilter($query->getFilter()))
+				->union($unionQuery)
+				->setUnionOrder($toGet->getOrder())
+				->setUnionLimit($toGet->getLimit())
+				->setUnionOffset($toGet->getOffset())
+			;
+		}
+		else
+		{
+			$query
+				->setOrder($toGet->getOrder())
+				->setLimit($toGet->getLimit())
+				->setOffset($toGet->getOffset())
+			;
 		}
 
 		$queryResult = $query->exec();
@@ -97,6 +121,37 @@ class WorkflowStateService
 		}
 
 		return $response->setWorkflowStatesCollection($responseCollection);
+	}
+
+	private function applyStatusFilter(array $filter): array
+	{
+		$filter[] = [
+			'=WORKFLOW_STATUS' => new SqlExpression('?i', WorkflowUserTable::WORKFLOW_STATUS_ACTIVE),
+			0 => [
+				'LOGIC' => 'OR',
+				'=IS_AUTHOR' => 1,
+				'=TASK_STATUS' => WorkflowUserTable::TASK_STATUS_ACTIVE,
+			],
+		];
+
+		return $filter;
+	}
+
+	private function applyCommentsFilter(array $filter): array
+	{
+		$filter[] = [
+			'!=COMMENTS.UNREAD_CNT' => null,
+			0 => [
+				'LOGIC' => 'OR',
+				'=COMMENTS.LAST_TYPE' => new SqlExpression('?i', WorkflowUserCommentTable::COMMENT_TYPE_DEFAULT),
+				0 => [
+					'=COMMENTS.LAST_TYPE' => WorkflowUserCommentTable::COMMENT_TYPE_SYSTEM,
+					'>COMMENTS.MODIFIED' => DateTime::createFromTimestamp(time() - 86400), // one day
+				],
+			],
+		];
+
+		return $filter;
 	}
 
 	private function getWorkflowTasks(WorkflowState $workflowState, WorkflowStateToGet $toGet): ?EO_Task_Collection

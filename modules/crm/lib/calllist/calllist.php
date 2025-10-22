@@ -13,6 +13,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
+use CCrmOwnerType;
 
 Loc::loadMessages(__FILE__);
 
@@ -825,8 +826,27 @@ final class CallList
 			);
 		}
 
-		$contactFields = count($contactIds) > 0 ? self::resolveItemFields(\CCrmOwnerType::Contact, array_keys($contactIds)) : array();
-		$companyFields = count($companyIds) > 0 ? self::resolveItemFields(\CCrmOwnerType::Company, array_keys($companyIds)) : array();
+		$itemPermissions = Container::getInstance()->getUserPermissions()->item();
+
+		$contactIds = array_filter(
+			$contactIds,
+			static fn($contactId) => $itemPermissions->canRead(CCrmOwnerType::Contact, $contactId),
+		);
+		$contactFields =
+			count($contactIds) > 0
+				? self::resolveItemFields(\CCrmOwnerType::Contact, array_keys($contactIds))
+				: []
+		;
+
+		$companyIds = array_filter(
+			$companyIds,
+			static fn($companyId) => $itemPermissions->canRead(CCrmOwnerType::Company, $companyId),
+		);
+		$companyFields =
+			count($companyIds) > 0
+				? self::resolveItemFields(\CCrmOwnerType::Company, array_keys($companyIds))
+				: []
+		;
 
 		if(count($companyFields) > 0 || count($contactFields) > 0)
 		{

@@ -12,7 +12,7 @@ class DelayedTaskDataMapper
 	{
 		return match ($delayedTaskType)
 		{
-			DelayedTaskType::ResourceLinkedEntitiesChanged => ResourceLinkedEntitiesChangedData::class,
+			DelayedTaskType::ResourceCalendarDataChanged => ResourceCalendarDataChanged::class,
 		};
 	}
 

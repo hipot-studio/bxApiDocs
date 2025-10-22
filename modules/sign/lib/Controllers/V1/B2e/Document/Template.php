@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Controllers\V1\B2e\Document;
 use Bitrix\Main;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute\Access\LogicAnd;
 use Bitrix\Sign\Attribute\ActionAccess;
@@ -12,8 +13,10 @@ use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Document\Template\TemplateCreatedDocument;
+use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Operation\Document\ExportBlank;
 use Bitrix\Sign\Operation\Document\Template\DeleteTemplateEntity;
+use Bitrix\Sign\Operation\Document\Template\GetOrInstallOnboardingTemplate;
 use Bitrix\Sign\Operation\Document\UnserializePortableBlank;
 use Bitrix\Sign\Operation\Document\Template\ImportTemplate;
 use Bitrix\Sign\Engine\Controller;
@@ -116,6 +119,7 @@ class Template extends Controller
 		string $uid,
 		Main\Engine\CurrentUser $user,
 		array $fields = [],
+		bool $isOnboarding = false,
 	): array
 	{
 		$template = Container::instance()->getDocumentTemplateRepository()->getByUid($uid);
@@ -141,11 +145,68 @@ class Template extends Controller
 			return [];
 		}
 
+		$members = new MemberCollection();
+		if ($isOnboarding)
+		{
+			if (!Loader::includeModule('crm'))
+			{
+				$this->addError(new Main\Error('Module crm not installed'));
+
+				return [];
+			}
+
+			if ($template->id === null)
+			{
+				$this->addError(new Main\Error('Template id is null'));
+
+				return [];
+			}
+
+			$documentByTemplateId = $this->container->getDocumentService()->getByTemplateId($template->id);
+			if ($documentByTemplateId === null)
+			{
+				$this->addError(new Main\Error('Document by template id not found'));
+
+				return [];
+			}
+
+			$companyEntityId = $this->container->getMemberService()->getAssignee($documentByTemplateId)?->entityId;
+			if ($companyEntityId === null)
+			{
+				$this->addError(new Main\Error('Assignee entity id not found'));
+
+				return [];
+			}
+
+			$companies = $this->container->getCrmMyCompanyService()->listWithTaxIds(checkRequisitePermissions: false);
+			$companyEntityIds = $companies->getIds();
+			if (!in_array($companyEntityId, $companyEntityIds, true))
+			{
+				$result = (new Operation\Document\Template\CompleteOnboardingTemplateFilling($template))->launch();
+				if (!$result->isSuccess())
+				{
+					$this->addErrors($result->getErrors());
+
+					return [];
+				}
+
+				$companyEntityId = $result->companyEntityId;
+			}
+
+			$memberService = $this->container->getMemberService();
+			$document = $this->container->getDocumentRepository()->getByTemplateId($template->id);
+			$assignee = $memberService->makeAssigneeByDocumentAndEntityId($document, $companyEntityId);
+			$signer = $memberService->makeSignerByDocumentAndEntityId($document, $createdById);
+			$members = new MemberCollection($assignee, $signer);
+		}
+
 		$result = (new Send(
 			template: $template,
 			responsibleUserId: $createdById,
 			fields: $fields,
 			sendFromUserId: $createdById,
+			representativeUserId: $isOnboarding ? $createdById : null,
+			memberList: $isOnboarding ? $members : null,
 		))->launch();
 		if (!$result instanceof SendResult)
 		{
@@ -154,10 +215,15 @@ class Template extends Controller
 			return [];
 		}
 
+		$assigneeMember = $result->assigneeMember;
 		$employeeMember = $result->employeeMember;
 		$document = $result->newDocument;
 
 		return [
+			'assigneeMember' => [
+				'id' => $assigneeMember->id,
+				'uid' => $assigneeMember->uid,
+			],
 			'employeeMember' => [
 				'id' => $employeeMember->id,
 				'uid' => $employeeMember->uid,
@@ -515,7 +581,7 @@ class Template extends Controller
 		),
 		new ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_ADD),
 	)]
-	public function registerDocumentsAction(array $templateIds): array
+	public function registerDocumentsAction(array $templateIds, bool $excludeRejected = true): array
 	{
 		if (empty($templateIds))
 		{
@@ -549,6 +615,7 @@ class Template extends Controller
 			templates: $templates,
 			sendFromUserId: $sendFromUserId,
 			onlyInitiatedByType: InitiatedByType::COMPANY,
+			excludeRejected: $excludeRejected,
 		);
 
 		$result = $operation->launch();
@@ -586,6 +653,7 @@ class Template extends Controller
 	public function setupSignersAction(
 		array $documentIds,
 		array $signers,
+		bool $excludeRejected = true,
 	): array
 	{
 		if (empty($documentIds))
@@ -595,7 +663,7 @@ class Template extends Controller
 			return [];
 		}
 
-		$entitiesResult = (new Operation\Member\ValidateEntitySelectorSigners($signers))->launch();
+		$entitiesResult = (new Operation\Member\Validation\ValidateEntitySelectorSigners($signers))->launch();
 		if (!$entitiesResult instanceof ValidateEntitySelectorMembersResult)
 		{
 			$this->addErrorsFromResult($entitiesResult);
@@ -616,6 +684,7 @@ class Template extends Controller
 			documents: $documents,
 			signers: $entitiesResult->entities,
 			sendFromUserId: (int)$this->getCurrentUser()->getId(),
+			excludeRejected: $excludeRejected,
 		);
 
 		$result = $operation->launch();
@@ -632,6 +701,29 @@ class Template extends Controller
 				static fn(Document $document) => (new \Bitrix\Sign\Ui\ViewModel\Wizard\Document($document))->toArray(),
 				$documents->toArray(),
 			),
+		];
+	}
+
+	public function installOnboardingTemplateAction(): array
+	{
+		$result = (new GetOrInstallOnboardingTemplate())->launch();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		$onboardingTemplate = $result->template;
+		if (!$onboardingTemplate)
+		{
+			$this->addError(new Error('Onboarding template not found'));
+
+			return [];
+		}
+
+		return [
+			'template' => $onboardingTemplate,
 		];
 	}
 }

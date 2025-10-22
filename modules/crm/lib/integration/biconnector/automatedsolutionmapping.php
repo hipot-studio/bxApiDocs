@@ -1,7 +1,7 @@
 <?php
 
 namespace Bitrix\Crm\Integration\BiConnector;
-
+//need created at + index
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 
 class AutomatedSolutionMapping
@@ -69,6 +69,12 @@ class AutomatedSolutionMapping
 						'TABLE_ALIAS' => 'CS',
 						'LEFT_JOIN' => 'LEFT JOIN b_crm_automated_solution CS ON CS.ID = DT.CUSTOM_SECTION_ID',
 						'FIELD_DESCRIPTION' => Localization::getMessage('CRM_SMART_PROC_FIELD_CUSTOM_SECTION_TITLE', $languageId),
+					],
+					'CREATED_AT' => [
+						'IS_METRIC' => 'N', // 'Y'
+						'FIELD_NAME' => 'DT.CREATED_TIME',
+						'FIELD_TYPE' => 'datetime',
+						'FIELD_DESCRIPTION' => Localization::getMessage('CRM_SMART_PROC_FIELD_CREATED_AT', $languageId),
 					],
 				],
 			];

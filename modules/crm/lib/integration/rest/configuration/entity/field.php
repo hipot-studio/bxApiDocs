@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\Rest\Configuration\Entity;
 
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\DealCategory;
+use Bitrix\Crm\Integration\Rest\Configuration\Helper;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\UserField\UserFieldHistory;
 use Bitrix\Main\ArgumentException;
@@ -31,7 +32,8 @@ class Field
 	private static $context = '';
 	private static $accessManifest = [
 		'total',
-		'crm'
+		'crm',
+		'automated_solution',
 	];
 
 	private static bool $isDynamicTypeChecked = false;
@@ -95,6 +97,8 @@ class Field
 	 */
 	public static function export($option)
 	{
+		global $USER_FIELD_MANAGER;
+
 		if(!Manifest::isEntityAvailable('', $option, static::$accessManifest))
 		{
 			return null;
@@ -106,13 +110,25 @@ class Field
 			$step = $option['STEP'];
 		}
 
-		$return = [
+		$result = [
 			'FILE_NAME' => '',
 			'CONTENT' => [],
 			'NEXT' => $step
 		];
-		global $USER_FIELD_MANAGER;
-		$entityList = array_column(CCrmFields::GetEntityTypes(), 'ID');
+
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeExportParams($option))
+		{
+			return null;
+		}
+
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($option);
+		$entityList =
+			$automatedSolutionModeParams['isAutomatedSolutionMode']
+				? []
+				: array_column(CCrmFields::GetEntityTypes(), 'ID')
+		;
+
 
 		// Dynamic types
 		$isDynamicType = false;
@@ -125,7 +141,14 @@ class Field
 		$dynamicTypeFields = [];
 		foreach ($dynamicTypesMap->getTypes() as $type)
 		{
-			if ($type->getCustomSectionId() > 0)
+			if (
+				!$helper->checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						$helper->getDynamicTypeCheckExportParamsByEntityTypeId($type->getEntityTypeId() ?? 0)
+					)
+				)
+			)
 			{
 				continue;
 			}
@@ -170,8 +193,8 @@ class Field
 				}
 			}
 
-			$return['FILE_NAME'] = $ufEntityId;
-			$return['CONTENT'] = [
+			$result['FILE_NAME'] = $ufEntityId;
+			$result['CONTENT'] = [
 				'TYPE' => $ufEntityId,
 				'ENTITY_TYPE_NAME' => $entityTypeName,
 				'ITEMS' => $dynamicTypeFields[$ufEntityId]
@@ -234,30 +257,30 @@ class Field
 						}
 					}
 				}
-				$return['CONTENT']['ATTRIBUTE'] = $attributeData;
+				$result['CONTENT']['ATTRIBUTE'] = $attributeData;
 			}
 
-			foreach ($return['CONTENT']['ITEMS'] as $key => $field)
+			foreach ($result['CONTENT']['ITEMS'] as $key => $field)
 			{
 				if($field['USER_TYPE_ID'] == 'enumeration')
 				{
-					$return['CONTENT']['ITEMS'][$key]['LIST'] = [];
+					$result['CONTENT']['ITEMS'][$key]['LIST'] = [];
 					$res = CUserFieldEnum::GetList([], ['USER_FIELD_ID' =>$field['ID']]);
 					$i = 0;
 					while($value = $res->fetch())
 					{
 						$i++;
-						$return['CONTENT']['ITEMS'][$key]['LIST']['n'.$i] = $value;
+						$result['CONTENT']['ITEMS'][$key]['LIST']['n'.$i] = $value;
 					}
 				}
 			}
 		}
 		else
 		{
-			$return['NEXT'] = false;
+			$result['NEXT'] = false;
 		}
 
-		return $return;
+		return $result;
 	}
 
 	/**
@@ -275,6 +298,12 @@ class Field
 			return null;
 		}
 
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeClearParams($option))
+		{
+			return null;
+		}
+
 		$result = [
 			'NEXT' => false,
 			'OWNER_DELETE' => []
@@ -287,6 +316,7 @@ class Field
 		$entityTypeList = array_column(CCrmFields::GetEntityTypes(), 'ID');
 
 		// Dynamic types
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeImportParams($option);
 		$isDynamicType = false;
 		$dynamicTypesMap = Container::getInstance()->getDynamicTypesMap()->load(
 			[
@@ -297,11 +327,17 @@ class Field
 		$dynamicTypeFields = [];
 		foreach ($dynamicTypesMap->getTypes() as $type)
 		{
-			if ($type->getCustomSectionId() > 0)
+			if (
+				!$helper->checkDynamicTypeExportConditions(
+					array_merge(
+						$automatedSolutionModeParams,
+						$helper->getDynamicTypeCheckExportParamsByEntityTypeId($type->getEntityTypeId() ?? 0)
+					)
+				)
+			)
 			{
 				continue;
 			}
-
 			$ufEntityId = ServiceLocator::getInstance()
 				->get('crm.type.factory')
 				->getUserFieldEntityId($type->getId())
@@ -490,19 +526,27 @@ class Field
 			return null;
 		}
 
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeImportParams($import))
+		{
+			return null;
+		}
+
 		$result = [];
 		if(!isset($import['CONTENT']['DATA']))
 		{
 			return $result;
 		}
+
 		$data = $import['CONTENT']['DATA'];
 		$ufEntityId = $oldUfEntityId = $data['TYPE'];
 		$isDynamicType = static::isDynamicType($import);
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeImportParams($import);
 		if ($isDynamicType)
 		{
 			$dynamicEntityTypeId = static::getDynamicEntityTypeId($import);
 			$dynamicType = Container::getInstance()->getTypeByEntityTypeId($dynamicEntityTypeId);
-			if ($dynamicType)
+			if ($dynamicType && $helper->checkDynamicTypeImportConditions($dynamicEntityTypeId, $import))
 			{
 				$ufEntityId = 'CRM_' . $dynamicType->getId();
 			}
@@ -511,6 +555,12 @@ class Field
 				$isDynamicType = false;
 			}
 		}
+
+		if (!$isDynamicType && $automatedSolutionModeParams['isAutomatedSolutionMode'])
+		{
+			return $result;
+		}
+
 		if(!empty($data['ITEMS']))
 		{
 			$entityList = array_column(CCrmFields::GetEntityTypes(), 'ID');

@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Entity\ExternalData;
 
 use Bitrix\Booking\Entity\BaseEntityCollection;
+use Bitrix\Booking\Entity\ExternalData\ItemType\ItemTypeFilter;
 
 /**
  * @method ExternalDataItem|null getFirstCollectionItem()
- * @method ExternalDataCollection[] getIterator()
+ * @method \ArrayIterator<ExternalDataItem> getIterator()
  */
 class ExternalDataCollection extends BaseEntityCollection
 {
@@ -38,26 +39,37 @@ class ExternalDataCollection extends BaseEntityCollection
 		return new ExternalDataCollection(...$this->baseDiff($collectionToCompare));
 	}
 
-	public function getByModuleAndType(string $moduleId, string|null $entityType = null): ExternalDataCollection
+	public function filterByType(ItemTypeFilter $filter, bool $exclude = false): ExternalDataCollection
 	{
-		$collection = new self();
+		$result = new ExternalDataCollection();
 
 		/** @var ExternalDataItem $externalDataItem */
 		foreach ($this as $externalDataItem)
 		{
-			if ($externalDataItem->getModuleId() !== $moduleId)
-			{
-				continue;
-			}
+			$isOfTypeCondition = (
+				$externalDataItem->getModuleId() === $filter->moduleId
+				&& $externalDataItem->getEntityTypeId() === $filter->entityTypeId
+			);
+			$condition = $exclude ? !$isOfTypeCondition : $isOfTypeCondition;
 
-			if ($entityType && $externalDataItem->getEntityTypeId() !== $entityType)
+			if ($condition)
 			{
-				continue;
+				$result->add($externalDataItem);
 			}
-
-			$collection->add($externalDataItem);
 		}
 
-		return $collection;
+		return $result;
+	}
+
+	public function getValues(): array
+	{
+		$result = [];
+
+		foreach ($this as $item)
+		{
+			$result[] = $item->getValue();
+		}
+
+		return $result;
 	}
 }

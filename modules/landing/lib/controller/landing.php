@@ -12,7 +12,17 @@ class Landing extends Controller
 	{
 		return [
 			new Engine\ActionFilter\Authentication(),
-			new ActionFilter\Extranet(),
+		];
+	}
+
+	public function configureActions(): array
+	{
+		return [
+			'getByIdAction' => [
+				'+prefilters' => [
+					new ActionFilter\Extranet(),
+				],
+			]
 		];
 	}
 
@@ -39,5 +49,10 @@ class Landing extends Controller
 		}
 
 		return null;
+	}
+
+	public function isPhoneRegionCodeTourAlreadySeenAction(): bool
+	{
+		return \CUserOptions::GetOption('ui-tour', 'landing_phone_aha_shown', null) !== null;
 	}
 }

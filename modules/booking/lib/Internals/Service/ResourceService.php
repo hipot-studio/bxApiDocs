@@ -7,11 +7,13 @@ namespace Bitrix\Booking\Internals\Service;
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Exception\Resource\ExternalResourceException;
+use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 use Bitrix\Booking\Internals\Repository\ORM\BookingResourceRepository;
 use Bitrix\Booking\Internals\Repository\ORM\ResourceLinkedEntityRepository;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceTypeRepositoryInterface;
 use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceLinkedEntitiesChangedData;
+use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceLinkedEntityDiff\ResourceLinkedEntityCollectionDiff;
 use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 
@@ -47,38 +49,14 @@ class ResourceService
 			return null;
 		}
 
-		if ($newEntities->isEmpty() && !$currentEntities->isEmpty())
-		{
-			$this->resourceLinkedEntityRepository->unLink($resource, $currentEntities);
-
-			return new ResourceLinkedEntitiesChangedData(
-				resourceId: $resource->getId(),
-				deleted: $currentEntities,
-				added: null,
-			);
-		}
-
-		$toDelete = $currentEntities->diff($newEntities);
-		if (!$toDelete->isEmpty())
-		{
-			$this->resourceLinkedEntityRepository->unLink($resource, $toDelete);
-		}
-
-		$toAdd = $newEntities->diff($currentEntities);
-		if (!$toAdd->isEmpty())
-		{
-			$this->resourceLinkedEntityRepository->link($resource, $toAdd);
-		}
-
-		if ($toDelete->isEmpty() && $toAdd->isEmpty())
-		{
-			return null;
-		}
+		$this->resourceLinkedEntityRepository->unLink($resource, $currentEntities);
+		$filteredEntitiesToLink = $this->filterResourceEntitiesToLink($newEntities);
+		$this->resourceLinkedEntityRepository->link($resource, $filteredEntitiesToLink);
+		$resource->setEntityCollection($filteredEntitiesToLink);
 
 		return new ResourceLinkedEntitiesChangedData(
 			resourceId: $resource->getId(),
-			deleted: $toDelete->isEmpty() ? null : $toDelete,
-			added: $toAdd->isEmpty() ? null : $toAdd,
+			diffResult: ResourceLinkedEntityCollectionDiff::fromCollections($currentEntities, $newEntities),
 		);
 	}
 
@@ -101,10 +79,10 @@ class ResourceService
 		$primaryResourceId = $resourceCollection->getPrimary()?->getId();
 
 		$resources = $this->resourceRepository->getList(
-			filter: (new ResourceFilter([
+			filter: new ResourceFilter([
 				'ID' => $resourceIds,
 				'INCLUDE_DELETED' => true,
-			]))->prepareFilter(),
+			]),
 			select: new ResourceSelect(),
 		);
 
@@ -172,7 +150,7 @@ class ResourceService
 				filter: (new ResourceFilter([
 					'TYPE_ID' => $externalTypeId,
 					'EXTERNAL_ID' => array_keys($typedExternalResources),
-				]))->prepareFilter(),
+				])),
 				select: new ResourceSelect(),
 			);
 
@@ -235,5 +213,31 @@ class ResourceService
 		$externalTypesDbCache[$cacheKey] = $externalType;
 
 		return $externalType;
+	}
+
+	private function filterResourceEntitiesToLink(
+		Entity\Resource\ResourceLinkedEntityCollection $entityCollection
+	): Entity\Resource\ResourceLinkedEntityCollection
+	{
+		$entitiesToLink = new Entity\Resource\ResourceLinkedEntityCollection();
+		foreach ($entityCollection as $entity)
+		{
+			switch ($entity->getEntityType())
+			{
+				case ResourceLinkedEntityType::Calendar:
+					if (!$entity->getData())
+					{
+						continue 2;
+					}
+					break;
+				default:
+					// For other types, we don't have any additional checks
+					break;
+			}
+
+			$entitiesToLink->add($entity);
+		}
+
+		return $entitiesToLink;
 	}
 }

@@ -8,6 +8,7 @@ use Bitrix\Landing;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Data;
 use Bitrix\Landing\Copilot\Connector;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\Error;
 
 class Copilot extends Controller
@@ -54,10 +55,26 @@ class Copilot extends Controller
 
 	public static function checkBlockGeneratableAction(int $blockId, ?int $chatId = null): bool
 	{
-		$result = Data\Block\Operator::isBlockAvailableForScenarioChangeBlock($blockId);
+		$isGeneratable = Data\Block\Operator::isBlockAvailableForScenarioChangeBlock($blockId);
+
+		$metrika = new Metrika\Metrika(
+			Metrika\Categories::BlockEdition,
+			Metrika\Events::select,
+			Metrika\Tools::ai
+		);
+		$metrika
+			->setSection(Metrika\Sections::siteEditor)
+			->setParam(4, 'block', (new Landing\Block($blockId))->getCode())
+		;
+		if (!$isGeneratable)
+		{
+			$metrika->setStatus(Metrika\Statuses::UnsupportedBlock);
+		}
+		$metrika->send();
+
 		if (!$chatId || $chatId <= 0)
 		{
-			return $result;
+			return $isGeneratable;
 		}
 
 		/**
@@ -67,12 +84,12 @@ class Copilot extends Controller
 		if ($chatBot)
 		{
 			$message = new Landing\Copilot\Connector\Chat\ChatBotMessageDto($chatId);
-			$result
+			$isGeneratable
 				? $chatBot->sendSelectBlockSuccessMessage($message)
 				: $chatBot->sendSelectBlockWrongMessage($message);
 		}
 
-		return $result;
+		return $isGeneratable;
 	}
 
 	public function sendBlockGenerationNeedSelectMessageAction(int $siteId)
@@ -131,6 +148,15 @@ class Copilot extends Controller
 			->setSiteData($siteData)
 			->setWishes((new Data\Wishes())->setWishes([$wishes]))
 			->setChatId($chat->getChatForSite($siteId) ?? 0)
+			->setMetrikaFields((new Metrika\FieldsDto(
+				params: [
+					[
+						4,
+						'block',
+						(new Landing\Block($blockId))->getCode(),
+					],
+				]
+			)))
 		;
 
 		if ($generation->execute())

@@ -7,6 +7,7 @@ use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
+use Bitrix\Landing\Metrika;
 
 interface IStep
 {
@@ -30,7 +31,6 @@ interface IStep
 	 * @return bool
 	 */
 	public function isAsync(): bool;
-
 
 	/**
 	 * Check if step was start executing
@@ -64,4 +64,11 @@ interface IStep
 	 * @return RequestQuotaDto|null
 	 */
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto;
+
+	/**
+	 * Step may, or not may send analytic event.
+	 * The Scenarist decides when to send the event.
+	 * @return Metrika\Events|null
+	 */
+	public function getAnalyticEvent(): ?Metrika\Events;
 }

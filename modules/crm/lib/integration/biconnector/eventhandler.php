@@ -62,6 +62,7 @@ class EventHandler
 				'crm_quote_product_row',
 				'crm_activity_relation',
 				'crm_ai_quality_assessment',
+				'crm_copilot_call_assessment',
 			];
 
 			if (!in_array($eventTableName, $tableNames, true))
@@ -78,6 +79,7 @@ class EventHandler
 				'crm_quote_product_row' => QuoteProductMapping::getMapping($helper),
 				'crm_activity_relation' => ActivityRelationMapping::getMapping(),
 				'crm_ai_quality_assessment' => AiQualityAssessmentMapping::getMapping(),
+				'crm_copilot_call_assessment' => CopilotCallAssessmentMapping::getMapping(),
 			};
 
 			self::addDescriptions([
@@ -94,6 +96,7 @@ class EventHandler
 		$result['crm_quote_product_row'] = QuoteProductMapping::getMapping($helper);
 		$result['crm_activity_relation'] = ActivityRelationMapping::getMapping();
 		$result['crm_ai_quality_assessment'] = AiQualityAssessmentMapping::getMapping();
+		$result['crm_copilot_call_assessment'] = CopilotCallAssessmentMapping::getMapping();
 		$result = array_merge(
 			$result,
 			AutomatedSolutionMapping::getMapping($languageId),
@@ -113,6 +116,7 @@ class EventHandler
 			'crm_quote_product_row',
 			'crm_activity_relation',
 			'crm_ai_quality_assessment',
+			'crm_copilot_call_assessment',
 		], $result, $languageId);
 	}
 

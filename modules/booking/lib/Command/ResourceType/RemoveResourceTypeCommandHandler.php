@@ -8,8 +8,8 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ResourceType\RemoveResourceTypeException;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
+use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
-use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 
 class RemoveResourceTypeCommandHandler
 {
@@ -17,8 +17,9 @@ class RemoveResourceTypeCommandHandler
 	{
 		$hasResourcesOfType = Container::getResourceRepository()->getList(
 			limit: 1,
-			filter: (new ConditionTree())
-				->where('TYPE_ID', '=', $command->id),
+			filter: new ResourceFilter([
+				'TYPE_ID' => $command->id,
+			]),
 			select: new ResourceSelect(),
 		)->isEmpty();
 

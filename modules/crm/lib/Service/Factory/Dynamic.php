@@ -5,12 +5,14 @@ namespace Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Binding\EntityContactTable;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Category\Entity\ItemCategory;
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\Intranet\CustomSectionProvider;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\Dynamic\PrototypeItem;
 use Bitrix\Crm\Model\Dynamic\PrototypeItemFieldsContext;
 use Bitrix\Crm\Model\Dynamic\PrototypeItemIndex;
+use Bitrix\Crm\Model\Dynamic\PrototypeItemRecurring;
 use Bitrix\Crm\Model\Dynamic\Type;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Crm\Model\ItemCategoryTable;
@@ -22,7 +24,10 @@ use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Service\Operation\Action;
 use Bitrix\Crm\Statistics;
 use Bitrix\Crm\StatusTable;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 
 class Dynamic extends Service\Factory
@@ -356,6 +361,41 @@ class Dynamic extends Service\Factory
 			];
 		}
 
+		if ($this->isRecurringEnabled())
+		{
+			$info[Item::FIELD_NAME_IS_RECURRING] = [
+				'TYPE' => Field::TYPE_BOOLEAN,
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
+			];
+
+			$info[Item::FIELD_NAME_RECURRING] = [
+				'TYPE' => Field::TYPE_RECURRING,
+				'CLASS' => Field\Recurring::class,
+			];
+
+			if ($this->isRecurringMode())
+			{
+				$info[Item::FIELD_NAME_RECURRING_ACTIVE] = [
+					'TYPE' => Field::TYPE_BOOLEAN,
+				];
+				$info[Item::FIELD_NAME_RECURRING_COUNTER_REPEAT] = [
+					'TYPE' => Field::TYPE_INTEGER,
+				];
+				$info[Item::FIELD_NAME_RECURRING_NEXT_EXECUTION] = [
+					'TYPE' => Field::TYPE_DATE,
+				];
+				$info[Item::FIELD_NAME_RECURRING_START_DATE] = [
+					'TYPE' => Field::TYPE_DATE,
+				];
+				$info[Item::FIELD_NAME_RECURRING_LIMIT_DATE] = [
+					'TYPE' => Field::TYPE_DATE,
+				];
+				$info[Item::FIELD_NAME_RECURRING_LIMIT_REPEAT] = [
+					'TYPE' => Field::TYPE_INTEGER,
+				];
+			}
+		}
+
 		return $info;
 	}
 
@@ -454,6 +494,24 @@ class Dynamic extends Service\Factory
 	public function isAutomationEnabled(): bool
 	{
 		return ($this->type->getIsStagesEnabled() && $this->type->getIsAutomationEnabled());
+	}
+
+	public function isRecurringEnabled(): bool
+	{
+		return $this->isRecurringAvailable() && $this->type->getIsRecurringEnabled();
+	}
+
+	public function isRecurringAvailable(): bool
+	{
+		return
+			Feature::enabled(Feature\RecurringDynamic::class)
+			&& Option::get('crm', '~is_recurring_column_alter_success_' . $this->getEntityTypeId(), 'Y') !== 'N'
+		;
+	}
+
+	public function isBizProcSupported(): bool
+	{
+		return true;
 	}
 
 	public function isBizProcEnabled(): bool
@@ -616,7 +674,20 @@ class Dynamic extends Service\Factory
 	 */
 	public function getAdditionalTableFields(): array
 	{
-		return [];
+		Container::getInstance()->getLocalization()->loadMessages();
+
+		$fields = [];
+
+		if (Option::get('crm', '~is_recurring_column_alter_success_' . $this->getEntityTypeId(), 'Y') !== 'N')
+		{
+			$fields[] = (new BooleanField(Item::FIELD_NAME_IS_RECURRING))
+				->configureTitle(Loc::getMessage('CRM_TYPE_DYNAMIC_FIELD_IS_RECURRING'))
+				->configureDefaultValue('N')
+				->configureStorageValues('N', 'Y')
+			;
+		}
+
+		return $fields;
 	}
 
 	public function isCountersEnabled(): bool

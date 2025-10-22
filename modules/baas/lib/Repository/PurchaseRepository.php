@@ -6,6 +6,7 @@ namespace Bitrix\Baas\Repository;
 
 use Bitrix\Baas;
 use Bitrix\Baas\Model;
+use Bitrix\Baas\Model\EO_Purchase;
 use Bitrix\Main;
 
 class PurchaseRepository implements PurchaseRepositoryInterface
@@ -18,9 +19,13 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 
 	public function purge(): void
 	{
-		Model\PurchaseTable::deleteBatch(['!CODE' => null]);
 		Model\PurchasedPackageTable::deleteBatch(['!CODE' => null]);
 		Model\ServiceInPurchasedPackageTable::deleteBatch(['!PURCHASED_PACKAGE_CODE' => null]);
+
+		Model\PurchaseTable::updateBatch(
+			['PURGED' => 'Y'],
+			['=PURGED' => 'N'],
+		);
 	}
 
 	public function save(
@@ -30,7 +35,6 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 	): void
 	{
 		foreach ([
-			$purchases,
 			$purchasedPackages,
 			$servicesInPurchasedPackages,
 		] as $collection)
@@ -43,6 +47,12 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 				);
 			}
 		}
+
+		/** @var EO_Purchase $purchase */
+		foreach ($purchases as $purchase) {
+			Model\PurchaseTable::insertUpdate($purchase->collectValues(), ['PURGED' => 'N']);
+		}
+		Model\PurchaseTable::deleteBatch(['=PURGED' => 'Y']);
 	}
 
 	public function update(
@@ -263,7 +273,7 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 		;
 	}
 
-	public function getServicesInPurchase(string $packageCode, string $purchaseCode): array
+	public function getServicesInPurchase(string $purchaseCode): array
 	{
 		return Baas\Model\ServiceInPurchasedPackageTable::query()
 			->setSelect([
@@ -272,7 +282,6 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 				new Main\ORM\Fields\ExpressionField('WILL_START', 'MIN(%s)', 'PURCHASED_PACKAGE.START_DATE'),
 				new Main\ORM\Fields\ExpressionField('WILL_EXPIRED', 'MAX(%s)', 'PURCHASED_PACKAGE.EXPIRATION_DATE'),
 			])
-			->where('PURCHASED_PACKAGE.PACKAGE_CODE', $packageCode)
 			->where('PURCHASED_PACKAGE.PURCHASE_CODE', $purchaseCode)
 			->where('CURRENT_VALUE', '>', 0)
 			->where('PURCHASED_PACKAGE.EXPIRED', 'N')
@@ -302,6 +311,15 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 		;
 
 		return ($purchase instanceof Baas\Model\EO_Purchase) ? $purchase : null;
+	}
+
+	public function getPurchasesToNotifyAbout(): Baas\Model\EO_Purchase_Collection
+	{
+		return Baas\Model\PurchaseTable::query()
+			->where('NOTIFIED', 'N')
+			->where('PURCHASED_PACKAGE.SERVICE_IN_PURCHASED_PACKAGE.CURRENT_VALUE', '>', '0')
+			->where('PURCHASED_PACKAGE.EXPIRED', 'N')
+			->fetchCollection();
 	}
 
 	private function getNotExpiredServicesQuery(): Main\ORM\Query\Query

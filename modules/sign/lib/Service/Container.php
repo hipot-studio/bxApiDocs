@@ -13,6 +13,7 @@ use Bitrix\Sign\Connector;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Callback;
 use Bitrix\Sign\Contract;
+use Bitrix\Sign\Service\Providers\ProviderVisibilityService;
 use Bitrix\Sign\Service\Sign\Document\TemplateFolderService;
 use Bitrix\Sign\Service\Sign\Document\TemplateGridService;
 use Psr\Container\ContainerInterface;
@@ -538,5 +539,30 @@ class Container
 	public function getLocalizedErrorService(): LocalizedErrorService
 	{
 		return self::getService('sign.service.localizedError');
+	}
+
+	public function getSignersListRepository(): Repository\SignersList\SignersListRepository
+	{
+		return static::getService('sign.repository.signerslist');
+	}
+
+	public function getSignersListUserRepository(): Repository\SignersList\SignersListUserRepository
+	{
+		return static::getService('sign.repository.signerslistuser');
+	}
+
+	public function getSignersListService(): SignersListService
+	{
+		return static::getService('sign.service.signerslist');
+	}
+
+	public function getOnboardingService(): OnboardingService
+	{
+		return static::getService('sign.service.onboarding');
+	}
+
+	public function getProviderVisibilityService(): ProviderVisibilityService
+	{
+		return static::getService('sign.service.provider.visibility');
 	}
 }

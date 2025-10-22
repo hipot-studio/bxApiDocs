@@ -213,11 +213,13 @@ class NotificationAgent
 		$list = self::$connection->query($sql)->fetchAll();
 		foreach ($list as $item)
 		{
-			$isMorningScenario = (int)$item['REMINDER_DELAY'] === ReminderNotificationDelay::Morning->value;
 			$isNowWorkingHours = self::isNowWorkingHours($currentTimestamp, $item['TIMEZONE_FROM']);
 			$isSameDay = self::isSameDay($currentTimestamp, (int)$item['DATE_FROM'], $item['TIMEZONE_FROM']);
-			$isPreciseDelay = (int)$item['REMINDER_DELAY'] < self::getPreciseDelayForConfirmationAndDelayed();
-			$isTimeToSend = (int)$item['DATE_FROM'] - (int)$item['REMINDER_DELAY'] <= $currentTimestamp;
+			$isMorningScenario = (int)$item['REMINDER_DELAY'] === ReminderNotificationDelay::Morning->value;
+			$isPreciseDelay = (
+				!$isMorningScenario
+				&& (int)$item['REMINDER_DELAY'] < self::getPreciseDelayForConfirmationAndDelayed()
+			);
 
 			if (!$isNowWorkingHours && !$isPreciseDelay)
 			{
@@ -243,9 +245,13 @@ class NotificationAgent
 					continue;
 				}
 			}
-			elseif (!$isTimeToSend)
+			else
 			{
-				continue;
+				$isTimeToSend = (int)$item['DATE_FROM'] - (int)$item['REMINDER_DELAY'] <= $currentTimestamp;
+				if (!$isTimeToSend)
+				{
+					continue;
+				}
 			}
 
 			$bookingIds[] = (int)$item['ID'];

@@ -12,6 +12,7 @@ use Bitrix\Crm\Component\EntityList\Grid;
 use Bitrix\Crm\Component\EntityList\Settings\PermissionItem;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Security\Role\Manage\Manager\CustomSectionListSelection;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Summary\SummaryFactory;
 use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Loader;
@@ -127,6 +128,24 @@ class CrmAutomatedSolutionListComponent extends Base
 	private function getSettingsItems(): array
 	{
 		$items = [];
+
+
+		if (
+			Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()
+			&& \Bitrix\Main\Loader::includeModule('rest')
+			&& is_callable('\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl')
+			&& \Bitrix\Crm\Restriction\RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
+		)
+		{
+			$items[] = [
+				'text' => Loc::getMessage('CRM_AUTOMATED_SOLUTION_LIST_EXPORT_IMPORT_ITEM'),
+				'href' => \Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl(
+					'automated_solution',
+					'automated_solution_list'
+				),
+				'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
+			];
+		}
 
 		$permissionItem = new PermissionItem(new CustomSectionListSelection());
 		$permissionItem->setAnalytics([

@@ -15,9 +15,9 @@ use Bitrix\Sign\Item\Hr\EntitySelector\Entity;
 use Bitrix\Sign\Item\Hr\EntitySelector\EntityCollection;
 use Bitrix\Sign\Item\Hr\NodeSync;
 use Bitrix\Sign\Item\MemberCollection;
-use Bitrix\Sign\Operation\Member\GetDepartmentSyncMembers;
+use Bitrix\Sign\Operation\Member\GetMembersFromUserPartyEntities;
 use Bitrix\Sign\Operation\Member\SyncDepartmentsPage;
-use Bitrix\Sign\Operation\Member\ValidateEntitySelectorMembers;
+use Bitrix\Sign\Operation\Member\Validation\ValidateEntitySelectorMembers;
 use Bitrix\Sign\Result\Operation\Member\ValidateEntitySelectorMembersResult;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Type\Access\AccessibleItemType;
@@ -355,6 +355,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	)]
 	public function getUniqSignersCountAction(
 		array $members,
+		bool $excludeRejected = true,
 	): array
 	{
 		$entityCollection = new EntityCollection();
@@ -375,7 +376,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			);
 		}
 
-		$result = $this->memberService->getUniqueSignersCount($entityCollection);
+		$result = $this->memberService->getUniqueSignersCount($entityCollection, $excludeRejected);
 
 		if (!$result->isSuccess())
 		{
@@ -397,6 +398,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	)]
 	public function getUniqSignersCountForDocumentAction(
 		string $documentUid,
+		bool $excludeRejected = true,
 	): array
 	{
 		$document = Service\Container::instance()->getDocumentService()->getByUid($documentUid);
@@ -415,7 +417,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 
 		$entityCollection = EntityCollection::fromMemberCollection($memberCollection);
 
-		$result = $this->memberService->getUniqueSignersCount($entityCollection);
+		$result = $this->memberService->getUniqueSignersCount($entityCollection, $excludeRejected);
 
 		if (!$result->isSuccess())
 		{
@@ -437,6 +439,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	public function syncB2eMembersWithDepartmentsAction(
 		string $documentUid,
 		int $currentParty,
+		bool $excludeRejected = true,
 	): array
 	{
 		if (!$this->getSyncMembersLock($documentUid))
@@ -461,7 +464,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		}
 
 		$nodeMemberService = \Bitrix\HumanResources\Service\Container::instance()->getNodeMemberService();
-		$result = (new SyncDepartmentsPage($document, $currentParty, $nodeMemberService))->launch();
+		$result = (new SyncDepartmentsPage($document, $currentParty, $nodeMemberService, $excludeRejected))->launch();
 
 		if (!$result->isSuccess())
 		{
@@ -499,6 +502,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		string $documentUid,
 		int $representativeId,
 		array $members,
+		bool $excludeRejected = true,
 	): array
 	{
 		if ($representativeId <= 0)
@@ -527,7 +531,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
-		$result = (new GetDepartmentSyncMembers($result->entities))->launch();
+		$result = (new GetMembersFromUserPartyEntities($result->entities, excludeRejectedSigners: $excludeRejected))->launch();
 		$memberCollection = $result->members;
 		$departmentEntities = $result->departments;
 		$assigneeEntityType = $result->assigneeEntityType;
@@ -539,7 +543,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			);
 		}
 
-		$result = $this->memberService->setupB2eMembers($documentUid, $memberCollection, $representativeId);
+		$result = $this->memberService->setupB2eMembers($documentUid, $memberCollection, $representativeId, excludeRejected: $excludeRejected);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());

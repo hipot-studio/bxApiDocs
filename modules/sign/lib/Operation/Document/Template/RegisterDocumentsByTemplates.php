@@ -21,7 +21,8 @@ class RegisterDocumentsByTemplates implements Operation
 	public function __construct(
 		private readonly TemplateCollection $templates,
 		private readonly int $sendFromUserId,
-		private readonly InitiatedByType $onlyInitiatedByType
+		private readonly InitiatedByType $onlyInitiatedByType,
+		private readonly bool $excludeRejected = true,
 	) {
 		$this->documentService = Container::instance()->getDocumentService();
 	}
@@ -56,6 +57,7 @@ class RegisterDocumentsByTemplates implements Operation
 			template: $template,
 			sendFromUserId: $this->sendFromUserId,
 			onlyInitiatedByType: $this->onlyInitiatedByType,
+			excludeRejected: $this->excludeRejected,
 		))
 			->launch()
 		;

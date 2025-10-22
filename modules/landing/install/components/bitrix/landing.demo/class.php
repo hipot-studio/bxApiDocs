@@ -1136,9 +1136,23 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 					unset($sectionId);
 
 					// agreement
-					if(!$settings['AGREEMENT_ID'] && Loader::includeModule('crm'))
+					if(!$settings['AGREEMENTS'] && Loader::includeModule('crm'))
 					{
-						$siteData['ADDITIONAL_FIELDS']['SETTINGS_AGREEMENT_ID'] = UserConsent::getDefaultAgreementId();
+						$defaultAgreementId = (int)UserConsent::getDefaultAgreementId();
+						if ($defaultAgreementId)
+						{
+							$siteData['ADDITIONAL_FIELDS']['SETTINGS_AGREEMENTS'] = [
+								[
+									'ID' => $defaultAgreementId,
+									'CHECKED' => 'Y',
+									'REQUIRED' => 'Y',
+								],
+							];
+						}
+						else
+						{
+							$siteData['ADDITIONAL_FIELDS']['SETTINGS_AGREEMENTS'] = [];
+						}
 					}
 				}
 

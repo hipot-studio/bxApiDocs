@@ -6,21 +6,20 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateFilter;
+use Bitrix\Bizproc\Api\Service\TaskService;
 use Bitrix\Lists\Api\Service\ServiceFactory\ProcessService;
 use Bitrix\Lists\Api\Service\ServiceFactory\ServiceFactory;
+use Bitrix\Main\Engine\Contract\Controllerable;
+use Bitrix\Main\Errorable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateToGet;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
 use Bitrix\Bizproc\Api\Response\WorkflowStateService\GetListResponse;
-use Bitrix\Main\Web\Uri;
 
-class BizprocUserProcesses
-	extends CBitrixComponent
-	implements \Bitrix\Main\Errorable, \Bitrix\Main\Engine\Contract\Controllerable
+class BizprocUserProcesses extends CBitrixComponent implements Errorable, Controllerable
 {
 	protected const GRID_ID = 'bizproc_user_processes_v2';
 	protected const NAVIGATION_ID = 'page';
@@ -28,6 +27,7 @@ class BizprocUserProcesses
 
 	private ErrorCollection $errorCollection;
 	private \Bitrix\Main\UI\Filter\Options $filterOptions;
+	private \Bitrix\Main\Grid\Options $gridOptions;
 
 	private int $targetUserId;
 
@@ -51,6 +51,7 @@ class BizprocUserProcesses
 
 		$this->errorCollection = new ErrorCollection();
 		$this->filterOptions = new \Bitrix\Main\UI\Filter\Options(static::FILTER_ID);
+		$this->gridOptions = new \Bitrix\Main\Grid\Options(static::GRID_ID);
 	}
 
 	public function addErrors(array $errors): static
@@ -151,7 +152,7 @@ class BizprocUserProcesses
 				}
 			}
 
-			$taskService = new \Bitrix\Bizproc\Api\Service\TaskService(
+			$taskService = new TaskService(
 				new \Bitrix\Bizproc\Api\Service\TaskAccessService($this->getCurrentUserId()),
 			);
 
@@ -302,7 +303,7 @@ class BizprocUserProcesses
 				'id' => 'MODIFIED',
 				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_MODIFIED_2_MSGVER_1'),
 				'default' => true,
-				'sort' => '',
+				'sort' => 'MODIFIED',
 				'width' => 192,
 				//'align' => 'center',
 				'first_order' => 'desc',
@@ -349,7 +350,7 @@ class BizprocUserProcesses
 				'id' => 'WORKFLOW_STARTED',
 				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_WORKFLOW_STARTED'),
 				'default' => false,
-				'sort' => '',
+				'sort' => 'WORKFLOW_STARTED',
 			],
 			[
 				'id' => 'WORKFLOW_STARTED_BY',
@@ -368,8 +369,7 @@ class BizprocUserProcesses
 
 	private function getPageNavigation(): \Bitrix\Main\UI\PageNavigation
 	{
-		$options = new \Bitrix\Main\Grid\Options(static::GRID_ID);
-		$navParams = $options->GetNavParams();
+		$navParams = $this->gridOptions->GetNavParams();
 
 		$pageNavigation = new \Bitrix\Main\UI\PageNavigation(static::NAVIGATION_ID);
 		$pageNavigation->setPageSize($navParams['nPageSize'])->initFromUri();
@@ -417,6 +417,15 @@ class BizprocUserProcesses
 		$this->arResult['viewData']['workflows'] = $workflowViews;
 	}
 
+	private function setSortingToRequest(WorkflowStateToGet $workflowsRequest): void
+	{
+		$defaultSorting = ['MODIFIED' => 'DESC'];
+
+		$sortingPayload = $this->gridOptions->getSorting(['sort' => $defaultSorting]);
+
+		$workflowsRequest->setOrder($sortingPayload['sort'] ?? $defaultSorting);
+	}
+
 	private function fetchWorkflows(int $limit, int $offset, bool $shouldCountTotal = true): GetListResponse
 	{
 		$workflowStateService = new WorkflowStateService();
@@ -432,6 +441,8 @@ class BizprocUserProcesses
 		}
 
 		$this->setFilterToRequest($workflowsRequest);
+
+		$this->setSortingToRequest($workflowsRequest);
 
 		return $workflowStateService->getList($workflowsRequest);
 	}
@@ -492,7 +503,7 @@ class BizprocUserProcesses
 			array_filter($this->getGridColumns(), static fn($column) => $column['default']),
 			'id'
 		);
-		$usedColumns = (new \Bitrix\Main\Grid\Options(static::GRID_ID))->getUsedColumns($defaultColumns);
+		$usedColumns = $this->gridOptions->getUsedColumns($defaultColumns);
 
 		foreach ($workflows->getWorkflowStatesCollection() as $workflowState)
 		{

@@ -191,7 +191,7 @@ final class FieldRepository
 				->configureDefaultValue(static function () {
 					return Container::getInstance()->getContext()->getUserId();
 				})
-				->configureTitle(Loc::getMessage('CRM_TYPE_ITEM_FIELD_LAST_ACTIVITY_BY'))
+				->configureTitle(Loc::getMessage('CRM_TYPE_ITEM_FIELD_LAST_ACTIVITY_BY_MSGVER_1'))
 		;
 	}
 

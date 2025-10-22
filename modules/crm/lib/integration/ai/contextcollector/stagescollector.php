@@ -62,7 +62,10 @@ final class StagesCollector implements ContextCollector
 			$info = [
 				'id' => $stage->getStatusId(),
 				'name' => $stage->getName(),
-				'semantics' => $stage->getSemantics() ?? PhaseSemantics::PROCESS,
+				'semantics' => PhaseSemantics::isDefined($stage->getSemantics())
+					? $stage->getSemantics()
+					: PhaseSemantics::PROCESS
+				,
 				'sort' => $stage->getSort(),
 			];
 

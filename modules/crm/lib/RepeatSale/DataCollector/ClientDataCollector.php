@@ -7,7 +7,7 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use CCrmOwnerType;
 
-final class ClientDataCollector extends AbstractDataCollector
+final class ClientDataCollector extends BaseDataCollector
 {
 	protected const SUPPORTED_ENTITY_TYPES = [
 		CCrmOwnerType::Contact,

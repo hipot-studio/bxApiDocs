@@ -4,8 +4,6 @@ namespace Bitrix\Sign\Repository\Grid;
 
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
-use Bitrix\Sign\Config\Feature;
-use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Internal\Document\Template\TemplateFolderRelationTable;
 use Bitrix\Sign\Item\DocumentTemplateGrid\QueryOptions;
 use Bitrix\Sign\Item\DocumentTemplateGrid\Row;
@@ -147,6 +145,16 @@ class TemplateGridRepository
 
 	private function selectTemplateFolderRelationQuery(QueryOptions $options): Query
 	{
+		$visibleRelationFilter = Query::filter()
+			->logic('or')
+			->where('ENTITY_TYPE', EntityType::FOLDER->value)
+			->where(
+				Query::filter()
+					->where('ENTITY_TYPE', EntityType::TEMPLATE->value)
+					->where('TEMPLATE.HIDDEN', false)
+			)
+		;
+
 		return TemplateFolderRelationTable::query()
 			->addSelect('ENTITY_ID')
 			->addSelect('ENTITY_TYPE')
@@ -158,6 +166,7 @@ class TemplateGridRepository
 			->addOrder('FOLDER.DATE_CREATE', 'DESC')
 			->addOrder('TEMPLATE.DATE_CREATE', 'DESC')
 			->where('DEPTH_LEVEL', 0)
+			->where($visibleRelationFilter)
 			->where($options->filter)
 			->setLimit($options->limit)
 			->setOffset($options->offset)
@@ -175,6 +184,7 @@ class TemplateGridRepository
 			->where('DEPTH_LEVEL', 1)
 			->where('PARENT_ID', $folderId)
 			->where('ENTITY_TYPE', EntityType::TEMPLATE->value)
+			->where('TEMPLATE.HIDDEN', false)
 			->where($options->filter)
 			->setLimit($options->limit)
 			->setOffset($options->offset)

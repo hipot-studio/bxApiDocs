@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals;
 
+use Bitrix\Booking\Internals\Integration\Catalog\CatalogSkuDataLoader;
+use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
+use Bitrix\Booking\Internals\Integration\Crm\Contact\ContactService;
+use Bitrix\Booking\Internals\Integration\Crm\CrmDealDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\DealService;
+use Bitrix\Booking\Internals\Integration\Intranet\BookingTool;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\DelayedTaskRepository;
@@ -13,6 +19,7 @@ use Bitrix\Booking\Internals\Repository\ORM\ResourceLinkedEntityRepository;
 use Bitrix\Booking\Internals\Repository\WaitListItemRepositoryInterface;
 use Bitrix\Booking\Internals\Service\BookingService;
 use Bitrix\Booking\Internals\Service\ClientService;
+use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
 use Bitrix\Booking\Internals\Service\EventForBookingService;
 use Bitrix\Booking\Internals\Service\ExternalDataService;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
@@ -41,8 +48,13 @@ use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
 use Bitrix\Booking\Internals\Service\ProviderManager;
 use Bitrix\Booking\Internals\Service\ResourceService;
 use Bitrix\Booking\Internals\Service\WaitListItemService;
+use Bitrix\Booking\Internals\Service\Yandex\AvailableTimeSlotsProvider;
+use Bitrix\Booking\Internals\Service\Yandex\ResourceProvider;
+use Bitrix\Booking\Internals\Service\Yandex\ServiceProvider;
+use Bitrix\Booking\Provider\BookingProvider;
 use Bitrix\Main\Access\BaseAccessController;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Booking\Internals\Service\Yandex;
 
 class Container
 {
@@ -59,10 +71,11 @@ class Container
 			$name = $prefix . $name;
 		}
 		$locator = ServiceLocator::getInstance();
+
 		return $locator->has($name)
 			? $locator->get($name)
 			: null
-			;
+		;
 	}
 
 	public static function getTransactionHandler(): TransactionHandlerInterface
@@ -255,8 +268,108 @@ class Container
 		return self::getService('booking.internals.delayed_task.repository');
 	}
 
+	public static function getDelayedTaskService(): DelayedTaskService
+	{
+		return self::getService('booking.internals.delayed_task.service');
+	}
+
 	public static function getResourceLinkedEntityRepository(): ResourceLinkedEntityRepository
 	{
 		return self::getService('booking.internals.resource_linked_entity.repository');
+	}
+
+	public static function getYandexResourceProvider(): ResourceProvider
+	{
+		return self::getService('booking.internals.service.yandex.resource.provider');
+	}
+
+	public static function getYandexServiceProvider(): ServiceProvider
+	{
+		return self::getService('booking.internals.service.yandex.service.provider');
+	}
+
+	public static function getYandexAvailableTimeSlotsProvider(): AvailableTimeSlotsProvider
+	{
+		return self::getService('booking.internals.service.yandex.available.time.slots.provider');
+	}
+
+	public static function getYandexAvailableDatesProvider(): Yandex\AvailableDatesProvider
+	{
+		return self::getService('booking.internals.service.yandex.available.dates.provider');
+	}
+
+	public static function getYandexDeleteBookingService(): Yandex\DeleteBookingService
+	{
+		return self::getService('booking.internals.service.yandex.delete.booking.service');
+	}
+
+	public static function getYandexCreateBookingService(): Yandex\CreateBookingService
+	{
+		return self::getService('booking.internals.service.yandex.create.booking.service');
+	}
+
+	public static function getCrmContactService(): ContactService
+	{
+		return self::getService('booking.internals.integration.crm.contact.service');
+	}
+
+	public static function getCrmDealService(): DealService
+	{
+		return self::getService('booking.internals.integration.crm.deal.service');
+	}
+
+	public static function getCatalogServiceSkuProvider(): ServiceSkuProvider
+	{
+		return self::getService('booking.internals.integration.catalog.service.sku.provider');
+	}
+
+	public static function getYandexBookingProvider(): Yandex\BookingProvider
+	{
+		return self::getService('booking.internals.service.yandex.booking.provider');
+	}
+
+	public static function getYandexCompanyFeedProvider(): Yandex\CompanyFeedProvider
+	{
+		return self::getService('booking.internals.service.yandex.company.feed.provider');
+	}
+
+	public static function getYandexCompanyRepository(): Yandex\CompanyRepository
+	{
+		return self::getService('booking.internals.service.yandex.company.repository');
+	}
+
+	public static function getYandexApiClient(): Yandex\ApiClient
+	{
+		return self::getService('booking.internals.service.yandex.api.client');
+	}
+
+	public static function getYandexAccount(): Yandex\Account
+	{
+		return self::getService('booking.internals.service.yandex.account');
+	}
+
+	public static function getYandexCompanyFeedSender(): Yandex\CompanyFeedSender
+	{
+		return self::getService('booking.internals.service.yandex.company.feed.sender');
+	}
+
+	public static function getCatalogSkuDataLoader(): CatalogSkuDataLoader
+	{
+		return self::getService('booking.internals.integration.catalog.sku.data.loader');
+	}
+
+	public static function getCrmDealDataLoader(): CrmDealDataLoader
+	{
+		return self::getService('booking.internals.integration.crm.deal.data.loader');
+	}
+
+	public static function getBookingProvider(): BookingProvider
+	{
+		return self::getService('booking.booking.provider');
+	}
+
+	public static function getIntranetBookingTool(): BookingTool
+	{
+		return self::getService('booking.internals.integration.intranet.booking.tool');
 	}
 }

@@ -237,6 +237,11 @@ class Http
 						'errorStack' => $errors,
 					]
 				];
+
+				$errors[] = 'url:'.$this->controllerUrl;
+				$errors[] = 'command:'.$command;
+				$systemException = new \Bitrix\Main\SystemException('Network connection error: '.implode('; ', $errors));
+				\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
 			}
 		}
 		elseif ($waitResponse)

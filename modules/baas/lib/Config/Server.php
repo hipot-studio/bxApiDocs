@@ -8,9 +8,9 @@ use Bitrix\Bitrix24;
 class Server extends Config
 {
 	private const SERVER_URLS = [
-		'ru' => 'https://baas-cis.bitrix.info',
-		'by' => 'https://baas-cis.bitrix.info',
-		'kz' => 'https://baas-cis.bitrix.info',
+		'ru' => 'https://baas-cis.bitrix24.tech',
+		'by' => 'https://baas-cis.bitrix24.tech',
+		'kz' => 'https://baas-cis.bitrix24.tech',
 		'en' => 'https://baas.bitrix.info',
 	];
 	private const OPTION_NAME_SERVER_URL = 'server_url';

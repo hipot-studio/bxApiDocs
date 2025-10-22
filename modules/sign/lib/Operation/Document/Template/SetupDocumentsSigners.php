@@ -10,7 +10,7 @@ use Bitrix\Sign\Item\DocumentCollection;
 use Bitrix\Sign\Item\Hr\EntitySelector\EntityCollection;
 use Bitrix\Sign\Item\Member\SelectorEntityCollection;
 use Bitrix\Sign\Item\MemberCollection;
-use Bitrix\Sign\Operation\Member\GetDepartmentSyncMembers;
+use Bitrix\Sign\Operation\Member\GetMembersFromUserPartyEntities;
 use Bitrix\Sign\Result\Operation\Document\Template\SetupDocumentSignersResult;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Sign\MemberService;
@@ -23,6 +23,7 @@ class SetupDocumentsSigners implements Operation
 		private readonly DocumentCollection $documents,
 		private readonly SelectorEntityCollection $signers,
 		private readonly int $sendFromUserId,
+		private readonly bool $excludeRejected = true,
 	)
 	{
 		$this->memberService = Container::instance()->getMemberService();
@@ -30,7 +31,7 @@ class SetupDocumentsSigners implements Operation
 
 	public function launch(): Main\Result|SetupDocumentSignersResult
 	{
-		$result = (new GetDepartmentSyncMembers($this->signers))->launch();
+		$result = (new GetMembersFromUserPartyEntities($this->signers, excludeRejectedSigners: $this->excludeRejected))->launch();
 		$members = $result->members;
 		$departments = $result->departments;
 
@@ -58,6 +59,7 @@ class SetupDocumentsSigners implements Operation
 			document: $document,
 			sendFromUserId: $this->sendFromUserId,
 			memberList: $members->cloneMembers(),
+			excludeRejected: $this->excludeRejected,
 		);
 
 		$result = $operation->launch();

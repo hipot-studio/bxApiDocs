@@ -35,6 +35,11 @@ class SignPermissionDictionary extends \Bitrix\Main\Access\Permission\Permission
 	public const SIGN_B2E_TEMPLATE_WRITE = 15;
 	public const SIGN_B2E_TEMPLATE_DELETE = 16;
 	public const SIGN_B2E_MY_SAFE_FIRED = 17;
+	public const SIGN_B2E_SIGNERS_LIST_READ = 18;
+	public const SIGN_B2E_SIGNERS_LIST_ADD = 19;
+	public const SIGN_B2E_SIGNERS_LIST_EDIT = 20;
+	public const SIGN_B2E_SIGNERS_LIST_DELETE = 21;
+	public const SIGN_B2E_SIGNERS_LIST_REFUSED = 22;
 
 	public static function isValid(string|int $permission): bool
 	{
@@ -52,6 +57,10 @@ class SignPermissionDictionary extends \Bitrix\Main\Access\Permission\Permission
 			self::SIGN_B2E_TEMPLATE_DELETE,
 			self::SIGN_TEMPLATES,
 			self::SIGN_B2E_TEMPLATES,
+			self::SIGN_B2E_SIGNERS_LIST_ADD,
+			self::SIGN_B2E_SIGNERS_LIST_READ,
+			self::SIGN_B2E_SIGNERS_LIST_DELETE,
+			self::SIGN_B2E_SIGNERS_LIST_EDIT,
 		]);
 	}
 
@@ -126,6 +135,11 @@ class SignPermissionDictionary extends \Bitrix\Main\Access\Permission\Permission
 			self::SIGN_B2E_TEMPLATE_CREATE => $signB2eTemplateCreate,
 			self::SIGN_B2E_TEMPLATE_WRITE => $signB2eTemplateWrite,
 			self::SIGN_B2E_TEMPLATE_DELETE => $signB2eTemplateDelete,
+			self::SIGN_B2E_SIGNERS_LIST_READ => 'SIGN_B2E_SIGNERS_LIST_READ',
+			self::SIGN_B2E_SIGNERS_LIST_ADD => 'SIGN_B2E_SIGNERS_LIST_ADD',
+			self::SIGN_B2E_SIGNERS_LIST_EDIT => 'SIGN_B2E_SIGNERS_LIST_EDIT',
+			self::SIGN_B2E_SIGNERS_LIST_DELETE => 'SIGN_B2E_SIGNERS_LIST_DELETE',
+			self::SIGN_B2E_SIGNERS_LIST_REFUSED => 'SIGN_B2E_SIGNERS_LIST_REFUSED',
 			default => null,
 		};
 	}

@@ -24,4 +24,8 @@ class UserDepartmentAndOpenedAsSettings extends UserDepartmentAndOpenedBase
 		return $value;
 	}
 
+	public function convertAttributeToSettings(string $attribute): array
+	{
+		return $this->permissionPreset->convertSingleToMultiValue($attribute);
+	}
 }

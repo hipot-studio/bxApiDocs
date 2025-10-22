@@ -6,6 +6,7 @@ use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Component\ComponentError;
+use Bitrix\Crm\Component\EntityDetails;
 use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 use Bitrix\Crm\Controller\Entity;
 use Bitrix\Crm\Entity\EntityEditorOptionBuilder;
@@ -21,6 +22,7 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MessageSender\Channel\ChannelRepository;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Product\Url\ProductBuilder;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\Relation;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Requisite\EntityLink;
@@ -31,7 +33,6 @@ use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Service\ParentFieldManager;
-use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\Json;
@@ -39,7 +40,6 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Request;
 use Bitrix\Main\Type\DateTime;
@@ -52,7 +52,6 @@ use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use CCrmComponentHelper;
 use CLists;
-use Bitrix\Crm\Component\EntityDetails;
 
 abstract class FactoryBased extends BaseComponent implements Controllerable, SupportsEditorProvider
 {
@@ -1429,13 +1428,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				$this->item,
 				$data[EditorAdapter::FIELD_MY_COMPANY_DATA_NAME]
 			);
-			if (!$result->isSuccess())
+
+			if ($result->isSuccess())
 			{
-				$this->errorCollection->add($result->getErrors());
+				$data = array_merge($data, $result->getData());
 			}
 			else
 			{
-				$data = array_merge($data, $result->getData());
+				$this->errorCollection->add($result->getErrors());
 			}
 		}
 
@@ -1475,7 +1475,23 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				];
 			}
 			$this->errorCollection->add($result->getErrors());
+
 			return null;
+		}
+
+		$recurringItemId = null;
+		$fieldRecurringName = RecurringFieldEditorAdapter::FIELD_RECURRING;
+		if (isset($data[$fieldRecurringName]) && $this->factory->isRecurringEnabled())
+		{
+			$result = $this->editorAdapter->saveRecurringData(
+				$this->item,
+				$data[$fieldRecurringName],
+			);
+
+			if ($result->isSuccess())
+			{
+				$recurringItemId = $result->getData()['ITEM_ID'] ?? null;
+			}
 		}
 
 		if(
@@ -1504,16 +1520,17 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			'ADDITIONAL_FIELDS_DATA' => $this->getAdditionalFieldsData(),
 		];
 
-		if($isNew)
+		$redirectUrlItemId = $recurringItemId ?: $this->item->getId();
+		if ($isNew || $recurringItemId)
 		{
 			$result['REDIRECT_URL'] = Container::getInstance()->getRouter()->getItemDetailUrl(
 				$this->getEntityTypeID(),
-				$this->item->getId()
+				$redirectUrlItemId,
 			);
 		}
 
 		$conversionWizard = $this->getConversionWizard();
-		if ($this->isConversionMode() && $conversionWizard !== null)
+		if ($conversionWizard !== null && $this->isConversionMode())
 		{
 			$conversionWizard->attachNewlyCreatedEntity($this->factory->getEntityName(), $this->item->getId());
 			$conversionRedirectUrl = $conversionWizard->getRedirectUrl();

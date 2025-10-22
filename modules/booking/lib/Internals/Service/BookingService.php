@@ -11,6 +11,7 @@ use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Service\Overbooking\IntersectionResult;
 use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
+use Bitrix\Booking\Provider\BookingProvider;
 
 class BookingService
 {
@@ -19,7 +20,7 @@ class BookingService
 		private readonly ResourceService $resourceService,
 		private readonly ClientService $clientService,
 		private readonly ExternalDataService $externalDataService,
-		private readonly OverlapPolicy $overbookingOverlapPolicy
+		private readonly OverlapPolicy $overbookingOverlapPolicy,
 	)
 	{
 	}

@@ -1,17 +1,17 @@
 <?php
 namespace Bitrix\Crm\Service;
 
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\ActivityPage;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Security\Role\Manage\Manager\AllSelection;
 use Bitrix\Crm\Security\Role\Manage\RoleManagerSelectionFactory;
 use Bitrix\Crm\Service\Router\Component\Component;
-use Bitrix\Crm\Service\Router\Dto\RouterAnchor;
-use Bitrix\Crm\Service\Router\Enum\Scope;
 use Bitrix\Crm\Service\Router\Contract\PageFactory;
 use Bitrix\Crm\Service\Router\Contract\PageResolver;
+use Bitrix\Crm\Service\Router\Dto\RouterAnchor;
+use Bitrix\Crm\Service\Router\Enum\Scope;
+use Bitrix\Crm\Service\Router\Page;
 use Bitrix\Crm\Service\Router\ParseResult;
 use Bitrix\Crm\Settings\EntityViewSettings;
 use Bitrix\Intranet\Util;
@@ -24,7 +24,6 @@ use Bitrix\Main\HttpRequest;
 use Bitrix\Main\IO\Directory;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
-use Bitrix\Crm\Service\Router\Page;
 use Bitrix\Main\SiteTable;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
@@ -545,6 +544,17 @@ class Router
 	public function getAutomatedSolutionDetailUrl(int $automatedSolutionId): ?Uri
 	{
 		return new Uri("/automation/type/automated_solution/details/{$automatedSolutionId}/");
+	}
+
+	public function getItemRecurringListUrl(int $entityTypeId, int $categoryId = null): ?Uri
+	{
+		return $this->getUrlForTemplate(
+			'bitrix:crm.item.recurlist',
+			[
+				'entityTypeId' => $entityTypeId,
+				'categoryId' => $categoryId ?? 0,
+			],
+		);
 	}
 
 	public function getItemListUrl(int $entityTypeId, int $categoryId = null): ?Uri

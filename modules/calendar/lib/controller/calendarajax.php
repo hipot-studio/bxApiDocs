@@ -433,8 +433,12 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 		if ($entryId > 0)
 		{
-			$fromTs = !empty($_REQUEST['date_from_offset']) ? \CCalendar::Timestamp($_REQUEST['date_from'])
-				- $_REQUEST['date_from_offset'] : \CCalendar::Timestamp($_REQUEST['date_from']);
+			$fromTs = \CCalendar::Timestamp($_REQUEST['date_from']);
+			if (!empty($_REQUEST['date_from_offset']))
+			{
+				$fromTs -= $_REQUEST['date_from_offset'];
+			}
+
 			$entry = \CCalendarEvent::getEventForEditInterface($entryId, ['eventDate' => \CCalendar::Date($fromTs)]);
 			$entryId = is_array($entry) && isset($entry['ID']) ? (int)$entry['ID'] : $entryId;
 		}
@@ -557,6 +561,20 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				{
 					$responseParams['sections'][] = $section;
 				}
+			}
+
+			if (
+				empty($responseParams['sections'])
+				&& $type === Dictionary::CALENDAR_TYPE['user']
+				&& !empty($ownerId)
+			)
+			{
+				$responseParams['sections'][] = \CCalendarSect::createDefault([
+					'type' => $type,
+					'ownerId' => $ownerId
+				]);
+
+				\CCalendarSect::setClearOperationCache();
 			}
 
 			$responseParams['dayOfWeekMonthFormat'] = (

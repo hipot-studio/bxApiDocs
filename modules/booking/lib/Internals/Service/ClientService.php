@@ -9,6 +9,7 @@ use Bitrix\Booking\Entity\EntityWithClientRelationInterface;
 use Bitrix\Booking\Entity\EntityInterface;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Integration\Crm\ClientAccessProvider;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\BookingClientRepositoryInterface;
 
@@ -84,5 +85,22 @@ class ClientService
 			?->getClientProvider()
 			?->loadClientDataForCollection($clientCollection)
 		;
+	}
+
+	public function applyClientPermissions(ClientCollection $clientCollection): void
+	{
+		$readAccessMap = (new ClientAccessProvider())->getReadAccessMap($clientCollection);
+
+		foreach ($clientCollection as $client)
+		{
+			$type = $client->getType()->getCode();
+			$canRead = $readAccessMap[$type . '_' . $client->getId()]['read'];
+			$client->setData([
+				'data' => $canRead ? $client->getData() : null,
+				'permissions' => [
+					'read' => $canRead,
+				],
+			]);
+		}
 	}
 }

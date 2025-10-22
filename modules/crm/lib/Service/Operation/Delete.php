@@ -147,27 +147,8 @@ class Delete extends Operation
 
 	protected function runAutomation(): Result
 	{
-		$entityTypeId = $this->itemBeforeSave->getEntityTypeId();
-		$entityId = $this->itemBeforeSave->getId();
-		$documentId = $this->bizProcHelper::ResolveDocumentId($entityTypeId, $entityId);
-
-		$deleteErrors = [];
-		\CBPDocument::OnDocumentDelete($documentId, $deleteErrors);
-		\Bitrix\Crm\Automation\QR\QrTable::deleteByEntity($entityTypeId, $entityId);
-
-		$result = new Result();
-		foreach ($deleteErrors as $error)
-		{
-			$result->addError(
-				new Error(
-					$error['message'] ?? '',
-					$error['code'] ?? 0,
-					$error['file'] ?? ''
-				)
-			);
-		}
-
-		return $result;
+		// There is no need to run automation during deleting.
+		return new Result();
 	}
 
 	public function processFieldsAfterSave(): Result

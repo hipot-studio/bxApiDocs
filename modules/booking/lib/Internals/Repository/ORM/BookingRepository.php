@@ -139,7 +139,13 @@ class BookingRepository implements BookingRepositoryInterface
 		return $result;
 	}
 
-	public function getById(int $id, int $userId = 0): Entity\Booking\Booking|null
+	public function getById(
+		int $id,
+		int $userId = 0,
+		bool $withCounters = true,
+		bool $withClientsData = true,
+		bool $withExternalData = true,
+	): Entity\Booking\Booking|null
 	{
 		// todo: needs refactoring, repository should not know about providers
 		$provider = new BookingProvider();
@@ -158,13 +164,20 @@ class BookingRepository implements BookingRepositoryInterface
 			userId: $userId
 		);
 
-		$provider
-			// TODO: should always be condition for counters loading
-			// need to refactor, add condition, and check usages
-			->withCounters($collection, $userId)
-			->withClientsData($collection)
-			->withExternalData($collection)
-		;
+		if ($withCounters)
+		{
+			$provider->withCounters($collection, $userId);
+		}
+
+		if ($withClientsData)
+		{
+			$provider->withClientsData($collection);
+		}
+
+		if ($withExternalData)
+		{
+			$provider->withExternalData($collection);
+		}
 
 		return $collection->getFirstCollectionItem();
 	}

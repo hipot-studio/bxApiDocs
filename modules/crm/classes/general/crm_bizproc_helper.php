@@ -70,6 +70,7 @@ class CCrmBizProcHelper
 		{
 			return ['crm', $docName, \CCrmOwnerType::ResolveName($ownerTypeID)];
 		}
+
 		return null;
 	}
 	public static function ResolveDocumentId($ownerTypeID, $ownerID)

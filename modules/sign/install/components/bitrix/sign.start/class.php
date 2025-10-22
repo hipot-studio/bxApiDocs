@@ -4,7 +4,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-use Bitrix\Main;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\SmartDocument;
 use Bitrix\Main\Application;
@@ -28,7 +27,14 @@ use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\Sign\Service\Container as SignContainer;
 
 \CBitrixComponent::includeComponentClass('bitrix:sign.base');
-\Bitrix\Main\UI\Extension::load(['sign.v2.grid.b2e.templates', 'crm_common']);
+\Bitrix\Main\UI\Extension::load([
+	'sign.v2.grid.b2e.templates',
+	'crm_common',
+
+	// for sign.tour in menu items (see component_epilog.php)
+	'ui.banner-dispatcher',
+	'sign.tour',
+]);
 
 class SignStartComponent extends SignBaseComponent
 {
@@ -79,6 +85,9 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_preview' => 'b2e/preview/#doc_id#/',
 		'b2e_template_folder_content_kanban' => 'b2e/employee/templates/folder/',
 		'b2e_template_folder_content_list' => 'b2e/list/employee/templates/folder/',
+		'b2e_signers_lists' => 'b2e/signers/',
+		'b2e_signers_edit' => 'b2e/signers/#list_id#/',
+		'b2e_signers_signer_edit' => 'b2e/signers/#list_id#/signer/#user_id#/',
 	];
 
 	/**
@@ -105,6 +114,9 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_preview' => ['doc_id'],
 		'b2e_template_folder_content_kanban' => [],
 		'b2e_template_folder_content_list' => [],
+		'b2e_signers_lists' => [],
+		'b2e_signers_edit' => ['list_id'],
+		'b2e_signers_signer_edit' => ['list_id', 'user_id'],
 	];
 
 	/**
@@ -465,6 +477,7 @@ class SignStartComponent extends SignBaseComponent
 		$this->resolveTemplate();
 		$this->subscribeOnEventsToReplaceCrmUrls();
 		$this->prepareMenuItems();
+		$this->installPresetSignersList();
 		$this->setParam('ENTITY_ID', \Bitrix\Sign\Document\Entity\Smart::getEntityTypeId());
 		$this->setParam('URL_LIST_FOR_RELOAD_TEMPLATE_GRID', $this->getUrlListForReloadTemplateGrid());
 	}
@@ -669,6 +682,35 @@ class SignStartComponent extends SignBaseComponent
 			];
 		}
 
+
+		if ($this->accessController->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ))
+		{
+			$urlGeneratorService = SignContainer::instance()->getUrlGeneratorService();
+
+			$signersInnerItems = [
+				[
+					'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS_LISTS'),
+					'ID' => 'sign_b2e_signers_lists',
+					'URL' => $urlGeneratorService->makeSignersListsUrl(),
+				],
+			];
+
+			if ($this->isRejectedListMenuAvailable())
+			{
+				$signersInnerItems[] = [
+					'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS_REJECTED'),
+					'ID' => 'sign_b2e_signers_edit_rejected',
+					'URL' => $urlGeneratorService->makeSignersListRejectedUrl(),
+				];
+			}
+
+			$items[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS'),
+				'ID' => 'sign_b2e_signers',
+				'ITEMS' => $signersInnerItems,
+			];
+		}
+
 		if ($this->accessController->check(ActionDictionary::ACTION_ACCESS_RIGHTS))
 		{
 			$items[] = [
@@ -681,6 +723,35 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 		return $items;
+	}
+
+	private function isRejectedListMenuAvailable(): bool
+	{
+		$rejectedListId = \Bitrix\Sign\Config\Storage::instance()->getSignersListRejectedId();
+
+		if (!$rejectedListId)
+		{
+			return false;
+		}
+
+		$rejectedList = SignContainer::instance()->getSignersListService()->getById($rejectedListId);
+
+		if (!$rejectedList)
+		{
+			return false;
+		}
+
+		if ($this->accessController->checkAll([
+			ActionDictionary::ACTION_B2E_SIGNERS_LIST_REFUSED_EDIT,
+			ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ,
+		]))
+		{
+			return true;
+		}
+
+		$item = SignContainer::instance()->getAccessibleItemFactory()->createFromItem($rejectedList);
+
+		return $this->accessController->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ, $item);
 	}
 
 	private function hasB2eKanbanMenuItem(array $items): bool
@@ -902,9 +973,17 @@ class SignStartComponent extends SignBaseComponent
 
 	private function getKanbanCategoryCollection(): KanbanCategoryCollection
 	{
-		return	SignContainer::instance()
+		return SignContainer::instance()
 			->getB2eKanbanCategoryService()
 			->getSmartB2eDocumentCategories()
 		;
+	}
+
+	private function installPresetSignersList(): void
+	{
+		if (\Bitrix\Sign\Config\Storage::instance()->getSignersListRejectedId() === null)
+		{
+			(new \Bitrix\Sign\Operation\Signers\InstallRejectedList())->launch();
+		}
 	}
 }

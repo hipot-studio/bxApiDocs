@@ -27,8 +27,8 @@ class FormProvider
 
 		return [
 			['zones' => $westZones, 'id' => 34, 'lang' => 'en', 'sec' => '940xiq'],
-			['zones' => $westZones, 'id' => 58, 'lang' => 'pt', 'sec' => 'db0u10'],
-			['zones' => $westZones, 'id' => 82, 'lang' => 'es', 'sec' => 'f5cg69'],
+			['zones' => $westZones, 'id' => 58, 'lang' => 'br', 'sec' => 'db0u10'],
+			['zones' => $westZones, 'id' => 82, 'lang' => 'la', 'sec' => 'f5cg69'],
 			['zones' => $westZones, 'id' => 84, 'lang' => 'pl', 'sec' => 'xaq93h'],
 			['zones' => $westZones, 'id' => 86, 'lang' => 'tr', 'sec' => '6xbruy'],
 			['zones' => $westZones, 'id' => 88, 'lang' => 'vn', 'sec' => '8g591b'],
@@ -39,7 +39,7 @@ class FormProvider
 			['zones' => $westZones, 'id' => 108, 'lang' => 'id', 'sec' => '3gs5vj'],
 			['zones' => $westZones, 'id' => 98, 'lang' => 'sc', 'sec' => '532jfn'],
 			['zones' => $westZones, 'id' => 100, 'lang' => 'th', 'sec' => '1q4cis'],
-			['zones' => $westZones, 'id' => 102, 'lang' => 'jp', 'sec' => 'c84t56'],
+			['zones' => $westZones, 'id' => 102, 'lang' => 'ja', 'sec' => 'c84t56'],
 			['zones' => $westZones, 'id' => 104, 'lang' => 'tc', 'sec' => '6s7a1m'],
 			['zones' => $westZones, 'id' => 110, 'lang' => 'ar', 'sec' => 'zfkgno'],
 			['zones' => $westZones, 'id' => 106, 'lang' => 'ru', 'sec' => 'j1h7w4'],

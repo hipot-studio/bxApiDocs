@@ -92,6 +92,7 @@ class UpdateBookingCommandHandler
 				$this->handleResources($command->booking, $currentBooking);
 				$this->handleClients($command, $currentBooking);
 				$this->handleExternalData($command, $currentBooking);
+
 				$bookingId = $this->bookingRepository->save($command->booking);
 				$booking = $this->bookingRepository->getById($bookingId);
 				if (!$booking)
@@ -105,9 +106,7 @@ class UpdateBookingCommandHandler
 					?->loadClientDataForCollection($booking->getClientCollection());
 
 				// load booking external data
-				Container::getProviderManager()::getCurrentProvider()
-					?->getDataProvider()
-					?->loadDataForCollection($booking->getExternalDataCollection());
+				$this->bookingProvider->withExternalData(new Entity\Booking\BookingCollection($booking));
 
 				Container::getProviderManager()::getCurrentProvider()
 					?->getDataProvider()

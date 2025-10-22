@@ -15,6 +15,8 @@ use RuntimeException;
 abstract class AbstractPayload implements PayloadInterface
 {
 	protected array $markers = [];
+	protected array $encodedMarkers = [];
+
 	private Date $currentDate;
 
 	public function __construct(
@@ -28,6 +30,13 @@ abstract class AbstractPayload implements PayloadInterface
 	public function setMarkers(array $markers): PayloadInterface
 	{
 		$this->markers = $markers;
+
+		return $this;
+	}
+
+	final public function setEncodedMarkers(array $encodedMarkers): PayloadInterface
+	{
+		$this->encodedMarkers = $encodedMarkers;
 
 		return $this;
 	}

@@ -5,8 +5,8 @@ namespace Bitrix\Crm\Security\Role\Utils;
 use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Manage\RoleManagementModelBuilder;
-use Bitrix\Crm\Security\Role\PermissionLevelValue;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\ControlMapper\DependentVariables\UserDepartmentAndOpenedAsSettings;
 
 class RolePermissionChecker
 {
@@ -60,11 +60,39 @@ class RolePermissionChecker
 	 */
 	public static function isPermissionAllowsAnything(PermissionModel $model): bool
 	{
-		$level = new PermissionLevelValue(
-			$model->attribute() ?? UserPermissions::PERMISSION_NONE,
-			$model->settings() ?? [],
+		$permissionEntity = RoleManagementModelBuilder::getInstance()->getPermissionByCode(
+			$model->entity(),
+			$model->permissionCode(),
 		);
+		if (!$permissionEntity)
+		{
+			return false;
+		}
+		$variants = $permissionEntity->variants();
+		if (!$variants)
+		{
+			return false;
+		}
 
-		return $level->hasSomePermissions();
+		$allowedValues = $variants->getPermissiveValues();
+
+		$attribute = $model->attribute() ?? UserPermissions::PERMISSION_NONE;
+		$settings = $model->settings() ?? [];
+
+		$permissionEntityControlMapper = $permissionEntity->getControlMapper();
+		if (
+			!empty($attribute)
+			&& empty($settings)
+			&& $permissionEntityControlMapper instanceof UserDepartmentAndOpenedAsSettings // ugly crunch, sorry
+		)
+		{
+			$settings = $permissionEntityControlMapper->convertAttributeToSettings($attribute);
+			$attribute = UserPermissions::PERMISSION_NONE;
+		}
+
+		return
+			in_array($attribute, $allowedValues, true)
+			|| !empty(array_intersect($settings, $allowedValues))
+		;
 	}
 }

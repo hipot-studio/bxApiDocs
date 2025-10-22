@@ -4,22 +4,23 @@ namespace Bitrix\Crm\Integration\Rest\Configuration\Entity;
 
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\EO_Status;
+use Bitrix\Crm\Integration\Rest\Configuration\Helper;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Status\FunnelStatusCollectionRevalidator;
 use Bitrix\Crm\StatusTable;
-use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
-use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\Configuration\Manifest;
 use CAllCrmInvoice;
 use CCrmOwnerType;
-use CCrmQuote;
 use CCrmStatus;
+use CCrmQuote;
 use Exception;
 
 class Status
@@ -53,7 +54,8 @@ class Status
 	];
 	private static $accessManifest = [
 		'total',
-		'crm'
+		'crm',
+		'automated_solution',
 	];
 
 	/**
@@ -115,27 +117,28 @@ class Status
 	{
 		$filteredTypes = [];
 
-		// Do not export categories and stages of dynamic types related to automated solutions
+		$helper = new Helper();
+		$automatedSolutionModeParams = $helper->getAutomatedSolutionModeParams($options);
+
 		foreach ($types as $typeInfo)
 		{
 			$typeCategoryId = $typeInfo['ID'];
 			if (static::isDynamicEntityStage($typeCategoryId))
 			{
 				$dynamicEntityTypeId = static::getDynamicEntityTypeIdByCategoryId($typeCategoryId);
-				if (CCrmOwnerType::isPossibleDynamicTypeId($dynamicEntityTypeId))
+				if (
+					$helper->checkDynamicTypeExportConditions(
+						array_merge(
+							$automatedSolutionModeParams,
+							$helper->getDynamicTypeCheckExportParamsByEntityTypeId($dynamicEntityTypeId)
+						)
+					)
+				)
 				{
-					$type = Container::getInstance()->getTypeByEntityTypeId($dynamicEntityTypeId);
-					if ($type)
-					{
-						$currentCustomSectionId = $type->getCustomSectionId();
-						if ($currentCustomSectionId <= 0)
-						{
-							$filteredTypes[] = $typeInfo;
-						}
-					}
+					$filteredTypes[] = $typeInfo;
 				}
 			}
-			else
+			elseif (!$automatedSolutionModeParams['isAutomatedSolutionMode'])
 			{
 				$filteredTypes[] = $typeInfo;
 			}
@@ -240,6 +243,12 @@ class Status
 			return null;
 		}
 
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeClearParams($option))
+		{
+			return null;
+		}
+
 		$resultCheck = static::checkRequiredParams('CLEAR');
 		if (is_array($resultCheck))
 		{
@@ -254,24 +263,13 @@ class Status
 
 		$entityList = array_values(CCrmStatus::GetEntityTypes());
 		$entityList = static::filterTypeListByOptions($entityList, $option);
-		$staticEntityList = [];
-		$dynamicEntityList = [];
+		$staticEntityCount = 0;
+		$dynamicEntityCount = 0;
 		foreach ($entityList as $entityInfo)
 		{
-			if (static::isDynamicEntityStage($entityInfo['ID']))
-			{
-				$dynamicEntityList[] = $entityInfo;
-			}
-			else
-			{
-				$staticEntityList[] = $entityInfo;
-			}
+			static::isDynamicEntityStage($entityInfo['ID']) ? $dynamicEntityCount++ : $staticEntityCount++;
 		}
-		$staticEntityCount = count($staticEntityList);
-		$dynamicEntityCount = count($dynamicEntityList);
-		$entityList = array_merge($staticEntityList, $dynamicEntityList);
 		$entitiesCount = $staticEntityCount + $dynamicEntityCount;
-		unset($staticEntityList, $dynamicEntityList);
 		if ($step >= $staticEntityCount && $dynamicEntityCount > 0 && $step < $entitiesCount)
 		{
 			$index = $entitiesCount + $staticEntityCount - $step - 1;
@@ -537,44 +535,42 @@ class Status
 				}
 			}
 		}
-		elseif (DealCategory::isCustomized())
+		else
 		{
-			$oldCategory = DealCategory::getAll(false);
-			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
-
-			foreach ($oldCategory as $category)
+			if (DealCategory::isCustomized())
 			{
-				if ($clearFull)
+				$oldCategory = DealCategory::getAll(false);
+				foreach ($oldCategory as $category)
 				{
-					$categoryId = $category['ID'] ?? null;
-					if ($categoryId === null)
+					if ($clearFull)
 					{
-						continue;
-					}
+						try
+						{
+							DealCategory::delete($category['ID']);
 
-					$category = $factory->getCategory($categoryId);
-					$deleteResult = $category?->delete();
-					if ($deleteResult?->isSuccess())
-					{
-						$result['OWNER_DELETE'][] = [
-							'ENTITY_TYPE' => self::OWNER_ENTITY_TYPE_CRM_DEAL_CATEGORY,
-							'ENTITY' => $categoryId,
-						];
+							$result['OWNER_DELETE'][] = [
+								'ENTITY_TYPE' => self::OWNER_ENTITY_TYPE_CRM_DEAL_CATEGORY,
+								'ENTITY' => $category['ID']
+							];
+						}
+						catch(Exception $e)
+						{
+						}
 					}
-				}
-				else
-				{
-					try
+					else
 					{
-						DealCategory::update(
-							$category['ID'],
-							[
-								'SORT' => static::$clearSort + $category['SORT']
-							]
-						);
-					}
-					catch(Exception $e)
-					{
+						try
+						{
+							DealCategory::update(
+								$category['ID'],
+								[
+									'SORT' => static::$clearSort + $category['SORT']
+								]
+							);
+						}
+						catch(Exception $e)
+						{
+						}
 					}
 				}
 			}
@@ -593,6 +589,12 @@ class Status
 	public static function import($import)
 	{
 		if(!Manifest::isEntityAvailable('', $import, static::$accessManifest))
+		{
+			return null;
+		}
+
+		$helper = new Helper();
+		if (!$helper->checkAutomatedSolutionModeImportParams($import))
 		{
 			return null;
 		}
@@ -616,6 +618,13 @@ class Status
 			\Bitrix\Main\Type\Collection::sortByColumn($itemList['ITEMS'], 'SORT');
 			$entityId = $itemList['ENTITY']['ID'];
 			$isDynamicType = static::isDynamicEntityStage($entityId);
+
+			$automatedSolutionModeParams = $helper->getAutomatedSolutionModeImportParams($import);
+			if (!$isDynamicType && $automatedSolutionModeParams['isAutomatedSolutionMode'])
+			{
+				return $result;
+			}
+
 			if (!(mb_strpos($entityId, static::$customDealStagePrefix) === 0 || $isDynamicType))
 			{
 				$entityList = array_column($entityTypes,'ID');
@@ -863,13 +872,6 @@ class Status
 							)
 						];
 
-						// The categories of dynamic items hasn't ORIGIN_ID and ORIGINATOR_ID fields
-						/*if($import['APP_ID'] > 0)
-						{
-							$categoryParams['ORIGIN_ID'] = $import['APP_ID'];
-							$categoryParams['ORIGINATOR_ID'] = DealCategory::MARKETPLACE_CRM_ORIGINATOR;
-						}*/
-
 						$categoryId = 0;
 						$entityTypeId = 0;
 						$factory = null;
@@ -879,7 +881,7 @@ class Status
 						{
 							$entityTypeId = (int)$import['RATIO']['CRM_DYNAMIC_TYPES'][$ratioKey];
 						}
-						if ($entityTypeId > 0)
+						if ($entityTypeId > 0 && $helper->checkDynamicTypeImportConditions($entityTypeId, $import))
 						{
 							$factory = Container::getInstance()->getFactory($entityTypeId);
 						}

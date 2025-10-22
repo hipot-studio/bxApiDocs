@@ -11,6 +11,7 @@ class Factory
 {
 	public static function createFromErrorCollection(Main\ErrorCollection $collection): UseCaseException
 	{
+		/** @var \Bitrix\Main\Error $error */
 		foreach ($collection as $error)
 		{
 			if (is_string($error->getCode()) && str_starts_with($error->getCode(), 'baascontroller:'))
@@ -58,6 +59,8 @@ class Factory
 				{
 					// 'LICENSE_NOT_FOUND',
 					ClientLicenseIsNotFoundException::SYMBOLIC_CODE => ClientLicenseIsNotFoundException::class,
+					// 'NETWORK'
+					ClientNetworkException::SYMBOLIC_CODE => ClientNetworkException::class,
 					default => UnknownException::class,
 				};
 			}

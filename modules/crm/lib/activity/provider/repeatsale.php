@@ -14,6 +14,8 @@ use Bitrix\Main\Result;
 use CCrmActivityDirection;
 use CCrmOwnerType;
 
+Loc::loadMessages(__FILE__);
+
 final class RepeatSale extends Base
 {
 	public const PROVIDER_ID = 'CRM_REPEAT_SALE';
@@ -109,46 +111,18 @@ final class RepeatSale extends Base
 		}
 	}
 
-	public static function createDescriptionFromPayload(FillRepeatSaleTipsPayload $payload, bool $actionPlanOnly = false): string
+	public static function createDescriptionFromPayload(
+		FillRepeatSaleTipsPayload $payload,
+		bool $actionPlanOnly = false,
+		?string $languageId = null
+	): string
 	{
-		$summaryResult = [];
-		if (
-			!empty($payload->customerInfo?->lastPurchaseDate)
-			|| !empty($payload->customerInfo?->lastPurchaseDetails)
-		)
-		{
-			$summaryResult[] = sprintf(
-				"\r\n📌 %s: %s – %s",
-				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_LAST_PURCHASE'),
-				$payload->customerInfo->lastPurchaseDate ?? '',
-				$payload->customerInfo->lastPurchaseDetails ?? ''
-			);
-		}
-
-		if (!empty($payload->customerInfo?->ordersOverview))
-		{
-			$summaryResult[] = sprintf(
-				"\r\n📌 %s: %s",
-				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ORDERS_OVERVIEW'),
-				$payload->customerInfo->ordersOverview
-			);
-		}
-
-		if (!self::isEmptyString($payload->customerInfo?->detailedIssuesSummary))
-		{
-			$summaryResult[] = sprintf(
-				"\r\n📌 %s: %s",
-				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ISSUES'),
-				$payload->customerInfo->detailedIssuesSummary
-			);
-		}
-
 		$actionPlanResult = [];
 		if ($payload->actionPlan)
 		{
 			$actionPlanResult[] = sprintf(
 				"\r\n✅ %s:",
-				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ACTION'),
+				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ACTION', null, $languageId),
 			);
 
 			if (!self::isEmptyString($payload->actionPlan->bestWayToContact))
@@ -181,7 +155,47 @@ final class RepeatSale extends Base
 			return implode(PHP_EOL, $actionPlanResult);
 		}
 
-		return implode(PHP_EOL, array_merge($summaryResult, $actionPlanResult));
+		$summaryResult = [];
+		if ($payload->customerInfo)
+		{
+			$summaryResult[] = sprintf(
+				"\r\n📘 %s:",
+				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_INFO', null, $languageId),
+			);
+
+			if (
+				!self::isEmptyString($payload->customerInfo->lastPurchaseDate)
+				|| !self::isEmptyString($payload->customerInfo->lastPurchaseDetails)
+			)
+			{
+				$summaryResult[] = sprintf(
+					"\r\n📌 [b]%s[/b]: %s – %s",
+					Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_LAST_PURCHASE', null, $languageId),
+					$payload->customerInfo->lastPurchaseDate ?? '',
+					$payload->customerInfo->lastPurchaseDetails ?? ''
+				);
+			}
+
+			if (!self::isEmptyString($payload->customerInfo->ordersOverview))
+			{
+				$summaryResult[] = sprintf(
+					"\r\n📌 [b]%s[/b]: %s",
+					Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ORDERS_OVERVIEW', null, $languageId),
+					$payload->customerInfo->ordersOverview
+				);
+			}
+
+			if (!self::isEmptyString($payload->customerInfo->detailedIssuesSummary))
+			{
+				$summaryResult[] = sprintf(
+					"\r\n📌 [b]%s[/b]: %s",
+					Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ISSUES', null, $languageId),
+					$payload->customerInfo->detailedIssuesSummary
+				);
+			}
+		}
+
+		return implode(PHP_EOL, array_merge($actionPlanResult, $summaryResult));
 	}
 
 	public static function getSegmentCodeByActivity(int $activityId): string

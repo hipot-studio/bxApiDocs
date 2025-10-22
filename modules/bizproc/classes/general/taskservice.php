@@ -385,6 +385,11 @@ class CBPTaskService extends CBPRuntimeService
 			}
 		}
 
+		if ($dbRes->SelectedRowsCount() <= 0)
+		{
+			return;
+		}
+
 		$DB->Query(
 			"DELETE FROM b_bp_task ".
 			"WHERE WORKFLOW_ID = '".$DB->ForSql($workflowId)."' "

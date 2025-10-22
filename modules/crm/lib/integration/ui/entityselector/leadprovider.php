@@ -33,6 +33,11 @@ class LeadProvider extends EntityProvider
 		return $ids;
 	}
 
+	protected function getTabIcon(): string
+	{
+		return 'o-lead';
+	}
+
 	protected function getEntityTypeId(): int
 	{
 		return CCrmOwnerType::Lead;

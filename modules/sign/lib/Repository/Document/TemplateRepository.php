@@ -151,6 +151,19 @@ class TemplateRepository
 		return $this->extractItemCollectionFromModelCollection($models);
 	}
 
+	public function getHiddenTemplatesByTitle(
+		string $templateTitle,
+	): Item\Document\TemplateCollection
+	{
+		$filter = (new ConditionTree())
+			->logic('and')
+			->where('TITLE', $templateTitle)
+			->where('HIDDEN', true)
+		;
+
+		return $this->getB2eEmployeeTemplateList($filter);
+	}
+
 	public function getB2eEmployeeTemplateList(
 		ConditionTree $filter,
 		int $limit = 10,
@@ -201,6 +214,7 @@ class TemplateRepository
 			->setTitle($item->title)
 			->setVisibility($item->visibility->toInt())
 			->setFolderId($item->folderId)
+			->setHidden($item->hidden)
 		;
 	}
 
@@ -217,6 +231,7 @@ class TemplateRepository
 			modifiedById: $model->getModifiedById(),
 			visibility: Type\Template\Visibility::tryFromInt($model->getVisibility()) ?? Type\Template\Visibility::VISIBLE,
 			folderId: $model->getFolderId(),
+			hidden: $model->getHidden(),
 		);
 	}
 

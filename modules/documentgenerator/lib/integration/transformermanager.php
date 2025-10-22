@@ -13,6 +13,7 @@ use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use Bitrix\Transformer\Command;
 use Bitrix\Transformer\DocumentTransformer;
 use Bitrix\Transformer\FileTransformer;
@@ -111,9 +112,14 @@ final class TransformerManager implements InterfaceCallback
 		$updateData = [];
 		foreach (static::getFormats() as $extension => $format)
 		{
-			if (isset($result['files'][$extension]))
+			if (!empty($result['files'][$extension]))
 			{
 				$fileArray = \CFile::MakeFileArray($result['files'][$extension], $format['TYPE']);
+				if (empty($fileArray['tmp_name']))
+				{
+					throw new SystemException('Could not make file array for ' . $result['files'][$extension]);
+				}
+
 				$fileArray['MODULE_ID'] = Driver::MODULE_ID;
 				$fileArray['name'] = $fileArray['fileName'] = $document->getFileName($extension);
 				$saveResult = FileTable::saveFile($fileArray);

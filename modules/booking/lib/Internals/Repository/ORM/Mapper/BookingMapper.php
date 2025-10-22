@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM\Mapper;
 
 use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Entity\Booking\BookingVisitStatus;
 use Bitrix\Booking\Entity\Client\ClientCollection;
 use Bitrix\Booking\Entity\DatePeriod;
@@ -28,7 +29,7 @@ class BookingMapper
 	public function __construct(
 		ResourceMapper $resourceMapper,
 		ClientMapper $clientMapper,
-		ExternalDataItemMapper $externalDataItemMapper
+		ExternalDataItemMapper $externalDataItemMapper,
 	)
 	{
 		$this->resourceMapper = $resourceMapper;
@@ -59,6 +60,7 @@ class BookingMapper
 				)
 			)
 			->setVisitStatus(BookingVisitStatus::from($ormBooking->getVisitStatus()))
+			->setSource(BookingSource::from($ormBooking->getSource()))
 			->setCreatedBy($ormBooking->getCreatedBy())
 			->setCreatedAt($ormBooking->getCreatedAt()->getTimestamp())
 			->setUpdatedAt($ormBooking->getUpdatedAt()->getTimestamp())
@@ -97,6 +99,7 @@ class BookingMapper
 			->setName($booking->getName())
 			->setDescription($booking->getDescription())
 			->setVisitStatus($booking->getVisitStatus()->value)
+			->setSource($booking->getSource()->value)
 			->setIsConfirmed($booking->isConfirmed())
 			->setDateFrom($dateFrom?->getTimestamp())
 			->setTimezoneFrom($timezoneFrom?->getName())

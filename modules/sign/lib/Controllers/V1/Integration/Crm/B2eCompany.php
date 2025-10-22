@@ -6,12 +6,12 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute\Access\LogicOr;
 use Bitrix\Sign\Attribute\ActionAccess;
 use Bitrix\Sign\Connector;
+use Bitrix\Sign\Engine\Controller;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\CompanyCollection;
 use Bitrix\Sign\Item\CompanyProvider;
@@ -19,8 +19,9 @@ use Bitrix\Sign\Item\Integration\Crm\MyCompanyCollection;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Item\Company;
 use Bitrix\Sign\Type\Document\InitiatedByType;
+use Bitrix\Sign\Type\ProviderCode;
 
-class B2eCompany extends \Bitrix\Sign\Engine\Controller
+class B2eCompany extends Controller
 {
 	#[LogicOr(
 		new ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT),
@@ -55,15 +56,15 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 		$myCompanyService = $this->container->getCrmMyCompanyService();
 		$myCompanies = $myCompanyService->listWithTaxIds(checkRequisitePermissions: false);
 
-		$companies = $this->getFilledRegisteredCompanies($myCompanies, $initiatedByType);
+		$companies = $this->getVisibleFilledRegisteredCompanies($myCompanies, $initiatedByType);
 
-		$aciveCompanyUuids = [];
+		$activeCompanyUuids = [];
 		/** @var Company $company */
 		foreach ($companies as $company)
 		{
 			foreach ($company->providers as $provider)
 			{
-				$aciveCompanyUuids[] = $provider->uid;
+				$activeCompanyUuids[] = $provider->uid;
 			}
 		}
 
@@ -71,7 +72,7 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 			->getDocumentRepository()
 			->getLastCompanyProvidersByUser(
 				(int)CurrentUser::get()->getId(),
-				$aciveCompanyUuids,
+				$activeCompanyUuids,
 			)
 		;
 
@@ -127,11 +128,20 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 		return [];
 	}
 
-	private function getFilledRegisteredCompanies(
+	/**
+	 * Get registered companies with visible providers.
+	 * Hidden providers are excluded.
+	 *
+	 * @param MyCompanyCollection $myCompanies
+	 * @param InitiatedByType $forDocumentInitiatedByType
+	 * @return CompanyCollection
+	 */
+	private function getVisibleFilledRegisteredCompanies(
 		MyCompanyCollection $myCompanies,
 		InitiatedByType $forDocumentInitiatedByType = InitiatedByType::COMPANY,
 	): CompanyCollection
 	{
+		$providerVisibilityService = $this->container->getProviderVisibilityService();
 		$registeredCompanies = $this->getRegistered($myCompanies, $forDocumentInitiatedByType);
 
 		$companies = new CompanyCollection();
@@ -174,6 +184,11 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 					&& !empty($provider['code']) && is_string($provider['code'])
 				)
 				{
+					if ($providerVisibilityService->isProviderHidden($provider['code']))
+					{
+						continue;
+					}
+
 					$company->providers[] = new CompanyProvider(
 						$provider['code'],
 						$provider['uid'],
@@ -195,7 +210,10 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 		return $companies;
 	}
 
-	private function getRegistered(MyCompanyCollection $myCompanies, InitiatedByType $forDocumentInitiatedByType): array
+	private function getRegistered(
+		MyCompanyCollection $myCompanies,
+		InitiatedByType $forDocumentInitiatedByType,
+	): array
 	{
 		$taxIds = $myCompanies->listTaxIds();
 		if (empty($taxIds))
@@ -209,6 +227,7 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 				[
 					'taxIds' => $taxIds,
 					'useProvidersWhereSignerSignFirst' => $forDocumentInitiatedByType === InitiatedByType::EMPLOYEE,
+					'supportedProviders' => ProviderCode::getAllFormattedCodes(),
 				],
 			)
 		;

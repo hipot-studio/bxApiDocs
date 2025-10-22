@@ -14,6 +14,7 @@ use Bitrix\Crm\WebForm\Internals\LandingTable;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\SalesCenter;
@@ -25,6 +26,8 @@ class Form
 	const REDIRECT_DELAY = 5;
 
 	public const PHONE_VERIFY_ENTITY = 'crm_webform';
+	private const GOOGLE_CAPTCHA_TYPE = 'google';
+	private const YANDEX_CAPTCHA_TYPE = 'yandex';
 
 	protected $id = null;
 	protected static $defaultParams = array(
@@ -61,6 +64,7 @@ class Form
 		if ($id)
 		{
 			$this->load($id);
+			$this->fillDefaultValues();
 		}
 
 		if ($params)
@@ -300,7 +304,6 @@ class Form
 		$this->params['FIELDS'] = $fieldResult->fetchAll();
 		unset($fieldResult);
 
-
 		$this->params['DEPENDENCIES'] = Internals\FieldDependenceTable::getList(array(
 			'filter' => array('=FORM_ID' => $id)
 		))->fetchAll();
@@ -418,18 +421,40 @@ class Form
 		unset($result['ASSIGNED_WORK_TIME']);
 
 		// captcha
+		$captchaService = $result['CAPTCHA_SERVICE'] ?? '';
+		if ($captchaService <> '')
+		{
+			if ($captchaService !== Option::get('crm', 'crm_form_captcha_service'))
+			{
+				$this->forceBuild = true;
+				Option::set('crm', 'crm_form_captcha_service', $captchaService);
+			}
+		}
+		$captchaService = Option::get('crm', 'crm_form_captcha_service', self::GOOGLE_CAPTCHA_TYPE);
+		unset($result['CAPTCHA_SERVICE']);
+
 		$captchaKey = $result['CAPTCHA_KEY'] ?? '';
 		$captchaSecret = $result['CAPTCHA_SECRET'] ?? '';
 		$captchaVersion = $result['CAPTCHA_VERSION'] ?? '';
 		if ($captchaKey <> '' && $captchaSecret <> '')
 		{
 			if (
-				$captchaKey !== ReCaptcha::getKey($captchaVersion)
+				$captchaService === self::GOOGLE_CAPTCHA_TYPE
+				&& $captchaKey !== ReCaptcha::getKey($captchaVersion)
 				&& $captchaSecret !== ReCaptcha::getSecret($captchaVersion)
 			)
 			{
 				$this->forceBuild = true;
 				ReCaptcha::setKey($captchaKey, $captchaSecret, $captchaVersion);
+			}
+			else if (
+				$captchaService === self::YANDEX_CAPTCHA_TYPE
+				&& $captchaKey !== YandexCaptcha::getKey()
+				&& $captchaSecret !== YandexCaptcha::getSecret()
+			)
+			{
+				$this->forceBuild = true;
+				YandexCaptcha::setKey($captchaKey, $captchaSecret);
 			}
 		}
 		unset($result['CAPTCHA_KEY']);
@@ -451,11 +476,23 @@ class Form
 			// captcha
 			if ($result['USE_CAPTCHA'] == 'Y')
 			{
-				$hasCaptchaKey = ReCaptcha::getKey(2) <> '' && ReCaptcha::getSecret(2) <> '';
-				$hasCaptchaDefaultKey = ReCaptcha::getDefaultKey(2) <> '' && ReCaptcha::getDefaultSecret(2) <> '';
-				if (!$hasCaptchaKey && !$hasCaptchaDefaultKey)
+				if ($captchaService === self::GOOGLE_CAPTCHA_TYPE)
 				{
-					$this->errors[] = Loc::getMessage('CRM_WEBFORM_FORM_ERROR_CAPTCHA_KEY');
+					$hasCaptchaKey = ReCaptcha::getKey(2) <> '' && ReCaptcha::getSecret(2) <> '';
+					$hasCaptchaDefaultKey = ReCaptcha::getDefaultKey(2) <> '' && ReCaptcha::getDefaultSecret(2) <> '';
+					if (!$hasCaptchaKey && !$hasCaptchaDefaultKey)
+					{
+						$this->errors[] = Loc::getMessage('CRM_WEBFORM_FORM_ERROR_CAPTCHA_KEY_MSGVER_1');
+					}
+				}
+				else if ($captchaService === self::YANDEX_CAPTCHA_TYPE)
+				{
+					$hasCaptchaKey = YandexCaptcha::getKey() <> '' && YandexCaptcha::getSecret() <> '';
+					$hasCaptchaDefaultKey = YandexCaptcha::getDefaultKey() <> '' && YandexCaptcha::getDefaultSecret() <> '';
+					if (!$hasCaptchaKey && !$hasCaptchaDefaultKey)
+					{
+						$this->errors[] = Loc::getMessage('CRM_WEBFORM_FORM_ERROR_YANDEX_CAPTCHA_KEY');
+					}
 				}
 			}
 
@@ -540,6 +577,26 @@ class Form
 		if (!$this->check())
 		{
 			return;
+		}
+
+		$phoneCodeToSetAsDefault = null;
+		$phoneCodeOld = \CUserOptions::GetOption('crm', 'webform_phone_default_code', null);
+
+		foreach ($fields as $field)
+		{
+			$fieldType = $field['type'] ?? $field['TYPE'] ?? null;
+			$fieldValue = $field['value'] ?? $field ['VALUE'] ?? null;
+
+			if ($fieldType === 'phone' && $fieldValue !== $phoneCodeOld)
+			{
+				$phoneCodeToSetAsDefault = $fieldValue;
+				break;
+			}
+		}
+
+		if ($phoneCodeToSetAsDefault !== null)
+		{
+			\CUserOptions::SetOption('crm', 'webform_phone_default_code', $phoneCodeToSetAsDefault);
 		}
 
 		if ($this->id)
@@ -2082,5 +2139,13 @@ class Form
 				$product['VAT_RATE'] = (float)$vatData['RATE'] / 100;
 			}
 		}
+	}
+
+	private function fillDefaultValues()
+	{
+		$this->params['FIELDS'] = ServiceLocator::getInstance()
+			->get('crm.service.webform.defaultvalueprovider')
+			->applyForFields($this->params['FIELDS'])
+		;
 	}
 }

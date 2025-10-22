@@ -526,6 +526,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 						'PARENT_ID' => null,
 						'SORT' => 350,
 						'TEXT' => Loc::getMessage('SHOP_MENU_PAY_SYSTEMS_DELIVERY'),
+						'URL' => '',
 					]
 				);
 

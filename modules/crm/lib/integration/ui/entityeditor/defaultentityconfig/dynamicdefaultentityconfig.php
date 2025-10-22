@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig;
 
 use Bitrix\Crm\Integration\UI\EntityEditor\AbstractDefaultEntityConfig;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
@@ -71,11 +72,28 @@ final class DynamicDefaultEntityConfig extends AbstractDefaultEntityConfig
 			];
 		}
 
+		if ($this->factory->isRecurringEnabled() && !$this->isSkipField(Item::FIELD_NAME_RECURRING))
+		{
+			$sections[] = [
+				'name' => 'recurring',
+				'title' => self::getRecurringSectionTitle(),
+				'type' => 'section',
+				'elements' => [
+					['name' => RecurringFieldEditorAdapter::FIELD_RECURRING],
+				],
+			];
+		}
+
 		return $sections;
 	}
 
 	protected function isSkipField(string $fieldName): bool
 	{
 		return in_array($fieldName, $this->skipFields, true);
+	}
+
+	public static function getRecurringSectionTitle(): string
+	{
+		return Loc::getMessage('CRM_TYPE_ITEM_EDITOR_SECTION_RECURRING') ?? '';
 	}
 }

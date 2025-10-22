@@ -7,6 +7,7 @@ use Bitrix\Landing\Copilot\Connector;
 use Bitrix\Landing\Copilot\Connector\Chat\ICopilotChatBot;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Step;
+use Bitrix\Landing\Metrika;
 
 class ChangeBlock extends BaseScenario
 {
@@ -43,6 +44,20 @@ class ChangeBlock extends BaseScenario
 	public function getQuotaCalculateStep(): int
 	{
 		return 10;
+	}
+
+	public function getAnalyticCategory(): Metrika\Categories
+	{
+		return Metrika\Categories::BlockEdition;
+	}
+
+	public function getAsyncRelations(): ?array
+	{
+		return [
+			30 => [
+				40,
+			],
+		];
 	}
 
 	/**

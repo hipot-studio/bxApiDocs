@@ -19,9 +19,9 @@ final class SyncChatParticipationWithEvent implements EventSubscriberInterface
 		$newStatus = $event->getParameter('newStatus');
 
 		$calendarEvent = $this->getCalendarEvent($event);
-		if (!$calendarEvent || $calendarEvent->getRecurringRule())
+		if (!$calendarEvent || $calendarEvent->getRecurrenceId())
 		{
-			// event not found or recurring one
+			// not found or recurring instance event
 			return $this->makeUndefinedResponse();
 		}
 

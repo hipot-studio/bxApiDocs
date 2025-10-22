@@ -28,6 +28,7 @@ final class Copy implements Contract\Operation
 		private readonly int $createdByUserId,
 		private readonly ?int $templateId = null,
 		private readonly ?BindingCollection $bindings = null,
+		private readonly bool $excludeRejected = true,
 		?DocumentService $documentService = null,
 		?DocumentRepository $documentRepository = null,
 		?MemberRepository $memberRepository = null,
@@ -63,7 +64,12 @@ final class Copy implements Contract\Operation
 		}
 
 		$members = $this->memberRepository->listByDocumentId($this->document->id);
-		$result = $this->memberService->setupB2eMembers($newDocument->uid, $members, $newDocument->representativeId);
+		$result = $this->memberService->setupB2eMembers(
+			$newDocument->uid,
+			$members,
+			$newDocument->representativeId,
+			excludeRejected: $this->excludeRejected,
+		);
 		if (!$result->isSuccess())
 		{
 			return $result;

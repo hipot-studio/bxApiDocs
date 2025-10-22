@@ -6,6 +6,13 @@ namespace Bitrix\Landing\Copilot\Connector\AI;
 
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Context;
+
+use Bitrix\Landing\Copilot\Connector\AI\Type\ErrorCode;
+use Bitrix\Landing\Copilot\Connector\AI\Type\HelpdeskCode;
+use Bitrix\Landing\Copilot\Connector\AI\Type\LimitType;
+use Bitrix\Landing\Copilot\Connector\AI\Type\MessageCode;
+use Bitrix\Landing\Copilot\Connector\AI\Type\PromoLimitCode;
+use Bitrix\Landing\Copilot\Connector\AI\Type\SliderCode;
 use Bitrix\AI\Limiter\Enums\TypeLimit;
 use Bitrix\AI\Limiter\LimitControlService;
 use Bitrix\AI\Limiter\LimitControlBoxService;
@@ -26,186 +33,204 @@ use Psr\Container\NotFoundExceptionInterface;
  * Class RequestLimiter
  *
  * Handles checking and messaging for request quotas to AI services (CoPilot) within the Landing module.
- * Supports both cloud (Bitrix24 module present) and box environments.
+ * Supports both cloud (Bitrix24 module present) and box (on-premise) environments.
  * Determines if request limits are exceeded and returns localized error messages or null if within limits.
  */
 class RequestLimiter
 {
-	/** @see \Bitrix\AI\Engine::ERRORS (key 'LIMIT_IS_EXCEEDED') */
-	protected const ERROR_CODE_LIMIT_CLOUD = 'LIMIT_IS_EXCEEDED';
-	/** @see \Bitrix\AI\Engine\Cloud\CloudEngine::ERROR_CODE_LIMIT_BAAS */
-	protected const ERROR_CODE_LIMIT_BAAS_CLOUD = 'LIMIT_IS_EXCEEDED_BAAS';
-	protected const ERROR_CODE_RATE_LIMIT = 'RATE_LIMIT';
-	protected const ERROR_CODE_DAILY = 'LIMIT_IS_EXCEEDED_DAILY';
-	protected const ERROR_CODE_MONTHLY = 'LIMIT_IS_EXCEEDED_MONTHLY';
 
 	/**
-	 * Slider feature promoter codes for various limit messages
-	 * @var string[]
+	 * Stores the result of the most recent limit check, including type, message, and exceeded flag.
 	 */
-	protected const SLIDER_CODES = [
-		'BOOST_COPILOT' => 'limit_boost_copilot',
-		'DAILY' => 'limit_copilot_max_number_daily_requests',
-		'MONTHLY' => 'limit_copilot_requests',
-		'BOOST_COPILOT_BOX' => 'limit_boost_copilot_box',
-		'REQUEST_BOX' => 'limit_copilot_requests_box',
-		'BOX' => 'limit_copilot_box',
-	];
+	private LimitCheckResult $checkResult;
 
 	/**
-	 * Helpdesk article codes for support links
-	 * @var string[]
+	 * Constructor initializes checkResult with a default value (no limit exceeded).
 	 */
-	protected const HELPDESK_CODES = [
-		'RATE' => '24736310',
-	];
+	public function __construct()
+	{
+		$this->checkResult = $this->createLimitResult(LimitType::None, false);
+	}
 
 	/**
-	 * Promo limit codes matching Usage::PERIODS values
-	 * @var string[]
+	 * Returns the result object containing information about the current limit check.
 	 *
-	 * @see Usage::PERIODS
+	 * @return LimitCheckResult Limit result data transfer object with type, message, and exceeded flag.
 	 */
-	protected const PROMO_LIMIT_CODES = [
-		'DAILY' => 'Daily',
-		'MONTHLY' => 'Monthly',
-	];
+	public function getCheckResult(): LimitCheckResult
+	{
+		return $this->checkResult;
+	}
 
 	/**
-	 * Checks whether an AI service error represents a quota exceed.
+	 * Returns the localized message describing the current limit status.
 	 *
-	 * @param Error $error Error instance returned from the AI service.
-	 *
-	 * @return string|null Localized error message if limit exceeded, or null otherwise.
+	 * @return string|null Localized message for the user about the limit status.
 	 */
-	public function getTextFromError(Error $error): ?string
+	public function getCheckResultMessage(): ?string
+	{
+		return $this->checkResult->getMessage();
+	}
+
+	/**
+	 * Checks if the given error corresponds to a request limit exceeded situation.
+	 *
+	 * @param Error $error Error object to check.
+	 *
+	 * @return bool True if the limit is exceeded, false otherwise.
+	 */
+	public function checkError(Error $error): bool
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
-			return $this->getTextFromLimitCloudError($error);
+			$this->checkResult = $this->checkCloudErrorLimit($error);
+		}
+		else
+		{
+			$this->checkResult = $this->checkBoxErrorLimit($error);
 		}
 
-		return $this->getTextFromLimitBoxError($error);
+		return $this->checkResult->isExceeded();
 	}
+
+	/**
+	 * Checks if the request count exceeds quota limits.
+	 *
+	 * @param int $requestCount Number of requests to check.
+	 *
+	 * @return bool True if the limit is exceeded, false otherwise.
+	 */
+	public function checkQuota(int $requestCount): bool
+	{
+		if ($requestCount <= 0)
+		{
+			$this->checkResult = $this->createLimitResult(LimitType::None, false);
+
+			return $this->checkResult->isExceeded();
+		}
+
+		if (Loader::includeModule('bitrix24'))
+		{
+			$this->checkResult =  $this->checkCloudQuotaLimit($requestCount);
+		}
+		else
+		{
+			$this->checkResult = $this->checkBoxQuotaLimit($requestCount);
+		}
+
+		return $this->checkResult->isExceeded();
+	}
+
 
 	/**
 	 * Handles cloud-specific AI error codes for quota limits.
 	 *
-	 * @param Error $error Error object from the cloud AI engine.
+	 * @param Error $error Error object to check.
 	 *
-	 * @return string|null Localized message for BAAS, daily, monthly or promo limits, or null if not a quota error.
+	 * @return LimitCheckResult Result object containing a localized message, limit type, and a flag indicating if the limit is exceeded.
 	 */
-	protected function getTextFromLimitCloudError(Error $error): ?string
+	private function checkCloudErrorLimit(Error $error): LimitCheckResult
 	{
-		$errorCode = $error->getCode();
+		$code = $error->getCode();
 
 		//right 2 in board
-		if ($errorCode === self::ERROR_CODE_LIMIT_BAAS_CLOUD)
+		if ($code === ErrorCode::LimitBaasCloud->value)
 		{
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_BAAS',
-				self::SLIDER_CODES['BOOST_COPILOT'],
+			return $this->createLimitResult(
+				LimitType::Baas,
+				true,
+				self::buildLimitMessage(MessageCode::Baas, SliderCode::BoostCopilot)
 			);
 		}
 
-		if (str_starts_with($errorCode, self::ERROR_CODE_LIMIT_CLOUD))
+		if (str_starts_with($code, ErrorCode::LimitCloud->value))
 		{
 			//right 1 in board
 			if (Loader::includeModule('baas') && Baas::getInstance()->isAvailable())
 			{
-				return self::getLimitMessage(
-					'LANDING_REQUEST_LIMITER_ERROR_PROMO',
-					self::SLIDER_CODES['BOOST_COPILOT'],
+				return $this->createLimitResult(
+					LimitType::Promo,
+					true,
+					self::buildLimitMessage(MessageCode::Promo, SliderCode::BoostCopilot)
 				);
 			}
 
 			//left 1 in board
-			if ($errorCode === self::ERROR_CODE_DAILY)
+			if ($code === ErrorCode::Daily->value)
 			{
-				return self::getLimitMessage(
-					'LANDING_REQUEST_LIMITER_ERROR_DAILY',
-					self::SLIDER_CODES['DAILY'],
+				return $this->createLimitResult(
+					LimitType::Daily,
+					true,
+					self::buildLimitMessage(MessageCode::Daily, SliderCode::Daily)
 				);
 			}
 
 			//left 2 in board
-			if ($errorCode === self::ERROR_CODE_MONTHLY)
+			if ($code === ErrorCode::Monthly->value)
 			{
-				return self::getLimitMessage(
-					'LANDING_REQUEST_LIMITER_ERROR_MONTHLY',
-					self::SLIDER_CODES['MONTHLY'],
+				return $this->createLimitResult(
+					LimitType::Monthly,
+					true,
+					self::buildLimitMessage(MessageCode::Monthly, SliderCode::Monthly)
 				);
 			}
 		}
 
-		return null;
+		return $this->createLimitResult(LimitType::None, false);
 	}
 
 	/**
 	 * Handles box AI error codes for quota limits.
 	 *
-	 * @param Error $error Error object containing code and optional custom data.
+	 * @param Error $error Error object to check.
 	 *
-	 * @return string Localized message for rate, BAAS, monthly or promo limits.
+	 * @return LimitCheckResult Result object containing a localized message, limit type, and a flag indicating if the limit is exceeded.
 	 */
-	protected function getTextFromLimitBoxError(Error $error): string
+	private function checkBoxErrorLimit(Error $error): LimitCheckResult
 	{
-		$customData = $error->getCustomData();
 		$errorCode = $error->getCode();
 
-		if ($errorCode === self::ERROR_CODE_RATE_LIMIT)
+		if ($errorCode === ErrorCode::RateLimit->value)
 		{
 			//top in board
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_RATE',
-				null,
-				self::HELPDESK_CODES['RATE'],
+			return $this->createLimitResult(
+				LimitType::Rate,
+				true,
+				self::buildLimitMessage(MessageCode::Rate, null, HelpdeskCode::Rate)
 			);
 		}
 
+		$customData = $error->getCustomData();
+
 		if (
-			 isset($customData['showSliderWithMsg'])
-			&& $errorCode === self::ERROR_CODE_LIMIT_BAAS_CLOUD
+			isset($customData['showSliderWithMsg'])
+			&& $errorCode === ErrorCode::LimitBaasCloud->value
 		)
 		{
 			//right 2 in board
 			if ($customData['showSliderWithMsg'] === true)
 			{
-				return self::getLimitMessage(
-					'LANDING_REQUEST_LIMITER_ERROR_BAAS',
-					self::SLIDER_CODES['BOOST_COPILOT_BOX'],
+				return $this->createLimitResult(
+					LimitType::Baas,
+					true,
+					self::buildLimitMessage(MessageCode::Baas, SliderCode::BoostCopilotBox)
 				);
 			}
 
 			//left 1 in board
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_MONTHLY',
-				self::SLIDER_CODES['REQUEST_BOX'],
+			return $this->createLimitResult(
+				LimitType::Monthly,
+				true,
+				self::buildLimitMessage(MessageCode::Monthly, SliderCode::RequestBox)
 			);
 		}
 
 		//right 1 in board
-		return self::getLimitMessage(
-			'LANDING_REQUEST_LIMITER_ERROR_PROMO',
-			self::SLIDER_CODES['BOOST_COPILOT_BOX'],
+		return $this->createLimitResult(
+			LimitType::Promo,
+			true,
+			self::buildLimitMessage(MessageCode::Promo, SliderCode::BoostCopilotBox)
 		);
-	}
-
-	/**
-	 * Checks if a batch of AI requests can be sent without exceeding quotas.
-	 *
-	 * @param int $requestCount Number of AI requests planned.
-	 *
-	 * @return string|null Localized error message if quota would be exceeded, or null if allowed.
-	 */
-	public function getTextFromCheckLimit(int $requestCount): ?string
-	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			return $this->getTextFromCheckCloudLimit($requestCount);
-		}
-
-		return $this->getTextFromCheckBoxLimit($requestCount);
 	}
 
 	/**
@@ -213,9 +238,9 @@ class RequestLimiter
 	 *
 	 * @param int $requestCount Number of requests to reserve.
 	 *
-	 * @return string|null Localized message for BAAS, promo, daily or monthly limits, or null if reserved.
+	 * @return LimitCheckResult Result object containing a localized message, limit type, and a flag indicating if the limit is exceeded.
 	 */
-	protected function getTextFromCheckCloudLimit(int $requestCount): ?string
+	private function checkCloudQuotaLimit(int $requestCount): LimitCheckResult
 	{
 		$reservedRequest = (new LimitControlService())->reserveRequest(
 			new Usage(Context::getFake()),
@@ -224,48 +249,52 @@ class RequestLimiter
 
 		if ($reservedRequest->isSuccess())
 		{
-			return null;
+			return $this->createLimitResult(LimitType::None, false);
 		}
 
 		$typeLimit = $reservedRequest->getTypeLimit();
 		//right 2 in board
 		if ($typeLimit === TypeLimit::BAAS)
 		{
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_BAAS',
-				self::SLIDER_CODES['BOOST_COPILOT'],
+			return $this->createLimitResult(
+				LimitType::Baas,
+				true,
+				self::buildLimitMessage(MessageCode::Baas, SliderCode::BoostCopilot)
 			);
 		}
 
 		//right 1 in board
 		if (Loader::includeModule('baas') && Baas::getInstance()->isAvailable())
 		{
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_PROMO',
-				self::SLIDER_CODES['BOOST_COPILOT'],
+			return $this->createLimitResult(
+				LimitType::Promo,
+				true,
+				self::buildLimitMessage(MessageCode::Promo, SliderCode::BoostCopilot)
 			);
 		}
 
 		$promoLimitCode = $reservedRequest->getPromoLimitCode();
 		//left 1 in board
-		if ($promoLimitCode === self::PROMO_LIMIT_CODES['DAILY'])
+		if ($promoLimitCode === PromoLimitCode::Daily->value)
 		{
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_DAILY',
-				self::SLIDER_CODES['DAILY'],
+			return $this->createLimitResult(
+				LimitType::Daily,
+				true,
+				self::buildLimitMessage(MessageCode::Daily, SliderCode::Daily)
 			);
 		}
 
 		//left 2 in board
-		if ($promoLimitCode === self::PROMO_LIMIT_CODES['MONTHLY'])
+		if ($promoLimitCode === PromoLimitCode::Monthly->value)
 		{
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_MONTHLY',
-				self::SLIDER_CODES['MONTHLY'],
+			return $this->createLimitResult(
+				LimitType::Monthly,
+				true,
+				self::buildLimitMessage(MessageCode::Monthly, SliderCode::Monthly)
 			);
 		}
 
-		return null;
+		return $this->createLimitResult(LimitType::None, false);
 	}
 
 	/**
@@ -273,23 +302,29 @@ class RequestLimiter
 	 *
 	 * @param int $requestCount Number of requests to reserve.
 	 *
-	 * @return string|null Localized message for cloud registration, rate, BAAS, monthly or promo limits, or null if reserved.
+	 * @return LimitCheckResult Result object containing a localized message, limit type, and a flag indicating if the limit is exceeded.
+	 *
+	 * @throws GenerationException When request reservation fails due to argument or object not found exceptions.
 	 */
-	protected function getTextFromCheckBoxLimit(int $requestCount): ?string
+	private function checkBoxQuotaLimit(int $requestCount): LimitCheckResult
 	{
-		$cloudConfiguration = new Cloud\Configuration();
-		$registrationDto = $cloudConfiguration->getCloudRegistrationData();
+		$cloudConfig = new Cloud\Configuration();
+		$registrationDto = $cloudConfig->getCloudRegistrationData();
 		if (!$registrationDto)
 		{
 			//top in board
-			return self::getLimitMessage('LANDING_REQUEST_LIMITER_ERROR_CLOUD_REGISTRATION',);
+			return $this->createLimitResult(
+				LimitType::Unregistered,
+				true,
+				self::buildLimitMessage(MessageCode::CloudRegistration)
+			);
 		}
 
 		try
 		{
 			$reservedBoxRequest = (new LimitControlBoxService())->isAllowedQuery($requestCount);
 		}
-		catch (ArgumentException | ObjectNotFoundException | NotFoundExceptionInterface $e)
+		catch (ArgumentException|ObjectNotFoundException|NotFoundExceptionInterface)
 		{
 			throw new GenerationException(GenerationErrors::notSendRequest);
 		}
@@ -301,7 +336,7 @@ class RequestLimiter
 
 		if ($reservedBoxRequest->isSuccess())
 		{
-			return null;
+			return $this->createLimitResult(LimitType::None, false);
 		}
 
 		$limitError = $reservedBoxRequest->getErrorByLimit();
@@ -309,10 +344,10 @@ class RequestLimiter
 		if ($limitError === ErrorLimit::RATE_LIMIT)
 		{
 			//top in board
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_RATE',
-				null,
-				self::HELPDESK_CODES['RATE'],
+			return $this->createLimitResult(
+				LimitType::Rate,
+				true,
+				self::buildLimitMessage(MessageCode::Rate, null, HelpdeskCode::Rate)
 			);
 		}
 
@@ -321,16 +356,18 @@ class RequestLimiter
 			if (Loader::includeModule('baas') && Baas::getInstance()->isAvailable())
 			{
 				//right 1 in board
-				return self::getLimitMessage(
-					'LANDING_REQUEST_LIMITER_ERROR_PROMO',
-					self::SLIDER_CODES['BOOST_COPILOT_BOX'],
+				return $this->createLimitResult(
+					LimitType::Promo,
+					true,
+					self::buildLimitMessage(MessageCode::Promo, SliderCode::BoostCopilotBox)
 				);
 			}
 
 			//right 3 in board
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_PROMO',
-				self::SLIDER_CODES['BOX'],
+			return $this->createLimitResult(
+				LimitType::Promo,
+				true,
+				self::buildLimitMessage(MessageCode::Promo, SliderCode::Box)
 			);
 		}
 
@@ -338,57 +375,78 @@ class RequestLimiter
 		if ($typeLimit === TypeLimit::BAAS)
 		{
 			//right 2 in board
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_BAAS',
-				self::SLIDER_CODES['BOOST_COPILOT_BOX'],
+			return $this->createLimitResult(
+				LimitType::Baas,
+				true,
+				self::buildLimitMessage(MessageCode::Baas, SliderCode::BoostCopilotBox)
 			);
 		}
 
 		if ($limitError === ErrorLimit::PROMO_LIMIT)
 		{
 			//left 1 in board
-			return self::getLimitMessage(
-				'LANDING_REQUEST_LIMITER_ERROR_MONTHLY',
-				self::SLIDER_CODES['REQUEST_BOX'],
+			return $this->createLimitResult(
+				LimitType::Monthly,
+				true,
+				self::buildLimitMessage(MessageCode::Monthly, SliderCode::RequestBox)
 			);
 		}
 
-		return null;
+		return $this->createLimitResult(LimitType::None, false);
 	}
 
 	/**
-	 * Returns the final text phrase with substituted links
+	 * Creates a LimitCheckResult object.
 	 *
-	 * @param string $phraseCode Localization phrase code
-	 * @param string|null $featurePromoterCode Feature promoter code (FEATURE_PROMOTER)
-	 * @param string|null $helpdeskCode Helpdesk promoter code
+	 * @param LimitType $limitType Type of the limit that was exceeded, or null if not applicable.
+	 * @param bool $isExceeded True if the limit is exceeded, false otherwise.
+	 * @param string|null $message Localized message for the user, or null if no limit is exceeded.
 	 *
-	 * @return string
+	 * @return LimitCheckResult
 	 */
-	private static function getLimitMessage(
-		string $phraseCode,
-		?string $featurePromoterCode = null,
-		?string $helpdeskCode = null,
+	private function createLimitResult(LimitType $limitType, bool $isExceeded, ?string $message = null): LimitCheckResult
+	{
+		if ($message === null)
+		{
+			return new LimitCheckResult($limitType, $isExceeded);
+		}
+
+		return new LimitCheckResult($limitType, $isExceeded, $message);
+	}
+
+	/**
+	 * Returns the final localized message with substituted links for limits.
+	 *
+	 * @param MessageCode $phraseCode Localization phrase code.
+	 * @param SliderCode|null $featurePromoterCode Optional feature promoter code for link substitution.
+	 * @param HelpdeskCode|null $helpdeskCode Optional helpdesk code for help link substitution.
+	 *
+	 * @return string Localized message with links.
+	 */
+	private static function buildLimitMessage(
+		MessageCode  $phraseCode,
+		?SliderCode $featurePromoterCode = null,
+		?HelpdeskCode $helpdeskCode = null,
 	): string
 	{
 		if ($featurePromoterCode !== null)
 		{
-			return Loc::getMessage($phraseCode, [
-				'#LINK#' => "[url=/?FEATURE_PROMOTER={$featurePromoterCode}]",
-				'#/LINK#' => '[/url]'
+			return Loc::getMessage($phraseCode->value, [
+				'#LINK#' => "[url=/?FEATURE_PROMOTER=$featurePromoterCode->value]",
+				'#/LINK#' => '[/url]',
 			]);
 		}
 
 		if ($helpdeskCode !== null)
 		{
-			$helpUrl = Util::getArticleUrlByCode($helpdeskCode);
+			$helpUrl = Util::getArticleUrlByCode($helpdeskCode->value);
 
-			return Loc::getMessage($phraseCode, [
+			return Loc::getMessage($phraseCode->value, [
 				'#HELP#' => "[url=$helpUrl]",
-				'#/HELP#' => '[/url]'
+				'#/HELP#' => '[/url]',
 			]);
 		}
 
-		return Loc::getMessage($phraseCode);
+		return Loc::getMessage($phraseCode->value);
 	}
 }

@@ -1114,33 +1114,4 @@ class Block
 
 		return $result;
 	}
-
-	/**
-	 * Get extensions configs, load relations, load lang phrases
-	 *
-	 * @param array $extCodes - array of extensions codes
-	 * @param array $tplCodes - array of site templates
-	 * @return PublicActionResult - array of assets by type
-	 */
-	public static function getAssetsConfig(array $extCodes, array $tplCodes = []): PublicActionResult
-	{
-		$result = new PublicActionResult();
-
-		$assetsManager = (new Assets\Manager())
-			->enableSandbox()
-			->addAsset($extCodes)
-		;
-
-		foreach ($tplCodes as $tpl)
-		{
-			$siteTemplatePath =
-				(defined('SITE_TEMPLATE_PATH') ? SITE_TEMPLATE_PATH : '/bitrix/templates/.default');
-			$style = $siteTemplatePath . "/template_styles.css";
-			$assetsManager->addAsset($style);
-		}
-
-		$result->setResult($assetsManager->getOutput());
-
-		return $result;
-	}
 }

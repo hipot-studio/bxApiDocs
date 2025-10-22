@@ -189,6 +189,8 @@ class Deal extends Entity
 			'CLIENT' => '',
 			'PROBLEM_NOTIFICATION' => '',
 			'OBSERVER' => Loc::getMessage('CRM_KANBAN_FIELD_OBSERVER'),
+			'LAST_ACTIVITY_BY_TIME' => '',
+			'LAST_ACTIVITY_BY_USER_AVATAR' => '',
 		];
 	}
 

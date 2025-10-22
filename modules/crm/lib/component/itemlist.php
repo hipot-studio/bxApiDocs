@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Component;
 
 use Bitrix\Crm\Automation;
+use Bitrix\Crm\Category\CategoryPullManager;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Component\EntityList\Settings\PermissionItem;
 use Bitrix\Crm\Counter\EntityCounterFactory;
@@ -21,16 +22,16 @@ use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\InvoiceSettings;
+use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
 use Bitrix\Crm\UI\Tools\NavigationBar;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Buttons\Button;
-use Bitrix\UI\Buttons\Color;
 use Bitrix\UI\Buttons\Icon;
-use Bitrix\UI\Buttons\Tag;
 use Bitrix\UI\Toolbar;
 
 abstract class ItemList extends Base
@@ -94,6 +95,11 @@ abstract class ItemList extends Base
 		$this->router->setCurrentListView($this->entityTypeId, $this->getListViewType());
 
 		$this->factory = Service\Container::getInstance()->getFactory($this->entityTypeId);
+		if ($this->isRecurring())
+		{
+			$this->factory->setIsRecurringMode(true);
+		}
+
 		$this->kanbanEntity = Kanban\Entity::getInstance($this->factory->getEntityName());
 
 		if($this->factory->isCategoriesSupported())
@@ -147,7 +153,7 @@ abstract class ItemList extends Base
 			[
 				'categoryId' => $this->getCategoryId(),
 				'type' => $type,
-			]
+			],
 		);
 		$this->provider = $filterFactory->getDataProvider($settings);
 
@@ -157,6 +163,11 @@ abstract class ItemList extends Base
 		$this->filter = $filterFactory->createFilter($settings->getID(), $this->provider, $additionalProviders);
 
 		EntityRelationTable::initiateClearingDuplicateSourceElementsWithInterval($this->factory->getEntityTypeId());
+	}
+
+	protected function isRecurring(): bool
+	{
+		return false;
 	}
 
 	protected function getGridId(): string
@@ -256,7 +267,7 @@ abstract class ItemList extends Base
 		}
 		$buttons[Toolbar\ButtonLocation::AFTER_TITLE][] = new Buttons\Button($addButtonParameters);
 
-		if ($this->factory->isCategoriesEnabled())
+		if ($this->factory->isCategoriesEnabled() && !$this->factory->isRecurringMode())
 		{
 			$categories = $this->userPermissions->category()->filterAvailableForReadingCategories(
 				$this->factory->getCategories()
@@ -292,6 +303,11 @@ abstract class ItemList extends Base
 					}
 				}
 
+				CategoryPullManager::getInstance()->subscribe(
+					Container::getInstance()->getUserPermissions()->getUserId(),
+					CategoryPullManager::EVENT_CATEGORIES_UPDATED,
+				);
+
 				$buttons[Toolbar\ButtonLocation::AFTER_TITLE][] = new Buttons\Button($buttonConfig);
 			}
 		}
@@ -303,7 +319,10 @@ abstract class ItemList extends Base
 			&& Container::getInstance()->getUserPermissions()->entityType()->canReadItems(\CCrmOwnerType::Invoice)
 		)
 		{
-			if (!InvoiceSettings::getCurrent()->isOldInvoicesEnabled())
+			if (
+				!$this->factory->isRecurringMode()
+				&& !InvoiceSettings::getCurrent()->isOldInvoicesEnabled()
+			)
 			{
 				$settingsItems[] = [
 					'text' => \CCrmOwnerType::GetCategoryCaption(\CCrmOwnerType::Invoice),
@@ -334,6 +353,69 @@ abstract class ItemList extends Base
 					$settingsItems,
 					$einvoiceToolbarSettings->getItems(),
 				);
+			}
+		}
+
+		$type = Service\Container::getInstance()->getTypeByEntityTypeId($this->entityTypeId);
+		$customSectionId = $type ? $type->getCustomSectionId() : 0;
+		if (
+			$customSectionId > 0
+			&& Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()
+			&& \Bitrix\Main\Loader::includeModule('rest')
+			&& is_callable('\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl')
+			&& RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
+		)
+		{
+
+			$customSectionCode = $this->getCustomSectionCodeById($customSectionId) ?? '';
+			if ($customSectionCode !== '')
+			{
+				$settingsItems[] = [
+					'text' => Loc::getMessage('CRM_COMPONENT_ITEM_LIST_AUTOMATED_SOLUTION_EXPORT_IMPORT_ITEM'),
+					'href' =>
+						(
+							new Uri(
+								\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl(
+									'automated_solution_one',
+									'dynamic_type_list'
+								)
+							)
+						)->addParams(['additional' => ['automatedSolutionCode' => $customSectionCode]])
+					,
+					'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
+				];
+			}
+		}
+
+		if ($this->factory->isRecurringEnabled())
+		{
+			if (($this->arParams['isRecurring'] ?? false) === true)
+			{
+				$text = (
+					$this->entityTypeId === \CCrmOwnerType::SmartInvoice
+						? Loc::getMessage('CRM_COMPONENT_ITEM_LIST_SMART_INVOICE')
+						: Loc::getMessage('CRM_COMPONENT_ITEM_LIST')
+				);
+				$link = $this->router->getItemListUrl($this->entityTypeId, $this->getCategoryId());
+			}
+			else
+			{
+				$text = (
+					$this->entityTypeId === \CCrmOwnerType::SmartInvoice
+						? Loc::getMessage('CRM_COMPONENT_ITEM_RECURRING_LIST_SMART_INVOICE')
+						: Loc::getMessage('CRM_COMPONENT_ITEM_RECURRING_LIST')
+				);
+
+				$link = $this->router->getItemRecurringListUrl($this->entityTypeId, $this->getCategoryId());
+			}
+
+			if ($link)
+			{
+				$settingsItems[] = [
+					'text' => $text,
+					'href' => $link,
+					'onclick' => new Buttons\JsHandler('BX.Crm.Page.openSlider("' . $link . '");'),
+				];
 			}
 		}
 
@@ -374,6 +456,11 @@ abstract class ItemList extends Base
 			'pathToEntityList' => '/crm/type/' . $this->entityTypeId,
 		];
 		//@codingStandardsIgnoreEnd
+
+		if ($this->isEmbedded())
+		{
+			$this->arResult['filter'] = $parameters['filter'];
+		}
 
 		return array_merge(parent::getToolbarParameters(), $parameters);
 	}
@@ -487,6 +574,11 @@ abstract class ItemList extends Base
 	protected function getToolbarViews(): array
 	{
 		$views = [];
+
+		if ($this->isRecurring())
+		{
+			return $views;
+		}
 
 		if ($this->factory->isCountersEnabled())
 		{
@@ -837,5 +929,17 @@ abstract class ItemList extends Base
 		$params['ANALYTICS'] = $this->getAnalytics();
 
 		return $params;
+	}
+
+	protected function getCustomSectionCodeById(int $customSectionId): string | null
+	{
+		$result = CustomSectionTable::query()
+			->setSelect(['CODE'])
+			->where('ID', $customSectionId)
+			->exec()
+			->fetch()
+		;
+
+		return $result['CODE'] ?? null;
 	}
 }

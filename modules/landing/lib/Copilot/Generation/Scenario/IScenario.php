@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Copilot\Generation\Scenario;
 use Bitrix\Landing\Copilot\Connector\Chat\ICopilotChatBot;
 use Bitrix\Landing\Copilot\Generation\Step\IStep;
 use Bitrix\Landing\Copilot\Generation;
+use Bitrix\Landing\Metrika;
 
 interface IScenario
 {
@@ -20,6 +21,15 @@ interface IScenario
 	 * @return ICopilotChatBot|null
 	 */
 	public function getChatbot(): ?ICopilotChatBot;
+
+	public function getAnalyticCategory(): Metrika\Categories;
+
+	/**
+	 * If some steps must be run only after async step - need set relations
+	 * f.e. [asyncStepId => [dependent_step_ids]]
+	 * @return array|null
+	 */
+	public function getAsyncRelations(): ?array;
 
 	/**
 	 * Get ID of first step in scenario
