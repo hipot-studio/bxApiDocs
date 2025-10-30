@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Main\Validation\Rule\PositiveNumber;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Tasks\V2\Internal\Entity\User\Gender;
 
 class User extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		#[PositiveNumber]
 		public readonly ?int $id = null,
@@ -18,6 +21,7 @@ class User extends AbstractEntity
 		public readonly ?Gender $gender = null,
 		public readonly ?string $email = null,
 		public readonly ?string $externalAuthId = null,
+		public readonly ?array $rights = null,
 	)
 	{
 
@@ -31,13 +35,14 @@ class User extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			name: $props['name'] ?? null,
-			role: $props['role'] ?? null,
-			image: $props['image'] ?? null,
-			gender: Gender::tryFrom($props['gender'] ?? 'M'),
-			email: $props['email'] ?? null,
-			externalAuthId: $props['externalAuthId'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			name: static::mapString($props, 'name'),
+			role: static::mapString($props, 'role'),
+			image: static::mapString($props, 'image'),
+			gender: static::mapBackedEnum($props, 'gender', Gender::class),
+			email: static::mapString($props, 'email'),
+			externalAuthId: static::mapString($props, 'externalAuthId'),
+			rights: static::mapArray($props, 'rights'),
 		);
 	}
 
@@ -56,6 +61,7 @@ class User extends AbstractEntity
 			'gender' => $this->gender?->value,
 			'email' => $this->email,
 			'externalAuthId' => $this->externalAuthId,
+			'rights' => $this->rights,
 		];
 	}
 }

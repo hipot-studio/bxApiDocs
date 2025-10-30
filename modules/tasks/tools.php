@@ -751,67 +751,14 @@ function tasksStatus2String($status)
 	return $strStatus;
 }
 
-
+/**
+ * @deprecated and will be removed
+ *
+ * @use \Bitrix\Tasks\V2\Internal\Service\UrlService
+ */
 function tasksServerName($server_name = false)
 {
-	if (!$server_name)
-	{
-		if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME)
-		{
-			$server_name = SITE_SERVER_NAME;
-		}
-		else
-		{
-			$server_name = COption::GetOptionString("main", "server_name", $_SERVER['HTTP_HOST']);
-		}
-	}
-
-	if (
-		(mb_substr(mb_strtolower($server_name), 0, 8) !== 'https://')
-		&& (mb_substr(mb_strtolower($server_name), 0, 7) !== 'http://')
-	)
-	{
-		if (CMain::IsHTTPS())
-			$server_name = 'https://' . $server_name;
-		else
-			$server_name = 'http://' . $server_name;
-	}
-
-	$server_name_wo_protocol = str_replace(
-		array('http://', 'https://', 'HTTP://', 'HTTPS://'), 	// Yeah, I know: 'hTtpS://', ...
-		array('', '', '', ''),
-		$server_name
-	);
-
-	// Cutoff all what is after '/' (include '/' itself)
-	$slashPos = mb_strpos($server_name_wo_protocol, '/');
-	if ($slashPos >= 1)
-	{
-		$length = $slashPos;
-		$server_name_wo_protocol = mb_substr(0, $length);
-	}
-
-	$isServerPortAlreadyGiven = false;
-	if (mb_strpos($server_name_wo_protocol, ':') !== false)
-		$isServerPortAlreadyGiven = true;
-
-	$server_port = '';
-
-	if (
-		!$isServerPortAlreadyGiven
-		&& isset($_SERVER['SERVER_PORT'])
-		&& ($_SERVER['SERVER_PORT'] <> '')
-		&& ($_SERVER['SERVER_PORT'] != '80')
-		&& ($_SERVER['SERVER_PORT'] != '443')
-	)
-	{
-		$server_port = ':' . $_SERVER['SERVER_PORT'];
-	}
-
-	if ( ! $isServerPortAlreadyGiven )
-		$server_name .= $server_port;
-
-	return ($server_name);
+	return \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getUrlService()->getHostUrl((string)$server_name);
 }
 
 define("TASKS_FILTER_SESSION_INDEX", "FILTER");

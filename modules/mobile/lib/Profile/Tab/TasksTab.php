@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mobile\Profile\Tab;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Profile\Enum\TabContextType;
 use Bitrix\Mobile\Profile\Enum\TabType;
@@ -25,11 +26,19 @@ class TasksTab extends BaseProfileTab
 	}
 
 	/**
+	 * @return string|null
+	 */
+	public function getComponentName(): ?string
+	{
+		return 'tasks:tasks.dashboard';
+	}
+
+	/**
 	 * @return bool
 	 */
 	public function isAvailable(): bool
 	{
-		return false;
+		return Loader::includeModule('tasks') && Loader::includeModule('tasksmobile');
 	}
 
 	/**
@@ -38,5 +47,15 @@ class TasksTab extends BaseProfileTab
 	public function getTitle(): string
 	{
 		return Loc::getMessage('PROFILE_TAB_TASKS_TITLE');
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getParams(): array
+	{
+		return [
+			'USER_ID' => $this->ownerId,
+		];
 	}
 }

@@ -26,9 +26,9 @@ class SetRemindersCommand extends AbstractCommand
 	{
 	}
 
-	protected function validate(): ValidationResult
+	protected function validateInternal(): ValidationResult
 	{
-		$validationResult = parent::validate();
+		$validationResult = parent::validateInternal();
 		if (!$validationResult->isSuccess())
 		{
 			return $validationResult;
@@ -44,7 +44,7 @@ class SetRemindersCommand extends AbstractCommand
 		return Container::getInstance()->getValidationService()->validate($reminders);
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 

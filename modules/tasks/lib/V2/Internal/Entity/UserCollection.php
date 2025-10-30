@@ -11,6 +11,8 @@ namespace Bitrix\Tasks\V2\Internal\Entity;
  * @method UserCollection findAllByIds(array $ids, string $idKey = 'id')
  * @method array getEmailList()
  * @method User[] getIterator()
+ * @method static UserCollection mapFromIds(array $ids, string $idKey = 'id')
+ * @method UserCollection filter(callable $callback)
  */
 class UserCollection extends AbstractEntityCollection
 {

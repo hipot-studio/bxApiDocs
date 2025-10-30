@@ -465,7 +465,7 @@ class Chat extends BaseController
 	public function addUsersAction(\Bitrix\Im\V2\Chat $chat, array $userIds, ?string $hideHistory = null): ?array
 	{
 		$hideHistoryBool = $hideHistory === null ? null : $this->convertCharToBool($hideHistory, true);
-		$chat->addUsers($userIds, new AddUsersConfig(hideHistory: $hideHistoryBool));
+		$chat->addUsers($userIds, new AddUsersConfig(hideHistory: $hideHistoryBool, skipAnalytics: false));
 
 		return ['result' => true];
 	}
@@ -816,7 +816,6 @@ class Chat extends BaseController
 			'CHANNEL' => \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL,
 			'COPILOT' => \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT,
 			'COLLAB' => \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB,
-			'AI_ASSISTANT' => \Bitrix\Im\V2\Chat::IM_TYPE_AI_ASSISTANT,
 			default => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
 		};
 	}

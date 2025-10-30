@@ -39,6 +39,11 @@ class Revision
 	 */
 	const REST = 32;
 
+	/**
+	 * Menu revision
+	 */
+	const MENU = 1;
+
 	public static function getWeb()
 	{
 		return static::WEB;
@@ -63,6 +68,11 @@ class Revision
 	public static function getRest()
 	{
 		return static::REST;
+	}
+
+	public static function getMenu()
+	{
+		return static::MENU;
 	}
 
 	public static function get()

@@ -621,12 +621,12 @@ class ContactCenter
 
 			$itemsList = array_merge($itemsList, array(
 				'ccplacement' => array(
-					"NAME" => Loc::getMessage("CONTACT_CENTER_REST_CC_PLACEMENT_2"),
+					"NAME" => Loc::getMessage("CONTACT_CENTER_REST_CC_PLACEMENT_2_MSGVER_1"),
 					"LOGO_CLASS" => "ui-icon ui-icon-service-rest-contact-center",
 					"SELECTED" => false
 				),
 				'chatbot' => array(
-					"NAME" => Loc::getMessage("CONTACT_CENTER_REST_CHATBOT"),
+					"NAME" => Loc::getMessage("CONTACT_CENTER_REST_CHATBOT_MSGVER_1"),
 					"LOGO_CLASS" => "ui-icon ui-icon-service-chatbot",
 					"SELECTED" => false
 				),
@@ -1460,7 +1460,7 @@ class ContactCenter
 		if (is_null($this->cisCheck))
 		{
 			$this->cisCheck = false;
-			$cisDomainList = array('ru', 'kz', 'by'); //except ua domain case services rules
+			$cisDomainList = array('ru', 'kz', 'by', 'uz'); //except ua domain case services rules
 
 			$this->cisCheck = !in_array(
 				Loader::includeModule('bitrix24') ? \CBitrix24::getPortalZone() : \CIntranetUtils::getPortalZone(),

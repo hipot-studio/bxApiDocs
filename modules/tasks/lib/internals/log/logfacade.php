@@ -8,6 +8,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Validation\ValidationError;
 use ReflectionClass;
 use Throwable;
 
@@ -41,6 +42,29 @@ final class LogFacade
 	public static function logError(Error $error): void
 	{
 		self::getLogger()->collect($error->getMessage());
+	}
+
+	public static function logValidationErrors(ErrorCollection $errors): void
+	{
+		if (!self::isDevMode() && Option::get('tasks', 'tasks_log_validation_errors', 'N') !== 'Y')
+		{
+			return;
+		}
+
+		$messages = [];
+		foreach ($errors as $error)
+		{
+			if ($error instanceof ValidationError)
+			{
+				$messages [] =
+					$error->getCode() . ':' . $error->getMessage() . ':' . $error->getFailedValidator()::class;
+			}
+		}
+
+		if (!empty($messages))
+		{
+			self::log($messages);
+		}
 	}
 
 	public static function handle(string|Throwable|Error $error, string $wrapperClass = SystemException::class): void

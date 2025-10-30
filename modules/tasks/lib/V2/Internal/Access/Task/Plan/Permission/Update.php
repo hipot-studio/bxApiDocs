@@ -24,6 +24,6 @@ class Update implements AttributeAccessInterface
 
 		$before = $adapter->create();
 
-		return $accessController->check(ActionDictionary::ACTION_TASK_DEADLINE, $before);
+		return $accessController->check(ActionDictionary::ACTION_TASK_DATE_PLAN, $before);
 	}
 }

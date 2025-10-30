@@ -10,6 +10,7 @@ final class AddUsersConfig
 	public readonly bool $skipRecent;
 	public readonly bool $isFakeAdd;
 	public readonly Reason $reason;
+	public readonly bool $skipAnalytics;
 	public readonly array $hiddenUserIds;
 
 	public function __construct(
@@ -20,6 +21,7 @@ final class AddUsersConfig
 		bool $isFakeAdd = false,
 		Reason $reason = Reason::DEFAULT,
 		array $hiddenUserIds = [],
+		bool $skipAnalytics = true,
 	)
 	{
 		$this->managerIds = $this->normalizeIds($managerIds);
@@ -29,6 +31,7 @@ final class AddUsersConfig
 		$this->isFakeAdd = $isFakeAdd;
 		$this->reason = $reason;
 		$this->hiddenUserIds = $this->normalizeIds($hiddenUserIds);
+		$this->skipAnalytics = $skipAnalytics;
 	}
 
 	public function isManager(int $userId): bool

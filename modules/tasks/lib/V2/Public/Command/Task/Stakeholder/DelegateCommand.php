@@ -24,7 +24,7 @@ class DelegateCommand extends AbstractCommand
 	{
 
 	}
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 

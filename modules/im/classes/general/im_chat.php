@@ -831,7 +831,7 @@ class CIMChat
 				'MESSAGE' => GetMessage('IM_PERSONAL_DESCRIPTION')
 			]);
 
-			return $favoriteChatResult->getResult()['CHAT_ID'];
+			return $favoriteChatResult->getChatId();
 		}
 
 		return $favoriteChatResult->getResult()['ID'];
@@ -2616,7 +2616,7 @@ class CIMChat
 			else
 			{
 				self::AddMessage([
-					"TO_CHAT_ID" => $chatResult->getResult()['CHAT_ID'],
+					"TO_CHAT_ID" => $chatResult->getChatId(),
 					"FROM_USER_ID" => $this->user_id,
 					"SYSTEM" => $this->user_id ? 'N' : 'Y',
 					"MESSAGE" => $message,
@@ -2624,11 +2624,9 @@ class CIMChat
 			}
 		}
 
-		$chat = $chatResult->getResult()['CHAT'];
-
 		CIMContactList::CleanAllChatCache();
 
-		return $chat->getChatId();
+		return $chatResult->getChatId();
 	}
 
 	public static function AddMessage($arFields)
@@ -2706,7 +2704,15 @@ class CIMChat
 		return true;
 	}
 
-	public function AddUser($chatId, $userId, $hideHistory = null, $skipMessage = false, $skipRecent = false, $skipRelation = false)
+	public function AddUser(
+		$chatId,
+		$userId,
+		$hideHistory = null,
+		$skipMessage = false,
+		$skipRecent = false,
+		$skipRelation = false,
+		$skipAnalytics = true
+	)
 	{
 		$chatId = intval($chatId);
 		if ($chatId <= 0)
@@ -2743,7 +2749,14 @@ class CIMChat
 			return false;
 		}
 
-		$config = new IM\V2\Relation\AddUsersConfig([], $hideHistory, !$skipMessage, $skipRecent, $skipRelation);
+		$config = new IM\V2\Relation\AddUsersConfig(
+			managerIds: [],
+			hideHistory: $hideHistory,
+			withMessage: !$skipMessage,
+			skipRecent: $skipRecent,
+			isFakeAdd: $skipRelation,
+			skipAnalytics: $skipAnalytics
+		);
 		$chat->addUsers($arUserId, $config);
 
 		return true;
@@ -3365,8 +3378,6 @@ class CIMChat
 			Chat::IM_TYPE_OPEN_CHANNEL,
 			Chat::IM_TYPE_COLLAB,
 			Chat::IM_TYPE_EXTERNAL,
-			Chat::IM_TYPE_AI_ASSISTANT,
-			Chat::IM_TYPE_AI_ASSISTANT_ENTITY,
 		];
 	}
 

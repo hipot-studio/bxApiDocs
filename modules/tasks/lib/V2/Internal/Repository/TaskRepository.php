@@ -15,7 +15,6 @@ use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
-use Bitrix\Tasks\Internals\Task\CheckListTable;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Trait\ApplicationErrorTrait;
@@ -28,12 +27,13 @@ class TaskRepository implements TaskRepositoryInterface
 
 	public function __construct(
 		private readonly GroupRepositoryInterface $groupRepository,
-		private readonly FlowRepositoryInterface  $flowRepository,
+		private readonly FlowRepositoryInterface $flowRepository,
 		private readonly StageRepositoryInterface $stageRepository,
-		private readonly UserRepositoryInterface  $userRepository,
+		private readonly UserRepositoryInterface $userRepository,
 		private readonly CheckListRepository $checkListRepository,
 		private readonly ChatRepositoryInterface $chatRepository,
-		private readonly TaskMapper               $taskMapper,
+		private readonly TaskParameterRepositoryInterface $taskParameterRepository,
+		private readonly TaskMapper $taskMapper,
 		private readonly OrmTaskMapper $ormTaskMapper,
 	)
 	{
@@ -41,13 +41,44 @@ class TaskRepository implements TaskRepositoryInterface
 
 	public function getById(int $id): ?Entity\Task
 	{
-		// todo: replace with 1 query
-		$task = TaskRegistry::getInstance()->getObject($id, true);
+		$selectFields = [
+			'ID',
+			'TITLE',
+			'GROUP_ID',
+			'STAGE_ID',
+			'STATUS',
+			'STATUS_CHANGED_DATE',
+			'ALLOW_CHANGE_DEADLINE',
+			'ALLOW_TIME_TRACKING',
+			'MATCH_WORK_TIME',
+			'DEADLINE',
+			'TASK_CONTROL',
+			'PRIORITY',
+			'DESCRIPTION',
+			'FORUM_TOPIC_ID',
+			'RESPONSIBLE_ID',
+			'CREATED_BY',
+			'CLOSED_DATE',
+			'CREATED_DATE',
+			'START_DATE_PLAN',
+			'END_DATE_PLAN',
+			'MEMBER_LIST',
+			'FAVORITE_TASK',
+		];
 
-		if ($task === null || $task->getZombie())
+		$task =
+			TaskTable::query()
+				->setSelect($selectFields)
+				->where('ID', $id)
+				->fetchObject()
+			;
+
+		if ($task === null)
 		{
 			return null;
 		}
+
+		$task->fillTagList();
 
 		$group = null;
 		if ($task->getGroupId() > 0)
@@ -56,9 +87,9 @@ class TaskRepository implements TaskRepositoryInterface
 		}
 
 		$flow = null;
-		if ($task->customData['FLOW_ID'] > 0)
+		if ($task->getFlowTask()?->getId() > 0)
 		{
-			$flow = $this->flowRepository->getById($task->customData['FLOW_ID']);
+			$flow = $this->flowRepository->getById($task->getFlowTask()->getId());
 		}
 
 		$stage = null;
@@ -79,11 +110,26 @@ class TaskRepository implements TaskRepositoryInterface
 			$checkListIds = null;
 		}
 
-		$aggregates['containsCheckList'] = !empty($checkListIds);
-
 		$chatId = $this->chatRepository->getChatIdByTaskId($id);
 
-		return $this->taskMapper->mapToEntity($task, $group, $flow, $stage, $members, $aggregates, $chatId, $checkListIds);
+		$aggregates['containsCheckList'] = !empty($checkListIds);
+
+		$taskParameters = [
+			'matchesSubTasksTime' => $this->taskParameterRepository->matchesSubTasksTime($id),
+			'allowsChangeDatePlan' => $this->taskParameterRepository->allowsChangeDatePlan($id),
+		];
+
+		return $this->taskMapper->mapToEntity(
+			taskObject: $task,
+			group: $group,
+			flow: $flow,
+			stage: $stage,
+			members: $members,
+			aggregates: $aggregates,
+			chatId: $chatId,
+			checkListIds: $checkListIds,
+			taskParameters: $taskParameters,
+		);
 	}
 
 	public function save(Entity\Task $entity): int

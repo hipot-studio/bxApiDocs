@@ -47,6 +47,7 @@ class Config implements \JsonSerializable
 			'tariffRestrictions' => $this->getTariffRestrictions(),
 			'anchors' => $this->getAnchors(),
 			'copilot' => $this->getCopilotData(),
+			'serviceHealthUrl' => $this->getServiceHealthUrl(),
 		];
 	}
 
@@ -70,6 +71,18 @@ class Config implements \JsonSerializable
 				? '//www.1c-bitrix.ru/200.ok'
 				: '//www.bitrixsoft.com/200.ok'
 			;
+	}
+
+	protected function getServiceHealthUrl(): string
+	{
+		$license = Application::getInstance()->getLicense();
+
+		$baseUrl = $license->isCis()
+			? 'https://status.bitrix24.ru/json_status.php?reg='
+			: 'https://status.bitrix24.com/json_status.php?reg='
+		;
+
+		return $baseUrl . $license->getRegion();
 	}
 
 	protected function getPreloadedList(): array

@@ -23,14 +23,13 @@ class DeferTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		$statusService = Container::getInstance()->getStatusService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
 
-		$handler = new DeferTaskHandler($statusService, $consistencyResolver);
+		$handler = new DeferTaskHandler($statusService);
 
 		try
 		{

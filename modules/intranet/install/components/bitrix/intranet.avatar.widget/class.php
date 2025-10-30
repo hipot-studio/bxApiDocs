@@ -19,29 +19,19 @@ class IntranetAvatarWidget extends \CBitrixComponent
 		$this->arResult['avatar'] = Uri::urnEncode((new Intranet\User\Widget\Content\Main($user))->getUserPhotoSrc());
 		$this->arResult['userRole'] = $user->getUserRole()->value;
 		$this->arResult['userId'] = $user->getId();
-		$this->arResult['signDocumentsCounter'] = $this->getSignDocumentsCounter();
-		$this->arResult['signDocumentsPullEventName'] = Intranet\User\Widget\Content\SignDocuments::getCounterEventName();
+		$this->arResult['signDocumentsCounter'] = \Bitrix\Intranet\User\Widget\Content\Tool\MyDocuments::getCount();
+		$this->arResult['signDocumentsPullEventName'] = \Bitrix\Intranet\User\Widget\Content\Tool\MyDocuments::getCounterEventName();
 		$this->arResult['workTimeData'] = $this->getWorkTimeData($user->getId());
 
 		$this->includeComponentTemplate();
-	}
-
-	private function getSignDocumentsCounter(): int
-	{
-		if (!Intranet\User\Widget\Content\SignDocuments::isSignDocumentAvailable())
-		{
-			return 0;
-		}
-
-		return Intranet\User\Widget\Content\SignDocuments::getCount();
 	}
 
 	private function getWorkTimeData(int $currentUserId): array
 	{
 		$cache = new \CPHPCache;
 
-		$cacheTtl = 86400;
-		$cacheId = 'timeman-work-time-data-' . $currentUserId;
+		$cacheTtl = 3500;
+		$cacheId = 'timeman-work-time-data-v2-' . $currentUserId;
 		$cacheDir = '/timeman/work-time-data/' . $currentUserId;
 
 		if ($cache->initCache($cacheTtl, $cacheId, $cacheDir))
@@ -55,6 +45,8 @@ class IntranetAvatarWidget extends \CBitrixComponent
 
 		$workTimeState = '';
 		$workTimeAction = '';
+		$workTimeClass = '';
+
 		if ($workTimeAvailable)
 		{
 			$timeManUser = \CTimeManUser::instance();
@@ -64,6 +56,23 @@ class IntranetAvatarWidget extends \CBitrixComponent
 			{
 				$workTimeAction = $timeManUser->openAction();
 				$workTimeAction = ($workTimeAction === false) ? '' : $workTimeAction;
+
+				if ($workTimeAction === 'OPEN')
+				{
+					$workTimeClass = '--worktime-not-started';
+				}
+				else
+				{
+					$workTimeClass = '--worktime-finished';
+				}
+			}
+			elseif ($workTimeState === 'EXPIRED')
+			{
+				$workTimeClass = '--worktime-not-finished';
+			}
+			elseif ($workTimeState === 'PAUSED')
+			{
+				$workTimeClass = '--worktime-paused';
 			}
 		}
 
@@ -71,6 +80,7 @@ class IntranetAvatarWidget extends \CBitrixComponent
 			'workTimeAvailable' => $workTimeAvailable,
 			'workTimeState' => $workTimeState,
 			'workTimeAction' => $workTimeAction,
+			'workTimeClass' => $workTimeClass,
 		];
 
 		$cache->endDataCache($workTimeData);

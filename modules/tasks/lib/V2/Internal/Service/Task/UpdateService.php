@@ -8,6 +8,7 @@ use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
+use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -56,6 +57,11 @@ class UpdateService
 
 	}
 
+	/**
+	 * @throws TaskNotExistsException
+	 * @throws CommandValidationException
+	 * @throws TaskUpdateException
+	 */
 	public function update(
 		Entity\Task  $task,
 		UpdateConfig $config,
@@ -246,5 +252,6 @@ class UpdateService
 	private function loadMessages(): void
 	{
 		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/task.php');
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/handler/taskfieldhandler.php');
 	}
 }

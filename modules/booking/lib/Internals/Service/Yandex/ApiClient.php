@@ -52,7 +52,7 @@ class ApiClient extends BaseSender
 			return $customServiceUrl;
 		}
 
-		return 'https://bookservice.' . (new UrlProvider())->getTechDomain() . '/';
+		return 'https://bookservice-ru.' . (new UrlProvider())->getTechDomain() . '/';
 	}
 
 	protected function getClientServerName(): string

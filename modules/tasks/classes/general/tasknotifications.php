@@ -1437,7 +1437,11 @@ class CTaskNotifications
 		$serverName = '';
 		if($bUseServerName)
 		{
-			$serverName = tasksServerName($site['SERVER_NAME']);
+			$serverName =
+				\Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+					->getUrlService()
+					->getHostUrl((string)$site['SERVER_NAME'])
+			;
 		}
 
 		$pathTemplate = COption::GetOptionString('tasks', 'paths_task_user', '', $site['SITE_ID']);
@@ -1569,7 +1573,11 @@ class CTaskNotifications
 			$serverName = '';
 			if($bUseServerName)
 			{
-				$serverName = tasksServerName($siteCache[$siteID]['SERVER_NAME']);
+				$serverName =
+					\Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+						->getUrlService()
+						->getHostUrl((string)$siteCache[$siteID]['SERVER_NAME'])
+				;
 			}
 
 			$strUrl = $serverName

@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\Integration\BIConnector\FlowBIAnalytics;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
-use Bitrix\Tasks\Integration\Intranet\Settings;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 final class BIAnalytics extends Column
 {
@@ -40,7 +40,7 @@ final class BIAnalytics extends Column
 	{
 		if (
 			Loader::includeModule('biconnector')
-			&& (new Settings())->isToolAvailable('crm_bi')
+			&& Container::getInstance()->getToolService()->isCrmBiAvailable()
 		)
 		{
 			return true;

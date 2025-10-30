@@ -381,6 +381,13 @@ class Bot
 				$update['WORK_POSITION'] = Loc::getMessage('BOT_DEFAULT_WORK_POSITION');
 			}
 
+			$color = null;
+			if (isset($update['COLOR']))
+			{
+				$color = $update['COLOR'];
+				unset($update['COLOR']);
+			}
+
 			$botAvatar = false;
 			$delBotAvatar = false;
 			$previousBotAvatar = false;
@@ -416,6 +423,11 @@ class Bot
 
 			$user = new \CUser;
 			$user->Update($botId, $update);
+
+			if ($color && \Bitrix\Main\Loader::includeModule('pull'))
+			{
+				\CIMStatus::SetColor($botId, $color);
+			}
 
 			if ($botAvatar > 0 && $botAvatar !== $previousBotAvatar)
 			{

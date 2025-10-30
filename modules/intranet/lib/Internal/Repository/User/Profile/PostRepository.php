@@ -51,6 +51,8 @@ class PostRepository
 
 		$profilePost = new ProfilePost([
 			'profileId' => $userId,
+			// use \Bitrix\Intranet\User\Access\Rule\UpdateRule and \Bitrix\Intranet\User\Access\Rule\ViewRule before Command
+			'permissions' => ['view' => true, 'edit' => true],
 		]);
 
 		if (empty($post->text))

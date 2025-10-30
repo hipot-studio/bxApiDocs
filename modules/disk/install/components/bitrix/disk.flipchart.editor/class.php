@@ -45,10 +45,9 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		return BoardService::convertDocumentIdToExternal($documentId, $versionId);
 	}
 
-	private function generateToken(): string
+	private function generateToken(JwtService $jwt): ?string
 	{
 		$session = $this->session;
-		$jwt = new JwtService($session->getUser());
 
 		if ($this->isNewElement())
 		{
@@ -89,6 +88,18 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 	private function prepareSdkParams(): void
 	{
 		$session = $this->session;
+		$jwt = new JwtService($session->getUser());
+		$token = $this->generateToken($jwt);
+
+		if (Configuration::isUsingDocumentProxy())
+		{
+			$appUrl = $jwt->getAppUrlFromProxy();
+		}
+		else
+		{
+			$appUrl = Configuration::getAppUrl();
+		}
+
 		$this->arResult['DOCUMENT_SESSION'] = $session;
 		$this->arResult['DOCUMENT_URL'] = $this->arParams['DOCUMENT_URL'];
 		$this->arResult['DOCUMENT_ID'] = $this->convertDocumentId($session->getObject()->getId(), $session->getVersionId());
@@ -96,8 +107,8 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		$this->arResult['DOCUMENT_NAME'] = $this->arParams['ORIGINAL_FILE']?->getName() ?? $session->getObject()->getName();
 		$this->arResult['DOCUMENT_NAME_WITHOUT_EXTENSION'] = $this->arParams['ORIGINAL_FILE']?->getNameWithoutExtension() ?? $this->arParams['DOCUMENT_NAME_WITHOUT_EXTENSION'] ?? $session->getObject()->getNameWithoutExtension();
 		$this->arResult['SESSION_ID'] = $session->getExternalHash();
-		$this->arResult['APP_URL'] = Configuration::getAppUrl();
-		$this->arResult['TOKEN'] = $this->generateToken();
+		$this->arResult['APP_URL'] = $appUrl;
+		$this->arResult['TOKEN'] = $token;
 		$this->arResult['ACCESS_LEVEL'] = $this->isViewMode ? 'readonly' : 'editable';
 		$this->arResult['EDIT_BOARD'] = $this->isEditMode;
 		$this->arResult['SHOW_TEMPLATES_MODAL'] = (bool)($this->arParams['SHOW_TEMPLATES_MODAL'] ?? false);

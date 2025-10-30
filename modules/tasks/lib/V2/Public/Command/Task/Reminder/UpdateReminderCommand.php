@@ -23,7 +23,7 @@ class UpdateReminderCommand extends AbstractCommand
 	{
 	}
 
-	protected function validate(): ValidationResult
+	protected function validateInternal(): ValidationResult
 	{
 		$validationResult = new ValidationResult();
 
@@ -45,7 +45,7 @@ class UpdateReminderCommand extends AbstractCommand
 		return (new MinValidator(min: 0))->validate($this->reminder->id);
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 

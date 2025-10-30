@@ -10,14 +10,12 @@ use Bitrix\Disk\File;
 use Bitrix\Im\V2\Analytics\Event\ChatEvent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\CollabChat;
-use Bitrix\Im\V2\Relation\Reason;
+use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Main\Loader;
 
 class ChatAnalytics extends AbstractAnalytics
 {
 	public const SUBMIT_CREATE_NEW = 'submit_create_new';
-
-	protected const JOIN = 'join';
 	protected const ADD_DEPARTMENT = 'add_department';
 	protected const ADD_USER = 'add_user';
 	protected const DELETE_USER = 'delete_user';
@@ -44,28 +42,21 @@ class ChatAnalytics extends AbstractAnalytics
 		});
 	}
 
-	public function addAddUser(Reason $reason = Reason::DEFAULT, bool $isJoin = false): void
+	public function addAddUser(AddUsersConfig $config): void
 	{
 		if ($this->isSingleUserEventsBlocked())
 		{
 			return;
 		}
 
-		$this->async(function () use ($reason, $isJoin) {
-			if ($isJoin)
-			{
-				$eventName = self::JOIN;
-			}
-			else
-			{
-				$eventName = match ($reason) {
-					Reason::STRUCTURE => self::ADD_DEPARTMENT,
-					default => self::ADD_USER,
-				};
-			}
+		if ($config->skipAnalytics)
+		{
+			return;
+		}
 
+		$this->async(function () {
 			$this
-				->createChatEvent($eventName)
+				->createChatEvent(self::ADD_USER)
 				?->send()
 			;
 			(new CopilotAnalytics($this->chat))->addAddUser();

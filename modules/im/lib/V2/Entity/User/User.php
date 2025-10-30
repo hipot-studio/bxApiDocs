@@ -171,12 +171,13 @@ class User implements RestEntity
 			return null;
 		}
 
-		if (!$createResult->isSuccess())
+		$chat = $createResult->getChat();
+		if (!($chat instanceof PrivateChat) || !$createResult->isSuccess())
 		{
 			return null;
 		}
 
-		return $createResult->getResult()['CHAT'];
+		return $chat;
 	}
 
 	final public function checkAccess(?int $idOtherUser = null): Result

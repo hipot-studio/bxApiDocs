@@ -21,9 +21,9 @@ class UpdateResultCommand extends AbstractCommand
 	{
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
-		$response = new Result();
+		$result = new Result();
 
 		try
 		{
@@ -32,11 +32,16 @@ class UpdateResultCommand extends AbstractCommand
 			$handler = new UpdateResultHandler($resultService, $consistencyResolver);
 			$object = $handler($this);
 
-			return $response->setObject($object);
+			if ($object === null)
+			{
+				return $result->addError(new Error('Result not found'));
+			}
+
+			return $result->setObject($object);
 		}
 		catch (Exception $e)
 		{
-			return $response->addError(Error::createFromThrowable($e));
+			return $result->addError(Error::createFromThrowable($e));
 		}
 	}
 

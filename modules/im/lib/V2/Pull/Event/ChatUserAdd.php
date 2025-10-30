@@ -33,6 +33,7 @@ class ChatUserAdd extends BaseChatEvent
 			'newUsers' => array_values($this->usersToAdd),
 			'relations' => $this->chat->getRelationsByUserIds($this->usersToAdd)->toRestFormat(),
 			'userCount' => $this->chat->getUserCount(),
+			'callToken' => $this->chat->getCallToken()->getToken(),
 		];
 	}
 

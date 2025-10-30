@@ -66,11 +66,6 @@ abstract class BaseProfileTab
 		];
 	}
 
-	public function getData(): array
-	{
-		return [];
-	}
-
 	public function isComponent(): bool
 	{
 		return $this->getContextType() === TabContextType::COMPONENT;

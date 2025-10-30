@@ -16,6 +16,6 @@ class FieldCollection extends IdentifiableEntityCollection implements Arrayable
 
 	public function toArray(): array
 	{
-		return $this->map(fn (UserField $item) => $item->toArray());
+		return $this->map(fn (Field $item) => $item->toArray());
 	}
 }

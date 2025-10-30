@@ -23,7 +23,7 @@ class MuteTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$userOptionService = Container::getInstance()->getUserOptionService();
 

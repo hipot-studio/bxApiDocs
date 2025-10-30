@@ -4,22 +4,29 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\DI;
 
+use Bitrix\Tasks\Deadline\Internals\Repository\Cache\Managed\CacheDeadlineUserOptionRepository;
 use Bitrix\Tasks\Deadline\Internals\Repository\DeadlineUserOptionRepositoryInterface;
 use Bitrix\Tasks\DI\AbstractContainer;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Provider\Log\TaskLogProvider;
 use Bitrix\Tasks\V2\Internal\Access\Factory\ControllerFactoryInterface;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
-use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Service\CrmItemService;
+use Bitrix\Tasks\V2\Internal\Integration\Disk\Repository\DiskFileRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\Task\AttachmentService;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
+use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
+use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ReminderMapper;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskParameterRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\ElapsedTimeRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\FavoriteTaskRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\FlowRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ElapsedTimeMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\OrmTaskMapper;
@@ -27,24 +34,21 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskStageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskScenarioRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TimerRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\PlannerRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\StageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskMemberRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\TaskUserFieldsRepository;
 use Bitrix\Tasks\V2\Internal\Repository\TemplateRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\UserOptionRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\AutomationService;
+use Bitrix\Tasks\V2\Internal\Repository\TaskUserOptionRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListService;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\Prepare\Save\CheckListEntityFieldService;
-use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
+use Bitrix\Tasks\V2\Internal\Service\Extension\ConfigService;
+use Bitrix\Tasks\V2\Internal\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
 use Bitrix\Tasks\V2\Internal\Service\TariffService;
-use Bitrix\Tasks\V2\Internal\Service\Task\AddService;
-use Bitrix\Tasks\V2\Internal\Service\Task\DeleteService;
+use Bitrix\Tasks\V2\Internal\Service\DeleteTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ElapsedTimeService;
 use Bitrix\Tasks\V2\Internal\Service\Task\FavoriteService;
-use Bitrix\Tasks\V2\Internal\Service\PushService;
 use Bitrix\Tasks\V2\Internal\Service\Task\MemberService;
 use Bitrix\Tasks\V2\Internal\Service\Task\PlannerService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ReminderService;
@@ -58,295 +62,328 @@ use Bitrix\Tasks\V2\Internal\Service\Task\TimerService;
 use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
 use Bitrix\Tasks\V2\Internal\Service\Task\UserOptionService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ViewService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
+use Bitrix\Tasks\V2\Internal\Service\UrlService;
 use Bitrix\Tasks\V2\Internal\Service\UserService;
+use Bitrix\Tasks\V2\Public\Provider\AhaMomentProvider;
 use Bitrix\Tasks\V2\Public\Provider\Counter\RoleProvider;
-use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
+use Bitrix\Tasks\V2\Public\Provider\TaskFromTemplateProvider;
 
 class Container extends AbstractContainer
 {
+	public function getFeatureService(): FeatureService
+	{
+		return $this->get(FeatureService::class);
+	}
+
+	public function getUrlService(): UrlService
+	{
+		return $this->get(UrlService::class);
+	}
+
+	public function getConfigService(): ConfigService
+	{
+		return $this->get(ConfigService::class);
+	}
+
+	public function getToolService(): ToolService
+	{
+		return $this->get(ToolService::class);
+	}
+
+	public function getAttachmentService(): AttachmentService
+	{
+		return $this->get(AttachmentService::class);
+	}
+
+	public function getDiskFileRepository(): DiskFileRepositoryInterface
+	{
+		return $this->get(DiskFileRepositoryInterface::class);
+	}
+
+	public function getTaskFromTemplateProvider(): TaskFromTemplateProvider
+	{
+		return $this->get(TaskFromTemplateProvider::class);
+	}
+
+	public function getCrmItemService(): CrmItemService
+	{
+		return $this->get(CrmItemService::class);
+	}
+
+	public function getCrmAccessService(): CrmAccessService
+	{
+		return $this->get(CrmAccessService::class);
+	}
+
 	public function getReminderReadRepository(): ReminderReadRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(ReminderReadRepositoryInterface::class);
+		return $this->get(ReminderReadRepositoryInterface::class);
 	}
 
 	public function getReminderMapper(): ReminderMapper
 	{
-		return $this->getRuntimeObjectWithDi(ReminderMapper::class);
+		return $this->get(ReminderMapper::class);
 	}
 
 	public function getReminderService(): ReminderService
 	{
-		return $this->getRuntimeObjectWithDi(ReminderService::class);
+		return $this->get(ReminderService::class);
 	}
 
 	public function getReminderRepository(): ReminderRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(ReminderRepositoryInterface::class);
+		return $this->get(ReminderRepositoryInterface::class);
 	}
 
 	public function getUserService(): UserService
 	{
-		return $this->getRuntimeObjectWithDi(UserService::class);
+		return $this->get(UserService::class);
 	}
 
 	public function getTaskReadRepository(): TaskReadRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TaskReadRepositoryInterface::class);
+		return $this->get(TaskReadRepositoryInterface::class);
 	}
 
 	public function getTaskStageRepository(): TaskStageRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TaskStageRepositoryInterface::class);
+		return $this->get(TaskStageRepositoryInterface::class);
 	}
 
 	public function getTaskStageService(): TaskStageService
 	{
-		return $this->getRuntimeObjectWithDi(TaskStageService::class);
+		return $this->get(TaskStageService::class);
 	}
 
 	public function getTaskLogRepository(): TaskLogRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TaskLogRepositoryInterface::class);
+		return $this->get(TaskLogRepositoryInterface::class);
 	}
 
 	public function getScenarioService(): ScenarioService
 	{
-		return $this->getRuntimeObjectWithDi(ScenarioService::class);
+		return $this->get(ScenarioService::class);
 	}
 
 	public function getScenarioRepository(): TaskScenarioRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TaskScenarioRepositoryInterface::class);
+		return $this->get(TaskScenarioRepositoryInterface::class);
 	}
 
-	public function getDeleteService(): DeleteService
+	public function getDeleteTaskService(): DeleteTaskService
 	{
-		return $this->getRuntimeObjectWithDi(DeleteService::class);
+		return $this->get(DeleteTaskService::class);
 	}
 
-	public function getAddService(): AddService
+	public function getAddTaskService(): AddTaskService
 	{
-		return $this->getRuntimeObjectWithDi(AddService::class);
+		return $this->get(AddTaskService::class);
 	}
 
 	public function getCheckListEntityFieldService(): CheckListEntityFieldService
 	{
-		return $this->getRuntimeObjectWithDi(CheckListEntityFieldService::class);
+		return $this->get(CheckListEntityFieldService::class);
 	}
 
 	public function getCheckListService(): CheckListService
 	{
-		return $this->getRuntimeObjectWithDi(CheckListService::class);
+		return $this->get(CheckListService::class);
+	}
+
+	public function getCheckListUserOptionService(): Service\CheckList\UserOptionService
+	{
+		return $this->get(Service\CheckList\UserOptionService::class);
 	}
 
 	public function getTariffService(): TariffService
 	{
-		return $this->getRuntimeObjectWithDi(TariffService::class);
+		return $this->get(TariffService::class);
 	}
 
 	public function getViewService(): ViewService
 	{
-		return $this->getRuntimeObjectWithDi(ViewService::class);
+		return $this->get(ViewService::class);
 	}
 
 	public function getLinkService(): LinkService
 	{
-		return $this->getRuntimeObjectWithDi(LinkService::class);
+		return $this->get(LinkService::class);
 	}
 
 	public function getMemberService(): MemberService
 	{
-		return $this->getRuntimeObjectWithDi(MemberService::class);
+		return $this->get(MemberService::class);
 	}
 
 	public function getTimeManagementService(): TimeManagementService
 	{
-		return $this->getRuntimeObjectWithDi(TimeManagementService::class);
+		return $this->get(TimeManagementService::class);
 	}
 
 	public function getPlannerService(): PlannerService
 	{
-		return $this->getRuntimeObjectWithDi(PlannerService::class);
-	}
-
-	public function getPlannerRepository(): PlannerRepositoryInterface
-	{
-		return $this->getRuntimeObjectWithDi(PlannerRepositoryInterface::class);
+		return $this->get(PlannerService::class);
 	}
 
 	public function getTimerService(): TimerService
 	{
-		return $this->getRuntimeObjectWithDi(TimerService::class);
+		return $this->get(TimerService::class);
 	}
 
 	public function getTimerRepository(): TimerRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TimerRepositoryInterface::class);
+		return $this->get(TimerRepositoryInterface::class);
 	}
 
 	public function getOrmTaskMapper(): OrmTaskMapper
 	{
-		return $this->getRuntimeObjectWithDi(OrmTaskMapper::class);
+		return $this->get(OrmTaskMapper::class);
 	}
 
 	public function getDeadlineRepository(): DeadlineUserOptionRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(DeadlineUserOptionRepositoryInterface::class);
+		return $this->get(DeadlineUserOptionRepositoryInterface::class);
 	}
 
 	public function getStageRepository(): StageRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(StageRepositoryInterface::class);
-	}
-
-	public function getTaskRuleService(): TaskRightService
-	{
-		return $this->getRuntimeObjectWithDi(TaskRightService::class);
+		return $this->get(StageRepositoryInterface::class);
 	}
 
 	public function getTaskAccessService(): TaskAccessService
 	{
-		return $this->getRuntimeObjectWithDi(TaskAccessService::class);
+		return $this->get(TaskAccessService::class);
 	}
 
-	public function getUserOptionRepository(): UserOptionRepositoryInterface
+	public function getTaskUserOptionRepository(): TaskUserOptionRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(UserOptionRepositoryInterface::class);
+		return $this->get(TaskUserOptionRepositoryInterface::class);
 	}
 
 	public function getUserOptionService(): UserOptionService
 	{
-		return $this->getRuntimeObjectWithDi(UserOptionService::class);
+		return $this->get(UserOptionService::class);
 	}
 
 	public function getElapsedTimeMapper(): ElapsedTimeMapper
 	{
-		return $this->getRuntimeObjectWithDi(ElapsedTimeMapper::class);
+		return $this->get(ElapsedTimeMapper::class);
 	}
 
 	public function getElapsedTimeService(): ElapsedTimeService
 	{
-		return $this->getRuntimeObjectWithDi(ElapsedTimeService::class);
-	}
-
-	public function getElapsedTimeRepository(): ElapsedTimeRepositoryInterface
-	{
-		return $this->getRuntimeObjectWithDi(ElapsedTimeRepositoryInterface::class);
+		return $this->get(ElapsedTimeService::class);
 	}
 
 	public function getStatusService(): StatusService
 	{
-		return $this->getRuntimeObjectWithDi(StatusService::class);
+		return $this->get(StatusService::class);
+	}
+
+	public function getUpdateTaskService(): UpdateTaskService
+	{
+		return $this->get(UpdateTaskService::class);
 	}
 
 	public function getUpdateService(): UpdateService
 	{
-		return $this->getRuntimeObjectWithDi(UpdateService::class);
+		return $this->get(UpdateService::class);
 	}
 
 	public function getFavoriteService(): FavoriteService
 	{
-		return $this->getRuntimeObjectWithDi(FavoriteService::class);
+		return $this->get(FavoriteService::class);
 	}
 
 	public function getTaskMemberRepository(): TaskMemberRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TaskMemberRepositoryInterface::class);
+		return $this->get(TaskMemberRepositoryInterface::class);
+	}
+
+	public function getTaskParameterRepository(): TaskParameterRepositoryInterface
+	{
+		return $this->get(TaskParameterRepositoryInterface::class);
 	}
 
 	public function getTaskCompatabilityRepository(): Compatibility\TaskRepository
 	{
-		return $this->getRegisteredObject(Compatibility\TaskRepository::class);
+		return $this->get(Compatibility\TaskRepository::class);
 	}
 
 	public function getFavoriteTaskRepository(): FavoriteTaskRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(FavoriteTaskRepositoryInterface::class);
+		return $this->get(FavoriteTaskRepositoryInterface::class);
 	}
 
 	public function getTaskLogProvider(): TaskLogProvider
 	{
-		return $this->getRegisteredObject(TaskLogProvider::class);
+		return $this->get(TaskLogProvider::class);
 	}
 
 	public function getAccessControllerFactory(): ControllerFactoryInterface
 	{
-		return $this->getRegisteredObject('tasks.access.controller.factory');
+		return $this->get(ControllerFactoryInterface::class);
 	}
 
 	public function getTaskRepository(): TaskRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TaskRepositoryInterface::class);
+		return $this->get(TaskRepositoryInterface::class);
 	}
 
 	public function getRegistry(): TaskRegistry
 	{
-		return $this->getRegisteredObject('tasks.task.registry');
+		return $this->get('tasks.task.registry');
 	}
 
 	public function getGroupRepository(): GroupRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(GroupRepositoryInterface::class);
-	}
-
-	public function getFlowRepository(): FlowRepositoryInterface
-	{
-		return $this->getRuntimeObjectWithDi(FlowRepositoryInterface::class);
+		return $this->get(GroupRepositoryInterface::class);
 	}
 
 	public function getTemplateRepository(): TemplateRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(TemplateRepositoryInterface::class);
-	}
-
-	public function getEgressController(): EgressInterface
-	{
-		return $this->getRuntimeObjectWithDi(EgressInterface::class);
+		return $this->get(TemplateRepositoryInterface::class);
 	}
 
 	public function getChatRepository(): ChatRepositoryInterface
 	{
-		return $this->getRuntimeObjectWithDi(ChatRepositoryInterface::class);
+		return $this->get(ChatRepositoryInterface::class);
 	}
 
 	public function getResultService(): ResultService
 	{
-		return $this->getRuntimeObjectWithDi(ResultService::class);
+		return $this->get(ResultService::class);
 	}
 
 	public function getConsistencyResolver(): ConsistencyResolverInterface
 	{
-		return $this->getRuntimeObjectWithDi(ConsistencyResolverInterface::class);
-	}
-
-	public function getPushService(): PushService
-	{
-		return $this->getRuntimeObjectWithDi(PushService::class);
-	}
-
-	public function getAutomationService(): AutomationService
-	{
-		return $this->getRuntimeObjectWithDi(AutomationService::class);
-	}
-
-	public function getTaskUserFieldsRepository(): TaskUserFieldsRepository
-	{
-		return $this->getRuntimeObjectWithDi(TaskUserFieldsRepository::class);
-	}
-
-	public function getTaskProvider(): TaskProvider
-	{
-		return $this->getRuntimeObjectWithDi(TaskProvider::class);
+		return $this->get(ConsistencyResolverInterface::class);
 	}
 
 	public function getTaskLegacyFeatureService(): TaskLegacyFeatureService
 	{
-		return $this->getRuntimeObjectWithDi(TaskLegacyFeatureService::class);
+		return $this->get(TaskLegacyFeatureService::class);
 	}
 
 	public function getRoleProvider(): RoleProvider
 	{
-		return $this->getRuntimeObjectWithDi(RoleProvider::class);
+		return $this->get(RoleProvider::class);
+	}
+
+	public function getDeadlineUserOptionRepository(): DeadlineUserOptionRepositoryInterface
+	{
+		return $this->get(CacheDeadlineUserOptionRepository::class);
+	}
+
+	public function getDeadlineLogRepository(): DeadlineChangeLogRepositoryInterface
+	{
+		return $this->get(DeadlineChangeLogRepository::class);
+	}
+
+	public function getAhaMomentProvider(): AhaMomentProvider
+	{
+		return $this->get(AhaMomentProvider::class);
 	}
 }

@@ -3,6 +3,7 @@
 namespace Bitrix\Mobile\Profile\Tab;
 
 use Bitrix\Intranet\Enum\InvitationStatus;
+use Bitrix\Intranet\Public\Provider\User\UserProfileProvider;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
@@ -11,10 +12,14 @@ use Bitrix\Mobile\Profile\Enum\TabContextType;
 use Bitrix\Mobile\Profile\Enum\TabType;
 use Bitrix\Mobile\Profile\Enum\UserStatus;
 use Bitrix\Mobile\Profile\Provider\GratitudeProvider;
+use Bitrix\Mobile\Profile\Provider\ProfileProvider;
+use Bitrix\Mobile\Profile\Provider\TagProvider;
 use Bitrix\Mobile\Provider\CommonUserDto;
 use Bitrix\Mobile\Provider\UserRepository;
+use Bitrix\IntranetMobile\Provider\DepartmentProvider;
 use Bitrix\Tasks\Internals\Effective;
 use Bitrix\Tasks\Util\User as TasksUser;
+use Bitrix\IntranetMobile\Provider\InviteProvider;
 
 class CommonTab extends BaseProfileTab
 {
@@ -57,6 +62,8 @@ class CommonTab extends BaseProfileTab
 	{
 		return [
 			'ownerId' => $this->ownerId,
+			'canUpdate' => (new ProfileProvider($this->viewerId, $this->ownerId))->canUpdate(),
+			'data' => $this->getData(),
 		];
 	}
 
@@ -66,22 +73,62 @@ class CommonTab extends BaseProfileTab
 	 */
 	public function getData(): array
 	{
-		// todo: check profile view permissions
-		$users = UserRepository::getByIds([$this->ownerId]);
+		$userOwner = UserRepository::getByIds([$this->ownerId]);
 
-		if (!empty($users))
+		if (empty($userOwner))
 		{
-			$statusData = $this->getOwnerStatusData($users[0]);
-
-			return [
-				'user' => $users[0],
-				'statusData' => $statusData,
-				'gratitude' => $this->getGratitudeData(),
-				'efficiency' => $this->getEfficiencyData(),
-			];
+			return [];
 		}
 
-		return [];
+		$owner = $userOwner[0];
+		$statusData = $this->getOwnerStatusData($owner);
+		$tagsData = $this->getTagsData();
+		$users = [$owner, ...UserRepository::getByIds($tagsData['userIds'])];
+
+		return [
+			'owner' => $owner,
+			'users' => $users,
+			'statusData' => $statusData,
+			'gratitude' => $this->getGratitudeData(),
+			'tags' => $tagsData['tags'],
+			'departments' => $this->getDepartmentData(),
+			'efficiency' => $this->getEfficiencyData(),
+			'commonFields' => $this->getCommonFields(),
+		];
+	}
+
+	private function getCommonFields(): array
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return [];
+		}
+
+		$sectionArray = [];
+		$sectionCollection = UserProfileProvider::createByDefault()
+			->getByUserId($this->ownerId)
+			->fieldSectionCollection;
+
+		foreach ($sectionCollection as $section)
+		{
+			$sectionData = [
+				'id' => $section->getId(),
+				'title' => $section->title,
+				'isEditable' => $section->isEditable,
+				'isRemovable' => $section->isRemovable,
+				'fields' => [],
+			];
+
+			foreach ($section->userFieldCollection as $userField)
+			{
+				$field = $userField->toArray();
+				$sectionData['fields'][] = $field;
+			}
+
+			$sectionArray[] = $sectionData;
+		}
+
+		return $sectionArray;
 	}
 
 	/**
@@ -156,10 +203,10 @@ class CommonTab extends BaseProfileTab
 	}
 
 	/**
-	 * @param string $lastActivityDate
+	 * @param ?string $lastActivityDate
 	 * @return array
 	 */
-	private function getOnlineStatus(string $lastActivityDate): array
+	private function getOnlineStatus(?string $lastActivityDate): array
 	{
 		return \CUser::GetOnlineStatus(
 			$this->ownerId,
@@ -231,6 +278,13 @@ class CommonTab extends BaseProfileTab
 		return $gratitudeProvider->getBadges($this->ownerId, $limit);
 	}
 
+	private function getTagsData(): array
+	{
+		$tagProvider = new TagProvider();
+
+		return (new TagProvider())->getTagsList($this->ownerId);
+	}
+
 	private function getEfficiencyData(): ?array
 	{
 		if (!Loader::includeModule('tasks'))
@@ -260,5 +314,26 @@ class CommonTab extends BaseProfileTab
 			'violations' => $tasksCounters['VIOLATIONS'],
 			'inProgress' => $tasksCounters['IN_PROGRESS'],
 		];
+	}
+
+	private function getDepartmentData(): array
+	{
+		$result = [
+			'departmentHierarchies' => [],
+			'canInviteUsers' => false,
+			'canUseTelephony' => false,
+		];
+		if (!Loader::includeModule('intranet')
+			|| !Loader::includeModule('intranetmobile'))
+		{
+			return $result;
+		}
+		$result['departmentHierarchies'] = (new DepartmentProvider())->getUserDepartments($this->ownerId);
+		$result['canInviteUsers'] = (new InviteProvider())->getInviteSettings()['canCurrentUserInvite'];
+		$result['canUseTelephony'] = Loader::includeModule('voximplant')
+			&& \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls()
+		;
+
+		return $result;
 	}
 }

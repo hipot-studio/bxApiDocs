@@ -4,6 +4,7 @@ namespace Bitrix\DiskMobile\Controller;
 
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Web\Uri;
 
 class Base extends Controller
 {
@@ -21,6 +22,18 @@ class Base extends Controller
 	{
 		$trackedObject = $trackedItem['trackedObject'];
 
+		$downloadLink = $trackedObject['links']['download'];
+		if ($downloadLink instanceof Uri)
+		{
+			$downloadLink = $downloadLink->getUri();
+		}
+
+		$previewLink = $trackedObject['links']['preview'];
+		if ($previewLink instanceof Uri)
+		{
+			$previewLink = $previewLink->getUri();
+		}
+
 		return array_merge(
 			[
 				'trackedId' => (int)$trackedObject['id'],
@@ -28,8 +41,8 @@ class Base extends Controller
 			$trackedObject['file'],
 			[
 				'links' => [
-					'download' => $trackedObject['links']['download']->getUri(),
-					'preview' => $trackedObject['links']['preview']->getUri(),
+					'download' => is_string($downloadLink) ? $downloadLink : null,
+					'preview' => is_string($previewLink) ? $previewLink : null,
 				]
 			],
 		);

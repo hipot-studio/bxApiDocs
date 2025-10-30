@@ -47,7 +47,7 @@ class Checklist extends Base
 				static function ($className, $checkListItemId)
 				{
 					$userId = CurrentUser::get()->getId();
-					$fields = TaskCheckListFacade::getList([], ['ID' => $checkListItemId])[$checkListItemId];
+					$fields = TaskCheckListFacade::getList([], ['ID' => $checkListItemId])[$checkListItemId] ?? [];
 
 					/** @var ChecklistItem $className */
 					return new $className(0, $userId, TaskCheckListFacade::class, $fields);

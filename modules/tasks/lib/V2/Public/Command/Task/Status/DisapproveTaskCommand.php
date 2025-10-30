@@ -23,14 +23,13 @@ class DisapproveTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		$statusService = Container::getInstance()->getStatusService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
 
-		$handler = new DisapproveTaskHandler($statusService, $consistencyResolver);
+		$handler = new DisapproveTaskHandler($statusService);
 
 		try
 		{

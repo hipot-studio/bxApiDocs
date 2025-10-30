@@ -456,7 +456,13 @@ final class BaseInfoProvider
 			return [];
 		}
 
-		return UserRepository::getByIds([$this->userId]);
+		$userIds = [$this->userId];
+		if ($this->calType === Dictionary::CALENDAR_TYPE['user'] && $this->userId !== $this->ownerId)
+		{
+			$userIds[] = $this->ownerId;
+		}
+
+		return UserRepository::getByIds($userIds);
 	}
 
 
@@ -567,14 +573,21 @@ final class BaseInfoProvider
 
 		foreach ($sections as $section)
 		{
-			if ($noEditAccessedCalendars && $section['PERM']['edit'])
+			if (
+				$groupOrUser
+				&& $section['CAL_TYPE'] === $this->calType
+				&& (int)$section['OWNER_ID'] === $this->ownerId
+			)
 			{
-				$noEditAccessedCalendars = false;
-			}
+				if ($noEditAccessedCalendars && $section['PERM']['edit'])
+				{
+					$noEditAccessedCalendars = false;
+				}
 
-			if ($readOnly && ($section['PERM']['edit'] || $section['PERM']['edit_section']))
-			{
-				$readOnly = false;
+				if ($readOnly && ($section['PERM']['edit'] || $section['PERM']['edit_section']))
+				{
+					$readOnly = false;
+				}
 			}
 		}
 

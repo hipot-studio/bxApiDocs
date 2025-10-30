@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Integration;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 
@@ -14,8 +15,14 @@ class RunMessenger
 {
 	use ConfigTrait;
 
-	public function __invoke(array $fields): void
+	public function __invoke(array $fields, ?Task\Source $source = null): void
 	{
+		if ($source && $source->type === 'chat')
+		{
+			$fields['IM_CHAT_ID'] = $source->data['entityId'] ?? 0;
+			$fields['IM_MESSAGE_ID'] = $source->data['subEntityId'] ?? 0;
+		}
+
 		if (!isset($fields['IM_CHAT_ID']))
 		{
 			return;

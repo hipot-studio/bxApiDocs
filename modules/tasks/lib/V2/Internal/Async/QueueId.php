@@ -13,4 +13,6 @@ enum QueueId: string
 	case UpdateSearchIndex = 'update_task_search_index';
 	case UpdateTopic = 'update_task_topic';
 	case RecountSort = 'recount_task_sort';
+
+	case AddFlowStages = 'add_flow_stages';
 }

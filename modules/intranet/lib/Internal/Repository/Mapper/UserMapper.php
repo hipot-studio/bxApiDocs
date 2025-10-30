@@ -16,6 +16,11 @@ class UserMapper
 			$active = $userData['ACTIVE'] === 'Y';
 		}
 
+		if (!empty($userData['PHONE_NUMBER']) && empty($userData['AUTH_PHONE_NUMBER']))
+		{
+			$userData['AUTH_PHONE_NUMBER'] = $userData['PHONE_NUMBER'];
+		}
+
 		return new User(
 			id: $userData['ID'] ?? null,
 			login: $userData['LOGIN'] ?? null,
@@ -24,7 +29,6 @@ class UserMapper
 			lastName: $userData['LAST_NAME'] ?? null,
 			confirmCode: $userData["CONFIRM_CODE"] ?? null,
 			groupIds: $userData['GROUP_ID'] ?? null,
-			phoneNumber: $userData['PHONE_NUMBER'] ?? null,
 			xmlId: $userData['XML_ID'] ?? null,
 			active: $active,
 			externalAuthId: $userData['EXTERNAL_AUTH_ID'] ?? null,

@@ -8,6 +8,22 @@ use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 
+/**
+ * Class TaskChatTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_TaskChat_Query query()
+ * @method static EO_TaskChat_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_TaskChat_Result getById($id)
+ * @method static EO_TaskChat_Result getList(array $parameters = [])
+ * @method static EO_TaskChat_Entity getEntity()
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat createObject($setDefaultValues = true)
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat_Collection createCollection()
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat wakeUpObject($row)
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat_Collection wakeUpCollection($rows)
+ */
 class TaskChatTable extends DataManager
 {
 	use DeleteByFilterTrait;

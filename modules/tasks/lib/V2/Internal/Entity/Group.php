@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Main\Validation\Rule\Min;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class Group extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		#[Min(0)]
 		public readonly ?int $id = null,
@@ -46,12 +49,12 @@ class Group extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: isset($props['id']) ? (int)$props['id'] : null,
-			name: $props['name'] ?? null,
-			image: isset($props['image']) ? File::mapFromArray($props['image']) : null,
-			type: $props['type'] ?? null,
-			stages: isset($props['stages']) ? StageCollection::mapFromArray($props['stages']) : null,
-			isVisible: $props['isVisible'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			name: static::mapString($props, 'name'),
+			image: static::mapEntity($props, 'image', File::class),
+			type: static::mapString($props, 'type'),
+			stages: static::mapEntityCollection($props, 'stages', StageCollection::class),
+			isVisible: static::mapBool($props, 'isVisible'),
 		);
 	}
 }

@@ -334,7 +334,7 @@ class Chat
 				'command' => 'chatMuteNotify',
 				'params' => Array(
 					'chatId' => $chatId,
-					'dialogId' => 'chat'.$chatId,
+					'dialogId' => $chatObject->getDialogId($userId),
 					'muted' => $action == 'Y',
 					'mute' => $action == 'Y', // TODO remove this later
 					'counter' => $counter,

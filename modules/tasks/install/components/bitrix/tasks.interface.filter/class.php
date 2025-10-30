@@ -8,7 +8,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Tasks\Helper\Filter;
-use Bitrix\Tasks\Integration\Intranet\Settings;
+use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Scrum\Service\SprintService;
 use Bitrix\Tasks\TourGuide\PresetsMoved;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\FilterLimit;
@@ -227,7 +227,7 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 		$this->arResult['IS_SCRUM_PROJECT'] = ($group && $group->isScrumProject());
 		$this->arResult['IS_COLLAB'] = ($group && $group->isCollab());
 		$this->arResult['SPRINT'] = $this->getSprint();
-		$this->arResult['IS_TEMPLATES_AVAILABLE'] = (new Settings())->isToolAvailable(Settings::TOOLS['templates']);
+		$this->arResult['IS_TEMPLATES_AVAILABLE'] = Container::getInstance()->getToolService()->isTemplatesAvailable();
 
 		$this->arResult['viewMode'] = $this->getUserTasksViewMode();
 		$this->arResult['viewList'] = $this->getTasksViewList();
@@ -471,7 +471,7 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 		$sectionType = match (true) {
 			($this->arResult['IS_SCRUM_PROJECT'] ?? false) => 'scrum',
 			($this->arResult['IS_COLLAB'] ?? false) => 'collab',
-			($this->arParams['MENU_GROUP_ID'] ?? $this->arParams['GROUP_ID'] ?? false) => 'project',
+			(($this->arParams['MENU_GROUP_ID'] ?? $this->arParams['GROUP_ID'] ?? false) > 0) => 'project',
 			true => 'tasks',
 		};
 
@@ -554,9 +554,11 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 		$items = Container::getInstance()->getRoleProvider()->getItems($this->userId);
 		$groupId = $this->arParams['GROUP_ID'] ?? 0;
 		$selectedRoleId = Filter::getInstance($this->userId, $groupId)->getDefaultRoleId();
+		$totalCounter = Counter::getInstance($this->userId)->get(Counter\CounterDictionary::COUNTER_MEMBER_TOTAL);
 
 		return [
 			'items' => $items,
+			'totalCounter' => $totalCounter,
 			'selectedRoleId' => $selectedRoleId,
 			'selectedRoleName' => $items[$selectedRoleId]['TEXT'] ?? null,
 		];

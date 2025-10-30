@@ -162,7 +162,14 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				else
 				{
 					$fileInfo = $this->createFileInfo($attachedModel);
-					$loadResult->setFile($fileInfo);
+					if ($fileInfo instanceof FileInfo)
+					{
+						$loadResult->setFile($fileInfo);
+					}
+					else
+					{
+						$loadResult->addError(new Error('File not found or failed to load'));
+					}
 				}
 			}
 
@@ -436,27 +443,34 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 	{
 		$viewerAttrs = Disk\Ui\FileAttributes::buildByFileId($fileModel->getFileId(), $downloadUrl)
 			->setTitle($fileModel->getName())
+			->setObjectId($fileModel->getId())
 		;
 
 		if ($fileModel instanceof Disk\AttachedObject)
 		{
-			$viewerAttrs->setObjectId($fileModel->getObjectId());
+			$viewerAttrs
+				->setObjectId($fileModel->getObjectId())
+				->setAttachedObjectId($fileModel->getId())
+			;
+		}
 
-			if ($viewerAttrs->getViewerType() === Board::JS_TYPE_BOARD && Disk\Document\Flipchart\Configuration::isBoardsEnabled())
-			{
-				$urlManager = Driver::getInstance()->getUrlManager();
-				$uri = $urlManager->getUrlForViewBoard($fileModel->getFile(), false, 'disk_page');
+		if ($viewerAttrs->getViewerType() === Board::JS_TYPE_BOARD && Disk\Document\Flipchart\Configuration::isBoardsEnabled())
+		{
+			$urlManager = Driver::getInstance()->getUrlManager();
+			/** @var Disk\File $file */
+			$file = $fileModel instanceof Disk\AttachedObject ? $fileModel->getFile() : $fileModel;
 
-				$viewerAttrs->addAction([
-					'type' => 'open',
-					'buttonIconClass' => ' ',
-					'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
-					'params' => [
-						'objectId' => $fileModel->getObjectId(),
-						'url' => $uri,
-					],
-				]);
-			}
+			$uri = $urlManager->getUrlForViewBoard($file);
+
+			$viewerAttrs->addAction([
+				'type' => 'open',
+				'buttonIconClass' => ' ',
+				'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+				'params' => [
+					'objectId' => $file->getId(),
+					'url' => $uri,
+				],
+			]);
 		}
 
 		return $viewerAttrs->toDataSet();

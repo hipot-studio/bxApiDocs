@@ -32,4 +32,12 @@ trait OptionTrait
 			&& !empty($this->command->responsibleList)
 		;
 	}
+
+	private function hasResponsibleImmutable(): bool
+	{
+		return
+			$this->flowEntity->getDistributionType() === FlowDistributionType::IMMUTABLE->value
+			&& !empty($this->command->responsibleList)
+		;
+	}
 }

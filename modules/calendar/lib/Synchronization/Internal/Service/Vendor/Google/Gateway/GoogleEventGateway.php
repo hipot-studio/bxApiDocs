@@ -32,10 +32,9 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws ConflictException
 	 * @throws DtoValidationException
 	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function createEvent(Event $event, string $googleCalendarId): EventResponse
 	{
@@ -69,7 +68,6 @@ class GoogleEventGateway extends AbstractGoogleGateway
 			return EventResponse::fromJson($this->client->getResult());
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Event was not created');
 	}
 

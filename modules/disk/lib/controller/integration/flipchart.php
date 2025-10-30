@@ -140,7 +140,6 @@ final class Flipchart extends Controller implements JwtHolder
 		$documentId = BoardService::getDocumentIdFromExternal($documentIdLong);
 		$siteId = BoardService::getSiteIdFromExternal($documentIdLong);
 
-
 		if (!$sessionId || !$documentId || !$type)
 		{
 			return null;

@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
-use Bitrix\Tasks\V2\Internal\Service\Task\Favorite\Action\NotifyLivefeed;
-use Bitrix\Tasks\V2\Internal\Service\Task\Favorite\Action\RunToggleEvent;
+use Bitrix\Tasks\Integration\Socialnetwork\Task;
+use Bitrix\Tasks\V2\Internal\Service\EventService;
 use Bitrix\Tasks\V2\Internal\Repository\FavoriteTaskRepositoryInterface;
 
 class FavoriteService
 {
 	public function __construct(
 		private readonly FavoriteTaskRepositoryInterface $favoriteTaskRepository,
+		private readonly EventService $eventService,
 	)
 	{
 
@@ -24,16 +25,16 @@ class FavoriteService
 			userId: $userId,
 		);
 
-		(new RunToggleEvent())(
-			taskId: $taskId,
-			userId: $userId,
-			isFavorite: false
-		);
+		$this->eventService->send('OnTaskToggleFavorite', [
+			'taskId' => $taskId,
+			'userId' => $userId,
+			'isFavorite' => true,
+		]);
 
-		(new NotifyLivefeed())(
+		$this->notifyLiveFeed(
 			taskId: $taskId,
 			userId: $userId,
-			isFavorite: false,
+			isFavorite: true,
 		);
 	}
 
@@ -44,16 +45,25 @@ class FavoriteService
 			userId: $userId,
 		);
 
-		(new RunToggleEvent())(
-			taskId: $taskId,
-			userId: $userId,
-			isFavorite: false
-		);
+		$this->eventService->send('OnTaskToggleFavorite', [
+			'taskId' => $taskId,
+			'userId' => $userId,
+			'isFavorite' => false,
+		]);
 
-		(new NotifyLivefeed())(
+		$this->notifyLiveFeed(
 			taskId: $taskId,
 			userId: $userId,
 			isFavorite: false,
 		);
+	}
+
+	protected function notifyLiveFeed(int $taskId, int $userId, bool $isFavorite): void
+	{
+		Task::toggleFavorites([
+			'TASK_ID' => $taskId,
+			'USER_ID' => $userId,
+			'OPERATION' => $isFavorite ? 'ADD' : 'DELETE',
+		]);
 	}
 }

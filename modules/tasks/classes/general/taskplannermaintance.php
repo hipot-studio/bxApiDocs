@@ -1,8 +1,13 @@
 <?php
 
 use Bitrix\Main\Loader;
-use Bitrix\Tasks\Integration\Intranet\Settings;
+use Bitrix\Tasks\Control\Exception\TaskAddException;
+use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Internals\TaskTable;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
 
 class CTaskPlannerMaintance
 {
@@ -112,7 +117,7 @@ class CTaskPlannerMaintance
 		$taskAddUrl = \Bitrix\Tasks\UI\Task::makeActionUrl($pathTemplate, 0, 'edit', self::$USER_ID);
 		$taskAddUrl .= '?'.http_build_query(['ADD_TO_TIMEMAN' => 'Y']);
 
-		$isTasksEnabled = (new Settings())->isToolAvailable(Settings::TOOLS['base_tasks']);
+		$isTasksEnabled = Container::getInstance()->getToolService()->isBaseTasksAvailable();
 		$arResult = [
 			'DATA' => [
 				'TASKS_ENABLED' => $isTasksEnabled,
@@ -262,25 +267,30 @@ class CTaskPlannerMaintance
 			{
 				$user = \Bitrix\Tasks\V2\Internal\Entity\User::mapFromId(self::$USER_ID);
 
-				$task = new \Bitrix\Tasks\V2\Internal\Entity\Task(
+				$task = new Task(
 					title:              $arActions['name'],
 					creator:            $user,
 					responsible:        $user,
-					status:             \Bitrix\Tasks\V2\Internal\Entity\Task\Status::Pending,
+					status:             Status::Pending,
 					allowsTimeTracking: true,
 					siteId:             self::$SITE_ID,
 				);
 
-				$config = new \Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig(self::$USER_ID);
+				$service = Container::getInstance()->getAddTaskService();
 
-				$result = (new \Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand(
-					task: $task,
-					config: $config,
-				))->run();
+				$config = new AddConfig(self::$USER_ID);
 
-				if ($result->isSuccess())
+				try
 				{
-					$id = $result->getObject()?->getId();
+					$task = $service->add($task, $config);
+
+					$id = $task->id;
+				}
+				catch (TaskAddException|TaskNotExistsException $e)
+				{
+					Container::getInstance()
+						->getLogger()
+						->logWarning($e);
 				}
 			}
 
@@ -292,7 +302,7 @@ class CTaskPlannerMaintance
 				$toAdd = array_merge($toAdd, [$id]);
 			}
 
-			$service = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getPlannerService();
+			$service = Container::getInstance()->getPlannerService();
 
 			return $service->merge(self::$USER_ID, $toAdd, $toDelete);
 		}
@@ -530,7 +540,7 @@ class CTaskPlannerMaintance
 			global $USER;
 			if ($USER instanceof CUser)
 			{
-				$service = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getPlannerService();
+				$service = Container::getInstance()->getPlannerService();
 
 				return $service->syncAndGetActualUserTaskIds((int)$USER->getId());
 			}

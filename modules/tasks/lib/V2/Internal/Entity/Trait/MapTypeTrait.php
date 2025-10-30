@@ -6,10 +6,12 @@ namespace Bitrix\Tasks\V2\Internal\Entity\Trait;
 
 use BackedEnum;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
+use Bitrix\Tasks\V2\Internal\Entity\AbstractEntityCollection;
+use Bitrix\Tasks\V2\Internal\Entity\ValueObject;
 
 trait MapTypeTrait
 {
-	private static function mapInteger(array $props, string $key): ?int
+	public static function mapInteger(array $props, string $key): ?int
 	{
 		if (!isset($props[$key]))
 		{
@@ -25,7 +27,7 @@ trait MapTypeTrait
 		return (int)$value;
 	}
 
-	private static function mapString(array $props, string $key): ?string
+	public static function mapString(array $props, string $key): ?string
 	{
 		if (!isset($props[$key]))
 		{
@@ -44,7 +46,7 @@ trait MapTypeTrait
 	/**
 	 * @param class-string<BackedEnum> $enumClass
 	 */
-	private static function mapBackedEnum(array $props, string $key, string $enumClass): ?BackedEnum
+	public static function mapBackedEnum(array $props, string $key, string $enumClass): ?BackedEnum
 	{
 		if (!isset($props[$key]))
 		{
@@ -56,7 +58,7 @@ trait MapTypeTrait
 		return $value !== null ? $enumClass::tryFrom($value) : null;
 	}
 
-	private static function mapBool(array $props, string $key): ?bool
+	public static function mapBool(array $props, string $key): ?bool
 	{
 		if (!isset($props[$key]))
 		{
@@ -72,7 +74,7 @@ trait MapTypeTrait
 		return $value;
 	}
 
-	private static function mapArray(array $props, string $key): ?array
+	public static function mapArray(array $props, string $key, null|string|callable $typeCallback = null): ?array
 	{
 		if (!isset($props[$key]))
 		{
@@ -85,13 +87,18 @@ trait MapTypeTrait
 			return null;
 		}
 
-		return $value;
+		if (!is_callable($typeCallback))
+		{
+			return $value;
+		}
+
+		return array_map(static fn(mixed $item): mixed => $typeCallback($item), $value);
 	}
 
 	/**
 	 * @param class-string<AbstractEntity> $entityClass
 	 */
-	private static function mapEntity(array $props, string $key, string $entityClass): ?object
+	public static function mapEntity(array $props, string $key, string $entityClass): ?AbstractEntity
 	{
 		if (!isset($props[$key]))
 		{
@@ -105,5 +112,43 @@ trait MapTypeTrait
 		}
 
 		return $entityClass::mapFromArray($value);
+	}
+
+	/**
+	 * @param class-string<ValueObject> $valueObjectClass
+	 */
+	public static function mapValueObject(array $props, string $key, string $valueObjectClass): ?ValueObject
+	{
+		if (!isset($props[$key]))
+		{
+			return null;
+		}
+
+		$value = $props[$key];
+		if (!is_array($value))
+		{
+			return null;
+		}
+
+		return $valueObjectClass::mapFromArray($value);
+	}
+
+	/**
+	 * @param class-string<AbstractEntityCollection> $entityCollectionClass
+	 */
+	public static function mapEntityCollection(array $props, string $key, string $entityCollectionClass): ?AbstractEntityCollection
+	{
+		if (!isset($props[$key]))
+		{
+			return null;
+		}
+
+		$value = $props[$key];
+		if (!is_array($value))
+		{
+			return null;
+		}
+
+		return $entityCollectionClass::mapFromArray($value);
 	}
 }

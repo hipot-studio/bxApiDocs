@@ -45,16 +45,9 @@ class MenuItemProvider
 				text: Loc::getMessage('IM_NAVIGATION_MENU_CHATS'),
 			),
 			new MenuItem(
-				id: 'aiAssistant',
-				text:
-					$this->applicationFeatures->aiAssistantChatCreationAvailable
-						? Loc::getMessage('IM_NAVIGATION_MENU_AI_ASSISTANT')
-						: Loc::getMessage('IM_NAVIGATION_MENU_COPILOT')
-				,
-				isVisible: (
-					$this->applicationFeatures->copilotAvailable
-					|| $this->applicationFeatures->aiAssistantChatCreationAvailable
-				)
+				id: 'copilot',
+				text: Loc::getMessage('IM_NAVIGATION_MENU_COPILOT'),
+				isVisible: $this->applicationFeatures->copilotAvailable,
 			),
 			new MenuItem(
 				id: 'collab',

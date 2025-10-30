@@ -25,7 +25,7 @@ use \Bitrix\Tasks\Internals\Task\SortingTable;
 use \Bitrix\Tasks\Integration\SocialNetwork;
 use \Bitrix\Tasks\Integration\Bizproc;
 use Bitrix\Tasks\Access\ActionDictionary;
-use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 Loc::loadMessages(__FILE__);
 
@@ -361,12 +361,12 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 						'STAGE.ENTITY_ID' => $stage['ENTITY_ID']
 					)
 				));
+
+				$stageService = Container::getInstance()->getTaskStageService();
+
 				while ($rowStg = $resStg->fetch())
 				{
-					(new MoveTaskCommand(
-						relationId: (int)$rowStg['ID'],
-						stageId: (int)$stageId
-					))->run();
+					$stageService->move((int)$rowStg['ID'], (int)$stageId);
 
 					if ($stageId !== (int)$rowStg['STAGE_ID'])
 					{
@@ -650,12 +650,11 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 				'STAGE.ENTITY_ID' => $entity->getId()
 			]
 		]);
+
+		$stageService = Container::getInstance()->getTaskStageService();
 		if ($taskStage = $queryObject->fetch())
 		{
-			(new MoveTaskCommand(
-				relationId: (int)$taskStage['ID'],
-				stageId: (int)$stage['ID']
-			))->run();
+			$stageService->move((int)$taskStage['ID'], (int)$stage['ID']);
 
 			$taskObject->update($taskId, ['STAGE_ID' => $stage['ID']]);
 		}

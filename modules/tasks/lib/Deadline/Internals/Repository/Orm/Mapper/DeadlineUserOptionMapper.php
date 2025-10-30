@@ -13,48 +13,54 @@ use Bitrix\Tasks\Deadline\SkipNotificationPeriod;
 
 class DeadlineUserOptionMapper
 {
-	public function convertFromOrm(EO_DeadlineUserOption $ormModel): DeadlineUserOption
+	public function convertFromOrm(EO_DeadlineUserOption $eoDeadlineUserOption): DeadlineUserOption
 	{
 		$skipNotificationPeriod =
-			SkipNotificationPeriod::tryFrom($ormModel->getSkipNotificationPeriod())
+			SkipNotificationPeriod::tryFrom($eoDeadlineUserOption->getSkipNotificationPeriod())
 			?? SkipNotificationPeriod::DEFAULT
 		;
 
 		$deadlineUserOption = new DeadlineUserOption(
-			$ormModel->getUserId(),
-			$ormModel->getDefaultDeadline(),
-			$ormModel->getIsExactDeadlineTime(),
-			$skipNotificationPeriod,
-			$ormModel->getSkipNotificationStartDate(),
+			userId: $eoDeadlineUserOption->getUserId(),
+			defaultDeadlineInSeconds: $eoDeadlineUserOption->getDefaultDeadline(),
+			isExactDeadlineTime: $eoDeadlineUserOption->getIsExactDeadlineTime(),
+			skipNotificationPeriod: $skipNotificationPeriod,
+			skipNotificationStartDate: $eoDeadlineUserOption->getSkipNotificationStartDate(),
+			canChangeDeadline:  $eoDeadlineUserOption->getCanChangeDeadline(),
+			maxDeadlineChangeDate: $eoDeadlineUserOption->getMaxDeadlineChangeDate(),
+			maxDeadlineChanges: $eoDeadlineUserOption->getMaxDeadlineChanges(),
+			requireDeadlineChangeReason: $eoDeadlineUserOption->getRequireDeadlineChangeReason(),
 		);
 
-		$deadlineUserOption->id = $ormModel->getId();
+		$deadlineUserOption->id = $eoDeadlineUserOption->getId();
 
 		return $deadlineUserOption;
 	}
 
 	/**
-	 * @param DeadlineUserOption $entity
-	 *
-	 * @return EO_DeadlineUserOption
-	 *
-	 * @throws ArgumentException
-	 * @throws SystemException
-	 */
-	public function convertToOrm(DeadlineUserOption $entity): EO_DeadlineUserOption
+				 *
+				 *
+				 * @throws ArgumentException
+				 * @throws SystemException
+				 */
+				public function convertToOrm(DeadlineUserOption $deadlineUserOption): EO_DeadlineUserOption
 	{
 		$ormModel =
-			$entity->getId()
-				? EO_DeadlineUserOption::wakeUp($entity->id)
+			$deadlineUserOption->getId()
+				? EO_DeadlineUserOption::wakeUp($deadlineUserOption->id)
 				: DeadlineUserOptionTable::createObject()
 		;
 
 		$ormModel
-			->setUserId($entity->userId)
-			->setDefaultDeadline($entity->defaultDeadlineInSeconds)
-			->setIsExactDeadlineTime($entity->isExactDeadlineTime)
-			->setSkipNotificationPeriod($entity->skipNotificationPeriod->value)
-			->setSkipNotificationStartDate($entity->skipNotificationStartDate)
+			->setUserId($deadlineUserOption->userId)
+			->setDefaultDeadline($deadlineUserOption->defaultDeadlineInSeconds)
+			->setIsExactDeadlineTime($deadlineUserOption->isExactDeadlineTime)
+			->setSkipNotificationPeriod($deadlineUserOption->skipNotificationPeriod->value)
+			->setSkipNotificationStartDate($deadlineUserOption->skipNotificationStartDate)
+			->setCanChangeDeadline($deadlineUserOption->canChangeDeadline)
+			->setMaxDeadlineChangeDate($deadlineUserOption->maxDeadlineChangeDate)
+			->setMaxDeadlineChanges($deadlineUserOption->maxDeadlineChanges)
+			->setRequireDeadlineChangeReason($deadlineUserOption->requireDeadlineChangeReason)
 		;
 
 		return $ormModel;

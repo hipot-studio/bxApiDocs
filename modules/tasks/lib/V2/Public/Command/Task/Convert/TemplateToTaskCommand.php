@@ -27,21 +27,20 @@ class TemplateToTaskCommand extends AbstractCommand
 		$this->container = Container::getInstance();
 	}
 
-	protected function validate(): ValidationResult
+	protected function validateInternal(): ValidationResult
 	{
 		return new ValidationResult();
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		try
 		{
 			$handler = new TemplateToTaskHandler(
-				consistencyResolver: $this->container->getConsistencyResolver(),
-				addService: $this->container->getAddService(),
-				provider: $this->container->getRuntimeObjectWithDi(TaskFromTemplateProvider::class),
+				addTaskService: $this->container->getAddTaskService(),
+				provider: $this->container->getTaskFromTemplateProvider(),
 			);
 
 			$task = $handler($this);

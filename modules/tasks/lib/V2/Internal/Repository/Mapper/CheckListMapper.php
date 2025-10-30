@@ -41,7 +41,9 @@ class CheckListMapper
 				isImportant: $item['IS_IMPORTANT'] === 'Y',
 				parentId: (int)$item['PARENT_ID'],
 				sortIndex: (int)$item['SORT_INDEX'],
-				actions: $this->mapActions($item['ACTION'])
+				actions: $this->mapActions($item['ACTION']),
+				collapsed: (bool)($item['COLLAPSED'] ?? null) === true,
+				expanded: (bool)($item['EXPANDED'] ?? null) === true,
 			);
 		}
 
@@ -124,11 +126,11 @@ class CheckListMapper
 		);
 	}
 
-	private function mapUserCollection(array $users): ?Entity\UserCollection
+	private function mapUserCollection(array $users): Entity\UserCollection
 	{
 		if (empty($users))
 		{
-			return null;
+			return new Entity\UserCollection();
 		}
 
 		$users = array_map(
@@ -143,11 +145,11 @@ class CheckListMapper
 		return new Entity\UserCollection(...$users);
 	}
 
-	private function mapAttachmentCollection(array $attachments): ?Entity\AttachmentCollection
+	private function mapAttachmentCollection(array $attachments): Entity\AttachmentCollection
 	{
 		if (empty($attachments))
 		{
-			return null;
+			return new Entity\AttachmentCollection();
 		}
 
 		$attachments = array_map(

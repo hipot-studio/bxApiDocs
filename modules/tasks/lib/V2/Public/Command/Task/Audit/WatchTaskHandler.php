@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Command\Task\Audit;
 
-use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserFields;
 use Bitrix\Tasks\V2\Internal\Repository\TaskMemberRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
 class WatchTaskHandler
 {
 	public function __construct(
 		private readonly TaskMemberRepositoryInterface $memberRepository,
-		private readonly ConsistencyResolverInterface $consistencyResolver,
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateTaskService,
 	)
 	{
 
@@ -42,12 +39,10 @@ class WatchTaskHandler
 			skipNotifications: $command->skipNotification,
 		);
 
-		[$taskAfter, $fields] = $this->consistencyResolver->resolve('task.watch')->wrap(
-			fn (): array => $this->updateService->update($task, $config)
+		$taskAfter = $this->updateTaskService->update(
+			task: $task,
+			config: $config,
 		);
-
-		// this action is outside of consistency because it is containing nested transactions
-		(new UpdateUserFields($config))($fields, $command->taskId);
 
 		return $taskAfter->auditors;
 	}

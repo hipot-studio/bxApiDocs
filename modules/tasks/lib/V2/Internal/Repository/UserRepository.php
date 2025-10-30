@@ -39,6 +39,7 @@ class UserRepository implements UserRepositoryInterface
 			'UF_DEPARTMENT',
 			'PERSONAL_GENDER',
 			'EMAIL',
+			'LOGIN',
 		];
 
 		$users = UserTable::query()

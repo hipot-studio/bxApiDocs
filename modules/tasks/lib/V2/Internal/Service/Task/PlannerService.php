@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Main\Type\Collection;
-use Bitrix\Tasks\DI\Attribute\Inject;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Tasks\Provider\TaskQuery;
 use Bitrix\Tasks\V2\Internal\Integration\TimeMan\Service\UserService;
@@ -17,7 +16,6 @@ class PlannerService
 
 	public function __construct(
 		private readonly PlannerRepositoryInterface $plannerRepository,
-		#[Inject(externalModule: 'timeman')]
 		private readonly UserService $userService,
 		private readonly TaskList $taskProvider,
 	)

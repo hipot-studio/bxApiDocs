@@ -706,7 +706,8 @@ class Notify
 		$newParams = array_diff($newParams, $params[$maxId] ?? []);
 
 		unset($messageIds[$maxId]);
-		CIMNotify::deleteList($messageIds, ['NOTIFY_TAG' => $notifyTag]);
+		$deleteParams = ['NOTIFY_TAG' => $notifyTag, 'SKIP_OVERFLOW_CLEANUP_CHAT' => $chatId];
+		CIMNotify::deleteList($messageIds, $deleteParams);
 
 		if ($currentMessageId >= $maxId)
 		{

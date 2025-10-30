@@ -17,7 +17,7 @@ class Deeplink
 		$link = $host."/?intent=".urlencode("$intent;$hash");
 		$data = self::getAppsData();
 
-		return self::getServiceUrl()."?link=${link}&apn=".$data['apn']."&isi=".$data['isi']. "&ibi=".$data['ibi'] ;
+		return self::getServiceUrl()."?".self::getLinkGETParamKey()."=${link}&apn=".$data['apn']."&isi=".$data['isi']. "&ibi=".$data['ibi'] ;
 	}
 
 	public static function onOneTimeHashRemoved($userId, $hash) {
@@ -58,5 +58,10 @@ class Deeplink
 	static private function getServiceUrl(): string
 	{
 		return Option::get('mobile', 'deeplink_service_url', 'https://bitrix24.page.link/');
+	}
+
+	static private function getLinkGETParamKey(): string
+	{
+		return Option::get('mobile', 'deeplink_link_param_key', 'link');
 	}
 }

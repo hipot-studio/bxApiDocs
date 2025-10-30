@@ -22,9 +22,16 @@ final class Sharing extends Internals\Model
 	const ERROR_COULD_NOT_FIND_STORAGE      = 'DISK_SHARING_22005';
 	const ERROR_COULD_NOT_CREATE_LINK       = 'DISK_SHARING_22006';
 
+	/** @deprecated Instead use: {@see \Bitrix\Disk\Access\AccessCodeEnum::USER}  */
 	const CODE_USER         = 'U';
+
+	/** @deprecated Instead use: {@see \Bitrix\Disk\Access\AccessCodeEnum::GROUP}  */
 	const CODE_GROUP        = 'G';
+
+	/** @deprecated Instead use: {@see \Bitrix\Disk\Access\AccessCodeEnum::SOCNET_GROUP}  */
 	const CODE_SOCNET_GROUP = 'SG';
+
+	/** @deprecated Instead use: {@see \Bitrix\Disk\Access\AccessCodeEnum::DEPARTMENT}  */
 	const CODE_DEPARTMENT   = 'DR';
 	const CODE_CHAT         = 'CHAT';
 
@@ -682,7 +689,7 @@ final class Sharing extends Internals\Model
 						: 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE';
 					Driver::getInstance()->sendNotify(mb_substr($sharingModel->getToEntity(), 1), array(
 						'FROM_USER_ID' => $sharingModel->getCreatedBy(),
-						'NOTIFY_EVENT' => 'sharing',
+						'NOTIFY_EVENT' => 'sharing_autoconnect',
 						'NOTIFY_TAG' => $tag,
 						'NOTIFY_SUB_TAG' => $subTag,
 						'NOTIFY_MESSAGE' => Loc::getMessage(
@@ -1325,7 +1332,7 @@ final class Sharing extends Internals\Model
 			[$subTag, $tag] = $this->getNotifyTags();
 			Driver::getInstance()->sendNotify($this->createdBy, array(
 				'FROM_USER_ID' => $declinedBy,
-				'NOTIFY_EVENT' => 'sharing',
+				'NOTIFY_EVENT' => 'sharing_user_disconnect',
 				'NOTIFY_TAG' => $tag,
 	//			'NOTIFY_SUB_TAG' => $subTag,
 				'NOTIFY_MESSAGE' => $message,
@@ -1570,7 +1577,7 @@ final class Sharing extends Internals\Model
 			[$subTag, $tag] = $sharingModel->getNotifyTags();
 			Driver::getInstance()->sendNotify(mb_substr($sharingModel->getToEntity(), 1), array(
 				'FROM_USER_ID' => $sharingModel->getCreatedBy(),
-				'NOTIFY_EVENT' => 'sharing',
+				'NOTIFY_EVENT' => 'sharing_autoconnect',
 				'NOTIFY_TAG' => $tag,
 				'NOTIFY_SUB_TAG' => $subTag,
 				'NOTIFY_MESSAGE' => $message,

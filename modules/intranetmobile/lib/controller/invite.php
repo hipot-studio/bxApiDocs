@@ -17,13 +17,6 @@ class Invite extends Base
 		return $preFilters;
 	}
 
-	protected function getQueryActionNames(): array
-	{
-		return [
-			'getInviteSettings',
-		];
-	}
-
 	/**
 	 * @restMethod intranetmobile.invite.getInviteSettings
 	 * @return array

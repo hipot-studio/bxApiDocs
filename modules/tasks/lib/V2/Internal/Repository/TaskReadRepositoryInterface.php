@@ -10,4 +10,6 @@ use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
 interface TaskReadRepositoryInterface
 {
 	public function getById(int $id, ?Select $select = null): ?Entity\Task;
+
+	public function getAttachmentIds(int $taskId): array;
 }

@@ -183,7 +183,7 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 	/**
 	 * @param $primary
 	 *
-	 * @return EntityObject
+	 * @return EntityObject|null
 	 * @throws ArgumentException
 	 */
 	final public function getByPrimary($primary)

@@ -17,7 +17,7 @@ class Access extends BaseController
 	 */
 	#[CloseSession]
 	public function getAction(
-		Entity\Task      $task,
+		Entity\Task $task,
 		TaskRightService $taskRightService,
 	): array
 	{

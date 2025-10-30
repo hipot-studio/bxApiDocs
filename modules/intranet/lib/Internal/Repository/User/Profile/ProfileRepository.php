@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Repository\User\Profile;
 
+use Bitrix\HumanResources\Item\Node;
 use Bitrix\Intranet\Component\UserProfile\Form;
 use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
@@ -18,6 +19,7 @@ use Bitrix\Intranet\Internal\Entity\User\Profile\FieldSection;
 use Bitrix\Intranet\Internal\Entity\User\Profile\Profile;
 use Bitrix\Intranet\Internal\Factory\User\UserFieldFactory;
 use Bitrix\Intranet\Internal\Integration\Humanresources\DepartmentRepository;
+use Bitrix\Intranet\Internal\Integration\Humanresources\TeamRepository;
 use Bitrix\Intranet\Internals\Trait\UserUpdateError;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
@@ -32,6 +34,7 @@ class ProfileRepository
 	public function __construct(
 		private UserFieldFactory $userFieldFactory,
 		private DepartmentRepository $departmentRepository,
+		private TeamRepository $teamRepository,
 	)
 	{
 		global $USER;
@@ -43,6 +46,7 @@ class ProfileRepository
 		return new static(
 			UserFieldFactory::createByDefault(),
 			new DepartmentRepository(),
+			new TeamRepository(),
 		);
 	}
 
@@ -87,6 +91,9 @@ class ProfileRepository
 			->getDepartmentHeadsByUserId($userId)
 			->map(fn (User $user) => $user->getFormattedName(true, false))
 		;
+
+		$userTeams = $this->teamRepository->getAllByUserId($userId);
+		$user['TEAM'] = isset($userTeams) ? array_values($userTeams->map(fn (Node $team) => $team->name)) : [];
 
 		return $user;
 	}

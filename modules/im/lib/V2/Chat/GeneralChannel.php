@@ -8,7 +8,6 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
-use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Intranet\Settings\CommunicationSettings;
@@ -17,6 +16,7 @@ use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use CAllSite;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class GeneralChannel extends OpenChannelChat
 {
@@ -102,17 +102,14 @@ class GeneralChannel extends OpenChannelChat
 		return null;
 	}
 
-	public function add(array $params, ?Context $context = null): Result
+	public function add(array $params, ?Context $context = null): AddResult
 	{
-		$result = new Result;
+		$result = new AddResult();
 
 		$generalChannel = Chat::getInstance($this->getGeneralChannelIdWithoutCache());
 		if ($generalChannel instanceof self)
 		{
-			return 	$result->setResult([
-				'CHAT_ID' => $generalChannel->getChatId(),
-				'CHAT' => $generalChannel,
-			]);
+			return $result->setChat($generalChannel);
 		}
 
 		$portalLanguage = self::getPortalLanguage();

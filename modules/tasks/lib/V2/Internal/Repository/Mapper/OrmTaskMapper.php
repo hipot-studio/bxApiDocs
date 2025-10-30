@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\Internals\Task\TimeUnitType;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -55,7 +56,7 @@ class OrmTaskMapper
 			$entityFields['status'] = $this->taskStatusMapper->mapToEnum((int)($fields['STATUS']))->value;
 		}
 
-		if (isset($fields['PRIORITY']))
+		if (isset($fields['PRIORITY']) && is_numeric($fields['PRIORITY']))
 		{
 			$entityFields['priority'] = $this->taskPriorityMapper->mapToEnum((int)$fields['PRIORITY'])->value;
 		}
@@ -170,6 +171,11 @@ class OrmTaskMapper
 			$entityFields['closedBy'] = ['id' => (int)$fields['CLOSED_BY']];
 		}
 
+		if (isset($fields['CHANGED_BY']))
+		{
+			$entityFields['changedBy'] = ['id' => (int)$fields['CHANGED_BY']];
+		}
+
 		if (isset($fields['CLOSED_DATE']))
 		{
 			$entityFields['closedTs'] = $this->castDateTime($fields['CLOSED_DATE']);
@@ -270,12 +276,12 @@ class OrmTaskMapper
 			$entityFields['flow'] = ['id' => (int)$fields['FLOW_ID']];
 		}
 
-		if (isset($fields['ACCOMPLICES']))
+		if (isset($fields['ACCOMPLICES']) && is_array($fields['ACCOMPLICES']))
 		{
 			$entityFields['accomplices'] = $this->castMembers($fields['ACCOMPLICES']);
 		}
 
-		if (isset($fields['AUDITORS']))
+		if (isset($fields['AUDITORS']) && is_array($fields['AUDITORS']))
 		{
 			$entityFields['auditors'] = $this->castMembers($fields['AUDITORS']);
 		}
@@ -283,6 +289,52 @@ class OrmTaskMapper
 		if (isset($fields['TAGS']))
 		{
 			$entityFields['tags'] = array_map(static fn (string $tag): array => ['name' => $tag], $fields['TAGS']);
+		}
+
+		if (isset($fields[Entity\UF\UserField::TASK_ATTACHMENTS]))
+		{
+			$entityFields['fileIds'] = $fields[Entity\UF\UserField::TASK_ATTACHMENTS];
+		}
+
+		if (isset($fields[Entity\UF\UserField::TASK_CRM]))
+		{
+			$entityFields['crmItemIds'] = $fields[Entity\UF\UserField::TASK_CRM];
+		}
+
+		if (isset($fields['SE_PARAMETER']) && is_array($fields['SE_PARAMETER']))
+		{
+			foreach ($fields['SE_PARAMETER'] as $key => $value)
+			{
+				if (!is_array($value))
+				{
+					continue;
+				}
+
+				$code = (int)($value['CODE'] ?? null);
+				$value = $value['VALUE'] ?? null;
+
+				if ($code === ParameterTable::PARAM_SUBTASKS_TIME)
+				{
+					$entityFields['matchesSubTasksTime'] = $value === 'Y' || $value === true;
+				}
+				elseif ($code === ParameterTable::PARAM_SUBTASKS_AUTOCOMPLETE)
+				{
+					$entityFields['autocompleteSubTasks'] = $value === 'Y' || $value === true;
+				}
+				elseif ($code === ParameterTable::PARAM_RESULT_REQUIRED)
+				{
+					$entityFields['requireResult'] = $value === 'Y' || $value === true;
+				}
+				elseif ($code === ParameterTable::PARAM_ALLOW_CHANGE_DATE_PLAN)
+				{
+					$entityFields['allowsChangeDatePlan'] = $value === 'Y' || $value === true;
+				}
+			}
+		}
+
+		if (isset($fields['DEPENDS_ON']) && is_array($fields['DEPENDS_ON']))
+		{
+			$entityFields['dependsOn'] = $fields['DEPENDS_ON'];
 		}
 
 		return Entity\Task::mapFromArray($entityFields);
@@ -304,7 +356,7 @@ class OrmTaskMapper
 		{
 			$fields['TITLE'] = $task->title;
 		}
-		if ($task->description)
+		if ($task->description || $task->description === '')
 		{
 			$fields['DESCRIPTION'] = $task->description;
 		}
@@ -448,6 +500,11 @@ class OrmTaskMapper
 			$fields['CLOSED_BY'] = $task->closedBy->id;
 		}
 
+		if ($task->changedBy?->id)
+		{
+			$fields['CHANGED_BY'] = $task->changedBy->id;
+		}
+
 		if ($task->closedTs)
 		{
 			$fields['CLOSED_DATE'] = DateTime::createFromTimestamp($task->closedTs);
@@ -568,14 +625,14 @@ class OrmTaskMapper
 			$fields['TAGS'] = $task->tags->getNameList();
 		}
 
-		if (isset($task->fileIds))
+		if ($task->fileIds !== null)
 		{
-			$fields['UF_TASK_WEBDAV_FILES'] = $task->fileIds;
+			$fields[Entity\UF\UserField::TASK_ATTACHMENTS] = $task->fileIds;
 		}
 
-		if ($task->crmFields)
+		if ($task->crmItemIds !== null)
 		{
-			$fields['UF_CRM_TASK'] = $task->crmFields;
+			$fields[Entity\UF\UserField::TASK_CRM] = $task->crmItemIds;
 		}
 
 		if ($task->userFields)
@@ -584,6 +641,47 @@ class OrmTaskMapper
 			{
 				$fields[$userField->key] = $userField->value;
 			}
+		}
+
+		if ($task->matchesSubTasksTime !== null)
+		{
+			$fields['SE_PARAMETER'] ??= [];
+			$fields['SE_PARAMETER'][] = [
+				'CODE' => ParameterTable::PARAM_SUBTASKS_TIME,
+				'VALUE' => $task->matchesSubTasksTime ? 'Y' : 'N',
+			];
+		}
+
+		if ($task->requireResult !== null)
+		{
+			$fields['SE_PARAMETER'] ??= [];
+			$fields['SE_PARAMETER'][] = [
+				'CODE' => ParameterTable::PARAM_RESULT_REQUIRED,
+				'VALUE' => $task->requireResult ? 'Y' : 'N',
+			];
+		}
+
+		if ($task->autocompleteSubTasks !== null)
+		{
+			$fields['SE_PARAMETER'] ??= [];
+			$fields['SE_PARAMETER'][] = [
+				'CODE' => ParameterTable::PARAM_SUBTASKS_AUTOCOMPLETE,
+				'VALUE' => $task->autocompleteSubTasks ? 'Y' : 'N',
+			];
+		}
+
+		if ($task->allowsChangeDatePlan !== null)
+		{
+			$fields['SE_PARAMETER'] ??= [];
+			$fields['SE_PARAMETER'][] = [
+				'CODE' => ParameterTable::PARAM_ALLOW_CHANGE_DATE_PLAN,
+				'VALUE' => $task->allowsChangeDatePlan ? 'Y' : 'N',
+			];
+		}
+
+		if ($task->dependsOn !== null)
+		{
+			$fields['DEPENDS_ON'] = $task->dependsOn;
 		}
 
 		return $fields;

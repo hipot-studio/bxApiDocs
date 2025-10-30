@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Public\Command\Task\Favorite\AddFavoriteCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Favorite\DeleteFavoriteCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Public\Command\Task\Favorite\ToggleFavoriteCommand;
 
 class Favorite extends BaseController
 {
@@ -16,7 +17,8 @@ class Favorite extends BaseController
 	 * @ajaxAction tasks.V2.Task.Favorite.add
 	 */
 	public function addAction(
-		#[Permission\Read] Entity\Task $task,
+		#[Permission\Read]
+		Entity\Task $task,
 	): ?bool
 	{
 		$result = (new AddFavoriteCommand(
@@ -38,7 +40,8 @@ class Favorite extends BaseController
 	 * @ajaxAction tasks.V2.Task.Favorite.delete
 	 */
 	public function deleteAction(
-		#[Permission\Read] Entity\Task $task,
+		#[Permission\Read]
+		Entity\Task $task,
 	): ?bool
 	{
 		$result = (new DeleteFavoriteCommand(
@@ -54,5 +57,28 @@ class Favorite extends BaseController
 		}
 
 		return true;
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Task.Favorite.toggle
+	 */
+	public function toggleAction(
+		#[Permission\Read]
+		Entity\Task $task,
+	): ?bool
+	{
+		$result = (new ToggleFavoriteCommand(
+			taskId: $task->getId(),
+			userId: $this->userId,
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData()['isFavorite'];
 	}
 }

@@ -6,9 +6,9 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add;
 
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ParticipantTrait;
-use Bitrix\Tasks\Internals\TaskObject;
 use CIBlock;
 use CIBlockElement;
 use CIBlockElementRights;
@@ -22,14 +22,14 @@ class AddWebDavFiles
 	public function __invoke(array $fields): void
 	{
 		if (
-			!isset($fields['UF_TASK_WEBDAV_FILES'])
-			|| !is_array($fields['UF_TASK_WEBDAV_FILES'])
+			!isset($fields[UserField::TASK_ATTACHMENTS])
+			|| !is_array($fields[UserField::TASK_ATTACHMENTS])
 		)
 		{
 			return;
 		}
 
-		$filesIds = array_filter($fields['UF_TASK_WEBDAV_FILES']);
+		$filesIds = array_filter($fields[UserField::TASK_ATTACHMENTS]);
 
 		if (empty($filesIds))
 		{

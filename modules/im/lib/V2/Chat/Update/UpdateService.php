@@ -122,7 +122,12 @@ class UpdateService
 			[$updateFields->getOwnerId()]
 		));
 
-		$this->chat->addUsers($addedUsers, new AddUsersConfig($updateFields->getAddedManagers(), $updateFields->shouldHideHistory()));
+		$config = new AddUsersConfig(
+			managerIds: $updateFields->getAddedManagers(),
+			hideHistory: $updateFields->shouldHideHistory(),
+			skipAnalytics: false
+		);
+		$this->chat->addUsers($addedUsers, $config);
 
 		return $this;
 	}

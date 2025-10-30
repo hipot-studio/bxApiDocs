@@ -23,14 +23,13 @@ class RenewTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		$statusService = Container::getInstance()->getStatusService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
 
-		$handler = new RenewTaskHandler($statusService, $consistencyResolver);
+		$handler = new RenewTaskHandler($statusService);
 
 		try
 		{

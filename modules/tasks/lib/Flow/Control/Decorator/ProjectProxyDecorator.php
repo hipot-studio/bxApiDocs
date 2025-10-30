@@ -8,11 +8,12 @@ use Bitrix\Tasks\Flow\Control\Command\AddCommand;
 use Bitrix\Tasks\Flow\Control\Command\UpdateCommand;
 use Bitrix\Tasks\Flow\Integration\Socialnetwork\AddGroupCommand;
 use Bitrix\Tasks\Flow\Integration\HumanResources\AccessCodeConverter;
-use Bitrix\Tasks\InvalidCommandException;
+use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\Integration\Socialnetwork\GroupService;
 use Bitrix\Tasks\Flow\Kanban\Command\AddKanbanCommand;
 use Psr\Container\NotFoundExceptionInterface;
+use Bitrix\Tasks\Flow\Internal\DI\Container;
 
 class ProjectProxyDecorator extends AbstractFlowServiceDecorator
 {
@@ -91,7 +92,7 @@ class ProjectProxyDecorator extends AbstractFlowServiceDecorator
 			->setOwnerId($flow->getOwnerId())
 			->setFlowId($flow->getId());
 
-		$service = ServiceLocator::getInstance()->get('tasks.flow.kanban.service');
+		$service = Container::getInstance()->getKanbanService();
 
 		$service->add($kanbanCommand);
 	}

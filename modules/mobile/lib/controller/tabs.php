@@ -4,6 +4,9 @@ namespace Bitrix\Mobile\Controller;
 
 use Bitrix\Main\Error;
 use Bitrix\Mobile\AppTabs\Menu;
+use Bitrix\Mobile\AppTabs\MenuNew;
+use Bitrix\Mobile\Config\Feature;
+use Bitrix\Mobile\Feature\MenuFeature;
 use Bitrix\Mobile\Tab\Manager;
 
 class Tabs extends \Bitrix\Main\Engine\Controller
@@ -29,7 +32,7 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 		];
 
 		$activeTabs = $manager->getActiveTabs();
-		$result["tabs"]["current"] = array_reduce(
+		$result['tabs']['current'] = array_reduce(
 			array_keys($activeTabs),
 			static function ($result, $tabId) use ($manager, $activeTabs) {
 				$tabInstance = $manager->getTabInstance($tabId);
@@ -44,7 +47,7 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 				return $result;
 			}, []);
 
-		$result["tabs"]["list"] = array_reduce(
+		$result['tabs']['list'] = array_reduce(
 			$manager->getAllTabIDs(),
 			static function ($result, $tabId) use ($manager)
 			{
@@ -53,8 +56,23 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 				$result[$tabId] = [
 					'title' => $instance->getTitle(),
 					'shortTitle' => $instance->getShortTitle(),
-					'iconId' => $instance->getIconId()
+					'iconId' => $instance->getIconId(),
 				];
+
+				$isMenuFeatureEnabled = Feature::isEnabled(MenuFeature::class);
+
+				$menuId = $isMenuFeatureEnabled ? (new MenuNew())->getId() : (new Menu())->getId();
+
+				if ($tabId === $menuId)
+				{
+					if ($isMenuFeatureEnabled)
+					{
+						$result[$tabId]['imageUrl'] = $instance->getImageUrl();
+						$result[$tabId]['name'] = $instance->getLastAndSecondName();
+					}
+
+					$result[$tabId]['isAvatarEnabled'] = $isMenuFeatureEnabled;
+				}
 
 				return $result;
 			}, []);

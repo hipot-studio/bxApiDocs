@@ -24,7 +24,7 @@ class StopTimerCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
@@ -36,8 +36,12 @@ class StopTimerCommand extends AbstractCommand
 		try
 		{
 			$timer = $handler($this);
+			if ($timer !== null)
+			{
+				$result->setObject($timer);
+			}
 
-			return $result->setObject($timer);
+			return $result;
 		}
 		catch (TimerNotFoundException $e)
 		{

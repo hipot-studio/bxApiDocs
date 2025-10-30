@@ -8,13 +8,18 @@ use Bitrix\Intranet;
 
 abstract class BaseContent implements \JsonSerializable
 {
-	public function __construct(protected readonly Intranet\User $user)
+	public function __construct(protected Intranet\User $user)
 	{
 	}
 
 	abstract public function getName(): string;
 
 	abstract public function getConfiguration(): array;
+
+	public static function isAvailable(): bool
+	{
+		return true;
+	}
 
 	public function jsonSerialize(): array
 	{

@@ -16,7 +16,8 @@ class Priority extends BaseController
 	 * @ajaxAction tasks.V2.Task.Attention.Priority.high
 	 */
 	public function highAction(
-		#[Permission\Update] Entity\Task $task
+		#[Permission\Update]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new SetHighTaskPriorityCommand(
@@ -38,7 +39,8 @@ class Priority extends BaseController
 	 * @ajaxAction tasks.V2.Task.Attention.Priority.average
 	 */
 	public function averageAction(
-		#[Permission\Update] Entity\Task $task
+		#[Permission\Update]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new SetAverageTaskPriorityCommand(

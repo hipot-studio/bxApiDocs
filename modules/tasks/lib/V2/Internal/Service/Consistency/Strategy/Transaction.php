@@ -18,7 +18,7 @@ class Transaction implements ConsistencyStrategyInterface
 
 		try
 		{
-			$result = $callable();
+			$result = $callable(...$parameters);
 
 			$connection->commitTransaction();
 

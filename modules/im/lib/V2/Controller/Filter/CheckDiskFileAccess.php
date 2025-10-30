@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Controller\Filter;
 
 use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\File\FileError;
+use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -17,6 +18,14 @@ class CheckDiskFileAccess extends Base
 			if ($argument instanceof FileCollection)
 			{
 				return $this->checkFileCollectionAccess($argument);
+			}
+
+			if ($argument instanceof FileItem)
+			{
+				$collection = new FileCollection();
+				$collection->offsetSet($argument->getId(), $argument);
+
+				return $this->checkFileCollectionAccess($collection);
 			}
 		}
 

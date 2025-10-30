@@ -515,12 +515,12 @@ class Tag
 	public function getGroupId(int $taskId): int
 	{
 		$task = TaskRegistry::getInstance()->get($taskId);
-		if (isset($task))
+		if ($task === null)
 		{
-			return $task['GROUP_ID'];
+			return 0;
 		}
 
-		return 0;
+		return (int)($task['GROUP_ID'] ?? 0);
 	}
 
 	/**

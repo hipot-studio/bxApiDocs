@@ -42,6 +42,11 @@ class Documents
 		return !Loader::includeModule('sign');
 	}
 
+	public static function isAvailableB2e(): bool
+	{
+		return !Sign\Integration\Bitrix24\B2eTariff::instance()->isB2eRestrictedInCurrentTariff();
+	}
+
 	public static function getCount(): int
 	{
 		if (Loader::includeModule('sign') && Sign\Config\Storage::instance()->isB2eAvailable())

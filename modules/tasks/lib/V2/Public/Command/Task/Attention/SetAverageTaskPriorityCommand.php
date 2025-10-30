@@ -23,17 +23,13 @@ class SetAverageTaskPriorityCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-		$updateService = Container::getInstance()->getUpdateService();
+		$updateTaskService = Container::getInstance()->getUpdateTaskService();
 
-		$handler = new SetAverageTaskPriorityHandler(
-			$consistencyResolver,
-			$updateService
-		);
+		$handler = new SetAverageTaskPriorityHandler($updateTaskService);
 
 		try
 		{

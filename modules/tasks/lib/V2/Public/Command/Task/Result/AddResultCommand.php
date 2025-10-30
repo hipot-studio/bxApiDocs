@@ -20,7 +20,7 @@ class AddResultCommand extends AbstractCommand
 	{
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$response = new Result();
 

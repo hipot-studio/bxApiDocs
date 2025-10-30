@@ -10,6 +10,6 @@ final class Container extends AbstractContainer
 {
 	public function getTaskProvider(): TaskList
 	{
-		return $this->getRegisteredObject(TaskList::class);
+		return $this->get(TaskList::class);
 	}
 }

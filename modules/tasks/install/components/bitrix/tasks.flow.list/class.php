@@ -31,7 +31,7 @@ use Bitrix\Tasks\Flow\Control\Exception\FlowNotUpdatedException;
 use Bitrix\Tasks\Flow\Grid\Preload\CopilotAdviceInfoPreloader;
 use Bitrix\Tasks\Flow\Option\FlowUserOption\FlowUserOptionDictionary;
 use Bitrix\Tasks\Flow\Option\FlowUserOption\FlowUserOptionRepository;
-use Bitrix\Tasks\InvalidCommandException;
+use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use Bitrix\Tasks\Flow\Control\FlowService;
 use Bitrix\Tasks\Flow\Filter\Filter;
 use Bitrix\Tasks\Flow\Flow;
@@ -112,13 +112,6 @@ final class TasksFlowListComponent extends CBitrixComponent implements Controlle
 	 */
 	public function executeComponent(): void
 	{
-		if (!FlowFeature::isOptionEnabled())
-		{
-			ShowError('Disabled');
-
-			return;
-		}
-
 		$this->setTitle();
 		$this->includeRequiredModules();
 

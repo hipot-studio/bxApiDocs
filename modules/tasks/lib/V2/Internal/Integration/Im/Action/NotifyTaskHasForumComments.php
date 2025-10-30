@@ -16,7 +16,7 @@ class NotifyTaskHasForumComments
 		array $args = [],
 	)
 	{
-		$url = 'http://example.com';
+		$url = '/task/comments/' . $task->getId() . '/';
 
 		$message = Loc::getMessage('TASKS_IM_TASK_HAS_FORUM_COMMENTS', [
 			'#URL_BEGIN#' => '[URL=' . $url . ']',

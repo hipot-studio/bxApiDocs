@@ -10,7 +10,7 @@ use Bitrix\Main\UI\PageNavigation;
 class GratitudeProvider
 {
 	protected ?Grats $gratitudeService;
-
+	private const DEFAULT_PAGE_SIZE = 30;
 	/**
 	 * @param Grats|null $gratitudeService
 	 */
@@ -27,17 +27,11 @@ class GratitudeProvider
 	 */
 	public function getBadges(int $ownerId, ?int $limit = null): array
 	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return [];
-		}
-
-		$service = $this->getGratitudeService($ownerId);
-		$badges = $service->getGratitudePostListAction()['BADGES'] ?? [];
+		$items = $this->fetchItems($ownerId, $limit ?? self::DEFAULT_PAGE_SIZE);
 
 		return [
-			'items' => $this->collectBadgeItems($badges, $ownerId, $limit),
-			'totalCount' => $this->countTotalBadges($badges)
+			'items' => $this->collectGratitudeItems($items['POSTS'], $items['BADGES'], $ownerId),
+			'totalCount' => $this->countTotalBadges($items['BADGES'])
 		];
 	}
 
@@ -49,23 +43,38 @@ class GratitudeProvider
 	 */
 	public function getListItems(int $ownerId, ?PageNavigation $pageNavigation = null): array
 	{
+		$pageSize = $pageNavigation?->getPageSize() ?? self::DEFAULT_PAGE_SIZE;
+		$pageNum = $pageNavigation?->getCurrentPage();
+
+		$items = $this->fetchItems($ownerId, $pageSize, $pageNum);
+		$gratitudeItems = $this->collectGratitudeItems($items['POSTS'], $items['BADGES'], $ownerId);
+
+		return [
+			'items' => $gratitudeItems,
+			'authorIds' => $this->extractAuthorIds($items['POSTS']),
+		];
+	}
+
+	/**
+	 * @throws LoaderException
+	 */
+	private function fetchItems(int $ownerId, int $pageSize, ?int $pageNum = 1): array
+	{
 		if (!Loader::includeModule('intranet'))
 		{
 			return [];
 		}
 
-		$service = $this->getGratitudeService($ownerId, $pageNavigation?->getPageSize());
-		$items = $service->getGratitudePostListAction([
-			'pageNum' => $pageNavigation?->getCurrentPage() ?: 0
-		]);
+		$service = $this->getGratitudeService($ownerId, $pageSize);
+		$result = $service->getGratitudePostListAction(['pageNum' => $pageNum]);
 
 		return [
-			'items' => $this->collectPostItems($items['POSTS'] ?? [], $items['BADGES'] ?? [], $ownerId),
-			'authorIds' => $this->extractAuthorIds($items['POSTS'] ?? [])
+			'POSTS' => $result['POSTS'] ?? [],
+			'BADGES' => $result['BADGES'] ?? [],
 		];
 	}
 
-	private function getGratitudeService(int $ownerId, int $pageSize = 20): Grats
+	private function getGratitudeService(int $ownerId, ?int $pageSize = self::DEFAULT_PAGE_SIZE): Grats
 	{
 		if (!$this->gratitudeService)
 		{
@@ -82,28 +91,6 @@ class GratitudeProvider
 		return $this->gratitudeService;
 	}
 
-	private function collectBadgeItems(array $badges, int $ownerId, ?int $limit): array
-	{
-		$result = [];
-		foreach ($badges as $badge)
-		{
-			foreach ($badge['ID'] as $id)
-			{
-				$result[] = [
-					'id' => $id,
-					'name' => $badge['NAME'],
-					'ownerId' => $ownerId
-				];
-
-				if ($limit && count($result) === $limit)
-				{
-					return $result;
-				}
-			}
-		}
-		return $result;
-	}
-
 	private function countTotalBadges(array $badges): int
 	{
 		return array_reduce(
@@ -113,7 +100,7 @@ class GratitudeProvider
 		);
 	}
 
-	private function collectPostItems(array $posts, array $badges, int $ownerId): array
+	private function collectGratitudeItems(array $posts, array $badges, int $ownerId): array
 	{
 		$badgeNames = $this->createBadgeNameMap($badges);
 		$result = [];
@@ -126,10 +113,14 @@ class GratitudeProvider
 				'title' => (string)$post['TITLE'],
 				'authorId' => (int)$post['AUTHOR_ID'],
 				'createdAt' => (int)$post['DATE_PUBLISH_TS'],
-				'formattedAt' => strtotime($post['DATE_FORMATTED'] ?? ''),
 				'relatedPostId' => (int)$post['ID'],
 				'ownerId' => $ownerId,
 			];
+		}
+
+		if (!empty($result))
+		{
+			usort($result, static fn($newer, $older) => $older['createdAt'] <=> $newer['createdAt']);
 		}
 
 		return $result;

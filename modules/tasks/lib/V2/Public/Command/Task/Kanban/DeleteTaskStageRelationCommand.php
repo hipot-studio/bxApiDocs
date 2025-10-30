@@ -22,11 +22,11 @@ class DeleteTaskStageRelationCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
-		$taskStageRepository = Container::getInstance()->getTaskStageRepository();
+		$taskStageService = Container::getInstance()->getTaskStageService();
 
-		$handler = new DeleteTaskStageRelationHandler($taskStageRepository);
+		$handler = new DeleteTaskStageRelationHandler($taskStageService);
 
 		$handler($this);
 

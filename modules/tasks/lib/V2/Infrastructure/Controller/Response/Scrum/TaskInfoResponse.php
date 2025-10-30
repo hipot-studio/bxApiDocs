@@ -9,7 +9,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 class TaskInfoResponse
 {
 	public function __construct(
-		public readonly ?string      $storyPoints = null,
+		public readonly ?string $storyPoints = null,
 		public readonly ?Entity\Epic $epic = null,
 	)
 	{

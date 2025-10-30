@@ -10,11 +10,10 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Filter;
 use Bitrix\Tasks\Integration\Bitrix24;
-use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Internals\Task\Template\TemplateTagTable;
 use Bitrix\Tasks\Item\Task\Template;
 use Bitrix\Tasks\Manager;
-use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 Loc::loadMessages(__FILE__);
 
@@ -145,7 +144,7 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 
 		if ($arResult['IS_TOOL_AVAILABLE'])
 		{
-			$arResult['IS_TOOL_AVAILABLE'] = (new Settings())->isToolAvailable(Settings::TOOLS['templates']);
+			$arResult['IS_TOOL_AVAILABLE'] = Container::getInstance()->getToolService()->isTemplatesAvailable();
 		}
 	}
 

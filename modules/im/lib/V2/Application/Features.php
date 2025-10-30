@@ -6,6 +6,7 @@ use Bitrix\Im\Call\Integration\Zoom;
 use Bitrix\Im\Integration\Disk\Documents;
 use Bitrix\Im\Settings;
 use Bitrix\Im\V2\Chat\CopilotChat;
+use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
 use Bitrix\Im\V2\Integration\Extranet\CollaberService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
@@ -48,7 +49,7 @@ class Features
 		public readonly bool $teamsInStructureAvailable,
 		public readonly bool $isDesktopRedirectAvailable,
 		public readonly bool $aiAssistantAvailable,
-		public readonly bool $aiAssistantChatCreationAvailable,
+		public readonly bool $aiFileTranscriptionAvailable,
 	){}
 
 	public static function get(): self
@@ -90,7 +91,7 @@ class Features
 			Structure::isTeamsAvailable(),
 			self::isDesktopRedirectAvailable(),
 			self::isAiAssistantAvailable(),
-			self::isAiAssistantChatCreationAvailable(),
+			self::isAiFileTranscriptionAvailable()
 		);
 	}
 
@@ -157,8 +158,10 @@ class Features
 		return ServiceLocator::getInstance()->get(AiAssistantService::class)->isAiAssistantAvailable();
 	}
 
-	public static function isAiAssistantChatCreationAvailable(): bool
+	public static function isAiFileTranscriptionAvailable(): bool
 	{
-		return ServiceLocator::getInstance()->get(AiAssistantService::class)->isAiAssistantChatCreationAvailable();
+		return Option::get('im', 'file_transcription_available', 'N') === 'Y'
+			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
+		;
 	}
 }

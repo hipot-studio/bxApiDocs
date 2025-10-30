@@ -456,13 +456,16 @@ class CommentChat extends GroupChat
 			'AUTHOR_ID' => $parentChat->getAuthorId(),
 		]);
 
-		if (!$addResult->isSuccess())
+		/**
+		 * @var ?static $chat
+		 */
+		$chat = $addResult->getChat();
+
+		if (!isset($chat) || !$addResult->isSuccess())
 		{
 			return $addResult;
 		}
 
-		/** @var static $chat */
-		$chat = $addResult->getResult()['CHAT'];
 		$chat->parentMessage = $message;
 		$chat->sendPushChatCreate();
 

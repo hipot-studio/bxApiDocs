@@ -23,7 +23,7 @@ class UpdateTemplateCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		try
 		{

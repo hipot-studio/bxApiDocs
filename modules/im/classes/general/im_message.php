@@ -1523,7 +1523,7 @@ class CIMMessage
 				'FROM_USER_ID' => $fromUserId,
 				'TO_USER_ID' => $toUserId,
 			]);
-			$chatId = $result->getResult()['CHAT_ID'] ?? 0;
+			$chatId = $result->getChatId() ?? 0;
 		}
 
 		return $chatId;

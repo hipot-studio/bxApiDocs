@@ -5,7 +5,6 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\Notify;
 use Bitrix\Im\Color;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
-use Bitrix\Im\V2\Call\CallToken;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\Param\Params;
@@ -35,8 +34,9 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Pull\Event;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
-class GroupChat extends Chat implements PopupDataAggregatable
+class GroupChat extends Chat
 {
 	protected function getDefaultType(): string
 	{
@@ -96,9 +96,9 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		(new Structure($this))->unlink($structureNodes);
 	}
 
-	public function add(array $params, ?Context $context = null): Result
+	public function add(array $params, ?Context $context = null): AddResult
 	{
-		$result = new Result;
+		$result = new AddResult();
 		$skipAddMessage = ($params['SKIP_ADD_MESSAGE'] ?? 'N') === 'Y';
 		$forceSendGreetingMessages = ($params['SEND_GREETING_MESSAGES'] ?? 'N') === 'Y';
 		$paramsResult = $this->prepareParams($params);
@@ -148,10 +148,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		}
 		$chat->addIndex();
 
-		$result->setResult([
-			'CHAT_ID' => $chat->getChatId(),
-			'CHAT' => $chat,
-		]);
+		$result->setChat($chat);
 
 		$chat->onAfterAdd();
 		$chat->onUserAddAfterChatAdd($usersToInvite);
@@ -745,7 +742,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 			->add(new UserPopupItem([$userId]))
 			->add(CopilotPopupItem::getInstanceByChatIds([$this->getChatId()]))
 			->add(new Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs([$this->getChatId()]))
-			->add(new CallToken($this->getId(), $userId))
+			->add($this->getCallToken())
 		;
 	}
 

@@ -7,7 +7,6 @@ namespace Bitrix\Tasks\V2\Public\Command\Task;
 use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
-use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Result\Result;
@@ -26,29 +25,29 @@ class AddTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		try
 		{
-			$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-			$addService = Container::getInstance()->getAddService();
+			$addTaskService = Container::getInstance()->getAddTaskService();
 
-			$handler = new AddTaskHandler(
-				$consistencyResolver,
-				$addService,
-			);
+			$handler = new AddTaskHandler($addTaskService);
 
 			$task = $handler($this);
 
-			return $result->setObject($task);
+			return
+				$result
+					->setObject($task)
+					->setId($task->id)
+				;
 		}
 		catch (Exception $e)
 		{
 			if (!$e instanceof TaskAddException)
 			{
-				Logger::handle($e);
+				Container::getInstance()->getLogger()->logError($e);
 			}
 
 			return $result->addError(Error::createFromThrowable($e));

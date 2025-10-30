@@ -331,7 +331,7 @@ class UserRepository implements UserRepositoryContract
 		}
 
 		$userList = [];
-		$dbUserList = \CAllGroup::GetGroupUserEx($userGroup);
+		$dbUserList = \CGroup::GetGroupUserEx($userGroup);
 
 		while($user = $dbUserList->fetch())
 		{

@@ -155,7 +155,7 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 	{
 		if (empty($this->adminIdList))
 		{
-			$dbAdminList = \CAllGroup::GetGroupUserEx(1);
+			$dbAdminList = \CGroup::GetGroupUserEx(1);
 
 			while($admin = $dbAdminList->fetch())
 			{

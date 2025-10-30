@@ -28,6 +28,8 @@ class CheckListItem extends AbstractEntity
 		public readonly ?string $parentNodeId = null,
 		public readonly ?int $sortIndex = null,
 		public readonly ?array $actions = null,
+		public readonly ?bool $collapsed = null,
+		public readonly ?bool $expanded = null,
 	)
 	{
 
@@ -56,6 +58,8 @@ class CheckListItem extends AbstractEntity
 			parentNodeId: $props['parentNodeId'] ?? null,
 			sortIndex: $props['sortIndex'] ?? null,
 			actions: $props['actions'] ?? null,
+			collapsed: $props['collapsed'] ?? null,
+			expanded: $props['expanded'] ?? null,
 		);
 	}
 
@@ -77,6 +81,8 @@ class CheckListItem extends AbstractEntity
 			'parentNodeId' => $this->parentNodeId,
 			'sortIndex' => $this->sortIndex,
 			'actions' => $this->actions,
+			'collapsed' => $this->collapsed,
+			'expanded' => $this->expanded,
 		];
 	}
 }

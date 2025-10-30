@@ -24,7 +24,8 @@ class FileTransferToCollab
 	public function isNeedTransfer(): bool
 	{
 		return $this->collabStorage
-			&& $this->collabStorage->getFolderForUploadedFiles()?->getId() !== $this->file->getParentId();
+			&& (int)$this->collabStorage->getId() !== (int)$this->file->getStorageId()
+		;
 	}
 
 	public function transferToFolderForUploadedFilesInCollab(): void
@@ -45,7 +46,10 @@ class FileTransferToCollab
 
 	public function copyToFolderForUploadedFilesInCollab(): ?File
 	{
-		$collabFile = $this->file->copyTo($this->collabStorage?->getFolderForUploadedFiles(), $this->file->getCreatedBy(), true);
+		$collabFile = $this->file
+			->getRealObject()
+			?->copyTo($this->collabStorage?->getFolderForUploadedFiles(), $this->file->getCreatedBy(), true)
+		;
 
 		if ($collabFile)
 		{

@@ -59,6 +59,39 @@ class FeedbackFormProvider
 				'lang' => 'en',
 			],
 		],
+		'aiAssistant' => [
+			'ru-kz-by-uz' => [
+				'portalZones' => ['ru', 'kz', 'by', 'uz'],
+				'formId' => 2982,
+				'sec' => 'vqmcxn',
+				'lang' => 'ru',
+			],
+			'com.br' => [
+				'portalZones' => ['com.br'],
+				'formId' => 840,
+				'sec' => 'ufjnte',
+				'lang' => 'br',
+			],
+			'es' => [
+				'portalZones' => ['es'],
+				'formId' => 838,
+				'sec' => 'm82wkx',
+				'lang' => 'es',
+			],
+			'de' => [
+				'portalZones' => ['de'],
+				'formId' => 836,
+				'sec' => 'frcsm3',
+				'lang' => 'de',
+			],
+			'en' => [
+				'isDefault' => true,
+				'portalZones' => ['en'],
+				'formId' => 834,
+				'sec' => 'qnauno',
+				'lang' => 'en',
+			],
+		],
 		'appFeedbackLight' => [
 			'ru-by-kz' => [
 				'portalZones' => ['ru', 'by', 'kz'],

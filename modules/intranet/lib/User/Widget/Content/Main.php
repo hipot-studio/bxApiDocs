@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\User\Widget\Content;
 
-use Bitrix\Bitrix24\Feature;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\User\Widget\BaseContent;
 use Bitrix\Intranet\Util;
 use Bitrix\Intranet;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use CComponentEngine;
 use CFile;
-use CSocServBitrix24Net;
 
 class Main extends BaseContent
 {
@@ -31,13 +31,19 @@ class Main extends BaseContent
 		return 'main';
 	}
 
+	/**
+	 * @throws LoaderException
+	 * @throws ArgumentException
+	 */
 	public function getConfiguration(): array
 	{
 		return [
 			'fullName' => htmlspecialcharsbx($this->currentUser->getFormattedName()),
 			'status' => $this->getStatus(),
+			'workPosition' => $this->getWorkPosition(),
+			'vacation' => $this->getVacationInformation(),
 			'url' => $this->getProfileUrl(),
-			'menuItems' => $this->getMenuItems(),
+			'tools' => $this->getTools(),
 			'userPhotoSrc' => $this->getUserPhotoSrc(),
 			'role' => $this->user->getUserRole(),
 			'id' => (int)$this->currentUser->getId(),
@@ -50,24 +56,42 @@ class Main extends BaseContent
 		return Intranet\Internal\Integration\Timeman\WorkTime::canUse();
 	}
 
-	private function getStatus(): string
+	private function getWorkPosition(): ?string
+	{
+		$workPosition = htmlspecialcharsbx($this->currentUser->getWorkPosition());
+
+		if (!$workPosition && $this->user->isIntranet() && !$this->currentUser->isAdmin())
+		{
+			return Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_WORK_POSITION_STUB_EMPLOYEE');
+		}
+
+		return $workPosition;
+	}
+
+	private function getVacationInformation(): ?string
+	{
+		$vacationInformation = Intranet\UserAbsence::isAbsentOnVacation($this->currentUser->getId(), true);
+
+		if (isset($vacationInformation['DATE_TO_TS']) && $vacationInformation['DATE_TO_TS'] > 0)
+		{
+			$format = Application::getInstance()->getContext()->getCulture()?->getDayShortMonthFormat() ?? 'd M';
+			$formattedDate = FormatDate($format, $vacationInformation['DATE_TO_TS']);
+
+			return Loc::getMessage(
+				'INTRANET_USER_WIDGET_CONTENT_MAIN_VACATION',
+				['#DATE#' => $formattedDate],
+			);
+		}
+
+		return null;
+	}
+
+	private function getStatus(): ?string
 	{
 		$userId = (int)$this->currentUser->getId();
 		$status = Util::getUserStatus($userId);
-		$workPosition = htmlspecialcharsbx($this->currentUser->getWorkPosition());
-		$statusMessage = Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_' . $status);
 
-		if ($status && $statusMessage && (!in_array($status, ['employee', 'collaber']) || !$workPosition))
-		{
-			return $statusMessage;
-		}
-
-		if (!empty($workPosition))
-		{
-			return $workPosition;
-		}
-
-		return $statusMessage ?? '';
+		return Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_' . $status);
 	}
 
 	public function getUserPhotoSrc(): string
@@ -105,99 +129,36 @@ class Main extends BaseContent
 		);
 	}
 
-	private function getMenuItems(): array
+	/**
+	 * @throws LoaderException
+	 * @throws ArgumentException
+	 */
+	private function getTools(): ToolCollection
 	{
 		$isExtranet = Loader::includeModule('extranet') && \CExtranet::IsExtranetSite();
+		$items = new ToolCollection();
 
-		$items = [];
-
-		if (!$isExtranet)
+		if ($isExtranet)
 		{
-			$items[] = $this->getUserLoginHistoryMenuItem();
+			return $items;
+		}
 
-			if (Intranet\UStat\UStat::checkAvailableCompanyPulse())
+		/** @var Tool\BaseTool[] $tools */
+		$tools = [
+			Tool\MyDocuments::class,
+			Tool\Security::class,
+			Tool\SalaryVacation::class,
+			Tool\Extension::class,
+		];
+
+		foreach ($tools as $tool)
+		{
+			if ($tool::isAvailable($this->user))
 			{
-				$items[] = [
-					'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_MORE_MENU_PULSE_TITLE'),
-					'icon' => '--o-pulse',
-					'type' => 'pulse',
-				];
+				$items->add(new $tool($this->user));
 			}
 		}
 
-		if (isset($_GET['BXD_API_VERSION']) || str_contains($_SERVER['HTTP_USER_AGENT'], 'BitrixDesktop'))
-		{
-			$items[] = [
-				'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_MORE_MENU_DESKTOP_ACCOUNTS_TITLE'),
-				'icon' => '--o-group',
-				'type' => 'desktop',
-			];
-		}
-
-		$items[] = $this->getSettingsMenuItem();
-
-		if (
-			Loader::includeModule('bitrix24')
-			&& Loader::includeModule('socialservices')
-			&& Option::get('bitrix24', 'network', 'N') === 'Y'
-		) {
-			$items[] = [
-				'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_MORE_MENU_NETWORK_TITLE'),
-				'icon' => '--o-cloud',
-				'url' => rtrim(CSocServBitrix24Net::NETWORK_URL, '/') . '/passport/view/',
-				'type' => 'network',
-			];
-		}
-		elseif ($this->currentUser->isAdmin() && !Loader::includeModule('bitrix24'))
-		{
-			$items[] = [
-				'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_MORE_MENU_ADMIN_TITLE'),
-				'icon' => '--o-filter-2-lines',
-				'url' => '/bitrix/admin/',
-				'type' => 'admin',
-			];
-		}
-
 		return $items;
-	}
-
-	private function getSettingsMenuItem(): array
-	{
-		$isExtranetSite = Loader::includeModule('extranet') && \CExtranet::IsExtranetSite();
-		$profileLink = $isExtranetSite ? SITE_DIR . 'contacts/personal' : SITE_DIR . 'company/personal';
-		$path = CComponentEngine::MakePathFromTemplate(
-			$profileLink . '/user/#user_id#/common_security/?page=auth',
-			['user_id' => $this->user->getId()],
-		);
-
-		return [
-			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_MORE_MENU_SETTINGS_TITLE'),
-			'url' => $path,
-			'type' => 'settings',
-			'icon' => '--o-settings',
-		];
-	}
-
-	private function getUserLoginHistoryMenuItem(): array
-	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			$isAvailable = Feature::isFeatureEnabled('user_login_history');
-			$isConfigured = true;
-		}
-		else
-		{
-			$isAvailable = true;
-			$isConfigured = Option::get('main', 'user_device_history', 'N') === 'Y';
-		}
-
-		return [
-			'isAvailable' => $isAvailable,
-			'isConfigured' => $isConfigured,
-			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_MORE_MENU_LOGIN_HISTORY_TITLE'),
-			'icon' => '--o-bulleted-list',
-			'url' => Intranet\Site\Sections\TimemanSection::getUserLoginHistoryUrl(),
-			'type' => 'login-history',
-		];
 	}
 }

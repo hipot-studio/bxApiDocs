@@ -2,10 +2,8 @@
 
 namespace Bitrix\Im\V2\Integration\HumanResources;
 
-use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
 use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Config\Storage;
-use Bitrix\HumanResources\Item\NodeRelation;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\AccessCodeType;
 use Bitrix\HumanResources\Type\RelationEntitySubtype;

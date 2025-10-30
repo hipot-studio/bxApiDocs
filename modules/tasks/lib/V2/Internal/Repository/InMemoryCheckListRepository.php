@@ -11,6 +11,7 @@ class InMemoryCheckListRepository implements CheckListRepositoryInterface
 	private CheckListRepositoryInterface $checkListRepository;
 
 	private array $idsCache = [];
+	private array $attachmentCache = [];
 
 	public function __construct(CheckListRepository $checkListRepository)
 	{
@@ -26,5 +27,16 @@ class InMemoryCheckListRepository implements CheckListRepositoryInterface
 		}
 
 		return $this->idsCache[$key];
+	}
+
+	public function getAttachmentIdsByEntity(int $entityId, Entity\CheckList\Type $type): array
+	{
+		$key = "{$entityId}_{$type->name}";
+		if (!isset($this->attachmentCache[$key]))
+		{
+			$this->attachmentCache[$key] = $this->checkListRepository->getAttachmentIdsByEntity($entityId, $type);
+		}
+
+		return $this->attachmentCache[$key];
 	}
 }

@@ -17,6 +17,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use CAllSite;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class GeneralChat extends GroupChat
 {
@@ -201,18 +202,16 @@ class GeneralChat extends GroupChat
 		return $result;
 	}
 
-	public function add(array $params, ?Context $context = null): Result
+	public function add(array $params, ?Context $context = null): AddResult
 	{
-		$result = new Result;
+		$result = new AddResult();
 
 		$generalChatResult = self::find();
 		if ($generalChatResult->hasResult())
 		{
 			$generalChat = new GeneralChat(['ID' => $generalChatResult->getResult()['ID']]);
-			return 	$result->setResult([
-				'CHAT_ID' => $generalChat->getChatId(),
-				'CHAT' => $generalChat,
-			]);
+
+			return $result->setChat($generalChat);
 		}
 
 		$installUsers = $this->getUsersForInstall();
@@ -260,10 +259,7 @@ class GeneralChat extends GroupChat
 
 		self::linkGeneralChat($chat->getChatId());
 
-		$result->setResult([
-			'CHAT_ID' => $chat->getChatId(),
-			'CHAT' => $chat,
-		]);
+		$result->setChat($chat);
 
 		self::cleanGeneralChatCache(self::ID_CACHE_ID);
 		self::cleanGeneralChatCache(self::MANAGERS_CACHE_ID);

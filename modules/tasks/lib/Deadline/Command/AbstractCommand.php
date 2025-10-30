@@ -6,7 +6,7 @@ namespace Bitrix\Tasks\Deadline\Command;
 
 use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Tasks\DI\Container;
-use Bitrix\Tasks\InvalidCommandException;
+use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use Bitrix\Main\Result;
 
 abstract class AbstractCommand implements CommandInterface

@@ -21,8 +21,9 @@ class Template extends BaseController
 	 */
 	#[CloseSession]
 	public function getAction(
-		#[Permission\Read] Entity\Template $template,
-		TemplateRepositoryInterface        $templateRepository,
+		#[Permission\Read]
+		Entity\Template $template,
+		TemplateRepositoryInterface $templateRepository,
 	): ?Arrayable
 	{
 		return $templateRepository->getById($template->getId());
@@ -31,7 +32,10 @@ class Template extends BaseController
 	/**
 	 * @restMethod tasks.V2.Template.add
 	 */
-	public function addAction(#[Permission\Add] Entity\Template $template): ?Arrayable
+	public function addAction(
+		#[Permission\Add]
+		Entity\Template $template
+	): ?Arrayable
 	{
 		$result = (new AddTemplateCommand(template: $template, createdBy: $this->userId))->run();
 
@@ -48,7 +52,9 @@ class Template extends BaseController
 	/**
 	 * @restMethod tasks.V2.Template.update
 	 */
-	public function updateAction(#[Permission\Update] Entity\Template $template): ?Arrayable
+	public function updateAction(
+		#[Permission\Update] Entity\Template $template
+	): ?Arrayable
 	{
 		$result = (new UpdateTemplateCommand(template: $template, updatedBy: $this->userId))->run();
 
@@ -65,7 +71,10 @@ class Template extends BaseController
 	/**
 	 * @restMethod tasks.V2.Template.delete
 	 */
-	public function deleteAction(#[Permission\Delete] Entity\Template $template): ?Arrayable
+	public function deleteAction(
+		#[Permission\Delete]
+		Entity\Template $template
+	): ?Arrayable
 	{
 		$result = (new DeleteTemplateCommand(templateId: $template->getId(), deletedBy: $this->userId))->run();
 

@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 use Bitrix\Main\Event;
 use Bitrix\Tasks\V2\Internal\Entity\HistoryLog;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ElapsedTime;
+use Bitrix\Tasks\V2\Internal\Exception\Task\ElapsedTimeException;
 use Bitrix\Tasks\V2\Internal\Repository\ElapsedTimeRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ElapsedTimeMapper;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
@@ -22,6 +23,9 @@ class ElapsedTimeService
 
 	}
 
+	/**
+	 * @throws ElapsedTimeException
+	 */
 	public function add(ElapsedTime $elapsedTime): ?array
 	{
 		$fields = $this->elapsedTimeMapper->mapFromEntity($elapsedTime);

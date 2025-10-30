@@ -16,7 +16,8 @@ class Audit extends BaseController
 	 * @ajaxAction tasks.V2.Task.Audit.watch
 	 */
 	public function watchAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new WatchTaskCommand(
@@ -39,7 +40,8 @@ class Audit extends BaseController
 	 * @ajaxAction tasks.V2.Task.Audit.unwatch
 	 */
 	public function unwatchAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new UnwatchTaskCommand(

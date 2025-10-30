@@ -5,33 +5,24 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\User;
 
 use Bitrix\Intranet;
-use Bitrix\Intranet\User\Widget\Content\Desktop;
-use Bitrix\Intranet\User\Widget\Content\Extension;
-use Bitrix\Intranet\User\Widget\Content\HcmlinkSalaryVacation;
+use Bitrix\Intranet\User\Widget\BaseContent;
 use Bitrix\Intranet\User\Widget\Content\Main;
-use Bitrix\Intranet\User\Widget\Content\PerfReview;
-use Bitrix\Intranet\User\Widget\Content\SignDocuments;
-use Bitrix\Intranet\User\Widget\Content\Otp;
-use Bitrix\Intranet\User\Widget\Content\QrAuth;
-use Bitrix\Intranet\User\Widget\Content\Theme;
+use Bitrix\Intranet\User\Widget\Content\ToolsContentAssembler;
+use Bitrix\Intranet\User\Widget\Content\Tool\AccountChanger;
+use Bitrix\Intranet\User\Widget\Content\Tool\Administration;
+use Bitrix\Intranet\User\Widget\Content\Tool\PerformanceReview;
 use Bitrix\Intranet\User\Widget\ContentCollection;
-use Bitrix\Intranet\User\Widget\Content\Logout;
 use Bitrix\Main\ArgumentException;
 
 class Widget
 {
-	private const CONTENT_LIST = [
-		Main::class,
-		SignDocuments::class,
-		HcmlinkSalaryVacation::class,
-		PerfReview::class,
-		Desktop::class,
-		QrAuth::class,
-		Otp::class,
-		Extension::class,
-		Theme::class,
-		Logout::class,
-	];
+	private Intranet\User $user;
+	private const SKELETON_ITEM_HEIGHT = 36;
+
+	public function __construct()
+	{
+		$this->user = new Intranet\User();
+	}
 
 	/**
 	 * @throws ArgumentException
@@ -39,59 +30,70 @@ class Widget
 	public function getContentCollection(): ContentCollection
 	{
 		$contentCollection = new ContentCollection();
-		$user = new Intranet\User();
+		$contentClasses = [
+			Main::class,
+		];
 
-		foreach (self::CONTENT_LIST as $contentClass)
+		/**
+		 * @var class-string<BaseContent> $contentClass
+		 */
+		foreach ($contentClasses as $contentClass)
 		{
-			$contentCollection->add(new $contentClass($user));
+			if ($contentClass::isAvailable())
+			{
+				$contentCollection->add(new $contentClass($this->user));
+			}
 		}
+
+		$toolsSectionBuilder = new ToolsContentAssembler($this->user);
+		$toolsSectionBuilder->addToContentCollection($contentCollection);
 
 		return $contentCollection;
 	}
 
 	public function getSkeletonConfiguration(): array
 	{
-		$items = [
-			[
-				'type' => 'item', 'height' => Main::isTimemanSectionAvailable() ? 98 : 48,
-			],
-		];
+		$items = [];
 
-		if (SignDocuments::isSignDocumentAvailable())
+		$items[] = ['type' => 'splitColumn', 'height' => 72, 'count' => 2];
+
+		$countSecondaryTools = 0;
+
+		if (AccountChanger::isAvailable($this->user))
 		{
-			$items[] = ['type' => 'item', 'height' => 46];
+			$countSecondaryTools++;
 		}
 
-		if (HcmlinkSalaryVacation::isAvailable())
+		if (PerformanceReview::isAvailable($this->user))
 		{
-			$items[] = ['type' => 'item', 'height' => 40];
+			$countSecondaryTools++;
 		}
 
-		if (PerfReview::isAvailable())
+		if (Administration::isAvailable($this->user))
 		{
-			$items[] = ['type' => 'item', 'height' => 40];
+			$countSecondaryTools++;
 		}
 
-		if (Otp::isAvailable())
+		if ($countSecondaryTools === 1)
 		{
-			$items[] = ['type' => 'split', 'height' => 80];
-			$items[] = ['type' => 'split', 'height' => 80];
+			$items[] = ['type' => 'item', 'height' => self::SKELETON_ITEM_HEIGHT];
 		}
 		else
 		{
-			$items[] = ['type' => 'split', 'height' => 88];
+			$items[] = ['type' => 'splitColumn', 'height' => self::SKELETON_ITEM_HEIGHT * $countSecondaryTools, 'count' => $countSecondaryTools];
 		}
 
-		if (Extension::isAvailable())
+		if (!$this->user->isIntranet() && $this->user->isExtranet())
 		{
-			$items[] = ['type' => 'item', 'height' => 40];
+			$items[] = ['type' => 'splitColumn', 'height' => self::SKELETON_ITEM_HEIGHT * 2, 'count' => 2];
 		}
 
-		$items[] = ['type' => 'split', 'height' => 40];
+		$hasTimeman = Intranet\Internal\Integration\Timeman\WorkTime::canUse();
 
 		return [
 			'header' => false,
-			'footer' => false,
+			'avatarWidgetHeader' => ['hasTimeman' => $hasTimeman, 'hasTools' => $this->user->isIntranet(), 'isAdmin' => $this->user->isAdmin()],
+			'footer' => ['height' => 10],
 			'items' => $items,
 		];
 	}

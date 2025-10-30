@@ -106,4 +106,14 @@ class ChannelChat extends GroupChat
 	{
 		return false;
 	}
+
+	public function needToSendTaskCreationMessage(): bool
+	{
+		return false;
+	}
+
+	public function needToSendCalendarCreationMessage(): bool
+	{
+		return false;
+	}
 }

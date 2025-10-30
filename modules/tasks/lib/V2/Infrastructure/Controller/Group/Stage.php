@@ -18,7 +18,7 @@ class Stage extends BaseController
 	#[CloseSession]
 	public function listAction(
 		#[Permission\Read] Entity\Group $group,
-		StageRepositoryInterface        $stageRepository
+		StageRepositoryInterface $stageRepository
 	): ?Entity\StageCollection
 	{
 		return $stageRepository->getByGroupId($group->getId());

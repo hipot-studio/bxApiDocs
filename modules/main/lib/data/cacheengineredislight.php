@@ -25,8 +25,8 @@ class CacheEngineRedisLight extends CacheEngineRedis
 		if ($filename <> '')
 		{
 			$key = $keyPrefix . '|' . $filename;
-			$this->delFromSet($initListKey, $filename);
 			$this->del($key);
+			$this->delFromSet($initListKey, $filename);
 		}
 		elseif ($initDir != '')
 		{

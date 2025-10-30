@@ -1,8 +1,8 @@
 <?php
 namespace Bitrix\Im\Model;
 
+use Bitrix\Im\V2\Common\DeleteTrait;
 use Bitrix\Main\Entity;
-use Bitrix\Main;
 
 
 /**
@@ -34,6 +34,8 @@ use Bitrix\Main;
 
 class MessageParamTable extends Entity\DataManager
 {
+	use DeleteTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -110,22 +112,5 @@ class MessageParamTable extends Entity\DataManager
 		return array(
 			new Entity\Validator\Length(null, 100),
 		);
-	}
-
-	/**
-	 * Deletes rows by filter.
-	 * @param array $filter Filter does not look like filter in getList. It depends by current implementation.
-	 * @return void
-	 */
-	public static function deleteBatch(array $filter)
-	{
-		$whereSql = \Bitrix\Main\Entity\Query::buildFilterSql(static::getEntity(), $filter);
-
-		if ($whereSql <> '')
-		{
-			$tableName = static::getTableName();
-			$connection = Main\Application::getConnection();
-			$connection->queryExecute("DELETE FROM {$tableName} WHERE {$whereSql}");
-		}
 	}
 }

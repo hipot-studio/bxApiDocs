@@ -3,14 +3,17 @@
 namespace Bitrix\Im\V2\Link\Task;
 
 use Bitrix\Disk\Uf\FileUserType;
-use Bitrix\Im\Dialog;
 use Bitrix\Im\Model\LinkTaskTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Link\File\TemporaryFileService;
 use Bitrix\Im\V2\Link\Push;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Entity\Task\TaskError;
+use Bitrix\Im\V2\Message\Params;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Message\Send\SendResult;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
@@ -30,30 +33,34 @@ class TaskService
 	protected const UPDATE_TASK_EVENT = 'taskUpdate';
 	protected const DELETE_TASK_EVENT = 'taskDelete';
 
-	public function registerTask(int $chatId, int $messageId, \Bitrix\Im\V2\Entity\Task\TaskItem $taskItem): Result
+	public function registerTask(Chat $chat, int $messageId, \Bitrix\Im\V2\Entity\Task\TaskItem $taskItem): Result
 	{
 		$result = new Result();
 
 		$userId = $this->getContext()->getUserId();
 
 		$taskLink = new TaskItem();
-		$taskLink->setEntity($taskItem)->setChatId($chatId)->setAuthorId($userId);
+		$taskLink->setEntity($taskItem)->setChatId($chat->getId())->setAuthorId($userId);
 
 		if ($messageId !== 0)
 		{
 			$taskLink->setMessageId($messageId);
 		}
 
-		$sendMessageResult = $this->sendMessageAboutTask($taskLink, $chatId);
-
-		if (!$sendMessageResult->isSuccess())
+		if ($chat->needToSendTaskCreationMessage())
 		{
-			$result->addErrors($sendMessageResult->getErrors());
+			$sendMessageResult = $this->sendMessageAboutTask($taskLink, $chat);
+
+			if (!$sendMessageResult->isSuccess())
+			{
+				$result->addErrors($sendMessageResult->getErrors());
+			}
+
+			$systemMessageId = $sendMessageResult->getMessageId();
+
+			$taskLink->setMessageId($messageId ?: $systemMessageId);
 		}
 
-		$systemMessageId = $sendMessageResult->getResult();
-
-		$taskLink->setMessageId($messageId ?: $systemMessageId);
 		$saveResult = $taskLink->save();
 
 		if (!$saveResult->isSuccess())
@@ -258,33 +265,37 @@ class TaskService
 		return $result->setResult($data);
 	}
 
-	protected function sendMessageAboutTask(TaskItem $taskLink, int $chatId): Result
+	protected function sendMessageAboutTask(TaskItem $taskLink, Chat $chat): SendResult
 	{
-		//todo: Replace with new API
-		$dialogId = Dialog::getDialogId($chatId);
 		$authorId = $this->getContext()->getUserId();
+		$messageText = $this->getTaskMessageText($taskLink);
 
-		$messageId = \CIMChat::AddMessage([
-			'DIALOG_ID' => $dialogId,
-			'SYSTEM' => 'Y',
-			'MESSAGE' => $this->getTaskMessageText($taskLink),
-			'FROM_USER_ID' => $authorId,
-			'PARAMS' => ['CLASS' => "bx-messenger-content-item-system"],
-			'URL_PREVIEW' => 'N',
-			'SKIP_CONNECTOR' => 'Y',
-			'SKIP_COMMAND' => 'Y',
-			'SILENT_CONNECTOR' => 'Y',
-			'SKIP_URL_INDEX' => 'Y',
-		]);
+		$message =
+			(new Message())
+				->setAuthorId($authorId)
+				->setChatId($chat->getId())
+				->setMessage($messageText)
+				->markAsSystem(true)
+				->addParam(Params::STYLE_CLASS, 'bx-messenger-content-item-system')
+		;
 
-		$result = new Result();
+		$sendingConfig =
+			(new SendingConfig())
+				->disableUrlPreview()
+				->enableSkipConnectorSend()
+				->enableSkipCommandExecution()
+				->enableKeepConnectorSilence()
+				->enableSkipUrlIndex()
+		;
 
-		if ($messageId === false)
+		$result = $chat->sendMessage($message, $sendingConfig);
+
+		if (!$result->isSuccess())
 		{
 			return $result->addError(new TaskError(TaskError::ADD_TASK_MESSAGE_FAILED));
 		}
 
-		return $result->setResult($messageId);
+		return $result;
 	}
 
 	/**
@@ -336,6 +347,11 @@ class TaskService
 
 	protected function getAuditors(Chat $chat): array
 	{
+		if ($chat instanceof ChannelChat)
+		{
+			return [];
+		}
+
 		return RelationCollection::find(
 			[
 				'ACTIVE' => true,

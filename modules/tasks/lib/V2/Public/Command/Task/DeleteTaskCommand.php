@@ -9,7 +9,6 @@ use Bitrix\Tasks\Control\Exception\TaskDeleteException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
-use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Internal\Error\ErrorCode;
@@ -27,18 +26,14 @@ class DeleteTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 		try
 		{
-			$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-			$deleteService = Container::getInstance()->getDeleteService();
+			$deleteTaskService = Container::getInstance()->getDeleteTaskService();
 
-			$handler = new DeleteTaskHandler(
-				$consistencyResolver,
-				$deleteService,
-			);
+			$handler = new DeleteTaskHandler($deleteTaskService);
 
 			$handler($this);
 
@@ -60,7 +55,7 @@ class DeleteTaskCommand extends AbstractCommand
 		{
 			if (!$e instanceof TaskDeleteException)
 			{
-				Logger::handle($e);
+				Container::getInstance()->getLogger()->logError($e);
 			}
 
 			return $result->addError(Error::createFromThrowable($e));

@@ -16,6 +16,7 @@ use Bitrix\Calendar\Synchronization\Internal\Entity\EventConnection;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\LogicException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\NoLogSynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
@@ -160,21 +161,17 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		GoogleEventGateway $gateway
 	): void
 	{
-		$eventConnection = new EventConnection();
-
-		$eventConnection
-			->setEvent($event)
-			->setConnection($connection)
-			->setLastSyncStatus(Dictionary::SYNC_STATUS['create'])
-		;
-
 		try
 		{
 			if ($sectionConnection->isActive())
 			{
-				$eventResponse = $gateway->createEvent($event, $sectionConnection->getVendorSectionId());
+				$eventResponse = $this->safeCreateEvent($event, $sectionConnection, $gateway);
+
+				$eventConnection = new EventConnection();
 
 				$eventConnection
+					->setEvent($event)
+					->setConnection($connection)
 					->setVendorEventId($eventResponse->id)
 					->setLastSyncStatus(Dictionary::SYNC_STATUS['success'])
 					->setRetryCount()
@@ -185,6 +182,8 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 					->setData([]
 					) // @todo \Bitrix\Calendar\Sync\Google\Builders\BuilderSyncEventFromExternalData::getEventConnectionData
 				;
+
+				$this->eventConnectionRepository->save($eventConnection);
 			}
 		}
 		catch (NotAuthorizedException $e)
@@ -206,22 +205,10 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				$e
 			);
 		}
-		catch (ConflictException)
-		{
-			// @todo Side effect?
-			if ($event->getUid())
-			{
-				$event->setUid(null);
-
-				$this->sendEvent($event);
-
-				return;
-			}
-		}
-		catch (BadRequestException|AccessDeniedException $e)
+		catch (BadRequestException|AccessDeniedException|NotFoundException $e)
 		{
 			throw new SynchronizerException(
-				sprintf('Google API exception: "%s"', $e->getMessage()),
+				sprintf('Google API exception on create event: "%s"', $e->getMessage()),
 				$e->getCode(),
 				$e,
 				isRecoverable: false,
@@ -230,14 +217,10 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		catch (ApiException|DtoValidationException $e)
 		{
 			throw new SynchronizerException(
-				sprintf('Google API exception: "%s"', $e->getMessage()),
+				sprintf('Google API exception on create event: "%s"', $e->getMessage()),
 				$e->getCode(),
 				$e
 			);
-		}
-		finally
-		{
-			$this->eventConnectionRepository->save($eventConnection);
 		}
 	}
 
@@ -281,7 +264,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 					// EventConnection may have an empty value of vendorEventId because in legacy logic
 					// it creates in case of deleted section on the vendor's side.
 					// See GoogleEventSynchronizer::createEvent logic
-					$eventResponse = $gateway->createEvent($event, $sectionConnection->getVendorSectionId());
+					$eventResponse = $this->safeCreateEvent($event, $sectionConnection, $gateway);
 				}
 
 				$eventConnection
@@ -629,7 +612,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				$e
 			);
 		}
-		catch (BadRequestException|AccessDeniedException $e)
+		catch (BadRequestException|AccessDeniedException|NotFoundException $e)
 		{
 			throw new SynchronizerException(
 				sprintf('Google API exception: "%s"', $e->getMessage()),
@@ -958,7 +941,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		{
 			$modifiedTime = $masterEvent->getDateModified()?->getTimestamp();
 
-			throw new SynchronizerException(
+			throw new NoLogSynchronizerException(
 				sprintf('The master event "%s" has no connection with Google', $masterEvent->getId()),
 				code: self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION,
 				isRecoverable: $modifiedTime && $modifiedTime + 86400 > time(),
@@ -1182,6 +1165,39 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		else
 		{
 			$this->updateEvent($event, $eventConnection, $connection, $sectionConnection, $gateway);
+		}
+	}
+
+	/**
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws ConflictException
+	 * @throws DtoValidationException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	private function safeCreateEvent(
+		Event $event,
+		SectionConnection $sectionConnection,
+		GoogleEventGateway $gateway,
+	): Dto\EventResponse
+	{
+		try
+		{
+			return $gateway->createEvent($event, $sectionConnection->getVendorSectionId());
+		}
+		catch (ConflictException $e)
+		{
+			if ($event->getUid())
+			{
+				$event->setUid(null);
+
+				return $this->safeCreateEvent($event, $sectionConnection, $gateway);
+			}
+
+			throw $e;
 		}
 	}
 }

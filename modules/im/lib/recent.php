@@ -6,15 +6,13 @@ use Bitrix\Im\Model\MessageParamTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat\Background\Background;
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
+use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
-use Bitrix\Im\V2\Message\Counter\CounterType;
-use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Entity\User\NullUser;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
@@ -319,6 +317,10 @@ class Recent
 			if (!RecentConfigManager::EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION)
 			{
 				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_EXTERNAL;
+			}
+			if (!CopilotChat::isActive())
+			{
+				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT;
 			}
 			if (!empty($skipTypes))
 			{
@@ -834,8 +836,15 @@ class Recent
 				'ID' => (int)$row['ITEM_ID'],
 			];
 
+			$muteList = [];
+			if ($row['RELATION_NOTIFY_BLOCK'] == 'Y')
+			{
+				$muteList = [$row['RELATION_USER_ID'] => true];
+			}
+
 			$item['CHAT']['TEXT_FIELD_ENABLED'] = self::getTextFieldEnabled((int)$row['ITEM_CID']);
 			$item['CHAT']['BACKGROUND_ID'] = self::getBackgroundId((int)$row['ITEM_CID']);
+			$item['CHAT']['MUTE_LIST'] = $muteList;
 		}
 		else
 		{

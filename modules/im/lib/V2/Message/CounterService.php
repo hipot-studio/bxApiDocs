@@ -464,23 +464,22 @@ class CounterService
 		}
 	}
 
-	public function deleteByMessagesForAll(MessageCollection $messages, ?array $invalidateCacheUsers = null): void
+	public function deleteByMessagesForAll(
+		MessageCollection $messages,
+		?array $invalidateCacheUsers = null,
+		?array $overflowResetChatIds = null
+	): void
 	{
 		$messageIds = $messages->getIds();
-		$chatIds = [];
 		if (empty($messageIds))
 		{
 			return;
 		}
 
-		foreach ($messages as $message)
-		{
-			$chatId = $message->getChatId();
-			$chatIds[$chatId] = $chatId;
-		}
+		$overflowResetChatIds ??= $messages->getChatIds();
 
 		MessageUnreadTable::deleteByFilter(['=MESSAGE_ID' => $messageIds]);
-		CounterOverflowService::deleteByChatIds($chatIds);
+		CounterOverflowService::deleteByChatIds($overflowResetChatIds);
 
 		if (!isset($invalidateCacheUsers))
 		{

@@ -29,13 +29,17 @@ class DeadlineUserOption extends AbstractEntity
 		public bool $isExactDeadlineTime = false,
 		public SkipNotificationPeriod $skipNotificationPeriod = SkipNotificationPeriod::DEFAULT,
 		public ?DateTime $skipNotificationStartDate = null,
+		public bool $canChangeDeadline = false,
+		public ?DateTime $maxDeadlineChangeDate = null,
+		public ?int $maxDeadlineChanges = null,
+		public bool $requireDeadlineChangeReason = false,
 	)
 	{
 	}
 
 	public function getDefaultDeadlineDate(
 		bool $matchWorkTime = false,
-		DateTime $originalDate = new DateTime(),
+		DateTime $dateTime = new DateTime(),
 	): ?DateTime
 	{
 		if ($this->defaultDeadlineInSeconds === 0)
@@ -46,7 +50,7 @@ class DeadlineUserOption extends AbstractEntity
 		$calendar = Calendar::createFromPortalSchedule();
 		$schedule = $calendar->getSchedule();
 
-		$date = $originalDate->toUserTime();
+		$date = $dateTime->toUserTime();
 
 		$closestDate = $calendar->getClosestDate(
 			date: $date,
@@ -81,22 +85,22 @@ class DeadlineUserOption extends AbstractEntity
 
 		$startDate = $this->skipNotificationStartDate;
 
-		$now = new DateTime();
+		$dateTime = new DateTime();
 
-		$secondsPassed = $now->getTimestamp() - $startDate->getTimestamp();
+		$secondsPassed = $dateTime->getTimestamp() - $startDate->getTimestamp();
 
 		return match ($this->skipNotificationPeriod)
 		{
 			SkipNotificationPeriod::DAY =>
-				$startDate->format('j') === $now->format('j')
+				$startDate->format('j') === $dateTime->format('j')
 				&& $secondsPassed < self::SECONDS_IN_DAY,
 
 			SkipNotificationPeriod::WEEK =>
-				$startDate->format('W') === $now->format('W')
+				$startDate->format('W') === $dateTime->format('W')
 				&& $secondsPassed < self::SECONDS_IN_WEEK,
 
 			SkipNotificationPeriod::MONTH =>
-				$startDate->format('n') === $now->format('n')
+				$startDate->format('n') === $dateTime->format('n')
 				&& $secondsPassed < self::SECONDS_IN_MONTH,
 
 			default => false,
@@ -116,6 +120,10 @@ class DeadlineUserOption extends AbstractEntity
 			'skipNotificationStartDate' => $this->skipNotificationStartDate,
 			'defaultDeadlineDate' => $this->getDefaultDeadlineDate($matchWorkTime)
 				?->format('Y-m-d H:i'),
+			'canChangeDeadline' => $this->canChangeDeadline,
+			'maxDeadlineChangeDate' => $this->maxDeadlineChangeDate?->format(DateTime::getFormat()),
+			'maxDeadlineChanges' => $this->maxDeadlineChanges,
+			'requireDeadlineChangeReason' => $this->requireDeadlineChangeReason,
 		];
 	}
 
@@ -127,6 +135,10 @@ class DeadlineUserOption extends AbstractEntity
 			(bool)($props['isExactDeadlineTime'] ?? false),
 			SkipNotificationPeriod::tryFrom($props['skipNotificationPeriod'] ?? ''),
 			$props['skipNotificationStartDate'] ?? null,
+			(bool)($props['canChangeDeadline'] ?? false),
+			$props['maxDeadlineChangeDate'] ?? null,
+			isset($props['maxDeadlineChanges']) ? (int)$props['maxDeadlineChanges'] : null,
+			(bool)($props['requireDeadlineChangeReason'] ?? false),
 		);
 
 		if (isset($props['id']))

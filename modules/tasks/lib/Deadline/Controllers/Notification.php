@@ -12,7 +12,7 @@ use Bitrix\Tasks\Deadline\Command\SkipDeadlineNotificationCommand;
 use Bitrix\Tasks\Deadline\Controllers\Dto\NotificationDto;
 use Bitrix\Tasks\Deadline\Entity\DeadlineUserOption;
 use Bitrix\Tasks\Deadline\SkipNotificationPeriod;
-use Bitrix\Tasks\InvalidCommandException;
+use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use Bitrix\Tasks\Rest\Controllers\Trait\ErrorResponseTrait;
 use InvalidArgumentException;
 

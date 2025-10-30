@@ -16,7 +16,8 @@ class Attention extends BaseController
 	 * @ajaxAction tasks.V2.Task.Group.Attention.pin
 	 */
 	public function pinAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new PinInGroupTaskCommand(
@@ -38,7 +39,8 @@ class Attention extends BaseController
 	 * @ajaxAction tasks.V2.Task.Group.Attention.unpin
 	 */
 	public function unpinAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new UnpinInGroupTaskCommand(

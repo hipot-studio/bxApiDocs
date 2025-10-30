@@ -59,6 +59,34 @@ class FormV2Feature
 		return Option::get('tasks', $feature, 'N') === 'Y';
 	}
 
+	public static function turnOn(string $feature = ''): bool
+	{
+		$option = $feature === '' ? 'tasks_form_v2' : self::getOptionByFeature($feature);
+
+		if ($option === '')
+		{
+			return false;
+		}
+
+		Option::set('tasks', $option, 'Y');
+
+		return true;
+	}
+
+	public static function turnOff(string $feature = ''): bool
+	{
+		$option = $feature === '' ? 'tasks_form_v2' : self::getOptionByFeature($feature);
+
+		if ($option === '')
+		{
+			return false;
+		}
+
+		Option::set('tasks', $option, 'N');
+
+		return true;
+	}
+
 	public static function getAllowedGroups(): array
 	{
 		$groups = Option::get('tasks', 'tasks_form_v2_groups', '');
@@ -71,5 +99,28 @@ class FormV2Feature
 		$exceptionHandling = Configuration::getValue('exception_handling');
 
 		return !empty($exceptionHandling['debug']) && Option::get('tasks', 'tasks_api_v2', 'N') === 'Y';
+	}
+
+	public static function getOptionByFeature(string $feature): string
+	{
+		return match ($feature)
+		{
+			'miniform' => 'tasks_form_v2_miniform',
+			'create' => 'tasks_form_v2_create',
+			'update' => 'tasks_form_v2_update',
+			'delete' => 'tasks_form_v2_delete',
+			'favorite' => 'tasks_form_v2_favorite',
+			'watch' => 'tasks_form_v2_watch',
+			'option' => 'tasks_form_v2_option',
+			'priority' => 'tasks_form_v2_priority',
+			'timer' => 'tasks_form_v2_timer',
+			'status' => 'tasks_form_v2_status',
+			'planner' => 'tasks_form_v2_planner',
+			'elapsed' => 'tasks_form_v2_elapsed',
+			'view' => 'tasks_form_v2_view',
+			'move' => 'tasks_form_v2_move',
+			'reminder' => 'tasks_form_v2_reminder',
+			default => '',
+		};
 	}
 }

@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Command\Task\Attention;
 
-use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserFields;
-use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
 class SetHighTaskPriorityHandler
 {
 	public function __construct(
-		private readonly ConsistencyResolverInterface $consistencyResolver,
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateTaskService,
 	)
 	{
 
@@ -23,7 +20,7 @@ class SetHighTaskPriorityHandler
 	public function __invoke(SetHighTaskPriorityCommand $command): Entity\Task
 	{
 		$entity = new Entity\Task(
-			id:       $command->taskId,
+			id: $command->taskId,
 			priority: Entity\Task\Priority::High,
 		);
 
@@ -31,13 +28,10 @@ class SetHighTaskPriorityHandler
 			userId: $command->userId,
 		);
 
-		[$task, $fields] = $this->consistencyResolver->resolve('task.priority')->wrap(
-			fn (): array => $this->updateService->update($entity, $config)
+
+		return $this->updateTaskService->update(
+			task: $entity,
+			config: $config,
 		);
-
-		// this action is outside of consistency because it is containing nested transactions
-		(new UpdateUserFields($config))($fields, $command->taskId);
-
-		return $task;
 	}
 }

@@ -5,18 +5,29 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Access\Service;
 
 use Bitrix\Tasks\Access\Model\TaskModel;
-use Bitrix\Tasks\DI\Attribute\Inject;
 use Bitrix\Tasks\V2\Internal\Access\Factory\ControllerFactoryInterface;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
+use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 
 class TaskRightService
 {
+	use UserRightsTrait;
+
 	public function __construct(
-		#[Inject(locatorCode: 'tasks.access.controller.factory')]
 		private readonly ControllerFactoryInterface $controllerFactory,
 	)
 	{
 
+	}
+
+	public function getUserRights(int $userId, array $rules = ActionDictionary::USER_ACTIONS['tasks']): array
+	{
+		return $this->getUserRightsByType(
+			userId: $userId,
+			rules: $rules,
+			type: Type::Task,
+			controllerFactory: $this->controllerFactory,
+		);
 	}
 
 	public function getUsersBatch(string $rule, int $taskId, array $userIds): array

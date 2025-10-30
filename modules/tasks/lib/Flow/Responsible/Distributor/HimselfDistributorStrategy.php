@@ -3,10 +3,13 @@
 namespace Bitrix\Tasks\Flow\Responsible\Distributor;
 
 use Bitrix\Tasks\Flow\Flow;
+use Bitrix\Tasks\Flow\Task\Trait\TaskFlowTrait;
 use Bitrix\Tasks\Internals\Task\Status;
 
 class HimselfDistributorStrategy implements DistributorStrategyInterface
 {
+	use TaskFlowTrait;
+
 	public function distribute(Flow $flow, array $fields, array $taskData): int
 	{
 		$isNewTask = empty($taskData);
@@ -30,18 +33,5 @@ class HimselfDistributorStrategy implements DistributorStrategyInterface
 		}
 
 		return (int)($fields['RESPONSIBLE_ID'] ?? $taskData['RESPONSIBLE_ID']);
-	}
-
-	private function isTaskAddedToFlow(array $fields, array $taskData): bool
-	{
-		$newFlowId = (int)($fields['FLOW_ID'] ?? 0);
-		if ($newFlowId <= 0)
-		{
-			return false;
-		}
-
-		$currentFlowId = (int)($taskData['FLOW_ID'] ?? 0);
-
-		return ($currentFlowId <= 0) || ($currentFlowId !== $newFlowId);
 	}
 }

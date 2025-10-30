@@ -109,7 +109,7 @@ class TaskSaveRule extends AbstractRule
 		}
 
 		// user can assign task to this man
-		if (!$this->canAssignTask($this->oldTask, RoleDictionary::ROLE_RESPONSIBLE, $this->newTask))
+		if (!$this->canAssignTask($this->oldTask, RoleDictionary::ROLE_RESPONSIBLE, $this->newTask, [$this->user->getUserId()]))
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_RESPONSIBLE_DENIED')));
 			$this->controller->addError(static::class, 'Access to assign responsible denied');
@@ -118,7 +118,7 @@ class TaskSaveRule extends AbstractRule
 		}
 
 		// user can assign task to co-executors
-		if (!$this->canAssignTask($this->oldTask, RoleDictionary::ROLE_ACCOMPLICE, $this->newTask))
+		if (!$this->canAssignTask($this->oldTask, RoleDictionary::ROLE_ACCOMPLICE, $this->newTask, [$this->user->getUserId()]))
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_ACCOMPLICE_DENIED')));
 			$this->controller->addError(static::class, 'Access to assign accomplice denied');

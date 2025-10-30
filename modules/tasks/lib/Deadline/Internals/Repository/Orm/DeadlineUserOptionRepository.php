@@ -15,7 +15,7 @@ use Bitrix\Tasks\Deadline\Internals\Repository\Orm\Mapper\DeadlineUserOptionMapp
 class DeadlineUserOptionRepository implements DeadlineUserOptionRepositoryInterface
 {
 	public function __construct(
-		private readonly DeadlineUserOptionMapper $mapper,
+		private readonly DeadlineUserOptionMapper $deadlineUserOptionMapper,
 	)
 	{
 	}
@@ -36,6 +36,10 @@ class DeadlineUserOptionRepository implements DeadlineUserOptionRepositoryInterf
 					'IS_EXACT_DEADLINE_TIME',
 					'SKIP_NOTIFICATION_PERIOD',
 					'SKIP_NOTIFICATION_START_DATE',
+					'CAN_CHANGE_DEADLINE',
+					'MAX_DEADLINE_CHANGE_DATE',
+					'MAX_DEADLINE_CHANGES',
+					'REQUIRE_DEADLINE_CHANGE_REASON',
 				])
 				->where('USER_ID', $userId)
 				->exec()
@@ -44,26 +48,34 @@ class DeadlineUserOptionRepository implements DeadlineUserOptionRepositoryInterf
 
 		return
 			$ormModel
-				? $this->mapper->convertFromOrm($ormModel)
+				? $this->deadlineUserOptionMapper->convertFromOrm($ormModel)
 				: new DeadlineUserOption($userId)
 		;
 	}
 
-	public function save(DeadlineUserOption $entity): void
+	public function save(DeadlineUserOption $deadlineUserOption): void
 	{
 		$insertFields = [
-			'USER_ID' => $entity->userId,
-			'DEFAULT_DEADLINE' => $entity->defaultDeadlineInSeconds,
-			'IS_EXACT_DEADLINE_TIME' => $entity->isExactDeadlineTime,
-			'SKIP_NOTIFICATION_PERIOD' => $entity->skipNotificationPeriod->value,
-			'SKIP_NOTIFICATION_START_DATE' => $entity->skipNotificationStartDate,
+			'USER_ID' => $deadlineUserOption->userId,
+			'DEFAULT_DEADLINE' => $deadlineUserOption->defaultDeadlineInSeconds,
+			'IS_EXACT_DEADLINE_TIME' => $deadlineUserOption->isExactDeadlineTime,
+			'SKIP_NOTIFICATION_PERIOD' => $deadlineUserOption->skipNotificationPeriod->value,
+			'SKIP_NOTIFICATION_START_DATE' => $deadlineUserOption->skipNotificationStartDate,
+			'CAN_CHANGE_DEADLINE' => $deadlineUserOption->canChangeDeadline,
+			'MAX_DEADLINE_CHANGE_DATE' => $deadlineUserOption->maxDeadlineChangeDate,
+			'MAX_DEADLINE_CHANGES' => $deadlineUserOption->maxDeadlineChanges,
+			'REQUIRE_DEADLINE_CHANGE_REASON' => $deadlineUserOption->requireDeadlineChangeReason,
 		];
 
 		$updateFields = [
-			'DEFAULT_DEADLINE' => $entity->defaultDeadlineInSeconds,
-			'IS_EXACT_DEADLINE_TIME' => $entity->isExactDeadlineTime,
-			'SKIP_NOTIFICATION_PERIOD' => $entity->skipNotificationPeriod->value,
-			'SKIP_NOTIFICATION_START_DATE' => $entity->skipNotificationStartDate,
+			'DEFAULT_DEADLINE' => $deadlineUserOption->defaultDeadlineInSeconds,
+			'IS_EXACT_DEADLINE_TIME' => $deadlineUserOption->isExactDeadlineTime,
+			'SKIP_NOTIFICATION_PERIOD' => $deadlineUserOption->skipNotificationPeriod->value,
+			'SKIP_NOTIFICATION_START_DATE' => $deadlineUserOption->skipNotificationStartDate,
+			'CAN_CHANGE_DEADLINE' => $deadlineUserOption->canChangeDeadline,
+			'MAX_DEADLINE_CHANGE_DATE' => $deadlineUserOption->maxDeadlineChangeDate,
+			'MAX_DEADLINE_CHANGES' => $deadlineUserOption->maxDeadlineChanges,
+			'REQUIRE_DEADLINE_CHANGE_REASON' => $deadlineUserOption->requireDeadlineChangeReason,
 		];
 
 		$uniqueFields = ['USER_ID'];

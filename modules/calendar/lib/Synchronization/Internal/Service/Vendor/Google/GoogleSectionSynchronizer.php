@@ -135,7 +135,7 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 				$e
 			);
 		}
-		catch (BadRequestException|AccessDeniedException $e)
+		catch (BadRequestException|AccessDeniedException|NotFoundException $e)
 		{
 			throw new SynchronizerException(
 				sprintf('Google API exception: "%s"', $e->getMessage()),

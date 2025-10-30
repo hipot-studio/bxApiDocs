@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Service\User;
 
+use Bitrix\Intranet\Internal\Integration\Humanresources\TeamRepository;
 use Bitrix\Intranet\Service;
 use Bitrix\Intranet\Integration;
 use Bitrix\Intranet\Enum\UserRole;
@@ -21,12 +22,12 @@ class MiniProfileService
 	private Service\UserService $userService;
 	private Integration\Im\ChatFacade $chatFacade;
 	private Integration\HumanResources\Department $departmentService;
-	private Integration\HumanResources\Team $teamService;
+	private TeamRepository $teamService;
 
 	public function __construct(
 		Integration\Im\ChatFacade $chatFacade,
 		Integration\HumanResources\Department $departmentService,
-		Integration\HumanResources\Team $teamService,
+		TeamRepository $teamService,
 		?Service\UserService $userService = null,
 	)
 	{
@@ -286,7 +287,7 @@ class MiniProfileService
 		return \CUser::FormatName(
 			\CSite::GetNameFormat(false),
 			[
-				'LOGIN' => '',
+				'LOGIN' => $userModel->getLogin(),
 				'NAME' => $userModel->getName(),
 				'LAST_NAME' => $userModel->getLastName(),
 				'SECOND_NAME' => $userModel->getSecondName(),

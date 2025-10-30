@@ -26,7 +26,24 @@ class BoardApiService
 	{
 		if (is_null($baseUrl))
 		{
-			$baseUrl = Configuration::getApiHost();
+			if (Configuration::isUsingDocumentProxy())
+			{
+				$jwt = new JwtService();
+				$tokenFromProxy = $jwt->generateToken();
+				if (!$tokenFromProxy)
+				{
+					$tokenFromProxy = $jwt->generateToken();
+				}
+				$baseUrl = $jwt->getApiUrlFromProxy();
+				if (!$baseUrl)
+				{
+					throw new \Exception('Proxy inavailable');
+				}
+			}
+			else
+			{
+				$baseUrl = Configuration::getApiHost();
+			}
 		}
 		$this->baseUrl = $baseUrl;
 	}

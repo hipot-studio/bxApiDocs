@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Command\Task\Attention;
 
-use Bitrix\Tasks\Internals\UserOption\Option;
 use Bitrix\Tasks\V2\Internal\Service\Task\UserOptionService;
-use Bitrix\Tasks\V2\Internal\Entity;
 
 class UnpinTaskHandler
 {
@@ -19,12 +17,9 @@ class UnpinTaskHandler
 
 	public function __invoke(UnpinTaskCommand $command): void
 	{
-		$entity = new Entity\Task\UserOption(
-			userId: $command->userId,
+		$this->userOptionService->unpin(
 			taskId: $command->taskId,
-			code: Option::PINNED,
+			userId: $command->userId,
 		);
-
-		$this->userOptionService->delete($entity);
 	}
 }

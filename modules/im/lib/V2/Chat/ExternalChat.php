@@ -23,23 +23,24 @@ use Bitrix\Im\V2\Relation\ExternalChatRelations;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class ExternalChat extends GroupChat
 {
 	protected Config $config;
 
-	public function add(array $params, ?Context $context = null): Result
+	public function add(array $params, ?Context $context = null): AddResult
 	{
 		$beforeCreateEvent = new BeforeCreateEvent($params);
 		$beforeCreateEvent->send();
-		$result = $beforeCreateEvent->getResult();
+		$eventResult = $beforeCreateEvent->getResult();
 
-		if (!$result->isSuccess())
+		if (!$eventResult->isSuccess())
 		{
-			return $result;
+			return (new AddResult())->addErrors($eventResult->getErrors());
 		}
 
-		$params = $result->getResult()['fields'] ?? $params;
+		$params = $eventResult->getResult()['fields'] ?? $params;
 
 		$addResult = parent::add($params, $context);
 

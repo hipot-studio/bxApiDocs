@@ -24,7 +24,7 @@ class Deadline extends BaseController
 		$result = (new UpdateDeadlineCommand(
 			taskId: $task->getId(),
 			deadlineTs: $task->deadlineTs,
-			config: new UpdateConfig($this->userId))
+			updateConfig: new UpdateConfig($this->userId))
 		)->run();
 
 		if (!$result->isSuccess())

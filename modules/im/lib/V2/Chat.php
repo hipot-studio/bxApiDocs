@@ -63,6 +63,7 @@ use CIMContactList;
 use CIMNotify;
 use CPushManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 /**
  * Chat version #2
@@ -90,9 +91,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		IM_TYPE_OPEN = 'O',
 		IM_TYPE_COPILOT = 'A',
 		IM_TYPE_COLLAB = 'B',
-		IM_TYPE_EXTERNAL = 'X',
-		IM_TYPE_AI_ASSISTANT = 'Q',
-		IM_TYPE_AI_ASSISTANT_ENTITY = 'E'
+		IM_TYPE_EXTERNAL = 'X'
 	;
 
 	public const IM_TYPES = [
@@ -107,8 +106,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		self::IM_TYPE_COPILOT,
 		self::IM_TYPE_COLLAB,
 		self::IM_TYPE_EXTERNAL,
-		self::IM_TYPE_AI_ASSISTANT,
-		self::IM_TYPE_AI_ASSISTANT_ENTITY,
 	];
 
 	public const IM_TYPES_TRANSLATE = [
@@ -423,6 +420,16 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return !empty($this->getRecentSections());
 	}
 
+	public function needToSendTaskCreationMessage(): bool
+	{
+		return true;
+	}
+
+	public function needToSendCalendarCreationMessage(): bool
+	{
+		return true;
+	}
+
 	public function getRecentSections(): array
 	{
 		return $this->recentConfigManager->getRecentSectionsByChat($this);
@@ -433,9 +440,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $this->getRecentSections();
 	}
 
-	public function add(array $params): Result
+	public function add(array $params): AddResult
 	{
-		return new Result();
+		return new AddResult();
 	}
 
 	public function containsCollaber(): bool
@@ -3076,7 +3083,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		foreach ($usersToAdd as $userId)
 		{
-			$chatAnalytics->addAddUser();
+			$chatAnalytics->addAddUser($config);
 		}
 	}
 
@@ -3181,6 +3188,19 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 					'NEW_USERS' => $usersToAdd,
 				]));
 			}
+		}
+
+		// Send universal event for all chat types
+		if (!empty($usersToAdd))
+		{
+			$event = new \Bitrix\Main\Event('im', 'OnChatUserAdd', [
+				'CHAT_ID' => $this->getId(),
+				'NEW_USERS' => $usersToAdd,
+				'CHAT' => $this,
+				'ENTITY_TYPE' => $this->getEntityType(),
+				'ENTITY_ID' => $this->getEntityId(),
+			]);
+			$event->send();
 		}
 	}
 

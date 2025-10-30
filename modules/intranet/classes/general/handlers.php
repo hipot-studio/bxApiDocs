@@ -7,6 +7,7 @@ use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Event;
 use Bitrix\Intranet\Internals\InvitationTable;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UserTable;
 
 IncludeModuleLangFile(__FILE__);
@@ -1498,6 +1499,12 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 		)
 		{
 			define('AIR_SITE_TEMPLATE', true);
+		}
+
+		$isBitrix24Cloud = ModuleManager::isModuleInstalled('bitrix24');
+		if (defined('AIR_SITE_TEMPLATE') && ($isBitrix24Cloud && !$USER->isAdmin() || defined('SKIP_SHOW_PANEL')))
+		{
+			return;
 		}
 
 		if (self::isSkipWizardButton())

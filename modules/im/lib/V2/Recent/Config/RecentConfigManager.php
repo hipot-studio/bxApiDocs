@@ -74,8 +74,6 @@ class RecentConfigManager
 	private function loadInternal(): void
 	{
 		$this->configByTypes[ExtendedType::Copilot->value] = new RecentConfig(true, true);
-		$this->configByTypes[ExtendedType::AiAssistant->value] = new RecentConfig(true, true);
-		$this->configByTypes[ExtendedType::AiAssistantEntity->value] = new RecentConfig(false, false);
 		$this->configByTypes[ExtendedType::Collab->value] = new RecentConfig(true, true);
 		$this->configByTypes[ExtendedType::Lines->value] = new RecentConfig(false, true);
 		$this->configByTypes[ExtendedType::Comment->value] = new RecentConfig(false, false);

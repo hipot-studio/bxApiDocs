@@ -25,7 +25,7 @@ class ViewCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$viewService = Container::getInstance()->getViewService();
 

@@ -332,7 +332,7 @@ class General extends Base
 				)
 				->whereIn('USER_ID', $userList)
 				->where('USER.ACTIVE', 'Y')
-				->where('USER.IS_REAL_USER', 'Y')
+				->where('USER.REAL_USER', 'expr', true)
 		;
 		$notifySchemas = [
 			'simple' => [],
@@ -387,7 +387,7 @@ class General extends Base
 				)
 				->whereIn('USER_ID', $userList)
 				->where('USER.ACTIVE', 'Y')
-				->where('USER.IS_REAL_USER', 'Y')
+				->where('USER.REAL_USER', 'expr', true)
 				->whereExpr("COALESCE(%s, '$defaultSettingValue') = 'Y'", ['OPTION_STATE.VALUE'])
 		;
 

@@ -122,6 +122,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		return $this->getDiskFile()->getId();
 	}
 
+	public function getOriginalFileId(): int
+	{
+		return (int)$this->getDiskFile()?->getFileId();
+	}
+
 	public function getChatId(): ?int
 	{
 		return $this->chatId;

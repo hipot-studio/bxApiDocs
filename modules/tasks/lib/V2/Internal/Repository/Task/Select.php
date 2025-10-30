@@ -13,6 +13,11 @@ class Select
 		public readonly bool $members = false,
 		public readonly bool $checkLists = false,
 		public readonly bool $chat = false,
+		public readonly bool $crm = false,
+		public readonly bool $tags = false,
+		public readonly bool $favorite = false,
+		public readonly bool $options = false,
+		public readonly bool $parameters = false,
 	)
 	{
 

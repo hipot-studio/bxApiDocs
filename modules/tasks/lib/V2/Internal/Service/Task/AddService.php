@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
+use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -51,9 +52,15 @@ class AddService
 		
 	}
 
+	/**
+	 * @throws TaskNotExistsException
+	 * @throws TaskAddException
+	 */
 	public function add(Entity\Task $task, AddConfig $config): array
 	{
 		$this->loadMessages();
+
+		$source = $task->source;
 
 		[$task, $fields] = (new EntityFieldService())->prepare($task, $config);
 
@@ -105,7 +112,7 @@ class AddService
 
 		(new Pin($config))($fields);
 
-		(new RunIntegration($config))($fields);
+		(new RunIntegration($config))($fields, $source);
 
 		(new SendAnalytics($config))($fields);
 
@@ -141,5 +148,6 @@ class AddService
 	private function loadMessages(): void
 	{
 		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/task.php');
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/handler/taskfieldhandler.php');
 	}
 }

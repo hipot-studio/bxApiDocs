@@ -267,9 +267,13 @@ class ReadService
 		$this->viewedService->deleteByMessageIdForAll($message->getMessageId());
 	}
 
-	public function deleteByMessages(MessageCollection $messages, ?array $invalidateCacheUsers = null): void
+	public function deleteByMessages(
+		MessageCollection $messages,
+		?array $invalidateCacheUsers = null,
+		?array $overflowResetChatIds = null
+	): void
 	{
-		$this->counterService->deleteByMessagesForAll($messages, $invalidateCacheUsers);
+		$this->counterService->deleteByMessagesForAll($messages, $invalidateCacheUsers, $overflowResetChatIds);
 		$this->viewedService->deleteByMessagesIdsForAll($messages->getIds());
 	}
 
@@ -278,12 +282,6 @@ class ReadService
 		$this->counterService->deleteByChatId($chatId);
 		$this->viewedService->deleteByChatId($chatId);
 	}
-
-	/*public function deleteByMessageIds(array $messageIds): void
-	{
-		$this->counterService->deleteByMessageIdsForAll($messageIds);
-		$this->viewedController->deleteByMessageIdsForAll($messageIds);
-	}*/
 
 	public function getReadStatusesByMessageIds(array $messageIds): array
 	{

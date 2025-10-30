@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Link;
 
-use Bitrix\Tasks\DI\Attribute\Inject;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\UrlService;
 use Bitrix\Tasks\V2\Internal\Service\UserService;
 use CTaskNotifications;
 
@@ -15,6 +15,7 @@ class LinkService
 {
 	public function __construct(
 		private readonly UserService $userService,
+		private readonly UrlService $urlService,
 		private readonly UserRepositoryInterface $userRepository,
 	)
 	{
@@ -36,7 +37,7 @@ class LinkService
 
 		if ($this->userService->isEmail($user))
 		{
-			return tasksServerName() . $this->getPublic($taskId);
+			return $this->urlService->getHostUrl() . $this->getPublic($taskId);
 		}
 
 		return (string)CTaskNotifications::GetNotificationPath(['ID' => $userId], $taskId);

@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Tasks\Internals;
 
 use Bitrix\Main;
@@ -8,12 +9,8 @@ use Bitrix\Tasks\Internals\Notification\UserRepositoryInterface;
 use Bitrix\Tasks\Internals\Task\UserOptionTable;
 use Bitrix\Tasks\Internals\UserOption\Option;
 use Bitrix\Tasks\Util\Result;
-use Bitrix\Tasks\V2\Public\Command\Task\Attention\MuteTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Attention\PinInGroupTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Attention\PinTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Attention\UnmuteTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Attention\UnpinInGroupTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Attention\UnpinTaskCommand;
+use Bitrix\Tasks\V2\Internal\Exception\Task\UserOptionException;
+use Bitrix\Tasks\V2\Internal\Service\Task\UserOptionService;
 use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Exception;
@@ -87,7 +84,7 @@ class UserOption
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			return Container::getInstance()->getUserOptionRepository()->isSet($option, $taskId, $userId);
+			return Container::getInstance()->getTaskUserOptionRepository()->isSet($option, $taskId, $userId);
 		}
 
 		return static::isOption($option) && in_array($option, static::getOptions($taskId, $userId), true);
@@ -102,7 +99,7 @@ class UserOption
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			return Container::getInstance()->getUserOptionRepository()->get($taskId, $userId)->getCodeList();
+			return Container::getInstance()->getTaskUserOptionRepository()->get($taskId, $userId)->getCodeList();
 		}
 
 		if (
@@ -136,33 +133,53 @@ class UserOption
 	/**
 	 * @deprecated
 	 * @TasksV2
-	 * @use MuteTaskCommand
-	 * @use PinTaskCommand
-	 * @use PinInGroupTaskCommand
+	 * @use UserOptionService
 	 */
 	public static function add(int $taskId, int $userId, int $option): Result
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			$result = new \Bitrix\Tasks\V2\Internal\Result\Result();
-
-			if ($option === Option::MUTED)
-			{
-				$result = (new MuteTaskCommand($taskId, $userId))->run();
-			}
-			elseif ($option === Option::PINNED)
-			{
-				$result = (new PinTaskCommand($taskId, $userId))->run();
-			}
-			elseif ($option === Option::PINNED_IN_GROUP)
-			{
-				$result = (new PinInGroupTaskCommand($taskId, $userId))->run();
-			}
-
 			$legacyResult = new Result();
-			$legacyResult->addError($result->getError(), 'Adding to table failed.');
 
-			return $legacyResult;
+			$service = Container::getInstance()->getUserOptionService();
+			try
+			{
+				if ($option === Option::MUTED)
+				{
+					$service->mute(
+						taskId: $taskId,
+						userId: $userId
+					);
+				}
+				elseif ($option === Option::PINNED)
+				{
+					$service->pin(
+						taskId: $taskId,
+						userId: $userId
+					);
+				}
+				elseif ($option === Option::PINNED_IN_GROUP)
+				{
+					$service->pinInGroup(
+						taskId: $taskId,
+						userId: $userId
+					);
+				}
+
+				return $legacyResult;
+			}
+			catch (Exception $e)
+			{
+				if ($e instanceof UserOptionException)
+				{
+					$legacyResult->addError(2, 'Adding to table failed.');
+				}
+
+				$legacyResult->addError(0, 'Some parameter is wrong.');
+				$legacyResult->addError(2, $e->getMessage());
+
+				return $legacyResult;
+			}
 		}
 
 		static::onBeforeOptionChanged($taskId, $userId, $option);
@@ -208,36 +225,53 @@ class UserOption
 	/**
 	 * @deprecated
 	 * @TasksV2
-	 * @use UnmuteTaskCommand
-	 * @use UnpinTaskCommand
-	 * @use UnpinInGroupTaskCommand
+	 * @use UserOptionService
 	 */
 	public static function delete(int $taskId, int $userId, int $option): Result
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			$result = new \Bitrix\Tasks\V2\Internal\Result\Result();
-
-			if ($option === Option::MUTED)
-			{
-				$result = (new UnmuteTaskCommand($taskId, $userId))->run();
-			}
-			elseif ($option === Option::PINNED)
-			{
-				$result = (new UnpinTaskCommand($taskId, $userId))->run();
-			}
-			elseif ($option === Option::PINNED_IN_GROUP)
-			{
-				$result = (new UnpinInGroupTaskCommand($taskId, $userId))->run();
-			}
-
 			$legacyResult = new Result();
-			if (!$result->isSuccess())
-			{
-				$legacyResult->addError($result->getError(), 'Adding to table failed.');
-			}
 
-			return $legacyResult;
+			$service = Container::getInstance()->getUserOptionService();
+			try
+			{
+				if ($option === Option::MUTED)
+				{
+					$service->unmute(
+						taskId: $taskId,
+						userId: $userId
+					);
+				}
+				elseif ($option === Option::PINNED)
+				{
+					$service->unpin(
+						taskId: $taskId,
+						userId: $userId
+					);
+				}
+				elseif ($option === Option::PINNED_IN_GROUP)
+				{
+					$service->unpinInGroup(
+						taskId: $taskId,
+						userId: $userId
+					);
+				}
+
+				return $legacyResult;
+			}
+			catch (Exception $e)
+			{
+				if ($e instanceof UserOptionException)
+				{
+					$legacyResult->addError(1, 'Deleting to table failed.');
+				}
+
+				$legacyResult->addError(0, 'Some parameter is wrong.');
+				$legacyResult->addError(1, $e->getMessage());
+
+				return $legacyResult;
+			}
 		}
 
 		static::onBeforeOptionChanged($taskId, $userId, $option);
@@ -282,7 +316,7 @@ class UserOption
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			Container::getInstance()->getUserOptionRepository()->delete(taskId: $taskId);
+			Container::getInstance()->getTaskUserOptionRepository()->delete(taskId: $taskId);
 
 			return;
 		}
@@ -303,7 +337,7 @@ class UserOption
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			Container::getInstance()->getUserOptionRepository()->delete(taskId: $taskId, userId: $userId);
+			Container::getInstance()->getTaskUserOptionRepository()->delete(taskId: $taskId, userId: $userId);
 
 			return;
 		}
@@ -411,7 +445,7 @@ class UserOption
 	{
 		if (FormV2Feature::isOn('option'))
 		{
-			Container::getInstance()->getUserOptionRepository()->delete(
+			Container::getInstance()->getTaskUserOptionRepository()->delete(
 				codes: static::REMOVE_ON_USER_ROLE_CHANGED,
 				taskId: $taskId,
 				userId: $userId,

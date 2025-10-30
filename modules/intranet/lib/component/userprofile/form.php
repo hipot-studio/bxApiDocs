@@ -277,6 +277,14 @@ class Form
 				'editable' => false,
 				'multiple' => true,
 			];
+
+			$fields[] = [
+				'title' => Loc::getMessage('INTRANET_USER_PROFILE_FIELD_TEAM'),
+				'name' => 'TEAM',
+				'type' => 'text',
+				'editable' => false,
+				'multiple' => true,
+			];
 		}
 
 		$fields[] = array(
@@ -728,6 +736,7 @@ class Form
 				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_ADDITIONS"),
 				'type' => 'section',
 				'elements' => [
+					['name' => 'TEAM'],
 					['name' => 'DEPARTMENT'],
 					['name' => 'DEPARTMENT_HEAD'],
 					['name' => 'PERSONAL_CITY'],
@@ -774,6 +783,7 @@ class Form
 			"PERSONAL_GENDER" => $result["User"]["PERSONAL_GENDER"],
 			"PERSONAL_WWW" => $result["User"]["PERSONAL_WWW"],
 			"UF_DEPARTMENT" => $result["User"]["UF_DEPARTMENT"],
+			"TEAM" => $result["User"]["TEAM"],
 			'DEPARTMENT' => $result['User']['DEPARTMENT'],
 			"DEPARTMENT_HEAD" => $result["User"]["DEPARTMENT_HEAD"],
 			"PERSONAL_MOBILE" => $result["User"]["PERSONAL_MOBILE"],

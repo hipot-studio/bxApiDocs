@@ -28,6 +28,7 @@ class ActionDictionary
 	public const ACTION_TASK_RENEW = 'task_renew';
 	public const ACTION_TASK_CREATE = 'task_create';
 	public const ACTION_TASK_DEADLINE = 'task_deadline';
+	public const ACTION_TASK_DATE_PLAN = 'task_date_plan';
 	public const ACTION_TASK_CHANGE_DIRECTOR = 'task_change_director';
 	public const ACTION_TASK_CHANGE_RESPONSIBLE = 'task_change_responsible';
 	public const ACTION_TASK_CHANGE_ACCOMPLICES = 'task_change_accomplices';
@@ -38,6 +39,10 @@ class ActionDictionary
 	public const ACTION_TASK_REMINDER = 'task_reminder';
 	public const ACTION_TASK_ADD_AUDITORS = 'task_add_auditors';
 	public const ACTION_TASK_DEPARTMENT = 'task_department';
+	public const ACTION_TASK_COPY = 'task_copy';
+
+	public const ACTION_TASK_ATTACH_FILE = 'task_attach_file';
+	public const ACTION_TASK_DETACH_FILE = 'task_detach_file';
 
 	public const ACTION_TASK_ELAPSED_TIME = 'task_elapsed_time';
 	public const ACTION_TASK_FAVORITE_ADD = 'task_favorite_add';
@@ -48,6 +53,8 @@ class ActionDictionary
 	public const ACTION_CHECKLIST_EDIT = 'checklist_edit';
 	public const ACTION_CHECKLIST_SAVE = 'checklist_save';
 	public const ACTION_CHECKLIST_TOGGLE = 'checklist_toggle';
+
+	public const ACTION_TASK_SAVE_AS_TEMPLATE = 'task_save_as_template';
 
 	public const ACTION_TEMPLATE_READ = 'template_read';
 	public const ACTION_TEMPLATE_EDIT = 'template_edit';

@@ -2,6 +2,7 @@
 namespace Bitrix\Im\Model;
 
 use Bitrix\Im\Text;
+use Bitrix\Im\V2\Common\DeleteTrait;
 use Bitrix\Main;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\MapBuilder;
@@ -48,6 +49,8 @@ use Bitrix\Main\Search\MapBuilder;
 
 class MessageTable extends Main\Entity\DataManager
 {
+	use DeleteTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -343,23 +346,6 @@ class MessageTable extends Main\Entity\DataManager
 		}
 
 		return $builder->build();
-	}
-
-	/**
-	 * Deletes rows by filter.
-	 * @param array $filter Filter does not look like filter in getList. It depends by current implementation.
-	 * @return void
-	 */
-	public static function deleteBatch(array $filter)
-	{
-		$whereSql = \Bitrix\Main\Entity\Query::buildFilterSql(static::getEntity(), $filter);
-
-		if ($whereSql <> '')
-		{
-			$tableName = static::getTableName();
-			$connection = Main\Application::getConnection();
-			$connection->queryExecute("DELETE FROM {$tableName} WHERE {$whereSql}");
-		}
 	}
 
 	public static function withUnreadOnly(Query $query): void

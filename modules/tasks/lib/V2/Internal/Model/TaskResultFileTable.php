@@ -9,6 +9,22 @@ use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 
+/**
+ * Class TaskResultFileTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_TaskResultFile_Query query()
+ * @method static EO_TaskResultFile_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_TaskResultFile_Result getById($id)
+ * @method static EO_TaskResultFile_Result getList(array $parameters = [])
+ * @method static EO_TaskResultFile_Entity getEntity()
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultFile createObject($setDefaultValues = true)
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultFile_Collection createCollection()
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultFile wakeUpObject($row)
+ * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultFile_Collection wakeUpCollection($rows)
+ */
 class TaskResultFileTable extends DataManager
 {
 	use DeleteByFilterTrait;

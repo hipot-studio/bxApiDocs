@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service;
 
-use Bitrix\Tasks\Util\User;
+use CSite;
+use CUser;
 
 class NameService
 {
 	public function format(array $user): string
 	{
-		return User::formatName($user);
+		return CUser::formatName(
+			CSite::GetNameFormat(),
+			$user,
+			true,
+			false,
+		);
 	}
 }

@@ -31,21 +31,30 @@ class SetDefaultDeadlineHandler
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function __invoke(SetDefaultDeadlineCommand $command): void
+	public function __invoke(SetDefaultDeadlineCommand $setDefaultDeadlineCommand): void
 	{
-		$deadlineUserOption = $this->deadlineUserOptionRepository->getByUserId($command->entity->userId);
+		$deadlineUserOption = $this->deadlineUserOptionRepository->getByUserId($setDefaultDeadlineCommand->entity->userId);
 
-		$deadlineUserOption->defaultDeadlineInSeconds = $command->entity->defaultDeadlineInSeconds;
-		$deadlineUserOption->isExactDeadlineTime = $command->entity->isExactDeadlineTime;
+		$deadlineUserOption->defaultDeadlineInSeconds = $setDefaultDeadlineCommand->entity->defaultDeadlineInSeconds;
+		$deadlineUserOption->isExactDeadlineTime = $setDefaultDeadlineCommand->entity->isExactDeadlineTime;
+
+		$deadlineUserOption->canChangeDeadline = $setDefaultDeadlineCommand->entity->canChangeDeadline;
+		$deadlineUserOption->maxDeadlineChangeDate = $setDefaultDeadlineCommand->entity->maxDeadlineChangeDate;
+		$deadlineUserOption->maxDeadlineChanges = $setDefaultDeadlineCommand->entity->maxDeadlineChanges;
+		$deadlineUserOption->requireDeadlineChangeReason = $setDefaultDeadlineCommand->entity->requireDeadlineChangeReason;
 
 		$this->deadlineUserOptionRepository->save($deadlineUserOption);
 
 		$this->sendPush(
-			$command->entity->userId,
+			$setDefaultDeadlineCommand->entity->userId,
 			PushCommand::DEFAULT_DEADLINE_UPDATED,
 			[
-				'deadline' => $command->entity->defaultDeadlineInSeconds,
+				'deadline' => $setDefaultDeadlineCommand->entity->defaultDeadlineInSeconds,
 				'defaultDeadlineDate' => $deadlineUserOption->toArray()['defaultDeadlineDate'],
+				'canChangeDeadline' => $setDefaultDeadlineCommand->entity->canChangeDeadline,
+				'maxDeadlineChangeDate' => $setDefaultDeadlineCommand->entity->maxDeadlineChangeDate ?: null,
+				'maxDeadlineChanges' => $setDefaultDeadlineCommand->entity->maxDeadlineChanges,
+				'requireDeadlineChangeReason' => $setDefaultDeadlineCommand->entity->requireDeadlineChangeReason,
 			],
 		);
 	}

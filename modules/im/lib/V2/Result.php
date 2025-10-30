@@ -2,6 +2,8 @@
 
 namespace Bitrix\Im\V2;
 
+use Bitrix\Main\DB\SqlExpression;
+
 /**
  * @template T
  */
@@ -27,6 +29,17 @@ class Result extends \Bitrix\Main\Result
 	public function getResult()
 	{
 		return parent::getData()['RESULT'] ?? null;
+	}
+
+	public function addToResult(string $key, mixed $value): static
+	{
+		if (!$value instanceof SqlExpression)
+		{
+			$this->hasResult = true;
+			$this->data['RESULT'][$key] = $value;
+		}
+
+		return $this;
 	}
 
 	/**

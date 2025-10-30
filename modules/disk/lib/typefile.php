@@ -109,6 +109,7 @@ final class TypeFile
 			case 'mp3':
 			case 'ogg':
 			case 'wav':
+			case 'm4a':
 				return self::AUDIO;
 
 			case 'vsd':

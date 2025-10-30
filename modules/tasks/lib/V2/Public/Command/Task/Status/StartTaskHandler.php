@@ -13,7 +13,6 @@ class StartTaskHandler
 {
 	public function __construct(
 		private readonly StatusService $statusService,
-		private readonly ConsistencyResolverInterface $consistencyResolver,
 	)
 	{
 
@@ -21,13 +20,6 @@ class StartTaskHandler
 
 	public function __invoke(StartTaskCommand $command): Entity\Task
 	{
-		[$task, $fields] = $this->consistencyResolver->resolve('task.start')->wrap(
-			fn () => $this->statusService->start($command->taskId, $command->config)
-		);
-
-		// this action is outside of consistency because it is containing nested transactions
-		(new UpdateUserFields($command->config))($fields, $command->taskId);
-
-		return $task;
+		return $this->statusService->start($command->taskId, $command->config);
 	}
 }

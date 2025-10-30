@@ -18,8 +18,8 @@ class History extends BaseController
 	#[CloseSession]
 	public function tailAction(
 		#[Permission\Read] Entity\Task $task,
-		TaskLogRepositoryInterface     $historyRepository,
-		int                            $offset = 0
+		TaskLogRepositoryInterface $historyRepository,
+		int $offset = 0
 	): Arrayable
 	{
 		return $historyRepository->tail($task->id, $offset);

@@ -9,7 +9,6 @@ use Bitrix\Tasks\Update\AgentInterface;
 use Bitrix\Tasks\Update\AgentTrait;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderReadRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\ReminderRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\ReminderService;
 
 final class Reminder implements AgentInterface
@@ -19,7 +18,6 @@ final class Reminder implements AgentInterface
 	public function __construct(
 		private readonly ReminderService $reminderService,
 		private readonly ReminderReadRepositoryInterface $reminderReadRepository,
-		private readonly ReminderRepositoryInterface $reminderRepository,
 	)
 	{
 
@@ -30,7 +28,6 @@ final class Reminder implements AgentInterface
 		$agent = new self(
 			Container::getInstance()->getReminderService(),
 			Container::getInstance()->getReminderReadRepository(),
-			Container::getInstance()->getReminderRepository(),
 		);
 
 		$agent->run();

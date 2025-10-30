@@ -5,112 +5,60 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Infrastructure\Controller;
 
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Engine\AutoWire\Parameter;
+use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\JsonController;
-use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\DI\Container;
+use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
+use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Infrastructure\Controller\ActionFilter\IsEnabledFilter;
-use Bitrix\Tasks\V2\Infrastructure\Controller\Trait\AttributeAccessTrait;
-use Bitrix\Tasks\V2\Infrastructure\Controller\Trait\AttributeAutowireTrait;
-use Bitrix\Tasks\V2\Infrastructure\Controller\Trait\AttributePrefilterTrait;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
-use Bitrix\Tasks\V2\Internal\Access\Context\AccessContextTrait;
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Repository\DiskFileRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\FlowRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\StageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TemplateRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
-use Bitrix\Tasks\V2\Public\Provider\CheckListProvider;
-use Bitrix\Tasks\V2\Public\Provider\ReminderProvider;
-use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
-use Bitrix\Tasks\V2\Public\Provider\TaskResultProvider;
-use Bitrix\Tasks\V2\Public\Provider\TaskFromTemplateProvider;
+use Bitrix\Tasks\V2\Internal\Repository\UserOptionRepositoryInterface;
+use ReflectionAttribute;
+use ReflectionMethod;
 
 abstract class BaseController extends JsonController
 {
-	use AttributeAccessTrait;
-	use AccessContextTrait;
-	use AttributeAutowireTrait;
+	protected ?Context $context = null;
 
 	protected int $userId = 0;
 
 	public function getAutoWiredParameters(): array
 	{
-		return [
-			new ExactParameter(
-				Entity\Task::class,
-				'task',
-				function (string $className, array $task): ?EntityInterface
-				{
-					return $this->getWithAccess($this, 'task', Entity\Task::mapFromArray($task));
-				}
-			),
-			new ExactParameter(
-				Entity\Template::class,
-				'template',
-				function (string $className, array $template): ?EntityInterface
-				{
-					return $this->getWithAccess($this, 'template', Entity\Template::mapFromArray($template));
-				}
-			),
-			new ExactParameter(
-				Entity\Group::class,
-				'group',
-				function (string $className, array $group)
-				{
-					return $this->getWithAccess($this, 'group', Entity\Group::mapFromArray($group));
-				}
-			),
-			new ExactParameter(
-				Entity\Flow::class,
-				'flow',
-				function (string $className, array $flow)
-				{
-					return $this->getWithAccess($this, 'flow', Entity\Flow::mapFromArray($flow));
-				}
-			),
-			new ExactParameter(
-				Entity\Result::class,
-				'result',
-				function (string $className, array $result)
-				{
-					return $this->getWithAccess($this, 'result', Entity\Result::mapFromArray($result));
-				}
-			),
-			new ExactParameter(
-				Entity\Task\Reminder::class,
-				'reminder',
-				function (string $className, array $reminder)
-				{
-					return $this->getWithAccess($this, 'reminder', Entity\Task\Reminder::mapFromArray($reminder));
-				}
-			),
-			$this->getInjectionParameter(TaskRepositoryInterface::class),
-			$this->getInjectionParameter(TemplateRepositoryInterface::class),
-			$this->getInjectionParameter(StageRepositoryInterface::class),
-			$this->getInjectionParameter(TaskLogRepositoryInterface::class),
-			$this->getInjectionParameter(TaskProvider::class),
-			$this->getInjectionParameter(GroupRepositoryInterface::class),
-			$this->getInjectionParameter(FlowRepositoryInterface::class),
-			$this->getInjectionParameter(UserRepositoryInterface::class),
-			$this->getInjectionParameter(DiskFileRepositoryInterface::class),
-			$this->getInjectionParameter(TaskResultProvider::class),
-			$this->getInjectionParameter(LinkService::class),
-			$this->getInjectionParameter(TaskRightService::class),
-			$this->getInjectionParameter(CheckListProvider::class),
-			$this->getInjectionParameter(TaskFromTemplateProvider::class),
-			$this->getInjectionParameter(ReminderProvider::class),
-		];
+		return array_merge(
+			$this->getExactParameters(),
+			$this->getInjectionParameters(),
+		);
 	}
 
 	public function getDefaultPreFilters(): array
 	{
-		return array_merge(parent::getDefaultPreFilters(), [new IsEnabledFilter()]);
+		return array_merge(
+			parent::getDefaultPreFilters(),
+			[new IsEnabledFilter()]
+		);
+	}
+
+	public function getAccessContext(): Context
+	{
+		return $this->context ?? new Context(0);
+	}
+
+	public function setAccessContext(Context $context): static
+	{
+		$this->context = $context;
+
+		return $this;
 	}
 
 	protected function init(): void
@@ -122,5 +70,147 @@ abstract class BaseController extends JsonController
 		);
 
 		parent::init();
+	}
+
+	protected function getInjectionParameter(string $className): Parameter
+	{
+		return new Parameter(
+			$className,
+			static fn (): object => Container::getInstance()->get($className),
+		);
+	}
+
+	protected function getExactParameters(): array
+	{
+		return [
+			new ExactParameter(
+				Entity\Task::class,
+				'task',
+				fn (string $className, array $task): ?EntityInterface
+				=> $this->getWithAccess($this, 'task', Entity\Task::mapFromArray($task)),
+			),
+			new ExactParameter(
+				Entity\Task::class,
+				'task',
+				fn (string $className, int $taskId): ?EntityInterface
+				=> $this->getWithAccess($this, 'task', new Entity\Task(id: $taskId)),
+			),
+			new ExactParameter(
+				Entity\Template::class,
+				'template',
+				fn (string $className, array $template): ?EntityInterface
+				=> $this->getWithAccess($this, 'template', Entity\Template::mapFromArray($template)),
+			),
+			new ExactParameter(
+				Entity\Group::class,
+				'group',
+				fn (string $className, array $group): ?EntityInterface
+				=> $this->getWithAccess($this, 'group', Entity\Group::mapFromArray($group)),
+			),
+			new ExactParameter(
+				Entity\Flow::class,
+				'flow',
+				fn (string $className, array $flow): ?EntityInterface
+				=> $this->getWithAccess($this, 'flow', Entity\Flow::mapFromArray($flow)),
+			),
+			new ExactParameter(
+				Entity\Result::class,
+				'result',
+				fn (string $className, array $result): ?EntityInterface
+				=> $this->getWithAccess($this, 'result', Entity\Result::mapFromArray($result)),
+			),
+			new ExactParameter(
+				Entity\Task\Reminder::class,
+				'reminder',
+				fn (string $className, array $reminder): ?EntityInterface
+				=> $this->getWithAccess($this, 'reminder', Entity\Task\Reminder::mapFromArray($reminder)),
+			),
+		];
+	}
+
+	protected function getInjectionParameters(): array
+	{
+		return [
+			$this->getInjectionParameter(TemplateRepositoryInterface::class),
+			$this->getInjectionParameter(StageRepositoryInterface::class),
+			$this->getInjectionParameter(TaskLogRepositoryInterface::class),
+			$this->getInjectionParameter(GroupRepositoryInterface::class),
+			$this->getInjectionParameter(FlowRepositoryInterface::class),
+			$this->getInjectionParameter(UserOptionRepositoryInterface::class),
+		];
+	}
+
+	protected function getWithAccess(
+		Controller $controller,
+		string $parameterName,
+		EntityInterface $entity,
+		array $parameters = [],
+	): ?EntityInterface
+	{
+		$request = $controller->getRequest();
+		$parameters = array_merge(
+			$request->toArray(),
+			$request->getJsonList()->toArray(),
+			$parameters
+		);
+
+		$accessAttributes = $this->getArgumentAccessAttributes($controller, $parameterName);
+		foreach ($accessAttributes as $accessAttribute)
+		{
+			/** @var AttributeAccessInterface $accessAttribute */
+			if (!$accessAttribute->check($entity, $this->getAccessContext(), $parameters))
+			{
+				if ($accessAttribute instanceof AccessUserErrorInterface)
+				{
+					return $this->buildForbiddenResponse($accessAttribute->getUserError());
+				}
+
+				return $this->buildForbiddenResponse();
+			}
+		}
+
+		return $entity;
+	}
+
+	protected function getArgumentAccessAttributes(Controller $controller, string $parameterName): array
+	{
+		$action = $this->getControllerAction($controller);
+		$reflector = new ReflectionMethod($controller, $action);
+
+		$args = $reflector->getParameters();
+
+		$accessAttributes = [];
+		foreach ($args as $arg)
+		{
+			if ($arg->getName() !== $parameterName)
+			{
+				continue;
+			}
+
+			return array_map(
+				static fn (ReflectionAttribute $attribute): AttributeAccessInterface => $attribute->newInstance(),
+				$arg->getAttributes(AttributeAccessInterface::class, ReflectionAttribute::IS_INSTANCEOF)
+			);
+		}
+
+		return $accessAttributes;
+	}
+
+	protected function buildForbiddenResponse(?Error $error = null): mixed
+	{
+		$error ??= new Error(Loc::getMessage('TASKS_ACCESS_ERROR_DEFAULT') ?? 'Access denied');
+
+		$this->errorCollection->setError($error);
+
+		return null;
+	}
+
+	protected function getControllerAction(Controller $controller): string
+	{
+		$action = $controller->getRequest()->get('action');
+		$parts = explode('.', $action);
+		$method = end($parts);
+
+		return $method . 'Action';
 	}
 }

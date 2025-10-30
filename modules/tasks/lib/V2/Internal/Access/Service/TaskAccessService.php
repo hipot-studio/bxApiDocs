@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Access\Service;
 
 use Bitrix\Main\Type\Collection;
-use Bitrix\Socialnetwork\Permission\OperationService;
 use Bitrix\Tasks\Access\ActionDictionary;
-use Bitrix\Tasks\DI\Attribute\Inject;
 use Bitrix\Tasks\V2\Internal\Access\Factory\ControllerFactoryInterface;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\OperationAccessService;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
@@ -21,9 +20,7 @@ class TaskAccessService
 		private readonly TaskRepositoryInterface    $taskRepository,
 		private readonly GroupRepositoryInterface   $groupRepository,
 		private readonly UserRepositoryInterface    $userRepository,
-		#[Inject(externalModule: 'socialnetwork')]
-		private readonly OperationService           $operationService,
-		#[Inject(locatorCode: 'tasks.access.controller.factory')]
+		private readonly OperationAccessService           $operationService,
 		private readonly ControllerFactoryInterface $controllerFactory,
 	)
 	{

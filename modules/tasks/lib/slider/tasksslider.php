@@ -59,7 +59,7 @@ class TasksSlider implements TasksSliderInterface
 							{$this->getWidth()}
 							printable: true,
 							events: {
-								onClose: function() {
+								onCloseComplete: function() {
 									location.href = '{$this->closeUrl}';
 								},
 							},

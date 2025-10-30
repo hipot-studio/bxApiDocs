@@ -43,6 +43,7 @@ use Bitrix\Main\Search\Content;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\UiTour;
 use Bitrix\Main\UI\Viewer\ItemAttributes;
+use Bitrix\Main\Web\Cookie;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork;
 use Bitrix\Main\DI\ServiceLocator;
@@ -62,6 +63,7 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 	const FILTER_SHARED_TO_ME       = 3;
 
 	const COLLABER_TOUR_ON_ADD_BUTTON_ID =  'tour-guide-on-add-button-for-collaber';
+	const READONLY_COLLAB_FOLDER_STATE_COOKIE_NAME = 'DISK_IS_READONLY_COLLAB_FOLDER';
 
 	protected $componentId = 'folder_list';
 
@@ -79,6 +81,8 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 	private $templateBizProc;
 	/** @var CollabService */
 	private $collabService;
+	private bool $isUserCollaber = false;
+	private ?Cookie $readOnlyCollabFolderStateCookie = null;
 
 	protected function processBeforeAction($actionName)
 	{
@@ -102,6 +106,7 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 		}
 
 		$this->collabService = new CollabService();
+		$this->isUserCollaber = $this->isCollaber();
 
 		return true;
 	}
@@ -265,6 +270,9 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 				$avatar = null;
 			}
 		}
+		$canAddInCurrentFolder = $this->folder->canAdd($securityContext);
+
+		$this->setUiFlagForReadonlyCollabFolderState($canAddInCurrentFolder);
 
 		$this->arResult = array(
 			'GRID_INFORMATION' => $this->information,
@@ -279,7 +287,7 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 				'MODEL' => $this->folder,
 				'NAME' => $this->folder->getName(),
 				'IS_DELETED' => $this->folder->isDeleted(),
-				'CAN_ADD' => $this->folder->canAdd($securityContext),
+				'CAN_ADD' => $canAddInCurrentFolder,
 				'CREATE_TIME' => $this->folder->getCreateTime(),
 				'UPDATE_TIME' => $this->folder->getUpdateTime(),
 			),
@@ -320,9 +328,10 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 			'DOCUMENT_HANDLERS' => $this->getDocumentHandlersForCreatingFile(),
 			'STATUS_BIZPROC' => $this->storage->isEnabledBizProc() && Loader::includeModule("bizproc"),
 			'SHOW_SEARCH_NOTICE' => \Bitrix\Main\Config\Option::get('disk', 'needBaseObjectIndex', 'x') !== 'N',
-			'IS_USER_COLLABER' => $this->isCollaber(),
+			'IS_USER_COLLABER' => $this->isUserCollaber,
 			'COLLABER_TOUR_ON_ADD_BUTTON_ID' => self::COLLABER_TOUR_ON_ADD_BUTTON_ID,
 			'IS_COLLABER_TOUR_ON_ADD_BUTTON_VIEWED' => $this->isCollaberTourOnAddButtonViewed(),
+			'READONLY_COLLAB_FOLDER_STATE_COOKIE_NAME' => $this->getReadOnlyCollabFolderStateCookie()->getName(),
 		);
 
 		if ($this->gridOptions->getViewMode() === FolderListOptions::VIEW_MODE_TILE)
@@ -2577,5 +2586,68 @@ HTML;
 		}
 
 		return 'disk_manual_external_link';
+	}
+
+	private function isInCollabFolder(): bool
+	{
+		$firstRelativeItemId = (int)($this->arParams['RELATIVE_ITEMS'][0]['ID'] ?? null);
+
+		if ($firstRelativeItemId === 0)
+		{
+			return false;
+		}
+
+		if ($firstRelativeItemId === (int)$this->folder->getId())
+		{
+			$firstFolder = $this->folder->getRealObject();
+		}
+		else
+		{
+			$firstFolder = Folder::getById($firstRelativeItemId)?->getRealObject();
+		}
+
+		if ($firstFolder === null)
+		{
+			return false;
+		}
+
+		return $this->collabService->isCollabStorage($firstFolder->getStorage());
+	}
+
+	private function setUiFlagForReadonlyCollabFolderState(bool $canAddInCurrentFolder): void
+	{
+		if ($this->isUserCollaber)
+		{
+			$isReadonlyCollabFolder = !$canAddInCurrentFolder && $this->isInCollabFolder();
+
+			$cookie = $this->getReadOnlyCollabFolderStateCookie();
+			$cookieName = $cookie->getName();
+			$cookieValue = $isReadonlyCollabFolder ? '1' : '0';
+			$cookieOptions = [
+				'path' => $cookie->getPath(),
+				'domain' => $cookie->getDomain(),
+				'expires' => $cookie->getExpires(),
+				'httponly' => $cookie->getHttponly(),
+				'samesite' => $cookie->getSamesite(),
+				'secure' => $cookie->getSecure(),
+			];
+
+			/*
+			you cannot set cookies here via \Bitrix\Main\HttpResponse::addCookie,
+			since the response object is replaced by the bitrix:main.ui.grid component when the tiled view is used.
+			*/
+			setcookie($cookieName, $cookieValue, $cookieOptions);
+		}
+	}
+
+	private function getReadOnlyCollabFolderStateCookie(): Cookie
+	{
+		if ($this->readOnlyCollabFolderStateCookie === null)
+		{
+			$this->readOnlyCollabFolderStateCookie = new Cookie(self::READONLY_COLLAB_FOLDER_STATE_COOKIE_NAME, '0');
+			$this->readOnlyCollabFolderStateCookie->setHttpOnly(false);
+		}
+
+		return $this->readOnlyCollabFolderStateCookie;
 	}
 }

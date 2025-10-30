@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
 use Bitrix\Tasks\Integration\Disk;
 
@@ -24,23 +25,23 @@ class PrepareDiskAttachments implements PrepareFieldInterface
 			return $fields;
 		}
 
-		if (empty($fields['UF_TASK_WEBDAV_FILES']))
+		if (empty($fields[UserField::TASK_ATTACHMENTS]))
 		{
 			return $fields;
 		}
 
-		$source = $fields['UF_TASK_WEBDAV_FILES'];
-		$fields['UF_TASK_WEBDAV_FILES'] = Disk::cloneFileAttachment(
-			$fields['UF_TASK_WEBDAV_FILES'],
+		$source = $fields[UserField::TASK_ATTACHMENTS];
+		$fields[UserField::TASK_ATTACHMENTS] = Disk::cloneFileAttachment(
+			$fields[UserField::TASK_ATTACHMENTS],
 			$this->config->getUserId()
 		);
 
-		if (count($source) !== count($fields['UF_TASK_WEBDAV_FILES']))
+		if (count($source) !== count($fields[UserField::TASK_ATTACHMENTS]))
 		{
 			return $fields;
 		}
 
-		$relations = array_combine($source, $fields['UF_TASK_WEBDAV_FILES']);
+		$relations = array_combine($source, $fields[UserField::TASK_ATTACHMENTS]);
 
 		return $this->updateInlineFiles($fields, $relations);
 	}

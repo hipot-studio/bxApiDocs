@@ -19,7 +19,6 @@ use \Bitrix\Main\Application;
 use Bitrix\Tasks\Component\Kanban\ScrumManager;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\Bizproc\Listener;
-use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 use Bitrix\Tasks\Integration\Socialnetwork\Context\Context;
 use Bitrix\Tasks\Internals\Log\LogFacade;
@@ -60,6 +59,7 @@ use \Bitrix\Tasks\Components\Kanban\Services\Time;
 use \Bitrix\Tasks\Components\Kanban\Services\Counters;
 
 use Bitrix\Tasks\TourGuide;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Public\Command\Task\Kanban\AddTaskStageRelationCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Kanban\DeleteTaskStageRelationCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
@@ -436,7 +436,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 
 	private function isToolAvailable(): bool
 	{
-		return (new Settings())->isToolAvailable(Settings::TOOLS['base_tasks']);
+		return Container::getInstance()->getToolService()->isBaseTasksAvailable();
 	}
 
 	/**
@@ -3623,6 +3623,40 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 
 					return [];
 				}
+
+				$analytics = Analytics::getInstance($this->userId);
+
+				$params = $this->request('params');
+
+				$groupId = isset($params['GROUP_ID']) ? (int)$params['GROUP_ID'] : 0;
+				$isPersonal = isset($params['PERSONAL']) && $params['PERSONAL'] === 'Y';
+				$isTimelineMode = isset($params['TIMELINE_MODE']) && $params['TIMELINE_MODE'] === 'Y';
+				$sprintId = isset($params['SPRINT_ID']) ? (int)$params['SPRINT_ID'] : -1;
+
+				$subSection = 'list';
+				if ($isPersonal)
+				{
+					if ($isTimelineMode)
+					{
+						$subSection = 'deadline';
+					}
+					else
+					{
+						$subSection = 'planner';
+					}
+				}
+				elseif ($groupId > 0 || $sprintId > 0)
+				{
+					$subSection = 'kanban';
+				}
+
+
+				$analytics->onTaskUpdate(
+					event: Analytics::EVENT['assignee_change'],
+					section: Analytics::SECTION[$analytics->getTaskContext($taskId)],
+					element: Analytics::ELEMENT['context_menu'],
+					subSection: $subSection,
+				);
 
 
 				//tmp, bug #85959

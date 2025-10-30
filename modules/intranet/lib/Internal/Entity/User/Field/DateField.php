@@ -15,11 +15,12 @@ class DateField extends SingleField
 		public readonly bool $isEditable,
 		public readonly bool $isShowAlways,
 		public readonly mixed $value = null,
+		public readonly string $format = '',
 	)
 	{
 	}
 
-	public static function createByData(array $fieldData,mixed $value) : static
+	public static function createByData(array $fieldData, mixed $value) : static
 	{
 		if (is_string($value) && !empty($value))
 		{
@@ -32,7 +33,18 @@ class DateField extends SingleField
 			}
 		}
 
-		return parent::createByData($fieldData, $value);
+		$format = isset($fieldData['data']['dateViewFormat']) && is_string($fieldData['data']['dateViewFormat'])
+			? $fieldData['data']['dateViewFormat']
+			: '';
+
+		return new static(
+			id: $fieldData['name'],
+			title: $fieldData['title'],
+			isEditable: $fieldData['editable'] ?? false,
+			isShowAlways: $fieldData['showAlways'] ?? false,
+			value: $value,
+			format: $format,
+		);
 	}
 
 	public function getId(): string

@@ -23,7 +23,7 @@ class AddTemplateCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		try
 		{

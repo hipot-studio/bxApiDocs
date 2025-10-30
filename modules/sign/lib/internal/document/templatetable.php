@@ -89,7 +89,8 @@ class TemplateTable extends Entity\DataManager
 			,
 			(new BooleanField('HIDDEN'))
 				->configureRequired()
-				->configureDefaultValue(false)
+				->configureValues(0, 1)
+				->configureDefaultValue(true)
 			,
 			(new Entity\ReferenceField(
 				'DOCUMENT',

@@ -19,7 +19,7 @@ class ClearTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$taskStageRepository = Container::getInstance()->getTaskStageRepository();
 

@@ -27,4 +27,24 @@ class TaskStageService
 			$this->taskStageRepository->deleteById($id);
 		}
 	}
+
+	public function upsert(int $taskId, int $stageId): int
+	{
+		return $this->taskStageRepository->upsert($taskId, $stageId);
+	}
+
+	public function clearRelations(array $relationIds): void
+	{
+		if (empty($relationIds))
+		{
+			return;
+		}
+
+		$this->taskStageRepository->deleteById(...$relationIds);
+	}
+
+	public function clearStage(int $stageId): void
+	{
+		$this->taskStageRepository->deleteByStageId($stageId);
+	}
 }

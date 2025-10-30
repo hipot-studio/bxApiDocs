@@ -18,10 +18,10 @@ class StopTimerHandler
 
 	}
 
-	public function __invoke(StopTimerCommand $command): Timer
+	public function __invoke(StopTimerCommand $command): ?Timer
 	{
 		return $this->consistencyResolver->resolve('task.time.stop')->wrap(
-			fn (): Timer => $this->timeManagementService->stopTimer(
+			fn (): ?Timer => $this->timeManagementService->stopTimer(
 				userId: $command->userId,
 				taskId: $command->taskId,
 			)

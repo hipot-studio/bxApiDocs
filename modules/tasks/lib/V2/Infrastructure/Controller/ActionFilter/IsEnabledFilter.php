@@ -14,7 +14,6 @@ use Bitrix\Tasks\V2\Infrastructure\Controller\CheckList;
 use Bitrix\Tasks\V2\Infrastructure\Controller\Group;
 use Bitrix\Tasks\V2\Infrastructure\Controller\Task;
 use Bitrix\Tasks\V2\FormV2Feature;
-use Bitrix\Tasks\V2\Infrastructure\Controller\Task\Convert;
 
 class IsEnabledFilter extends Base
 {
@@ -22,7 +21,6 @@ class IsEnabledFilter extends Base
 		Task::class => ['add'],
 		CheckList::class => ['save'],
 		Group\Url::class => ['get'],
-		Task\Reminder::class => ['add', 'update', 'delete', 'set']
 	];
 
 	public function onBeforeAction(Event $event): ?EventResult

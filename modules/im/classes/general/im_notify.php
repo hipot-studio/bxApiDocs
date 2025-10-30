@@ -1222,7 +1222,7 @@ class CIMNotify
 			$resultDataForPushAndPull[$notifyId] = $notify['NOTIFY_TYPE'];
 		}
 
-		self::deleteListInternal($messageCollection, $relationUserIds);
+		self::deleteListInternal($messageCollection, $relationUserIds, $params);
 
 		foreach ($notifyList as $notify)
 		{
@@ -1302,7 +1302,11 @@ class CIMNotify
 		(new IM\V2\Message\ReadService())->deleteByMessage($message, [$userId]);
 	}
 
-	private static function deleteListInternal(IM\V2\MessageCollection $messages, array $userIds): void
+	private static function deleteListInternal(
+		IM\V2\MessageCollection $messages,
+		array $userIds,
+		array $params
+	): void
 	{
 		$messageIds = $messages->getIds();
 		if (empty($messageIds))
@@ -1310,9 +1314,16 @@ class CIMNotify
 			return;
 		}
 
+		$overflowResetChatIds = null;
+		if (!empty($params['SKIP_OVERFLOW_CLEANUP_CHAT']))
+		{
+			$overflowResetChatIds = $messages->getChatIds();
+			unset($overflowResetChatIds[(int)$params['SKIP_OVERFLOW_CLEANUP_CHAT']]);
+		}
+
 		IM\Model\MessageParamTable::deleteBatch(['=MESSAGE_ID' => $messageIds]);
 		IM\Model\MessageTable::deleteBatch(['=ID' => $messageIds]);
-		(new IM\V2\Message\ReadService())->deleteByMessages($messages, $userIds);
+		(new IM\V2\Message\ReadService())->deleteByMessages($messages, $userIds, $overflowResetChatIds);
 	}
 
 	private static function getNotificationById(int $id): ?array

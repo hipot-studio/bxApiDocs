@@ -27,9 +27,7 @@ use Bitrix\Tasks\Provider\Exception\InvalidGroupByException;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Tasks\Provider\TaskQuery;
 use Bitrix\Tasks\Util\User;
-use Bitrix\Tasks\V2\Public\Command\Task\Kanban\AddTaskStageRelationCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Kanban\ClearStageCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Kanban\DeleteTaskStageRelationCommand;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use CTaskMembers;
 use CTasks;
 use CUserOptions;
@@ -233,9 +231,8 @@ class StagesTable extends DataManager
 
 					if (!empty($ids))
 					{
-						(new DeleteTaskStageRelationCommand(
-							relationIds: $ids
-						))->run();
+						$stageService = Container::getInstance()->getTaskStageService();
+						$stageService->clearRelations($ids);
 					}
 				}
 			}
@@ -894,6 +891,8 @@ class StagesTable extends DataManager
 		// pin in personal default stage (if already Kanban exist)
 		$personalDefStages = [];
 		self::setWorkMode(self::WORK_MODE_USER);
+
+		$stageService = Container::getInstance()->getTaskStageService();
 		foreach ($users as $userId)
 		{
 			$checkStages = self::getStages($userId, true);
@@ -921,14 +920,13 @@ class StagesTable extends DataManager
 							)->fetch()
 						)
 						{
-							$addResult = (new AddTaskStageRelationCommand(
-								taskId: $taskId,
-								stageId: self::getDefaultStageId($userId),
-							))->run();
-
-							if (!$addResult->isSuccess())
+							try
 							{
-								LogFacade::logError($addResult->getError());
+								$stageService->upsert($taskId, self::getDefaultStageId($userId));
+							}
+							catch (\Exception $e)
+							{
+								Container::getInstance()->getLogger()->logError($e);
 							}
 						}
 					}
@@ -1169,9 +1167,8 @@ class StagesTable extends DataManager
 	{
 		$primary = $event->getParameter('id');
 
-		(new ClearStageCommand(
-			stageId: (int)$primary['ID']
-		))->run();
+		$service = Container::getInstance()->getTaskStageService();
+		$service->clearStage((int)$primary['ID']);
 	}
 
 	/**

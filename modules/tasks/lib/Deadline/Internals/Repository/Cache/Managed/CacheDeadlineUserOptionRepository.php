@@ -18,17 +18,12 @@ class CacheDeadlineUserOptionRepository implements DeadlineUserOptionRepositoryI
 	private const CACHE_DIR = '/tasks/deadline_user_option/';
 	private const CACHE_ID_PREFIX = 'tasks_deadline_user_option_';
 
-	private DeadlineUserOptionRepositoryInterface $repository;
-
-	public function __construct(DeadlineUserOptionRepository $repository)
+	public function __construct(private readonly DeadlineUserOptionRepository $deadlineUserOptionRepository)
 	{
-		$this->repository = $repository;
 	}
 
 	/**
-	 * @param int $userId
 	 *
-	 * @return DeadlineUserOption
 	 *
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -50,23 +45,23 @@ class CacheDeadlineUserOptionRepository implements DeadlineUserOptionRepositoryI
 			return DeadlineUserOption::mapFromArray($deadlineUserOptionData);
 		}
 
-		$deadlineUserOption = $this->repository->getByUserId($userId);
+		$deadlineUserOption = $this->deadlineUserOptionRepository->getByUserId($userId);
 
 		$cacheManager->set($cacheId, $deadlineUserOption->toArray());
 
 		return $deadlineUserOption;
 	}
 
-	public function save(DeadlineUserOption $entity): void
+	public function save(DeadlineUserOption $deadlineUserOption): void
 	{
 		$cacheManager = Application::getInstance()->getManagedCache();
-		$cacheId = $this->getCacheId($entity->userId);
+		$cacheId = $this->getCacheId($deadlineUserOption->userId);
 
 		$cacheManager->clean($cacheId, self::CACHE_DIR);
 
-		$this->repository->save($entity);
+		$this->deadlineUserOptionRepository->save($deadlineUserOption);
 
-		$cacheManager->set($cacheId, $entity->toArray());
+		$cacheManager->set($cacheId, $deadlineUserOption->toArray());
 	}
 
 	private function getCacheId(int $userId): string

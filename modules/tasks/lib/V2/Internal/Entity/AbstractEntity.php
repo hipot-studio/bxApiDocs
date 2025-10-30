@@ -60,7 +60,7 @@ abstract class AbstractEntity implements EntityInterface, IteratorAggregate
 
 			if (is_array($value))
 			{
-				$diff = array_diff($value, $valueToCompare);
+				$diff = array_diff($value, $valueToCompare ?? []);
 				if (!empty($diff))
 				{
 					$result[$key] = $value;

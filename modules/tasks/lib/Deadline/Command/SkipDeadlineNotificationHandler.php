@@ -9,13 +9,12 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Tasks\AbstractCommand;
 use Bitrix\Tasks\Deadline\Command\Trait\SendPushTrait;
 use Bitrix\Tasks\Deadline\Internals\Repository\Cache\Managed\CacheDeadlineUserOptionRepository;
 use Bitrix\Tasks\Deadline\Internals\Repository\DeadlineUserOptionRepositoryInterface;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 
-class SkipDeadlineNotificationHandler extends AbstractCommand
+class SkipDeadlineNotificationHandler
 {
 	use SendPushTrait;
 

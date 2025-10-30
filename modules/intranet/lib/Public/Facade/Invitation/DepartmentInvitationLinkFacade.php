@@ -116,6 +116,11 @@ class DepartmentInvitationLinkFacade extends InvitationLinkFacade
 	public function onBeforeUserRegister(array &$data): void
 	{
 		$data['SITE_ID'] = SITE_ID;
-		$data['UF_DEPARTMENT'] = null;
+		// iblock department ids are needed to execute CAccess::RecalculateForUser
+		// in OnAfterUserAdd method of CIntranetAuthProvider class
+		$departmentIblockIds = $this->filteredByPermissionDepartmentCollection()
+			->map(fn ($department) => $department->getIblockSectionId())
+		;
+		$data['UF_DEPARTMENT'] = $departmentIblockIds;
 	}
 }

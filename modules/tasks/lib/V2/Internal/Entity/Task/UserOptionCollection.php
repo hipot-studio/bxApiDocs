@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Internal\Entity\AbstractEntityCollection;
 /**
  * @method array getCodeList()
  * @method null|UserOption findOne(array $conditions)
+ * @method array getUserIdList()
  */
 class UserOptionCollection extends AbstractEntityCollection
 {

@@ -359,6 +359,7 @@ final class FileUserType
 		if ($type === self::TYPE_NEW_OBJECT)
 		{
 			$fileModel = self::getFileById($realValue);
+
 			if (!$fileModel || !$fileModel->getStorage())
 			{
 				return '';
@@ -378,6 +379,11 @@ final class FileUserType
 				else
 				{
 					$fileModel = $fileTransferToCollab->copyToFolderForUploadedFilesInCollab();
+
+					if (!$fileModel)
+					{
+						return '';
+					}
 				}
 			}
 
@@ -417,7 +423,8 @@ final class FileUserType
 
 			return $attachedModel->getId();
 		}
-		elseif ($type === self::TYPE_ALREADY_ATTACHED)
+
+		if ($type === self::TYPE_ALREADY_ATTACHED)
 		{
 			$allowEdit = self::getValueForAllowEdit($userField, $value);
 			if ($allowEdit !== null)

@@ -50,14 +50,7 @@ class TimeManagementService
 		bool $canRenew = false,
 	): Timer
 	{
-		try
-		{
-			$this->stopTimer($userId, $taskId);
-		}
-		catch (TimerNotFoundException)
-		{
-
-		}
+		$this->stopTimer($userId, $taskId);
 
 		$task = $this->taskRepository->getById($taskId);
 		if ($task === null)
@@ -114,12 +107,12 @@ class TimeManagementService
 		return $timer;
 	}
 
-	public function stopTimer(int $userId, int $taskId = 0): Timer
+	public function stopTimer(int $userId, int $taskId = 0): ?Timer
 	{
 		$timer = $this->timerService->stop($userId, $taskId);
 		if ($timer === null || $timer->seconds <= 0)
 		{
-			throw new TimerNotFoundException();
+			return null;
 		}
 
 		$userOffset = User::getTimeZoneOffset($userId);

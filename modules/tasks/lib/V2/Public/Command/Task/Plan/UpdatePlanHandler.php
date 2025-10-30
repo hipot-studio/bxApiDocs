@@ -2,18 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Bitrix\Tasks\V2\Public\Command\Task;
+namespace Bitrix\Tasks\V2\Public\Command\Task\Plan;
 
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserFields;
-use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
 class UpdatePlanHandler
 {
 	public function __construct(
-		private readonly ConsistencyResolverInterface $consistencyResolver,
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateTaskService,
 	)
 	{
 
@@ -26,15 +23,13 @@ class UpdatePlanHandler
 			startPlanTs: $command->startPlanTs,
 			endPlanTs: $command->endPlanTs,
 			plannedDuration: $command->duration,
+			matchesWorkTime: $command->matchesWorkTime,
+			matchesSubTasksTime: $command->matchesSubTasksTime,
 		);
 
-		[$task, $fields] = $this->consistencyResolver->resolve('task.update')->wrap(
-			fn (): array => $this->updateService->update($entity, $command->config)
+		return $this->updateTaskService->update(
+			task: $entity,
+			config: $command->config,
 		);
-
-		// this action is outside of consistency because it is containing nested transactions
-		(new UpdateUserFields($command->config))($fields, $command->taskId);
-
-		return $task;
 	}
 }

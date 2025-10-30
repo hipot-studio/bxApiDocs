@@ -24,6 +24,8 @@ class ResultModelAdapter implements EntityModelAdapterInterface
 		}
 
 		$data['id'] = (int)$this->entity->getId();
+		$data['taskId'] = (int)$this->entity->taskId;
+		$data['createdBy'] = (int)$this->entity->author?->getId();
 
 		return Model\ResultModel::createFromArray($data);
 	}

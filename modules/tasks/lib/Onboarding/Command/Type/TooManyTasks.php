@@ -12,6 +12,7 @@ use Bitrix\Tasks\Onboarding\Command\Trait\ContainerTrait;
 use Bitrix\Tasks\Onboarding\Internal\Config\JobLimit;
 use Bitrix\Tasks\Onboarding\Internal\Config\TaskCountLimit;
 use Bitrix\Tasks\Onboarding\Internal\Type;
+use Bitrix\Tasks\Onboarding\Notification\NotificationController;
 
 class TooManyTasks implements CountableCommandInterface
 {
@@ -55,7 +56,7 @@ class TooManyTasks implements CountableCommandInterface
 			return $result;
 		}
 
-		$notificationController = $this->getContainer()->getNotificationController();
+		$notificationController = new NotificationController();
 
 		$notificationController->onTooManyTasks($this->task)->push();
 

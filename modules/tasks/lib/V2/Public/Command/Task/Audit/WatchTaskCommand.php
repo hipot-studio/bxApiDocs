@@ -26,18 +26,16 @@ class WatchTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		$memberRepository = Container::getInstance()->getTaskMemberRepository();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-		$updateService = Container::getInstance()->getUpdateService();
+		$updateTaskService = Container::getInstance()->getUpdateTaskService();
 
 		$handler = new WatchTaskHandler(
 			$memberRepository,
-			$consistencyResolver,
-			$updateService
+			$updateTaskService,
 		);
 
 		try

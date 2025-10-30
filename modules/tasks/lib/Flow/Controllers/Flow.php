@@ -20,7 +20,7 @@ use Bitrix\Tasks\Flow\Control\Decorator\ProjectProxyDecorator;
 use Bitrix\Tasks\Flow\Integration\HumanResources\DepartmentService;
 use Bitrix\Tasks\Flow\Option\FlowUserOption\FlowUserOptionRepository;
 use Bitrix\Tasks\Flow\Option\FlowUserOption\FlowUserOptionService;
-use Bitrix\Tasks\InvalidCommandException;
+use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use Bitrix\Tasks\Flow\Controllers\Dto\FlowDto;
 use Bitrix\Tasks\Flow\Controllers\Trait\ControllerTrait;
 use Bitrix\Tasks\Flow\Controllers\Trait\MessageTrait;

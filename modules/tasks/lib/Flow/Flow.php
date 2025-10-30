@@ -352,6 +352,11 @@ class Flow implements Arrayable, Jsonable
 		return ($this->distributionType ?? self::DEFAULT_DISTRIBUTION_TYPE) === FlowDistributionType::HIMSELF;
 	}
 
+	public function isImmutable(): bool
+	{
+		return ($this->distributionType ?? self::DEFAULT_DISTRIBUTION_TYPE) === FlowDistributionType::IMMUTABLE;
+	}
+
 	public function getTargetEfficiency(): int
 	{
 		return $this->notifyWhenEfficiencyDecreases ?? 100;

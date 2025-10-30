@@ -18,7 +18,8 @@ class Attention extends BaseController
 	 * @ajaxAction tasks.V2.Task.Attention.mute
 	 */
 	public function muteAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new MuteTaskCommand(
@@ -40,7 +41,8 @@ class Attention extends BaseController
 	 * @ajaxAction tasks.V2.Task.Attention.unmute
 	 */
 	public function unmuteAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new UnmuteTaskCommand(
@@ -62,7 +64,8 @@ class Attention extends BaseController
 	 * @ajaxAction tasks.V2.Task.Attention.pin
 	 */
 	public function pinAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new PinTaskCommand(
@@ -84,7 +87,8 @@ class Attention extends BaseController
 	 * @ajaxAction tasks.V2.Task.Attention.unpin
 	 */
 	public function unpinAction(
-		#[Permission\Read] Entity\Task $task
+		#[Permission\Read]
+		Entity\Task $task
 	): ?bool
 	{
 		$result = (new UnpinTaskCommand(

@@ -4,7 +4,6 @@ namespace Bitrix\Tasks\Integration\Bizproc\Automation\Target;
 use Bitrix\Main\Loader;
 use Bitrix\Tasks;
 use Bitrix\Tasks\Integration\Bizproc\Document;
-use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
 
 if (!Loader::includeModule('bizproc'))
 {
@@ -50,10 +49,8 @@ class ScrumProjectTask extends Base
 	{
 		if ($taskStage = $this->getTaskStage())
 		{
-			(new MoveTaskCommand(
-				relationId: (int)$taskStage['ID'],
-				stageId: (int)$statusId
-			))->run();
+			$stageService = Tasks\V2\Internal\DI\Container::getInstance()->getTaskStageService();
+			$stageService->move((int)$taskStage['ID'], (int)$statusId);
 
 			$task = new \CTasks();
 			$result = $task->update($this->getDocumentId(), ['STAGE_ID' => $statusId]);

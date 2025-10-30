@@ -5,7 +5,6 @@ namespace Bitrix\Im\V2\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
-use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\MessagePopupItem;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Registry;

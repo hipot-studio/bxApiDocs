@@ -25,7 +25,7 @@ class Status extends BaseController
 	 */
 	public function startAction(
 		#[Permission\Start]
-		Entity\Task      $task,
+		Entity\Task $task,
 		TaskRightService $taskRightService,
 	): ?Entity\EntityInterface
 	{
@@ -54,7 +54,7 @@ class Status extends BaseController
 	 */
 	public function disapproveAction(
 		#[Permission\Disapprove]
-		Entity\Task      $task,
+		Entity\Task $task,
 		TaskRightService $taskRightService,
 	): ?Entity\EntityInterface
 	{
@@ -83,7 +83,7 @@ class Status extends BaseController
 	 */
 	public function deferAction(
 		#[Permission\Defer]
-		Entity\Task      $task,
+		Entity\Task $task,
 		TaskRightService $taskRightService,
 	): ?Entity\EntityInterface
 	{
@@ -112,7 +112,7 @@ class Status extends BaseController
 	 */
 	public function approveAction(
 		#[Permission\Approve]
-		Entity\Task      $task,
+		Entity\Task $task,
 		TaskRightService $taskRightService,
 	): ?Entity\EntityInterface
 	{

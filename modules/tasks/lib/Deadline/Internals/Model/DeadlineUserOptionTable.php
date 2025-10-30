@@ -69,6 +69,20 @@ class DeadlineUserOptionTable extends DataManager
 			(new DatetimeField('SKIP_NOTIFICATION_START_DATE'))
 				->configureNullable()
 			,
+			(new BooleanField(name: 'CAN_CHANGE_DEADLINE' ))
+				->configureValues(falseValue: 0, trueValue: 1)
+				->configureDefaultValue(value: 0)
+			,
+			(new DatetimeField(name: 'MAX_DEADLINE_CHANGE_DATE'))
+				->configureNullable()
+			,
+			(new IntegerField(name: 'MAX_DEADLINE_CHANGES'))
+				->configureNullable()
+			,
+			(new BooleanField(name: 'REQUIRE_DEADLINE_CHANGE_REASON'))
+				->configureValues(falseValue: 0, trueValue: 1)
+				->configureDefaultValue(value: 0)
+			,
 		];
 	}
 }

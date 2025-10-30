@@ -8,6 +8,7 @@
  * @deprecated
  */
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -432,6 +433,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		try
 		{
 			$newTaskItem = new CTaskItem( (int) $rc, $executiveUserId);
+			static::sendTaskCreateAnalytics($arNewTaskData, (int)$executiveUserId, true, $newTaskItem->getId());
 		}
 		catch (TasksException | CTaskAssertException $e)
 		{
@@ -1871,6 +1873,39 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			return;
 		}
 
+		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+
+		if (
+			$request->get('deadline')
+			|| (isset($arNewTaskData['DEADLINE']) && !empty($arNewTaskData['DEADLINE']))
+		)
+		{
+			$subSection = 'list';
+			if ($request->get('viewType') === 'VIEW_MODE_LIST')
+			{
+				$subSection = 'list';
+			}
+			else if ($request->get('personal') === 'Y')
+			{
+				$subSection = 'planner';
+			}
+			else if ($request->get('personal') === 'N')
+			{
+				$subSection = 'kanban';
+			}
+			else if ($request->get('timeline') === 'Y')
+			{
+				$subSection = 'deadline';
+			}
+
+			Analytics::getInstance($this->executiveUserId)->onTaskUpdate(
+				event: Analytics::EVENT['deadline_set'],
+				section: Analytics::SECTION['tasks'],
+				subSection: Analytics::SUB_SECTION[$subSection],
+				element: Analytics::ELEMENT['context_menu'],
+			);
+		}
+
 		$this->proceedAction(
 			self::ACTION_EDIT,
 			array('FIELDS' => $arNewTaskData, 'PARAMETERS' => $parameters)
@@ -2535,6 +2570,36 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		$this->checkProjectDates($arTaskData, $arFields); //
 
 		$this->markCacheAsDirty();
+
+		if (isset($arActionArguments['FIELDS']['CHECKLIST']))
+		{
+			$analytics = Analytics::getInstance($this->executiveUserId);
+
+			$checklistParents = [];
+			foreach ($arActionArguments['FIELDS']['CHECKLIST'] as $item)
+			{
+				if (isset($item["PARENT_NODE_ID"]) && $item["PARENT_NODE_ID"] !== "0")
+				{
+					$checklistParents[$item["PARENT_NODE_ID"]] = true;
+				}
+			}
+
+			$checkListPointsCount = array_reduce($arTaskData['CHECKLIST'], static fn($carry, $item) => $carry + ($item['IS_COMPLETE'] === 'Y' ? 1 : 0), 0);
+
+			$analytics->onTaskUpdate(
+				event: Analytics::EVENT['add_checklist'],
+				section: Analytics::SECTION[$analytics->getTaskContext($this->taskId)],
+				element: Analytics::ELEMENT['checklist_button'],
+				subSection: Analytics::SUB_SECTION['existing'],
+				params: [
+					'p1' => $analytics->getIsDemoParameter(),
+					'p2' => 'checklistCount_' . (string)count($checklistParents),
+					'p3' => 'viewersCount_' . (string)count($arTaskData['AUDITORS']),
+					'p4' => 'checklistpointsCount_' . (string)$checkListPointsCount,
+					'p5' => 'coexecutorsCount_' . (string)count($arTaskData['ACCOMPLICES']),
+				],
+			);
+		}
 
 		$o = new CTasks();
 		/** @noinspection PhpDeprecationInspection */
@@ -3808,21 +3873,56 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		return $entityUserFields;
 	}
 
-	protected static function sendTaskCreateAnalytics(array $fields, int $userId, bool $status = false): void
+	protected static function sendTaskCreateAnalytics(array $fields, int $userId, bool $status = false, int $taskId = 0): void
 	{
 		if (!empty($fields['TASKS_ANALYTICS_SECTION']))
 		{
 			$parentId = (int)($fields['PARENT_ID'] ?? null);
-			$event = $parentId ? Analytics::EVENT['subtask_add'] : Analytics::EVENT['task_create'];
-			$params = array_merge(
-				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
-				[
-					'p3' => 'auditorsCount_' . count($fields['AUDITORS'] ?? []),
-					'p5' => 'accomplicesCount_' . count($fields['ACCOMPLICES'] ?? []),
-				]
-			);
 
-			Analytics::getInstance($userId)->onTaskCreate(
+			$analytics = Analytics::getInstance($userId);
+
+			$params = [
+				'p1' => $analytics->getIsDemoParameter(),
+				'p2' => $analytics->getUserTypeParameter(),
+				'p3' => 'viewersCount_' . count($fields['AUDITORS'] ?? []),
+			];
+
+			if (
+				$taskId > 0
+				&& $analytics->getCollabIdFromTask($taskId) > 0
+			)
+			{
+				$params['p4'] = $analytics->getCollabParameter($analytics->getCollabIdFromTask($taskId));
+			}
+
+			$event = Analytics::EVENT['task_create'];
+			if (
+				$parentId
+				&& $parentId > 0
+			)
+			{
+				$event = Analytics::EVENT['subtask_add'];
+			}
+			else if (
+				isset($fields['CHECKLIST'])
+				&& is_array($fields['CHECKLIST'])
+				&& count($fields['CHECKLIST']) > 0
+			)
+			{
+				$event = Analytics::EVENT['task_create_with_checklist'];
+
+				$checklistParents = array_filter(
+					$fields['CHECKLIST'],
+					static function($item)
+					{
+						return is_array($item) && $item['PARENT_NODE_ID'] === '0';
+					}
+				);
+
+				$params['p5'] = 'checklistCount_' . (string)(count($checklistParents));
+			}
+
+			$analytics->onTaskCreate(
 				$fields['TASKS_ANALYTICS_CATEGORY'] ?: Analytics::TASK_CATEGORY,
 				$event,
 				$fields['TASKS_ANALYTICS_SECTION'],

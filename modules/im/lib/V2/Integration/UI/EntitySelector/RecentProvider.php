@@ -592,7 +592,6 @@ class RecentProvider extends BaseProvider
 			Chat::IM_TYPE_OPEN_CHANNEL,
 			Chat::IM_TYPE_COLLAB,
 			Chat::IM_TYPE_COPILOT,
-			Chat::IM_TYPE_AI_ASSISTANT,
 		];
 
 		return $types;

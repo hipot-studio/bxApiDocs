@@ -14,7 +14,6 @@ use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\UserTable;
 use Bitrix\Tasks\Integration\Bitrix24;
-use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Util\Error\Collection;
@@ -83,7 +82,7 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 			return;
 		}
 
-		$arResult['IS_TOOL_AVAILABLE'] = (new Settings())->isToolAvailable(Settings::TOOLS['departments']);
+		$arResult['IS_TOOL_AVAILABLE'] = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getToolService()->isDepartmentsAvailable();
 	}
 
 	protected function checkParameters()

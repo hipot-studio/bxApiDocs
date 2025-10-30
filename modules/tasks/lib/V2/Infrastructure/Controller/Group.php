@@ -16,8 +16,9 @@ class Group extends BaseController
 	 */
 	#[CloseSession]
 	public function getAction(
-		#[Permission\Read] Entity\Group $group,
-		GroupRepositoryInterface        $groupRepository,
+		#[Permission\Read]
+		Entity\Group $group,
+		GroupRepositoryInterface $groupRepository,
 	): ?Entity\Group
 	{
 		return $groupRepository->getById($group->getId());

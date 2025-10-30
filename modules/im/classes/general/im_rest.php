@@ -4,6 +4,7 @@ use Bitrix\Im\Chat;
 use Bitrix\Im\V2\Link\File\FileCollection;
 use Bitrix\Im\V2\Link\File\FileItem;
 use Bitrix\Im\V2\Link\File\SubtypeGroup;
+use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -1769,9 +1770,11 @@ class CIMRestService extends IRestService
 			throw new Bitrix\Rest\RestException('It is forbidden to add users to this chat', 'ACCESS_ERROR', CRestServer::STATUS_FORBIDDEN);
 		}
 
+		$skipAnalytics = false;
 		$userId = $USER->GetID();
 		if ($server->getMethod() == "imbot.chat.user.add")
 		{
+			$skipAnalytics = true;
 			$userId = self::getBotId($arParams, $server);
 		}
 
@@ -1802,7 +1805,13 @@ class CIMRestService extends IRestService
 		}
 
 		$CIMChat = new CIMChat($userId);
-		$result = $CIMChat->AddUser($arParams['CHAT_ID'], $arParams['USERS'], $hideHistory);
+		$result = $CIMChat->AddUser(
+			chatId: $arParams['CHAT_ID'],
+			userId: $arParams['USERS'],
+			hideHistory: $hideHistory,
+			skipAnalytics: $skipAnalytics
+		);
+
 		if (!$result)
 		{
 			throw new Bitrix\Rest\RestException("You don't have access or user already member in chat", "WRONG_REQUEST", CRestServer::STATUS_WRONG_REQUEST);
@@ -1925,7 +1934,7 @@ class CIMRestService extends IRestService
 
 		if (isset($arParams['DIALOG_ID']))
 		{
-			if (\Bitrix\Im\Common::isChatId($arParams['DIALOG_ID']))
+			if (\Bitrix\Im\Common::isDialogId($arParams['DIALOG_ID']))
 			{
 				$arParams['CHAT_ID'] = \Bitrix\Im\Dialog::getChatId($arParams['DIALOG_ID']);
 			}
@@ -1935,13 +1944,14 @@ class CIMRestService extends IRestService
 			}
 		}
 
-		$arParams['CHAT_ID'] = intval($arParams['CHAT_ID']);
+		$arParams['CHAT_ID'] = (int)$arParams['CHAT_ID'];
 		if ($arParams['CHAT_ID'] <= 0)
 		{
 			throw new Bitrix\Rest\RestException("Chat ID can't be empty", "CHAT_ID_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
 		}
 
-		if (!Chat::isActionAllowed('chat' . $arParams['CHAT_ID'], 'MUTE'))
+		$chat = \Bitrix\Im\V2\Chat::getInstance($arParams['CHAT_ID']);
+		if (!$chat->canDo(Action::Mute))
 		{
 			throw new Bitrix\Rest\RestException('This chat cannot be muted', 'ACCESS_ERROR', CRestServer::STATUS_FORBIDDEN);
 		}
@@ -2552,8 +2562,6 @@ class CIMRestService extends IRestService
 			}
 		}
 
-		$chatId = $chat->getChatId();
-
 		$calendarId = $arParams['CALENDAR_ID'];
 
 		$calendarService = new \Bitrix\Im\V2\Link\Calendar\CalendarService();
@@ -2566,7 +2574,7 @@ class CIMRestService extends IRestService
 			throw new \Bitrix\Rest\RestException('You do not have access to this calendar event', Bitrix\Im\V2\Entity\Calendar\CalendarError::ACCESS_ERROR, \CRestServer::STATUS_FORBIDDEN);
 		}
 
-		$saveResult = $calendarService->registerCalendar($chatId, $messageId, $calendar);
+		$saveResult = $calendarService->registerCalendar($chat, $messageId, $calendar);
 		if (!$saveResult->isSuccess())
 		{
 			$error = $saveResult->getErrors()[0];

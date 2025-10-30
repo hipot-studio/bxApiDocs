@@ -21,7 +21,7 @@ class MoveTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$stageService = Container::getInstance()->getTaskStageService();
 

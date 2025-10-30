@@ -11,6 +11,7 @@ use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
+use Bitrix\Intranet\Public\Provider\Portal;
 
 class AuthRegistrationComponent extends \CBitrixComponent
 {
@@ -64,6 +65,8 @@ class AuthRegistrationComponent extends \CBitrixComponent
 		{
 			$this->arResult['AUTH_RESULT'] = $exception->getMessage();
 		}
+
+		$this->arResult['HOST_NAME'] = (new Portal\DomainProvider())->getHostName();
 
 		$this->includeComponentTemplate();
 	}

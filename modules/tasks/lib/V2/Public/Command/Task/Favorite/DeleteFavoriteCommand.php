@@ -21,7 +21,7 @@ class DeleteFavoriteCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$favoriteTaskRepository = Container::getInstance()->getFavoriteTaskRepository();
 		$favoriteService = Container::getInstance()->getFavoriteService();

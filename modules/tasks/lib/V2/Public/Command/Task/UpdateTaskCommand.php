@@ -10,7 +10,6 @@ use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
-use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Error\ErrorCode;
@@ -31,30 +30,28 @@ class UpdateTaskCommand extends AbstractCommand
 
 	}
 
-	protected function validate(): ValidationResult
+	protected function validateInternal(): ValidationResult
 	{
 		return new ValidationResult();
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		try
 		{
-			$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-			$updateService = Container::getInstance()->getUpdateService();
-			$taskRepository = Container::getInstance()->getTaskRepository();
+			$updateTaskService = Container::getInstance()->getUpdateTaskService();
 
-			$handler = new UpdateTaskHandler(
-				$consistencyResolver,
-				$updateService,
-				$taskRepository,
-			);
+			$handler = new UpdateTaskHandler($updateTaskService);
 
 			$task = $handler($this);
 
-			return $result->setObject($task);
+			return
+				$result
+					->setObject($task)
+					->setId($task->id)
+				;
 		}
 		catch (WrongTaskIdException)
 		{
@@ -68,7 +65,7 @@ class UpdateTaskCommand extends AbstractCommand
 		{
 			if (!$e instanceof TaskUpdateException)
 			{
-				Logger::handle($e);
+				Container::getInstance()->getLogger()->logError($e);
 			}
 
 			return $result->addError(Error::createFromThrowable($e));

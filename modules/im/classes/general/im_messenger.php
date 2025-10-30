@@ -1596,7 +1596,7 @@ class CIMMessenger
 					return false;
 				}
 
-				$chatId = $result->getResult()['CHAT_ID'];
+				$chatId = $result->getChatId() ?? 0;
 
 				if ($chatId <= 0)
 				{

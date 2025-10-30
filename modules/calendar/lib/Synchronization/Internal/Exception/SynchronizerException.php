@@ -10,7 +10,7 @@ class SynchronizerException extends Exception
 		string $message,
 		int $code = 0,
 		\Throwable $previous = null,
-		private bool $isRecoverable = true
+		private bool $isRecoverable = true,
 	)
 	{
 		parent::__construct($message, $code, $previous);

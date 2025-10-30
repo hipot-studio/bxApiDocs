@@ -4,9 +4,11 @@ namespace Bitrix\Tasks\Helper;
 
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Loader;
 use Bitrix\Tasks\Integration\Intranet\User;
 use Bitrix\Tasks\Ui\Filter;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class Analytics extends Common
 {
@@ -45,6 +47,11 @@ class Analytics extends Common
 		'add_viewer' => 'add_viewer',
 		'add_coexecutor' => 'add_coexecutor',
 		'task_update' => 'task_update',
+		'click_create' => 'click_create',
+		'assignee_change' => 'assignee_change',
+		'deadline_set' => 'deadline_set',
+		'add_checklist' => 'add_checklist',
+		'task_create_with_checklist' => 'task_create_with_checklist',
 	];
 
 	public const SECTION = [
@@ -82,6 +89,7 @@ class Analytics extends Common
 		'group_card' => 'group_card',
 		'flow_guide' => 'flow_guide',
 		'copilot_advice' => 'copilot_advice',
+		'existing' => 'existing',
 	];
 
 	public const ELEMENT = [
@@ -108,6 +116,9 @@ class Analytics extends Common
 		'guide_button' => 'guide_button',
 		'viewer_button' => 'viewer_button',
 		'coexecutor_button' => 'coexecutor_button',
+		'change_button' => 'change_button',
+		'deadline_field' => 'deadline_field',
+		'checklist_button' => 'checklist_button',
 	];
 
 	/**
@@ -155,7 +166,15 @@ class Analytics extends Common
 		array $params = [],
 	): void
 	{
-		if (!in_array($event, [self::EVENT['task_create'], self::EVENT['subtask_add']], true))
+		if (!in_array(
+			$event,
+			[
+				self::EVENT['task_create'],
+				self::EVENT['subtask_add'],
+				self::EVENT['task_create_with_checklist'],
+			],
+			true)
+		)
 		{
 			return;
 		}
@@ -260,6 +279,28 @@ class Analytics extends Common
 		);
 	}
 
+	public function onTaskCreateClick(
+		?string $section = null,
+		?string $element = null,
+		?string $subSection = null,
+		array $params = [],
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			self::EVENT['click_create'],
+			self::TOOL,
+			self::TASK_CATEGORY,
+		);
+
+		$this->sendAnalytics(
+			analyticsEvent: $analyticsEvent,
+			section: $section,
+			element: $element,
+			subSection: $subSection,
+			params: $params,
+		);
+	}
+
 	public function getTaskContext(int $taskId): string
 	{
 		$task = TaskRegistry::getInstance()->getObject($taskId);
@@ -300,6 +341,46 @@ class Analytics extends Common
 		}
 
 		return self::SECTION['tasks'];
+	}
+
+	public function getViewersCountParameter(int $taskId): string
+	{
+		$task = TaskRegistry::getInstance()->getObject($taskId);
+
+		$viewersCount = 0;
+
+		if ($task)
+		{
+			$viewersCount = count($task->getMembersIdsByRole('U'));
+		}
+
+		return 'viewersCount_' . $viewersCount;
+	}
+
+	public function getCoexecutorsCountParameter(int $taskId): string
+	{
+		$task = TaskRegistry::getInstance()->getObject($taskId);
+
+		$coexecutorsCount = 0;
+
+		if ($task)
+		{
+			$coexecutorsCount = count($task->getMembersIdsByRole('A'));
+		}
+
+		return 'coexecutorsCount_' . $coexecutorsCount;
+	}
+
+	public function getCollabIdFromTask(int $taskId): int
+	{
+		$task = TaskRegistry::getInstance()->getObject($taskId);
+
+		if ($task?->isCollab())
+		{
+			return $task->getGroupId();
+		}
+
+		return 0;
 	}
 
 	public function onFlowCreate(
@@ -563,6 +644,13 @@ class Analytics extends Common
 	public function getCollabParameter(int $collabId): string
 	{
 		return 'collabId_' . $collabId;
+	}
+
+	public function getIsDemoParameter(): string
+	{
+		$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
+
+		return 'isDemo_' . $isDemo;
 	}
 
 	/**

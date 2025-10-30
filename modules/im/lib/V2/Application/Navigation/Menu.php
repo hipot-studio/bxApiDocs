@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Application\Navigation;
 
+use Bitrix\Im\Revision;
 use Bitrix\Main\DI\ServiceLocator;
 
 /**
@@ -46,6 +47,16 @@ class Menu
 		}
 
 		return $menuItemsFormatted;
+	}
+
+	/**
+	 * Returns current menu revision number.
+	 *
+	 * @return int
+	 */
+	public static function getRevision(): int
+	{
+		return Revision::getMenu();
 	}
 
 	/**

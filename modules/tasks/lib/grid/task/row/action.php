@@ -6,6 +6,7 @@ use Bitrix\Main;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use CExtranet;
 use CTaskPlannerMaintance;
 
@@ -199,7 +200,8 @@ class Action
 			];
 		}
 
-		$copyLink = tasksServerName() . TaskPathMaker::getPath([
+		$hostUrl = Container::getInstance()->getUrlService()->getHostUrl();
+		$copyLink = $hostUrl . TaskPathMaker::getPath([
 			'user_id' => $userId,
 			'task_id' => $taskId,
 			'action' => 'view',

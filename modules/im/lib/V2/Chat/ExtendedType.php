@@ -14,8 +14,6 @@ enum ExtendedType: string
 		Chat::IM_TYPE_COMMENT => self::Comment,
 		Chat::IM_TYPE_COLLAB => self::Collab,
 		Chat::IM_TYPE_COPILOT => self::Copilot,
-		Chat::IM_TYPE_AI_ASSISTANT => self::AiAssistant,
-		Chat::IM_TYPE_AI_ASSISTANT_ENTITY => self::AiAssistantEntity,
 		Chat::IM_TYPE_OPEN => self::OpenChat,
 		Chat::IM_TYPE_CHAT => self::Chat,
 	];
@@ -29,8 +27,6 @@ enum ExtendedType: string
 	case GeneralChannel = 'GENERAL_CHANNEL';
 	case Comment = 'COMMENT';
 	case Copilot = 'COPILOT';
-	case AiAssistant = 'AI_ASSISTANT';
-	case AiAssistantEntity = 'AI_ASSISTANT_ENTITY';
 	case Collab = 'COLLAB';
 	case Announcement = 'ANNOUNCEMENT';
 	case Videoconference = 'VIDEOCONF';

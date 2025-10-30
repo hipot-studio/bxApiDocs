@@ -17,8 +17,9 @@ class UserField extends BaseController
 	 */
 	#[CloseSession]
 	public function getAction(
-		#[Permission\Read] Entity\Task $task,
-		TaskUserFieldsRepository       $fieldsRepository,
+		#[Permission\Read]
+		Entity\Task $task,
+		TaskUserFieldsRepository $fieldsRepository,
 	): Entity\UserFieldCollection
 	{
 		return $fieldsRepository->getByTaskId($task->getId());

@@ -18,8 +18,8 @@ class Flow extends BaseController
 	#[CloseSession]
 	public function getAction(
 		#[Permission\Read] Entity\Flow $flow,
-		FlowRepositoryInterface        $flowRepository,
-		GroupRepositoryInterface       $groupRepository,
+		FlowRepositoryInterface $flowRepository,
+		GroupRepositoryInterface $groupRepository,
 	): ?Entity\Flow
 	{
 		$flow = $flowRepository->getById($flow->getId());

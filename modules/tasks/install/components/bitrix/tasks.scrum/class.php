@@ -30,7 +30,6 @@ use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Component\Scrum;
 use Bitrix\Tasks\Control\Tag;
 use Bitrix\Tasks\Integration\Bizproc\Automation\Factory;
-use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
@@ -56,6 +55,7 @@ use Bitrix\Tasks\Scrum\Utility\ViewHelper;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction;
 use Bitrix\Tasks\Helper\Analytics;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class TasksScrumComponent extends \CBitrixComponent implements Controllerable, Errorable
 {
@@ -390,7 +390,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			$this->userId = Util\User::getId();
 
 			$tmpId = (is_string($post['tmpId'] ?? null) ? $post['tmpId'] : '');
-			$name = (is_string($post['name'] ?? null) ? $post['name'] : '');
+			$name = (is_string($post['name'] ?? null) ? trim($post['name']) : '');
 			$entityId = (is_numeric($post['entityId'] ?? null) ? (int) $post['entityId'] : 0);
 			$epicId = (is_numeric($post['epicId']) ? (int) $post['epicId'] : 0);
 			$parentTaskId = (is_numeric($post['parentTaskId'] ?? null) ? (int) $post['parentTaskId'] : 0);
@@ -400,7 +400,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			$sortInfo = (is_array($post['sortInfo'] ?? null) ? $post['sortInfo'] : []);
 			$info = (is_array($post['info'] ?? null) ? $post['info'] : []);
 
-			if (empty($name))
+			if ($name === '')
 			{
 				$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_ADD_NAME_ERROR'));
 
@@ -2081,7 +2081,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 	private function isScrumEnabled(): bool
 	{
-		return (new Settings())->isToolAvailable(Settings::TOOLS['scrum']);
+		return Container::getInstance()->getToolService()->isScrumAvailable();
 	}
 
 	private function includePlanTemplate(int $groupId): void

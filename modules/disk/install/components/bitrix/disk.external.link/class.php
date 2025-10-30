@@ -98,9 +98,21 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$this->downloadToken = Random::getString(12);
 			$this->storeDownloadToken($this->downloadToken);
 
-			if ($isBoardsHandler && $actionName === 'default' && $this->externalLink->allowEdit())
+			if ($this->externalLink->allowEdit())
 			{
-				$this->redirectToAction('goToEdit');
+				if ($isBoardsHandler && $this->validatePassword() && $actionName !== 'goToEdit')
+				{
+					$this->redirectToAction('goToEdit');
+
+					return true;
+				}
+
+				if (!$this->validatePassword() && $actionName !== 'default')
+				{
+					$this->redirectToAction('default');
+
+					return false;
+				}
 			}
 		}
 		else
@@ -115,7 +127,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$this->redirectToAction('default', ['session' => 'expired']);
 			}
 
-			if ($this->externalLink->hasPassword() && !$this->checkPassword())
+			if ($this->validatePassword() !== true)
 			{
 				$this->showAccessDenied();
 
@@ -228,8 +240,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected function processActionGoToEdit()
 	{
-		$file = $this->externalLink->getFile();
-		if(!$file || !$this->externalLink->allowEdit())
+		if (!$this->externalLink->getFile() || !$this->externalLink->allowEdit())
 		{
 			$this->showNotFoundPage();
 
@@ -279,23 +290,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected function processActionDefault($path = '/')
 	{
-		$validPassword = true;
-		if($this->externalLink->hasPassword())
-		{
-			$validPassword = $this->checkPassword();
-		}
-		if(!$validPassword && !$this->request->isPost())
-		{
-			$validPassword = null;
-		}
-
 		$isFolder = $this->externalLink->getObject() instanceof Folder;
 		$isFile = !$isFolder;
 
 		$server = Application::getInstance()->getContext()->getServer();
 		$this->arResult = array(
 			'PROTECTED_BY_PASSWORD' => $this->externalLink->hasPassword(),
-			'VALID_PASSWORD' => $validPassword,
+			'VALID_PASSWORD' => $this->validatePassword(),
 			'SESSION_EXPIRED' => $this->request->getQuery('session') === 'expired',
 			'SITE_NAME' => Option::get('main', 'site_name', $server->getServerName()),
 		);
@@ -390,6 +391,35 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$this->includeComponentTemplate($isFile? 'template' : 'folder');
+	}
+
+	protected function validatePassword(): ?bool
+	{
+		// Allow access if no password
+		if (!$this->externalLink->hasPassword())
+		{
+			return true;
+		}
+
+		// Get password from POST or session
+		$password = $_POST['PASSWORD'] ?? $_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] ?? null;
+
+		// If no password
+		if (!$password)
+		{
+			return $this->request->isPost()
+				? false // restrict access
+				: null; // show form
+		}
+
+		if ($this->externalLink->checkPassword($password))
+		{
+			$_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] = $password;
+
+			return true;
+		}
+
+		return false;
 	}
 
 	private function generateDocumentSession(File $file): ?DocumentSession
@@ -917,37 +947,6 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		return !$this->externalLink->hasPassword() && $this->defaultHandlerForView instanceof \Bitrix\Disk\Document\GoogleViewerHandler;
-	}
-
-	protected function checkPassword()
-	{
-		$password = null;
-		if (isset($_POST['PASSWORD']))
-		{
-			$password = $_POST['PASSWORD'];
-		}
-		elseif (isset($_SESSION["DISK_DATA"]["EXT_LINK_PASSWORD"]) && $_SESSION["DISK_DATA"]["EXT_LINK_PASSWORD"] <> '')
-		{
-			$password = $_SESSION["DISK_DATA"]["EXT_LINK_PASSWORD"];
-		}
-
-		if ($password === null)
-		{
-			return null;
-		}
-
-		if ($this->externalLink->checkPassword($password))
-		{
-			if (!isset($_SESSION["DISK_DATA"]))
-			{
-				$_SESSION["DISK_DATA"] = array();
-			}
-			$_SESSION["DISK_DATA"]["EXT_LINK_PASSWORD"] = $password;
-
-			return true;
-		}
-
-		return false;
 	}
 
 	protected function processActionShowViewHtml($path, $fileId, $pathToView, $mode = '', $print = '', $preview = '', $sizeType = '', $printUrl = '')

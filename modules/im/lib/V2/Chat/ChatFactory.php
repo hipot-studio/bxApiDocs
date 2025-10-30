@@ -5,8 +5,6 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Chat\Ai\AiAssistantChat;
-use Bitrix\Im\V2\Chat\Ai\AiAssistantEntityChat;
 use Bitrix\Im\V2\Chat\Ai\AiAssistantPrivateChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
@@ -14,6 +12,7 @@ use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class ChatFactory
 {
@@ -92,10 +91,11 @@ class ChatFactory
 			$addResult = $this->addChat($params);
 			if ($addResult->hasResult())
 			{
-				$chat = $addResult->getResult()['CHAT'];
-				$chat->setContext($this->context);
-
-				return $chat;
+				return
+					$addResult
+						->getChat()
+						?->setContext($this->context)
+				;
 			}
 		}
 
@@ -208,8 +208,6 @@ class ChatFactory
 			$type === Chat::IM_TYPE_COPILOT => new CopilotChat($params),
 			$type === Chat::IM_TYPE_COLLAB => new CollabChat($params),
 			$type === Chat::IM_TYPE_EXTERNAL => new ExternalChat($params),
-			$type === Chat::IM_TYPE_AI_ASSISTANT => new AiAssistantChat($params),
-			$type === Chat::IM_TYPE_AI_ASSISTANT_ENTITY => new AiAssistantEntityChat($params),
 			default => new NullChat(),
 		};
 
@@ -492,9 +490,9 @@ class ChatFactory
 
 	/**
 	 * @param array $params
-	 * @return Result
+	 * @return AddResult
 	 */
-	public function addChat(array $params): Result
+	public function addChat(array $params): AddResult
 	{
 		$params['ENTITY_TYPE'] ??= '';
 		$params['TYPE'] ??= Chat::IM_TYPE_CHAT;
@@ -532,7 +530,7 @@ class ChatFactory
 			return $addResult->addError(new ChatError(ChatError::CREATION_ERROR));
 		}
 
-		$resultChat = $addResult->getResult()['CHAT'] ?? null;
+		$resultChat = $addResult->getChat();
 		if ($resultChat instanceof Chat)
 		{
 			(new ChatAnalytics($resultChat))->addSubmitCreateNew();
@@ -543,14 +541,14 @@ class ChatFactory
 
 	/**
 	 * Creates a chat ensuring uniqueness for the provided ENTITY_TYPE and ENTITY_ID pair.
+	 * @param array $params ENTITY_TYPE and ENTITY_ID are required keys
+	 * @return AddResult
 	 * @see static::addChat()
 	 *
-	 * @param array $params ENTITY_TYPE and ENTITY_ID are required keys
-	 * @return Result
 	 */
-	public function addUniqueChat(array $params): Result
+	public function addUniqueChat(array $params): AddResult
 	{
-		$result = new Result();
+		$result = new AddResult();
 		if (!isset($params['ENTITY_TYPE']))
 		{
 			return $result->addError(new ChatError(ChatError::ENTITY_TYPE_EMPTY));

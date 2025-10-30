@@ -2173,6 +2173,15 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			]
 		);
 
+		$analytics = Analytics::getInstance($this->userId);
+
+		$analytics->onTaskUpdate(
+			event: Analytics::EVENT['deadline_set'],
+			section: Analytics::SECTION['tasks'],
+			subSection: Analytics::SUB_SECTION['task_card'],
+			element: Analytics::ELEMENT['deadline_field'],
+		);
+
 		if ($this->errorCollection->checkNoFatals())
 		{
 			return null;
@@ -5115,6 +5124,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$this->arResult['isFlowForm'] = $this->isFlowForm;
 		$this->arResult['isExtranetUser'] = Extranet\User::isExtranet($this->userId);
 		$this->arResult['noFlow'] = (bool)$this->request->get('NO_FLOW');
+		$this->arResult['canCreateFlow'] = FlowAccessController::can($this->userId, FlowAction::CREATE);
 
 		$this->arResult['canEditTask'] = true;
 

@@ -27,7 +27,6 @@ class User
 		private ?string $lastName = null,
 		private ?string $confirmCode = null,
 		private ?array $groupIds = null,
-		private ?string $phoneNumber = null,
 		private ?string $xmlId = null,
 		private ?bool $active = null,
 		private ?string $externalAuthId = null,
@@ -99,9 +98,9 @@ class User
 		return $this->personalMobile;
 	}
 
-	public function setPersonalMobile(?string $authPhoneNumber): void
+	public function setPersonalMobile(?string $personalMobile): void
 	{
-		$this->personalMobile = $authPhoneNumber;
+		$this->personalMobile = $personalMobile;
 	}
 
 	public function getInviteStatus(): InvitationStatus
@@ -242,12 +241,12 @@ class User
 
 	public function getPhoneNumber(): ?string
 	{
-		return $this->phoneNumber;
+		return $this->getAuthPhoneNumber();
 	}
 
 	public function setPhoneNumber(?string $phoneNumber): void
 	{
-		$this->phoneNumber = $phoneNumber;
+		$this->setAuthPhoneNumber($phoneNumber);
 	}
 
 	public function getGroupIds(): ?array

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Infrastructure\Controller\Task;
 
-use Bitrix\Tasks\V2\Public\Command\Task\UpdatePlanCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Plan\UpdatePlanCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
@@ -17,7 +17,7 @@ class Plan extends BaseController
 	 */
 	public function updateAction(
 		#[Permission\Update]
-		Entity\Task $task
+		Entity\Task $task,
 	): ?Entity\EntityInterface
 	{
 		$result = (new UpdatePlanCommand(
@@ -26,6 +26,8 @@ class Plan extends BaseController
 			startPlanTs: $task->startPlanTs,
 			endPlanTs: $task->endPlanTs,
 			duration: $task->plannedDuration,
+			matchesWorkTime: $task->matchesWorkTime,
+			matchesSubTasksTime: $task->matchesSubTasksTime,
 		))->run();
 
 		if (!$result->isSuccess())

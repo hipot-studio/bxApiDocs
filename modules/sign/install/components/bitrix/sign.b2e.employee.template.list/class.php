@@ -667,7 +667,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 					Query::filter()
 						->logic('or')
 						->whereIn('TEMPLATE.DOCUMENT.INITIATED_BY_TYPE', $initiatedByTypeValues)
-						->where('ENTITY_TYPE', 'FOLDER')
+						->where('ENTITY_TYPE', \Bitrix\Sign\Type\Template\EntityType::FOLDER->value)
 				);
 			}
 			else
@@ -694,7 +694,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 				Query::filter()
 					->logic('or')
 					->where('TEMPLATE.DOCUMENT.INITIATED_BY_TYPE', InitiatedByType::COMPANY->toInt())
-					->where('ENTITY_TYPE', 'FOLDER')
+					->where('ENTITY_TYPE', \Bitrix\Sign\Type\Template\EntityType::FOLDER->value)
 			);
 		}
 

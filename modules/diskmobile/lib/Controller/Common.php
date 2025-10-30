@@ -3,8 +3,6 @@
 namespace Bitrix\DiskMobile\Controller;
 
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
-use Bitrix\Disk;
-use Bitrix\Main\Engine\CurrentUser;
 
 class Common extends Base
 {
@@ -108,7 +106,7 @@ class Common extends Base
 		$targetFolderId = $resolvedPath['targetFolder']->getId();
 
 		$targetFolder = $this->forward(
-			\Bitrix\DiskMobile\Controller\Common::class,
+			self::class,
 			'getByIdWithRights',
 			['id' => $targetFolderId],
 		);

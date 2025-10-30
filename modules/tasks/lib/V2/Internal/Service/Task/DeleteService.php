@@ -58,6 +58,12 @@ class DeleteService
 	{
 		
 	}
+
+	/**
+	 * @throws TaskNotExistsException
+	 * @throws TaskStopDeleteException
+	 * @throws WrongTaskIdException
+	 */
 	public function delete(int $taskId, DeleteConfig $config): void
 	{
 		if ($taskId <= 0)
@@ -151,5 +157,6 @@ class DeleteService
 	private function loadMessages(): void
 	{
 		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/task.php');
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/handler/taskfieldhandler.php');
 	}
 }

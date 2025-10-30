@@ -148,6 +148,19 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return Chat::getInstance($this->getCommonChatId());
 	}
 
+	public function getChatIds():array
+	{
+		$chatIds = [];
+
+		foreach ($this as $message)
+		{
+			$chatId = $message->getChatId();
+			$chatIds[$chatId] = $chatId;
+		}
+
+		return $chatIds;
+	}
+
 	//endregion
 
 	//region Rest

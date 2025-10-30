@@ -840,11 +840,11 @@ class Group extends Controller
 		return $actionResult;
 	}
 
-	private function processAnswer(int $ProcessedItems): array
+	private function processAnswer(int $processedItems): array
 	{
-		$this->incrementProcessedItems($ProcessedItems);
+		$this->incrementProcessedItems($processedItems);
 
-		if ($this->totalItems === $this->processedItems)
+		if ($this->shouldProcessBeCompleted($processedItems))
 		{
 			$this->setProcessDone();
 		}
@@ -886,6 +886,14 @@ class Group extends Controller
 	private function incrementProcessedItems(int $incrementItems): void
 	{
 		$this->processedItems += $incrementItems;
+	}
+
+	private function shouldProcessBeCompleted(int $processedItems): bool
+	{
+		return
+			$processedItems === 0
+			|| $this->totalItems === $this->processedItems
+		;
 	}
 
 	private function setProcessDone(bool $done = true): void

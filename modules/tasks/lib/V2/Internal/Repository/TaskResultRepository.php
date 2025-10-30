@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
-use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\V2\Internal\Entity\Result;
 use Bitrix\Tasks\V2\Internal\Entity\ResultCollection;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
@@ -15,23 +14,14 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 {
 	public function __construct(
 		private readonly UserRepositoryInterface  $userRepository,
+		private readonly TaskParameterRepositoryInterface $taskParameterRepository,
 	)
 	{
 	}
 
 	public function isResultRequired(int $taskId): bool
 	{
-		$res = ParameterTable::getList([
-			'select' => ['ID'],
-			'filter' => [
-				'=TASK_ID' => $taskId,
-				'=CODE' => ParameterTable::PARAM_RESULT_REQUIRED,
-				'=VALUE' => 'Y',
-			],
-			'limit' => 1
-		])->fetch();
-
-		return $res && (int)$res['ID'] > 0;
+		return $this->taskParameterRepository->isResultRequired($taskId);
 	}
 
 	public function getById(int $resultId): Result|null
@@ -138,7 +128,7 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 	private function saveFiles(int $resultId, Result $result): void
 	{
 		$filesInDb = $this->getFiles($resultId);
-		$incomingFileIds = $result->fileIds;
+		$incomingFileIds = $result->fileIds ?? [];
 		Collection::normalizeArrayValuesByInt($incomingFileIds);
 
 		if ($filesInDb === $incomingFileIds)

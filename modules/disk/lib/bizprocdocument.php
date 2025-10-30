@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internals\FileHelper;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
@@ -15,12 +16,12 @@ use CFile;
 
 Loc::loadMessages(__FILE__);
 
-if (!Integration\BizProcManager::isAvailable())
+if (!Loader::includeModule('bizproc'))
 {
 	return;
 }
 
-class BizProcDocument
+class BizProcDocument implements \IBPWorkflowDocument
 {
 	const DOCUMENT_TYPE_PREFIX = 'STORAGE_';
 
@@ -1884,6 +1885,16 @@ class BizProcDocument
 							if (!array_key_exists("MODULE_ID", $value) || $value["MODULE_ID"] == '')
 								$value["MODULE_ID"] = "bizproc";
 
+							if (!FileHelper::hasValidFileKeys($value))
+							{
+								$value = null;
+								$errors[] = array(
+									'code' => "ErrorValue",
+									'message' => Loc::getMessage("DISK_UNKNOW"),
+									'parameter' => $fieldName["Field"],
+								);
+							}
+
 							$value = CFile::saveFile($value, "bizproc_wf", true, true);
 							if (!$value)
 							{
@@ -2303,7 +2314,7 @@ class BizProcDocument
 		}
 	}
 
-	public static function getAllowableOperations()
+	public static function getAllowableOperations($documentType)
 	{
 		return array();
 	}
@@ -2370,7 +2381,11 @@ class BizProcDocument
 
 	public static function getBizprocEditorUrl($documentType): ?string
 	{
-
 		return '/docs/bp_edit/#ID#/';
+	}
+
+	public static function recoverDocumentFromHistory($documentId, $arDocument)
+	{
+		return true;
 	}
 }

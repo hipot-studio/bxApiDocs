@@ -8,24 +8,18 @@ use Bitrix\Tasks\Flow\Option\OptionDictionary;
 use Bitrix\Tasks\Flow\Option\OptionService;
 use Bitrix\Tasks\Flow\Responsible\ResponsibleQueue\ResponsibleQueueService;
 use Bitrix\Tasks\Flow\Task\Status;
+use Bitrix\Tasks\Flow\Task\Trait\TaskFlowTrait;
+use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Psr\Container\NotFoundExceptionInterface;
 
 class QueueDistributorStrategy implements DistributorStrategyInterface
 {
+	use TaskFlowTrait;
+
 	public function distribute(Flow $flow, array $fields, array $taskData): int
 	{
-		$isTaskAddedToFlow = false;
-		if (isset($fields['FLOW_ID']) && (int)$fields['FLOW_ID'] > 0)
-		{
-			$isTaskAddedToFlow =
-				!isset($taskData['FLOW_ID'])
-				|| (int)$taskData['FLOW_ID'] !== (int)$fields['FLOW_ID']
-			;
-		}
-
-		$isTaskStatusNew =
-			isset($taskData['REAL_STATUS'])
-			&& in_array($taskData['REAL_STATUS'], [Status::NEW, Status::PENDING])
-		;
+		$isTaskAddedToFlow = $this->isTaskAddedToFlow($fields, $taskData);
+		$isTaskStatusNew = $this->isTaskStatusNew($taskData);
 
 		if (empty($taskData) || ($isTaskAddedToFlow && $isTaskStatusNew))
 		{

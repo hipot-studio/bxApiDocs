@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Receiver;
 
 use Bitrix\Calendar\Synchronization\Internal\Exception\LogicException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\NoLogSynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Main\ArgumentException;
@@ -38,6 +39,11 @@ trait ExceptionProcessorTrait
 				if (!$previous->isRecoverable())
 				{
 					throw new UnrecoverableMessageException($e->getMessage(), $e->getCode(), $e);
+				}
+
+				if ($previous instanceof NoLogSynchronizerException)
+				{
+					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
 				}
 
 				$vendorException = $previous->getPrevious();

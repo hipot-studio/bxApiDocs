@@ -80,7 +80,6 @@ class Permission
 		self::$permissionsByChatTypes[ExtendedType::Private->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
-			Action::Mute->value => Chat::ROLE_NONE,
 			Action::Leave->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 			Action::Kick->value => Chat::ROLE_NONE,
@@ -110,8 +109,6 @@ class Permission
 			Action::Send->value => $roleForPostToGeneralChannel,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::Call->value => Chat::ROLE_NONE,
-			Action::CreateTask->value => Chat::ROLE_NONE,
-			Action::CreateMeeting->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Copilot->value] = [
@@ -127,8 +124,6 @@ class Permission
 
 		self::$permissionsByChatTypes[ExtendedType::Channel->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
-			Action::CreateTask->value => Chat::ROLE_NONE,
-			Action::CreateMeeting->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
@@ -136,8 +131,6 @@ class Permission
 
 		self::$permissionsByChatTypes[ExtendedType::OpenChannel->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
-			Action::CreateTask->value => Chat::ROLE_NONE,
-			Action::CreateMeeting->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
@@ -303,7 +296,6 @@ class Permission
 				GlobalAction::CreateChannel->value => true,
 				GlobalAction::CreateConference->value => true,
 				GlobalAction::CreateCopilot->value => true,
-				GlobalAction::CreateAiAssistant->value => true,
 				GlobalAction::CreateChat->value => true,
 				GlobalAction::GetMarket->value => true,
 				GlobalAction::GetOpenlines->value => true,
@@ -316,7 +308,6 @@ class Permission
 				GlobalAction::CreateChannel->value => false,
 				GlobalAction::CreateConference->value => false,
 				GlobalAction::CreateCopilot->value => false,
-				GlobalAction::CreateAiAssistant->value => false,
 				GlobalAction::CreateChat->value => false,
 				GlobalAction::GetMarket->value => false,
 				GlobalAction::GetOpenlines->value => false,
@@ -329,7 +320,6 @@ class Permission
 				GlobalAction::CreateChannel->value => false,
 				GlobalAction::CreateConference->value => false,
 				GlobalAction::CreateCopilot->value => true,
-				GlobalAction::CreateAiAssistant->value => true,
 				GlobalAction::CreateChat->value => false,
 				GlobalAction::GetMarket->value => false,
 				GlobalAction::GetOpenlines->value => false,
@@ -378,11 +368,6 @@ class Permission
 			if ($type === Chat::IM_TYPE_CHANNEL || $type === Chat::IM_TYPE_OPEN_CHANNEL)
 			{
 				return GlobalAction::CreateChannel;
-			}
-
-			if ($type === Chat::IM_TYPE_AI_ASSISTANT)
-			{
-				return GlobalAction::CreateAiAssistant;
 			}
 
 			if ($type === Chat::IM_TYPE_COPILOT)

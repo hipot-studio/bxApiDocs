@@ -45,6 +45,7 @@ use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\Extranet;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 Loc::loadMessages(__FILE__);
 
@@ -151,26 +152,43 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 	}
 
-		public function executeComponent()
+	public function executeComponent()
+	{
+		$result = parent::executeComponent();
+
+		if ($this->exportAs === 'EXCEL')
 		{
-			$result = parent::executeComponent();
-
-			if ($this->exportAs === 'EXCEL')
+			if (!$this->errors->checkNoFatals())
 			{
-				unset($this->listParameters['filter']['ONLY_ROOT_TASKS']);
-				$totalCount = Manager\Task::getCount($this->listParameters['filter'], $this->arParams['PROVIDER_PARAMETERS']);
+				$errors = $this->errors?->toArray() ?? [];
+				$errors = array_merge($errors, ['userId' => $this->userId]);
 
-				$result = [
-					'PROCESSED_ITEMS' => count($this->arResult['LIST']),
-					'TOTAL_ITEMS' => $totalCount,
-					'LAST_EXPORTED_ID' => end($this->arResult['LIST'])['id'],
-				];
+				Container::getInstance()
+					->getLogger()
+					->logWarning($errors);
+
+				$this->handleAnalytics();
+
+				return $result;
 			}
 
-			$this->handleAnalytics();
+			unset($this->listParameters['filter']['ONLY_ROOT_TASKS']);
+			$totalCount = Manager\Task::getCount(
+				$this->listParameters['filter'],
+				$this->arParams['PROVIDER_PARAMETERS']
+			);
 
-			return $result;
+			$result = [
+				'PROCESSED_ITEMS' => count($this->arResult['LIST']),
+				'TOTAL_ITEMS' => $totalCount,
+				'LAST_EXPORTED_ID' => end($this->arResult['LIST'])['id'],
+			];
 		}
+
+		$this->handleAnalytics();
+
+		return $result;
+	}
 
 	protected function setUserId()
 	{

@@ -15,7 +15,8 @@ class PrepareTitle implements PrepareFieldInterface
 
 	public function __invoke(array $fields): array
 	{
-		$title = trim((string)$fields['TITLE']);
+		$title = (string)($fields['TITLE'] ?? '');
+		$title = trim($title);
 		if ($title === '')
 		{
 			throw new TaskFieldValidateException(Loc::getMessage('TASKS_BAD_TITLE'));

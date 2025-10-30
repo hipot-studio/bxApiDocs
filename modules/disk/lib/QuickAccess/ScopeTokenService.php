@@ -6,6 +6,7 @@ namespace Bitrix\Disk\QuickAccess;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\File;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Config\Option;
@@ -298,33 +299,14 @@ class ScopeTokenService
 			return null;
 		}
 
-		if ($attachedObject instanceof AttachedObject)
-		{
-			if ($attachedObject->isSpecificVersion())
-			{
-				$version = $attachedObject->getVersion();
-				if ($version === null)
-				{
-					return null;
-				}
+		$fileObject = $this->extractFileObject($attachedObject);
 
-				$fileData = $version->getFile();
-			}
-			else
-			{
-				$fileObject = $attachedObject->getFile();
-				if (!$fileObject)
-				{
-					return null;
-				}
-
-				$fileData = $fileObject->getFile();
-			}
-		}
-		else
+		if (!$fileObject instanceof File)
 		{
-			$fileData = $attachedObject->getFile();
+			return null;
 		}
+
+		$fileData = $fileObject->getFile();
 
 		if (!$fileData)
 		{
@@ -336,7 +318,44 @@ class ScopeTokenService
 			return null;
 		}
 
-		return $this->getInfoForAccelRedirect($fileData);
+		$previewFileData = [];
+		if (TypeFile::isVideo($fileObject))
+		{
+			$previewFileData = $fileObject->getView()->getPreviewData();
+		}
+
+		$infoForAccelRedirect = $this->getInfoForAccelRedirect($fileData);
+
+		if ($infoForAccelRedirect === null)
+		{
+			return null;
+		}
+
+		if (!empty($previewFileData) && is_array($previewFileData) && isset($previewFileData['ID']))
+		{
+			$infoForAccelRedirect['preview'] = $this->getInfoForAccelRedirect($previewFileData);
+		}
+		else
+		{
+			$infoForAccelRedirect['preview'] = $infoForAccelRedirect;
+		}
+
+		return $infoForAccelRedirect;
+	}
+
+	private function extractFileObject(AttachedObject|BaseObject $attachedObject): ?BaseObject
+	{
+		if ($attachedObject instanceof AttachedObject)
+		{
+			if ($attachedObject->isSpecificVersion())
+			{
+				return $attachedObject->getVersion()?->getObject();
+			}
+
+			return $attachedObject->getFile();
+		}
+
+		return $attachedObject;
 	}
 
 	/**
@@ -400,7 +419,7 @@ class ScopeTokenService
 			'filename' => $fileData['FILE_NAME'],
 			'contentType' => TypeFile::normalizeMimeType($fileData['CONTENT_TYPE'], $filePath),
 			'expirationTime' => time() + ScopeStorage::DEFAULT_FILE_METADATA_TTL,
-			'id' => (int)$fileData['ID']
+			'id' => (int)$fileData['ID'],
 		];
 	}
 

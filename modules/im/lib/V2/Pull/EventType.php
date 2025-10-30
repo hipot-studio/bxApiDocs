@@ -13,4 +13,5 @@ enum EventType: string
 	case ChangeEngine = 'changeEngine';
 	case ChatUserAdd = 'chatUserAdd';
 	case ChatUserLeave = 'chatUserLeave';
+	case FileTranscription = 'fileTranscription';
 }

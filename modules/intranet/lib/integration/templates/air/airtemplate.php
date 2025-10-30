@@ -100,7 +100,7 @@ final class AirTemplate
 				isset($traceLine['function']) &&
 				in_array(
 					$traceLine['function'],
-					['ob_end_flush', 'ob_end_clean', 'LocalRedirect', 'ForkActions', 'fastcgi_finish_request']
+					['ob_end_flush', 'ob_end_clean', 'LocalRedirect', 'fastcgi_finish_request']
 				)
 			)
 			{

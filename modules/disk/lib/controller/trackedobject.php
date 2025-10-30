@@ -232,52 +232,27 @@ class TrackedObject extends BaseObject
 			/** @var Disk\File $model */
 			$model = Disk\File::buildFromRow($row);
 
-			$trackedObjectId = $fileToTrackObjectIds[(int)$model->getId()];
+			$modelId = (int)$model->getId();
+			$trackedObjectId = $fileToTrackObjectIds[$modelId];
+			$file = $model->jsonSerialize();
+
+			$items[$modelId] = [
+				'trackedObject' => [
+					'id' => $trackedObjectId,
+					'links' => [
+						/** @see TrackedObject::downloadAction */
+						'download' => $this->getActionUri('download', ['id' => $trackedObjectId]),
+						/** @see \Bitrix\Disk\Controller\File::showPreviewAction() */
+						/** @see \Bitrix\Disk\Controller\File::showImageAction() */
+						'preview' => $file['links']['preview'] ?? null,
+					],
+					'file' => $file,
+				],
+			];
+
 			if ($showRights)
 			{
-				$rights = $rightsManager->getAvailableActions($model, $securityContext);
-				$items[(int)$model->getId()] = [
-					'trackedObject' => [
-						'id' => $trackedObjectId,
-						'rights' => $rights,
-						'links' => [
-							/** @see TrackedObject::downloadAction */
-							'download' => $this->getActionUri('download', ['id' => $trackedObjectId]),
-							/** @see TrackedObject::showPreviewAction */
-							'preview' => $this->getActionUri('showPreview', [
-								'id' => $trackedObjectId,
-								'humanRE' => 1,
-								'width' => 640,
-								'height' => 640,
-								'signature' => ParameterSigner::getImageSignature($trackedObjectId, 640, 640),
-							]),
-						],
-						'file' => [
-							...$model->jsonSerialize(),
-						],
-					],
-				];
-			}
-			else
-			{
-				$items[(int)$model->getId()] = [
-					'trackedObject' => [
-						'id' => $trackedObjectId,
-						'links' => [
-							/** @see TrackedObject::downloadAction */
-							'download' => $this->getActionUri('download', ['id' => $trackedObjectId]),
-							/** @see TrackedObject::showPreviewAction */
-							'preview' => $this->getActionUri('showPreview', [
-								'id' => $trackedObjectId,
-								'humanRE' => 1,
-								'width' => 640,
-								'height' => 640,
-								'signature' => ParameterSigner::getImageSignature($trackedObjectId, 640, 640),
-							]),
-						],
-						'file' => $model->jsonSerialize(),
-					],
-				];
+				$items[$modelId]['trackedObject']['rights'] = $rightsManager->getAvailableActions($model, $securityContext);
 			}
 		}
 

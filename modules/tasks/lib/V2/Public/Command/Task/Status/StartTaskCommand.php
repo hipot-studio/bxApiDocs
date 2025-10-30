@@ -23,14 +23,13 @@ class StartTaskCommand extends AbstractCommand
 
 	}
 
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
 		$result = new Result();
 
 		$statusService = Container::getInstance()->getStatusService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
 
-		$handler = new StartTaskHandler($statusService, $consistencyResolver);
+		$handler = new StartTaskHandler($statusService);
 
 		try
 		{

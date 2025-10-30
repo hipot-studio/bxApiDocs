@@ -18,6 +18,7 @@ use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Localization\Loc;
 use CGlobalCounter;
 use CIMMessageParamAttach;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class VideoConfChat extends GroupChat
 {
@@ -33,18 +34,15 @@ class VideoConfChat extends GroupChat
 		return true;
 	}
 
-	public function add(array $params, ?Context $context = null): Result
+	public function add(array $params, ?Context $context = null): AddResult
 	{
 		$addResult = parent::add($params, $context);
-		if (!$addResult->isSuccess() || !$addResult->hasResult())
+		$chat = $addResult->getChat();
+
+		if (!isset($chat) || !$addResult->isSuccess())
 		{
 			return $addResult;
 		}
-
-		$chatResult = $addResult->getResult();
-		/** @var Chat $chat */
-		$chat = $chatResult['CHAT'];
-
 
 		if (
 			!isset($params['VIDEOCONF']['ALIAS_DATA'])
@@ -129,12 +127,11 @@ class VideoConfChat extends GroupChat
 			'SKIP_USER_CHECK' => 'Y',
 		]);
 
-		$addResult->setResult([
-			'CHAT_ID' => $chat->getChatId(),
-			'CHAT' => $chat,
-			'ALIAS' => $aliasData['ALIAS'],
-			'LINK' => $aliasData['LINK'],
-		]);
+		$addResult
+			->setChat($chat)
+			->setAlias($aliasData['ALIAS'])
+			->setLink($aliasData['LINK'])
+		;
 
 		$chat->isFilledNonCachedData = false;
 

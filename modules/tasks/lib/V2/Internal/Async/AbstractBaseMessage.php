@@ -55,4 +55,9 @@ abstract class AbstractBaseMessage extends AbstractMessage
 
 		return $payload;
 	}
+
+	public function sendByInternalQueueId(): void
+	{
+		$this->send($this->getQueueId()->value);
+	}
 }

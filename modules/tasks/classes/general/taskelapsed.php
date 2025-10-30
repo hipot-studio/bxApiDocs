@@ -22,7 +22,7 @@ class CTaskElapsedTime
 	/**
 	 * @deprecated
 	 * @TasksV2
-	 * @use \Bitrix\Tasks\V2\Public\Command\Task\Tracking\AddElapsedTimeCommand
+	 * @use \Bitrix\Tasks\V2\Internal\Service\Task\ElapsedTimeService
 	 */
 	function Add($arFields, $arParams = array())
 	{
@@ -66,22 +66,27 @@ class CTaskElapsedTime
 
 			if (\Bitrix\Tasks\V2\FormV2Feature::isOn('elapsed'))
 			{
+				$service = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getElapsedTimeService();
 				$mapper = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getElapsedTimeMapper();
 
 				$arFields['CREATED_DATE'] = $createdDate;
 
 				$elapsedTime = $mapper->mapToEntity($arFields);
 
-				$result = (new \Bitrix\Tasks\V2\Public\Command\Task\Tracking\AddElapsedTimeCommand(
-					elapsedTime: $elapsedTime,
-				))->run();
-
-				if (!$result->isSuccess())
+				try
 				{
+					[$id] = $service->add($elapsedTime);
+				}
+				catch (\Bitrix\Tasks\V2\Internal\Exception\Task\ElapsedTimeException $e)
+				{
+					\Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+						->getLogger()
+						->logError($e);
+
 					return false;
 				}
 
-				return (int)$result->getObject()?->getId();
+				return $id;
 			}
 
 			$curDuration = 0;

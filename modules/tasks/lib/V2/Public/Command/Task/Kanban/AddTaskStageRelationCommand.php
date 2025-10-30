@@ -22,11 +22,11 @@ class AddTaskStageRelationCommand extends AbstractCommand
 	{
 
 	}
-	protected function execute(): Result
+	protected function executeInternal(): Result
 	{
-		$taskStageRepository = Container::getInstance()->getTaskStageRepository();
+		$taskStageService = Container::getInstance()->getTaskStageService();
 
-		$handler = new AddTaskStageRelationHandler($taskStageRepository);
+		$handler = new AddTaskStageRelationHandler($taskStageService);
 
 		$result = new Result();
 		try

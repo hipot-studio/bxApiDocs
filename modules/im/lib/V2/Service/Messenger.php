@@ -221,7 +221,7 @@ class Messenger
 				return;
 			}
 
-			$taskService->registerTask($chatId, $messageId, TaskItem::initByTaskObject($task));
+			$taskService->registerTask($chat, $messageId, TaskItem::initByTaskObject($task));
 		}
 		catch (\Bitrix\Main\SystemException $exception)
 		{

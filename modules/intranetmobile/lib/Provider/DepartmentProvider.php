@@ -119,4 +119,15 @@ class DepartmentProvider
 		return $employeeCounts;
 	}
 
+	public function getUserDepartments(int $userId): array
+	{
+		$nodes = $this->nodeRepository->findAllByUserId($userId);
+		$result = [];
+		foreach ($nodes as $node)
+		{
+			$result[$node->id] = $this->getParents($node->id);
+		}
+
+		return $result;
+	}
 }

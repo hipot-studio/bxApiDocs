@@ -3,8 +3,10 @@
 namespace Bitrix\Mobile\Profile\Provider;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Mobile\Profile\Enum\TabType;
 use Bitrix\Mobile\Profile\Tab\ProfileTabFactory;
+use Bitrix\Mobile\Provider\UserRepository;
 
 class ProfileProvider
 {
@@ -26,6 +28,13 @@ class ProfileProvider
 	 */
 	public function getTabs(string $selectedTabId): array
 	{
+		$canViewProfile = $this->canView();
+		if (!$canViewProfile)
+		{
+			return [
+				'canView' => false,
+			];
+		}
 		$availableTabs = $this->getAvailableTabs();
 
 		$selectedTabNotAvailable = empty(array_filter($availableTabs, function ($tab) use ($selectedTabId) {
@@ -40,6 +49,7 @@ class ProfileProvider
 		return [
 			'tabs' => $availableTabs,
 			'selectedTabId' => $selectedTabId,
+			'canView' => true,
 		];
 	}
 
@@ -83,19 +93,127 @@ class ProfileProvider
 	}
 
 	/**
-	 * @param TabType $tabType
-	 * @return array
-	 */
-	public function getTabData(TabType $tabType): array
-	{
-		return ProfileTabFactory::createTab($tabType, $this->viewerId, $this->ownerId)->getData();
-	}
-
-	/**
 	 * @return bool
 	 */
 	public static function isNewProfileFeatureEnabled(): bool
 	{
 		return Option::get('mobile', 'profile_feature_enabled', 'N') === 'Y';
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getPermissions(): array
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return [];
+		}
+
+		$access = \Bitrix\Intranet\User\Access\UserAccessController::createByDefault();
+		$targetUser = \Bitrix\Intranet\User\Access\Model\TargetUserModel::createFromId($this->ownerId);
+
+		$valuesForBatchCheck = \Bitrix\Intranet\User\Access\UserActionDictionary::valuesForBatchCheck([
+			\Bitrix\Intranet\User\Access\UserActionDictionary::VIEW,
+			\Bitrix\Intranet\User\Access\UserActionDictionary::UPDATE,
+		]);
+
+		return $access->batchCheck($valuesForBatchCheck, $targetUser);
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function canView(): bool
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return false;
+		}
+
+		$access = \Bitrix\Intranet\User\Access\UserAccessController::createByDefault();
+		$targetUser = \Bitrix\Intranet\User\Access\Model\TargetUserModel::createFromId($this->ownerId);
+
+		return $access->check(\Bitrix\Intranet\User\Access\UserActionDictionary::VIEW, $targetUser);
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function canUpdate(): bool
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return false;
+		}
+
+		$access = \Bitrix\Intranet\User\Access\UserAccessController::createByDefault();
+		$targetUser = \Bitrix\Intranet\User\Access\Model\TargetUserModel::createFromId($this->ownerId);
+
+		return $access->check(\Bitrix\Intranet\User\Access\UserActionDictionary::UPDATE, $targetUser);
+	}
+
+	public function save($fieldsToSave): array
+	{
+		$tags = $fieldsToSave['tags'] ?? null;
+
+		if ($tags !== null)
+		{
+			$tagProvider = new \Bitrix\Mobile\Profile\Provider\TagProvider();
+			$tagProvider->saveTags($this->ownerId, $tags);
+		}
+
+		$commonFields = $fieldsToSave['commonFields'] ?? null;
+		if ($commonFields !== null)
+		{
+			$preparedCommonFields = [];
+			foreach ($commonFields as $field)
+			{
+				if ($field['type'] === 'date')
+				{
+					if (empty($field['value']))
+					{
+						$preparedCommonFields[$field['id']] = null;
+					}
+					else
+					{
+						$dateTime = (new \DateTime())->setTimestamp($field['value']);
+						$preparedCommonFields[$field['id']] = new \Bitrix\Main\Type\Date($dateTime->format('Y-m-d'), 'Y-m-d');
+					}
+				}
+				else
+				{
+					$preparedCommonFields[$field['id']] = $field['value'] ?? null;
+				}
+			}
+			$userFields = \Bitrix\Intranet\Public\Provider\User\UserFieldsProvider::createByDefault()->getByUserData($preparedCommonFields);
+
+			$command = new \Bitrix\Intranet\User\Command\UpdateUserFieldsCommand($this->ownerId, $userFields);
+			$command->run();
+		}
+
+		$avatar = $fieldsToSave['header']['image'];
+		if (!empty($avatar) && Loader::includeModule('rest'))
+		{
+			$base64 = $avatar['base64'];
+			$avatarData = [
+				'bx_mobile' => 'Y',
+				'bx_mobile_background' => 'N',
+				'id' => $this->ownerId,
+				'PERSONAL_PHOTO' => [
+					'avatar.png',
+					$base64,
+				],
+			];
+			\Bitrix\Rest\Api\User::userUpdate($avatarData);
+		}
+
+		// Here you can add other data processing logic if needed
+
+		return ProfileTabFactory::createTab(
+			TabType::COMMON,
+			$this->viewerId,
+			$this->ownerId,
+		)->getData();
 	}
 }

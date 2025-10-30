@@ -20,11 +20,11 @@ use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Comments\Internals\Comment;
 use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
+use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskNotFoundException;
+use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
-use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\DeleteTaskCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
+use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
@@ -288,11 +288,15 @@ class Task
 			);
 
 			$mapper = Container::getInstance()->getOrmTaskMapper();
-			$entity = $mapper->mapToEntity($fields);
-			$command = new AddTaskCommand($entity, $config);
+			$service = Container::getInstance()->getAddTaskService();
 
-			/** @var \Bitrix\Tasks\V2\Internal\Entity\Task $entity */
-			$entity = $command->run()->getObject();
+			$entity = $mapper->mapToEntity($fields);
+
+			$entity = $service->add(
+				task: $entity,
+				config: $config,
+				useConsistency: false
+			);
 
 			return $mapper->mapToObject($entity);
 		}
@@ -400,33 +404,26 @@ class Task
 			);
 
 			$mapper = Container::getInstance()->getOrmTaskMapper();
+			$service = Container::getInstance()->getUpdateTaskService();
+
 			$fields['ID'] = $taskId;
 
 			$entity = $mapper->mapToEntity($fields);
-			$command = new UpdateTaskCommand($entity, $config);
 
-			$result = $command->run();
-
-			foreach ($result->getErrors() as $error)
+			try
 			{
-				if (
-					$error->getCode() === ErrorCode::WRONG_TASK_ID
-					|| $error->getCode() === ErrorCode::TASK_NOT_EXISTS
-				)
-				{
-					return false;
-				}
+				$entity = $service->update(
+					task: $entity,
+					config: $config,
+					useConsistency: false
+				);
+			}
+			catch (WrongTaskIdException|TaskNotExistsException)
+			{
+				return false;
 			}
 
-			if (!$result->isSuccess())
-			{
-				throw new TaskUpdateException($result->getError()?->getMessage());
-			}
-
-			/** @var \Bitrix\Tasks\V2\Internal\Entity\Task $entity */
-			$entity = $result->getObject();
-
-			$this->legacyOperationResultData = $command->config->getRuntime()->getLegacyOperationResultData();
+			$this->legacyOperationResultData = $config->getRuntime()->getLegacyOperationResultData();
 
 			return $mapper->mapToObject($entity);
 		}
@@ -553,22 +550,22 @@ class Task
 				skipBP: $this->skipBP
 			);
 
-			$command = new DeleteTaskCommand($taskId, $config);
+			$service = Container::getInstance()->getDeleteTaskService();
 
-			$result = $command->run();
-			foreach ($result->getErrors() as $error)
+			try
 			{
-				if (
-					$error->getCode() === ErrorCode::WRONG_TASK_ID
-					|| $error->getCode() === ErrorCode::TASK_NOT_EXISTS
-					|| $error->getCode() === ErrorCode::TASK_STOP_DELETE
-				)
-				{
-					return false;
-				}
+				$service->delete(
+					taskId: $taskId,
+					config: $config,
+					useConsistency: false
+				);
+			}
+			catch (WrongTaskIdException|TaskNotExistsException|TaskStopDeleteException)
+			{
+				return false;
 			}
 
-			return $result->isSuccess();
+			return true;
 		}
 
 		if ($taskId < 1)

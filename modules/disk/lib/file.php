@@ -47,6 +47,7 @@ class File extends BaseObject
 	const ERROR_ALREADY_LOCKED                = 'DISK_FILE_22008';
 	const ERROR_INVALID_LOCK_TOKEN            = 'DISK_FILE_22009';
 	const ERROR_INVALID_USER_FOR_UNLOCK       = 'DISK_FILE_22010';
+	const ERROR_INVALID_FILE_ARRAY 		      = 'DISK_FILE_22011';
 
 	const SECONDS_TO_JOIN_VERSION = 300;
 
@@ -338,6 +339,14 @@ class File extends BaseObject
 		}
 
 		$previewFileData['MODULE_ID'] = 'main';
+
+		if (!Disk\Internals\FileHelper::hasValidFileKeys($previewFileData))
+		{
+			$result->addError(new Error('Preview file data is not valid'));
+
+			return $result;
+		}
+
 		$previewId = \CFile::saveFile($previewFileData, 'main_preview', true, true);
 		if (!$previewId)
 		{
@@ -1096,6 +1105,12 @@ class File extends BaseObject
 			$fileArray['type'] = '';
 		}
 		$fileArray['type'] = TypeFile::normalizeMimeType($fileArray['type'], $this->name);
+
+		if (!Disk\Internals\FileHelper::hasValidFileKeys($fileArray))
+		{
+			$this->errorCollection->add(array(new Error('File data is not valid')));
+			return null;
+		}
 
 
 		$fileId = CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);

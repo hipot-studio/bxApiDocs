@@ -256,6 +256,9 @@ class WorktimeService extends BaseService
 			$this->safeRun($this->save($actualRecord, $worktimeEvents));
 			// we need ID, so we save and then updating if needed
 			$this->runAfterRecordSave($actualRecord, $actionListResult->getSchedule(), $actionListResult->getShift(), $recordForm->getFirstEventName());
+			
+			// clear orm cache for findLatestRecord
+			(\Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable::getEntity())->cleanCache();
 
 			if ($actionListResult->getSchedule())
 			{
@@ -282,8 +285,10 @@ class WorktimeService extends BaseService
 							'action' => $workTimeAction,
 							'dateStart' => $currentInfo['DATE_START'] ? (MakeTimeStamp($currentInfo['DATE_START']) - \CTimeZone::GetOffset()) : '',
 							'dateFinish' => $currentInfo['DATE_FINISH'] ? (MakeTimeStamp($currentInfo['DATE_FINISH']) - \CTimeZone::GetOffset()) : '',
-							'timeLeaks' => $currentInfo['TIME_LEAKS'],
-							'lastPause' => $currentInfo['LAST_PAUSE'],
+							'timeLeaks' => $currentInfo['TIME_LEAKS'] ?? null,
+							'lastPause' => $currentInfo['LAST_PAUSE'] ?? null,
+							'duration' => $currentInfo['DURATION'] ?? null,
+							'canOpen' => $tmUserObject->OpenAction(),
 						],
 					],
 					entityId: $actualRecord->getId(),
@@ -323,30 +328,54 @@ class WorktimeService extends BaseService
 	 */
 	protected function save($record, $worktimeEvents)
 	{
-		$res = $this->worktimeRepository->save($record);
-		if (!$res->isSuccess())
+		$connection = \Bitrix\Main\Application::getConnection();
+		$connection->startTransaction();
+		
+		try
 		{
-			foreach ($res->getErrors() as $error)
-			{
-				if ($error->getCode() === WorktimeEventsManager::ERROR_CODE_CANCEL)
-				{
-					return WorktimeServiceResult::createWithErrorText('cannot perform this action because it has been canceled by event handler');
-				}
-			}
-			return WorktimeServiceResult::createByResult($res);
-		}
-		foreach ($worktimeEvents as $worktimeEvent)
-		{
-			/** @var WorktimeRecordIdStorable $worktimeEvent */
-			$worktimeEvent->setRecordId($record->getId());
-			$res = $this->worktimeRepository->save($worktimeEvent);
+			$res = $this->worktimeRepository->save($record);
 			if (!$res->isSuccess())
 			{
+				foreach ($res->getErrors() as $error)
+				{
+					if ($error->getCode() === WorktimeEventsManager::ERROR_CODE_CANCEL)
+					{
+						$connection->rollbackTransaction();
+
+						return WorktimeServiceResult::createWithErrorText(
+							'cannot perform this action because it has been canceled by event handler'
+						);
+					}
+				}
+
+				$connection->rollbackTransaction();
+
 				return WorktimeServiceResult::createByResult($res);
 			}
-		}
+			
+			foreach ($worktimeEvents as $worktimeEvent)
+			{
+				/** @var WorktimeRecordIdStorable $worktimeEvent */
+				$worktimeEvent->setRecordId($record->getId());
+				$res = $this->worktimeRepository->save($worktimeEvent);
+				if (!$res->isSuccess())
+				{
+					$connection->rollbackTransaction();
 
-		return new WorktimeServiceResult();
+					return WorktimeServiceResult::createByResult($res);
+				}
+			}
+			
+			$connection->commitTransaction();
+
+			return new WorktimeServiceResult();
+		}
+		catch (\Exception $e)
+		{
+			$connection->rollbackTransaction();
+
+			return WorktimeServiceResult::createWithErrorText('Database error: ' . $e->getMessage());
+		}
 	}
 
 	private function sendNotifications(WorktimeRecord $worktimeRecord, Schedule $schedule)

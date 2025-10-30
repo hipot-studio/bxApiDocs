@@ -635,10 +635,9 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		// analytics for task auditors
 		if ($context && $context !== self::CONTEXT_TEMPLATE)
 		{
-			$userId = User::getId();
 			$members = TaskModel::createFromId($taskId)->getMembers();
 
-			$analytics = Analytics::getInstance($userId);
+			$analytics = Analytics::getInstance($this->userId);
 
 			$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
 
@@ -754,9 +753,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		// analytics for task coexecutors
 		if ($context && $context !== self::CONTEXT_TEMPLATE)
 		{
-			$userId = User::getId();
-
-			$analytics = Analytics::getInstance($userId);
+			$analytics = Analytics::getInstance($this->userId);
 
 			$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
 

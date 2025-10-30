@@ -130,6 +130,7 @@ class GetTabsAction extends Action
 				'isChatSupported' => Im\Chat::isEntitySupported($entityTypeId),
 				'isLastActivityEnabled' => $factory->isLastActivityEnabled(),
 				'isLinkWithProductsEnabled' => $factory->isLinkWithProductsEnabled(),
+				'isInCustomSection' => Container::getInstance()->getFactory($entityTypeId)->isInCustomSection(),
 				'needSaveCurrentCategoryId' => (
 					$entityTypeName === \CCrmOwnerType::DealName
 					|| (\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId) && $isCategoriesEnabled)

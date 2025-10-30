@@ -11,6 +11,7 @@ use Bitrix\Im\Model\EO_Chat;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class FavoriteChat extends PrivateChat
 {
@@ -160,11 +161,11 @@ class FavoriteChat extends PrivateChat
 	/**
 	 * @param array $params
 	 * @param Context|null $context
-	 * @return Result
+	 * @return AddResult
 	 */
-	public function add(array $params, ?Context $context = null): Result
+	public function add(array $params, ?Context $context = null): AddResult
 	{
-		$result = new Result;
+		$result = new AddResult();
 
 		$paramsResult = $this->prepareParams($params);
 		if (!$paramsResult->isSuccess())
@@ -203,10 +204,7 @@ class FavoriteChat extends PrivateChat
 			}
 		}
 
-		$result->setResult([
-			'CHAT_ID' => $chat->getChatId(),
-			'CHAT' => $chat,
-		]);
+		$result->setChat($chat);
 		$chat->isFilledNonCachedData = false;
 
 		return $result;
