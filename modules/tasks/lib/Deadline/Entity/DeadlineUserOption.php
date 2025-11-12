@@ -29,7 +29,7 @@ class DeadlineUserOption extends AbstractEntity
 		public bool $isExactDeadlineTime = false,
 		public SkipNotificationPeriod $skipNotificationPeriod = SkipNotificationPeriod::DEFAULT,
 		public ?DateTime $skipNotificationStartDate = null,
-		public bool $canChangeDeadline = false,
+		public bool $canChangeDeadline = true,
 		public ?DateTime $maxDeadlineChangeDate = null,
 		public ?int $maxDeadlineChanges = null,
 		public bool $requireDeadlineChangeReason = false,

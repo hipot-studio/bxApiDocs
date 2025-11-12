@@ -24,10 +24,12 @@ class CopilotAnalytics extends AbstractAnalytics
 		$this->async(function () use ($promptCode, $result) {
 			$this
 				->createCopilotEvent(self::GENERATE, $promptCode)
+				?->setType('default')
 				?->send()
 			;
 			$this
 				->createCopilotEvent(self::RECEIVED_RESULT, $promptCode)
+				?->setType('default')
 				?->setCopilotStatus($result)
 				?->send()
 			;

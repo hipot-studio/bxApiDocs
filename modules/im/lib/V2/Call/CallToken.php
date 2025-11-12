@@ -9,29 +9,35 @@ use Bitrix\Main\Loader;
 class CallToken implements PopupDataItem
 {
 	protected ?int $chatId = null;
-	protected ?int $userId = null;
 	protected string $token = '';
 
-	public function __construct(?int $chatId, ?int $userId)
+	public function __construct(?int $chatId)
 	{
-		if (isset($chatId) && Loader::includeModule('call'))
+		if ($chatId > 0)
 		{
-			$this->token = JwtCall::getCallToken($chatId, $userId);
 			$this->chatId = $chatId;
-			$this->userId = $userId;
 		}
 	}
 
 	public function update(): void
 	{
-		if (Loader::includeModule('call'))
+		if ($this->chatId > 0 && Loader::includeModule('call'))
 		{
-			$this->token = \Bitrix\Call\JwtCall::updateCallToken((int)$this->chatId, (int)$this->userId);
+			$this->token = JwtCall::updateCallToken((int)$this->chatId);
 		}
 	}
 
 	public function getToken(): string
 	{
+		if (
+			empty($this->token)
+			&& $this->chatId > 0
+			&& Loader::includeModule('call')
+		)
+		{
+			$this->token = JwtCall::getCallToken($this->chatId);
+		}
+
 		return $this->token;
 	}
 
@@ -48,7 +54,7 @@ class CallToken implements PopupDataItem
 	public function toRestFormat(array $option = []): ?array
 	{
 		return [
-			'token' => $this->token,
+			'token' => $this->getToken(),
 			'chatId' => $this->chatId,
 		];
 	}

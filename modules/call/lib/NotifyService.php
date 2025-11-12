@@ -13,7 +13,7 @@ use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Application;
-use Bitrix\Main\Localization\Loc;
+
 
 class NotifyService
 {
@@ -75,11 +75,13 @@ class NotifyService
 				$message = ChatMessage::generateTaskFailedMessage($call->getId(), $error, $chat);
 				if ($message)
 				{
-					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
-
+					$sendingConfig = (new SendingConfig())
+						->enableSkipCounterIncrements()
+						->enableSkipUrlIndex()
+					;
 					$this->sendMessageDeferred($chat, $message, $sendingConfig);
 
-					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode() ?? 'UNDEFINED');
 				}
 			}
 		}
@@ -107,7 +109,7 @@ class NotifyService
 				{
 					$this->sendError($chat, $errorMessage);
 
-					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode());
+					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode() ?? 'UNDEFINED');
 				}
 			}
 		}
@@ -131,7 +133,10 @@ class NotifyService
 			$message = ChatMessage::generateWaitMessage($call, $chat);
 			if ($message)
 			{
-				$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+				$sendingConfig = (new SendingConfig())
+					->enableSkipCounterIncrements()
+					->enableSkipUrlIndex()
+				;
 				$this->sendMessageDeferred($chat, $message, $sendingConfig);
 			}
 		}
@@ -145,7 +150,10 @@ class NotifyService
 			$message = ChatMessage::generateOpponentBusyMessage($opponentUserId);
 			if ($message)
 			{
-				$sendingConfig = (new SendingConfig)->disableSkipCounterIncrements();
+				$sendingConfig = (new SendingConfig)
+					->disableSkipCounterIncrements()
+					->enableSkipUrlIndex()
+				;
 				$context = (new Context())->setUser($opponentUserId);
 				$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 			}

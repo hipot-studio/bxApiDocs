@@ -580,7 +580,7 @@ class Chat
 
 			if (isset($options['USER_TAG_SPREAD']) && $options['USER_TAG_SPREAD'] === 'Y')
 			{
-				$message['MESSAGE'] = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $message['MESSAGE']);
+				$message['MESSAGE'] = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $message['MESSAGE']);
 			}
 
 			$messages[$message['ID']] = Array(

@@ -8,14 +8,12 @@
 
 namespace Bitrix\Tasks\Access\Model;
 
-use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Tasks\Access\AccessibleTask;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
-use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class TaskModel implements AccessibleTask
 {
@@ -434,7 +432,24 @@ class TaskModel implements AccessibleTask
 
 	public function isAllowedChangeDatePlan(): bool
 	{
-		return Container::getInstance()->getTaskParameterRepository()->allowsChangeDatePlan($this->id);
+		$task = $this->getTask(true);
+		if (!$task)
+		{
+			return false;
+		}
+
+		return ($task['ALLOW_CHANGE_DATE_PLAN'] ?? null) === 'Y';
+	}
+
+	public function isResultRequired(): bool
+	{
+		$task = $this->getTask(true);
+		if (!$task)
+		{
+			return false;
+		}
+
+		return ($task['IS_RESULT_REQUIRED'] ?? null) === 'Y';
 	}
 
 	public function isAllowedTimeTracking(): bool

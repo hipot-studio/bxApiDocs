@@ -6,6 +6,8 @@ namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 class NotifyAuditorsChanged
@@ -13,15 +15,28 @@ class NotifyAuditorsChanged
 	public function __construct(
 		Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
+		?User $triggeredBy = null,
+		?UserCollection $oldAuditors = null,
+		?UserCollection $newAuditors = null,
 	)
 	{
-		$triggeredBy = $args['triggeredBy'] ?? null;
-		$oldAuditors = $args['oldAuditors'] ?? null;
-		$newAuditors = $args['newAuditors'] ?? null;
+		$oldAuditorsNames = [];
+		if ($oldAuditors !== null)
+		{
+			foreach ($oldAuditors as $user)
+			{
+				$oldAuditorsNames[] = '[USER=' . $user->id . ']' . $user->name . '[/USER]';
+			}
+		}
 
-		$oldAuditorsNames = array_map(fn($user) => '[USER=' . $user['id'] . ']' . $user['name'] . '[/USER]', $oldAuditors?->toArray() ?? []);
-		$newAuditorsNames = array_map(fn($user) => '[USER=' . $user['id'] . ']' . $user['name'] . '[/USER]', $newAuditors?->toArray() ?? []);
+		$newAuditorsNames = [];
+		if ($newAuditors !== null)
+		{
+			foreach ($newAuditors as $user)
+			{
+				$newAuditorsNames[] = '[USER=' . $user->id . ']' . $user->name . '[/USER]';
+			}
+		}
 
 		$newDiff = array_diff($newAuditorsNames, $oldAuditorsNames);
 		$oldDiff = array_diff($oldAuditorsNames, $newAuditorsNames);

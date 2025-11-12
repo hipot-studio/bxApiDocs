@@ -58,6 +58,16 @@ abstract class AbstractEntity implements EntityInterface, IteratorAggregate
 				continue;
 			}
 
+			if ($value instanceof ValueObjectInterface)
+			{
+				if ($value->toArray() !== $valueToCompare?->toArray())
+				{
+					$result[$key] = $value->toArray();
+				}
+
+				continue;
+			}
+
 			if (is_array($value))
 			{
 				$diff = array_diff($value, $valueToCompare ?? []);

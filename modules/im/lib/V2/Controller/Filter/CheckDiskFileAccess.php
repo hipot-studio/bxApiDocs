@@ -8,11 +8,18 @@ use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
+use Bitrix\Main\Loader;
 
 class CheckDiskFileAccess extends Base
 {
 	public function onBeforeAction(Event $event)
 	{
+		if (!Loader::includeModule('disk'))
+		{
+			$this->addError(new FileError(FileError::DISK_NOT_INSTALLED));
+			return new EventResult(EventResult::ERROR, null, null, $this);
+		}
+
 		foreach ($this->getAction()->getArguments() as $argument)
 		{
 			if ($argument instanceof FileCollection)

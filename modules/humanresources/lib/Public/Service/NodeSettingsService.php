@@ -2,8 +2,10 @@
 
 namespace Bitrix\HumanResources\Public\Service;
 
+use Bitrix\HumanResources\Repository\NodeRepository;
 use Bitrix\HumanResources\Repository\NodeSettingsRepository;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\NodeSettingsAuthorityType;
 use Bitrix\HumanResources\Type\NodeSettingsAuthorityTypeCollection;
 use Bitrix\HumanResources\Type\NodeSettingsType;
@@ -30,12 +32,6 @@ class NodeSettingsService
 	public function getBusinessProcAuthoritySettings(int $nodeId): NodeSettingsAuthorityTypeCollection
 	{
 		$entityCollection = $this->nodeSettingsRepository->getByNodeAndTypes($nodeId, [NodeSettingsType::BusinessProcAuthority]);
-
-		// workaround for teams and departments which was created before the new settings
-		if ($entityCollection->count() === 0)
-		{
-			return new NodeSettingsAuthorityTypeCollection(NodeSettingsAuthorityType::DepartmentHead);
-		}
 
 		$authorityCollection = new NodeSettingsAuthorityTypeCollection();
 		foreach ($entityCollection as $entity)

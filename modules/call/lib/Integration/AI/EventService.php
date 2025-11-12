@@ -51,7 +51,10 @@ class EventService
 				$message = ChatMessage::generateCallFinishedMessage($call, $chat);
 				if ($message)
 				{
-					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+					$sendingConfig = (new SendingConfig())
+						->enableSkipCounterIncrements()
+						->enableSkipUrlIndex()
+					;
 					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
 				}
 			}
@@ -115,7 +118,8 @@ class EventService
 					$messageOutcome = ChatMessage::generateOverviewMessage($outcome->getCallId(), $outcomeCollection, $chat);
 					if ($messageOutcome)
 					{
-						NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome);
+						$sendingConfig = (new SendingConfig())->enableSkipUrlIndex();
+						NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome, $sendingConfig);
 
 						CallAIService::getInstance()->removeExpectation($call->getId());
 

@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
+
 class HistoryLog extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
-		public readonly ?int    $id = null,
-		public readonly ?int    $createdDateTs = null,
-		public readonly ?int    $userId = null,
-		public readonly ?int    $taskId = null,
+		public readonly ?int $id = null,
+		public readonly ?int $createdDateTs = null,
+		public readonly ?int $userId = null,
+		public readonly ?int $taskId = null,
 		public readonly ?string $field = null,
-		public readonly mixed   $fromValue = null,
-		public readonly mixed   $toValue = null,
+		public readonly mixed $fromValue = null,
+		public readonly mixed $toValue = null,
 	)
 	{
 
@@ -27,13 +31,13 @@ class HistoryLog extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id:            $props['id'] ?? null,
-			createdDateTs: $props['createdDate'] ?? null,
-			userId:        $props['userId'] ?? null,
-			taskId:        $props['taskId'] ?? null,
-			field:         $props['field'] ?? null,
-			fromValue:     $props['fromValue'] ?? null,
-			toValue:       $props['toValue'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			createdDateTs: static::mapInteger($props, 'createdDateTs'),
+			userId: static::mapInteger($props, 'userId'),
+			taskId: static::mapInteger($props, 'taskId'),
+			field: static::mapString($props, 'field'),
+			fromValue: static::mapMixed($props, 'fromValue'),
+			toValue: static::mapMixed($props, 'toValue'),
 		);
 	}
 

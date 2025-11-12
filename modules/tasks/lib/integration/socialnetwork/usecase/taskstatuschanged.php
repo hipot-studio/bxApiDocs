@@ -2,7 +2,6 @@
 
 namespace Bitrix\Tasks\Integration\SocialNetwork\UseCase;
 
-use Bitrix\Tasks\Integration\Socialnetwork\Space\SpaceService;
 use Bitrix\Tasks\Internals\Notification\Message;
 use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\Util\User;

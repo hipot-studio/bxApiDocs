@@ -8,7 +8,7 @@ use Bitrix\Im\Model\LinkTaskTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
-use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\ORM\Fields\Relations\Reference as ReferenceField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ORM\Entity;
@@ -67,6 +67,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	public const ALIAS_TASK_COUNTERS = 'TSC';
 	public const ALIAS_SEARCH_FULL = 'TSIF';
 	public const ALIAS_TASK_DEPENDS = 'TD';
+	public const ALIAS_TASK_GANTT = 'TGT';
 	public const ALIAS_TASK_STAGES = 'STG';
 	public const ALIAS_FORUM_MESSAGE = 'FM';
 	public const ALIAS_TASK_TAG = 'TG';
@@ -81,11 +82,8 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	public const ALIAS_SCRUM_ITEM = 'TSI';
 	public const ALIAS_SCRUM_ENTITY = 'TSE';
 	public const ALIAS_SCRUM_ITEM_B = 'BTSI';
-	public const ALIAS_SCRUM_ENTITY_B = 'BTSE';
 	public const ALIAS_SCRUM_ITEM_C = 'TSIS';
-	public const ALIAS_SCRUM_ENTITY_C = 'TSES';
 	public const ALIAS_SCRUM_ITEM_D = 'TSIE';
-	public const ALIAS_SCRUM_ENTITY_D = 'TSEE';
 	public const ALIAS_TASK_SCENARIO = 'SCR';
 	public const ALIAS_TASK_REGULAR = 'REG';
 	public const ALIAS_TASK_CHAT_ID = 'TCID';
@@ -822,7 +820,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 				break;
 
 			case self::ALIAS_SCRUM_ITEM_B:
-				$this->joinByAlias(TaskQueryBuilder::ALIAS_SCRUM_ENTITY_B);
+				$this->joinByAlias(TaskQueryBuilder::ALIAS_SCRUM_ENTITY);
 				$this->query->registerRuntimeField(
 					$alias,
 					(new ReferenceField(
@@ -832,21 +830,9 @@ class TaskQueryBuilder implements QueryBuilderInterface
 							->where('ref.ACTIVE', 'Y')
 					))->configureJoinType('inner')
 				);
-				$this->query->whereExpr('%s = %s', [$alias . '.ENTITY_ID', self::ALIAS_SCRUM_ENTITY_B . '.ID']);
+				$this->query->whereExpr('%s = %s', [$alias . '.ENTITY_ID', self::ALIAS_SCRUM_ENTITY . '.ID']);
 				break;
-
 			case self::ALIAS_SCRUM_ENTITY:
-				$this->query->registerRuntimeField(
-					$alias,
-					(new ReferenceField(
-						$alias,
-						EntityTable::getEntity(),
-						Join::on('this.GROUP_ID', 'ref.GROUP_ID')
-					))->configureJoinType('left')
-				);
-				break;
-
-			case self::ALIAS_SCRUM_ENTITY_B:
 				$join = Join::on('this.GROUP_ID', 'ref.GROUP_ID');
 
 				$filter = $this->taskQuery->getWhere();
@@ -861,24 +847,12 @@ class TaskQueryBuilder implements QueryBuilderInterface
 						$alias,
 						EntityTable::getEntity(),
 						$join
-					))->configureJoinType('inner')
-				);
-				break;
-
-			case self::ALIAS_SCRUM_ENTITY_C:
-			case self::ALIAS_SCRUM_ENTITY_D:
-				$this->query->registerRuntimeField(
-					$alias,
-					(new ReferenceField(
-						$alias,
-						EntityTable::getEntity(),
-						Join::on('this.GROUP_ID', 'ref.GROUP_ID')
-					))->configureJoinType('inner')
+					))->configureJoinType('left')
 				);
 				break;
 
 			case self::ALIAS_SCRUM_ITEM_C:
-				$this->joinByAlias(TaskQueryBuilder::ALIAS_SCRUM_ENTITY_C);
+				$this->joinByAlias(TaskQueryBuilder::ALIAS_SCRUM_ENTITY);
 				$this->query->registerRuntimeField(
 					$alias,
 					(new ReferenceField(
@@ -887,11 +861,11 @@ class TaskQueryBuilder implements QueryBuilderInterface
 						Join::on('this.ID', 'ref.SOURCE_ID')
 					))->configureJoinType('inner')
 				);
-				$this->query->whereExpr('%s = %s', [$alias . '.ENTITY_ID', self::ALIAS_SCRUM_ENTITY_C . '.ID']);
+				$this->query->whereExpr('%s = %s', [$alias . '.ENTITY_ID', self::ALIAS_SCRUM_ENTITY . '.ID']);
 				break;
 
 			case self::ALIAS_SCRUM_ITEM_D:
-				$this->joinByAlias(TaskQueryBuilder::ALIAS_SCRUM_ENTITY_D);
+				$this->joinByAlias(TaskQueryBuilder::ALIAS_SCRUM_ENTITY);
 
 				$epicId = null;
 				$filter = $this->taskQuery->getWhere();
@@ -918,7 +892,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 							->where('ref.EPIC_ID', $epicId)
 					))->configureJoinType('inner')
 				);
-				$this->query->whereExpr('%s = %s', [$alias . '.ENTITY_ID', self::ALIAS_SCRUM_ENTITY_D . '.ID']);
+				$this->query->whereExpr('%s = %s', [$alias . '.ENTITY_ID', self::ALIAS_SCRUM_ENTITY . '.ID']);
 				break;
 
 			case self::ALIAS_TASK_STAGES:
@@ -1391,24 +1365,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	 */
 	private function getScrumField(string $field, string $entityForm): ExpressionField
 	{
-		$this->query->registerRuntimeField(
-			self::ALIAS_SCRUM_ITEM,
-			(new ReferenceField(
-				self::ALIAS_SCRUM_ITEM,
-				ItemTable::getEntity(),
-				Join::on('this.ID', 'ref.SOURCE_ID')
-			))->configureJoinType(Join::TYPE_LEFT)
-		);
-
-		$this->query->registerRuntimeField(
-			self::ALIAS_SCRUM_ENTITY,
-			(new ReferenceField(
-				self::ALIAS_SCRUM_ENTITY,
-				EntityTable::getEntity(),
-				Join::on('this.GROUP_ID', 'ref.GROUP_ID')
-					->whereColumn('ref.ID', 'this.' . self::ALIAS_SCRUM_ITEM . '.ENTITY_ID')
-			))->configureJoinType(Join::TYPE_LEFT)
-		);
+		$this->joinByAlias(self::ALIAS_SCRUM_ITEM);
 
 		return new ExpressionField(
 			$field,

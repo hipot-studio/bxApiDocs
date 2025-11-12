@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
+
 class File extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		public readonly ?string $src = null,
@@ -27,14 +31,14 @@ class File extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			src: $props['src'] ?? null,
-			name: $props['name'] ?? null,
-			width: $props['width'] ?? null,
-			height: $props['height'] ?? null,
-			size: $props['size'] ?? null,
-			subDir: $props['subDir'] ?? null,
-			contentType: $props['contentType'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			src: static::mapString($props, 'src'),
+			name: static::mapString($props, 'name'),
+			width: static::mapInteger($props, 'width'),
+			height: static::mapInteger($props, 'height'),
+			size: static::mapInteger($props, 'size'),
+			subDir: static::mapString($props, 'subDir'),
+			contentType: static::mapString($props, 'contentType'),
 		);
 	}
 

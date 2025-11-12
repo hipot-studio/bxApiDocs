@@ -158,8 +158,8 @@ class MentionService
 		$pushMessage = preg_replace("/\[[bui]\](.*?)\[\/[bui]\]/i", "$1", $pushMessage);
 		$pushMessage = preg_replace("/\\[url\\](.*?)\\[\\/url\\]/iu", "$1", $pushMessage);
 		$pushMessage = preg_replace("/\\[url\\s*=\\s*((?:[^\\[\\]]++|\\[ (?: (?>[^\\[\\]]+) | (?:\\1) )* \\])+)\\s*\\](.*?)\\[\\/url\\]/ixsu", "$2", $pushMessage);
-		$pushMessage = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", ['\Bitrix\Im\Text', 'modifyShortUserTag'], $pushMessage);
-		$pushMessage = preg_replace("/\[USER=([0-9]+)( REPLACE)?](.+?)\[\/USER]/i", "$3", $pushMessage);
+		$pushMessage = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", ['\Bitrix\Im\Text', 'modifyShortUserTag'], $pushMessage);
+		$pushMessage = preg_replace("/\[USER=([0-9]+|all)( REPLACE)?](.+?)\[\/USER]/i", "$3", $pushMessage);
 		$pushMessage = preg_replace("/\[CHAT=([0-9]{1,})\](.*?)\[\/CHAT\]/i", "$2", $pushMessage);
 		$pushMessage = preg_replace_callback("/\[SEND(?:=(?:.+?))?\](?:.+?)?\[\/SEND]/i", ['\Bitrix\Im\Text', 'modifySendPut'], $pushMessage);
 		$pushMessage = preg_replace_callback("/\[PUT(?:=(?:.+?))?\](?:.+?)?\[\/PUT]/i", ['\Bitrix\Im\Text', 'modifySendPut'], $pushMessage);

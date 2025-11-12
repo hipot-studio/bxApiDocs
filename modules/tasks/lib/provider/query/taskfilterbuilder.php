@@ -30,6 +30,7 @@ use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\Internals\Task\LabelTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
+use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\Internals\Task\RelatedTable;
 use Bitrix\Tasks\Internals\Task\SearchIndexTable;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -874,6 +875,34 @@ class TaskFilterBuilder
 					);
 					$subQuery->setSelect(['*']);
 					$subQuery->whereIn('TASK_ID', $val);
+					$subQuery->where('DEPENDS_ON_ID', new SqlExpression('%s'));
+
+					$subFilter = Query::filter();
+					$subFilter->whereExpr("EXISTS({$subQuery->getQuery()})", ['ID']);
+
+					$conditionTree->where($subFilter);
+					break;
+
+				case 'GANTT_ANCESTOR_ID':
+					if (empty($val))
+					{
+						break;
+					}
+
+					$val = (int)$val;
+					if ($val <= 0)
+					{
+						break;
+					}
+
+					$subQuery = TaskQueryBuilder::createQuery(
+						TaskQueryBuilder::ALIAS_TASK_GANTT,
+						ProjectDependenceTable::getEntity()
+					);
+
+					$subQuery->setSelect([new ExpressionField('1', '1')]);
+					$subQuery->where('TASK_ID', $val);
+					$subQuery->where('DIRECT', 1);
 					$subQuery->where('DEPENDS_ON_ID', new SqlExpression('%s'));
 
 					$subFilter = Query::filter();

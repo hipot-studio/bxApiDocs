@@ -10,5 +10,7 @@ interface CrmItemRepositoryInterface
 {
 	public function getIdsByTaskId(int $taskId): array;
 
+	public function getIdsByTaskIds(array $taskIds): array;
+
 	public function getByIds(array $ids): CrmItemCollection;
 }

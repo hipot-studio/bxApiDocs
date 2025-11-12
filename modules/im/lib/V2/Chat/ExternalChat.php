@@ -16,6 +16,7 @@ use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterSendMessageEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterUpdateMessageEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Counter\CounterType;
 use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
@@ -99,6 +100,17 @@ class ExternalChat extends GroupChat
 		}
 
 		return $this->chatRelations;
+	}
+
+	public function getCounterType(): CounterType
+	{
+		// TODO: delete this asap
+		if ($this->getEntityType() === 'TASKS_TASK')
+		{
+			return CounterType::TasksTask;
+		}
+
+		return parent::getCounterType();
 	}
 
 	public function isAutoJoinEnabled(): bool

@@ -50,6 +50,7 @@ class Features
 		public readonly bool $isDesktopRedirectAvailable,
 		public readonly bool $aiAssistantAvailable,
 		public readonly bool $aiFileTranscriptionAvailable,
+		public readonly bool $isTasksRecentListAvailable,
 	){}
 
 	public static function get(): self
@@ -91,7 +92,8 @@ class Features
 			Structure::isTeamsAvailable(),
 			self::isDesktopRedirectAvailable(),
 			self::isAiAssistantAvailable(),
-			self::isAiFileTranscriptionAvailable()
+			self::isAiFileTranscriptionAvailable(),
+			self::isTasksRecentListAvailable(),
 		);
 	}
 
@@ -162,6 +164,14 @@ class Features
 	{
 		return Option::get('im', 'file_transcription_available', 'N') === 'Y'
 			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
+		;
+	}
+
+	public static function isTasksRecentListAvailable(): bool
+	{
+		return
+			Option::get('im', 'is_tasks_recent_list_available', 'N') === 'Y'
+			&& Loader::includeModule('tasks')
 		;
 	}
 }

@@ -22,8 +22,8 @@ class UpdateTaskCommand extends AbstractCommand
 {
 	public function __construct(
 		#[Validatable]
-		public readonly Entity\Task      $task,
-		public readonly UpdateConfig     $config,
+		public readonly Entity\Task $task,
+		public readonly UpdateConfig $config,
 		public readonly null|Entity\Task $taskBeforeUpdate = null,
 	)
 	{
@@ -47,19 +47,7 @@ class UpdateTaskCommand extends AbstractCommand
 
 			$task = $handler($this);
 
-			return
-				$result
-					->setObject($task)
-					->setId($task->id)
-				;
-		}
-		catch (WrongTaskIdException)
-		{
-			return $result->addError(new Error('Wrong task id', ErrorCode::WRONG_TASK_ID));
-		}
-		catch (TaskNotExistsException)
-		{
-			return $result->addError(new Error('Task not exists', ErrorCode::TASK_NOT_EXISTS));
+			return $result->setObject($task);
 		}
 		catch (Exception $e)
 		{

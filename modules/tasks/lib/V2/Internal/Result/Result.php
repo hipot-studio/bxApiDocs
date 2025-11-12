@@ -23,6 +23,7 @@ class Result extends \Bitrix\Main\Result
 	public function setObject(EntityInterface $object): self
 	{
 		$this->data['object'] = $object;
+		$this->data['id'] = $object->getId();
 
 		return $this;
 	}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Command\Task\Result;
 
 use Bitrix\Main\Error;
+use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -16,7 +17,8 @@ class UpdateResultCommand extends AbstractCommand
 {
 	public function __construct(
 		public readonly Entity\Result $result,
-		public readonly int           $userId,
+		#[PositiveNumber]
+		public readonly int $userId,
 	)
 	{
 	}
@@ -25,17 +27,13 @@ class UpdateResultCommand extends AbstractCommand
 	{
 		$result = new Result();
 
+		$resultService = Container::getInstance()->getResultService();
+		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
+		$handler = new UpdateResultHandler($resultService, $consistencyResolver);
+
 		try
 		{
-			$resultService = Container::getInstance()->getResultService();
-			$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-			$handler = new UpdateResultHandler($resultService, $consistencyResolver);
 			$object = $handler($this);
-
-			if ($object === null)
-			{
-				return $result->addError(new Error('Result not found'));
-			}
 
 			return $result->setObject($object);
 		}

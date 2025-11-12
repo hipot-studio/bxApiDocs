@@ -57,7 +57,7 @@ final class UserService
 		return CUser::FormatName(
 			CSite::GetNameFormat(false),
 			[
-				'LOGIN' => '',
+				'LOGIN' => $user->login,
 				'NAME' => $user->firstName,
 				'LAST_NAME' => $user->lastName,
 				'SECOND_NAME' => $user->secondName,

@@ -2,6 +2,8 @@
 
 namespace Bitrix\Im\V2\Recent;
 
+use Bitrix\Im\Model\EO_Recent_Collection;
+use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
@@ -12,6 +14,7 @@ use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Rest\PopupDataItem;
 use Bitrix\Im\V2\Settings\UserConfiguration;
+use Bitrix\Main\Type\DateTime;
 
 /**
  * @extends Registry<RecentItem>
@@ -98,5 +101,42 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 			(new MessageCollection($messageIds))
 				->fillParams()
 		;
+	}
+
+	protected static function getOrmEntities(
+		int $limit,
+		int $userId,
+		string $type,
+		?DateTime $lastMessageDate = null,
+		?string $entityType = null,
+	): EO_Recent_Collection
+	{
+		$query = RecentTable::query()
+			->setSelect([
+				'ITEM_CID',
+				'ITEM_MID',
+				'UNREAD',
+				'PINNED',
+				'DATE_LAST_ACTIVITY',
+				'DATE_UPDATE',
+				'RELATION.LAST_ID',
+			])
+			->where('USER_ID', $userId)
+			->where('ITEM_TYPE', $type)
+
+			->setLimit($limit)
+			->setOrder(self::getOrder($userId))
+		;
+		if ($entityType !== null)
+		{
+			$query->where('CHAT.ENTITY_TYPE', $entityType);
+		}
+
+		if (isset($lastMessageDate))
+		{
+			$query->where('DATE_LAST_ACTIVITY', '<=', $lastMessageDate);
+		}
+
+		return $query->fetchCollection();
 	}
 }

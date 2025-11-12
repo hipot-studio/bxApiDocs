@@ -80,7 +80,7 @@ class Logger
 	public function clean(): void
 	{
 		$now = new DateTime();
-		LogTable::deleteByFilter(['<=DATE_DELETE' => $now]);
+		LogTable::deleteByFilter(['<=DATE_DELETE' => $now]); //Todo: add index in b_im_log
 	}
 
 	protected function needToLog(?Chat $chat): bool

@@ -44,6 +44,12 @@ class ActionDictionary
 	public const ACTION_TASK_ATTACH_FILE = 'task_attach_file';
 	public const ACTION_TASK_DETACH_FILE = 'task_detach_file';
 
+	public const ACTION_TASK_DETACH_PARENT = 'task_detach_parent';
+	public const ACTION_TASK_DETACH_RELATED = 'task_detach_related';
+
+	public const ACTION_TASK_CHANGE_GANTT_DEPENDENCE = 'task_change_gantt_dependence';
+	public const ACTION_TASK_CREATE_GANTT_DEPENDENCE = 'task_create_gantt_dependence';
+
 	public const ACTION_TASK_ELAPSED_TIME = 'task_elapsed_time';
 	public const ACTION_TASK_FAVORITE_ADD = 'task_favorite_add';
 	public const ACTION_TASK_FAVORITE_DELETE = 'task_favorite_delete';

@@ -16,17 +16,15 @@ use Bitrix\HumanResources\Internals\Attribute\StructureActionAccess;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\UserService;
 use Bitrix\HumanResources\Type\AccessibleItemType;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main;
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Request;
-use Bitrix\Main\SystemException;
 
 final class Member extends Controller
 {
@@ -34,6 +32,7 @@ final class Member extends Controller
 	private readonly NodeMemberService $nodeMemberService;
 	private readonly RoleRepository $roleRepository;
 	private readonly UserService $userService;
+	private readonly NodeRepository $nodeRepository;
 
 	private const ERROR_CODE_MEMBER_ALREADY_BELONGS_TO_NODE = 'MEMBER_ALREADY_BELONGS_TO_NODE';
 
@@ -43,6 +42,7 @@ final class Member extends Controller
 		$this->nodeMemberService = Container::getNodeMemberService();
 		$this->roleRepository = Container::getRoleRepository();
 		$this->userService = Container::getUserService();
+		$this->nodeRepository = Container::getNodeRepository();
 
 		parent::__construct($request);
 	}
@@ -180,6 +180,16 @@ final class Member extends Controller
 		Item\NodeMember $nodeUserMember,
 	): array
 	{
+		$node = $this->nodeRepository->getById($nodeUserMember->nodeId);
+		if ($node->type === NodeEntityType::DEPARTMENT
+			&& !InternalContainer::getNodeMemberService()->isUserInMultipleNodes($nodeUserMember->entityId)
+		)
+		{
+			$this->addError(new Error('Can\'t remove user from last department'));
+
+			return [ 'userMovedToRoot' => false ];
+		}
+
 		$nodeMember = null;
 		try
 		{
@@ -379,5 +389,12 @@ final class Member extends Controller
 		$result['userCount'] = $this->nodeMemberRepository->countAllByByNodeId($node->id);
 
 		return $result;
+	}
+
+	public function getMultipleUsersMapAction(): array
+	{
+		$internalNodeMemberRepository = InternalContainer::getNodeMemberRepository();
+
+		return $internalNodeMemberRepository->getMultipleNodeMembers(NodeEntityType::DEPARTMENT);
 	}
 }

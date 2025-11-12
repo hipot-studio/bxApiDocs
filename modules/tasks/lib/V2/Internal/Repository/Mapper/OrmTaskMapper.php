@@ -143,7 +143,7 @@ class OrmTaskMapper
 
 		if (isset($fields['REPLICATE']))
 		{
-			$entityFields['replicate'] = $fields['REPLICATE'] === 'Y';
+			$entityFields['replicate'] = $fields['REPLICATE'] === 'Y' || $fields['REPLICATE'] === true;
 		}
 
 		if (isset($fields['DEADLINE']))
@@ -286,7 +286,7 @@ class OrmTaskMapper
 			$entityFields['auditors'] = $this->castMembers($fields['AUDITORS']);
 		}
 
-		if (isset($fields['TAGS']))
+		if (is_array($fields['TAGS'] ?? null))
 		{
 			$entityFields['tags'] = array_map(static fn (string $tag): array => ['name' => $tag], $fields['TAGS']);
 		}

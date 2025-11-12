@@ -17,18 +17,6 @@ class Copilot extends Tab
 
 	protected function getRecentList(): array
 	{
-		$recentList = \Bitrix\Im\Recent::getList(
-			null,
-			[
-				'JSON' => 'Y',
-				'SKIP_OPENLINES' => 'Y',
-				'GET_ORIGINAL_TEXT' => 'N',
-				'OFFSET' => self::OFFSET,
-				'LIMIT' => self::LIMIT,
-				'ONLY_COPILOT' => 'Y',
-			]
-		);
-
-		return $recentList ?: [];
+		return static::getCopilotList();
 	}
 }

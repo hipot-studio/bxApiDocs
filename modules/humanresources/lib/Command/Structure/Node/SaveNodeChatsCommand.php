@@ -4,9 +4,10 @@ namespace Bitrix\HumanResources\Command\Structure\Node;
 
 use Bitrix\HumanResources\Command\AbstractCommand;
 use Bitrix\HumanResources\Command\Structure\Node\Handler\SaveNodeChatsCommandHandler;
+use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Result\Command\Structure\SaveNodeChatsResult;
+use Bitrix\HumanResources\Type\NodeChatType;
 use Bitrix\Main\Error;
-use Bitrix\Main\Result;
 use Bitrix\HumanResources\Item;
 
 /**
@@ -19,64 +20,28 @@ class SaveNodeChatsCommand extends AbstractCommand
 	const COLLAB_INDEX = 'collab';
 	const WITH_CHILDREN_INDEX = 'withChildren';
 
-	public readonly array $ids;
-	public readonly array $removeIds;
-
 	/**
-	 * @param Item\Node $node
-	 * @param array $createDefault
+	 * @param Node $node
+	 * @param NodeChatType $chatType
+	 * @param bool $createDefault
 	 * @param array $ids
+	 * @param array $removeIds
+	 * @param bool $withChildren
 	 */
 	public function __construct(
 		public readonly Item\Node $node,
-		public readonly array $createDefault = [
-			self::CHAT_INDEX => false,
-			self::CHANNEL_INDEX => false,
-			self::COLLAB_INDEX => false,
-		],
-		array $ids = [
-			self::CHAT_INDEX => [],
-			self::CHANNEL_INDEX => [],
-			self::COLLAB_INDEX => [],
-		],
-		array $removeIds = [
-			self::CHAT_INDEX => [],
-			self::CHANNEL_INDEX => [],
-			self::COLLAB_INDEX => [],
-		],
+		public readonly NodeChatType $chatType,
+		public readonly bool $createDefault = false,
+		public readonly array $ids = [],
+		public readonly array $removeIds = [],
+		public readonly bool $withChildren = false,
 	)
-	{
-		$ids[self::WITH_CHILDREN_INDEX] = self::convertToBoolean($ids[self::WITH_CHILDREN_INDEX] ?? false);
-		$this->ids = array_merge([self::CHAT_INDEX => [], self::CHANNEL_INDEX => [], self::COLLAB_INDEX => []], $ids);
-		$this->removeIds = array_merge([
-			self::CHAT_INDEX => [],
-			self::CHANNEL_INDEX => [],
-			self::COLLAB_INDEX => [],
-		], $removeIds);
-	}
+	{}
 
 	protected function validate(): bool
 	{
-		if (!isset($this->createDefault[self::CHAT_INDEX])
-			|| !isset($this->createDefault[self::CHANNEL_INDEX])
-			|| !isset($this->createDefault[self::COLLAB_INDEX])
-			|| !is_array($this->ids[self::CHAT_INDEX])
-			|| !is_array($this->ids[self::CHANNEL_INDEX])
-			|| !is_array($this->ids[self::COLLAB_INDEX])
-			|| !is_array($this->removeIds[self::CHAT_INDEX])
-			|| !is_array($this->removeIds[self::CHANNEL_INDEX])
-			|| !is_array($this->removeIds[self::COLLAB_INDEX])
-		)
-		{
-			return false;
-		}
-
-		if (!array_product(array_map('is_numeric', $this->ids[self::CHAT_INDEX]))
-			|| !array_product(array_map('is_numeric', $this->ids[self::CHANNEL_INDEX]))
-			|| !array_product(array_map('is_numeric', $this->ids[self::COLLAB_INDEX]))
-			|| !array_product(array_map('is_numeric', $this->removeIds[self::CHAT_INDEX]))
-			|| !array_product(array_map('is_numeric', $this->removeIds[self::CHANNEL_INDEX]))
-			|| !array_product(array_map('is_numeric', $this->removeIds[self::COLLAB_INDEX]))
+		if (!array_product(array_map('is_numeric', $this->ids))
+			|| !array_product(array_map('is_numeric', $this->removeIds))
 		)
 		{
 			return false;
@@ -103,10 +68,5 @@ class SaveNodeChatsCommand extends AbstractCommand
 
 			return $result;
 		}
-	}
-
-	private static function convertToBoolean($value): bool
-	{
-		return $value === true || $value === 'true' || $value === '1' || $value === 'Y' || $value === 1;
 	}
 }

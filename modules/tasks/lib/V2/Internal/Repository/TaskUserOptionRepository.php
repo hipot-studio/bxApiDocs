@@ -80,7 +80,7 @@ class TaskUserOptionRepository implements TaskUserOptionRepositoryInterface
 		}
 	}
 
-	public function delete(array $codes, int $taskId, int $userId): void
+	public function delete(array $codes = [], int $taskId = 0, int $userId = 0): void
 	{
 		$filter = [];
 

@@ -18,9 +18,9 @@ class UpdateDeadlineCommand extends AbstractCommand
 {
 	public function __construct(
 		#[PositiveNumber]
-		public readonly int          $taskId,
+		public readonly int $taskId,
 		#[Min(0)]
-		public readonly int          $deadlineTs,
+		public readonly int $deadlineTs,
 		public readonly UpdateConfig $updateConfig,
 		public readonly ?string $reason = null,
 	)

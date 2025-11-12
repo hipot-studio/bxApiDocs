@@ -59,14 +59,11 @@ class NewToOldEventHandler
 				return;
 			}
 
-			$nodeRepository = Container::getNodeRepository();
-			if (Feature::instance()->isCrossFunctionalTeamsAvailable())
-			{
-				$nodeRepository->setSelectableNodeEntityTypes([
-					NodeEntityType::DEPARTMENT,
-					NodeEntityType::TEAM,
-				]);
-			}
+			$nodeRepository = new \Bitrix\HumanResources\Repository\NodeRepository();
+			$nodeRepository->setSelectableNodeEntityTypes([
+				NodeEntityType::DEPARTMENT,
+				NodeEntityType::TEAM,
+			]);
 			$parent =
 				$node->parentId
 				? $nodeRepository
@@ -85,6 +82,9 @@ class NewToOldEventHandler
 			$companyStructureConverter->createBackwardAccessCode($node, $newDepartmentId);
 
 			$nodeRepository->update($node);
+			$nodeRepository->setSelectableNodeEntityTypes([
+				NodeEntityType::DEPARTMENT,
+			]);
 		}
 		catch (\Exception $e)
 		{

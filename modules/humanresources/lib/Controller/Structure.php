@@ -83,9 +83,11 @@ final class Structure extends Controller
 		}
 
 		$internalNodeRepository = InternalContainer::getNodeRepository();
+		$internalNodeMemberRepository = InternalContainer::getNodeMemberRepository();
 		return [
 			'structure' => $result,
 			'map' => $internalNodeRepository->getStructuresNodeMap($structure->id),
+			'multipleMembers' => $internalNodeMemberRepository->getMultipleNodeMembers(NodeEntityType::DEPARTMENT),
 		];
 	}
 
@@ -164,16 +166,36 @@ final class Structure extends Controller
 					PermissionDictionary::HUMAN_RESOURCES_TEAM_SETTINGS_EDIT,
 					$userId
 				),
-				StructureActionDictionary::ACTION_TEAM_COMMUNICATION_EDIT => $this->getVariablePermissionValue(
-					PermissionDictionary::HUMAN_RESOURCES_TEAM_COMMUNICATION_EDIT,
+				StructureActionDictionary::ACTION_TEAM_CHAT_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
+					$userId
+				),
+				StructureActionDictionary::ACTION_TEAM_CHANNEL_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_TEAM_CHANNEL_EDIT,
+					$userId
+				),
+				StructureActionDictionary::ACTION_TEAM_COLLAB_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_TEAM_COLLAB_EDIT,
 					$userId
 				),
 				StructureActionDictionary::ACTION_TEAM_ACCESS_EDIT => $this->getVariablePermissionValue(
 					PermissionDictionary::HUMAN_RESOURCES_TEAM_ACCESS_EDIT,
 					$userId
 				),
-				StructureActionDictionary::ACTION_DEPARTMENT_COMMUNICATION_EDIT => $this->getVariablePermissionValue(
-					PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COMMUNICATION_EDIT,
+				StructureActionDictionary::ACTION_DEPARTMENT_CHAT_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHAT_EDIT,
+					$userId
+				),
+				StructureActionDictionary::ACTION_DEPARTMENT_CHANNEL_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHANNEL_EDIT,
+					$userId
+				),
+				StructureActionDictionary::ACTION_DEPARTMENT_COLLAB_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COLLAB_EDIT,
+					$userId
+				),
+				StructureActionDictionary::ACTION_DEPARTMENT_SETTINGS_EDIT => $this->getVariablePermissionValue(
+					PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT,
 					$userId
 				),
 			],
@@ -182,6 +204,7 @@ final class Structure extends Controller
 			'teamsAvailable' => Feature::instance()->isCrossFunctionalTeamsAvailable(),
 			'collabsAvailable' => Feature::instance()->isCollabsAvailable(),
 			'deputyApprovesBP' => Feature::instance()->isDeputyApprovesBPAvailable(),
+			'departmentSettingsAvailable' => Feature::instance()->isDepartmentSettingsAvailable(),
 		];
 	}
 

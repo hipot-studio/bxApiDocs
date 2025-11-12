@@ -201,7 +201,7 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 		static::tryParseStringParameter($this->arParams['USE_EXPORT'], 'Y');
 		static::tryParseStringParameter($this->arParams['USE_GROUP_BY_SUBTASKS'], 'N');
 		static::tryParseStringParameter($this->arParams['USE_GROUP_BY_GROUPS'], 'N');
-		static::tryParseStringParameter($this->arParams['USE_LIVE_SEARCH'], 'Y');
+		static::tryParseStringParameter($this->arParams['USE_LIVE_SEARCH'], 'N');
 		static::tryParseStringParameter($this->arParams['SHOW_QUICK_FORM_BUTTON'], 'Y');
 		static::tryParseStringParameter($this->arParams['SHOW_USER_SORT'], 'N');
 		static::tryParseStringParameter($this->arParams['USE_GROUP_SELECTOR'], 'N');
@@ -551,10 +551,10 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 
 	private function prepareRoles(): array
 	{
-		$items = Container::getInstance()->getRoleProvider()->getItems($this->userId);
-		$groupId = $this->arParams['GROUP_ID'] ?? 0;
+		$groupId = (int)$this->arParams['GROUP_ID'] ?? 0;
+		$items = Container::getInstance()->getRoleProvider()->getItems($this->userId, $groupId);
 		$selectedRoleId = Filter::getInstance($this->userId, $groupId)->getDefaultRoleId();
-		$totalCounter = Counter::getInstance($this->userId)->get(Counter\CounterDictionary::COUNTER_MEMBER_TOTAL);
+		$totalCounter = Counter::getInstance($this->userId)->get(Counter\CounterDictionary::COUNTER_MEMBER_TOTAL, $groupId);
 
 		return [
 			'items' => $items,

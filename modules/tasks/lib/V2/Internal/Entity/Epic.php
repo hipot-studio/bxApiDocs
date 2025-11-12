@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
+
 class Epic extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		public readonly ?string $title = null,
@@ -22,9 +26,9 @@ class Epic extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			title: $props['name'] ?? null,
-			color: $props['color'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			title: static::mapString($props, 'name'),
+			color: static::mapString($props, 'color'),
 		);
 	}
 

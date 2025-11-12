@@ -50,6 +50,11 @@ class MenuItemProvider
 				isVisible: $this->applicationFeatures->copilotAvailable,
 			),
 			new MenuItem(
+				id: 'tasksTask',
+				text: Loc::getMessage('IM_NAVIGATION_MENU_TASKS'),
+				isVisible: $this->applicationFeatures->isTasksRecentListAvailable,
+			),
+			new MenuItem(
 				id: 'collab',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_COLLAB'),
 				isVisible: $this->applicationFeatures->collabAvailable,

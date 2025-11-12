@@ -43,8 +43,8 @@ enum AccessCodeType: string
 	public static function getTeamTypes(): array
 	{
 		return [
-			self::HrTeamType,
 			self::HrTeamRecursiveType,
+			self::HrTeamType,
 		];
 	}
 
@@ -79,6 +79,17 @@ enum AccessCodeType: string
 			fn(AccessCodeType $type) => $type->value,
 			self::getIntranetDepartmentTypes(),
 		);
+	}
+
+	/**
+	 * @return list<self>
+	 */
+	public static function getDepartmentTypes(): array
+	{
+		return [
+			self::HrDepartmentRecursiveType,
+			self::HrDepartmentType,
+		];
 	}
 
 	public function buildAccessCode(int $nodeId): string

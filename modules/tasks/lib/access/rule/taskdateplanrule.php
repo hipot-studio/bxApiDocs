@@ -7,13 +7,14 @@ namespace Bitrix\Tasks\Access\Rule;
 use Bitrix\Main\Access\Rule\AbstractRule;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Main\Access\AccessibleItem;
+use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 
 class TaskDatePlanRule extends AbstractRule
 {
 	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
-		if (!($item instanceof \Bitrix\Tasks\Access\Model\TaskModel))
+		if (!$item instanceof TaskModel)
 		{
 			$this->controller->addError(static::class, 'Incorrect task');
 
@@ -28,8 +29,8 @@ class TaskDatePlanRule extends AbstractRule
 		}
 
 		if (
-			$task->isMember($this->user->getUserId(), RoleDictionary::ROLE_RESPONSIBLE)
-			&& $task->isAllowedChangeDatePlan()
+			$task->isAllowedChangeDatePlan()
+			&& $task->isMember($this->user->getUserId(), RoleDictionary::ROLE_RESPONSIBLE)
 		)
 		{
 			return true;

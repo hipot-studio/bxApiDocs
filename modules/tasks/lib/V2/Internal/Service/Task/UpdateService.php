@@ -13,6 +13,8 @@ use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\AttachDependence;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CorrectDatePlan;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunInternalEvent;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateReminders;
 use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
@@ -27,7 +29,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunUpdateEvent;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\SendNotification;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\SendPush;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\StopTimer;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateDependencies;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateRelatedTasks;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateHistoryLog;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateLegacyFiles;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateMembers;
@@ -106,7 +108,11 @@ class UpdateService
 
 		(new UpdateTags($config))($fields, $fullTaskData, $changes);
 
-		(new UpdateDependencies($config))($fields, $fullTaskData);
+		(new UpdateRelatedTasks($config))($fields, $fullTaskData);
+
+		(new AttachDependence($config))($fields, $fullTaskData);
+
+		(new CorrectDatePlan($config))($fields, $fullTaskData);
 
 		/**
 		 * @var array $sourceTaskData

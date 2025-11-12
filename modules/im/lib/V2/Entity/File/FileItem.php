@@ -14,6 +14,7 @@ use Bitrix\Disk\UI\Viewer\Renderer\Board;
 use Bitrix\Im\Common;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\File\Param\ParamName;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Message;
@@ -255,6 +256,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'urlDownload' => $this->getDownloadLink(),
 			'viewerAttrs' => $this->getViewerAttributes(),
 			'mediaUrl' => $this->getMediaUrl(),
+			'isTranscribable' => $this->isTranscribable(),
 		];
 	}
 
@@ -569,5 +571,15 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	public function getId(): int
 	{
 		return $this->getDiskFileId();
+	}
+
+	public function getParams(): ParamCollection
+	{
+		return ParamCollection::getInstance($this->getId());
+	}
+
+	public function isTranscribable(): bool
+	{
+		return $this->getParams()->getParam(ParamName::IsTranscribable)?->getValue() ?? false;
 	}
 }

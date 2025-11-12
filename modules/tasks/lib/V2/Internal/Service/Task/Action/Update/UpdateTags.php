@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ParseTextTrait;
 use Bitrix\Tasks\Control\Tag;
@@ -33,5 +34,6 @@ class UpdateTags
 
 		$tag = new Tag($this->config->getUserId());
 		$tag->set((int)$fullTaskData['ID'], $parsedTags, $oldGroupId, $newGroupId);
+		Container::getInstance()->getTaskTagRepository()->invalidate((int)$fullTaskData['ID']);
 	}
 }

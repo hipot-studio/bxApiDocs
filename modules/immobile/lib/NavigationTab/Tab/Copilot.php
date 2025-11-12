@@ -62,4 +62,14 @@ class Copilot extends BaseRecent
 	{
 		return 'im:copilot-messenger';
 	}
+
+	public function getWidgetObjectName(): string
+	{
+		return 'copilotRecentList';
+	}
+
+	protected function isWidgetSupported(): bool
+	{
+		return true;
+	}
 }

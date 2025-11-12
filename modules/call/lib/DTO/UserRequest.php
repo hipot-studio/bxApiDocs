@@ -18,12 +18,4 @@ class UserRequest extends Hydrator
 	public int $callType = 0;
 	public string $entityType = '';
 	public string $entityId = '';
-
-	public function __construct(?array $fields = null)
-	{
-		if ($fields)
-		{
-			parent::__construct((object) $fields);
-		}
-	}
 }

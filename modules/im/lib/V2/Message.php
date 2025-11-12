@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessage;
+use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Im\V2\TariffLimit\Limit;
@@ -64,7 +65,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	/** Created by Id */
 	protected int $authorId = 0;
-	protected array $userIdsFromMention;
+	protected array $mentionedUserIds;
 
 	/** Message to send */
 	protected ?string $message = null;
@@ -173,6 +174,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	protected ?string $dialogId = null;
 	protected ?int $prevId = null;
 
+	protected bool $hasMentionAll = false;
+
 	/**
 	 * @param int|array|EO_Message|null $source
 	 */
@@ -256,6 +259,25 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $this->isImportant;
 	}
 
+	public function hasMentionAll(): bool
+	{
+		if (isset($this->hasMentionAll))
+		{
+			return $this->hasMentionAll;
+		}
+
+		$this->setHasMentionAll((preg_match("/\[USER=(all)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage())));
+
+		return $this->hasMentionAll;
+	}
+
+	public function setHasMentionAll(bool $hasMentionAll): self
+	{
+		$this->hasMentionAll = $hasMentionAll;
+
+		return $this;
+	}
+
 	public function markAsImportant(?bool $isImportant = true): self
 	{
 		$this->isImportant = $isImportant;
@@ -265,7 +287,21 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getImportantFor(): array
 	{
-		return $this->importantFor ?? array_values($this->getUserIdsFromMention());
+		if ($this->importantFor !== null)
+		{
+			return $this->importantFor;
+		}
+
+		if ($this->hasMentionAll)
+		{
+			$this->setImportantFor([]);
+		}
+		else
+		{
+			$this->setImportantFor(array_values($this->getMentionedUserIds()));
+		}
+
+		return $this->importantFor;
 	}
 
 	public function setImportantFor(array $importantFor): self
@@ -1681,7 +1717,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getUserIds(): array
 	{
-		$userIds = $this->getUserIdsFromMention();
+		$userIds = $this->getMentionedUserIds();
 
 		if ($this->getAuthorId() !== 0)
 		{
@@ -1697,35 +1733,51 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $userIds;
 	}
 
-	public function getUserIdsFromMention(): array
+	public function getMentionedUserIds(): array
 	{
-		if (isset($this->userIdsFromMention))
+		if (isset($this->mentionedUserIds))
 		{
-			return $this->userIdsFromMention;
+			return $this->mentionedUserIds;
 		}
 
-		$this->userIdsFromMention = [];
-		if (preg_match_all("/\[USER=([0-9]+)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage(), $matches))
+		$this->mentionedUserIds = [];
+		$chat = $this->getChat();
+
+		if (preg_match_all("/\[USER=([0-9]+|all)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage(), $matches))
 		{
 			foreach ($matches[1] as $userId)
 			{
-				$this->userIdsFromMention[(int)$userId] = (int)$userId;
+				if ($userId === 'all')
+				{
+					$this->mentionedUserIds = $chat->getAllUserIdsForMention();
+					$this->setHasMentionAll(true);
+					$this->markAsImportant();
+
+					break;
+				}
+				$this->mentionedUserIds[(int)$userId] = (int)$userId;
 			}
 		}
 
-		return $this->userIdsFromMention;
+		return $this->mentionedUserIds;
 	}
 
 	public function getUserIdsToSendMentions(): array
 	{
-		$mentionedUsers = $this->getUserIdsFromMention();
+		$chat = $this->getChat();
+		$mentionedUsers = $this->getMentionedUserIds();
 
-		return $this->getChat()->filterUsersToMention($mentionedUsers);
+		if (!$chat->allowMentionAllChatNotification() && $this->hasMentionAll())
+		{
+			$mentionedUsers = [];
+		}
+
+		return $chat->filterUsersToMention($mentionedUsers);
 	}
 
 	public function getUserIdsToSendMentionAnchors(): array
 	{
-		$mentionedUsers = $this->getUserIdsFromMention();
+		$mentionedUsers = $this->getMentionedUserIds();
 
 		return $this->getChat()->filterUsersToMentionAnchor($mentionedUsers);
 	}

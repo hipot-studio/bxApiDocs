@@ -30,9 +30,9 @@ class ElapsedTimeService
 	{
 		$fields = $this->elapsedTimeMapper->mapFromEntity($elapsedTime);
 
-		foreach (GetModuleEvents('tasks', 'OnBeforeTaskElapsedTimeAdd', true) as $arEvent)
+		foreach (GetModuleEvents('tasks', 'OnBeforeTaskElapsedTimeAdd', true) as $moduleEvent)
 		{
-			if (ExecuteModuleEventEx($arEvent, [&$fields]) === false)
+			if (ExecuteModuleEventEx($moduleEvent, [&$fields]) === false)
 			{
 				return null;
 			}
@@ -45,11 +45,11 @@ class ElapsedTimeService
 		$id = $this->elapsedTimeRepository->save($elapsedTime);
 
 		$log = new HistoryLog(
-			userId:    $elapsedTime->userId,
-			taskId:    $elapsedTime->taskId,
-			field:     'TIME_SPENT_IN_LOGS',
+			userId: $elapsedTime->userId,
+			taskId: $elapsedTime->taskId,
+			field: 'TIME_SPENT_IN_LOGS',
 			fromValue: $currentDuration,
-			toValue:   $currentDuration + $elapsedTime->seconds,
+			toValue: $currentDuration + $elapsedTime->seconds,
 		);
 
 		$this->taskLogRepository->add($log);

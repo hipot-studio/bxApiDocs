@@ -18,6 +18,8 @@ class CrmItem extends AbstractEntity
 		public readonly ?string $typeName = null,
 		public readonly ?string $title = null,
 		public readonly ?string $link = null,
+		public readonly ?int $linkedEntityId = null,
+		public readonly ?LinkedType $linkedEntityType = null,
 	)
 	{
 
@@ -36,6 +38,8 @@ class CrmItem extends AbstractEntity
 			typeName: static::mapString($props, 'typeName'),
 			title: static::mapString($props, 'title'),
 			link: static::mapString($props, 'link'),
+			linkedEntityId: static::mapInteger($props, 'linkedEntityId'),
+			linkedEntityType: static::mapBackedEnum($props, 'linkedEntityType', LinkedType::class),
 		);
 	}
 
@@ -48,6 +52,8 @@ class CrmItem extends AbstractEntity
 			'typeName' => $this->typeName,
 			'title' => $this->title,
 			'link' => $this->link,
+			'linkedEntityId' => $this->linkedEntityId,
+			'linkedEntityType' => $this->linkedEntityType?->value,
 		];
 	}
 }

@@ -9,9 +9,12 @@ use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Reminder\Recipient;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Reminder\RemindBy;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Reminder\RemindVia;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class Reminder extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		#[PositiveNumber]
@@ -38,15 +41,15 @@ class Reminder extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			userId: $props['userId'] ?? null,
-			taskId: $props['taskId'] ?? null,
-			nextRemindTs: $props['nextRemindTs'] ?? null,
-			remindBy: isset($props['remindBy']) ? RemindBy::tryFrom($props['remindBy']) : null,
-			remindVia: isset($props['remindVia']) ? RemindVia::tryFrom($props['remindVia']) : null,
-			recipient: isset($props['recipient']) ? Recipient::tryFrom($props['recipient']) : null,
-			rrule: $props['rrule'] ?? null,
-			before: $props['before'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			userId: static::mapInteger($props, 'userId'),
+			taskId: static::mapInteger($props, 'taskId'),
+			nextRemindTs: static::mapInteger($props, 'nextRemindTs'),
+			remindBy: static::mapBackedEnum($props, 'remindBy', RemindBy::class),
+			remindVia: static::mapBackedEnum($props, 'remindVia', RemindVia::class),
+			recipient: static::mapBackedEnum($props, 'recipient', Recipient::class),
+			rrule: static::mapArray($props, 'rrule'),
+			before: static::mapInteger($props, 'before'),
 		);
 	}
 

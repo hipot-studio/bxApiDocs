@@ -116,6 +116,12 @@ class UserOptionService
 
 	private function add(UserOption $userOption): void
 	{
+		// Prevent re-sending events if the option is already set. Moved from \Bitrix\Tasks\Internals\UserOption::add
+		if ($this->userOptionRepository->isSet($userOption->code, $userOption->taskId, $userOption->userId))
+		{
+			return;
+		}
+
 		$this->userOptionRepository->add($userOption);
 
 		$this->pushService->addEventByParameters(
@@ -142,6 +148,12 @@ class UserOptionService
 
 	private function delete(UserOption $userOption): void
 	{
+		// Prevent re-sending events if the option is already deleted. Moved from \Bitrix\Tasks\Internals\UserOption::delete
+		if (!$this->userOptionRepository->isSet($userOption->code, $userOption->taskId, $userOption->userId))
+		{
+			return;
+		}
+
 		$this->userOptionRepository->delete([$userOption->code], $userOption->taskId, $userOption->userId);
 
 		$this->pushService->addEventByParameters(

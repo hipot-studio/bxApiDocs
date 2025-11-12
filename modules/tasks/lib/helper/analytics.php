@@ -8,7 +8,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Tasks\Integration\Intranet\User;
 use Bitrix\Tasks\Ui\Filter;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
-use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class Analytics extends Common
 {
@@ -24,6 +23,7 @@ class Analytics extends Common
 
 	public const TASK_TYPE = 'task';
 	public const COMMENT_TYPE = 'comment';
+	public const NOTIFICATION_TYPE = 'notification';
 
 	public const STATUS_SUCCESS = 'success';
 	public const STATUS_ERROR = 'error';
@@ -52,6 +52,9 @@ class Analytics extends Common
 		'deadline_set' => 'deadline_set',
 		'add_checklist' => 'add_checklist',
 		'task_create_with_checklist' => 'task_create_with_checklist',
+		'click_task_link' => 'click_task_link',
+		'task_delegation' => 'task_delegation',
+		'notification_sent' => 'notification_sent',
 	];
 
 	public const SECTION = [
@@ -119,6 +122,8 @@ class Analytics extends Common
 		'change_button' => 'change_button',
 		'deadline_field' => 'deadline_field',
 		'checklist_button' => 'checklist_button',
+		'task_link' => 'task_link',
+		'delegation_button' => 'delegation_button',
 	];
 
 	/**
@@ -208,10 +213,12 @@ class Analytics extends Common
 		?string $element = null,
 		?string $subSection = null,
 		array $params = [],
+		?string $event = null,
+		?string $type = null,
 	): void
 	{
 		$analyticsEvent = new AnalyticsEvent(
-			self::EVENT['task_view'],
+			$event ?? self::EVENT['task_view'],
 			self::TOOL,
 			self::TASK_CATEGORY,
 		);
@@ -222,7 +229,7 @@ class Analytics extends Common
 			$element,
 			$subSection,
 			true,
-			self::TASK_TYPE,
+			$type ?? self::TASK_TYPE,
 			$params,
 		);
 	}
@@ -265,8 +272,6 @@ class Analytics extends Common
 			self::TOOL,
 			self::TASK_CATEGORY,
 		);
-
-		$status = isset($params['status']) && $params['status'] === self::STATUS_SUCCESS;
 
 		$this->sendAnalytics(
 			$analyticsEvent,
@@ -604,6 +609,44 @@ class Analytics extends Common
 			0,
 			'QrMobile',
 			$this->userId
+		);
+	}
+
+	public function onTaskDelegate(
+		string $section,
+		bool $status = true,
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			event: self::EVENT['task_delegation'],
+			tool: self::TOOL,
+			category: self::TASK_CATEGORY
+		);
+
+		$this->sendAnalytics(
+			analyticsEvent: $analyticsEvent,
+			section: $section,
+			element: self::ELEMENT['delegation_button'],
+			subSection: self::SUB_SECTION['task_card'],
+			status: $status,
+			params: [
+				'p1' => $this->getIsDemoParameter(),
+			]
+		);
+	}
+
+	public function onTaskOnboardingPingSent(): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			event: self::EVENT['notification_sent'],
+			tool: self::TOOL,
+			category: self::TASK_CATEGORY
+		);
+
+		$this->sendAnalytics(
+			analyticsEvent: $analyticsEvent,
+			section: self::SECTION['onboarding_notification'],
+			type: self::NOTIFICATION_TYPE,
 		);
 	}
 

@@ -36,6 +36,7 @@ use Bitrix\Tasks\Util\Type;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Throwable;
 
 class TaskService implements Errorable
@@ -818,26 +819,24 @@ class TaskService implements Errorable
 	{
 		try
 		{
-			$parentId = \CTasks::getParentOfTask($taskId);
+			$parentId = Container::getInstance()->getParentService()->getParentId($taskId);
 
-			if ($parentId === false)
+			if ($parentId === null)
 			{
 				return 0;
 			}
-			else
-			{
-				[$rows, $queryObject] = $this->getList([
-					'select' => ['ID'],
-					'filter' => [
-						'ID' => $parentId,
-						'GROUP_ID' => $groupId,
-						'CHECK_PERMISSIONS' => 'Y',
-						'!=STATUS' => Status::COMPLETED,
-					],
-				]);
 
-				return (count($rows) > 0 ? $parentId : 0);
-			}
+			[$rows] = $this->getList([
+				'select' => ['ID'],
+				'filter' => [
+					'ID' => $parentId,
+					'GROUP_ID' => $groupId,
+					'CHECK_PERMISSIONS' => 'Y',
+					'!=STATUS' => Status::COMPLETED,
+				],
+			]);
+
+			return (count($rows) > 0 ? $parentId : 0);
 		}
 		catch (\Exception $exception)
 		{

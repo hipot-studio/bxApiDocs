@@ -17,10 +17,10 @@ class AddResultHandler
 	{
 	}
 
-	public function __invoke(AddResultCommand $command): ?Entity\Result
+	public function __invoke(AddResultCommand $command): Entity\Result
 	{
 		return $this->consistencyResolver->resolve('task.result.add')->wrap(
-			fn (): ?Entity\Result => $this->resultService->create($command->result, $command->userId)
+			fn (): Entity\Result => $this->resultService->create($command->result, $command->userId)
 		);
 	}
 }

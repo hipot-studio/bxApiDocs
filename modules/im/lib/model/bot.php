@@ -103,6 +103,10 @@ class BotTable extends Main\Entity\DataManager
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateToMethod'),
 			),
+			'METHOD_REACTION_CHANGE' => array(
+				'data_type' => 'string',
+				'validation' => array(__CLASS__, 'validateToMethod'),
+			),
 			'METHOD_WELCOME_MESSAGE' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateToMethod'),
@@ -141,6 +145,11 @@ class BotTable extends Main\Entity\DataManager
 				'default_value' => 'N',
 			),
 			'HIDDEN' => array(
+				'data_type' => 'boolean',
+				'values' => array('N', 'Y'),
+				'default_value' => 'N',
+			),
+			'REACTIONS_ENABLED' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'N',
@@ -271,6 +280,7 @@ class BotTable extends Main\Entity\DataManager
 			'METHOD_MESSAGE_UPDATE',
 			'METHOD_MESSAGE_DELETE',
 			'METHOD_CONTEXT_GET',
+			'METHOD_REACTION_CHANGE',
 			'METHOD_WELCOME_MESSAGE',
 			'TEXT_PRIVATE_WELCOME_MESSAGE',
 			'TEXT_CHAT_WELCOME_MESSAGE',
@@ -278,6 +288,7 @@ class BotTable extends Main\Entity\DataManager
 			'VERIFIED',
 			'OPENLINE',
 			'HIDDEN',
+			'REACTIONS_ENABLED',
 			'BACKGROUND_ID',
 		];
 

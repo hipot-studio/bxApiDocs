@@ -27,9 +27,11 @@ class Task extends BaseController
 		#[Permission\Read]
 		Entity\Task $task,
 		TaskProvider $taskProvider,
-	): ?Arrayable
+	): ?Entity\Task
 	{
-		return $taskProvider->getTaskById(new TaskParams(taskId: $task->getId(), userId: $this->userId));
+		return $taskProvider->get(
+			new TaskParams(taskId: $task->getId(), userId: $this->userId, checkTaskAccess: false)
+		);
 	}
 
 	/**
@@ -53,7 +55,7 @@ class Task extends BaseController
 			return null;
 		}
 
-		return $taskProvider->getTaskById(new TaskParams(taskId: $result->getId(), userId: $this->userId));
+		return $taskProvider->get(new TaskParams(taskId: $result->getId(), userId: $this->userId));
 	}
 
 	/**
@@ -77,7 +79,7 @@ class Task extends BaseController
 			return null;
 		}
 
-		return $taskProvider->getTaskById(new TaskParams(taskId: $result->getId(), userId: $this->userId));
+		return $taskProvider->get(new TaskParams(taskId: $result->getId(), userId: $this->userId));
 	}
 
 	/**

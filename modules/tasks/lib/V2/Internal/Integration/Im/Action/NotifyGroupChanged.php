@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 class NotifyGroupChanged
@@ -13,13 +15,11 @@ class NotifyGroupChanged
 	public function __construct(
 		Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
+		?User $triggeredBy = null,
+		?Group $newGroup = null,
+		?Group $oldGroup = null,
 	)
 	{
-		$triggeredBy = $args['triggeredBy'] ?? null;
-		$newGroup = $args['newGroup'] ?? null;
-		$oldGroup = $args['oldGroup'] ?? null;
-
 		$secretCode = !$newGroup?->isVisible ? 'SECRET_' : '';
 
 		$code = 'TASKS_IM_TASK_GROUP_ADDED_' . $secretCode . $triggeredBy?->getGender()->value;

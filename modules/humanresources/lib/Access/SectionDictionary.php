@@ -93,8 +93,16 @@ class SectionDictionary
 			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_EDIT,
 			PermissionDictionary::HUMAN_RESOURCES_EMPLOYEE_ADD_TO_DEPARTMENT,
 			PermissionDictionary::HUMAN_RESOURCES_EMPLOYEE_REMOVE_FROM_DEPARTMENT,
-			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COMMUNICATION_EDIT,
 		];
+
+		if (Config\Feature::instance()->isDepartmentSettingsAvailable())
+		{
+			$companyStructure[] = PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT;
+		}
+
+		$companyStructure[] = PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHAT_EDIT;
+		$companyStructure[] = PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHANNEL_EDIT;
+		$companyStructure[] = PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COLLAB_EDIT;
 
 		$accessRights = [
 			PermissionDictionary::HUMAN_RESOURCES_USERS_ACCESS_EDIT,
@@ -127,7 +135,9 @@ class SectionDictionary
 			PermissionDictionary::HUMAN_RESOURCES_TEAM_EDIT,
 			PermissionDictionary::HUMAN_RESOURCES_TEAM_MEMBER_ADD,
 			PermissionDictionary::HUMAN_RESOURCES_TEAM_MEMBER_REMOVE,
-			PermissionDictionary::HUMAN_RESOURCES_TEAM_COMMUNICATION_EDIT,
+			PermissionDictionary::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
+			PermissionDictionary::HUMAN_RESOURCES_TEAM_CHANNEL_EDIT,
+			PermissionDictionary::HUMAN_RESOURCES_TEAM_COLLAB_EDIT,
 			PermissionDictionary::HUMAN_RESOURCES_TEAM_SETTINGS_EDIT,
 		];
 

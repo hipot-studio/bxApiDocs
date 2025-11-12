@@ -762,7 +762,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 			StructureActionDictionary::ACTION_DEPARTMENT_EDIT => StructureActionDictionary::ACTION_TEAM_EDIT,
 			StructureActionDictionary::ACTION_EMPLOYEE_ADD_TO_DEPARTMENT => StructureActionDictionary::ACTION_TEAM_MEMBER_ADD,
 			StructureActionDictionary::ACTION_EMPLOYEE_REMOVE_FROM_DEPARTMENT => StructureActionDictionary::ACTION_TEAM_MEMBER_REMOVE,
-			StructureActionDictionary::ACTION_DEPARTMENT_COMMUNICATION_EDIT => StructureActionDictionary::ACTION_TEAM_COMMUNICATION_EDIT,
+			StructureActionDictionary::ACTION_DEPARTMENT_CHAT_EDIT => StructureActionDictionary::ACTION_TEAM_CHAT_EDIT,
 			default => null,
 		};
 	}

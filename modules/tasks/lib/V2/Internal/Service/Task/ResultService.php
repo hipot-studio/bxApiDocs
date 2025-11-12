@@ -9,10 +9,12 @@ use Bitrix\Tasks\V2\Internal\Entity\Result;
 use Bitrix\Tasks\V2\Internal\Entity\ResultCollection;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
+use Bitrix\Tasks\V2\Internal\Exception\Task\ResultNotFoundException;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskResultRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AutomationService;
 use Bitrix\Tasks\V2\Internal\Service\PushService;
+use InvalidArgumentException;
 
 class ResultService
 {
@@ -47,11 +49,11 @@ class ResultService
 		return $this->taskResultRepository->isResultRequired($taskId);
 	}
 
-	public function create(Result $result, int $userId): ?Result
+	public function create(Result $result, int $userId): Result
 	{
 		if ($result->taskId === null)
 		{
-			throw new \InvalidArgumentException("Task id must be set");
+			throw new InvalidArgumentException('Task id must be set');
 		}
 
 		$resultToAdd = new Result(
@@ -84,18 +86,18 @@ class ResultService
 		return $result;
 	}
 
-	public function update(Result $result, int $userId): ?Result
+	public function update(Result $result, int $userId): Result
 	{
 		if ($result->id === null)
 		{
-			throw new \InvalidArgumentException("Result id must be set");
+			throw new InvalidArgumentException('Result id must be set');
 		}
 
 		$resultInDb = $this->taskResultRepository->getById($result->id);
 
 		if (!$resultInDb)
 		{
-			return null;
+			throw new ResultNotFoundException('Result not found');
 		}
 
 		$updatedResult = Result::mapFromArray([
@@ -171,7 +173,7 @@ class ResultService
 
 	public function getLastResult(int $taskId): ?Result
 	{
-		return $this->taskResultRepository->getByTask($taskId)->getFirstEntity();
+		return $this->taskResultRepository->getByTask($taskId)->findOneById($taskId);
 	}
 
 	protected function sendPush(string $command, int $userId, Result $result): void

@@ -9,18 +9,14 @@
 namespace Bitrix\Tasks\Integration\SocialNetwork;
 
 use Bitrix\Main\Loader;
-use Bitrix\Tasks\Integration\Socialnetwork\Space\SpaceService;
 use Bitrix\Tasks\Integration\SocialNetwork\UseCase\TaskCreated;
 use Bitrix\Tasks\Integration\SocialNetwork\UseCase\TaskDeleted;
 use Bitrix\Tasks\Integration\SocialNetwork\UseCase\TaskStatusChanged;
 use Bitrix\Tasks\Integration\SocialNetwork\UseCase\TaskUpdated;
-use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Internals\Notification\EntityCode;
 use Bitrix\Tasks\Internals\Notification\EntityOperation;
 use Bitrix\Tasks\Internals\Notification\Message;
 use Bitrix\Tasks\Internals\Notification\ProviderInterface;
-use CSocNetLogRights;
-use Error;
 
 class NotificationProvider implements ProviderInterface
 {

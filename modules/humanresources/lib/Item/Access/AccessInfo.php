@@ -8,6 +8,6 @@ class AccessInfo implements Item
 {
 	public function __construct(
 		public string $actionId,
-		public int $permissionId,
+		public string $permissionId,
 	) {}
 }

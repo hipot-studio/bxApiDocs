@@ -85,6 +85,7 @@ class JobService implements Contract\Service\HcmLink\JobService
 					companyId: $company->id,
 					type: JobType::USER_LIST,
 					outputData: $data,
+					settingsData: new SettingsData(),
 				),
 			);
 		}
@@ -190,6 +191,7 @@ class JobService implements Contract\Service\HcmLink\JobService
 					companyId: $company->id,
 					type: JobType::COMPLETE_MAPPING,
 					outputData: $data,
+					settingsData: new SettingsData(),
 				),
 			);
 		}

@@ -27,24 +27,24 @@ class Automation extends Tool
 
 	private function getBizprocUrl(): string
 	{
-		return '/bizproc/userprocesses/';
+		return SITE_DIR . 'bizproc/userprocesses/';
 	}
 
 	public function getSubgroupSettingsPath(): array
 	{
 		return [
-			'robots' => '/crm/deal/list/#robots',
+			'robots' => SITE_DIR . 'crm/deal/list/#robots',
 			'bizproc' => $this->getBizprocUrl(),
 			'crm-dynamic' => $this->getCrmDynamicUrl(),
-			'bizproc_script' => '/crm/deal/list/#scripts',
-			'rpa' => '/rpa/',
-			'lists' => $this->isListsEnabled() ? '/company/lists/' : null,
+			'bizproc_script' => SITE_DIR . 'crm/deal/list/#scripts',
+			'rpa' => SITE_DIR . 'rpa/',
+			'lists' => $this->isListsEnabled() ? SITE_DIR . 'company/lists/' : null,
 		];
 	}
 
 	private function getCrmDynamicUrl(): string
 	{
-		static $defaultUrl = '/automation/type/';
+		static $defaultUrl = SITE_DIR . 'automation/type/';
 
 		if (!Loader::includeModule('crm'))
 		{
@@ -200,7 +200,7 @@ class Automation extends Tool
 			}
 		}
 
-		return '/rpa/';
+		return SITE_DIR . 'rpa/';
 	}
 
 	private function clearScriptsCache(): void

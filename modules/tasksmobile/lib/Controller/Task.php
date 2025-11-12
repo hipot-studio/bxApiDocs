@@ -256,7 +256,7 @@ class Task extends Base
 	{
 		return [
 			'view' => $settings->getDashboardSelectedView($projectId),
-			'displayFields' => KanbanFieldsProvider::getFullState(),
+			'displayFields' => KanbanFieldsProvider::getFullState($this->getCurrentUser()?->getId() ?? 0),
 			'calendarSettings' => \Bitrix\Tasks\Util\Calendar::getSettings(),
 		];
 	}

@@ -29,19 +29,17 @@ class GroupMapper
 	}
 
 	public function mapToEntity(
-		Workgroup               $workgroup,
-		?Entity\File            $image = null,
-		?Entity\StageCollection $stages = null
+		Workgroup $workgroup,
+		?Entity\File $image = null,
 	): Entity\Group
 	{
 		$image = $image ? ($this->photoService->resize($image) ?? $image) : null;
 
 		return new Entity\Group(
-			id:    $workgroup->getId(),
-			name:  $workgroup->getName(),
+			id: $workgroup->getId(),
+			name: $workgroup->getName(),
 			image: $image,
 			type: $workgroup->getType()?->value,
-			stages: $stages,
 			isVisible: $workgroup->isVisible(),
 		);
 	}

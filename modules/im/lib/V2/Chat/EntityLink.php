@@ -43,8 +43,13 @@ class EntityLink implements RestConvertible
 		{
 			$instance = new SonetType();
 		}
-		elseif ($type === ExtendedType::Tasks->value && Loader::includeModule('tasks'))
+		elseif (
+			Loader::includeModule('tasks')
+			&& ($type === ExtendedType::Tasks->value || $type === \Bitrix\Tasks\V2\Internal\Integration\Im\Chat::ENTITY_TYPE)
+		)
 		{
+			// TODO: replace with send event!!!
+			$type = ExtendedType::Tasks->value;
 			$instance = new TasksType();
 		}
 		elseif ($type === ExtendedType::Calendar->value && Loader::includeModule('calendar'))

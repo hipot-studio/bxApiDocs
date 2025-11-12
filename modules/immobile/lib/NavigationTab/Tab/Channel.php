@@ -65,4 +65,9 @@ class Channel extends BaseRecent
 			],
 		];
 	}
+
+	protected function isWidgetSupported(): bool
+	{
+		return true;
+	}
 }

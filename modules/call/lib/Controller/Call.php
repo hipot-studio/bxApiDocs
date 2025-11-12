@@ -106,11 +106,13 @@ class Call extends JwtController
 	 */
 	public function getCallTokenAction(DTO\CallTokenRequest $tokenRequest): array
 	{
-		$callToken = $tokenRequest->chatId ? JwtCall::getCallToken($tokenRequest->chatId, $this->getCurrentUser()->getId(), $tokenRequest->additionalData) : '';
+		$callToken = $tokenRequest->chatId
+			? JwtCall::getCallToken($tokenRequest->chatId, $tokenRequest->additionalData)
+			: '';
 
 		return [
 			'callToken' => $callToken,
-			'userToken' => JwtCall::getUserJwt(),
+			'userToken' => JwtCall::getUserJwt((int)$this->getCurrentUser()->getId()),
 		];
 	}
 
@@ -586,7 +588,7 @@ class Call extends JwtController
 		Application::getConnection()->unlock($lockName);
 
 		$userIds = $call->getUsers();
-		$call->getSignaling()->sendHangup($currentUserId, $userIds, $userRequest->callInstanceId);
+		$call->getSignaling()->sendHangup($currentUserId, $userIds, $userRequest->callInstanceId, $userRequest->code);
 
 		if (!$call->hasActiveUsers())
 		{
@@ -820,7 +822,7 @@ class Call extends JwtController
 		{
 			return ['result' => false];
 		}
-		$callToken = JwtCall::getCallToken($chatId, $currentUserId, ['parentUuid' => $callUuid]);
+		$callToken = JwtCall::getCallToken($chatId, ['parentUuid' => $callUuid]);
 
 		Application::getConnection()->unlock($lockName);
 
@@ -1004,7 +1006,7 @@ class Call extends JwtController
 			'userData' => Util::getUsers($users),
 			'publicChannels' => $publicChannels,
 			'logToken' => $call->getLogToken($currentUserId),
-			'callToken' => JwtCall::getCallToken($call->getChatId(), $currentUserId)
+			'callToken' => JwtCall::getCallToken($call->getChatId())
 		];
 		if ($isNew)
 		{

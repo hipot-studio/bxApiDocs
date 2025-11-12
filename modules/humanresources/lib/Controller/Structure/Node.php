@@ -22,11 +22,11 @@ use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Internals\Attribute\Access\LogicOr;
 use Bitrix\HumanResources\Internals\Attribute\StructureActionAccess;
 use Bitrix\HumanResources\Item;
+use Bitrix\HumanResources\Repository\Access\PermissionRestrictedNodeRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\AccessibleItemType;
 use Bitrix\HumanResources\Type\IntegerCollection;
 use Bitrix\HumanResources\Type\NodeEntityType;
-use Bitrix\HumanResources\Type\NodeEntityTypeCollection;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Main\ArgumentException;
@@ -45,14 +45,7 @@ final class Node extends Controller
 	public function __construct(Request $request = null)
 	{
 		$this->nodeService = Container::getNodeService();
-		$this->nodeRepository = Container::getNodeRepository(true);
-		if (Feature::instance()->isCrossFunctionalTeamsAvailable())
-		{
-			$this->nodeRepository->setSelectableNodeEntityTypes([
-				NodeEntityType::DEPARTMENT,
-				NodeEntityType::TEAM,
-			]);
-		}
+		$this->nodeRepository = new PermissionRestrictedNodeRepository();
 
 		parent::__construct($request);
 	}
@@ -225,7 +218,14 @@ final class Node extends Controller
 			return [];
 		}
 
+		$this->nodeRepository->setSelectableNodeEntityTypes([
+			NodeEntityType::DEPARTMENT,
+			NodeEntityType::TEAM,
+		]);
 		$nodeCollection = $this->nodeRepository->findAllByUserId($currentUserId);
+		$this->nodeRepository->setSelectableNodeEntityTypes([
+			NodeEntityType::DEPARTMENT,
+		]);
 
 		return array_column($nodeCollection->getItemMap(), 'id');
 	}

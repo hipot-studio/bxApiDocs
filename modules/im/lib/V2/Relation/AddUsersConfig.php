@@ -39,6 +39,22 @@ final class AddUsersConfig
 		return isset($this->managerIds[$userId]);
 	}
 
+	/**
+	 * @param int[] $ids
+	 * @return self
+	 */
+	public function addHiddenUserIds(array $ids): self
+	{
+		$hiddenUserIds = $this->hiddenUserIds;
+		$hiddenUserIds += $this->normalizeIds($ids);
+
+		return $this->with(['hiddenUserIds' => $hiddenUserIds]);
+	}
+
+	/**
+	 * @param int[] $managerIds
+	 * @return self
+	 */
 	public function setManagerIds(array $managerIds): self
 	{
 		return $this->with(['managerIds' => $managerIds]);

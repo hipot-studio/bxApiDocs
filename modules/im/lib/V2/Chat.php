@@ -467,6 +467,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $this->usersIds;
 	}
 
+	public function getAllUserIdsForMention(): array
+	{
+		return $this->getRelations()->getUserIds();
+	}
+
 	public function getAliasName(): ?string
 	{
 		return $this->aliasName;
@@ -848,7 +853,31 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$this->messageCount = $countMessageBeforeUpdate + 1;
 		$this->lastMessageId = $message->getId();
 
+		/**
+		 * We need to clear the static cache due to the side effects of the withContext method due to cloning an object in it.
+		 * @see ContextCustomer::withContext
+		 *
+		 * This is a temporary solution.
+		 * TODO: Fix the issue with cloning an object in withContext method
+		 */
+		$this->updateStaticCacheInstance([
+			'LAST_MESSAGE_ID' => $this->lastMessageId,
+			'MESSAGE_COUNT' => $this->messageCount
+		]);
+
+
 		return new Result();
+	}
+
+	protected function updateStaticCacheInstance(array $fields): void
+	{
+		$id = $this->getChatId();
+		if (!isset($id, self::$chatStaticCache[$id]))
+		{
+			return;
+		}
+
+		self::$chatStaticCache[$id]->onAfterOrmUpdate($fields);
 	}
 
 	protected function updateRecentAfterMessageSend(Message $message, SendingConfig $config): Result
@@ -962,11 +991,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected function updateCountersAfterMessageSend(Message $message, SendingConfig $sendingConfig): Result
 	{
 		$skipCounterIncrement = !$this->isCounterIncrementAllowed() || $sendingConfig->skipCounterIncrements();
+		$counterRecipients = $skipCounterIncrement ? [] : $sendingConfig->counterRecipients();
 
 		return $this
 			->getReadService()
 			->withContextUser($message->getContext()->getUserId())
-			->onAfterMessageSend($message, $this->getRelationsForSendMessage(), $skipCounterIncrement)
+			->onAfterMessageSend($message, $this->getRelationsForSendMessage(), $counterRecipients)
 		;
 	}
 
@@ -1878,6 +1908,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	 */
 	abstract public function allowMention(): bool;
 
+	public function allowMentionAllChatNotification(): bool
+	{
+		return true;
+	}
+
 	public function filterUsersToMention(array $userIds): array
 	{
 		$result = [];
@@ -1934,10 +1969,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	}
 
 	/**
-	 * @see \Bitrix\Im\V2\Message::getContextId
 	 * @param string $contextId
 	 * @param int|null $userId
 	 * @return string
+	 *@see Message::getContextId
 	 */
 	public static function getDialogIdByContextId(string $contextId, ?int $userId = null): string
 	{
@@ -2843,7 +2878,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	{
 		if (!isset($this->callToken))
 		{
-			$this->callToken = new Im\V2\Call\CallToken($this->getId(), $this->getContext()->getUserId());
+			$this->callToken = new Im\V2\Call\CallToken($this->getId());
 		}
 
 		return $this->callToken;
@@ -3569,7 +3604,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			$startMessageId = $this->getLastId();
 		}
 
-		return (new \Bitrix\Im\V2\Message($startMessageId))->setChatId($this->getId())->setMessageId($startMessageId);
+		$message = (new Message($startMessageId))->setChatId($this->getId());
+
+		if ($message->getId() === null)
+		{
+			return $message->setDateCreate(null);
+		}
+
+		return $message->setMessageId($startMessageId);
 	}
 
 	public function fillNonCachedData(): self

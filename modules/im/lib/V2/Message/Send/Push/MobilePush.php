@@ -320,8 +320,8 @@ class MobilePush
 		$messageText = preg_replace("/\[[bui]\](.*?)\[\/[bui]\]/i", "$1", $messageText);
 		$messageText = preg_replace("/\\[url\\](.*?)\\[\\/url\\]/iu", "$1", $messageText);
 		$messageText = preg_replace("/\\[url\\s*=\\s*((?:[^\\[\\]]++|\\[ (?: (?>[^\\[\\]]+) | (?:\\1) )* \\])+)\\s*\\](.*?)\\[\\/url\\]/ixsu", "$2", $messageText);
-		$messageText = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", ['\Bitrix\Im\Text', 'modifyShortUserTag'], $messageText);
-		$messageText = preg_replace("/\[USER=([0-9]+)( REPLACE)?](.+?)\[\/USER]/i", "$3", $messageText);
+		$messageText = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", ['\Bitrix\Im\Text', 'modifyShortUserTag'], $messageText);
+		$messageText = preg_replace("/\[USER=([0-9]+|all)( REPLACE)?](.+?)\[\/USER]/i", "$3", $messageText);
 		$messageText = preg_replace("/\[CHAT=([0-9]{1,})\](.*?)\[\/CHAT\]/i", "$2", $messageText);
 		$messageText = preg_replace("/\[context=(chat\d+|\d+:\d+)\/(\d+)](.*?)\[\/context]/i", "$3", $messageText);
 		$messageText = preg_replace_callback("/\[SEND(?:=(?:.+?))?\](?:.+?)?\[\/SEND]/i", ['\Bitrix\Im\Text', "modifySendPut"], $messageText);

@@ -24,17 +24,20 @@ class RecentItem implements RestConvertible
 	protected array $options = [];
 	protected array $invited = [];
 
-	public static function initByEntity(EO_Recent $entity): self
+	public static function initByEntity(EO_Recent $entity, int $counter): self
 	{
 		$recentItem = new static();
-
-		$recentItem->dialogId = static::formDialogId($entity->getItemId(), $entity->getItemType());
-		$recentItem->chatId = $entity->getItemCid();
-		$recentItem->messageId = $entity->getItemMid();
-		$recentItem->id = $entity->getItemId() ?? 0;
-		$recentItem->type = RecentType::tryFromChatType($entity->getItemType());
-		$recentItem->pinned = $entity->getPinned();
-		$recentItem->unread = $entity->getUnread();
+		$recentItem
+			->setMessageId($entity->getItemMid())
+			->setChatId($entity->getItemCid())
+			->setDialogId('chat' . $entity->getItemCid()) // TODO: replace
+			->setCounter($counter)
+			->setUnread($entity->getUnread())
+			->setPinned($entity->getPinned())
+			->setLastReadMessageId($entity->getRelation()->getLastId())
+			->setDateUpdate($entity->getDateUpdate())
+			->setDateLastActivity($entity->getDateLastActivity())
+		;
 
 		return $recentItem;
 	}

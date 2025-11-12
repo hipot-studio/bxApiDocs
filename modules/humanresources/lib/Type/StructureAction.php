@@ -19,7 +19,9 @@ enum StructureAction: string
 	case RemoveMemberAction = 'removeMember';
 	case InviteUserAction = 'inviteUser';
 	case EditSettingsAction = 'editSettings';
-	case CommunicationEditAction = 'CommunicationEdit';
+	case EditChatAction = 'editChat';
+	case EditChannelAction = 'editChannel';
+	case EditCollabAction = 'editCollab';
 
 	use ValuesTrait;
 
@@ -72,9 +74,21 @@ enum StructureAction: string
 				actionId: StructureActionDictionary::ACTION_USER_INVITE,
 				permissionId: PermissionDictionary::HUMAN_RESOURCES_USER_INVITE,
 			),
-			self::CommunicationEditAction => new AccessInfo(
-				actionId: StructureActionDictionary::ACTION_DEPARTMENT_COMMUNICATION_EDIT,
-				permissionId: PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COMMUNICATION_EDIT,
+			self::EditSettingsAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_DEPARTMENT_SETTINGS_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT,
+			),
+			self::EditChatAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_DEPARTMENT_CHAT_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHAT_EDIT,
+			),
+			self::EditChannelAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_DEPARTMENT_CHANNEL_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHANNEL_EDIT,
+			),
+			self::EditCollabAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_DEPARTMENT_COLLAB_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COLLAB_EDIT,
 			),
 			default => throw new \InvalidArgumentException('Unavailable structure action for department'),
 		};
@@ -112,9 +126,17 @@ enum StructureAction: string
 				actionId: StructureActionDictionary::ACTION_TEAM_SETTINGS_EDIT,
 				permissionId: PermissionDictionary::HUMAN_RESOURCES_TEAM_SETTINGS_EDIT,
 			),
-			self::CommunicationEditAction => new AccessInfo(
-				actionId: StructureActionDictionary::ACTION_TEAM_COMMUNICATION_EDIT,
-				permissionId: PermissionDictionary::HUMAN_RESOURCES_TEAM_COMMUNICATION_EDIT,
+			self::EditChatAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_TEAM_CHAT_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
+			),
+			self::EditChannelAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_TEAM_CHANNEL_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_TEAM_CHANNEL_EDIT,
+			),
+			self::EditCollabAction => new AccessInfo(
+				actionId: StructureActionDictionary::ACTION_TEAM_COLLAB_EDIT,
+				permissionId: PermissionDictionary::HUMAN_RESOURCES_TEAM_COLLAB_EDIT,
 			),
 			default => throw new \InvalidArgumentException('Unavailable structure action for team'),
 		};

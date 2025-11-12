@@ -9,9 +9,12 @@ use Bitrix\Tasks\V2\Internal\Entity\AttachmentCollection;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class CheckListItem extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		public readonly ?string $nodeId = null,
@@ -43,23 +46,23 @@ class CheckListItem extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			nodeId: $props['nodeId'] ?? null,
-			title: $props['title'] ?? null,
-			creator: isset($props['creator']) ? User::mapFromArray($props['creator']) : null,
-			toggledBy: isset($props['toggledBy']) ? User::mapFromArray($props['toggledBy']) : null,
-			toggledDate: $props['toggledDate'] ?? null,
-			accomplices: isset($props['accomplices']) ? UserCollection::mapFromArray($props['accomplices']) : null,
-			auditors: isset($props['auditors']) ? UserCollection::mapFromArray($props['auditors']) : null,
-			attachments: isset($props['attachments']) ? AttachmentCollection::mapFromArray($props['attachments']) : null,
-			isComplete: $props['isComplete'] ?? null,
-			isImportant: $props['isImportant'] ?? null,
-			parentId: $props['parentId'] ?? null,
-			parentNodeId: $props['parentNodeId'] ?? null,
-			sortIndex: $props['sortIndex'] ?? null,
-			actions: $props['actions'] ?? null,
-			collapsed: $props['collapsed'] ?? null,
-			expanded: $props['expanded'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			nodeId: static::mapString($props, 'nodeId'),
+			title: static::mapString($props, 'title'),
+			creator: static::mapEntity($props, 'creator', User::class),
+			toggledBy: static::mapEntity($props, 'toggledBy', User::class),
+			toggledDate: static::mapDateTime($props, 'toggledDate'),
+			accomplices: static::mapEntityCollection($props, 'accomplices', UserCollection::class),
+			auditors: static::mapEntityCollection($props, 'auditors', UserCollection::class),
+			attachments: static::mapEntityCollection($props, 'attachments', AttachmentCollection::class),
+			isComplete: static::mapBool($props, 'isComplete'),
+			isImportant: static::mapBool($props, 'isImportant'),
+			parentId: static::mapInteger($props, 'parentId'),
+			parentNodeId: static::mapString($props, 'parentNodeId'),
+			sortIndex: static::mapInteger($props, 'sortIndex'),
+			actions: static::mapArray($props, 'actions'),
+			collapsed: static::mapBool($props, 'collapsed'),
+			expanded: static::mapBool($props, 'expanded'),
 		);
 	}
 

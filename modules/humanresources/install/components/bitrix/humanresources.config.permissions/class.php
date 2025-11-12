@@ -107,10 +107,19 @@ class HumanResourcesConfigPermissionsComponent extends HumanResourcesBaseCompone
 
 			$categoryParameters = $section->getCategoryParameters();
 			$encodedParameters = htmlspecialcharsbx(Json::encode($categoryParameters));
+			$analyticType = $section->getCategory() === RoleCategory::Team ? 'team' : 'dept';
 			$menuItems[] = [
 				'NAME' => $section->getTitle(),
 				'ATTRIBUTES' => [
-					'onclick' => "ConfigPerms.openPermission({$encodedParameters});",
+					'onclick' => "
+						BX.UI.Analytics.sendData({
+							tool: 'structure', 
+							category: 'roles', 
+							event: 'open_tab', 
+							type: '{$analyticType}'
+						});
+						ConfigPerms.openPermission({$encodedParameters});
+					",
 					'data-menu-id' => $section->getMenuId(),
 					'title' => htmlspecialcharsbx($section->getTitle()),
 				],
@@ -134,7 +143,7 @@ class HumanResourcesConfigPermissionsComponent extends HumanResourcesBaseCompone
 		}
 
 		$accessService = InternalsContainer::getAccessService();
-		if (!$accessService->checkAccessToEditPermissions($category))
+		if (!$accessService->checkAccessToEditPermissions(category: $category, checkTariffRestriction: false))
 		{
 			return [];
 		}

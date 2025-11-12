@@ -227,7 +227,7 @@ class CalendarService
 
 		$sendingConfig =
 			(new SendingConfig())
-				->disableUrlPreview()
+				->disableGenerateUrlPreview()
 				->enableSkipConnectorSend()
 				->enableSkipCommandExecution()
 				->enableKeepConnectorSilence()

@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Analytics\Event;
 
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
+use Bitrix\Im\V2\Chat\Ai\AiAssistantPrivateChat;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\CommentChat;
@@ -47,6 +48,8 @@ class ChatEvent extends Event
 		'videoconf' => ['instanceof' => VideoConfChat::class],
 		'copilot' => ['instanceof' => CopilotChat::class],
 		'chat' => ['instanceof' => GroupChat::class],
+
+		'aiAssistant' => ['instanceof' => AiAssistantPrivateChat::class],
 		'user' => ['instanceof' => PrivateChat::class],
 	];
 	protected const CHAT_P1_CONDITIONS = [
@@ -71,6 +74,7 @@ class ChatEvent extends Event
 		'chatType_chat' => ['instanceof' => GroupChat::class],
 
 		'chatType_notes' => ['instanceof' => FavoriteChat::class],
+		'chatType_aiAssistant' => ['instanceof' => AiAssistantPrivateChat::class],
 		'chatType_user' => ['instanceof' => PrivateChat::class],
 	];
 

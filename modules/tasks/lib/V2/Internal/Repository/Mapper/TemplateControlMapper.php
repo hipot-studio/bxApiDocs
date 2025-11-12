@@ -18,6 +18,7 @@ class TemplateControlMapper
 
 		$fields = $converter->process($this->getTemplateFields($template));
 
+		$this->mapTaskFields($fields);
 		$this->mapPriorityFields($fields);
 		$this->mapMembersFields($fields);
 		$this->mapGroupField($fields);
@@ -26,6 +27,16 @@ class TemplateControlMapper
 		$this->mapParentField($fields);
 
 		return $fields;
+	}
+
+	private function mapTaskFields(array &$fields): void
+	{
+		if (isset($fields['TASK']['ID']))
+		{
+			$fields['TASK_ID'] = $fields['TASK']['ID'];
+		}
+
+		unset($fields['TASK']);
 	}
 
 	private function mapPriorityFields(array &$fields): void

@@ -17,10 +17,10 @@ class UpdateResultHandler
 	{
 	}
 
-	public function __invoke(UpdateResultCommand $command): ?Entity\Result
+	public function __invoke(UpdateResultCommand $command): Entity\Result
 	{
 		return $this->consistencyResolver->resolve('task.result.update')->wrap(
-			fn (): ?Entity\Result => $this->resultService->update($command->result, $command->userId)
+			fn (): Entity\Result => $this->resultService->update($command->result, $command->userId)
 		);
 	}
 }

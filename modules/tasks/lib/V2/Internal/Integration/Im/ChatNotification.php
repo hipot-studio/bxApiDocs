@@ -21,23 +21,186 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 		$this->loadMessages();
 
 		match ($type) {
-			NotificationType::ChatCreatedForExistingTask => new Action\NotifyChatCreatedForExistingTask($task, $this, $args),
-			NotificationType::TaskHasForumComments => new Action\NotifyTaskHasForumComments($task, $this, $args),
-			NotificationType::TaskHasLegacyChat => new Action\NotifyTaskHasLegacyChat($task, $this, $args),
-			NotificationType::TaskCreated => new Action\NotifyTaskCreated($task, $this, $args),
-			NotificationType::ResponsibleChanged => new Action\NotifyResponsibleChanged($task, $this, $args),
-			NotificationType::OwnerChanged => new Action\NotifyOwnerChanged($task, $this, $args),
-			NotificationType::DeadlineChanged => new Action\NotifyDeadlineChanged($task, $this, $args),
-			NotificationType::AuditorsChanged => new Action\NotifyAuditorsChanged($task, $this, $args),
-			NotificationType::AccomplicesChanged => new Action\NotifyAccomplicesChanged($task, $this, $args),
-			NotificationType::GroupChanged => new Action\NotifyGroupChanged($task, $this, $args),
-			NotificationType::TaskOverdue => new Action\NotifyTaskOverdue($task, $this, $args),
-			NotificationType::TaskStatusChanged => new Action\NotifyTaskStatusChanged($task, $this, $args),
-			NotificationType::TaskTimerStarted => new Action\NotifyTaskTimerStarted($task, $this, $args),
-			NotificationType::TaskTimerStopped => new Action\NotifyTaskTimerStopped($task, $this, $args),
+			NotificationType::ChatCreatedForExistingTask => new Action\NotifyChatCreatedForExistingTask(
+				task: $task,
+				sender: $this,
+				args: $args,
+			),
+			NotificationType::TaskHasForumComments => new Action\NotifyTaskHasForumComments(
+				task: $task,
+				sender: $this,
+				args: $args
+			),
+			NotificationType::TaskHasLegacyChat => new Action\NotifyTaskHasLegacyChat(
+				task: $task,
+				sender: $this,
+				args: $args,
+			),
+			NotificationType::TaskCreated => new Action\NotifyTaskCreated(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null
+			),
+			NotificationType::ResponsibleChanged => new Action\NotifyResponsibleChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				oldResponsible: $args['oldResponsible'] ?? null,
+				newResponsible: $args['newResponsible'] ?? null
+			),
+			NotificationType::OwnerChanged => new Action\NotifyOwnerChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				oldOwner: $args['oldOwner'] ?? null,
+				newOwner: $args['newOwner'] ?? null
+			),
+			NotificationType::DeadlineChanged => new Action\NotifyDeadlineChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				newDeadlineTs: $args['newDeadlineTs'] ?? null,
+				oldDeadlineTs: $args['oldDeadlineTs'] ?? null
+			),
+			NotificationType::AuditorsChanged => new Action\NotifyAuditorsChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				oldAuditors: $args['oldAuditors'] ?? null,
+				newAuditors: $args['newAuditors'] ?? null
+			),
+			NotificationType::AccomplicesChanged => new Action\NotifyAccomplicesChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				oldAccomplices: $args['oldAccomplices'] ?? null,
+				newAccomplices: $args['newAccomplices'] ?? null
+			),
+			NotificationType::GroupChanged => new Action\NotifyGroupChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				newGroup: $args['newGroup'] ?? null,
+				oldGroup: $args['oldGroup'] ?? null
+			),
+			NotificationType::TaskOverdue => new Action\NotifyTaskOverdue(
+				task: $task,
+				sender: $this,
+				args: $args,
+			),
+			NotificationType::TaskStatusChanged => new Action\NotifyTaskStatusChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				newStatus: $args['newStatus'] ?? null
+			),
+			NotificationType::TaskTimerStarted => new Action\NotifyTaskTimerStarted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null
+			),
+			NotificationType::TaskTimerStopped => new Action\NotifyTaskTimerStopped(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null
+			),
+			NotificationType::ChecklistItemsAdded => new Action\NotifyChecklistItemsAdded(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				itemCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistItemsDeleted => new Action\NotifyChecklistItemsDeleted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				itemCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistItemsModified => new Action\NotifyChecklistItemsModified(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				itemCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistItemsCompleted => new Action\NotifyChecklistItemsCompleted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				itemCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistItemsUnchecked => new Action\NotifyChecklistItemsUnchecked(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				itemCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistSingleItemCompleted => new Action\NotifyChecklistSingleItemCompleted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				checklistName: $args['checklistName'] ?? '',
+				itemName: $args['itemName'] ?? ''
+			),
+			NotificationType::ChecklistSingleItemUnchecked => new Action\NotifyChecklistSingleItemUnchecked(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				checklistName: $args['checklistName'] ?? '',
+				itemName: $args['itemName'] ?? ''
+			),
+			NotificationType::ChecklistAuditorAssigned => new Action\NotifyChecklistAuditorAssigned(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				checklistName: $args['checklistName'] ?? '',
+				assignee: $args['assignee'] ?? null
+			),
+			NotificationType::ChecklistAccompliceAssigned => new Action\NotifyChecklistAccompliceAssigned(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				checklistName: $args['checklistName'] ?? '',
+				assignee: $args['assignee'] ?? null
+			),
+			NotificationType::ChecklistFilesAdded => new Action\NotifyChecklistFilesAdded(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				fileCount: $args['fileCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistCompleted => new Action\NotifyChecklistCompleted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistGroupedOperations => new Action\NotifyChecklistGroupedOperations(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				operations: $args
+			),
+			NotificationType::ChecklistAdded => new Action\NotifyChecklistAdded(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				itemCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? ''
+			),
+			NotificationType::ChecklistDeleted => new Action\NotifyChecklistDeleted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				checklistName: $args['checklistName'] ?? ''
+			),
 			default => null,
 		};
-
 	}
 
 	public function sendMessage(Task $task, string|null $text): void

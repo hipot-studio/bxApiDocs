@@ -12,7 +12,6 @@ class SyncService
 {
 	use ContextCustomer;
 
-	private const OFFSET_INTERVAL_IN_SECONDS = 5;
 	private const MODULE_ID = 'im';
 	private const ENABLE_OPTION_NAME = 'sync_logger_enable';
 
@@ -21,63 +20,82 @@ class SyncService
 		return Option::get(self::MODULE_ID, self::ENABLE_OPTION_NAME, 'Y') === 'Y';
 	}
 
-	public function getChangesFromDate(DateTime $date, int $limit): array
+	public function getChangesFromDate(DateTime $lastDate, ?int $lastId, int $limit): array
 	{
 		if (!self::isEnable())
 		{
 			return [];
 		}
 
-		$date = $this->getDateWithOffset($date);
-		$logEntities = LogTable::query()
+		$query = LogTable::query()
 			->setSelect(['ID', 'USER_ID', 'ENTITY_TYPE', 'ENTITY_ID', 'EVENT', 'DATE_CREATE'])
 			->where('USER_ID', $this->getContext()->getUserId())
-			->where('DATE_CREATE', '>=', $date)
 			->setLimit($limit)
-			->fetchAll()
+			->setOrder(['USER_ID' => 'ASC','DATE_CREATE' => 'ASC', 'ID' => 'ASC'])
 		;
 
-		return $this->formatData($logEntities, $limit);
-	}
+		if (isset($lastId))
+		{
+			$filter = [[
+					'LOGIC' => 'OR',
+					[
+						'>DATE_CREATE' => $lastDate,
+					],
+					[
+						'=DATE_CREATE' => $lastDate,
+						'>=ID' => $lastId,
+					],
+			]];
+			$query->setFilter($filter);
+		}
+		else
+		{
+			$query->where('DATE_CREATE', '>=', $lastDate);
+		}
 
-	private function getDateWithOffset(DateTime $date): DateTime
-	{
-		$offset = self::OFFSET_INTERVAL_IN_SECONDS;
-		$date->add("- {$offset} seconds");
-
-		return $date;
+		return $this->formatData($query->fetchAll(), $limit);
 	}
 
 	private function formatData(array $logEntities, int $limit): array
 	{
 		$entities = (new EntityFactory())->createEntities(Event::initByArray($logEntities));
 		$rest = $entities->getRestData();
-
-		$rest['hasMore'] = count($logEntities) >= $limit;
-		$rest['lastServerDate'] = $this->getLastServerDate($logEntities);
+		$rest['navigationData'] = $this->getNavigationData($logEntities, $limit);
 
 		return $rest;
 	}
 
-	protected function getLastServerDate(array $logEntities): ?DateTime
+	protected function getNavigationData(array $logEntities, int $limit): array
 	{
 		$maxDateTime = null;
 		$maxTimestamp = 0;
+		$lastId = 0;
 		foreach ($logEntities as $logEntity)
 		{
 			$dateCreate = $logEntity['DATE_CREATE'];
+			$entityId = (int)$logEntity['ID'];
 
 			if (!$dateCreate instanceof DateTime)
 			{
 				continue;
 			}
+
 			if ($dateCreate->getTimestamp() > $maxTimestamp)
 			{
 				$maxTimestamp = $dateCreate->getTimestamp();
 				$maxDateTime = $dateCreate;
+				$lastId = $entityId;
+			}
+			elseif ($dateCreate->getTimestamp() === $maxTimestamp && $entityId > $lastId)
+			{
+				$lastId = $entityId;
 			}
 		}
 
-		return $maxDateTime;
+		return [
+			'lastServerDate' => $maxDateTime,
+			'hasMore' => count($logEntities) >= $limit,
+			'lastId' => $lastId,
+		];
 	}
 }

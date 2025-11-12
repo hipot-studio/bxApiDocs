@@ -4,6 +4,7 @@ namespace Bitrix\Mobile\Controller;
 
 use Bitrix\Extranet\PortalSettings;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Main\Error;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Collab\ActionFilter\CollabAccessControl;
@@ -18,6 +19,7 @@ use Bitrix\Mobile\Trait\PublicErrorsTrait;
 use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
 use Bitrix\SocialNetwork\Collab\Access\CollabDictionary;
 use Bitrix\Main\Config\Option;
+use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 
 final class Collab extends JsonController
 {
@@ -77,18 +79,42 @@ final class Collab extends JsonController
 		$isBitrix24Included = Loader::includeModule('bitrix24');
 		$languages = (new LanguageProvider())->getLanguages();
 
-		$canInviteCollabers = false;
+		$canInviteCollabersInPortalSettings = false;
 		if (Loader::includeModule('extranet'))
 		{
-			$canInviteCollabers = PortalSettings::getInstance()->isEnabledCollabersInvitation();
+			$canInviteCollabersInPortalSettings = PortalSettings::getInstance()->isEnabledCollabersInvitation();
 		}
+
+		$allowGuestsInvitation = $this->getAllowGuestsInvitationByCollabId($collabId);
 
 		return [
 			'canCurrentUserInvite' => $canCurrentUserInvite,
 			'isBitrix24Included' => $isBitrix24Included,
-			'canInviteCollabers' => $canInviteCollabers,
+			'canInviteCollabersInPortalSettings' => $canInviteCollabersInPortalSettings,
+			'allowGuestsInvitation' => $allowGuestsInvitation,
 			'languages' => $languages,
 		];
+	}
+
+	private function getAllowGuestsInvitationByCollabId(int $collabId): ?bool
+	{
+		if (!CollabAccessController::can($this->getCurrentUser()?->getId(), CollabDictionary::VIEW, $collabId))
+		{
+			$this->addError(new Error('Access denied'));
+
+			return null;
+		}
+
+
+		$collab = CollabProvider::getInstance()->getCollab($collabId);
+		if (!$collab)
+		{
+			$this->addError(new Error('Collab not found'));
+
+			return null;
+		}
+
+		return $collab->toJson()['options']['allowGuestsInvitation'] === 'Y';
 	}
 
 	/**
@@ -112,7 +138,13 @@ final class Collab extends JsonController
 			'taskPermissions' => null,
 			'autoDeleteEnabledInPortalSettings' => null,
 			'security' => new CollabSecuritySettingsDto(),
+			'canInviteCollabersInPortalSettings' => false,
 		];
+
+		if (Loader::includeModule('extranet'))
+		{
+			$result['canInviteCollabersInPortalSettings'] = PortalSettings::getInstance()->isEnabledCollabersInvitation();
+		}
 
 		$user = $this->getCurrentUser();
 

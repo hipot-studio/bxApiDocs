@@ -6,6 +6,8 @@ namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 class NotifyAccomplicesChanged
@@ -13,15 +15,28 @@ class NotifyAccomplicesChanged
 	public function __construct(
 		Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
+		?User $triggeredBy = null,
+		?UserCollection $oldAccomplices = null,
+		?UserCollection $newAccomplices = null,
 	)
 	{
-		$triggeredBy = $args['triggeredBy'] ?? null;
-		$oldAccomplices = $args['oldAccomplices'] ?? null;
-		$newAccomplices = $args['newAccomplices'] ?? null;
+		$oldAccomplicesNames = [];
+		if ($oldAccomplices !== null)
+		{
+			foreach ($oldAccomplices as $user)
+			{
+				$oldAccomplicesNames[] = '[USER=' . $user->id . ']' . $user->name . '[/USER]';
+			}
+		}
 
-		$oldAccomplicesNames = array_map(fn($user) => '[USER=' . $user['id'] . ']' . $user['name'] . '[/USER]', $oldAccomplices?->toArray() ?? []);
-		$newAccomplicesNames = array_map(fn($user) => '[USER=' . $user['id'] . ']' . $user['name'] . '[/USER]', $newAccomplices?->toArray() ?? []);
+		$newAccomplicesNames = [];
+		if ($newAccomplices !== null)
+		{
+			foreach ($newAccomplices as $user)
+			{
+				$newAccomplicesNames[] = '[USER=' . $user->id . ']' . $user->name . '[/USER]';
+			}
+		}
 
 		$newDiff = array_diff($newAccomplicesNames, $oldAccomplicesNames);
 		$oldDiff = array_diff($oldAccomplicesNames, $newAccomplicesNames);

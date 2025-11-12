@@ -512,7 +512,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 			if ($sortInfo)
 			{
-				$itemService->sortItems($this->prepareSortInfo($groupId, $sortInfo), $pushService);
+				$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
 				if ($itemService->getErrors())
 				{
 					$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_ADD_ERROR'), $itemService->getErrors());
@@ -1130,6 +1130,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$backlog = $backlogService->getBacklogByGroupId($sprint->getGroupId());
 
 		$itemService->moveItemsToEntity(
+			$backlog->getGroupId(),
 			$itemService->getItemIdsByEntityId($sprint->getId()),
 			$backlog->getId()
 		);
@@ -1255,7 +1256,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		if ($sortInfo)
 		{
-			$itemService->sortItems($this->prepareSortInfo($groupId, $sortInfo), $pushService);
+			$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
 		}
 
 		return '';
@@ -1329,7 +1330,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		if ($sortInfo)
 		{
-			$itemService->sortItems($this->prepareSortInfo($groupId, $sortInfo), $pushService);
+			$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
 		}
 
 		if ($itemService->getErrors())
@@ -1390,7 +1391,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		if ($sortInfo)
 		{
-			$itemService->sortItems($this->prepareSortInfo($groupId, $sortInfo), $pushService);
+			$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
 		}
 
 		return '';

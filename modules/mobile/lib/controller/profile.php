@@ -102,7 +102,13 @@ final class Profile extends JsonController
 			$ownerId,
 		);
 
-		return $provider->save($fieldsToSave);
+		$saveResult = $provider->save($fieldsToSave);
+		if (!$saveResult->isSuccess())
+		{
+			$this->addErrors($saveResult->getErrors());
+		}
+
+		return $saveResult->getData();
 	}
 
 
@@ -118,9 +124,7 @@ final class Profile extends JsonController
 	#[CanUpdate]
 	public function searchTagsAction(int $ownerId, int $limit = 20, string $searchString = ''): array
 	{
-		$provider = new \Bitrix\Mobile\Profile\Provider\TagProvider();
-
-		return $provider->searchTags($ownerId, $limit, $searchString);
+		return (new \Bitrix\Mobile\Profile\Provider\TagProvider())->searchTags($ownerId, $limit, $searchString);
 	}
 
 	/**
@@ -133,8 +137,16 @@ final class Profile extends JsonController
 	#[CanUpdate]
 	public function addTagAction(int $ownerId, string $tag): array
 	{
-		$provider = new \Bitrix\Mobile\Profile\Provider\TagProvider();
+		return (new \Bitrix\Mobile\Profile\Provider\TagProvider())->addTag($ownerId, $tag);
+	}
 
-		return $provider->addTag($ownerId, $tag);
+	/**
+	 * @restMethod mobile.Profile.isPhoneNumberValid
+	 * @param string $phoneNumber
+	 * @return bool
+	 */
+	public function isPhoneNumberValidAction(string $phoneNumber): bool
+	{
+		return (\Bitrix\Main\PhoneNumber\Parser::getInstance())->parse($phoneNumber)->isValid();
 	}
 }

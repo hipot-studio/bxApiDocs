@@ -7,6 +7,7 @@ use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
@@ -67,6 +68,18 @@ class NodeMemberService
 		$this->nodeMemberRepository->update($nodeMember);
 
 		return $nodeMember;
+	}
+
+	public function isUserInMultipleNodes(int $userId, NodeEntityType $nodeEntityType = NodeEntityType::DEPARTMENT): bool
+	{
+		$nodeMemberCollection = $this->nodeMemberRepository->findAllByEntityIdAndEntityTypeAndNodeType(
+			entityId: $userId,
+			entityType: MemberEntityType::USER,
+			nodeType: NodeEntityType::DEPARTMENT,
+			limit: 2,
+		);
+
+		return $nodeMemberCollection->count() > 1;
 	}
 
 	private function isRoleCorrectForNode(Item\Node $node, Item\Role $role): bool

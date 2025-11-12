@@ -8,4 +8,5 @@ interface Param
 {
 	public function getFileId(): int;
 	public function getValue(): string|int|bool;
+	public function toArray(): array;
 }

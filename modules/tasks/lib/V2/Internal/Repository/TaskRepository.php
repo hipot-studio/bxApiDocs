@@ -33,8 +33,12 @@ class TaskRepository implements TaskRepositoryInterface
 		private readonly CheckListRepository $checkListRepository,
 		private readonly ChatRepositoryInterface $chatRepository,
 		private readonly TaskParameterRepositoryInterface $taskParameterRepository,
+		private readonly TaskTagRepositoryInterface $taskTagRepository,
 		private readonly TaskMapper $taskMapper,
 		private readonly OrmTaskMapper $ormTaskMapper,
+		private readonly SubTaskRepositoryInterface $subTaskRepository,
+		private readonly RelatedTaskRepositoryInterface $relatedTaskRepository,
+		private readonly GanttLinkRepositoryInterface $ganttLinkRepository,
 	)
 	{
 	}
@@ -78,7 +82,7 @@ class TaskRepository implements TaskRepositoryInterface
 			return null;
 		}
 
-		$task->fillTagList();
+		$tags = $this->taskTagRepository->getById($id);
 
 		$group = null;
 		if ($task->getGroupId() > 0)
@@ -110,9 +114,18 @@ class TaskRepository implements TaskRepositoryInterface
 			$checkListIds = null;
 		}
 
+		$containsSubTasks = $this->subTaskRepository->containsSubTasks($id);
+		$containsRelatedTasks = $this->relatedTaskRepository->containsRelatedTasks($id);
+		$containsGanttLinks = $this->ganttLinkRepository->containsLinks($id);
+
 		$chatId = $this->chatRepository->getChatIdByTaskId($id);
 
-		$aggregates['containsCheckList'] = !empty($checkListIds);
+		$aggregates = [
+			'containsCheckList' => !empty($checkListIds),
+			'containsSubTasks' => $containsSubTasks,
+			'containsRelatedTasks' => $containsRelatedTasks,
+			'containsGanttLinks' => $containsGanttLinks,
+		];
 
 		$taskParameters = [
 			'matchesSubTasksTime' => $this->taskParameterRepository->matchesSubTasksTime($id),
@@ -129,6 +142,7 @@ class TaskRepository implements TaskRepositoryInterface
 			chatId: $chatId,
 			checkListIds: $checkListIds,
 			taskParameters: $taskParameters,
+			tags: $tags,
 		);
 	}
 

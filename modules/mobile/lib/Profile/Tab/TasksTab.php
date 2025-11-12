@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mobile\Profile\Tab;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Profile\Enum\TabContextType;
@@ -38,7 +39,14 @@ class TasksTab extends BaseProfileTab
 	 */
 	public function isAvailable(): bool
 	{
-		return Loader::includeModule('tasks') && Loader::includeModule('tasksmobile');
+		$isToolAvailable = (
+			!Loader::includeModule('intranet')
+			|| ToolsManager::getInstance()->checkAvailabilityByToolId('tasks')
+		);
+
+		return $isToolAvailable
+			&& Loader::includeModule('tasks')
+			&& Loader::includeModule('tasksmobile');
 	}
 
 	/**

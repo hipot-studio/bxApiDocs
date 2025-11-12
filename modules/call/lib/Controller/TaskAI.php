@@ -9,6 +9,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Registry;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Call\Error;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\ChatMessage;
@@ -67,7 +68,11 @@ class TaskAI extends Engine\Controller
 				$message = ChatMessage::generateTaskStartMessage($callId, $chat);
 				if ($message)
 				{
-					NotifyService::getInstance()->sendMessageDeferred($chat, $message);
+					$sendingConfig = (new SendingConfig())
+						->enableSkipCounterIncrements()
+						->enableSkipUrlIndex()
+					;
+					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
 				}
 			}
 		}

@@ -23,6 +23,10 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		private readonly TaskParameterRepositoryInterface $taskParameterRepository,
 		private readonly CrmItemRepositoryInterface $crmItemRepository,
 		private readonly TaskUserOptionRepositoryInterface $userOptionRepository,
+		private readonly SubTaskRepositoryInterface $subTaskRepository,
+		private readonly RelatedTaskRepositoryInterface $relatedTaskRepository,
+		private readonly TaskTagRepositoryInterface $taskTagRepository,
+		private readonly GanttLinkRepositoryInterface $ganttLinkRepository,
 		private readonly TaskMapper               $taskMapper,
 	)
 	{
@@ -33,6 +37,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		$selectFields = [
 			'ID',
 			'TITLE',
+			'PARENT_ID',
 			'GROUP_ID',
 			'STAGE_ID',
 			'STATUS',
@@ -51,6 +56,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			'CREATED_DATE',
 			'START_DATE_PLAN',
 			'END_DATE_PLAN',
+			'SITE_ID',
 		];
 
 		$select ??= new Select();
@@ -82,9 +88,10 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			return null;
 		}
 
+		$tags = null;
 		if ($select->tags)
 		{
-			$task->fillTagList();
+			$tags = $this->taskTagRepository->getById($id);
 		}
 
 		$group = null;
@@ -121,8 +128,6 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			$checkListIds = $this->checkListRepository->getIdsByEntity($id, Entity\CheckList\Type::Task);
 		}
 
-		$aggregates['containsCheckList'] = !empty($checkListIds);
-
 		$chatId = null;
 		if ($select->chat)
 		{
@@ -134,6 +139,31 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		{
 			$crmItemIds = $this->crmItemRepository->getIdsByTaskId($id);
 		}
+
+		$containsSubTasks = false;
+		if ($select->subTasks)
+		{
+			$containsSubTasks = $this->subTaskRepository->containsSubTasks($id);
+		}
+
+		$containsRelatedTasks = false;
+		if ($select->relatedTasks)
+		{
+			$containsRelatedTasks = $this->relatedTaskRepository->containsRelatedTasks($id);
+		}
+
+		$containsGanttLinks = false;
+		if ($select->gantt)
+		{
+			$containsGanttLinks = $this->ganttLinkRepository->containsLinks($id);
+		}
+
+		$aggregates = [
+			'containsCheckList' => !empty($checkListIds),
+			'containsSubTasks' => $containsSubTasks,
+			'containsRelatedTasks' => $containsRelatedTasks,
+			'containsGanttLinks' => $containsGanttLinks,
+		];
 
 		$userOptions = null;
 		if ($select->options)
@@ -162,6 +192,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			crmItemIds: $crmItemIds,
 			taskParameters: $taskParameters,
 			userOptions: $userOptions,
+			tags: $tags,
 		);
 	}
 

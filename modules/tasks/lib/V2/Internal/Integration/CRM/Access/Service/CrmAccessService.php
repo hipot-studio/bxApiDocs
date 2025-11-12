@@ -6,6 +6,9 @@ namespace Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service;
 
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItem;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\LinkedType;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\Mapper\CrmIdMapper;
 
@@ -17,6 +20,29 @@ class CrmAccessService
 	)
 	{
 
+	}
+
+	public function getTasksCrmItems(array $taskIds, int $userId): CrmItemCollection
+	{
+		$itemMap = $this->crmItemRepository->getIdsByTaskIds($taskIds);
+		$itemIds = array_merge(...$itemMap);
+		$ids = $this->filterCrmItemsWithAccess($itemIds, $userId);
+
+		$items = $this->crmItemRepository->getByIds($ids);
+
+		$collection = new CrmItemCollection();
+		foreach ($itemMap as $taskId => $taskItemIds)
+		{
+			$crmItems =
+				$items
+					->filter(static fn (CrmItem $item): bool => in_array($item->id, $taskItemIds, true))
+					->cloneWith(['linkedEntityId' => $taskId, 'linkedEntityType' => LinkedType::Task->value])
+			;
+
+			$collection->merge($crmItems);
+		}
+
+		return $collection;
 	}
 
 	public function canChangeCrmItems(array $ids, int $userId, int $taskId): bool
@@ -48,6 +74,13 @@ class CrmAccessService
 		$ids = $this->groupByType($ids);
 
 		return $this->getWithAccess($ids, $userId);
+	}
+
+	public function filterByTask(array $ids, int $taskId): array
+	{
+		$crmItemIds = $this->crmItemRepository->getIdsByTaskId($taskId);
+
+		return array_filter($ids, static fn (string $id): bool => in_array($id, $crmItemIds, true));
 	}
 
 	private function groupByType(array $ids): array

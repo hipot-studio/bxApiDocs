@@ -5,6 +5,8 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\FileLink;
 use Bitrix\Disk\SystemUser;
 use \Bitrix\Im as IM;
+use Bitrix\Im\V2\Entity\File\Param\Transcribable;
+use Bitrix\Im\V2\Entity\File\ParamCollection;
 use Bitrix\Main\Loader;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
@@ -518,6 +520,7 @@ class CIMDisk
 		$attach = $options['ATTACH'] ?? null;
 		$asFile = isset($options['AS_FILE']) && $options['AS_FILE'] === 'Y';
 		$params = isset($options['PARAMS']) && is_array($options['PARAMS']) ? $options['PARAMS'] : null;
+		$transcribableFileIds = $options['TRANSCRIBABLE_FILE_IDS'] ?? [];
 		$waitFullExecution = $options['WAIT_FULL_EXECUTION'] ?? 'Y';
 		if ($chat->getEntityType() === 'LINES' || $chat->getEntityType() === 'LIVECHAT')
 		{
@@ -559,7 +562,6 @@ class CIMDisk
 
 			if ($newFile)
 			{
-				$result['FILES'][$fileId] = self::GetFileParams($chatId, $newFile);
 				$result['DISK_ID'][] = $newFile->getId();
 				$result['FILE_MODELS'][$fileId] = $newFile;
 
@@ -610,14 +612,28 @@ class CIMDisk
 					}
 				}
 			}
-			else
-			{
-				$result['FILES'][$fileId]['id'] = 0;
-			}
 		}
 		if (empty($result['DISK_ID']))
 		{
 			return false;
+		}
+
+		if (!empty($transcribableFileIds))
+		{
+			self::markTranscribable($result['DISK_ID'], $transcribableFileIds);
+		}
+
+		foreach ($files as $fileId)
+		{
+			$fileObject = $result['FILE_MODELS'][$fileId] ?? null;
+			if ($fileObject instanceof File)
+			{
+				$result['FILES'][$fileId] = self::GetFileParams($chatId, $fileObject);
+			}
+			else
+			{
+				$result['FILES'][$fileId]['id'] = 0;
+			}
 		}
 
 		$result['MESSAGE_ID'] = 0;
@@ -750,6 +766,25 @@ class CIMDisk
 		}
 
 		return $result;
+	}
+
+	protected static function markTranscribable(array $fileIds, array $transcribableFileIds): void
+	{
+		$fileIds = array_map('intval', $fileIds);
+		$transcribableFileIds = array_map('intval', $transcribableFileIds);
+
+		$params = [];
+		foreach ($transcribableFileIds as $fileId)
+		{
+			if (!in_array($fileId, $fileIds, true))
+			{
+				continue;
+			}
+
+			$params[] = Transcribable::formatForDb($fileId, true);
+		}
+
+		ParamCollection::addParams($params);
 	}
 
 	protected static function checkDirectlyUseFileAccess(

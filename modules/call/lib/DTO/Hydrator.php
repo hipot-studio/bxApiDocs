@@ -2,17 +2,23 @@
 
 namespace Bitrix\Call\DTO;
 
+use Bitrix\Main\Type\ParameterDictionary;
+
 class Hydrator
 {
-	public function __construct(?\stdClass $fields = null)
+	public function __construct(null|array|\stdClass|ParameterDictionary $fields = null)
 	{
 		if ($fields !== null)
 		{
+			if (is_array($fields))
+			{
+				$fields = (object) $fields;
+			}
 			$this->hydrate($fields);
 		}
 	}
 
-	protected function hydrate(\stdClass $fields): void
+	protected function hydrate(\stdClass|ParameterDictionary $fields): void
 	{
 		foreach ($fields as $property => $value)
 		{

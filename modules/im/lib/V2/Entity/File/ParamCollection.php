@@ -76,10 +76,10 @@ final class ParamCollection extends Registry
 			$params[$row['DISK_FILE_ID']][] = $row;
 		}
 
-		foreach ($params as $fileId => $fileParams)
+		foreach ($fileIds as $fileId)
 		{
 			$collection = new self((int)$fileId);
-			self::$cache[$fileId] = $collection->initByArray($fileParams);
+			self::$cache[$fileId] = $collection->initByArray($params[$fileId] ?? []);
 		}
 	}
 
@@ -141,6 +141,11 @@ final class ParamCollection extends Registry
 
 	private static function insertParams(array $fields): void
 	{
+		if (empty($fields))
+		{
+			return;
+		}
+
 		FileParamTable::multiplyInsertWithoutDuplicate(
 			$fields,
 			['UNIQUE_FIELDS' => ['DISK_FILE_ID', 'PARAM_NAME']]
@@ -155,5 +160,25 @@ final class ParamCollection extends Registry
 	public function getFileId(): int
 	{
 		return $this->fileId;
+	}
+
+	public static function copyParams(array $fileMap): void
+	{
+		$oldFiles = array_keys($fileMap);
+		self::loadByFileIds($oldFiles);
+		$insertParams = [];
+
+		foreach ($fileMap as $oldFileId => $newFileId)
+		{
+			$oldCollection = self::getInstance($oldFileId);
+			foreach ($oldCollection as $item)
+			{
+				$newParam = $item->toArray();
+				$newParam['DISK_FILE_ID'] = $newFileId;
+				$insertParams[] = $newParam;
+			}
+		}
+
+		self::insertParams($insertParams);
 	}
 }

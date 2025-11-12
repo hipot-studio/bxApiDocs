@@ -11,7 +11,6 @@ use Bitrix\Tasks\V2\Internal\Entity\AbstractEntityCollection;
  * @method null|Timer findOneById(int $id, string $idKey = 'id')
  * @method TimerCollection findAll(array $conditions)
  * @method TimerCollection findAllByIds(array $ids, string $idKey = 'id')
- * /
  * @method Timer[] getIterator()
  */
 class TimerCollection extends AbstractEntityCollection

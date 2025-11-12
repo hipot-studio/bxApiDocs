@@ -117,6 +117,26 @@ class Settings
 		;
 	}
 
+	public static function getPrivateKey(): string
+	{
+		$privateKey = Option::get('call', 'call_portal_key');
+
+		$cryptoOptions = Configuration::getValue('crypto');
+		if (!empty($cryptoOptions['crypto_key']))
+		{
+			try
+			{
+				$cipher = new Cipher();
+				$privateKey = $cipher->decrypt(base64_decode($privateKey), $cryptoOptions['crypto_key']);
+			}
+			catch (SecurityException $exception)
+			{
+			}
+		}
+
+		return $privateKey;
+	}
+
 	public static function getPortalId(): int
 	{
 		return (int)Option::get('call', 'call_portal_id', 0);

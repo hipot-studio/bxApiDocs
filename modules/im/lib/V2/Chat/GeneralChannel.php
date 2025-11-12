@@ -15,7 +15,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use CAllSite;
+use CSite;
 use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class GeneralChannel extends OpenChannelChat
@@ -132,13 +132,13 @@ class GeneralChannel extends OpenChannelChat
 
 	private static function getPortalLanguage(): ?string
 	{
-		$defSite = CAllSite::GetDefSite();
+		$defSite = CSite::GetDefSite();
 		if ($defSite === false)
 		{
 			return null;
 		}
 
-		$portalData = CAllSite::GetByID($defSite)->Fetch();
+		$portalData = CSite::GetByID($defSite)->Fetch();
 		if ($portalData)
 		{
 			$languageId = $portalData['LANGUAGE_ID'];

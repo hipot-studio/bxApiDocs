@@ -8,11 +8,12 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddParent;
 use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\DI\Container;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddDependencies;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddRelatedTasks;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddFavorite;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddHistoryLog;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddLastActivity;
@@ -108,7 +109,9 @@ class AddService
 
 		(new SendPush($config))($fields, $fullTaskData);
 
-		(new AddDependencies($config))($fields);
+		(new AddRelatedTasks($config))($fields);
+
+		(new AddParent($config))($fields);
 
 		(new Pin($config))($fields);
 

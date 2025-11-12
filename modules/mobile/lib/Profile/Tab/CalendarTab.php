@@ -33,9 +33,6 @@ class CalendarTab extends BaseProfileTab
 	 */
 	public function isAvailable(): bool
 	{
-		// todo: remove when calendar tab will be ready
-		return false;
-
 		$isToolAvailable = (
 			!Loader::includeModule('intranet')
 			|| ToolsManager::getInstance()->checkAvailabilityByToolId('calendar')

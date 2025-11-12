@@ -18,17 +18,6 @@ class Chat extends Tab
 
 	protected function getRecentList(): array
 	{
-		$recentList = \Bitrix\Im\Recent::getList(
-			null,
-			[
-				'JSON' => 'Y',
-				'SKIP_OPENLINES' => 'Y',
-				'GET_ORIGINAL_TEXT' => 'N',
-				'OFFSET' => self::OFFSET,
-				'LIMIT' => self::LIMIT,
-			]
-		);
-
-		return $recentList ?: [];
+		return static::getChatsList();
 	}
 }

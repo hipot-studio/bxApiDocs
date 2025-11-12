@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 class NotifyTaskStatusChanged
@@ -13,12 +14,10 @@ class NotifyTaskStatusChanged
 	public function __construct(
 		Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
+		?User $triggeredBy = null,
+		?Task\Status $newStatus = null,
 	)
 	{
-		$triggeredBy = $args['triggeredBy'] ?? null;
-		$newStatus = $args['newStatus'] ?? null;
-
 		$replace = [
 			'#TITLE#' => $task->title,
 			'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]'

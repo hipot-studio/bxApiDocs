@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity\Result;
 
+use Bitrix\Tasks\Internals\Task\Result\ResultTable;
+
 enum Status: string
 {
 	case Open = 'open';
@@ -13,16 +15,16 @@ enum Status: string
 	{
 		return match ($this)
 		{
-			self::Open => \Bitrix\Tasks\Internals\Task\Result\ResultTable::STATUS_OPENED,
-			self::Closed => \Bitrix\Tasks\Internals\Task\Result\ResultTable::STATUS_CLOSED,
+			self::Open => ResultTable::STATUS_OPENED,
+			self::Closed => ResultTable::STATUS_CLOSED,
 		};
 	}
 
 	public static function fromRaw(int $value): self
 	{
 		return match ($value) {
-			\Bitrix\Tasks\Internals\Task\Result\ResultTable::STATUS_OPENED => self::Open,
-			\Bitrix\Tasks\Internals\Task\Result\ResultTable::STATUS_CLOSED => self::Closed,
+			ResultTable::STATUS_OPENED => self::Open,
+			ResultTable::STATUS_CLOSED => self::Closed,
 		};
 	}
 }

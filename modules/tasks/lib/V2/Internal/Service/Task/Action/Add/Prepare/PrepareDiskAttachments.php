@@ -63,7 +63,7 @@ class PrepareDiskAttachments implements PrepareFieldInterface
 			$search[] = sprintf($searchTpl, $source);
 			$replace[] = sprintf($searchTpl, $destination);
 
-			if (!preg_match('/^' . FileUserType::NEW_FILE_PREFIX . '/', $source))
+			if (!preg_match('/^' . FileUserType::NEW_FILE_PREFIX . '/', (string)$source))
 			{
 				$attachedObject = AttachedObject::loadById($source);
 				if ($attachedObject)

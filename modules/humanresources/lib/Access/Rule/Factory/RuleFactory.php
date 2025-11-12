@@ -12,6 +12,8 @@ class RuleFactory extends RuleControllerFactory
 	protected const STRUCTURE_BASE_RULE = 'StructureBase';
 	protected const STRUCTURE_TEAM_BASE_RULE = 'StructureTeamBase';
 	protected const STRUCTURE_BASE_TOGGLE_RULE = 'StructureBaseToggle';
+	protected const DEPARTMENT_COMMUNICATION_EDIT_RULE = 'DepartmentCommunicationEdit';
+	protected const TEAM_COMMUNICATION_EDIT_RULE = 'TeamCommunicationEdit';
 
 	protected function getClassName(string $action, AccessibleController $controller): ?string
 	{
@@ -37,6 +39,16 @@ class RuleFactory extends RuleControllerFactory
 			if (PermissionDictionary::isTogglePermission($permissionId))
 			{
 				return $this->getNamespace($controller) . static::STRUCTURE_BASE_TOGGLE_RULE . static::SUFFIX;
+			}
+
+			if (PermissionDictionary::isDepartmentCommunicationEditPermission($permissionId))
+			{
+				return $this->getNamespace($controller) . static::DEPARTMENT_COMMUNICATION_EDIT_RULE . static::SUFFIX;
+			}
+
+			if (PermissionDictionary::isTeamCommunicationEditPermission($permissionId))
+			{
+				return $this->getNamespace($controller) . static::TEAM_COMMUNICATION_EDIT_RULE . static::SUFFIX;
 			}
 
 			if (PermissionDictionary::isTeamDependentVariablesPermission($permissionId))

@@ -20,7 +20,7 @@ class Library
 
 	public static function getClientSelfTestUrl(): string
 	{
-		$url = in_array(\Bitrix\Main\Application::getInstance()->getLicense()->getRegion(), Library::REGION_CIS, true)
+		$url = \Bitrix\Main\Application::getInstance()->getLicense()->isCis()
 			? self::SELF_TEST_UTL['ru']
 			: self::SELF_TEST_UTL['en']
 		;

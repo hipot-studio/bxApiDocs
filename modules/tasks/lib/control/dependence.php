@@ -73,7 +73,7 @@ class Dependence
 	 */
 	private function deleteByTask()
 	{
-		RelatedTable::deleteList([
+		RelatedTable::deleteByFilter([
 			'TASK_ID' => $this->taskId,
 		]);
 	}

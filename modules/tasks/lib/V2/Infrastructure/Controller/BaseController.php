@@ -11,11 +11,13 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Provider\Params\SelectInterface;
 use Bitrix\Tasks\DI\Container;
 use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Infrastructure\Controller\ActionFilter\IsEnabledFilter;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
+use Bitrix\Tasks\V2\Internal\Entity\EntityCollectionInterface;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\FlowRepositoryInterface;
@@ -24,6 +26,7 @@ use Bitrix\Tasks\V2\Internal\Repository\StageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserOptionRepositoryInterface;
+use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskSelect;
 use ReflectionAttribute;
 use ReflectionMethod;
 
@@ -96,6 +99,30 @@ abstract class BaseController extends JsonController
 				=> $this->getWithAccess($this, 'task', new Entity\Task(id: $taskId)),
 			),
 			new ExactParameter(
+				Entity\Task::class,
+				'relatedTask',
+				fn (string $className, array $relatedTask): ?EntityInterface
+				=> $this->getWithAccess($this, 'relatedTask', Entity\Task::mapFromArray($relatedTask)),
+			),
+			new ExactParameter(
+				Entity\Task::class,
+				'relatedTask',
+				fn (string $className, int $relatedTaskId): ?EntityInterface
+				=> $this->getWithAccess($this, 'relatedTask',new Entity\Task(id: $relatedTaskId)),
+			),
+			new ExactParameter(
+				Entity\TaskCollection::class,
+				'tasks',
+				fn (string $className, array $tasks): ?Entity\EntityCollectionInterface
+				=> $this->getWithAccess($this, 'tasks', Entity\TaskCollection::mapFromArray($tasks)),
+			),
+			new ExactParameter(
+				Entity\TaskCollection::class,
+				'tasks',
+				fn (string $className, array $taskIds): ?Entity\EntityCollectionInterface
+				=> $this->getWithAccess($this, 'tasks', Entity\TaskCollection::mapFromIds($taskIds)),
+			),
+			new ExactParameter(
 				Entity\Template::class,
 				'template',
 				fn (string $className, array $template): ?EntityInterface
@@ -125,6 +152,18 @@ abstract class BaseController extends JsonController
 				fn (string $className, array $reminder): ?EntityInterface
 				=> $this->getWithAccess($this, 'reminder', Entity\Task\Reminder::mapFromArray($reminder)),
 			),
+			new ExactParameter(
+				SelectInterface::class,
+				'relationTaskSelect',
+				fn (string $className, array $relationTaskSelect): ?SelectInterface
+				=> new RelationTaskSelect($relationTaskSelect),
+			),
+			new ExactParameter(
+				Entity\Task\GanttLink::class,
+				'ganttLink',
+				fn (string $className, array $ganttLink): ?EntityInterface
+				=> $this->getWithAccess($this, 'ganttLink', Entity\Task\GanttLink::mapFromArray($ganttLink)),
+			),
 		];
 	}
 
@@ -143,9 +182,9 @@ abstract class BaseController extends JsonController
 	protected function getWithAccess(
 		Controller $controller,
 		string $parameterName,
-		EntityInterface $entity,
+		EntityInterface|EntityCollectionInterface $entity,
 		array $parameters = [],
-	): ?EntityInterface
+	): null|EntityInterface|EntityCollectionInterface
 	{
 		$request = $controller->getRequest();
 		$parameters = array_merge(

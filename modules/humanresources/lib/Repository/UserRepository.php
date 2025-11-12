@@ -80,6 +80,7 @@ final class UserRepository
 			'PERSONAL_GENDER',
 			'CONFIRM_CODE',
 			'ACTIVE',
+			'LOGIN',
 		];
 
 		$eoUserCollection = UserTable::query()
@@ -102,6 +103,7 @@ final class UserRepository
 	{
 		return new Item\User(
 			$model['ID'],
+			$model['LOGIN'],
 			$model['NAME'],
 			$model['LAST_NAME'],
 			$model['SECOND_NAME'],

@@ -8,6 +8,8 @@ use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\Im\V2\Recent\RecentChannel;
+use Bitrix\Im\V2\Recent\RecentCollab;
 use Bitrix\Im\V2\TariffLimit\Limit;
 use Bitrix\ImMobile\NavigationTab\Tab\AvailableMethodList;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -78,6 +80,21 @@ abstract class Tab extends BaseController
 					break;
 				case (AvailableMethodList::TARIFF_RESTRICTION->value):
 					$data[$method] = $this->getTariffRestriction();
+					break;
+				case (AvailableMethodList::CHATS_LIST->value):
+					$data[$method] = $this->getChatsList();
+					break;
+				case (AvailableMethodList::COPILOT_LIST->value):
+					$data[$method] = $this->getCopilotList();
+					break;
+				case (AvailableMethodList::CHANNEL_LIST->value):
+					$data[$method] = $this->getChannelList();
+					break;
+				case (AvailableMethodList::COLLAB_LIST->value):
+					$data[$method] = $this->getCollabList();
+					break;
+				case (AvailableMethodList::TASK_LIST->value):
+					$data[$method] = $this->getTaskList();
 					break;
 				case (AvailableMethodList::ACTIVE_CALLS->value):
 					$data[$method] = [];
@@ -181,6 +198,82 @@ abstract class Tab extends BaseController
 	protected function getTariffRestriction(): array
 	{
 		return Limit::getInstance()->getRestrictions();
+	}
+
+	protected function getChatsList(): array
+	{
+		$recentList = \Bitrix\Im\Recent::getList(
+			null,
+			[
+				'JSON' => 'Y',
+				'SKIP_OPENLINES' => 'Y',
+				'GET_ORIGINAL_TEXT' => 'N',
+				'OFFSET' => self::OFFSET,
+				'LIMIT' => self::LIMIT,
+			]
+		);
+		
+		return $recentList ?: [];
+	}
+	
+	protected function getCopilotList(): array
+	{
+		$recentList = \Bitrix\Im\Recent::getList(
+			null,
+			[
+				'JSON' => 'Y',
+				'SKIP_OPENLINES' => 'Y',
+				'GET_ORIGINAL_TEXT' => 'N',
+				'OFFSET' => self::OFFSET,
+				'LIMIT' => self::LIMIT,
+				'ONLY_COPILOT' => 'Y',
+			]
+		);
+		
+		return $recentList ?: [];
+	}
+
+	protected function getChannelList(): array
+	{
+		$recentList = RecentChannel::getOpenChannels(self::LIMIT);
+
+		return $this->toRestFormatWithPaginationData(
+			[$recentList],
+			self::LIMIT,
+			$recentList->count()
+		);
+	}
+
+	protected function getCollabList(): array
+	{
+		$recentList = RecentCollab::getCollabs(self::LIMIT);
+
+		return $this->toRestFormatWithPaginationData(
+			[$recentList],
+			self::LIMIT,
+			$recentList->count()
+		);
+	}
+
+	protected function getTaskList(): array
+	{
+		// TODO: task-tab remove class_exists after merge feature
+		if (!\Bitrix\ImMobile\Settings::isTasksRecentListAvailable() || !class_exists('\Bitrix\Im\V2\Recent\RecentExternalChat'))
+		{
+			return $this->toRestFormatWithPaginationData(
+				[],
+				self::LIMIT,
+				0
+			);
+		}
+
+		$recentList = \Bitrix\Im\V2\Recent\RecentExternalChat::getExternalChats('tasksTask', self::LIMIT);
+
+		return $this->toRestFormatWithPaginationData(
+			[$recentList],
+			self::LIMIT,
+			$recentList->count()
+		);
 	}
 
 	abstract protected function getRecentList(): array;

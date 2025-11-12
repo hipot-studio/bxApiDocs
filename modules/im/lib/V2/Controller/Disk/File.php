@@ -89,24 +89,23 @@ class File extends BaseController
 	/**
 	 * @restMethod im.v2.Disk.File.transcribe
 	 */
-	public function transcribeAction(Chat $chat, FileItem $file, CurrentUser $currentUser): ?array
+	public function transcribeAction(Chat $chat, FileItem $file): ?array
 	{
-		$userId = $currentUser->getId();
-		if (!isset($userId))
+		if ((int)$file->getDiskFile()?->getSize() > TranscribeManager::MAX_TRANSCRIBABLE_FILE_SIZE)
 		{
-			$this->addError(new UserError(UserError::NOT_FOUND));
-			return null;
-		}
-
-		if (!Loader::includeModule('disk'))
-		{
-			$this->addError(new FileError(FileError::DISK_NOT_INSTALLED));
+			$this->addError(new FileError(FileError::FILE_SIZE_EXCEEDED));
 			return null;
 		}
 
 		if (!Features::isAiFileTranscriptionAvailable())
 		{
 			$this->addError(new CopilotError(CopilotError::TRANSCRIPTION_NOT_ACTIVE));
+			return null;
+		}
+
+		if (!$file->isTranscribable())
+		{
+			$this->addError(new CopilotError(CopilotError::FILE_NOT_TRANSCRIBABLE));
 			return null;
 		}
 

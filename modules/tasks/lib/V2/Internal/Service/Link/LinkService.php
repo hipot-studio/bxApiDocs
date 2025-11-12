@@ -45,8 +45,13 @@ class LinkService
 
 	public function getCreateTask(int $userId = 0, int $groupId = 0): string
 	{
+		return $this->getEditTask(0, $userId, $groupId);
+	}
+
+	public function getEditTask(int $taskId = 0, int $userId = 0, int $groupId = 0): string
+	{
 		$parameters = [
-			'entityId' => 0,
+			'entityId' => $taskId,
 			'entityType' => 'task',
 			'action' => 'edit',
 		];
@@ -63,7 +68,8 @@ class LinkService
 
 		return LinkBuilderFactory::getInstance()
 			->create(...$parameters)
-			?->makeEntityPath();
+			?->makeEntityPath()
+		;
 	}
 
 	public function get(EntityInterface $entity, int $userId = 0): ?string

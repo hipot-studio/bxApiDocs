@@ -16,6 +16,15 @@ use Bitrix\Main\Service\MicroService\Client;
 
 class JwtCall
 {
+	/** @var array<int, string> */
+	private static array $userTokens = [];
+
+	/** @var array<int, string> */
+	private static array $callTokens = [];
+
+	/** @var array<int, string> */
+	private static array $userRoles = [];
+
 	/**
 	 * Generates a secret key for call JWT
 	 */
@@ -237,115 +246,44 @@ class JwtCall
 		return $result;
 	}
 
-	protected static function getCurrentUserId(): int
-	{
-		global $USER;
-
-		return $USER->getId();
-	}
-
-	public static function getPrivateKey(): string
-	{
-		$privateKey = Option::get('call', 'call_portal_key');
-
-		$cryptoOptions = Configuration::getValue('crypto');
-		if (!empty($cryptoOptions['crypto_key']))
-		{
-			try
-			{
-				$cipher = new Cipher();
-				$privateKey = $cipher->decrypt(base64_decode($privateKey), $cryptoOptions['crypto_key']);
-			}
-			catch (SecurityException $exception)
-			{
-			}
-		}
-
-		return $privateKey;
-	}
-
-	protected static function getUserData(): array
-	{
-		$user = \Bitrix\Im\User::getInstance(self::getCurrentUserId());
-
-		return [
-			'userId' => $user->getId(),
-			'userName' => $user->getFullName(false),
-			'avatar' => $user->getAvatar(),
-		];
-	}
-
 	/**
 	 * Generates a user JWT for a call
-	 *
+	 * @param int $userId
 	 * @return string
 	 */
-	public static function getUserJwt(): string
+	public static function getUserJwt(int $userId): string
 	{
-		return JWT::encode(
-			self::getUserData(),
-			self::getPrivateKey()
-		);
-	}
-
-	/**
-	 * Generates call JWT
-	 *
-	 * @param array $chatData Chat info for token
-	 * @param array|null $additionalData Additional info for call token
-	 *
-	 * @return string
-	 */
-	protected static function getCallJwt(array $chatData, array|null $additionalData = null): string
-	{
-		if (empty($chatData))
+		if (!isset(self::$userTokens[$userId]))
 		{
-			return '';
+			$user = \Bitrix\Im\User::getInstance($userId);
+			$userData = [
+				'userId' => $user->getId(),
+				'userName' => $user->getFullName(false),
+				'avatar' => $user->getAvatar(),
+			];
+
+			self::$userTokens[$userId] = JWT::encode($userData, Settings::getPrivateKey());
 		}
 
-		$callToken = [
-			'portalId' => Settings::getPortalId(),
-			'chatId' => $chatData['CHAT_ID'],
-			'tokenVersion' => $chatData['TOKEN_VERSION'],
-			'usersLimit' => Call::getMaxCallServerParticipants(),
-			'portalType' => Client::getPortalType(),
-			'portalUrl' => Client::getServerName(),
-			'controllerUrl' => (new ControllerClient())->getServiceUrl(),
-			'roomType' => 1,
-			'additionalData' => $additionalData,
-		];
-		if (!empty($chatData['USER_ROLE']))
-		{
-			$callToken['role'] = $chatData['USER_ROLE'];
-		}
-
-		return JWT::encode($callToken, self::getPrivateKey());
+		return self::$userTokens[$userId];
 	}
 
 	/**
 	 * Return call JWT
 	 *
 	 * @param int $chatId Chat info for token
-	 * @param int $userId
 	 * @param array|null $additionalData Additional info for call token
 	 *
 	 * @return string
 	 */
-	public static function getCallToken(int $chatId, int $userId, array|null $additionalData = null): string
+	public static function getCallToken(int $chatId, array|null $additionalData = null): string
 	{
-		if (empty($chatId))
+		if (!isset(self::$callTokens[$chatId]))
 		{
-			return '';
+			self::$callTokens[$chatId] = self::generateCallJwt($chatId, self::getTokenVersion($chatId), self::getUserRoles($chatId), $additionalData);
 		}
 
-		return self::getCallJwt(
-			[
-				'CHAT_ID' => $chatId,
-				'TOKEN_VERSION' => self::getTokenVersion($chatId),
-				'USER_ROLE' => self::getUserRole($chatId, $userId),
-			],
-			$additionalData
-		);
+		return self::$callTokens[$chatId];
 	}
 
 	/**
@@ -358,16 +296,13 @@ class JwtCall
 	 */
 	public static function getCallTokenList(array $chatIdList, array|null $additionalData = null): array
 	{
-		$result = [];
-
-		if (empty($chatIdList))
-		{
-			return $result;
-		}
-
 		$chatEntityList = CallChatEntity::findAll($chatIdList);
 		foreach ($chatIdList as $chatId)
 		{
+			if (isset(self::$callTokens[$chatId]))
+			{
+				continue;
+			}
 			$tokenVersion = 1;
 			if (isset($chatEntityList[$chatId]))
 			{
@@ -380,49 +315,33 @@ class JwtCall
 				$additionalFields = $additionalData[$chatId];
 			}
 
-			$result[$chatId] =  self::getCallJwt(
-				[
-					'CHAT_ID' => $chatId,
-					'TOKEN_VERSION' => $tokenVersion,
-				],
-				$additionalFields
-			);
+			self::$callTokens[$chatId] = self::generateCallJwt($chatId, $tokenVersion, self::getUserRoles($chatId), $additionalFields);
 		}
 
-		return $result;
+		return array_intersect_key(self::$callTokens, array_flip($chatIdList));
 	}
 
 	/**
 	 * Update call JWT version
 	 *
 	 * @param int $chatId Chat id for token update
-	 * @param int $userId
 	 * @return string
 	 */
-	public static function updateCallToken(int $chatId, int $userId): string
+	public static function updateCallToken(int $chatId): string
 	{
-		if (empty($chatId))
-		{
-			return '';
-		}
-
 		$chatEntity = CallChatEntity::updateVersion($chatId);
 
 		$newTokenVersion = $chatEntity->getCallTokenVersion();
-		(new BalancerClient())->updateTokenVersion($newTokenVersion, $chatId);
+		(new BalancerClient())->updateTokenVersion($chatId, $newTokenVersion);
 
-		return self::getCallJwt([
-			'CHAT_ID' => $chatId,
-			'TOKEN_VERSION' => $newTokenVersion,
-			'USER_ROLE' => self::getUserRole($chatId, $userId),
-		]);
+		self::$callTokens[$chatId] = self::generateCallJwt($chatId, $newTokenVersion, self::getUserRoles($chatId));
+
+		return self::$callTokens[$chatId];
 	}
 
 	/**
 	 * Get version for call token
-	 *
 	 * @param int $chatId Chat id for token update
-	 *
 	 * @return int|null
 	 */
 	public static function getTokenVersion(int $chatId): ?int
@@ -442,38 +361,65 @@ class JwtCall
 		return $tokenVersion;
 	}
 
-	private static function getUserRole(int $chatId, int $userId): string
+	/**
+	 * Generates call JWT
+	 *
+	 * @param int $chatId
+	 * @param int $tokenVersion
+	 * @param array $userRoles
+	 * @param array|null $additionalData Additional info for call token
+	 *
+	 * @return string
+	 */
+	private static function generateCallJwt(int $chatId, int $tokenVersion, array $userRoles, array|null $additionalData = null): string
 	{
-		static $cache = [];
-
-		if (isset($cache[$chatId][$userId]))
+		$callToken = [
+			'portalId' => Settings::getPortalId(),
+			'chatId' => $chatId,
+			'tokenVersion' => $tokenVersion,
+			'usersLimit' => Call::getMaxCallServerParticipants(),
+			'portalType' => Client::getPortalType(),
+			'portalUrl' => Client::getServerName(),
+			'controllerUrl' => (new ControllerClient())->getServiceUrl(),
+			'roomType' => 1,
+		];
+		if (!empty($additionalData))
 		{
-			return $cache[$chatId][$userId];
+			$callToken['additionalData'] = $additionalData;
+		}
+		if (!empty($userRoles))
+		{
+			$callToken['userRoles'] = $userRoles;
 		}
 
-		$role = 'USER';
-		if ($chatId == 0 || $userId == 0)
-		{
-			return $role;
-		}
+		return JWT::encode($callToken, Settings::getPrivateKey());
+	}
 
-		\Bitrix\Main\Loader::includeModule('im');
-
-		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
-		if ($chat->getId() == $chatId)
+	private static function getUserRoles(int $chatId): array
+	{
+		if (!isset(self::$userRoles[$chatId]))
 		{
-			if ($userId === $chat->getAuthorId())
+			$roles = [];
+			\Bitrix\Main\Loader::includeModule('im');
+
+			$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+			if ($chat->getId() == $chatId)
 			{
-				$role = 'ADMIN';
+				if ($chat->getAuthorId())
+				{
+					$roles['admin'] = $chat->getAuthorId();
+				}
+
+				$manages = $chat->getManagerList();
+				if (!empty($manages))
+				{
+					$roles['manager'] = $manages;
+				}
 			}
-			elseif (in_array($userId, $chat->getManagerList(), true))
-			{
-				$role = 'MANAGER';
-			}
+
+			self::$userRoles[$chatId] = $roles;
 		}
 
-		$cache[$chatId][$userId] = $role;
-
-		return $role;
+		return self::$userRoles[$chatId] ?? [];
 	}
 }

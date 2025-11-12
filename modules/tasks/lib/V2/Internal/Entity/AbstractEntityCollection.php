@@ -203,6 +203,11 @@ abstract class AbstractEntityCollection implements EntityCollectionInterface
 		return array_map(static fn ($collectionItem): array => $collectionItem->toArray(), $this->entities);
 	}
 
+	public function getEntities(): array
+	{
+		return $this->entities;
+	}
+
 	public function diff(self $collectionToCompare): static
 	{
 		$ids = array_diff($this->getIds(), $collectionToCompare->getIds());

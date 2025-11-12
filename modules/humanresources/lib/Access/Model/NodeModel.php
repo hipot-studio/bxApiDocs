@@ -21,14 +21,6 @@ final class NodeModel implements AccessibleItem
 		if ($itemId !== null)
 		{
 			$nodeRepository = Container::getNodeRepository();
-			if (Feature::instance()->isCrossFunctionalTeamsAvailable())
-			{
-				$nodeRepository->setSelectableNodeEntityTypes([
-					NodeEntityType::DEPARTMENT,
-					NodeEntityType::TEAM,
-				]);
-			}
-
 			$model->node = $nodeRepository->getById($itemId);
 		}
 
@@ -58,14 +50,6 @@ final class NodeModel implements AccessibleItem
 	public function setTargetNodeId(int $itemId): void
 	{
 		$nodeRepository = Container::getNodeRepository();
-		if (Feature::instance()->isCrossFunctionalTeamsAvailable())
-		{
-			$nodeRepository->setSelectableNodeEntityTypes([
-				NodeEntityType::DEPARTMENT,
-			 	NodeEntityType::TEAM,
-			]);
-		}
-
 		$this->targetNodeId =  $nodeRepository->getById($itemId)?->id ?? null;
 	}
 }

@@ -12,10 +12,19 @@ use Bitrix\Main\Engine\CurrentUser;
 
 final class AccessService
 {
-	public function checkAccessToEditPermissions(RoleCategory $category, ?int $userId = null): bool
+	public function checkAccessToEditPermissions(
+		RoleCategory $category,
+		?int $userId = null,
+		bool $checkTariffRestriction = true,
+	): bool
 	{
-		return Storage::canUsePermissionConfig()
-			&& $this->isSupportedRoleCategory($category)
+		if ($checkTariffRestriction && !Storage::canUsePermissionConfig())
+		{
+			return false;
+		}
+
+		return
+			$this->isSupportedRoleCategory($category)
 			&& $this->checkAccessToEditRoleCategory($category, $userId)
 		;
 	}

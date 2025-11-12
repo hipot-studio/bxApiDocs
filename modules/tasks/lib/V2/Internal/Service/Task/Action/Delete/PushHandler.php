@@ -48,6 +48,7 @@ class PushHandler
 				'event_GUID' => $this->config->getEventGuid(),
 				'BEFORE' => [
 					'GROUP_ID' => $groupId,
+					'PARENT_ID' => (int)($fullTaskData['PARENT_ID'] ?? 0),
 				],
 			],
 		]);

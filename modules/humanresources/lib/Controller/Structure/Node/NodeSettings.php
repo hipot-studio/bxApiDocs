@@ -87,11 +87,19 @@ class NodeSettings extends Controller
 	 * @param array{ NodeSettingsType: array{ values: string, replace: bool } } $settings
 	 * @return void
 	 */
-	#[StructureActionAccess(
-		permission: StructureActionDictionary::ACTION_TEAM_SETTINGS_EDIT,
-		itemType: AccessibleItemType::NODE,
-		itemIdRequestKey: 'nodeId',
-		itemParentIdRequestKey: 'parentId',
+	#[LogicOr(
+		new StructureActionAccess(
+			permission: StructureActionDictionary::ACTION_DEPARTMENT_SETTINGS_EDIT,
+			itemType: AccessibleItemType::NODE,
+			itemIdRequestKey: 'nodeId',
+			itemParentIdRequestKey: 'parentId',
+		),
+		new StructureActionAccess(
+			permission: StructureActionDictionary::ACTION_TEAM_SETTINGS_EDIT,
+			itemType: AccessibleItemType::NODE,
+			itemIdRequestKey: 'nodeId',
+			itemParentIdRequestKey: 'parentId',
+		),
 	)]
 	public function updateAction(Item\Node $node, int $parentId, array $settings)
 	{

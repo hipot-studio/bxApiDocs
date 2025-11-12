@@ -16,7 +16,7 @@ use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
-use CAllSite;
+use CSite;
 use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class GeneralChat extends GroupChat
@@ -271,13 +271,13 @@ class GeneralChat extends GroupChat
 
 	private static function getPortalLanguage(): ?string
 	{
-		$defSite = CAllSite::GetDefSite();
+		$defSite = CSite::GetDefSite();
 		if ($defSite === false)
 		{
 			return null;
 		}
 
-		$portalData = CAllSite::GetByID($defSite)->Fetch();
+		$portalData = CSite::GetByID($defSite)->Fetch();
 		if ($portalData)
 		{
 			$languageId = $portalData['LANGUAGE_ID'];

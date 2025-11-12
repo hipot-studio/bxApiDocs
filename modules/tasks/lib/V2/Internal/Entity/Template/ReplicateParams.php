@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity\Template;
 
-class ReplicateParams
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
+use Bitrix\Tasks\V2\Internal\Entity\ValueObjectInterface;
+
+class ReplicateParams implements ValueObjectInterface
 {
+	use MapTypeTrait;
+
 	public function __construct(
-		public readonly ?string $period = null,
+		public readonly ?Period $period = null,
 		public readonly ?string $everyDay = null,
 		public readonly ?string $workdayOnly = null,
 		public readonly ?string $dailyMonthInterval = null,
@@ -29,13 +34,15 @@ class ReplicateParams
 		public readonly ?string $startDate = null,
 		public readonly ?string $repeatTill = null,
 		public readonly ?string $endDate = null,
-		public readonly ?string $times = null
-	) {}
+		public readonly ?string $times = null,
+	)
+	{
+	}
 
 	public function toArray(): array
 	{
 		return [
-			'period' => $this->period,
+			'period' => $this->period?->value,
 			'everyDay' => $this->everyDay,
 			'workdayOnly' => $this->workdayOnly,
 			'dailyMonthInterval' => $this->dailyMonthInterval,
@@ -61,32 +68,32 @@ class ReplicateParams
 		];
 	}
 
-	public static function mapFromArray(array $props): self
+	public static function mapFromArray(array $props): static
 	{
 		return new self(
-			period: $props['period'] ?? null,
-			everyDay: $props['everyDay'] ?? null,
-			workdayOnly: $props['workdayOnly'] ?? null,
-			dailyMonthInterval: $props['dailyMonthInterval'] ?? null,
-			everyWeek: $props['everyWeek'] ?? null,
-			monthlyType: $props['monthlyType'] ?? null,
-			monthlyDayNum: $props['monthlyDayNum'] ?? null,
-			monthlyMonthNum1: $props['monthlyMonthNum1'] ?? null,
-			monthlyWeekDayNum: $props['monthlyWeekDayNum'] ?? null,
-			monthlyWeekDay: $props['monthlyWeekDay'] ?? null,
-			monthlyMonthNum2: $props['monthlyMonthNum2'] ?? null,
-			yearlyType: $props['yearlyType'] ?? null,
-			yearlyDayNum: $props['yearlyDayNum'] ?? null,
-			yearlyMonth1: $props['yearlyMonth1'] ?? null,
-			yearlyWeekDayNum: $props['yearlyWeekDayNum'] ?? null,
-			yearlyWeekDay: $props['yearlyWeekDay'] ?? null,
-			yearlyMonth2: $props['yearlyMonth2'] ?? null,
-			time: $props['time'] ?? null,
-			timezoneOffset: $props['timezoneOffset'] ?? null,
-			startDate: $props['startDate'] ?? null,
-			repeatTill: $props['repeatTill'] ?? null,
-			endDate: $props['endDate'] ?? null,
-			times: $props['times'] ?? null,
+			period: static::mapBackedEnum($props, 'period', Period::class),
+			everyDay: static::mapString($props, 'everyDay'),
+			workdayOnly: static::mapString($props, 'workdayOnly'),
+			dailyMonthInterval: static::mapString($props, 'dailyMonthInterval'),
+			everyWeek: static::mapString($props, 'everyWeek'),
+			monthlyType: static::mapString($props, 'monthlyType'),
+			monthlyDayNum: static::mapString($props, 'monthlyDayNum'),
+			monthlyMonthNum1: static::mapString($props, 'monthlyMonthNum1'),
+			monthlyWeekDayNum: static::mapString($props, 'monthlyWeekDayNum'),
+			monthlyWeekDay: static::mapString($props, 'monthlyWeekDay'),
+			monthlyMonthNum2: static::mapString($props, 'monthlyMonthNum2'),
+			yearlyType: static::mapString($props, 'yearlyType'),
+			yearlyDayNum: static::mapString($props, 'yearlyDayNum'),
+			yearlyMonth1: static::mapString($props, 'yearlyMonth1'),
+			yearlyWeekDayNum: static::mapString($props, 'yearlyWeekDayNum'),
+			yearlyWeekDay: static::mapString($props, 'yearlyWeekDay'),
+			yearlyMonth2: static::mapString($props, 'yearlyMonth2'),
+			time: static::mapString($props, 'time'),
+			timezoneOffset: static::mapString($props, 'timezoneOffset'),
+			startDate: static::mapString($props, 'startDate'),
+			repeatTill: static::mapString($props, 'repeatTill'),
+			endDate: static::mapString($props, 'endDate'),
+			times: static::mapString($props, 'times'),
 		);
 	}
 }

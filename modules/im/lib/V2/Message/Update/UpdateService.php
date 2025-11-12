@@ -47,7 +47,7 @@ class UpdateService
 	{
 		if (!$urlPreview)
 		{
-			$this->sendingConfig->disableUrlPreview();
+			$this->sendingConfig->disableGenerateUrlPreview();
 		}
 
 		return $this;

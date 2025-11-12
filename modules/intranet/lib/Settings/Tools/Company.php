@@ -117,13 +117,13 @@ class Company extends Tool
 	public function getSubgroupSettingsPath(): array
 	{
 		return [
-			'structure' => '/hr/structure/',
-			'employees' => '/company/',
-			'worktime' => '/timeman/timeman.php',
-			'knowledge_base' => '/kb/',
-			'video_conference' => '/conference/',
-			'meetings' => '/timeman/meeting/',
-			'absence' => '/timeman/',
+			'structure' => SITE_DIR . 'hr/structure/',
+			'employees' => SITE_DIR .'company/',
+			'worktime' => SITE_DIR .'timeman/timeman.php',
+			'knowledge_base' => SITE_DIR .'kb/',
+			'video_conference' => SITE_DIR .'conference/',
+			'meetings' => SITE_DIR .'timeman/meeting/',
+			'absence' => SITE_DIR .'timeman/',
 		];
 	}
 
@@ -218,6 +218,6 @@ class Company extends Tool
 
 	public function getSettingsPath(): ?string
 	{
-		return '/hr/structure/';
+		return SITE_DIR .'hr/structure/';
 	}
 }

@@ -108,6 +108,7 @@ class NodeRelationRepository implements Contract\Repository\NodeRelationReposito
 
 		$nodeRelation->id = $nodeRelationCreateResult->getId();
 		$nodeRelation->node = $this->nodeRepository->getById($nodeRelation->nodeId);
+		$nodeRelation->createdBy = $currentUserId;
 
 		$this->eventSenderService->send(EventName::OnRelationAdded, [
 			'relation' => $nodeRelation,

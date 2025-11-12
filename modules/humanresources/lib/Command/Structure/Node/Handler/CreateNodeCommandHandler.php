@@ -108,7 +108,7 @@ class CreateNodeCommandHandler
 
 			if ($command->createCollab)
 			{
-				// ToDo: Implement collab creation logic
+				$this->nodeCollabService->create($node);
 			}
 
 			if (count($command->bindingChatIds) > 0)

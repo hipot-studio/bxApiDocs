@@ -4,9 +4,9 @@ namespace Bitrix\Mobile\Profile\Provider;
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Result;
 use Bitrix\Mobile\Profile\Enum\TabType;
 use Bitrix\Mobile\Profile\Tab\ProfileTabFactory;
-use Bitrix\Mobile\Provider\UserRepository;
 
 class ProfileProvider
 {
@@ -153,8 +153,9 @@ class ProfileProvider
 		return $access->check(\Bitrix\Intranet\User\Access\UserActionDictionary::UPDATE, $targetUser);
 	}
 
-	public function save($fieldsToSave): array
+	public function save($fieldsToSave): Result
 	{
+		$result = new Result();
 		$tags = $fieldsToSave['tags'] ?? null;
 
 		if ($tags !== null)
@@ -189,7 +190,11 @@ class ProfileProvider
 			$userFields = \Bitrix\Intranet\Public\Provider\User\UserFieldsProvider::createByDefault()->getByUserData($preparedCommonFields);
 
 			$command = new \Bitrix\Intranet\User\Command\UpdateUserFieldsCommand($this->ownerId, $userFields);
-			$command->run();
+			$saveResult = $command->run();
+			if (!$saveResult->isSuccess())
+			{
+				$result->addErrors($saveResult->getErrors());
+			}
 		}
 
 		$avatar = $fieldsToSave['header']['image'];
@@ -209,11 +214,12 @@ class ProfileProvider
 		}
 
 		// Here you can add other data processing logic if needed
-
-		return ProfileTabFactory::createTab(
+		$result->setData(ProfileTabFactory::createTab(
 			TabType::COMMON,
 			$this->viewerId,
 			$this->ownerId,
-		)->getData();
+		)->getData());
+
+		return $result;
 	}
 }

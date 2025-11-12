@@ -18,12 +18,6 @@ class Channel extends Tab
 
 	protected function getRecentList(): array
 	{
-		$recentList = RecentChannel::getOpenChannels(self::LIMIT);
-
-		return $this->toRestFormatWithPaginationData(
-			[$recentList],
-			self::LIMIT,
-			$recentList->count()
-		);
+		return static::getChannelList();
 	}
 }

@@ -49,7 +49,15 @@ class DepartmentDeputy extends Base
 				PermissionValueType::DepartmentValue,
 			) => PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
 			TeamPermissionMapper::makeTeamPermissionId(
-				PermissionDictionary::HUMAN_RESOURCES_TEAM_COMMUNICATION_EDIT,
+				PermissionDictionary::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
+				PermissionValueType::DepartmentValue,
+			) => PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+			TeamPermissionMapper::makeTeamPermissionId(
+				PermissionDictionary::HUMAN_RESOURCES_TEAM_CHANNEL_EDIT,
+				PermissionValueType::DepartmentValue,
+			) => PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+			TeamPermissionMapper::makeTeamPermissionId(
+				PermissionDictionary::HUMAN_RESOURCES_TEAM_COLLAB_EDIT,
 				PermissionValueType::DepartmentValue,
 			) => PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
 

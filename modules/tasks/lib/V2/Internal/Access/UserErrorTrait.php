@@ -19,4 +19,9 @@ trait UserErrorTrait
 	{
 		return $this->errors;
 	}
+
+	public function clearUserErrors(): void
+	{
+		$this->errors = [];
+	}
 }

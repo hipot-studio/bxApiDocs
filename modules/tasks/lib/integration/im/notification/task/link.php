@@ -77,10 +77,7 @@ class Link
 			)
 		);
 
-		$url->addParams([
-							'ta_sec' => $analyticsData->getSection(),
-							'ta_el' => $analyticsData->getElement(),
-		]);
+		$url->addParams($analyticsData->getData());
 
 		return $url->getUri();
 	}

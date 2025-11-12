@@ -128,8 +128,8 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 		CTaskAssert::assertLaxIntegers($actionId);
 		$actionId = (int) $actionId;
 
-		$isAdmin = CTasksTools::IsAdmin($this->executiveUserId)
-			|| CTasksTools::IsPortalB24Admin($this->executiveUserId);
+		$isAdmin = \Bitrix\Tasks\Util\User::isAdmin($this->executiveUserId)
+			|| \Bitrix\Tasks\Integration\Bitrix24\User::isAdmin($this->executiveUserId);
 
 		if ($actionId === self::ACTION_ELAPSED_TIME_ADD)
 			$isActionAllowed = $this->oTaskItem->checkAccess(ActionDictionary::ACTION_TASK_ELAPSED_TIME);

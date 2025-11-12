@@ -68,10 +68,12 @@ class Bot
 		$methodMessageDelete = isset($fields['METHOD_MESSAGE_DELETE'])? $fields['METHOD_MESSAGE_DELETE']: '';
 		$methodWelcomeMessage = isset($fields['METHOD_WELCOME_MESSAGE'])? $fields['METHOD_WELCOME_MESSAGE']: '';
 		$methodContextGet = isset($fields['METHOD_CONTEXT_GET']) ? $fields['METHOD_CONTEXT_GET'] : '';
+		$methodReactionChange = isset($fields['METHOD_REACTION_CHANGE']) ? $fields['METHOD_REACTION_CHANGE'] : '';
 		$textPrivateWelcomeMessage = isset($fields['TEXT_PRIVATE_WELCOME_MESSAGE'])? $fields['TEXT_PRIVATE_WELCOME_MESSAGE']: '';
 		$textChatWelcomeMessage = isset($fields['TEXT_CHAT_WELCOME_MESSAGE'])? $fields['TEXT_CHAT_WELCOME_MESSAGE']: '';
 		$openline = isset($fields['OPENLINE']) && $fields['OPENLINE'] == 'Y'? 'Y': 'N';
 		$isHidden = isset($fields['HIDDEN']) && $fields['HIDDEN'] === 'Y' ? 'Y' : 'N';
+		$reactionsEnabled = isset($fields['REACTIONS_ENABLED']) && $fields['REACTIONS_ENABLED'] === 'Y' ? 'Y' : 'N';
 		$backgroundId = Background::validateBackgroundId($fields['BACKGROUND_ID'] ?? null);
 
 		/* rewrite vars for openline type */
@@ -193,12 +195,14 @@ class Bot
 			'METHOD_MESSAGE_DELETE' => $methodMessageDelete,
 			'METHOD_WELCOME_MESSAGE' => $methodWelcomeMessage,
 			'METHOD_CONTEXT_GET' => $methodContextGet,
+			'METHOD_REACTION_CHANGE' => $methodReactionChange,
 			'TEXT_PRIVATE_WELCOME_MESSAGE' => $textPrivateWelcomeMessage,
 			'TEXT_CHAT_WELCOME_MESSAGE' => $textChatWelcomeMessage,
 			'APP_ID' => $appId,
 			'VERIFIED' => $verified,
 			'OPENLINE' => $openline,
 			'HIDDEN' => $isHidden,
+			'REACTIONS_ENABLED' => $reactionsEnabled,
 			'BACKGROUND_ID' => $backgroundId,
 		));
 
@@ -491,6 +495,10 @@ class Bot
 		{
 			$update['METHOD_CONTEXT_GET'] = $updateFields['METHOD_CONTEXT_GET'];
 		}
+		if (isset($updateFields['METHOD_REACTION_CHANGE']))
+		{
+			$update['METHOD_REACTION_CHANGE'] = $updateFields['METHOD_REACTION_CHANGE'];
+		}
 		if (isset($updateFields['TEXT_PRIVATE_WELCOME_MESSAGE']))
 		{
 			$update['TEXT_PRIVATE_WELCOME_MESSAGE'] = $updateFields['TEXT_PRIVATE_WELCOME_MESSAGE'];
@@ -506,6 +514,10 @@ class Bot
 		if (isset($updateFields['HIDDEN']))
 		{
 			$update['HIDDEN'] = $updateFields['HIDDEN'] === 'Y' ? 'Y' : 'N';
+		}
+		if (isset($updateFields['REACTIONS_ENABLED']))
+		{
+			$update['REACTIONS_ENABLED'] = $updateFields['REACTIONS_ENABLED'] === 'Y' ? 'Y' : 'N';
 		}
 		if (isset($updateFields['BACKGROUND_ID']))
 		{
@@ -946,6 +958,53 @@ class Bot
 		return true;
 	}
 
+	public static function onReactionChange(Message $message, array $params): bool
+	{
+		$bot = \Bitrix\Im\V2\Entity\User\User::getInstance($message->getAuthorId());
+
+		if (!$bot->isBot())
+		{
+			return false;
+		}
+
+		$dialogId = self::getDialogIdByChat($message->getChat());
+		if ($dialogId === null)
+		{
+			return false;
+		}
+
+		$params['DIALOG_ID'] = $dialogId;
+
+		$botData = BotData::getInstance($bot->getId())?->getBotData();
+		if (
+			empty($botData)
+			|| !\Bitrix\Main\Loader::includeModule($botData['MODULE_ID'])
+			|| ($botData['REACTIONS_ENABLED'] ?? 'N') === 'N'
+		)
+		{
+			return false;
+		}
+
+		if (
+			$botData["METHOD_REACTION_CHANGE"]
+			&& method_exists($botData["CLASS"], $botData["METHOD_REACTION_CHANGE"])
+		)
+		{
+			call_user_func([$botData["CLASS"], $botData["METHOD_REACTION_CHANGE"]], $message->getId(), $params);
+		}
+		else if (method_exists($botData["CLASS"], "onReactionChange"))
+		{
+			call_user_func([$botData["CLASS"], "onReactionChange"], $message->getId(), $params);
+		}
+
+		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotReactionChange") as $event)
+		{
+			\ExecuteModuleEventEx($event, [$botData, $message->getId(), $params]);
+		}
+
+		return true;
+	}
+
 	protected static function addAdditionalParams(array $params): array
 	{
 		$chatId = $params['TO_CHAT_ID'] ?? $params['CHAT_ID'] ?? null;
@@ -962,7 +1021,7 @@ class Bot
 
 		$params['MENTIONED_LIST'] = (new Message())
 			->setMessage($params['MESSAGE'] ?? '')
-			->getUserIdsFromMention()
+			->getMentionedUserIds()
 		;
 
 		$params['PLATFORM_CONTEXT'] = self::getPlatformContext();
@@ -970,7 +1029,13 @@ class Bot
 		return $params;
 	}
 
-	public static function startWriting(array $bot, $dialogId, $userName = '')
+	public static function startWriting(
+		array $bot,
+		$dialogId,
+		$userName = '',
+		?string $statusMessageCode = null,
+		?int $duration = null
+	)
 	{
 		$botId = $bot['BOT_ID'];
 		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
@@ -1001,8 +1066,7 @@ class Bot
 		{
 			return false;
 		}
-
-		\CIMMessenger::StartWriting($dialogId, $botId, $userName);
+		\CIMMessenger::StartWriting($dialogId, $botId, $userName, false, false, $statusMessageCode, $duration);
 
 		return true;
 	}
@@ -1546,6 +1610,7 @@ class Bot
 				'type' => $type,
 				'openline' => $bot['OPENLINE'] == 'Y',
 				'backgroundId' => $bot['BACKGROUND_ID'] ?? null,
+				'reactionsEnabled' => $bot['REACTIONS_ENABLED'] ?? false,
 			);
 		}
 

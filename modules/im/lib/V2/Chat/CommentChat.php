@@ -163,9 +163,14 @@ class CommentChat extends GroupChat
 		return true;
 	}
 
+	public function allowMentionAllChatNotification(): bool
+	{
+		return false;
+	}
+
 	public function onAfterMessageUpdate(Message $message): Result
 	{
-		$result = $this->subscribeUsers(true, $message->getUserIdsFromMention(), $message->getPrevId());
+		$result = $this->subscribeUsers(true, $message->getMentionedUserIds(), $message->getPrevId());
 		$parentResult = parent::onAfterMessageUpdate($message);
 
 		return Result::merge($parentResult, $result);
@@ -174,7 +179,7 @@ class CommentChat extends GroupChat
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
 	{
 		$this->subscribe(true, $message->getAuthorId());
-		$this->subscribeUsers(true, $message->getUserIdsFromMention(), $message->getPrevId());
+		$this->subscribeUsers(true, $message->getMentionedUserIds(), $message->getPrevId());
 		Message\LastMessages::insert($message);
 
 		if (!$sendingService->getConfig()->skipCounterIncrements())
@@ -204,6 +209,11 @@ class CommentChat extends GroupChat
 		return $relations->filter(
 			fn (Relation $relation) => $parentRelations->getByUserId($relation->getUserId(), $this->getParentChatId())
 		);
+	}
+
+	public function getAllUserIdsForMention(): array
+	{
+		return $this->getParentChat()->getRelations()->getUserIds();
 	}
 
 	public function getRelationsForSendMessage(): RelationCollection

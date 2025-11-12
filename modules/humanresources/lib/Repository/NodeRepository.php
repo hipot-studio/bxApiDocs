@@ -950,14 +950,6 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		return $this;
 	}
 
-	/**
-	 * @return list<NodeEntityType>
-	 */
-	public function getSelectableNodeEntityTypes(): array
-	{
-		return $this->selectableNodeEntityTypes;
-	}
-
 	protected function convertModelArrayToItemByCollection(Model\NodeCollection $models): Item\Collection\NodeCollection
 	{
 		return new Item\Collection\NodeCollection(
@@ -1212,8 +1204,31 @@ class NodeRepository implements Contract\Repository\NodeRepository
 			{
 				continue;
 			}
+
 			$node = $this->getById($id);
-			if (!$node->isTeam())
+			if (!$node?->isTeam())
+			{
+				return null;
+			}
+
+			return $node;
+		}
+
+		foreach (AccessCodeType::getDepartmentTypes() as $type)
+		{
+			if (!str_starts_with($accessCode, $type->value))
+			{
+				continue;
+			}
+
+			$id = (int)AccessCodeHelper::extractIdFromCode($accessCode, $type);
+			if (!$id)
+			{
+				continue;
+			}
+
+			$node = $this->getById($id);
+			if (!$node?->isDepartment())
 			{
 				return null;
 			}

@@ -154,10 +154,6 @@ abstract class Controller extends Main\Engine\Controller
 					}
 
 					return Container::getNodeRepository()
-					->setSelectableNodeEntityTypes([
-						NodeEntityType::DEPARTMENT,
-						NodeEntityType::TEAM,
-					])
 					->getById((int)$nodeId)
 					;
 				}
@@ -175,10 +171,6 @@ abstract class Controller extends Main\Engine\Controller
 					}
 
 					return Container::getNodeRepository()
-						->setSelectableNodeEntityTypes([
-							NodeEntityType::DEPARTMENT,
-							NodeEntityType::TEAM,
-						])
 						->getById((int)$targetNodeId)
 					;
 				}

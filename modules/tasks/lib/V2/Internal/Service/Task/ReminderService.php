@@ -208,7 +208,7 @@ class ReminderService
 
 		Collection::normalizeArrayValuesByInt($recipients, false);
 
-		$this->taskRightService->getUsersBatch(ActionDictionary::ACTION_TASK_READ, $reminder->taskId, $recipients);
+		$this->taskRightService->getUserRightBatch(ActionDictionary::ACTION_TASK_READ, $reminder->taskId, $recipients);
 
 		return $this->userRepository->getByIds($recipients);
 	}

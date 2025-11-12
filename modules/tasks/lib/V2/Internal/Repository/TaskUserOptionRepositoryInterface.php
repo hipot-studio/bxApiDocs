@@ -13,5 +13,5 @@ interface TaskUserOptionRepositoryInterface
 
 	public function add(Entity\Task\UserOption $userOption): void;
 
-	public function delete(array $codes, int $taskId, int $userId): void;
+	public function delete(array $codes = [], int $taskId = 0, int $userId = 0): void;
 }

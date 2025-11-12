@@ -151,7 +151,7 @@ class PushService
 			'ignoreDelay' => false,
 		];
 
-		$params['params'] = array_merge($params['params'], $pullManagerParams);
+		$params['params'] = $params['params'] + $pullManagerParams;
 
 		return $params;
 	}

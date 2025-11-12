@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity\Task;
 
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class View extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $taskId = null,
 		public readonly ?int $userId = null,
@@ -29,10 +32,10 @@ class View extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			taskId: $props['taskId'] ?? null,
-			userId: $props['userId'] ?? null,
-			viewedTs: $props['viewedTs'] ?? null,
-			isRealView: $props['isRealView'] ?? null,
+			taskId: static::mapInteger($props, 'taskId'),
+			userId: static::mapInteger($props, 'userId'),
+			viewedTs: static::mapInteger($props, 'viewedTs'),
+			isRealView: static::mapBool($props, 'isRealView'),
 		);
 	}
 

@@ -28,7 +28,6 @@ class StructureAuthProvider extends CAuthProvider
 {
 	private const PROVIDER_ID = 'hr_structure';
 	private const LOCK_NAME = 'auth_provider_lock';
-	private const LOCK_TIMEOUT = 10;
 	private const CHUNK_SIZE = 500;
 	private ?int $structureId = null;
 
@@ -217,7 +216,7 @@ class StructureAuthProvider extends CAuthProvider
 		$helper = $connection->getSqlHelper();
 		$lockName = $this->getLockNameByUserId($userId);
 
-		if (!$connection->lock($lockName, self::LOCK_TIMEOUT))
+		if (!$connection->lock($lockName))
 		{
 			return;
 		}

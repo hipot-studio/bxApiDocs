@@ -5,23 +5,26 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity\Task;
 
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
-use Bitrix\Tasks\V2\Internal\Entity\ValueObject;
+use Bitrix\Tasks\V2\Internal\Entity\ValueObjectInterface;
 
-class Source extends ValueObject
+class Source implements ValueObjectInterface
 {
 	use MapTypeTrait;
 
-    public function __construct(public readonly ?string $type = null, public readonly ?array $data = null)
-    {
-    }
+	public function __construct(
+		public readonly ?string $type = null,
+		public readonly ?array $data = null
+	)
+	{
+	}
 
-    public function toArray(): array
-    {
-        return [
-            'type' => $this->type,
-            'data' => $this->data,
-        ];
-    }
+	public function toArray(): array
+	{
+		return [
+			'type' => $this->type,
+			'data' => $this->data,
+		];
+	}
 
 	public static function mapFromArray(array $props = []): static
 	{

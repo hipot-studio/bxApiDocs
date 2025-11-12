@@ -63,7 +63,7 @@ class Text
 		$text = preg_replace_callback("/\[CODE\](.*?)\[\/CODE\]/si", Array('\Bitrix\Im\Text', 'setReplacement'), $text);
 		$text = preg_replace_callback("/\[PUT(?:=(.+?))?\](.+?)?\[\/PUT\]/i", Array('\Bitrix\Im\Text', 'setReplacement'), $text);
 		$text = preg_replace_callback("/\[SEND(?:=(.+?))?\](.+?)?\[\/SEND\]/i", Array('\Bitrix\Im\Text', 'setReplacement'), $text);
-		$text = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $text);
+		$text = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $text);
 
 		if ($cutStrikeParam === 'Y')
 		{
@@ -159,7 +159,7 @@ class Text
 		$text = preg_replace_callback("/\[PUT(?:=(.+?))?\](.+?)?\[\/PUT\]/i", Array('\Bitrix\Im\Text', 'setReplacement'), $text);
 		$text = preg_replace_callback("/\[SEND(?:=(.+?))?\](.+?)?\[\/SEND\]/i", Array('\Bitrix\Im\Text', 'setReplacement'), $text);
 		$text = preg_replace_callback("/\[CODE\](.*?)\[\/CODE\]/si", Array('\Bitrix\Im\Text', 'setReplacement'), $text);
-		$text = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $text);
+		$text = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $text);
 
 		if ($cutStrikeParam === 'Y')
 		{
@@ -293,8 +293,14 @@ class Text
 	public static function modifyShortUserTag($matches)
 	{
 		$userId = $matches[1];
-		$userName = \Bitrix\Im\User::getInstance($userId)->getFullName(false);
-		return '[USER='.$userId.' REPLACE]'.$userName.'[/USER]';
+
+		$innerText =
+			$userId === 'all'
+			? Loc::getMessage('IM_MESSAGE_MENTION_ALL')
+			: \Bitrix\Im\User::getInstance($userId)->getFullName(false)
+		;
+
+		return '[USER='.$userId.' REPLACE]'.$innerText.'[/USER]';
 	}
 
 	public static function removeBbCodes($text, $withFile = false, $attachValue = false)
@@ -317,8 +323,8 @@ class Text
 		$text = preg_replace("/\[url\\s*=\\s*((?:[^\\[\\]]++|\\[ (?: (?>[^\\[\\]]+) | (?:\\1) )* \\])+)\\s*\\](.*?)\\[\\/url\\]/ixsu", "$2", $text);
 		$text = preg_replace("/\[RATING=([1-5]{1})\]/i", " [".Loc::getMessage('IM_MESSAGE_RATING')."] ", $text);
 		$text = preg_replace("/\[ATTACH=([0-9]{1,})\]/i", " [".Loc::getMessage('IM_MESSAGE_ATTACH')."] ", $text);
-		$text = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $text);
-		$text = preg_replace("/\[USER=([0-9]+)( REPLACE)?](.*?)\[\/USER]/i", "$3", $text);
+		$text = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $text);
+		$text = preg_replace("/\[USER=([0-9]+|all)( REPLACE)?](.*?)\[\/USER]/i", "$3", $text);
 		$text = preg_replace("/\[dialog=(chat\d+|\d+:\d)(?: message=(\d+))?](.*?)\[\/dialog]/i", "$3", $text);
 		$text = preg_replace("/\[context=(chat\d+|\d+:\d+)\/(\d+)](.*?)\[\/context]/i", "$3", $text);
 		$text = preg_replace("/\[CHAT=([0-9]{1,})\](.*?)\[\/CHAT\]/i", "$2", $text);
@@ -347,15 +353,6 @@ class Text
 		}
 
 		return $text;
-	}
-
-	public static function populateUserBbCode(string $text): string
-	{
-		return preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", static function($matches){
-			$userId = $matches[1];
-			$userName = \Bitrix\Im\User::getInstance($userId)->getFullName(false);
-			return '[USER='.$userId.' REPLACE]'.$userName.'[/USER]';
-		}, $text);
 	}
 
 	public static function modifyTimestampCode(array $matches): string

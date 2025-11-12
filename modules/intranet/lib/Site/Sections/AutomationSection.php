@@ -440,7 +440,7 @@ class AutomationSection
 			return [];
 		}
 
-		$baseUrl = '/company/personal/user/' . CurrentUser::get()->getId() . '/tasks/';
+		$baseUrl = SITE_DIR . 'company/personal/user/' . CurrentUser::get()->getId() . '/tasks/';
 
 		$items = [
 			[
@@ -483,7 +483,7 @@ class AutomationSection
 		$items = [
 			[
 				'TEXT' => Loc::getMessage('AUTOMATION_SECTION_SIGN_SIGN_TITLE_MSGVER_1'),
-				'URL' => '/sign/#robots',
+				'URL' => SITE_DIR . 'sign/#robots',
 			],
 		];
 
@@ -498,7 +498,7 @@ class AutomationSection
 
 		return [
 			'TEXT' => Loc::getMessage('AUTOMATION_SECTION_SIGN_ITEM_TITLE_MSGVER_1'),
-			'URL' => '/sign/',
+			'URL' => SITE_DIR . 'sign/',
 			'ITEMS' => $items,
 		];
 	}
@@ -561,7 +561,7 @@ class AutomationSection
 	{
 		$available = ModuleManager::isModuleInstalled('lists') && ModuleManager::isModuleInstalled('bitrix24');
 
-		$listUrl = SITE_DIR . 'company/lists/';
+		$listUrl = '/company/lists/';
 		$locked = false;
 		$onclick = '';
 

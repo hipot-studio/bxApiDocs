@@ -30,10 +30,11 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 			return [];
 		}
 
-		$row = TaskTable::query()
-			->setSelect(['ID', UserField::TASK_CRM])
-			->where('ID', $taskId)
-			->fetch()
+		$row =
+			TaskTable::query()
+				->setSelect(['ID', UserField::TASK_CRM])
+				->where('ID', $taskId)
+				->fetch()
 		;
 
 		if (!is_array($row[UserField::TASK_CRM] ?? null))
@@ -42,6 +43,37 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 		}
 
 		return $row[UserField::TASK_CRM];
+	}
+
+	public function getIdsByTaskIds(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		if (!Loader::includeModule('crm'))
+		{
+			return [];
+		}
+
+		$rows =
+			TaskTable::query()
+				->setSelect(['ID', UserField::TASK_CRM])
+				->whereIn('ID', $taskIds)
+				->fetchAll()
+		;
+
+		$items = [];
+		foreach ($rows as $row)
+		{
+			$taskId = (int)($row['ID'] ?? 0);
+			$crm = is_array($row[UserField::TASK_CRM] ?? null) ? $row[UserField::TASK_CRM] : [];
+
+			$items[$taskId] = $crm;
+		}
+
+		return $items;
 	}
 
 	public function getByIds(array $ids): CrmItemCollection

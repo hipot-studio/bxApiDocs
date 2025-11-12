@@ -1885,6 +1885,8 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			return $result;
 		}
 
+		$analytics = Analytics::getInstance($this->userId);
+
 		try
 		{
 			$task = CTaskItem::getInstance($taskId, $this->userId);
@@ -1894,8 +1896,19 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		{
 			$this->errorCollection->add('ACTION_ERROR.UNEXPECTED_ERROR', $e->getFirstErrorMessage(), false,
 				['ui' => 'notification']);
+
+			$analytics->onTaskDelegate(
+				section: $analytics->getTaskContext($taskId),
+				status: false,
+			);
+
+
 			return $result;
 		}
+
+		$analytics->onTaskDelegate(
+			section: $analytics->getTaskContext($taskId),
+		);
 
 		return $result;
 	}
@@ -2338,6 +2351,12 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	{
 		$error = new Util\Error(Loc::getMessage('TASKS_TT_NOT_FOUND_OR_NOT_ACCESSIBLE'), 'ACCESS_DENIED.NO_TASK');
 
+		$userId = (int)($arResult['USER_ID'] ?? 0);
+		if ($userId <= 0)
+		{
+			return $error;
+		}
+
 		$request = null;
 		if (array_key_exists('REQUEST', $auxParams))
 		{
@@ -2411,7 +2430,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			$action = ActionDictionary::ACTION_TASK_CREATE;
 		}
 
-		$res = (new TaskAccessController($arResult['USER_ID']))->check($action, $oldTask, $accessCheckParams);
+		$res = (new TaskAccessController($userId))->check($action, $oldTask, $accessCheckParams);
 
 		if (!$res)
 		{
@@ -3113,6 +3132,15 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		if ($responsibleId)
 		{
 			$data[Task\Responsible::getCode(true)][] = ['ID' => $responsibleId];
+		}
+
+		$accomplices = $this->request->get('ACCOMPLICES');
+		if (is_array($accomplices) && !empty($accomplices))
+		{
+			foreach ($accomplices as $accompliceId)
+			{
+				$data[Task\Accomplice::getCode(true)][] = ['ID' => (int)$accompliceId];
+			}
 		}
 
 		// auditors
@@ -4330,7 +4358,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			try
 			{
 				$roles['ORIGINATOR'] = $this->task['CREATED_BY'] == $this->userId;
-				$roles['DIRECTOR'] = !!$this->task->isUserRole(CTaskItem::ROLE_DIRECTOR);
+				$roles['DIRECTOR'] = false;
 			}
 			catch (TasksException $e)
 			{

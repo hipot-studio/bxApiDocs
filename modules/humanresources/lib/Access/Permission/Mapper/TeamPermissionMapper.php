@@ -16,6 +16,19 @@ final class TeamPermissionMapper extends BasePermissionMapper
 	{
 	}
 
+	public static function createById(string $permissionId): TeamPermissionMapper
+	{
+		if (!PermissionDictionary::isTeamDependentVariablesPermission($permissionId))
+		{
+			throw new \InvalidArgumentException('Unavailable permission id');
+		}
+
+		return
+			(new TeamPermissionMapper())
+				->setPermissionId($permissionId)
+		;
+	}
+
 	/**
 	 * @param array<array{id: string, value: int}> $permissions
 	 *

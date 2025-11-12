@@ -57,22 +57,14 @@ class CheckListMapper
 
 		foreach ($checkList as $id => $item)
 		{
-			$item['id'] = (
-				is_string($item['id'])
-				|| (int)($item['id'] ?? null) === 0
-			)
-				? null
-				: (int)$item['id']
-			;
+			$itemId = $item['id'] ?? null;
+			$item['id'] = (is_string($itemId) || (int)$itemId === 0) ? null : (int)$itemId;
 
-			$item['isComplete'] = (
-				($item['isComplete'] === true)
-				|| ((int)$item['isComplete'] > 0)
-			);
-			$item['isImportant'] = (
-				($item['isImportant'] === true)
-				|| ((int)$item['isImportant'] > 0)
-			);
+			$isComplete = $item['isComplete'] ?? null;
+			$item['isComplete'] = $isComplete === true || (int)$isComplete > 0;
+
+			$isImportant = $item['isImportant'] ?? null;
+			$item['isImportant'] = $isImportant === true || (int)$isImportant > 0;
 
 			$auditors = $this->mapMembers($item['auditors'] ?? [], RoleDictionary::ROLE_AUDITOR);
 			$accomplices = $this->mapMembers($item['accomplices'] ?? [], RoleDictionary::ROLE_ACCOMPLICE);
@@ -82,7 +74,7 @@ class CheckListMapper
 			unset($item['auditors'], $item['accomplices']);
 
 			$items[$id] = $item;
-			$nodeIdMapping[$id] = $item['nodeId'];
+			$nodeIdMapping[$id] = $item['nodeId'] ?? null;
 		}
 
 		$converter = new Converter(
@@ -135,9 +127,9 @@ class CheckListMapper
 
 		$users = array_map(
 			static fn (array $user): Entity\User => new Entity\User(
-				id:    (int)$user['ID'],
-				name:  $user['NAME'],
-				image: $user['IMAGE']
+				id: (int)$user['ID'],
+				name: $user['NAME'],
+				image: new Entity\File(src: $user['IMAGE']),
 			),
 			$users
 		);

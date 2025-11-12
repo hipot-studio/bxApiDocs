@@ -4,19 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
-use Bitrix\Tasks\Internals\Task\TagCollection;
-use Bitrix\Tasks\Internals\Task\TagObject;
 use Bitrix\Tasks\V2\Internal\Entity;
 
 class TagMapper
 {
-	public function mapToCollection(?TagCollection $tags): Entity\TagCollection
+	public function mapToCollection(array $tags): Entity\TagCollection
 	{
-		if ($tags === null)
-		{
-			return new Entity\TagCollection();
-		}
-
 		$entities = [];
 		foreach ($tags as $tag)
 		{
@@ -26,13 +19,14 @@ class TagMapper
 		return new Entity\TagCollection(...$entities);
 	}
 
-	public function mapToEntity(TagObject $tag): Entity\Tag
+	public function mapToEntity(array $tag): Entity\Tag
 	{
 		return new Entity\Tag(
-			id: $tag->getId(),
-			name: $tag->getName(),
-			owner: new Entity\User(id: $tag->getUserId()),
-			group: new Entity\Group(id: $tag->getGroupId())
+			id: (int)($tag['ID'] ?? null),
+			name: (string)($tag['NAME'] ?? null),
+			owner: new Entity\User(id: (int)($tag['USER_ID'] ?? 0)),
+			group: new Entity\Group(id: (int)($tag['GROUP_ID'] ?? 0)),
+			task: new Entity\Task(id: (int)($tag['TASK_ID'] ?? 0)),
 		);
 	}
 }

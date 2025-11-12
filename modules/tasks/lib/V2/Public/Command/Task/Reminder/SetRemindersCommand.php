@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Command\Task\Reminder;
 
 use Bitrix\Main\Error;
-use Bitrix\Main\Validation\Rule\Recursive\Validatable;
+use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Main\Validation\ValidationResult;
-use Bitrix\Tasks\Internals\Attribute\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ReminderCollection;
 use Bitrix\Tasks\V2\Internal\Result\Result;

@@ -67,6 +67,11 @@ class CIMNotifySchema
 						"NAME" => GetMessage('IM_NS_MENTION_2'),
 						"PUSH" => 'Y',
 					],
+					"videconf_new_guest" => [
+						"NAME" => GetMessage('IM_NS_VIDEOCONF_NEW_GUEST'),
+						"MAIL" => "N",
+						"PUSH" => "Y",
+					],
 					"default" => [
 						"NAME" => GetMessage('IM_NS_DEFAULT_MSGVER_1'),
 						"PUSH" => 'N',

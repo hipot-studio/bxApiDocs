@@ -36,6 +36,6 @@ class Convert extends BaseController
 			return null;
 		}
 
-		return $taskProvider->getTaskById(new TaskParams(taskId: $result->getId(), userId: $this->userId));
+		return $taskProvider->get(new TaskParams(taskId: $result->getId(), userId: $this->userId));
 	}
 }

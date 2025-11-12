@@ -8,6 +8,7 @@ use Bitrix\Main\Engine\Response\Converter;
 
 class CAllIMContactList
 {
+	private static array $staticUserDataCache = [];
 	private $user_id = 0;
 
 	const NETWORK_AUTH_ID = 'replica';
@@ -868,68 +869,83 @@ class CAllIMContactList
 
 		if ($useCache)
 		{
-			$obCache = new \CPHPCache;
-			$cache_ttl = (int)$paramsCacheTtl;
-			if ($cache_ttl <= 0)
-			{
-				$cache_ttl = defined("BX_COMP_MANAGED_CACHE") ? 18144000 : 1800;
-			}
-
 			$uid = md5(implode('|', $arFilter['=ID']));
 			$cache_id = 'user_data_v40_'.$uid.'_'.$nameTemplate.'_'.$nameTemplateSite.'_'.$extraFields.'_'.$getPhones.'_'.$getDepartment.'_'.$bIntranetEnable.'_'.$bVoximplantEnable.'_'.LANGUAGE_ID.'_'.$bColorEnabled;
 			$cache_dir = '/bx/imc/userdata/' . mb_substr($uid, 0, 2) . '/' . mb_substr($uid, 2, 2) . '/' . $uid;
-			if ($obCache->initCache($cache_ttl, $cache_id, $cache_dir))
+
+			if (empty(self::$staticUserDataCache[$cache_id]))
 			{
-				$arCacheResult = $obCache->getVars();
-				if ($showOnline)
+				$obCache = new \CPHPCache;
+				$cache_ttl = (int)$paramsCacheTtl;
+				if ($cache_ttl <= 0)
 				{
-					$onlineUserId = array_keys(array_filter($arCacheResult['users'], function($user) {
-						return !$user['bot'];
-					}));
-					if (!empty($onlineUserId))
-					{
-						$arOnline = CIMStatus::GetList(Array('ID' => $onlineUserId));
-					}
+					$cache_ttl = defined("BX_COMP_MANAGED_CACHE") ? 18144000 : 1800;
 				}
 
-				foreach ($arCacheResult['users'] as $userId => $value)
+				$arCacheResult = $obCache->initCache($cache_ttl, $cache_id, $cache_dir) ? $obCache->getVars() : null;
+
+				if (!empty($arCacheResult))
 				{
-					if ($showOnline)
-					{
+					self::$staticUserDataCache[$cache_id] = $arCacheResult;
+				}
+			}
+			else
+			{
+				$arCacheResult = self::$staticUserDataCache[$cache_id];
+			}
+		}
+
+		if ($useCache && isset($arCacheResult))
+		{
+			if ($showOnline)
+			{
+				$onlineUserId = array_keys(array_filter($arCacheResult['users'], function($user) {
+					return !$user['bot'];
+				}));
+				if (!empty($onlineUserId))
+				{
+					$arOnline = CIMStatus::GetList(Array('ID' => $onlineUserId));
+				}
+			}
+
+			foreach ($arCacheResult['users'] as $userId => $value)
+			{
+				if ($showOnline)
+				{
 					/*	$arCacheResult['users'][$userId]['status'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['status']: 'offline';
 						$arCacheResult['users'][$userId]['idle'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['idle']: false;
 						$arCacheResult['users'][$userId]['mobile_last_date'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['mobile_last_date']: false;
 						$arCacheResult['users'][$userId]['desktop_last_date'] = $arOnline['users'][$userId]['desktop_last_date'] ?? false;*/
-						$arCacheResult['users'][$userId]['status'] = 'online';
-						$arCacheResult['users'][$userId]['idle'] = false;
-						$arCacheResult['users'][$userId]['mobile_last_date'] = false;
-						$arCacheResult['users'][$userId]['desktop_last_date'] = false;
-						$arCacheResult['users'][$userId]['last_activity_date'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['last_activity_date']: false;
-						$arCacheResult['users'][$userId]['absent'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['absent']: false;
-					}
-
-					if ($getHrPhoto && !isset($arCacheResult['hrphoto']))
-					{
-						$arCacheResult['hrphoto'][$userId] = $arCacheResult['users'][$userId]['avatar'];
-					}
-
-					if ($value['bot'])
-					{
-						$converter = new Converter(Converter::TO_SNAKE | Converter::TO_LOWER | Converter::KEYS);
-
-						$botData = \Bitrix\Im\V2\Entity\User\Data\BotData::getInstance((int)$userId)->toRestFormat();
-						$arCacheResult['users'][$userId]['bot_data'] = !empty($botData)
-							? $converter->process($botData)
-							: null
-						;
-					}
-					else
-					{
-						$arCacheResult['users'][$userId]['bot_data'] = null;
-					}
+					$arCacheResult['users'][$userId]['status'] = 'online';
+					$arCacheResult['users'][$userId]['idle'] = false;
+					$arCacheResult['users'][$userId]['mobile_last_date'] = false;
+					$arCacheResult['users'][$userId]['desktop_last_date'] = false;
+					$arCacheResult['users'][$userId]['last_activity_date'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['last_activity_date']: false;
+					$arCacheResult['users'][$userId]['absent'] = isset($arOnline['users'][$userId])? $arOnline['users'][$userId]['absent']: false;
 				}
-				return $arCacheResult;
+
+				if ($getHrPhoto && !isset($arCacheResult['hrphoto']))
+				{
+					$arCacheResult['hrphoto'][$userId] = $arCacheResult['users'][$userId]['avatar'];
+				}
+
+				if ($value['bot'])
+				{
+					$converter = new Converter(Converter::TO_SNAKE | Converter::TO_LOWER | Converter::KEYS);
+
+					$botData = \Bitrix\Im\V2\Entity\User\Data\BotData::getInstance((int)$userId)->toRestFormat();
+					$arCacheResult['users'][$userId]['bot_data'] = !empty($botData)
+						? $converter->process($botData)
+						: null
+					;
+				}
+				else
+				{
+					$arCacheResult['users'][$userId]['bot_data'] = null;
+				}
 			}
+
+			return $arCacheResult;
 		}
 
 		$arSelect = array("ID", "LAST_NAME", "NAME", "EMAIL", "LOGIN", "PERSONAL_PHOTO", "SECOND_NAME", "PERSONAL_BIRTHDAY", "WORK_POSITION", "PERSONAL_GENDER", "EXTERNAL_AUTH_ID", "PERSONAL_WWW", "ACTIVE", "LAST_ACTIVITY_DATE");
@@ -1132,6 +1148,8 @@ class CAllIMContactList
 
 		if($useCache)
 		{
+			self::$staticUserDataCache[$cache_id] = $result;
+
 			$cacheTag = array();
 			if($obCache->StartDataCache())
 			{

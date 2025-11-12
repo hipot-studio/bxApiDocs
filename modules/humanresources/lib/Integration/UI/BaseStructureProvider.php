@@ -62,9 +62,9 @@ abstract class BaseStructureProvider extends BaseProvider
 	{
 		return
 			$this->providerOptions->isProviderActive
-			|| CurrentUser::get()
-			|| UserProvider::isIntranetUser()
-			|| Loader::includeModule('socialnetwork')
+			&& (int)CurrentUser::get()->getId() > 0
+			&& Loader::includeModule('socialnetwork')
+			&& UserProvider::isIntranetUser()
 		;
 	}
 

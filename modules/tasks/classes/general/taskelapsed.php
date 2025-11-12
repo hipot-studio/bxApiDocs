@@ -34,7 +34,7 @@ class CTaskElapsedTime
 		elseif ($userId = \Bitrix\Tasks\Util\User::getId())
 			$executiveUserId = $userId;
 
-		$occurAsUserId = CTasksTools::getOccurAsUserId();
+		$occurAsUserId = \Bitrix\Tasks\Util\User::getOccurAsId();
 		if ( ! $occurAsUserId )
 			$occurAsUserId = ($executiveUserId ? $executiveUserId : 1);
 
@@ -228,7 +228,7 @@ class CTaskElapsedTime
 				$update["COMMENT_TEXT"] = $arFields['COMMENT_TEXT'];
 			$updateResult = \Bitrix\Tasks\Internals\Task\ElapsedTimeTable::update($ID, $update);
 
-			$occurAsUserId = CTasksTools::getOccurAsUserId();
+			$occurAsUserId = \Bitrix\Tasks\Util\User::getOccurAsId();
 			if ( ! $occurAsUserId )
 				$occurAsUserId = ($executiveUserId ? $executiveUserId : 1);
 
@@ -290,7 +290,7 @@ class CTaskElapsedTime
 
 		$deleteResult = \Bitrix\Tasks\Internals\Task\ElapsedTimeTable::delete($ID);
 
-		$occurAsUserId = CTasksTools::getOccurAsUserId();
+		$occurAsUserId = \Bitrix\Tasks\Util\User::getOccurAsId();
 		if ( ! $occurAsUserId )
 			$occurAsUserId = ($executiveUserId ? $executiveUserId : 1);
 
@@ -450,7 +450,7 @@ class CTaskElapsedTime
 		}
 		elseif (
 			\Bitrix\Tasks\Util\User::isAdmin()
-			|| CTasksTools::IsPortalB24Admin()
+			|| \Bitrix\Tasks\Integration\Bitrix24\User::isAdmin()
 			|| ($userID == $task["RESPONSIBLE_ID"])
 			|| (is_array($task["ACCOMPLICES"]) && in_array($userId, $task["ACCOMPLICES"]))
 		)

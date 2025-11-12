@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Integration\AI;
 
 use Bitrix\AI\Engine;
+use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Defaults;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\AI\Tuning\Type;
@@ -17,13 +18,14 @@ class Restriction
 	public const SETTING_COPILOT_CHAT_PROVIDER = 'im_chat_answer_provider';
 	public const SETTING_TRANSCRIPTION_PROVIDER = 'im_file_transcription_provider';
 
-	private const AI_TEXT_CATEGORY = 'text';
-	private const AI_AUDIO_CATEGORY = 'audio';
+	private const AI_TEXT_CATEGORY = 'text'; /** @see Engine::CATEGORIES */
+	private const AI_AUDIO_CATEGORY = 'audio'; /** @see Engine::CATEGORIES */
 	private const DEFAULT_COPILOT_ENABLED = true;
 	private const DEFAULT_TRANSCRIPTION_ENABLED = true;
 	private const SETTING_COPILOT_CHAT = 'im_allow_chat_answer_generate';
 	private const SETTING_TRANSCRIPTION = 'im_allow_file_transcription_generate';
 	private const PORTAL_ZONE_BLACKLIST = ['cn'];
+	private const TRANSCRIPTION_QUALITY = 'transcribe_chat_voice_messages'; /** @see Quality::QUALITIES */
 
 	private static ?bool $isCopilotActive = null;
 	private static ?bool $isTranscriptionActive = null;
@@ -100,7 +102,10 @@ class Restriction
 						'group' => 'im_copilot_chat',
 						'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_PROVIDER_TITLE'),
 					],
-					Defaults::getProviderSelectFieldParams(self::AI_AUDIO_CATEGORY)
+					Defaults::getProviderSelectFieldParams(
+						self::AI_AUDIO_CATEGORY,
+						new Quality(self::TRANSCRIPTION_QUALITY)
+					)
 				);
 
 				$itemRelations[self::SETTING_TRANSCRIPTION] = [self::SETTING_TRANSCRIPTION_PROVIDER];

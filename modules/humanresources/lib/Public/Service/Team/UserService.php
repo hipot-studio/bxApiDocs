@@ -63,9 +63,8 @@ class UserService
 			return [];
 		}
 
-		$nodeFilter->idFilter = IdFilter::fromIds($currentTeamMembers->getNodeIds());
-
 		$nodeFilter = new NodeFilter(
+			idFilter: idFilter::fromIds($currentTeamMembers->getNodeIds()),
 			entityTypeFilter: NodeTypeFilter::fromNodeType(NodeEntityType::TEAM),
 			direction: Direction::ROOT,
 			depthLevel: DepthLevel::FULL,

@@ -15,7 +15,6 @@ class MessageAnalytics extends ChatAnalytics
 	protected const ADD_REACTION = 'add_reaction';
 	protected const SHARE_MESSAGE = 'share_message';
 	protected const DELETE_MESSAGE = 'delete_message';
-	protected const ATTACH_FILE = 'attach_file';
 
 	protected Message $message;
 
@@ -44,7 +43,7 @@ class MessageAnalytics extends ChatAnalytics
 				?->send()
 			;
 
-			$this->addAttachFilesEvent();
+			(new FileAnalytics($this->chat))->addAttachFilesEvent($this->message);
 		});
 	}
 
@@ -54,6 +53,7 @@ class MessageAnalytics extends ChatAnalytics
 			$this
 				->createMessageEvent(self::ADD_REACTION)
 				?->setType($reaction)
+				?->setMessageP4($this->message->getAuthorId())
 				?->send()
 			;
 		});
@@ -86,23 +86,6 @@ class MessageAnalytics extends ChatAnalytics
 				?->send()
 			;
 		});
-	}
-
-	protected function addAttachFilesEvent(): void
-	{
-		$files = $this->message->getFiles();
-		$fileCount = $files->count();
-		if ($fileCount < 1)
-		{
-			return;
-		}
-
-		$this
-			->createMessageEvent(self::ATTACH_FILE)
-			?->setFilesType($files)
-			?->setFileP3($fileCount)
-			?->send()
-		;
 	}
 
 	protected function createMessageEvent(

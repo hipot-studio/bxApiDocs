@@ -125,6 +125,11 @@ class Filter extends Common
 	public function getAllPresets(): array
 	{
 		$presets = static::getPresets($this);
+		if ($this->isRelation())
+		{
+			return $presets;
+		}
+
 		$startSortForRolePresets = count($presets) + 1;
 		$contexts = $this->getContexts();
 		foreach ($contexts as $name)
@@ -151,7 +156,11 @@ class Filter extends Common
 			&& !$filterInstance?->isGroup()
 		;
 
-		if ($filterInstance?->isScrumProject())
+		if ($filterInstance?->isRelation())
+		{
+			$scope = Scope::RELATION;
+		}
+		else if ($filterInstance?->isScrumProject())
 		{
 			$scope = Scope::SCRUM;
 		}
@@ -164,6 +173,11 @@ class Filter extends Common
 		$presetCollection = $presetProvider->getScopePresetCollection($scope);
 
 		return $presetCollection->toArray();
+	}
+
+	protected function isRelation(): bool
+	{
+		return $this->getContext() === FilterRegistry::FILTER_RELATION;
 	}
 
 	public static function getRolePresets(bool $isScrumProject = false, int $startSort = 6): array

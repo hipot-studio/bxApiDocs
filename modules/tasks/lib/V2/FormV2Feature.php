@@ -48,6 +48,7 @@ class FormV2Feature
 			'view' => 'tasks_form_v2_view',
 			'move' => 'tasks_form_v2_move',
 			'reminder' => 'tasks_form_v2_reminder',
+			'gantt' => 'tasks_form_v2_gantt',
 			default => '',
 		};
 

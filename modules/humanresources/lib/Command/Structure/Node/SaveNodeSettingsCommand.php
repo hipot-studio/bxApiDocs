@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Command\Structure\Node;
 use Bitrix\HumanResources\Command\AbstractCommand;
 use Bitrix\HumanResources\Command\Structure\Node\Handler\SaveNodeSettingsHandler;
 use Bitrix\HumanResources\Config\Feature;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\NodeSettingsAuthorityType;
 use Bitrix\HumanResources\Type\NodeSettingsType;
 use Bitrix\Main\Result;
@@ -17,12 +18,20 @@ class SaveNodeSettingsCommand extends AbstractCommand
 
 	protected function validate(): bool
 	{
-		$isDeputyCheckRequired = !Feature::instance()->isDeputyApprovesBPAvailable();
-
-		$deputyTypes = $isDeputyCheckRequired ? [
+		$isDeputyCheckRequired = !Feature::instance()->isDeputyApprovesBPAvailable() && $this->node->type === NodeEntityType::TEAM;
+		$unavailableDeputyTypes = $isDeputyCheckRequired ? [
 			NodeSettingsAuthorityType::DepartmentDeputy->value,
 			NodeSettingsAuthorityType::TeamDeputy->value,
 		] : [];
+		$unavailableTeamTypes = $this->node->type !== NodeEntityType::TEAM ? [
+			NodeSettingsAuthorityType::TeamHead->value,
+			NodeSettingsAuthorityType::TeamDeputy->value,
+			NodeSettingsAuthorityType::TeamEmployee->value,
+		] : [];
+		$unavailableTypes = array_merge([NodeSettingsAuthorityType::DepartmentEmployee->value],
+			$unavailableDeputyTypes,
+			$unavailableTeamTypes,
+		);
 
 		foreach ($this->settings as $type => $setting)
 		{
@@ -34,22 +43,23 @@ class SaveNodeSettingsCommand extends AbstractCommand
 			// if the $key is of getCasesWithAuthorityTypeValue, check if each $settingType value is a valid NodeSettingsAuthorityType
 			if (
 				!in_array(NodeSettingsType::from($type), NodeSettingsType::getCasesWithAuthorityTypeValue(), true)
-				|| !isset($setting['values'])
-				|| !is_array($setting['values'])
-				|| !array_reduce(
-					$setting['values'],
-					fn($carry, $item) => $carry && NodeSettingsAuthorityType::tryFrom($item) !== null,
-					true
+				|| ($this->node->type === NodeEntityType::TEAM && !isset($setting['values']))
+				|| (isset($setting['values'])
+					&& (!is_array($setting['values'])
+						|| !array_reduce(
+							$setting['values'],
+							fn($carry, $item) => $carry && NodeSettingsAuthorityType::tryFrom($item) !== null,
+							true
+						)
+					)
 				)
 			)
 			{
 				return false;
 			}
 
-			if (
-				$isDeputyCheckRequired
-				&& !empty(array_intersect($setting['values'], $deputyTypes))
-			) {
+			if (is_array($setting['values']) && !empty(array_intersect($setting['values'], $unavailableTypes)))
+			{
 				return false;
 			}
 		}

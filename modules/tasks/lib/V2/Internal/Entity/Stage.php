@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Main\Validation\Rule\Min;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class Stage extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		#[Min(0)]
 		public readonly ?int $id = null,
@@ -26,9 +29,9 @@ class Stage extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: (int)($props['id'] ?? null),
-			title: $props['title'] ?? null,
-			color: $props['color'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			title: static::mapString($props, 'title'),
+			color: static::mapString($props, 'color'),
 		);
 	}
 

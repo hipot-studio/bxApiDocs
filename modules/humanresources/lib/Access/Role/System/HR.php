@@ -20,7 +20,10 @@ class HR extends Base
 			PermissionDictionary::HUMAN_RESOURCES_EMPLOYEE_ADD_TO_DEPARTMENT => PermissionVariablesDictionary::VARIABLE_ALL,
 			PermissionDictionary::HUMAN_RESOURCES_EMPLOYEE_REMOVE_FROM_DEPARTMENT => PermissionVariablesDictionary::VARIABLE_ALL,
 			PermissionDictionary::HUMAN_RESOURCES_USER_INVITE => PermissionVariablesDictionary::VARIABLE_ALL,
-			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COMMUNICATION_EDIT => PermissionVariablesDictionary::VARIABLE_ALL,
+			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT => PermissionVariablesDictionary::VARIABLE_ALL,
+			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHAT_EDIT => PermissionVariablesDictionary::VARIABLE_ALL,
+			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_CHANNEL_EDIT => PermissionVariablesDictionary::VARIABLE_ALL,
+			PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_COLLAB_EDIT => PermissionVariablesDictionary::VARIABLE_ALL,
 
 			PermissionDictionary::HUMAN_RESOURCES_USERS_ACCESS_EDIT => PermissionVariablesDictionary::VARIABLE_NONE,
 			PermissionDictionary::HUMAN_RESOURCES_FIRE_EMPLOYEE => PermissionVariablesDictionary::VARIABLE_NONE,

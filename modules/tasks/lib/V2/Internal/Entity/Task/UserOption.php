@@ -8,9 +8,12 @@ use Bitrix\Main\Validation\Rule\InArray;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\Internals\UserOption\Option;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class UserOption extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		#[PositiveNumber]
@@ -33,10 +36,10 @@ class UserOption extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			userId: $props['userId'] ?? null,
-			taskId: $props['taskId'] ?? null,
-			code: $props['code'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			userId: static::mapInteger($props, 'userId'),
+			taskId: static::mapInteger($props, 'taskId'),
+			code: static::mapInteger($props, 'code'),
 		);
 	}
 

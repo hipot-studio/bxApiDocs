@@ -118,6 +118,8 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 		}
 
 		$nodeCollection = $nodeRepository->findAllByUserId($userId);
+		$nodeRepository->setSelectableNodeEntityTypes([NodeEntityType::DEPARTMENT]);
+
 		$nodeIds = [];
 		foreach ($nodeCollection as $node)
 		{

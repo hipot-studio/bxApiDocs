@@ -6,11 +6,38 @@ namespace Bitrix\Tasks\V2\Internal\Service;
 
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Integration\Bitrix24;
+use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
+use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
+use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Repository\TariffRestrictionRepositoryInterface;
 use CBitrix24;
 
 class TariffService
 {
+	public function __construct(
+		private readonly TariffRestrictionRepositoryInterface $tariffRestrictionRepository,
+	)
+	{
+
+	}
+
+	public function canCreateDependence(int $userId): bool
+	{
+		if (Bitrix24\Task::checkFeatureEnabled(Bitrix24\FeatureDictionary::TASKS_GANTT))
+		{
+			return true;
+		}
+
+		if ($this->isLimitExceed())
+		{
+			return $this->tariffRestrictionRepository->getGanttLinkCount($userId) < 5;
+		}
+
+		return true;
+	}
+
 	public function isDemo(): bool
 	{
 		return Loader::includeModule('bitrix24') && CBitrix24::IsDemoLicense();
@@ -44,5 +71,10 @@ class TariffService
 	public function isEnabled(string $featureName): bool
 	{
 		return Bitrix24::checkFeatureEnabled($featureName);
+	}
+
+	public function isLimitExceed(): bool
+	{
+		return Limit::isLimitExceeded();
 	}
 }

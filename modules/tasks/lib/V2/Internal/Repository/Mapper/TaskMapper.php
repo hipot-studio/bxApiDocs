@@ -13,7 +13,6 @@ class TaskMapper
 	public function __construct(
 		private readonly TaskStatusMapper $taskStatusMapper,
 		private readonly TaskPriorityMapper $taskPriorityMapper,
-		private readonly TagMapper $tagMapper,
 	)
 	{
 
@@ -31,6 +30,7 @@ class TaskMapper
 		?array $crmItemIds = null,
 		?array $taskParameters = null,
 		?Entity\Task\UserOptionCollection $userOptions = null,
+		?Entity\TagCollection $tags = null,
 	): Entity\Task
 	{
 		return new Entity\Task(
@@ -45,6 +45,7 @@ class TaskMapper
 			startPlanTs: $taskObject->getStartDatePlan()?->getTimestamp(),
 			endPlanTs: $taskObject->getEndDatePlan()?->getTimestamp(),
 			fileIds: $taskObject->getFileFields(),
+			parentId: $taskObject->getParentId(),
 			checklist: $checkListIds,
 			group: $group,
 			stage: $stage,
@@ -55,10 +56,14 @@ class TaskMapper
 			accomplices: $members?->findAllByIds($taskObject->getMemberList()->getAccompliceIds()),
 			auditors: $members?->findAllByIds($taskObject->getMemberList()->getAuditorIds()),
 			containsChecklist: $aggregates['containsCheckList'] ?? null,
+			containsSubTasks: $aggregates['containsSubTasks'] ?? null,
+			containsRelatedTasks: $aggregates['containsRelatedTasks'] ?? null,
+			containsGanttLinks: $aggregates['containsGanttLinks'] ?? null,
 			chatId: $chatId,
 			allowsChangeDeadline: $taskObject->getAllowChangeDeadline(),
 			matchesWorkTime: $taskObject->getMatchWorkTime(),
-			tags: $this->tagMapper->mapToCollection($taskObject->getTagList()),
+			siteId: $taskObject->getSiteId(),
+			tags: $tags,
 			crmItemIds: $crmItemIds,
 			matchesSubTasksTime: $taskParameters['matchesSubTasksTime'] ?? null,
 			allowsChangeDatePlan: $taskParameters['allowsChangeDatePlan'] ?? null,

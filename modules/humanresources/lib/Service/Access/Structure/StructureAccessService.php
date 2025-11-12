@@ -136,19 +136,6 @@ class StructureAccessService
 			return null;
 		}
 
-		try
-		{
-			$restrictedRepository = Container::getPermissionRestrictedNodeRepository($this->action);
-			$restrictedRepository->setSelectableNodeEntityTypes([
-				$nodeEntityType,
-			]);
-			$restrictedRepository->setUserId($this->userId);
-		}
-		catch (SystemException)
-		{
-			return null;
-		}
-
 		$structure = Util\StructureHelper::getDefaultStructure();
 		if (!$structure)
 		{

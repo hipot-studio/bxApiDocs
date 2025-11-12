@@ -23,11 +23,11 @@ class CommunicationInstallerV2 extends BaseInstaller
 
 		$targetPermissions = [
 			TeamPermissionMapper::makeTeamPermissionId(
-				PermissionDictionary::HUMAN_RESOURCES_TEAM_COMMUNICATION_EDIT,
+				PermissionDictionary::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
 				PermissionValueType::TeamValue,
 			),
 			TeamPermissionMapper::makeTeamPermissionId(
-				PermissionDictionary::HUMAN_RESOURCES_TEAM_COMMUNICATION_EDIT,
+				PermissionDictionary::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
 				PermissionValueType::DepartmentValue,
 			),
 		];

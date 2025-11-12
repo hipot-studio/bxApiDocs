@@ -8,25 +8,21 @@
  * @deprecated
  */
 
-use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\Comments\Task\CommentPoster;
-use Bitrix\Tasks\Flow\Access\FlowAccessController;
-use Bitrix\Tasks\Flow\Access\FlowAction;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Log\Logger;
 use \Bitrix\Tasks\Internals\Task\FavoriteTable;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
+use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\Task\TimeUnitType;
-use \Bitrix\Tasks\Task\DependenceTable;
 use \Bitrix\Tasks\Integration;
 use \Bitrix\Tasks\Integration\Rest\Task\UserField;
 use \Bitrix\Tasks\Integration\Disk\Rest\Attachment;
@@ -37,6 +33,14 @@ use \Bitrix\Tasks\ActionFailedException;
 use \Bitrix\Tasks\ActionNotAllowedException;
 use \Bitrix\Tasks\ActionRestrictedException;
 use \Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Task\Gantt\LinkTypeMapper;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
+use Bitrix\Tasks\V2\Internal\Entity\Task\Gantt\LinkType;
+use Bitrix\Tasks\V2\Public\Command\Gantt\AddDependenceCommand;
+use Bitrix\Tasks\V2\Public\Command\Gantt\DeleteDependenceCommand;
+use Bitrix\Tasks\V2\Public\Command\Gantt\UpdateDependenceCommand;
 
 Loc::loadMessages(__FILE__);
 
@@ -137,17 +141,8 @@ interface CTaskItemInterface
 	 * @use \Bitrix\Tasks\V2\Public\Command\Task\Audit\WatchTaskCommand
 	 */
 	public function startWatch();		// include itself to auditors
-	public function isUserRole($roleId);
-	public function checkAccess($actionId); // see the full list of actions in ActionDictionary
 
-	/**
-	 * Remove file attached to task
-	 *
-	 * @param integer $fileId
-	 * @throws TasksException
-	 * @throws CTaskAssertException
-	 */
-	public function removeAttachedFile($fileId);
+	public function checkAccess($actionId); // see the full list of actions in ActionDictionary
 
 	/**
 	 * @param integer $format one of constants:
@@ -1664,7 +1659,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function delegate($newResponsibleId, array $params=array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			try
 			{
@@ -1721,7 +1716,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function startExecution(array $params=array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			$this->checkAccessIfRequired(ActionDictionary::ACTION_TASK_START, $params);
 
@@ -1764,7 +1759,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function pauseExecution(array $params=array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			$this->checkAccessIfRequired(ActionDictionary::ACTION_TASK_PAUSE, $params);
 
@@ -1790,7 +1785,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function defer(array $params=array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			$this->checkAccessIfRequired(ActionDictionary::ACTION_TASK_DEFER, $params);
 
@@ -1816,7 +1811,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function complete(array $params=array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			try
 			{
@@ -1931,7 +1926,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		// Force reload cache
 		$this->markCacheAsDirty();
 
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('watch'))
+		if (FormV2Feature::isOn('watch'))
 		{
 			if (!TaskAccessController::can($this->executiveUserId, ActionDictionary::ACTION_TASK_READ, $this->getId()))
 			{
@@ -2003,7 +1998,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		// Force reload cache
 		$this->markCacheAsDirty();
 
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('watch'))
+		if (FormV2Feature::isOn('watch'))
 		{
 			if (!TaskAccessController::can($this->executiveUserId, ActionDictionary::ACTION_TASK_READ, $this->getId()))
 			{
@@ -2077,7 +2072,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function renew(array $params = array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			$this->checkAccessIfRequired(ActionDictionary::ACTION_TASK_RENEW, $params);
 
@@ -2103,7 +2098,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function approve(array $params = array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			$this->checkAccessIfRequired(ActionDictionary::ACTION_TASK_APPROVE, $params);
 
@@ -2129,7 +2124,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function disapprove(array $params = array())
 	{
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('status'))
+		if (FormV2Feature::isOn('status'))
 		{
 			$this->checkAccessIfRequired(ActionDictionary::ACTION_TASK_DISAPPROVE, $params);
 
@@ -2649,7 +2644,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		// ensure we have access to the task
 		$this->checkCanReadThrowException();
 
-		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('favorite'))
+		if (FormV2Feature::isOn('favorite'))
 		{
 			$result = (new \Bitrix\Tasks\V2\Public\Command\Task\Favorite\ToggleFavoriteCommand(
 				taskId: $this->getId(),
@@ -2665,15 +2660,11 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			return false;
 		}
 
-		$f = 'toggle';
-
-
-
 		// here could be trouble: socnet doesn`t know anything aboult child tasks
 		// in case of a ticket came, get all child tasks IDs here, pass ID list to \Bitrix\Tasks\Integration\Socialnetwork\Task::toggleFavorites()
 		// and also pass ID list as a cache to FavoriteTable::$f to avoid calling same query twice
 
-		$res = FavoriteTable::$f(array(
+		$res = FavoriteTable::toggle(array(
 			'TASK_ID' => $this->getId(),
 			'USER_ID' => $this->executiveUserId,
 		), array(
@@ -3283,28 +3274,6 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		return $userRole;
 	}
 
-	private function getUserRoles()
-	{
-		try
-		{
-			$arTask = $this->getData($bEscaped = false);
-		}
-		catch (TasksException $e)
-		{
-			return [];
-		}
-
-		$userId = $this->executiveUserId;
-
-		// Is there precached data?
-		if ($this->arTaskUserRoles === null)
-		{
-			$this->arTaskUserRoles = self::getUserRolesArray($userId, $arTask);
-		}
-
-		return ($this->arTaskUserRoles);
-	}
-
 	private function throwExceptionNotAccessible()
 	{
 		throw new TasksException('Task not found or not accessible', TasksException::TE_TASK_NOT_FOUND_OR_NOT_ACCESSIBLE);
@@ -3350,7 +3319,12 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		return ($this->arTaskDependsOn);
 	}
 
-	public function addProjectDependence($parentId, $linkType = DependenceTable::LINK_TYPE_FINISH_START)
+	/**
+	 * @deprecated
+	 *
+	 * @use AddDependenceCommand
+	 */
+	public function addProjectDependence($parentId, $linkType = ProjectDependenceTable::LINK_TYPE_FINISH_START)
 	{
 		$exceptionInfo = array(
 			'AUX' => array(
@@ -3362,7 +3336,8 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			),
 		);
 
-		if(!\Bitrix\Tasks\Util\Restriction::checkCanCreateDependence())
+		$tariffService = Container::getInstance()->getTariffService();
+		if(!$tariffService->canCreateDependence($this->executiveUserId))
 		{
 			$exceptionInfo['ERROR'] = array(
 				array(
@@ -3379,10 +3354,28 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			$parentTask = CTaskItem::getInstanceFromPool($parentId, $this->executiveUserId);
 			if($parentTask->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE))
 			{
+				if (FormV2Feature::isOn('gantt'))
+				{
+					$mapper = new LinkTypeMapper();
+
+					$result = (new AddDependenceCommand(
+						taskId: $this->taskId,
+						dependentId: (int)$parentId,
+						userId: $this->executiveUserId,
+						linkType: $mapper->mapToEnum($linkType) ?? LinkType::FinishStart,
+					))->run();
+
+					if (!$result->isSuccess())
+					{
+						throw new ActionFailedException($result->getError()?->getMessage(), $exceptionInfo);
+					}
+
+					return;
+				}
+
 				// DependenceTable does not care about PARENT_ID relations and other restrictions except
 				// those which may compromise dependence mechanism logic
 				// so PARENT_ID check and DATE assignment are placed outside
-
 				$errors = array();
 				if($this->checkIsSubtaskOf($parentId) || $parentTask->checkIsSubtaskOf($this->getId()))
 				{
@@ -3402,7 +3395,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 						throw new ActionFailedException(Loc::getMessage('TASK_CANT_ADD_LINK'), $exceptionInfo);
 					}
 
-					$result = DependenceTable::createLink($this->getId(), $parentId, array(
+					$result = ProjectDependenceTable::createLink($this->getId(), $parentId, array(
 						//'TASK_DATA' => 			$this->getData(false),
 						//'PARENT_TASK_DATA' => 	$parentTask->getData(false),
 						'LINK_TYPE' => $linkType,
@@ -3427,55 +3420,22 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		throw new ActionNotAllowedException(Loc::getMessage('TASK_CANT_ADD_LINK'), $exceptionInfo);
 	}
 
+	/**
+	 * @deprecated
+	 *
+	 * @use \Bitrix\Tasks\V2\Internal\Service\Task\ParentService::isDescendantOf
+	 */
 	public function checkIsSubtaskOf($taskId)
 	{
-		$met = array();
-		$exitLimit = 1000;
-
-		// recursive queries, no tree structure here
-
-		$task = $this->getId();
-		$met[$task] = true;
-		$i = 0;
-		while(true)
-		{
-			if($i === 0)
-			{
-				$parent = $this['PARENT_ID'];
-			}
-			else
-			{
-				$parent = CTasks::getParentOfTask($task);
-			}
-
-			if(isset($met[$parent])) // chain is loopy
-			{
-				return false;
-			}
-			if($i > $exitLimit) // smth is too wrong
-			{
-				return false;
-			}
-
-			if($parent === false || !intval($parent)) // no parent anymore
-			{
-				return false;
-			}
-
-			if($parent == $taskId) // found
-			{
-				return true;
-			}
-
-			$met[$parent] = true;
-			$task = $parent;
-			$i++;
-		}
-
-		return false;
+		return Container::getInstance()->getParentService()->isDescendantOf($this->getId(), (int)$taskId);
 	}
 
-	public function updateProjectDependence($parentId, $linkType = DependenceTable::LINK_TYPE_FINISH_START)
+	/**
+	 * @deprecated
+	 *
+	 * @use UpdateDependenceCommand
+	 */
+	public function updateProjectDependence($parentId, $linkType = ProjectDependenceTable::LINK_TYPE_FINISH_START)
 	{
 		$exceptionInfo = array(
 			'AUX' => array(
@@ -3492,7 +3452,25 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			$parentTask = CTaskItem::getInstanceFromPool($parentId, $this->executiveUserId);
 			if($parentTask->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE))
 			{
-				$result = DependenceTable::update(array(
+				if (FormV2Feature::isOn('gantt'))
+				{
+					$mapper = new LinkTypeMapper();
+
+					$result = (new UpdateDependenceCommand(
+						taskId: $this->taskId,
+						dependentId: (int)$parentId,
+						linkType: $mapper->mapToEnum($linkType) ?? LinkType::FinishStart,
+					))->run();
+
+					if (!$result->isSuccess())
+					{
+						throw new ActionFailedException($result->getError()?->getMessage(), $exceptionInfo);
+					}
+
+					return;
+				}
+
+				$result = ProjectDependenceTable::update(array(
 					'TASK_ID' => $this->getId(),
 					'DEPENDS_ON_ID' => $parentId,
 				), array(
@@ -3510,6 +3488,11 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		throw new ActionNotAllowedException(Loc::getMessage('TASK_CANT_UPDATE_LINK'), $exceptionInfo);
 	}
 
+	/**
+	 * @deprecated
+	 *
+	 * @use DeleteDependenceCommand
+	 */
 	public function deleteProjectDependence($parentId)
 	{
 		$exceptionInfo = array(
@@ -3527,7 +3510,22 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			$parentTask = CTaskItem::getInstanceFromPool($parentId, $this->executiveUserId);
 			if($parentTask->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE))
 			{
-				$result = DependenceTable::deleteLink($this->getId(), $parentId);
+				if (FormV2Feature::isOn('gantt'))
+				{
+					$result = (new DeleteDependenceCommand(
+						taskId: $this->taskId,
+						dependentId: (int)$parentId,
+					))->run();
+
+					if (!$result->isSuccess())
+					{
+						throw new ActionFailedException($result->getError()?->getMessage(), $exceptionInfo);
+					}
+
+					return;
+				}
+
+				$result = ProjectDependenceTable::deleteLink($this->getId(), $parentId);
 				if(!$result->isSuccess())
 				{
 					$exceptionInfo['ERROR'] = $result->getErrorMessages();
@@ -4730,28 +4728,9 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		throw new \Bitrix\Main\NotAllowedException('Manual managing of task data is not allowed');
 	}
 
-	############################################################################################
-	### Deprecated
-	############################################################################################
-
-	/**
-	 * @deprecated
-	 */
-	public function addDependOn($parentId, $linkType = DependenceTable::LINK_TYPE_FINISH_START)
+	private function createConfig(array $parameters = []): UpdateConfig
 	{
-		$this->addProjectDependence($parentId, $linkType);
-	}
-	/**
-	 * @deprecated
-	 */
-	public function deleteDependOn($parentId)
-	{
-		$this->deleteProjectDependence($parentId);
-	}
-
-	private function createConfig(array $parameters = []): \Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig
-	{
-		return \Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig::createFromArray(
+		return UpdateConfig::createFromArray(
 			userId: $this->executiveUserId,
 			parameters: $parameters,
 		);

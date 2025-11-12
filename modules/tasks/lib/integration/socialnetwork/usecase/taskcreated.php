@@ -3,7 +3,6 @@
 namespace Bitrix\Tasks\Integration\SocialNetwork\UseCase;
 
 use Bitrix\Main\SystemException;
-use Bitrix\Tasks\Integration\Socialnetwork\Space\SpaceService;
 use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Internals\Notification\Message;
 use Bitrix\Tasks\Internals\TaskObject;

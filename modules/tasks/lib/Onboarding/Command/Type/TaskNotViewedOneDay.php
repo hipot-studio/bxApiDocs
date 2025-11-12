@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Onboarding\Command\Type;
 
+use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Onboarding\Command\CountableCommandInterface;
@@ -50,6 +51,8 @@ class TaskNotViewedOneDay implements CountableCommandInterface
 		$notificationController = new NotificationController();
 
 		$notificationController->onTaskNotViewedOneDay($this->task)->push();
+
+		Analytics::getInstance($this->userId)->onTaskOnboardingPingSent();
 
 		return $result;
 	}

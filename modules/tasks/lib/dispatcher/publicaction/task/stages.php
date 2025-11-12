@@ -419,7 +419,7 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 	 */
 	private function isAdmin()
 	{
-		return $GLOBALS['USER']->isAdmin() || \CTasksTools::IsPortalB24Admin();
+		return $GLOBALS['USER']->isAdmin() || \Bitrix\Tasks\Integration\Bitrix24\User::isAdmin();
 	}
 
 	/**

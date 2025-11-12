@@ -147,6 +147,7 @@ class BotData implements RestEntity
 			'isHidden' => $this->botData['HIDDEN'] === 'Y',
 			'isSupportOpenline' => $this->botData['OPENLINE'] === 'Y',
 			'backgroundId' => $this->botData['BACKGROUND_ID'] ?? null,
+			'reactionsEnabled' => ($this->botData['REACTIONS_ENABLED'] ?? 'N') === 'Y',
 		];
 	}
 

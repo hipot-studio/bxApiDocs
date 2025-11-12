@@ -10,6 +10,7 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Payload\Audio;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Im\Model\FileTranscriptionTable;
+use Bitrix\Im\V2\Analytics\FileAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Integration\AI\Transcription\Item\Status;
@@ -25,9 +26,11 @@ use Bitrix\Main\Web\Uri;
 final class TranscribeManager
 {
 	use ContextCustomer;
-	private const MODULE_ID = 'im';
+
 	public const CONTEXT_ID = 'chat_file_transcribe';
 	public const MAX_TRANSCRIPTION_CHARS = 20000;
+	public const MAX_TRANSCRIBABLE_FILE_SIZE = 26214400;
+	private const MODULE_ID = 'im';
 
 	private int $fileId;
 	private int $diskFileId;
@@ -78,11 +81,15 @@ final class TranscribeManager
 			TranscribeQueueManager::getInstance()->delete($this->fileId, $this->chatId);
 		}
 
+		(new FileAnalytics(Chat::getInstance($this->chatId)))->addStartTranscript($result);
+
 		return $result;
 	}
 
-	public function handleTranscriptionResponse(TranscribeFileItem $transcribeFileItem): void
+	public function handleTranscriptionResponse(TranscribeResult $transcribeResult): void
 	{
+		$transcribeFileItem = $transcribeResult->getFileItem();
+
 		if ($transcribeFileItem->status === Status::Success)
 		{
 			try
@@ -101,6 +108,7 @@ final class TranscribeManager
 		$queueManager->delete($transcribeFileItem->fileId);
 
 		$this->sendTranscribeEvent($transcribeFileItem, null, $chatIds);
+		(new FileAnalytics(Chat::getInstance($this->chatId)))->addFinishTranscript($transcribeResult);
 	}
 
 	protected function getFileTranscription(): ?TranscribeFileItem

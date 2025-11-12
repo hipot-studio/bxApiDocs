@@ -6,11 +6,17 @@ namespace Bitrix\Tasks\Access\Rule;
 
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\Rule\Traits\SubordinateTrait;
+use Bitrix\Tasks\Access\TaskAccessController;
 
+/**
+ * @property TaskAccessController $controller
+ */
 class TaskDepartmentRule extends AbstractRule
 {
 	use SubordinateTrait;

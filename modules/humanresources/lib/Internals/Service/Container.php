@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Internals\Service;
 
+use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeMemberRepository;
 use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeRepository;
 use Bitrix\HumanResources\Internals\Service\Structure\AccessService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeAccessCodeService;
@@ -75,5 +76,10 @@ class Container
 	public static function getAccessService(): AccessService
 	{
 		return self::getService('humanresources.service.internal.accessService');
+	}
+
+	public static function getNodeMemberRepository(): NodeMemberRepository
+	{
+		return self::getService('humanresources.internal.repository.structure.node.nodeMemberRepository');
 	}
 }

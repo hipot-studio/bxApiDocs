@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 
-use Bitrix\Main\Entity\DatetimeField;
 use Bitrix\Main\ObjectException;
+use Bitrix\Main\ORM\Fields\DatetimeField;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareFieldInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
 use Bitrix\Tasks\Internals\TaskTable;
+use Throwable;
 
 class PrepareDBFields implements PrepareFieldInterface
 {
@@ -39,9 +41,9 @@ class PrepareDBFields implements PrepareFieldInterface
 			{
 				try
 				{
-					$fields[$fieldName] = \Bitrix\Main\Type\DateTime::createFromUserTime($value);
+					$fields[$fieldName] = DateTime::createFromUserTime($value);
 				}
-				catch (\Throwable)
+				catch (Throwable)
 				{
 					throw new ObjectException('Incorrect date/time');
 				}

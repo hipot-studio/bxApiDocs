@@ -13,6 +13,7 @@ use Bitrix\Tasks\Flow\Internal\FlowTaskTable;
 use Bitrix\Tasks\Integration\Recyclebin\Manager;
 use Bitrix\Tasks\Internals\Task\FavoriteTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
+use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Util\Type\DateTime;
 
@@ -108,6 +109,14 @@ class TaskRegistry
 		)
 		{
 			$this->fillFlowId([$taskId]);
+		}
+
+		if (
+			$withRelations
+			&& !isset($this->storage[$taskId]['IS_RESULT_REQUIRED'])
+		)
+		{
+			$this->fillParameters([$taskId]);
 		}
 
 		return $this->storage[$taskId];
@@ -207,6 +216,7 @@ class TaskRegistry
 			$this->fillMembers($foundIds);
 			$this->fillDepartments($foundIds);
 			$this->fillFlowId($foundIds);
+			$this->fillParameters($foundIds);
 		}
 
 		return $this;
@@ -483,4 +493,28 @@ class TaskRegistry
 		}
 	}
 
+	private function fillParameters(array $taskIds): void
+	{
+		$parameters =
+			ParameterTable::query()
+				->setSelect(['ID', 'CODE', 'VALUE', 'TASK_ID'])
+				->whereIn('TASK_ID', $taskIds)
+				->exec()
+				->fetchAll()
+		;
+
+		foreach ($parameters as $parameter)
+		{
+			$taskId = (int)$parameter['TASK_ID'];
+
+			if ((int)$parameter['CODE'] === ParameterTable::PARAM_RESULT_REQUIRED)
+			{
+				$this->storage[$taskId]['IS_RESULT_REQUIRED'] = $parameter['VALUE'];
+			}
+			elseif ((int)$parameter['CODE'] === ParameterTable::PARAM_ALLOW_CHANGE_DATE_PLAN)
+			{
+				$this->storage[$taskId]['ALLOW_CHANGE_DATE_PLAN'] = $parameter['VALUE'];
+			}
+		}
+	}
 }

@@ -62,4 +62,9 @@ class Collab extends BaseRecent
 	{
 		return 'im:collab-messenger';
 	}
+
+	protected function isWidgetSupported(): bool
+	{
+		return true;
+	}
 }

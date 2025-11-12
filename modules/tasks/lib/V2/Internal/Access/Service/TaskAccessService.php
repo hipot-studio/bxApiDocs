@@ -27,6 +27,7 @@ class TaskAccessService
 
 	}
 
+	// TODO: Move this code closer to where it's actually used. For chat integration.
 	public function filterUsersWithAccess(int $taskId, array $userIds): array
 	{
 		$task = $this->taskRepository->getById($taskId);

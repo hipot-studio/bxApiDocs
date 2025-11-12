@@ -1083,7 +1083,7 @@ final class Task extends Base
 
 		if (!empty($fields[CRM\UserField::getMainSysUFCode()]))
 		{
-			$fields['SCENARIO_NAME'][] = Scenario::Default->value;
+			$fields['SCENARIO_NAME'][] = Scenario::Crm->value;
 		}
 
 		if (isset($fields['SCENARIO_NAME']) && is_array($fields['SCENARIO_NAME']))

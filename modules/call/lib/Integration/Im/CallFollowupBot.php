@@ -75,7 +75,10 @@ class CallFollowupBot extends ImBot\Bot\Base
 							$message = ChatMessage::generateTaskStartMessage($callId, $chat);
 							if ($message)
 							{
-								$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+								$sendingConfig = (new SendingConfig())
+									->enableSkipCounterIncrements()
+									->enableSkipUrlIndex()
+								;
 								NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
 							}
 						}

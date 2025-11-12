@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Main\Validation\Rule\Min;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class Flow extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		#[Min(0)]
 		public readonly ?int $id = null,
@@ -36,10 +39,10 @@ class Flow extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			name: $props['name'] ?? null,
-			efficiency: $props['efficiency'] ?? null,
-			group: isset($props['group']) ? Group::mapFromArray($props['group']) : null,
+			id: static::mapInteger($props, 'id'),
+			name: static::mapString($props, 'name'),
+			efficiency: static::mapInteger($props, 'efficiency'),
+			group: static::mapEntity($props, 'group', Group::class),
 		);
 	}
 }

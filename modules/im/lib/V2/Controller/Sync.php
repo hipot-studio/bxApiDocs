@@ -10,30 +10,28 @@ use DateTimeInterface;
 
 class Sync extends BaseController
 {
+	private const LIMIT = 50;
+
 	private const DATE_FORMAT = DateTimeInterface::RFC3339;
 
-	public function listAction(array $filter = [], int $limit = 50): ?array
+	public function listAction(string $lastDate, ?int $lastId = null, int $limit = self::LIMIT): ?array
 	{
-		$syncService = new SyncService();
-
-		if (isset($filter['lastDate']))
+		if ($limit <= 0 || $limit > 10000)
 		{
-			try
-			{
-				$date = new DateTime($filter['lastDate'], self::DATE_FORMAT);
-			}
-			catch (ObjectException $exception)
-			{
-				$this->addError(new Error($exception->getCode(), $exception->getMessage()));
-
-				return null;
-			}
-		}
-		else
-		{
-			$date = new DateTime(null, self::DATE_FORMAT);
+			$limit = self::LIMIT;
 		}
 
-		return $syncService->getChangesFromDate($date, $limit);
+		try
+		{
+			$lastDate = new DateTime($lastDate, self::DATE_FORMAT);
+		}
+		catch (ObjectException $exception)
+		{
+			$this->addError(new Error($exception->getCode(), $exception->getMessage()));
+
+			return null;
+		}
+
+		return (new SyncService())->getChangesFromDate($lastDate, $lastId, $limit);
 	}
 }

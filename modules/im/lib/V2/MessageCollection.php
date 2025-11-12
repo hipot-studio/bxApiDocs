@@ -18,6 +18,7 @@ use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Imbot\Bot\CopilotChatBot;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -784,8 +785,23 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 
 		if (isset($filter['LAST_ID']))
 		{
-			$operator = $order['ID'] === 'DESC' ? '<' : '>';
-			$query->where('ID', $operator, $filter['LAST_ID']);
+			$isDesc = ($order['ID'] === 'DESC');
+
+			$idComparisonOp = $isDesc ? '<' : '>';
+			$subQueryIdComparisonOp = $isDesc ? '<=' : '>=';
+			$dateComparisonOp = $isDesc ? '<=' : '>=';
+			$sortOrder = $isDesc ? 'DESC' : 'ASC';
+
+			$query->where('ID', $idComparisonOp, $filter['LAST_ID']);
+
+			$subQuery = MessageTable::query()
+				->setSelect(['DATE_CREATE'])
+				->where('ID', $subQueryIdComparisonOp, $filter['LAST_ID'])
+				->setOrder(['ID' => $sortOrder])
+				->setLimit(1)
+			;
+
+			$query->where('DATE_CREATE', $dateComparisonOp, new SqlExpression("({$subQuery->getQuery()})"));
 		}
 
 		if (isset($filter['DATE_FROM']))

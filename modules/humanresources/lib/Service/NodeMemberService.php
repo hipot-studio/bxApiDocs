@@ -29,6 +29,7 @@ use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 
@@ -412,25 +413,11 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		);
 
 		$departmentsCollectionCount = $nodeMemberCollection->count();
-		if (
-			$nodeMember->nodeId === $rootNode->id
-			&& $departmentsCollectionCount <= 1
-		)
-		{
-			$connection->unlock($lockName);
-
-			throw (new DeleteFailedException('You can\'t remove employee from structure'));
-		}
-
 		if ($departmentsCollectionCount <= 1)
 		{
-			$nodeMember->role = $this->roleRepository->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE'])->id;
-			$nodeMember->nodeId = $rootNode->id;
 			$connection->unlock($lockName);
 
-			$this->nodeMemberRepository->updateWithEventQueue($nodeMember);
-
-			return $nodeMember;
+			throw (new DeleteFailedException(Loc::getMessage('HUMANRESOURCES_NODE_MEMBER_SERVICE_CANT_REMOVE_USER_FROM_LAST_DEPARTMENT')));
 		}
 
 		$this->nodeMemberRepository->remove($nodeMember);

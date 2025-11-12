@@ -16,7 +16,7 @@ class PauseTaskCommand extends AbstractCommand
 {
 	public function __construct(
 		#[PositiveNumber]
-		public readonly int          $taskId,
+		public readonly int $taskId,
 		public readonly UpdateConfig $config,
 	)
 	{

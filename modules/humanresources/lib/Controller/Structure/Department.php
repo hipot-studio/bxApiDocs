@@ -64,6 +64,7 @@ class Department extends Controller
 		array $bindingChannelIds = [],
 		bool $createCollab = false,
 		array $bindingCollabIds = [],
+		array $settings = [],
 	): array
 	{
 		$usersStrategy = UserAddStrategy::SaveUsersStrategy;
@@ -90,7 +91,7 @@ class Department extends Controller
 			$bindingChannelIds,
 			$areCollabsAvailable ? $createCollab : false,
 			$areCollabsAvailable ? $bindingCollabIds : [],
-			[],
+			$settings,
 		);
 
 		$validationResult = $this->validation->validate($command);

@@ -17,23 +17,23 @@ class RoleProvider
 		Counter\Role::AUDITOR => Counter\CounterDictionary::COUNTER_AUDITOR,
 	];
 
-	public function getItems(int $userId): array
+	public function getItems(int $userId, int $groupId = 0): array
 	{
-		if (isset($this->items[$userId]))
+		if (isset($this->items[$groupId][$userId]))
 		{
-			return $this->items[$userId];
+			return $this->items[$groupId][$userId];
 		}
 
-		$this->items[$userId] = [];
+		$this->items[$groupId][$userId] = [];
 
 		foreach (Counter\Role::getRoles() as $roleId => $role)
 		{
-			$this->items[$userId][$roleId] = [
+			$this->items[$groupId][$userId][$roleId] = [
 				'TEXT' => $role['TITLE'],
-				'COUNTER' => Counter::getInstance($userId)->get(self::COUNTERS_MAP[$roleId]),
+				'COUNTER' => Counter::getInstance($userId)->get(self::COUNTERS_MAP[$roleId], $groupId),
 			];
 		}
 
-		return $this->items[$userId];
+		return $this->items[$groupId][$userId];
 	}
 }

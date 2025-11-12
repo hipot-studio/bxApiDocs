@@ -13,7 +13,12 @@ abstract class MenuSectionBaseClass
 
 	public function hasPermissionToEditRights(): bool
 	{
-		return Container::getAccessService()->checkAccessToEditPermissions($this->getCategory());
+		return Container::getAccessService()
+			->checkAccessToEditPermissions(
+				category: $this->getCategory(),
+				checkTariffRestriction: false,
+			)
+		;
 	}
 
 	/**

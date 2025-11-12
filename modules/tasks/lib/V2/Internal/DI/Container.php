@@ -18,11 +18,15 @@ use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\Task\AttachmentService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\GanttLinkRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ReminderMapper;
+use Bitrix\Tasks\V2\Internal\Repository\ParentTaskRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\RelatedTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskParameterRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskTagRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
@@ -49,8 +53,11 @@ use Bitrix\Tasks\V2\Internal\Service\TariffService;
 use Bitrix\Tasks\V2\Internal\Service\DeleteTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ElapsedTimeService;
 use Bitrix\Tasks\V2\Internal\Service\Task\FavoriteService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Gantt\GanttDependenceService;
 use Bitrix\Tasks\V2\Internal\Service\Task\MemberService;
+use Bitrix\Tasks\V2\Internal\Service\Task\ParentService;
 use Bitrix\Tasks\V2\Internal\Service\Task\PlannerService;
+use Bitrix\Tasks\V2\Internal\Service\Task\RelatedTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ReminderService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ResultService;
 use Bitrix\Tasks\V2\Internal\Repository\Compatibility;
@@ -66,12 +73,33 @@ use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 use Bitrix\Tasks\V2\Internal\Service\UrlService;
 use Bitrix\Tasks\V2\Internal\Service\UserService;
 use Bitrix\Tasks\V2\Public\Provider\AhaMomentProvider;
+use Bitrix\Tasks\V2\Public\Provider\CheckListProvider;
 use Bitrix\Tasks\V2\Public\Provider\Counter\RoleProvider;
 use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
 use Bitrix\Tasks\V2\Public\Provider\TaskFromTemplateProvider;
 
 class Container extends AbstractContainer
 {
+	public function getParentService(): ParentService
+	{
+		return $this->get(ParentService::class);
+	}
+
+	public function getGanttDependenceService(): GanttDependenceService
+	{
+		return $this->get(GanttDependenceService::class);
+	}
+
+	public function getRelatedTaskRepository(): RelatedTaskRepositoryInterface
+	{
+		return $this->get(RelatedTaskRepositoryInterface::class);
+	}
+
+	public function getRelatedTaskService(): RelatedTaskService
+	{
+		return $this->get(RelatedTaskService::class);
+	}
+
 	public function getFeatureService(): FeatureService
 	{
 		return $this->get(FeatureService::class);
@@ -155,6 +183,11 @@ class Container extends AbstractContainer
 	public function getTaskStageService(): TaskStageService
 	{
 		return $this->get(TaskStageService::class);
+	}
+
+	public function getTaskTagRepository(): TaskTagRepositoryInterface
+	{
+		return $this->get(TaskTagRepositoryInterface::class);
 	}
 
 	public function getTaskLogRepository(): TaskLogRepositoryInterface
@@ -385,5 +418,20 @@ class Container extends AbstractContainer
 	public function getAhaMomentProvider(): AhaMomentProvider
 	{
 		return $this->get(AhaMomentProvider::class);
+	}
+
+	public function getEgressController(): Service\Esg\EgressInterface
+	{
+		return $this->get(Service\Esg\EgressController::class);
+	}
+
+	public function getChecklistOperationDetector(): Service\Esg\Detector\ChecklistOperationDetector
+	{
+		return $this->get(Service\Esg\Detector\ChecklistOperationDetector::class);
+	}
+
+	public function getCheckListProvider(): CheckListProvider
+	{
+		return $this->get(CheckListProvider::class);
 	}
 }

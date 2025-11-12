@@ -7,9 +7,12 @@ namespace Bitrix\Tasks\V2\Internal\Entity\CheckList;
 use Bitrix\Main\Validation\Rule\InArray;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class UserOption extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		#[PositiveNumber]
@@ -19,7 +22,10 @@ class UserOption extends AbstractEntity
 		#[PositiveNumber]
 		#[InArray(Option::ALLOWED_OPTIONS)]
 		public readonly ?int $code = null,
-	){}
+	)
+	{
+
+	}
 
 	public function getId(): ?int
 	{
@@ -29,10 +35,10 @@ class UserOption extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			userId: $props['userId'] ?? null,
-			itemId: $props['itemId'] ?? null,
-			code: $props['code'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			userId: static::mapInteger($props, 'userId'),
+			itemId: static::mapInteger($props, 'itemId'),
+			code: static::mapInteger($props, 'code'),
 		);
 	}
 

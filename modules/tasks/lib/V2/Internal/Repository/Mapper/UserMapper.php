@@ -20,7 +20,7 @@ class UserMapper
 	}
 
 	public function mapToCollection(
-		array                  $users,
+		array $users,
 		?Entity\FileCollection $files = null
 	): Entity\UserCollection
 	{
@@ -33,9 +33,9 @@ class UserMapper
 			$email = is_string($user['EMAIL'] ?? null) ? $user['EMAIL'] : null;
 
 			$result[] = new Entity\User(
-				id:     (int)$user['ID'],
-				name:   $this->nameService->format($user),
-				image:  $personalPhoto ? $this->photoService->resize($personalPhoto)?->src : null,
+				id: (int)$user['ID'],
+				name: $this->nameService->format($user),
+				image: $personalPhoto ? $this->photoService->resize($personalPhoto) : null,
 				gender: Entity\User\Gender::tryFrom($gender) ?? Entity\User\Gender::Male,
 				email: $email,
 			);

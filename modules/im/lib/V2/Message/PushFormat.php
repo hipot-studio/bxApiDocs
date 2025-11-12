@@ -31,7 +31,7 @@ class PushFormat
 	public function format(): array
 	{
 		$message = $this->message;
-		$chat = $this->message->getChat();
+		$chat = $message->getChat()->withContext($message->getContext());
 		$chatLegacyFormat = $chat->toPullFormat();
 		$users = $this->getUsers();
 		$notify = !empty($chat->getRecentSections());

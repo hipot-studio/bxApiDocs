@@ -483,7 +483,7 @@ class DepartmentProvider extends BaseStructureProvider
 			elseif ($node->isTeam())
 			{
 				$avatar = self::IMAGE_TEAM_OPTION;
-				$title = Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ALL_TEAM_EMPLOYEES_SUBTEAMS');
+				$title = Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ALL_TEAM_EMPLOYEES_SUBTEAMS_MSGVER_1');
 			}
 
 			$item->addChild(
@@ -544,7 +544,7 @@ class DepartmentProvider extends BaseStructureProvider
 								['#NODE_NAME#' => $node->name]
 							),
 							'nodeOptions' => [
-								'title' => Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ONLY_TEAM_EMPLOYEES'),
+								'title' => Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ONLY_TEAM_EMPLOYEES_MSGVER_1'),
 								'avatar' => self::IMAGE_TEAM_OPTION,
 								'renderMode' => 'override',
 							],

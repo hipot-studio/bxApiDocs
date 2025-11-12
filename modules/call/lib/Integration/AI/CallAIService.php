@@ -114,6 +114,12 @@ final class CallAIService
 		$tasks = [];
 		foreach ($taskToLaunch as $taskSenseType)
 		{
+			$task = AITask::getTaskForCall($outcome->getCallId(), $taskSenseType);
+			if ($task && $task->isFinished())
+			{
+				continue; // skip finished task
+			}
+
 			$taskClass = $taskSenseType->getTaskClass();
 
 			$task = new $taskClass();

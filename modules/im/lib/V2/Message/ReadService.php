@@ -18,6 +18,7 @@ use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Im\V2\Anchor;
 
 class ReadService
 {
@@ -28,6 +29,7 @@ class ReadService
 
 	protected CounterService $counterService;
 	protected ViewedService $viewedService;
+	protected Anchor\ReadService $anchorReadService;
 
 	private static array $lastMessageIdCache = [];
 
@@ -35,6 +37,7 @@ class ReadService
 	{
 		$this->counterService = new CounterService();
 		$this->viewedService = new ViewedService();
+		$this->anchorReadService = new Anchor\ReadService();
 
 		if (isset($userId))
 		{
@@ -43,6 +46,7 @@ class ReadService
 			$this->setContext($context);
 			$this->counterService->setContext($context);
 			$this->viewedService->setContext($context);
+			$this->anchorReadService->setContext($context);
 		}
 	}
 
@@ -123,6 +127,7 @@ class ReadService
 		$counter = 0;
 		//$this->viewedController->addAllFromChat($chatId);
 		$this->updateDateRecent($chatId);
+		$this->anchorReadService->readByChatId($chatId);
 		$userId = $this->getContext()->getUserId();
 		$chat = Chat::getInstance($chatId);
 		$chat->onAfterAllMessagesRead($userId);
@@ -246,14 +251,18 @@ class ReadService
 	 * @param RelationCollection $relations
 	 * @return Result
 	 */
-	public function onAfterMessageSend(Message $message, RelationCollection $relations, bool $withoutCounters = false): Result
+	public function onAfterMessageSend(Message $message, RelationCollection $relations, ?array $counterRecipients): Result
 	{
-		if (!$withoutCounters)
+		$counterRecipientsRelation = $relations;
+		if ($counterRecipients !== null)
 		{
-			$this->markMessageUnread($message, $relations);
+			$counterRecipientsRelation = $counterRecipientsRelation
+				->filter(fn (Relation $relation) => isset($counterRecipients[$relation->getUserId()]))
+			;
 		}
 
 		$counters = $this
+			->markMessageUnread($message, $counterRecipientsRelation)
 			->markRecentUnread($message)
 			->getCountersForUsers($message, $relations)
 		;
@@ -407,6 +416,11 @@ class ReadService
 		return $this->viewedService;
 	}
 
+	public function getAnchorReadService(): Anchor\ReadService
+	{
+		return $this->anchorReadService;
+	}
+
 
 	public function setLastIdForRead(int $lastId, int $chatId): void
 	{
@@ -424,6 +438,7 @@ class ReadService
 		$this->defaultSetContext($context);
 		$this->getCounterService()->setContext($context);
 		$this->getViewedService()->setContext($context);
+		$this->getAnchorReadService()->setContext($context);
 
 		return $this;
 	}

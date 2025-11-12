@@ -44,7 +44,7 @@ class CommonTab extends BaseProfileTab
 	 */
 	public function isAvailable(): bool
 	{
-		return true;
+		return Loader::includeModule('intranet');
 	}
 
 	/**
@@ -99,11 +99,6 @@ class CommonTab extends BaseProfileTab
 
 	private function getCommonFields(): array
 	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return [];
-		}
-
 		$sectionArray = [];
 		$sectionCollection = UserProfileProvider::createByDefault()
 			->getByUserId($this->ownerId)
@@ -233,11 +228,6 @@ class CommonTab extends BaseProfileTab
 
 	private function getOwnerAbsences(): array
 	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return [];
-		}
-
 		$result = \Bitrix\Intranet\UserAbsence::isAbsentOnVacation($this->ownerId, true);
 		if (empty($result) || !is_array($result))
 		{
@@ -252,10 +242,6 @@ class CommonTab extends BaseProfileTab
 	 */
 	private function isOwnerFired(): bool
 	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return false;
-		}
 		$this->userRepository = ServiceContainer::getInstance()->userRepository();
 		$intranetUser = $this->userRepository->findUsersByIds([$this->ownerId])->first();
 		if (empty($intranetUser))
@@ -323,16 +309,16 @@ class CommonTab extends BaseProfileTab
 			'canInviteUsers' => false,
 			'canUseTelephony' => false,
 		];
-		if (!Loader::includeModule('intranet')
-			|| !Loader::includeModule('intranetmobile'))
+		if (!Loader::includeModule('intranetmobile'))
 		{
 			return $result;
 		}
 		$result['departmentHierarchies'] = (new DepartmentProvider())->getUserDepartments($this->ownerId);
 		$result['canInviteUsers'] = (new InviteProvider())->getInviteSettings()['canCurrentUserInvite'];
-		$result['canUseTelephony'] = Loader::includeModule('voximplant')
+		$result['canUseTelephony'] = (
+			Loader::includeModule('voximplant')
 			&& \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls()
-		;
+		);
 
 		return $result;
 	}

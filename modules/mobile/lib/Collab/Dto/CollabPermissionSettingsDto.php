@@ -10,6 +10,7 @@ class CollabPermissionSettingsDto
 		public string $inviters = 'K',
 		public string $messageWriters = 'K',
 		public string $showHistory = 'Y',
+		public string $allowGuestsInvitation = 'Y',
 	)
 	{
 	}

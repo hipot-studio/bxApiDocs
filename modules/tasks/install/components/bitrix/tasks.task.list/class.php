@@ -21,6 +21,7 @@ use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access;
 use Bitrix\Tasks\Helper\Filter;
+use Bitrix\Tasks\Helper\FilterRegistry;
 use Bitrix\Tasks\Helper\Grid;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk\Connector\Task as ConnectorTask;
@@ -356,7 +357,28 @@ class TasksTaskListComponent extends TasksBaseComponent
 			return 0;
 		}
 
-		$filter = Filter::getInstance($userId, $groupId)->process();
+		$parameters = \Bitrix\Main\Web\Json::decode($parameters);
+		$relationToId = (int)($parameters['relationToId'] ?? 0);
+		$relationType = $parameters['relationType'] ?? 'subTasks';
+
+		$gridId = null;
+		if ($relationToId)
+		{
+			$gridId = match ($relationType) {
+				default => 'tasks-subtasks-grid',
+				'relatedTasks' => 'tasks-related-grid',
+			};
+		}
+
+		$filter = Filter::getInstance($userId, $groupId, $gridId)->process();
+		if ($relationToId)
+		{
+			$relationFilterField = match ($relationType) {
+				default => 'PARENT_ID',
+				'relatedTasks' => 'DEPENDS_ON',
+			};
+			$filter[$relationFilterField] = $relationToId;
+		}
 
 		$listState = \CTaskListState::getInstance($userId);
 		$groupBySubtasks = $listState->isSubmode(\CTaskListState::VIEW_SUBMODE_WITH_SUBTASKS);
@@ -384,7 +406,6 @@ class TasksTaskListComponent extends TasksBaseComponent
 			$listState->switchOffSubmode(\CTaskListState::VIEW_SUBMODE_WITH_SUBTASKS);
 		}
 
-		$parameters = \Bitrix\Main\Web\Json::decode($parameters);
 		if (!array_key_exists('TARGET_USER_ID', $parameters))
 		{
 			$parameters['TARGET_USER_ID'] = $userId;
@@ -776,11 +797,33 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 	protected function loadGrid()
 	{
-		$this->grid = Grid::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"])
+		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+		$this->arParams['relationToId'] = (int)$request->get('relationToId');
+		$this->arParams['relationType'] = $request->get('relationType') ?? 'subTasks';
+		$gridId = null;
+		if ($this->arParams['relationToId'])
+		{
+			$gridId = match ($this->arParams['relationType']) {
+				default => 'tasks-subtasks-grid',
+				'relatedTasks' => 'tasks-related-grid',
+			};
+
+			if (empty($request->get('grid_id')))
+			{
+				(new Options($gridId))->reset();
+			}
+		}
+
+		$this->grid = Grid::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"], $gridId)
 			->setScope($this->arParams['CONTEXT'] ?? '');
 
-		$this->filter = Filter::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"])
+		$this->filter = Filter::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"], $gridId)
 			->setGanttMode(static::class === TasksTaskGanttComponent::class);
+
+		if ($this->arParams['relationToId'])
+		{
+			$this->filter->setContext(FilterRegistry::FILTER_RELATION);
+		}
 	}
 
 	protected function doPreAction()
@@ -1301,7 +1344,21 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 		$this->arParams['PROVIDER_PARAMETERS'] = [
 			'MAKE_ACCESS_FILTER' => true,
+			'relationToId' => $this->arParams['relationToId'] ?? null,
+			'relationType' => $this->arParams['relationType'] ?? null,
 		];
+
+		$relationToId = (int)($this->arParams['relationToId'] ?? 0);
+		$relationType = $this->arParams['relationType'] ?? 'subTasks';
+		if ($relationToId)
+		{
+			$relationFilterField = match ($relationType) {
+				default => 'PARENT_ID',
+				'relatedTasks' => 'DEPENDS_ON',
+			};
+			$this->listParameters['filter'][$relationFilterField] ??= $relationToId;
+			unset($this->listParameters['filter']['::SUBFILTER-ROLEID']);
+		}
 
 		$legacyFilter = $this->listParameters['filter'];
 

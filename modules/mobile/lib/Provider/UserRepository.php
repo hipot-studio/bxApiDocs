@@ -5,6 +5,7 @@ namespace Bitrix\Mobile\Provider;
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Main\Loader;
 use Bitrix\Main\UserTable;
+use DateTimeZone;
 
 class UserRepository
 {
@@ -25,6 +26,7 @@ class UserRepository
 			'WORK_PHONE',
 			'LAST_ACTIVITY_DATE',
 			'PERSONAL_GENDER',
+			'TIME_ZONE',
 		];
 	}
 
@@ -82,8 +84,19 @@ class UserRepository
 
 		if (!empty($user["LAST_ACTIVITY_DATE"]))
 		{
-			$timeZone = $user["LAST_ACTIVITY_DATE"]->getTimezone();
 			$lastActivityDate = $user["LAST_ACTIVITY_DATE"]->toString();
+		}
+
+		if (!empty($user['TIME_ZONE']))
+		{
+			try
+			{
+				$timezone = new DateTimeZone($user['TIME_ZONE']);
+			}
+			catch (\Exception $e)
+			{
+				$timezone = null;
+			}
 		}
 
 		return new CommonUserDto(
@@ -105,7 +118,7 @@ class UserRepository
 			personalMobile: $user['PERSONAL_MOBILE'] ?? null,
 			personalPhone: $user['PERSONAL_PHONE'] ?? null,
 			lastActivityDate: $lastActivityDate ?? null,
-			timezone: $timeZone ?? null,
+			timezone: $timezone ?? null,
 			personalGender: $user['PERSONAL_GENDER'] ?? null,
 		);
 	}

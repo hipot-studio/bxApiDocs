@@ -12,12 +12,4 @@ class TrackFileRequest extends Hydrator
 	public string $mime = '';
 	public int $size = 0;
 	public int $duration = 0;
-
-	public function __construct(?array $fields = null)
-	{
-		if ($fields)
-		{
-			parent::__construct((object) $fields);
-		}
-	}
 }

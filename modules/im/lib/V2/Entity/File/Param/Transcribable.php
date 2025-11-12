@@ -19,4 +19,13 @@ class Transcribable extends BaseParam
 			'PARAM_VALUE' => $value ? 'Y' : 'N',
 		];
 	}
+
+	public function toArray(): array
+	{
+		return [
+			'DISK_FILE_ID' => $this->fileId,
+			'PARAM_NAME' => ParamName::IsTranscribable->value,
+			'PARAM_VALUE' => $this->value,
+		];
+	}
 }

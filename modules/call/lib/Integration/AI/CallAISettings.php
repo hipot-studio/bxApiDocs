@@ -5,7 +5,7 @@ namespace Bitrix\Call\Integration\AI;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Entity\EventResult;
+use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Call\Settings;
@@ -33,7 +33,10 @@ class CallAISettings
 	public const
 		CALL_COPILOT_BAAS_SLIDER_CODE = 'limit_boost_copilot',
 		CALL_COPILOT_HELP_SLIDER_CODE = 'limit_copilot_follow_up',
-		CALL_COPILOT_DISCLAIMER_ARTICLE = '20412666'
+		CALL_COPILOT_DISCLAIMER_ARTICLE = [
+			'CIS' => '20412666',
+			'WEST' => '25775495',
+		]
 	;
 
 	private const
@@ -224,8 +227,10 @@ class CallAISettings
 
 	public static function getHelpUrl(): string
 	{
-		\Bitrix\Main\Loader::includeModule('ui');
-		return \Bitrix\UI\Util::getArticleUrlByCode(self::CALL_COPILOT_HELP_SLIDER_CODE);
+		Loader::includeModule('ui');
+		$url = (new \Bitrix\UI\Helpdesk\Url())->getByCodeArticle(self::CALL_COPILOT_HELP_SLIDER_CODE);
+
+		return $url->getLocator();
 	}
 
 
@@ -239,9 +244,24 @@ class CallAISettings
 		return '/online/?FEATURE_PROMOTER='.self::CALL_COPILOT_BAAS_SLIDER_CODE;
 	}
 
+	public static function getDisclaimerArticleCode(): string
+	{
+		$isCis =
+			\Bitrix\Main\Application::getInstance()->getLicense()->isCis()
+			|| Loc::getCurrentLang() === 'ru'
+		;
+
+		return $isCis
+			? self::CALL_COPILOT_DISCLAIMER_ARTICLE['CIS']
+			: self::CALL_COPILOT_DISCLAIMER_ARTICLE['WEST']
+		;
+	}
+
 	public static function getDisclaimerUrl(): string
 	{
-		$url = (new \Bitrix\UI\Helpdesk\Url())->getByCodeArticle(self::CALL_COPILOT_DISCLAIMER_ARTICLE);
+		$article = self::getDisclaimerArticleCode();
+		Loader::includeModule('ui');
+		$url = (new \Bitrix\UI\Helpdesk\Url())->getByCodeArticle($article);
 
 		return $url->getLocator();
 	}

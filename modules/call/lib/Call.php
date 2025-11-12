@@ -44,6 +44,7 @@ class Call
 		}
 
 		$userId = self::getCurrentUserId();
+
 		return self::callsCache()->getActiveCallsForUser($userId);
 	}
 
@@ -54,7 +55,6 @@ class Call
 		$callList = CallTable::getList([
 			'select' => ['*'],
 			'filter' => [
-				'=PROVIDER' => \Bitrix\Im\Call\Call::PROVIDER_BITRIX,
 				'!=STATE' => \Bitrix\Im\Call\Call::STATE_FINISHED,
 				'<START_DATE' => (new DateTime())->add("-{$depthHours} hour"),
 			]
@@ -150,7 +150,7 @@ class Call
 		{
 			// Reset END_DATE to null before creating the call instance to ensure proper finish() behavior
 			$callData['END_DATE'] = null;
-			
+
 			$activeCall = CallFactory::createWithArray($callData['PROVIDER'], $callData);
 			if ($activeCall->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
 			{

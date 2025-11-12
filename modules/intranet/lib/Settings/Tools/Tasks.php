@@ -33,15 +33,15 @@ class Tasks extends Tool
 	public function getSubgroupSettingsPath(): array
 	{
 		return [
-			'base_tasks' => '/company/personal/user/#USER_ID#/tasks/',
-			'projects' => '/company/personal/user/#USER_ID#/tasks/projects/',
-			'flows' => '/company/personal/user/#USER_ID#/tasks/flow/',
-			'scrum' => '/company/personal/user/#USER_ID#/tasks/scrum/',
-			'departments' => '/company/personal/user/#USER_ID#/tasks/departments/',
-			'effective' => '/company/personal/user/#USER_ID#/tasks/effective/',
-			'employee_plan' => '/company/personal/user/#USER_ID#/tasks/employee/plan/',
-			'report' => '/company/personal/user/#USER_ID#/tasks/report/',
-			'templates' => '/company/personal/user/#USER_ID#/tasks/templates/',
+			'base_tasks' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/',
+			'projects' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/projects/',
+			'flows' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/flow/',
+			'scrum' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/scrum/',
+			'departments' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/departments/',
+			'effective' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/effective/',
+			'employee_plan' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/employee/plan/',
+			'report' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/report/',
+			'templates' => SITE_DIR . 'company/personal/user/#USER_ID#/tasks/templates/',
 		];
 	}
 
@@ -104,7 +104,7 @@ class Tasks extends Tool
 
 	public function getLeftMenuPath(): ?string
 	{
-		return '/company/personal/user/#USER_ID#/tasks/';
+		return SITE_DIR . 'company/personal/user/#USER_ID#/tasks/';
 	}
 
 	public function getMenuItemId(): string

@@ -187,9 +187,10 @@ class TranscriptionInsights extends AITask
 
 	protected function getPromptCode(): string
 	{
-		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
-
-		return in_array($region, Library::REGION_CIS, true) ? self::PROMPT_ID_CIS : self::PROMPT_ID;
+		return \Bitrix\Main\Application::getInstance()->getLicense()->isCis()
+			? self::PROMPT_ID_CIS
+			: self::PROMPT_ID
+		;
 	}
 
 	public function getAIEngineCategory(): string

@@ -1,28 +1,28 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage tasks
- * @copyright 2001-2021 Bitrix
- */
 
 namespace Bitrix\Tasks\Access\Rule;
 
+use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\Internals\Registry\FeaturePermRegistry;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Main\Access\AccessibleItem;
+use Bitrix\Tasks\Access\Model\TaskModel;
+use Bitrix\Tasks\Access\TaskAccessController;
 
 /**
- * Class TaskReadRule
- * @package Bitrix\Tasks\Access\Rule
+ * @property TaskAccessController $controller
  */
-class TaskReadRule extends \Bitrix\Main\Access\Rule\AbstractRule
+class TaskReadRule extends AbstractRule
 {
-	public function execute(AccessibleItem $task = null, $params = null): bool
+	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
-		if (!$task)
+		if (!$item instanceof TaskModel)
 		{
 			$this->controller->addError(static::class, 'Incorrect task');
+
 			return false;
 		}
 
@@ -31,16 +31,16 @@ class TaskReadRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
-		if ($task->isMember($this->user->getUserId()))
+		if ($item->isMember($this->user->getUserId()))
 		{
 			return true;
 		}
 
 		if (
-			$task->getGroupId()
-			&& Loader::includeModule("socialnetwork")
-			&& \Bitrix\Socialnetwork\Internals\Registry\FeaturePermRegistry::getInstance()->get(
-				$task->getGroupId(),
+			$item->getGroupId()
+			&& Loader::includeModule('socialnetwork')
+			&& FeaturePermRegistry::getInstance()->get(
+				$item->getGroupId(),
 				'tasks',
 				'view_all',
 				$this->user->getUserId()
@@ -50,6 +50,14 @@ class TaskReadRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
-		return $this->controller->check(ActionDictionary::ACTION_TASK_DEPARTMENT, $task, $params);
+		if (!$this->controller->check(ActionDictionary::ACTION_TASK_DEPARTMENT, $item, $params))
+		{
+			$this->controller->addError(static::class, 'Access to read task denied');
+			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_READ_RULE_DENIED')));
+
+			return false;
+		}
+
+		return true;
 	}
 }

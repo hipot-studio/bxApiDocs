@@ -17,7 +17,7 @@ class User extends AbstractEntity
 		public readonly ?int $id = null,
 		public readonly ?string $name = null,
 		public readonly ?string $role = null, // role depends on context
-		public readonly ?string $image = null,
+		public readonly ?File $image = null,
 		public readonly ?Gender $gender = null,
 		public readonly ?string $email = null,
 		public readonly ?string $externalAuthId = null,
@@ -32,23 +32,23 @@ class User extends AbstractEntity
 		return $this->id;
 	}
 
+	public function getGender(): Gender
+	{
+		return $this->gender ?? Gender::Male;
+	}
+
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
 			id: static::mapInteger($props, 'id'),
 			name: static::mapString($props, 'name'),
 			role: static::mapString($props, 'role'),
-			image: static::mapString($props, 'image'),
+			image: static::mapEntity($props, 'image', File::class),
 			gender: static::mapBackedEnum($props, 'gender', Gender::class),
 			email: static::mapString($props, 'email'),
 			externalAuthId: static::mapString($props, 'externalAuthId'),
 			rights: static::mapArray($props, 'rights'),
 		);
-	}
-
-	public function getGender(): Gender
-	{
-		return $this->gender ?? Gender::Male;
 	}
 
 	public function toArray(): array
@@ -57,7 +57,7 @@ class User extends AbstractEntity
 			'id' => $this->id,
 			'name' => $this->name,
 			'role' => $this->role,
-			'image' => $this->image,
+			'image' => $this->image?->toArray(),
 			'gender' => $this->gender?->value,
 			'email' => $this->email,
 			'externalAuthId' => $this->externalAuthId,

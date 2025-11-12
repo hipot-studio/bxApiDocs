@@ -88,4 +88,9 @@ class OpenLines extends BaseRecent
 			],
 		];
 	}
+
+	protected function isWidgetSupported(): bool
+	{
+		return true;
+	}
 }

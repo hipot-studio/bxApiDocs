@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Internals\Service\Structure;
 
+use Bitrix\HumanResources\Contract\Service\NodeMemberService;
 use Bitrix\HumanResources\Contract\Service\NodeRelationService;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Integration\Socialnetwork\CollabService;
@@ -9,12 +10,12 @@ use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\Collection\NodeRelationCollection;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Service\Container;
-use Bitrix\HumanResources\Type\RelationEntitySubtype;
 use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\Main\Engine\CurrentUser;
 
 class NodeCollabService
 {
+	private NodeMemberService $nodeMemberService;
 	private CollabService $collabService;
 	private NodeRelationService $nodeRelationService;
 
@@ -22,16 +23,30 @@ class NodeCollabService
 	{
 		$this->nodeRelationService = Container::getNodeRelationService();
 		$this->collabService = Container::getCollabService();
+		$this->nodeMemberService = $nodeMemberService ?? Container::getNodeMemberService();
 	}
 
-	/**
-	 * @param Item\Node $node
-	 * @param RelationEntitySubtype $relationEntitySubtype
-	 * @return int (chatId)
-	 */
-	public function create(Item\Node $node, RelationEntitySubtype $relationEntitySubtype): int
+	public function create(Item\Node $node): int
 	{
-		// ToDo: implement
+		$heads = $this->nodeMemberService->getDefaultHeadRoleEmployees($node->id);
+		$headIds = $heads->map(fn ($head) => $head->entityId);
+
+		if (count($headIds) > 0)
+		{
+			$addResult = $this->collabService->create($node, $headIds, CurrentUser::get()->getId());
+
+			if ($addResult->isSuccess())
+			{
+				$newCollabId = (int)$addResult->getCollabId();
+
+				if ($newCollabId > 0)
+				{
+					$this->bind($node, [$newCollabId]);
+				}
+
+				return $newCollabId;
+			}
+		}
 
 		return 0;
 	}

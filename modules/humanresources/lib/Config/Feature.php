@@ -16,6 +16,7 @@ class Feature
 	private const CROSS_FUNCTIONAL_TEAMS_IS_AVAILABLE_OPTION_NAME = 'teams_available';
 	private const COLLABS_IS_AVAILABLE_OPTION_NAME = 'collabs_available';
 	private const DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME = 'deputy_approves_bp_available';
+	private const DEPARTMENT_SETTINGS_IS_AVAILABLE_OPTION_NAME = 'department_settings_available';
 
 	public function isHcmLinkAvailable(): bool
 	{
@@ -31,12 +32,17 @@ class Feature
 
 	public function isCollabsAvailable(): bool
 	{
-		return $this->getOptionValue(self::COLLABS_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+		return true; // enabled in 25.1000.0
 	}
 
 	public function isDeputyApprovesBPAvailable(): bool
 	{
 		return $this->getOptionValue(self::DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function isDepartmentSettingsAvailable(): bool
+	{
+		return $this->getOptionValue(self::DEPARTMENT_SETTINGS_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
 	}
 
 	public function setDeputyApprovesBPAvailable(bool $value): void

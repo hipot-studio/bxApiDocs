@@ -6,9 +6,12 @@ namespace Bitrix\Tasks\V2\Internal\Entity\Task;
 
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Elapsed\Source;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class ElapsedTime extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public ?int $id = null,
 		public ?int $userId = null,
@@ -32,16 +35,16 @@ class ElapsedTime extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: $props['id'] ?? null,
-			userId: $props['userId'] ?? null,
-			taskId: $props['taskId'] ?? null,
-			minutes: $props['minutes'] ?? null,
-			seconds: $props['seconds'] ?? null,
-			source: isset($props['source']) ? Source::tryFrom($props['source']) : null,
-			text: $props['text'] ?? null,
-			createdAtTs: $props['createdAtTs'] ?? null,
-			startTs: $props['startTs'] ?? null,
-			stopTs: $props['stopTs'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			userId: static::mapInteger($props, 'userId'),
+			taskId: static::mapInteger($props, 'taskId'),
+			minutes: static::mapInteger($props, 'minutes'),
+			seconds: static::mapInteger($props, 'seconds'),
+			source: static::mapBackedEnum($props, 'source', Source::class),
+			text: static::mapString($props, 'text'),
+			createdAtTs: static::mapInteger($props, 'createdAtTs'),
+			startTs: static::mapInteger($props, 'startTs'),
+			stopTs: static::mapInteger($props, 'stopTs'),
 		);
 	}
 

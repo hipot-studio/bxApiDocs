@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Tasks\V2\Internal\Entity\Result\Status;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class Result extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		public readonly ?int $taskId = null,
@@ -35,14 +38,14 @@ class Result extends AbstractEntity
 	public static function mapFromArray(array $props): static
 	{
 		return new static(
-			id: isset($props['id']) ? (int)$props['id'] : null,
-			taskId: isset($props['taskId']) ? (int)$props['taskId'] : null,
-			text: $props['text'] ?? null,
-			author: isset($props['author']) ? User::mapFromArray($props['author']) : null,
-			createdAtTs: isset($props['createdAtTs']) ? (int)$props['createdAtTs'] : null,
-			updatedAtTs: isset($props['updatedAtTs']) ? (int)$props['updatedAtTs'] : null,
-			status: isset($props['status']) ? Status::from($props['status']) : null,
-			fileIds: $props['fileIds'] ?? null,
+			id: static::mapInteger($props, 'id'),
+			taskId: static::mapInteger($props, 'taskId'),
+			text: static::mapString($props, 'text'),
+			author: static::mapEntity($props, 'author', User::class),
+			createdAtTs: static::mapInteger($props, 'createdAtTs'),
+			updatedAtTs: static::mapInteger($props, 'updatedAtTs'),
+			status: static::mapBackedEnum($props, 'status', Status::class),
+			fileIds: static::mapArray($props, 'fileIds'),
 		);
 	}
 

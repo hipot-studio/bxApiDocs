@@ -57,7 +57,7 @@ class AddWebDavFiles
 			return;
 		}
 
-		$arRightsTasks = CWebDavIblock::GetTasks();
+		$rightsTasks = CWebDavIblock::GetTasks();
 
 		$members = $this->getParticipants($fields);
 
@@ -79,51 +79,51 @@ class AddWebDavFiles
 		}
 
 		$i = 0;
-		$arRightsForTaskMembers = [];
+		$rightsForTaskMembers = [];
 		foreach ($members as $userId)
 		{
 			// For intranet users and their managers
-			$arRightsForTaskMembers['n' . $i++] = [
+			$rightsForTaskMembers['n' . $i++] = [
 				'GROUP_CODE' => 'IU' . $userId,
-				'TASK_ID' => $arRightsTasks['R'],        // rights for reading
+				'TASK_ID' => $rightsTasks['R'],        // rights for reading
 			];
 
 			// For extranet users
-			$arRightsForTaskMembers['n' . $i++] = [
+			$rightsForTaskMembers['n' . $i++] = [
 				'GROUP_CODE' => 'U' . $userId,
-				'TASK_ID' => $arRightsTasks['R'],        // rights for reading
+				'TASK_ID' => $rightsTasks['R'],        // rights for reading
 			];
 		}
 		$iNext = $i;
 
-		while ($arWDFile = $dbWDFile->Fetch())
+		while ($wdFile = $dbWDFile->Fetch())
 		{
-			if (!$arWDFile['IBLOCK_ID'])
+			if (!$wdFile['IBLOCK_ID'])
 			{
 				continue;
 			}
 
-			$fileId = $arWDFile['ID'];
+			$fileId = $wdFile['ID'];
 
-			if (!CIBlock::GetArrayByID($arWDFile['IBLOCK_ID'], "RIGHTS_MODE") === "E")
+			if (!CIBlock::GetArrayByID($wdFile['IBLOCK_ID'], "RIGHTS_MODE") === "E")
 			{
 				continue;
 			}
-			$ibRights = new CIBlockElementRights($arWDFile['IBLOCK_ID'], $fileId);
-			$arCurRightsRaw = $ibRights->getRights();
+			$ibRights = new CIBlockElementRights($wdFile['IBLOCK_ID'], $fileId);
+			$curRightsRaw = $ibRights->getRights();
 
 			// Preserve existing rights
 			$i = $iNext;
-			$arRights = $arRightsForTaskMembers;
-			foreach ($arCurRightsRaw as $arRightsData)
+			$rights = $rightsForTaskMembers;
+			foreach ($curRightsRaw as $rightsData)
 			{
-				$arRights['n' . $i++] = [
-					'GROUP_CODE' => $arRightsData['GROUP_CODE'],
-					'TASK_ID' => $arRightsData['TASK_ID'],
+				$rights['n' . $i++] = [
+					'GROUP_CODE' => $rightsData['GROUP_CODE'],
+					'TASK_ID' => $rightsData['TASK_ID'],
 				];
 			}
 
-			$ibRights->setRights($arRights);
+			$ibRights->setRights($rights);
 		}
 	}
 }

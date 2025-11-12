@@ -753,8 +753,16 @@ class CIMMessenger
 
 						//\Bitrix\Im\Counter::clearCache($relation['USER_ID']);
 					}
+
+					$withoutCounters = $arFields['SKIP_COUNTER_INCREMENTS'] === 'Y' || !$isCounterIncrementAllowed;
+					$counterRecipients = null;
+					if ($withoutCounters)
+					{
+						$counterRecipients = [];
+					}
+
 					$counters = (new ReadService((int)$arFields["FROM_USER_ID"]))
-						->onAfterMessageSend($message, $relationCollection, $arFields['SKIP_COUNTER_INCREMENTS'] === 'Y')
+						->onAfterMessageSend($message, $relationCollection, $counterRecipients)
 						->getResult()['COUNTERS']
 					;
 
@@ -1399,8 +1407,14 @@ class CIMMessenger
 					if (!$fakeRelation)
 					{
 						$withoutCounters = $arFields['SKIP_COUNTER_INCREMENTS'] === 'Y' || !$isCounterIncrementAllowed;
+						$counterRecipients = null;
+						if ($withoutCounters)
+						{
+							$counterRecipients = [];
+						}
+
 						$counters = (new ReadService((int)$arFields["FROM_USER_ID"]))
-							->onAfterMessageSend($message, $relationCollection, $withoutCounters)
+							->onAfterMessageSend($message, $relationCollection, $counterRecipients)
 							->getResult()['COUNTERS']
 						;
 					}
@@ -4023,7 +4037,15 @@ class CIMMessenger
 		return $initConfig;
 	}
 
-	public static function StartWriting($dialogId, $userId = false, $userName = "", $byEvent = false, $linesSilentMode = false)
+	public static function StartWriting(
+		$dialogId,
+		$userId = false,
+		$userName = "",
+		$byEvent = false,
+		$linesSilentMode = false,
+		?string $statusMessageCode = null,
+		?int $duration = null
+	)
 	{
 		$userId = intval($userId);
 		if ($userId <= 0)
@@ -4052,11 +4074,15 @@ class CIMMessenger
 			return false;
 		}
 
-		$action = new \Bitrix\Im\V2\Chat\InputAction\Action($chat, \Bitrix\Im\V2\Chat\InputAction\Type::Writing);
-		$action = $action->withContextUser($userId);
-		$action->setCustomUserName($userName);
-		$action->setByEvent($byEvent);
-		$action->setLinesSilentMode($linesSilentMode);
+		$action =
+			(new \Bitrix\Im\V2\Chat\InputAction\Action($chat, \Bitrix\Im\V2\Chat\InputAction\Type::Writing))
+				->withContextUser($userId)
+				->setCustomUserName($userName)
+				->setByEvent($byEvent)
+				->setLinesSilentMode($linesSilentMode)
+				->setStatusMessageCode($statusMessageCode)
+				->setDuration($duration)
+		;
 
 		$result = $action->notify();
 
@@ -4636,7 +4662,7 @@ class CIMMessenger
 		$params['MESSAGE'] = preg_replace("/\[u]([^[]*(?:\[(?!u]|\/u])[^[]*)*)\[\/u]/i", "$1", $params['MESSAGE']);
 		$params['MESSAGE'] = preg_replace("/\\[url\\](.*?)\\[\\/url\\]/iu", "$1", $params['MESSAGE']);
 		$params['MESSAGE'] = preg_replace("/\\[url\\s*=\\s*((?:[^\\[\\]]++|\\[ (?: (?>[^\\[\\]]+) | (?:\\1) )* \\])+)\\s*\\](.*?)\\[\\/url\\]/ixsu", "$2", $params['MESSAGE']);
-		$params['MESSAGE'] = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $params['MESSAGE']);
+		$params['MESSAGE'] = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $params['MESSAGE']);
 		$params['MESSAGE'] = preg_replace("/\[USER=([0-9]+)( REPLACE)?](.+?)\[\/USER]/i", "$3", $params['MESSAGE']);
 		$params['MESSAGE'] = preg_replace("/\[CHAT=([0-9]{1,})\](.*?)\[\/CHAT\]/i", "$2", $params['MESSAGE']);
 		$params['MESSAGE'] = preg_replace_callback("/\[SEND(?:=(?:.+?))?\](?:.+?)?\[\/SEND]/i", Array("CIMMessenger", "PrepareMessageForPushSendPutCallBack"), $params['MESSAGE']);
@@ -4719,7 +4745,7 @@ class CIMMessenger
 		$message['message']['text'] = preg_replace("/\[[bui]\](.*?)\[\/[bui]\]/i", "$1", $message['message']['text']);
 		$message['message']['text'] = preg_replace("/\\[url\\](.*?)\\[\\/url\\]/iu", "$1", $message['message']['text']);
 		$message['message']['text'] = preg_replace("/\\[url\\s*=\\s*((?:[^\\[\\]]++|\\[ (?: (?>[^\\[\\]]+) | (?:\\1) )* \\])+)\\s*\\](.*?)\\[\\/url\\]/ixsu", "$2", $message['message']['text']);
-		$message['message']['text'] = preg_replace_callback("/\[USER=([0-9]{1,})\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $message['message']['text']);
+		$message['message']['text'] = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $message['message']['text']);
 		$message['message']['text'] = preg_replace("/\[USER=([0-9]+)( REPLACE)?](.+?)\[\/USER]/i", "$3", $message['message']['text']);
 		$message['message']['text'] = preg_replace("/\[CHAT=([0-9]{1,})\](.*?)\[\/CHAT\]/i", "$2", $message['message']['text']);
 		$message['message']['text'] = preg_replace("/\[context=(chat\d+|\d+:\d+)\/(\d+)](.*?)\[\/context]/i", "$3", $message['message']['text']);

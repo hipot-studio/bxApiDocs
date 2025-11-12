@@ -7,11 +7,11 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Web\Http\ClientException;
 use Bitrix\Main\Web\Http\Method;
 use Bitrix\Main\Web\Http\Request;
-use Bitrix\Main\Web\Http\Response;
 use Bitrix\Main\Web\Http\Stream;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Web\Uri;
+use Psr\Http\Message\ResponseInterface;
 
 class BalancerClient
 {
@@ -67,11 +67,27 @@ class BalancerClient
 	}
 
 	/**
-	 * @param int $tokenVersion
 	 * @param int $chatId
+	 * @param int $tokenVersion
 	 * @return Result
 	 */
-	public function updateTokenVersion(int $tokenVersion, int $chatId): Result
+	public function updateTokenVersion(int $chatId, int $tokenVersion): Result
+	{
+		$data = [
+			'portalId' => Settings::getPortalId(),
+			'minTokenVersion' => $tokenVersion,
+			'chatId' => $chatId
+		];
+
+		return $this->performRequest('/v2/update-token-version', $data);
+	}
+
+	/**
+	 * @param string $method
+	 * @param array $data
+	 * @return Result
+	 */
+	protected function performRequest(string $method, array $data = []): Result
 	{
 		$result = new Result();
 
@@ -79,19 +95,22 @@ class BalancerClient
 			'compress' => true
 		]);
 
-		$uri = new Uri($this->getServiceUrl() . '/v2/update-token-version');
+		$uri = new Uri($this->getServiceUrl() . $method);
 
-		$data = [
-			'portalId' => Settings::getPortalId(),
-			'minTokenVersion' => $tokenVersion,
-			'chatId' => $chatId
-		];
-
-		$jwt = JWT::encode($data, JwtCall::getPrivateKey());
+		$jwt = JWT::encode($data, Settings::getPrivateKey());
 		$body = new Stream('php://temp', 'r+');
 		$body->write(json_encode(['token' => $jwt]));
-		$request = new Request(Method::POST, $uri, [], $body);
-		$request->withHeader('bx_call_portal_jwt', $jwt);
+
+		$request = new Request(
+			Method::POST,
+			$uri,
+			[
+				'bx_call_portal_jwt' => $jwt,
+				'User-Agent' => 'Bitrix Call Client '.\Bitrix\Main\Service\MicroService\Client::getPortalType(),
+				'Referer' => \Bitrix\Main\Service\MicroService\Client::getServerName(),
+			],
+			$body
+		);
 
 		try
 		{
@@ -101,6 +120,10 @@ class BalancerClient
 			if (!$answer->isSuccess())
 			{
 				$result->addErrors($answer->getErrors());
+			}
+			else
+			{
+				$result->setData($answer->getData());
 			}
 		}
 		catch (ClientException $exception)
@@ -115,7 +138,11 @@ class BalancerClient
 		return $result;
 	}
 
-	protected function extractAnswer(Response $response): Result
+	/**
+	 * @param ResponseInterface $response
+	 * @return Result
+	 */
+	protected function extractAnswer(ResponseInterface $response): Result
 	{
 		$result = new Result();
 

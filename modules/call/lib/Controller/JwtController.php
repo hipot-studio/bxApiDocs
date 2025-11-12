@@ -2,7 +2,7 @@
 
 namespace Bitrix\Call\Controller;
 
-use Bitrix\Call\JwtCall;
+use Bitrix\Call\Settings;
 use Bitrix\Call\Error;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
@@ -28,7 +28,7 @@ abstract class JwtController extends Controller
 		{
 			try
 			{
-				$payload = JWT::decode($jwt, base64_decode(JwtCall::getPrivateKey()), ['HS256']);
+				$payload = JWT::decode($jwt, base64_decode(Settings::getPrivateKey()), ['HS256']);
 
 				return new $className($payload);
 			}

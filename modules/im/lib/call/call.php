@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\Call;
 
+use Bitrix\Call\Library;
 use Bitrix\Im\Call\Integration\EntityFactory;
 use Bitrix\Im\Call\Integration\EntityType;
 use Bitrix\Im\Dialog;
@@ -1346,8 +1347,7 @@ class Call
 		}
 		else
 		{
-			$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
-			if (in_array($region, ['ru', 'by', 'kz']))
+			if (\Bitrix\Main\Application::getInstance()->getLicense()->isCis())
 			{
 				$turnServer = 'turn.bitrix24.tech';
 			}

@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Filter;
 
 use Bitrix\Tasks\Filter\Scope\CollaberScope;
 use Bitrix\Tasks\Filter\Scope\DefaultScope;
+use Bitrix\Tasks\Filter\Scope\RelationScope;
 use Bitrix\Tasks\Filter\Scope\ScrumScope;
 use Bitrix\Tasks\Helper\Filter;
 
@@ -18,6 +19,7 @@ class PresetProvider
 		{
 			Scope::COLLABER => new CollaberScope(),
 			Scope::SCRUM => new ScrumScope($this->filter?->getUserId() ?? 0),
+			Scope::RELATION => new RelationScope(),
 			default => new DefaultScope(),
 		};
 

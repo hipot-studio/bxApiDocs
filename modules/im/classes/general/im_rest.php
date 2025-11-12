@@ -4254,6 +4254,11 @@ class CIMRestService extends IRestService
 			$arParams['FILE_TEMPLATE_ID'] = mb_substr((string)$arParams['FILE_TEMPLATE_ID'], 0, 255);
 		}
 
+		if (empty($arParams['TRANSCRIBABLE_FILE_IDS']) || !is_array($arParams['TRANSCRIBABLE_FILE_IDS']))
+		{
+			$arParams['TRANSCRIBABLE_FILE_IDS'] = [];
+		}
+
 		$result = CIMDisk::UploadFileFromDisk($chatId, array_values($files), $arParams['MESSAGE'], [
 			'LINES_SILENT_MODE' => $arParams['SILENT_MODE'],
 			'TEMPLATE_ID' => $arParams['TEMPLATE_ID']?:'',
@@ -4261,6 +4266,7 @@ class CIMRestService extends IRestService
 			'SYMLINK' => $arParams['SYMLINK']?:false,
 			'AS_FILE' => $arParams['AS_FILE'] ?? 'N',
 			'WAIT_FULL_EXECUTION' => 'N',
+			'TRANSCRIBABLE_FILE_IDS' => $arParams['TRANSCRIBABLE_FILE_IDS'],
 		]);
 		if (!$result)
 		{
@@ -7162,7 +7168,7 @@ class CIMRestService extends IRestService
 			'id' => (int)$userData['ID'],
 			'hash' => $userData['HASH'],
 			'created' => $userData['CREATED'],
-			'userToken' => \Bitrix\Call\JwtCall::getUserJwt(),
+			'userToken' => \Bitrix\Call\JwtCall::getUserJwt((int)$userData['ID']),
 		];
 
 		$_SESSION['CALL']['REGISTER'] = $result;
@@ -7176,6 +7182,8 @@ class CIMRestService extends IRestService
 		CIMNotify::Add(
 			[
 				'TO_USER_ID' => $chatOwnerId,
+				'NOTIFY_MODULE' => 'im',
+				'NOTIFY_EVENT' => 'videconf_new_guest',
 				'MESSAGE' => fn (?string $languageId = null) => Loc::getMessage(
 						"IM_VIDEOCONF_NEW_GUEST",
 						['#CHAT_TITLE#' => $chatTitle],

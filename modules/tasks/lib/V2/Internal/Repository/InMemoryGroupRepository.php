@@ -10,23 +10,28 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 {
 	private GroupRepositoryInterface $groupRepository;
 
-	private array $cache = [];
+	private Entity\GroupCollection $cache;
 	private array $membersCache = [];
 	private array $typeCache = [];
 
 	public function __construct(GroupRepository $groupRepository)
 	{
 		$this->groupRepository = $groupRepository;
+		$this->cache = new Entity\GroupCollection();
 	}
 
 	public function getById(int $id): ?Entity\Group
 	{
-		if (!isset($this->cache[$id]))
+		if (!$this->cache->findOneById($id))
 		{
-			$this->cache[$id] = $this->groupRepository->getById($id);
+			$group = $this->groupRepository->getById($id);
+			if ($group !== null)
+			{
+				$this->cache->add($group);
+			}
 		}
 
-		return $this->cache[$id];
+		return $this->cache->findOneById($id);
 	}
 
 	public function getMembers(int $id): Entity\UserCollection
@@ -41,12 +46,10 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 
 	public function getType(int $id): ?string
 	{
-		if (isset($this->cache[$id]))
+		$group = $this->cache->findOneById($id);
+		if ($group !== null)
 		{
-			/** @var Entity\Group $group */
-			$group = $this->cache[$id];
-
-			$this->typeCache[$id] = $group?->type;
+			$this->typeCache[$id] = $group->type;
 
 			return $this->typeCache[$id];
 		}
@@ -57,5 +60,24 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 		}
 
 		return $this->typeCache[$id];
+	}
+
+	public function getByIds(array $ids): Entity\GroupCollection
+	{
+		$groups = Entity\GroupCollection::mapFromIds($ids);
+		$stored = $this->cache->findAllByIds($ids);
+
+		$notStoredIds = $groups->diff($stored)->getIdList();
+
+		if (empty($notStoredIds))
+		{
+			return $stored;
+		}
+
+		$groups = $this->groupRepository->getByIds($ids);
+
+		$this->cache->merge($groups);
+
+		return $groups;
 	}
 }

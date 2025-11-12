@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Command\Task;
 
 use Bitrix\Main\Error;
+use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\Control\Exception\TaskDeleteException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
@@ -19,6 +20,7 @@ use Exception;
 class DeleteTaskCommand extends AbstractCommand
 {
 	public function __construct(
+		#[PositiveNumber]
 		public readonly int $taskId,
 		public readonly DeleteConfig $config,
 	)
@@ -29,6 +31,7 @@ class DeleteTaskCommand extends AbstractCommand
 	protected function executeInternal(): Result
 	{
 		$result = new Result();
+
 		try
 		{
 			$deleteTaskService = Container::getInstance()->getDeleteTaskService();
@@ -38,18 +41,6 @@ class DeleteTaskCommand extends AbstractCommand
 			$handler($this);
 
 			return $result;
-		}
-		catch (WrongTaskIdException)
-		{
-			return $result->addError(new Error('Wrong task id', ErrorCode::WRONG_TASK_ID));
-		}
-		catch (TaskNotExistsException)
-		{
-			return $result->addError(new Error('Task not exists', ErrorCode::TASK_NOT_EXISTS));
-		}
-		catch (TaskStopDeleteException)
-		{
-			return $result->addError(new Error('Deletion stopped', ErrorCode::TASK_STOP_DELETE));
 		}
 		catch (Exception $e)
 		{

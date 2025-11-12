@@ -16,6 +16,7 @@ class SaveCheckListCommand extends AbstractCommand
 	public function __construct(
 		public readonly Entity\Task $task,
 		public readonly int         $updatedBy,
+		public readonly ?Entity\Task $taskBeforeUpdate = null,
 	)
 	{
 
@@ -25,9 +26,13 @@ class SaveCheckListCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$checkListService = Container::getInstance()->getCheckListService();
-
-		$handler = new SaveCheckListCommandHandler($checkListService);
+		$handler = new SaveCheckListCommandHandler(
+			checkListService: Container::getInstance()->getCheckListService(),
+			consistencyResolver: Container::getInstance()->getConsistencyResolver(),
+			egressController: Container::getInstance()->getEgressController(),
+			taskRepository: Container::getInstance()->getTaskRepository(),
+			checkListProvider: Container::getInstance()->getCheckListProvider(),
+		);
 
 		try
 		{

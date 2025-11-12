@@ -30,7 +30,11 @@ class TaskNotViewedOneDay
 		$notification->setParams(['action' => $locKey]);
 
 		$analyticsData = (new Notification\Analytics\AnalyticsData())
-			->setSection(Analytics::SECTION['onboarding_notification']);
+			->setSection(Analytics::SECTION['onboarding_notification'])
+			->setElement(Analytics::ELEMENT['task_link'])
+			->setEvent(Analytics::EVENT['click_task_link'])
+			->setType(Analytics::NOTIFICATION_TYPE)
+		;
 
 		$notification->setAnalyticsData($analyticsData);
 

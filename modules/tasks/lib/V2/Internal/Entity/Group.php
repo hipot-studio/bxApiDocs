@@ -18,7 +18,6 @@ class Group extends AbstractEntity
 		public readonly ?File $image = null,
 		/** @see \Bitrix\Socialnetwork\Item\Workgroup\Type */
 		public readonly ?string $type = null,
-		public readonly ?StageCollection $stages = null,
 		public readonly ?bool $isVisible = null,
 	)
 	{
@@ -41,7 +40,6 @@ class Group extends AbstractEntity
 			'name' => $this->name,
 			'image' => $this->image?->toArray(),
 			'type' => $this->type,
-			'stages' => $this->stages?->toArray(),
 			'isVisible' => $this->isVisible,
 		];
 	}
@@ -53,7 +51,6 @@ class Group extends AbstractEntity
 			name: static::mapString($props, 'name'),
 			image: static::mapEntity($props, 'image', File::class),
 			type: static::mapString($props, 'type'),
-			stages: static::mapEntityCollection($props, 'stages', StageCollection::class),
 			isVisible: static::mapBool($props, 'isVisible'),
 		);
 	}

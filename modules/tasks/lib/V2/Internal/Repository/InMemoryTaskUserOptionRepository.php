@@ -52,7 +52,7 @@ class InMemoryTaskUserOptionRepository implements TaskUserOptionRepositoryInterf
 		}
 	}
 
-	public function delete(array $codes, int $taskId, int $userId): void
+	public function delete(array $codes = [], int $taskId = 0, int $userId = 0): void
 	{
 		$this->userOptionRepository->delete($codes, $taskId, $userId);
 

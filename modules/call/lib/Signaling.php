@@ -54,7 +54,7 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 		$chatId = (int)$this->call->getAssociatedEntity()?->getChatId();
 
 		$config = [
-			'callToken' => JwtCall::getCallToken($chatId, $toUserId),
+			'callToken' => JwtCall::getCallToken($chatId),
 			'call' => $this->getCallInfoForSend(($senderId !== $toUserId ? $toUserId : 0)),
 			'aiSettings' => $this->getCallAiSettings(),
 			'isLegacyMobile' => $isLegacyMobile,
@@ -112,7 +112,7 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 			'params' => [
 				'ACTION' => 'IMINV_'.$this->call->getId()."_".time()."_".($video ? 'Y' : 'N'),
 				'PARAMS' => [
-					'callToken' => JwtCall::getCallToken($chatId, $toUserId),
+					'callToken' => JwtCall::getCallToken($chatId),
 					'call' => $this->getCallInfoForSend(($senderId === $toUserId ? $toUserId : 0)),
 					'type' => 'internal',
 					'callerName' => htmlspecialcharsback($name),

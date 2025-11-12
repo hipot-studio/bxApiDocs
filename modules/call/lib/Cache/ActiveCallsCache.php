@@ -141,7 +141,7 @@ class ActiveCallsCache
 				$result[$call['ID']] = array_merge(
 					$callInstance->toArray($userId),
 					[
-						'CALL_TOKEN' => JwtCall::getCallToken($call['CHAT_ID'], $userId),
+						'CALL_TOKEN' => JwtCall::getCallToken($call['CHAT_ID']),
 						'CONNECTION_DATA' => $callInstance->getConnectionData($userId),
 						'USERS' => $callUsers,
 						'LOG_TOKEN' => $callInstance->getLogToken($userId),

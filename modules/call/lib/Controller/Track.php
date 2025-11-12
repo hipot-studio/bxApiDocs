@@ -8,6 +8,7 @@ use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Registry;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Call\Error;
 use Bitrix\Call\Settings;
 use Bitrix\Call\NotifyService;
@@ -145,7 +146,11 @@ class Track extends Engine\Controller
 		if ($message)
 		{
 			$message->setAuthorId($call->getInitiatorId());
-			NotifyService::getInstance()->sendMessageDeferred($chat, $message);
+			$sendingConfig = (new SendingConfig())
+				->enableSkipCounterIncrements()
+				->enableSkipUrlIndex()
+			;
+			NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
 		}
 
 		return ['destroyed' => true];

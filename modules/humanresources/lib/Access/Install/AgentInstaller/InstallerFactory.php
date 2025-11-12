@@ -24,6 +24,8 @@ class InstallerFactory
 			6 => TeamRolesInstallerV2::class,
 			7 => CommunicationInstaller::class,
 			8 => CommunicationInstallerV2::class,
+			9 => CommunicationInstallerV3::class,
+			10 => DepartmentSettingsInstaller::class,
 		];
 	}
 

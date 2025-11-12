@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Application;
 use Bitrix\Call\Call;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\ImOpenLines\V2\Status\Status;
@@ -48,6 +49,7 @@ class Config implements \JsonSerializable
 			'anchors' => $this->getAnchors(),
 			'copilot' => $this->getCopilotData(),
 			'serviceHealthUrl' => $this->getServiceHealthUrl(),
+			'aiSettings' => $this->getAiSettings(),
 		];
 	}
 
@@ -206,6 +208,13 @@ class Config implements \JsonSerializable
 	{
 		return [
 			'availableEngines' => (new EngineManager())->getAvailableEnginesForRest(),
+		];
+	}
+
+	protected function getAiSettings(): array
+	{
+		return [
+			'maxTranscribableFileSize' => TranscribeManager::MAX_TRANSCRIBABLE_FILE_SIZE,
 		];
 	}
 }

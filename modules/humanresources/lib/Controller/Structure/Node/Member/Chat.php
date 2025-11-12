@@ -12,6 +12,8 @@ use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Exception\CommandException;
 use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Type\AccessibleItemType;
+use Bitrix\HumanResources\Type\NodeChatType;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Request;
 use Bitrix\HumanResources\Internals\Attribute;
@@ -30,43 +32,119 @@ class Chat extends Controller
 
 	#[Attribute\Access\LogicOr(
 		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_DEPARTMENT_COMMUNICATION_EDIT,
+			permission: StructureActionDictionary::ACTION_DEPARTMENT_CHAT_EDIT,
 			itemType: AccessibleItemType::CHAT_LIST,
 			itemIdRequestKey: 'nodeId',
 		),
 		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_TEAM_COMMUNICATION_EDIT,
+			permission: StructureActionDictionary::ACTION_TEAM_CHAT_EDIT,
 			itemType: AccessibleItemType::CHAT_LIST,
 			itemIdRequestKey: 'nodeId',
 		),
 	)]
 	public function saveChatListAction(
 		Item\Node $node,
-		array $createDefault = [
-			SaveNodeChatsCommand::CHAT_INDEX => false,
-			SaveNodeChatsCommand::CHANNEL_INDEX => false,
-			SaveNodeChatsCommand::COLLAB_INDEX => false,
-		],
-		array $ids = [
-			SaveNodeChatsCommand::CHAT_INDEX => [],
-			SaveNodeChatsCommand::CHANNEL_INDEX => [],
-			SaveNodeChatsCommand::COLLAB_INDEX => [],
-			SaveNodeChatsCommand::WITH_CHILDREN_INDEX => false,
-		],
-		array $removeIds = [
-			SaveNodeChatsCommand::CHAT_INDEX => [],
-			SaveNodeChatsCommand::CHANNEL_INDEX => [],
-			SaveNodeChatsCommand::COLLAB_INDEX => [],
-		],
+		bool $createDefault = false,
+		array $ids = [],
+		array $removeIds = [],
+		bool $withChildren = false,
 	): void
 	{
 		try
 		{
 			$commandResult = (new SaveNodeChatsCommand(
-				$node,
-				$createDefault,
-				$ids,
-				$removeIds,
+				node: $node,
+				chatType: NodeChatType::Chat,
+				createDefault: $createDefault,
+				ids: $ids,
+				removeIds: $removeIds,
+				withChildren: $withChildren
+			))->run();
+
+			if (!$commandResult->isSuccess())
+			{
+				$this->addErrors($commandResult->getErrors());
+			}
+		}
+		catch (CommandException|CommandValidateException $e)
+		{
+			$this->addError(new Error($e->getMessage()));
+		}
+	}
+
+
+	#[Attribute\Access\LogicOr(
+		new Attribute\StructureActionAccess(
+			permission: StructureActionDictionary::ACTION_DEPARTMENT_CHANNEL_EDIT,
+			itemType: AccessibleItemType::CHAT_LIST,
+			itemIdRequestKey: 'nodeId',
+		),
+		new Attribute\StructureActionAccess(
+			permission: StructureActionDictionary::ACTION_TEAM_CHANNEL_EDIT,
+			itemType: AccessibleItemType::CHAT_LIST,
+			itemIdRequestKey: 'nodeId',
+		),
+	)]
+	public function saveChannelListAction(
+		Item\Node $node,
+		bool $createDefault = false,
+		array $ids = [],
+		array $removeIds = [],
+		bool $withChildren = false,
+	): void
+	{
+		try
+		{
+			$commandResult = (new SaveNodeChatsCommand(
+				node: $node,
+				chatType: NodeChatType::Channel,
+				createDefault: $createDefault,
+				ids: $ids,
+				removeIds: $removeIds,
+				withChildren: $withChildren
+			))->run();
+
+			if (!$commandResult->isSuccess())
+			{
+				$this->addErrors($commandResult->getErrors());
+			}
+		}
+		catch (CommandException|CommandValidateException $e)
+		{
+			$this->addError(new Error($e->getMessage()));
+		}
+	}
+
+
+	#[Attribute\Access\LogicOr(
+		new Attribute\StructureActionAccess(
+			permission: StructureActionDictionary::ACTION_DEPARTMENT_COLLAB_EDIT,
+			itemType: AccessibleItemType::CHAT_LIST,
+			itemIdRequestKey: 'nodeId',
+		),
+		new Attribute\StructureActionAccess(
+			permission: StructureActionDictionary::ACTION_TEAM_COLLAB_EDIT,
+			itemType: AccessibleItemType::CHAT_LIST,
+			itemIdRequestKey: 'nodeId',
+		),
+	)]
+	public function saveCollabListAction(
+		Item\Node $node,
+		bool $createDefault = false,
+		array $ids = [],
+		array $removeIds = [],
+		bool $withChildren = false,
+	): void
+	{
+		try
+		{
+			$commandResult = (new SaveNodeChatsCommand(
+				node: $node,
+				chatType: NodeChatType::Collab,
+				createDefault: $createDefault,
+				ids: $ids,
+				removeIds: $removeIds,
+				withChildren: $withChildren
 			))->run();
 
 			if (!$commandResult->isSuccess())
@@ -88,9 +166,9 @@ class Chat extends Controller
 			return [];
 		}
 
-		$result = $this->chatService->getChatsAndChannelsByNode($node);
-		$result['collabs'] = $this->collabService->getCollabsByNode($node);
+		$chatsResult = $this->chatService->getChatsAndChannelsByNode($node);
+		$collabsResult = $this->collabService->getCollabsByNode($node, CurrentUser::get()->getId());
 
-		return $result;
+		return array_merge($chatsResult, $collabsResult);
 	}
 }

@@ -46,6 +46,12 @@ class PrepareGroup implements PrepareFieldInterface
 
 	private function prepareCollab(array $fields): array
 	{
+		$isGroupUpdateOnCorrect = isset($fields['GROUP_ID']) && (int)$fields['GROUP_ID'] !== 0;
+		if ($isGroupUpdateOnCorrect)
+		{
+			return $fields;
+		}
+
 		$isCollaber = \Bitrix\Tasks\Integration\Extranet\User::isCollaber($this->config->getUserId());
 		if (!$isCollaber)
 		{

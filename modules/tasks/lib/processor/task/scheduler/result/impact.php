@@ -1,11 +1,4 @@
-<?
-/**
- * todo: Impact class is TEMPORAL, it should be replaced with (or at least inherited from) \Bitrix\Tasks\Item\Task when ready
- * This class could be changed (removed, renamed, relocated) in any time, so do not use it in public code
- *
- * @internal
- * @access private
- */
+<?php
 
 namespace Bitrix\Tasks\Processor\Task\Scheduler\Result;
 
@@ -166,10 +159,7 @@ final class Impact extends \Bitrix\Tasks\Processor\Task\Result\Impact
 				'CORRECT_DATE_PLAN_DEPENDENT_TASKS' => false,
 			));
 
-			if($prevUserId)
-			{
-				User::setOccurAsId($prevUserId);
-			}
+			User::setOccurAsId($prevUserId);
 		}
 		catch(\TasksException $e)
 		{

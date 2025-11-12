@@ -7,7 +7,7 @@ namespace Bitrix\Tasks\V2\Infrastructure\Controller;
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
 use Bitrix\Main\Validation\Rule\ElementsType;
 use Bitrix\Main\Validation\Rule\Enum\Type;
-use Bitrix\Tasks\Internals\Attribute\NotEmpty;
+use Bitrix\Main\Validation\Rule\NotEmpty;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Public\Provider\Params\UserParams;
 use Bitrix\Tasks\V2\Public\Provider\UserProvider;

@@ -54,6 +54,7 @@ use Bitrix\Tasks\Util\Type;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Util\Db;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class CTasks
 {
@@ -1578,7 +1579,7 @@ class CTasks
 
 		if ($ts === null)
 		{
-			$ts = CTasksPerHitOption::getHitTimestamp();
+			$ts = time();
 		}
 
 		$bTzWasDisabled = !CTimeZone::enabled();
@@ -2725,7 +2726,7 @@ class CTasks
 				if (in_array('SCENARIO_NAME', $select) || in_array('*', $select))
 				{
 					$task['SCENARIO_NAME'] = [];
-					$scenarios = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+					$scenarios = Container::getInstance()
 					                                                   ->getScenarioRepository()
 					                                                   ->getById($ID);
 
@@ -2775,14 +2776,14 @@ class CTasks
 					&& \Bitrix\Tasks\V2\FormV2Feature::isOn()
 				)
 				{
-					$task['CHAT_ID'] = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+					$task['CHAT_ID'] = Container::getInstance()
 						->getChatRepository()
 						->getChatIdByTaskId((int)$ID);
 
 					if ($task['CHAT_ID'] === null)
 					{
 						// special case, chat doesn't exist yet
-						$updatedTaskEntity = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()
+						$updatedTaskEntity = Container::getInstance()
 							->getTaskReadRepository()
 							->getById((int)$ID, new \Bitrix\Tasks\V2\Internal\Repository\Task\Select(chat: true));
 
@@ -5579,8 +5580,8 @@ class CTasks
 		}
 
 		if (
-			CTasksTools::IsAdmin($userId)
-			|| CTasksTools::IsPortalB24Admin($userId)
+			\Bitrix\Tasks\Util\User::isAdmin($userId)
+			|| \Bitrix\Tasks\Integration\Bitrix24\User::isAdmin($userId)
 			|| ($userId == $taskCreatedBy)
 		)
 		{
@@ -5619,8 +5620,8 @@ class CTasks
 		}
 
 		if (
-			CTasksTools::IsAdmin($userId)
-			|| CTasksTools::IsPortalB24Admin($userId)
+			\Bitrix\Tasks\Util\User::isAdmin($userId)
+			|| \Bitrix\Tasks\Integration\Bitrix24\User::isAdmin($userId)
 			|| ($userId == $taskCreatedBy)
 		)
 		{
@@ -5845,19 +5846,16 @@ class CTasks
 		return false;
 	}
 
+	/**
+	 * @deprecated
+	 *
+	 * @use \Bitrix\Tasks\V2\Internal\Service\Task\ParentService::getParentId
+	 */
 	public static function getParentOfTask($taskId)
 	{
-		$taskId = intval($taskId);
-		if (!$taskId)
-		{
-			return false;
-		}
+		$parentId = Container::getInstance()->getParentService()->getParentId((int)$taskId);
 
-		global $DB;
-
-		$item = $DB->query("select PARENT_ID from b_tasks where ID = '" . $taskId . "'")->fetch();
-
-		return intval($item['PARENT_ID']) ? intval($item['PARENT_ID']) : false;
+		return $parentId ?? false;
 	}
 
 	public static function GetUserDepartments($USER_ID)

@@ -19,7 +19,7 @@ class AddTaskCommand extends AbstractCommand
 	public function __construct(
 		#[Validatable]
 		public readonly Entity\Task $task,
-		public readonly AddConfig   $config,
+		public readonly AddConfig $config,
 	)
 	{
 
@@ -37,11 +37,7 @@ class AddTaskCommand extends AbstractCommand
 
 			$task = $handler($this);
 
-			return
-				$result
-					->setObject($task)
-					->setId($task->id)
-				;
+			return $result->setObject($task);
 		}
 		catch (Exception $e)
 		{

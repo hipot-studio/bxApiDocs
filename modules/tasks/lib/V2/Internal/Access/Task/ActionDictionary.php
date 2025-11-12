@@ -49,6 +49,24 @@ class ActionDictionary
 		'saveAsTemplate' => Access\ActionDictionary::ACTION_TASK_SAVE_AS_TEMPLATE,
 		'attachFile' => Access\ActionDictionary::ACTION_TASK_ATTACH_FILE,
 		'detachFile' => Access\ActionDictionary::ACTION_TASK_DETACH_FILE,
+		'detachParent' => Access\ActionDictionary::ACTION_TASK_DETACH_PARENT,
+		'createGanttDependence' => Access\ActionDictionary::ACTION_TASK_CREATE_GANTT_DEPENDENCE,
+	];
+
+	public const SUBTASK_ACTIONS = [
+		'deadline' => Access\ActionDictionary::ACTION_TASK_DEADLINE,
+		'detachParent' => Access\ActionDictionary::ACTION_TASK_DETACH_PARENT,
+		'delegate' => Access\ActionDictionary::ACTION_TASK_DELEGATE,
+	];
+
+	public const RELATED_TASK_ACTIONS = [
+		'deadline' => Access\ActionDictionary::ACTION_TASK_DEADLINE,
+		'detachRelated' => Access\ActionDictionary::ACTION_TASK_DETACH_RELATED,
+		'delegate' => Access\ActionDictionary::ACTION_TASK_DELEGATE,
+	];
+
+	public const GANTT_TASK_ACTIONS = [
+		'changeDependence' => Access\ActionDictionary::ACTION_TASK_CHANGE_GANTT_DEPENDENCE,
 	];
 
 	public const USER_ACTIONS = [
@@ -59,6 +77,6 @@ class ActionDictionary
 		],
 		'flow' => [
 			'create' => FlowAction::CREATE,
-		]
+		],
 	];
 }

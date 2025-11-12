@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 class NotifyDeadlineChanged
@@ -14,13 +15,11 @@ class NotifyDeadlineChanged
 	public function __construct(
 		Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
+		?User $triggeredBy = null,
+		?int $newDeadlineTs = null,
+		?int $oldDeadlineTs = null,
 	)
 	{
-		$triggeredBy = $args['triggeredBy'] ?? null;
-		$newDeadlineTs = $args['newDeadlineTs'] ?? null;
-		$oldDeadlineTs = $args['oldDeadlineTs'] ?? null;
-
 		$code = 'TASKS_IM_TASK_DEADLINE_ADDED_' . $triggeredBy?->getGender()->value;
 
 		$message = Loc::getMessage($code, [

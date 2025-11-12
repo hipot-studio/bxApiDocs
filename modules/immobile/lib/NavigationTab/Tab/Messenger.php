@@ -61,4 +61,9 @@ class Messenger extends BaseRecent
 			],
 		];
 	}
+
+	protected function isWidgetSupported(): bool
+	{
+		return true;
+	}
 }

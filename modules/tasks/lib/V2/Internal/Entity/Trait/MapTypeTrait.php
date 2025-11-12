@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity\Trait;
 
 use BackedEnum;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntityCollection;
-use Bitrix\Tasks\V2\Internal\Entity\ValueObject;
+use Bitrix\Tasks\V2\Internal\Entity\ValueObjectInterface;
 
 trait MapTypeTrait
 {
@@ -53,7 +54,14 @@ trait MapTypeTrait
 			return null;
 		}
 
-		$value = is_string($props[$key]) ? $props[$key] : static::mapInteger($props, $key);
+		$value = $props[$key];
+		if ($value instanceof $enumClass)
+		{
+			/** @var BackedEnum $value */
+			return $value;
+		}
+
+		$value = is_string($value) ? $value : static::mapInteger($props, $key);
 
 		return $value !== null ? $enumClass::tryFrom($value) : null;
 	}
@@ -106,6 +114,12 @@ trait MapTypeTrait
 		}
 
 		$value = $props[$key];
+		if ($value instanceof $entityClass)
+		{
+			/** @var AbstractEntity $value */
+			return $value;
+		}
+
 		if (!is_array($value))
 		{
 			return null;
@@ -115,9 +129,9 @@ trait MapTypeTrait
 	}
 
 	/**
-	 * @param class-string<ValueObject> $valueObjectClass
+	 * @param class-string<ValueObjectInterface> $valueObjectClass
 	 */
-	public static function mapValueObject(array $props, string $key, string $valueObjectClass): ?ValueObject
+	public static function mapValueObject(array $props, string $key, string $valueObjectClass): ?ValueObjectInterface
 	{
 		if (!isset($props[$key]))
 		{
@@ -125,6 +139,12 @@ trait MapTypeTrait
 		}
 
 		$value = $props[$key];
+		if ($value instanceof $valueObjectClass)
+		{
+			/** @var ValueObjectInterface $value */
+			return $value;
+		}
+
 		if (!is_array($value))
 		{
 			return null;
@@ -144,11 +164,34 @@ trait MapTypeTrait
 		}
 
 		$value = $props[$key];
+		if ($value instanceof $entityCollectionClass)
+		{
+			/** @var AbstractEntityCollection $value */
+			return $value;
+		}
+
 		if (!is_array($value))
 		{
 			return null;
 		}
 
 		return $entityCollectionClass::mapFromArray($value);
+	}
+
+	public static function mapMixed(array $props, string $key): mixed
+	{
+		return $props[$key] ?? null;
+	}
+
+	public static function mapDateTime(array $props, string $key): ?DateTime
+	{
+		if (!isset($props[$key]))
+		{
+			return null;
+		}
+
+		$value = $props[$key];
+
+		return $value instanceof DateTime ? $value : null;
 	}
 }

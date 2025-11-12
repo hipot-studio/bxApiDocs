@@ -26,6 +26,7 @@ use Bitrix\Im\V2\Message\MessagePopupItem;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Message\Send\PushService;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
+use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Settings\UserConfiguration;
@@ -971,7 +972,7 @@ class Recent
 		}
 		elseif ($getOriginalTextOption === 'Y')
 		{
-			$text = Text::populateUserBbCode($text);
+			$text = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i",['\Bitrix\Im\Text', 'modifyShortUserTag'], $text);
 		}
 		else
 		{
@@ -1663,7 +1664,10 @@ class Recent
 
 	public static function getUsersOutOfRecent(\Bitrix\Im\V2\Chat $chat): array
 	{
-		$relations = $chat->getRelations()->filterActive();
+		$relations = $chat
+			->getRelationsForSendMessage()
+			->filter(fn (Relation $relation): bool => !$relation->isHidden())
+		;
 		$users = $relations->getUserIds();
 		$usersAlreadyInRecentRows = RecentTable::query()
 			->setSelect(['USER_ID'])

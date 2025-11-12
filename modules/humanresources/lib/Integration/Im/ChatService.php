@@ -59,7 +59,7 @@ class ChatService
 
 		if (!$this->isAvailable())
 		{
-			return $result->addError(new Error(Loc::getMessage('HUMANRESOURCES_CHAT_SERVICE_NOT_AVAILABLE')));
+			return $result->addError(new Error(Loc::getMessage('HUMANRESOURCES_CHAT_SERVICE_NOT_AVAILABLE_MSGVER_1')));
 		}
 
 		$creationType = $type === RelationEntitySubtype::Channel ? Chat::IM_TYPE_CHANNEL : Chat::IM_TYPE_CHAT;
@@ -142,7 +142,7 @@ class ChatService
 
 		if (!$this->isAvailable() && count($ids) > 0)
 		{
-			return $result->addError(new Error(Loc::getMessage('HUMANRESOURCES_CHAT_SERVICE_NOT_AVAILABLE')));
+			return $result->addError(new Error(Loc::getMessage('HUMANRESOURCES_CHAT_SERVICE_NOT_AVAILABLE_MSGVER_1')));
 		}
 
 		$filter = Chat\Filter::init()

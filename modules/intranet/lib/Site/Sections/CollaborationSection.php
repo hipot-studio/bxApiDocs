@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Site\Sections;
 
+use Bitrix\Intranet\Internal\Integration\Extranet\ExtranetService;
 use Bitrix\Intranet\Settings\Tools\Automation;
 use Bitrix\Intranet\Settings\Tools\BIConstructor;
 use Bitrix\Intranet\Settings\Tools\Tasks;
@@ -161,8 +162,9 @@ class CollaborationSection
 	public static function shouldShowNewStructure(): bool
 	{
 		$shouldShowNewMenu = \Bitrix\Main\Config\Option::get('intranet', 'should_show_new_collaboration_menu', 'N') === 'Y';
-
-		return $shouldShowNewMenu;
+		return $shouldShowNewMenu
+			&& !(new ExtranetService())->isExtranet()
+		;
 	}
 
 	public static function isFeatureEnabled(string $feature): bool
