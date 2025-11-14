@@ -13,4 +13,5 @@ enum ErrorCode: string
 	case RateLimit = 'RATE_LIMIT';
 	case Daily = 'LIMIT_IS_EXCEEDED_DAILY';
 	case Monthly = 'LIMIT_IS_EXCEEDED_MONTHLY';
+	case BaasRateLimit = 'LIMIT_IS_EXCEEDED_BAAS_RATE_LIMIT';
 }

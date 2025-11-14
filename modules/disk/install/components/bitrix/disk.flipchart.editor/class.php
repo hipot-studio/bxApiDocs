@@ -35,7 +35,7 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 	const DEFAULT_DISPLAY_VARIANT = 'desktop';
 
 	private bool $isExternalLinkMode = false;
-	private bool $isUnifiedLinkMode = false;
+	private bool $unifiedLinkAccessOnly = false;
 	private bool $isViewMode = false;
 	private bool $isEditMode = false;
 	private ?DocumentSession $session = null;
@@ -70,6 +70,7 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 				'document_id' => $this->convertDocumentId($session->getObject()->getId(), $session->getVersionId()),
 				'session_id' => $session->getExternalHash(),
 				'file_name' => $this->arParams['ORIGINAL_FILE']?->getNameWithoutExtension() ?? $session->getObject()->getNameWithoutExtension(),
+				'salt' => crc32($session->getCreateTime()),
 			],
 		);
 	}
@@ -124,7 +125,7 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		$this->arResult['SHOULD_SHOW_SHARING_BUTTON'] = $this->isEditMode && !$this->isExternalLinkMode;
 		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType()->value;
 		$this->arResult['DISPLAY_VARIANT'] = $this->getDisplayVariant();
-		$this->arResult['IS_UNIFIED_LINK_MODE'] = $this->isUnifiedLinkMode;
+		$this->arResult['UNIFIED_LINK_ACCESS_ONLY'] = $this->unifiedLinkAccessOnly;
 		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
 	}
 
@@ -136,7 +137,7 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		{
 			$this->session = $this->arParams['DOCUMENT_SESSION'];
 			$this->isExternalLinkMode = (bool)($this->arParams['EXTERNAL_LINK_MODE'] ?? false);
-			$this->isUnifiedLinkMode = (bool)($this->arParams['UNIFIED_LINK_MODE'] ?? false);
+			$this->unifiedLinkAccessOnly = (bool)($this->arParams['UNIFIED_LINK_ACCESS_ONLY'] ?? false);
 			$this->isViewMode = $this->session->getType() === DocumentSession::TYPE_VIEW;
 			$this->isEditMode = $this->session->getType() === DocumentSession::TYPE_EDIT;
 		}

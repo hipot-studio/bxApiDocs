@@ -8,9 +8,15 @@ use Bitrix\Disk\File;
 
 class PermissionSystemAccessCheckHandler extends ChainableAccessCheckHandler
 {
+	public function __construct(
+		private readonly int $userId,
+	)
+	{
+	}
+
 	protected function doCheck(File $file): UnifiedLinkAccessLevel
 	{
-		$securityContext = $file->getStorage()?->getCurrentUserSecurityContext();
+		$securityContext = $file->getStorage()?->getSecurityContext($this->userId);
 
 		if (!$securityContext)
 		{

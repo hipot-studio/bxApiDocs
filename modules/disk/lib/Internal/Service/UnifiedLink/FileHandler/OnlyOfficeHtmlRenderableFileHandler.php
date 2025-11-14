@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
+use Bitrix\Disk\Document\DocumentSessionResult;
 use Bitrix\Disk\Document\DocumentSource;
 use Bitrix\Disk\Document\Flipchart\SessionManager;
 use Bitrix\Disk\Document\Models\DocumentSession;
@@ -49,6 +50,7 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 
 		try
 		{
+			/** @var DocumentSessionResult $sessionCreationResult */
 			$sessionCreationResult = $createInternalSessionCommand->run();
 		}
 		catch (CommandException|CommandValidationException $e)
@@ -63,14 +65,20 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 			return FileHandlerOperationResult::createError($sessionCreationResult->getErrorCollection());
 		}
 
-		$this->trackObject();
+		/** @var DocumentSession $documentSession */
+		$documentSession = $sessionCreationResult->getDocumentSession();
 
-		return $this->showEditor($sessionCreationResult->getDocumentSession());
+		if ($documentSession->canUserRead($this->getCurrentUser()))
+		{
+			$this->trackObject();
+		}
+
+		return $this->showEditor($documentSession);
 	}
 
 	private function trackObject(): void
 	{
-		$userId = $this->getCurrenUser()->getId();
+		$userId = $this->getCurrentUser()->getId();
 		if ($this->documentSource->getAttachedObject() !== null)
 		{
 			$this->trackedObjectManager->pushAttachedObject($userId, $this->documentSource->getAttachedObject(), true);
@@ -93,6 +101,9 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 				'POPUP_COMPONENT_PARAMS' => [
 					'DOCUMENT_SESSION' => $documentSession,
 					'SHOW_BUTTON_OPEN_NEW_WINDOW' => false,
+					'UNIFIED_LINK_MODE' => true,
+					'UNIFIED_LINK_ACCESS_ONLY' => !$documentSession->canUserRead($this->getCurrentUser()),
+					'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
 				],
 				'PLAIN_VIEW' => true,
 				'IFRAME_MODE' => true,
@@ -104,7 +115,7 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 		return FileHandlerOperationResult::createSuccess($content);
 	}
 
-	private function getCurrenUser(): CurrentUser
+	private function getCurrentUser(): CurrentUser
 	{
 		return CurrentUser::get();
 	}

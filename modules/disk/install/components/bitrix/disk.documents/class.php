@@ -6,6 +6,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\Type\DocumentGridVariant;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Main;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -123,13 +124,13 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 					'ID' => $file->getCreateUser()->getId(),
 					'URL' => $file->getCreateUser()->getDetailUrl(),
 					'AVATAR_HTML' => $file->getCreateUser()->renderAvatar(),
-					'NAME' => htmlspecialcharsbx($file->getCreateUser()->getFormattedName())
+					'NAME' => htmlspecialcharsbx($file->getCreateUser()->getFormattedName()),
 				] : null),
 				'UPDATED_BY' => (in_array('UPDATED_BY', $visibleColumns) ? [
 					'ID' => $file->getUpdatedBy(),
 					'URL' => $file->getUpdateUser()->getDetailUrl(),
 					'AVATAR_HTML' => $file->getUpdateUser()->renderAvatar(),
-					'NAME' => htmlspecialcharsbx($file->getUpdateUser()->getFormattedName())
+					'NAME' => htmlspecialcharsbx($file->getUpdateUser()->getFormattedName()),
 				] : null),
 				'CREATE_TIME' => $this->getRelativeTime($timestampCreate),
 				'UPDATE_TIME' => $this->getRelativeTime($timestampUpdate),
@@ -153,15 +154,17 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 					'HEIGHT' => $item['HEIGHT'],
 					'ORIGINAL_NAME' => $item['NAME'],
 					'FILE_SIZE' => $item['FILE_SIZE'],
+					FileAttributes::KEY_FILE_OBJECT => $file,
 				], $sourceUri);
 			}
 			else
 			{
-				$attr = Disk\Ui\FileAttributes::tryBuildByFileId($file->getFileId(), $sourceUri);
+				$attr = Disk\Ui\FileAttributes::tryBuildByFileId($file->getFileId(), $sourceUri, $file);
 			}
+			$attachedObjectId = $file->getExtra()->get('ATTACHED_OBJECT_ID');
 			$attr
 				->setObjectId($fileId)
-				->setAttachedObjectId($file->getExtra()->get('ATTACHED_OBJECT_ID'))
+				->setAttachedObjectId($attachedObjectId)
 				->setTitle($item['NAME'])
 				->addAction([
 					'type' => 'download',
@@ -175,26 +178,41 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				$attr->setAttribute('data-open-edit-instead-preview', true);
 			}
 
-			if ($file->getTypeFile() == TypeFile::FLIPCHART)
+			if ((int)$file->getTypeFile() === TypeFile::FLIPCHART)
 			{
-				if ($file->getExtra()->get('ATTACHED_OBJECT_ID'))
-				{
-					$attachedId = (int)$file->getExtra()->get('ATTACHED_OBJECT_ID');
-					$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewAttachedBoard($file, $attachedId, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page');
-				} else
-				{
-					$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($file, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page');
-				}
+				$isBoardsPage = $this->variant === DocumentGridVariant::FlipchartList;
+				$cElementParam = $isBoardsPage ? 'boards_page' : 'docs_page';
 
-				$attr->addAction([
-					'type' => 'open',
-					'buttonIconClass' => ' ',
-					'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
-					'params' => [
-						'objectId' => $fileId,
-						'url' => $openUrl,
-					],
-				]);
+				if ($file->supportsUnifiedLink())
+				{
+					$attr->setUnifiedLinkOptions([
+						'additionalQueryParams' => [
+							'c_element' => $cElementParam,
+						],
+					]);
+				}
+				else
+				{
+					if ($attachedObjectId)
+					{
+						$attachedId = (int)$attachedObjectId;
+						$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewAttachedBoard($file, $attachedId, false, $cElementParam);
+					}
+					else
+					{
+						$openUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($file, false, $cElementParam);
+					}
+
+					$attr->addAction([
+						'type' => 'open',
+						'buttonIconClass' => ' ',
+						'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+						'params' => [
+							'objectId' => $fileId,
+							'url' => $openUrl,
+						],
+					]);
+				}
 			}
 			else
 			{
@@ -207,7 +225,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 						'name' => $documentName,
 						'dependsOnService' => null,
 					],
-					'items' => array_map(static function($handler) use ($documentName, $fileId) {
+					'items' => array_map(static function ($handler) use ($documentName, $fileId) {
 						return [
 							'text' => $handler['name'],
 							'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '{$documentName}', objectId: {$fileId}, serviceCode: '{$handler['code']}'})",
@@ -488,6 +506,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 					$handlers[] = array(
 						'code' => $handler::getCode(),
 						'name' => $handler::getName(),
+						'supportsUnifiedLink' => $handler->supportsUnifiedLink(),
 					);
 				}
 			}
@@ -495,6 +514,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		$handlers[] = array(
 			'code' => Disk\Document\LocalDocumentController::getCode(),
 			'name' => Disk\Document\LocalDocumentController::getName(),
+			'supportsUnifiedLink' => false,
 		);
 		return $handlers;
 	}

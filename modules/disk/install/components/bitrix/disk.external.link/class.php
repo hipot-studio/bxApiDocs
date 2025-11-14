@@ -1371,7 +1371,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		if ($session->get($sessionKey) === null)
 		{
-			$session->set($sessionKey, Random::getString(12));
+			$session->set($sessionKey, '~' . Random::getString(12));
 		}
 
 		return $session->get($sessionKey);

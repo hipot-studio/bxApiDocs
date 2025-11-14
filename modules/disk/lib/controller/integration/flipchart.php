@@ -599,8 +599,12 @@ final class Flipchart extends Controller implements JwtHolder
 			}
 		}
 
-		$urlManager = UrlManager::getInstance();
-		$avatarUrl = $urlManager->getHostUrl() . $userModel->getAvatarSrc();
+		$avatarUrl = $userModel->getAvatarSrc();
+		if (strpos($avatarUrl, 'http') !== 0)
+		{
+			$urlManager = UrlManager::getInstance();
+			$avatarUrl = $urlManager->getHostUrl() . $avatarUrl;
+		}
 
 		$content = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:ui.sidepanel.wrapper',
@@ -642,8 +646,7 @@ final class Flipchart extends Controller implements JwtHolder
 			[
 				'RETURN_CONTENT' => true,
 				'POPUP_COMPONENT_NAME' => 'bitrix:disk.error.page',
-				'POPUP_COMPONENT_PARAMS' => [
-				],
+				'POPUP_COMPONENT_PARAMS' => [],
 				'PLAIN_VIEW' => false,
 				'IFRAME_MODE' => true,
 				'PREVENT_LOADING_WITHOUT_IFRAME' => false,

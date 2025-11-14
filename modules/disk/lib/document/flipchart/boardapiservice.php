@@ -72,4 +72,57 @@ class BoardApiService
 	{
 		return $this->downloadBoard('/api/v1/file/new', Method::POST);
 	}
+
+	public function kickUsers(string $documentId, array $userIds): bool|string
+	{
+		$url = $this->baseUrl . '/api/v1/flip/kick';
+		$token = (new JwtService())->generateToken(
+			false,
+			[
+				'document_id' => $documentId
+			]
+		);
+
+		$httpClient = new HttpClient();
+		$httpClient->disableSslVerification();
+		$httpClient->setHeader('Content-Type', 'application/json');
+		$httpClient->setHeader(
+			Configuration::getClientTokenHeaderLookup(),
+			$token,
+		);
+
+		$userIds = array_map(static fn ($userId) => (string)$userId, $userIds);
+
+		return $httpClient->post($url, Json::encode([
+			'user_id' => $userIds,
+		]));
+	}
+
+	public function getActiveUsersByDocumentId(string $documentId): ?array
+	{
+		$url = $this->baseUrl . '/api/v1/flip/users';
+		$token = (new JwtService())->generateToken(
+			false,
+			[
+				'document_id' => $documentId
+			]
+		);
+
+		$httpClient = new HttpClient();
+		$httpClient->disableSslVerification();
+		$httpClient->setHeader('Content-Type', 'application/json');
+		$httpClient->setHeader(
+			Configuration::getClientTokenHeaderLookup(),
+			$token,
+		);
+
+		$data = $httpClient->get($url);
+
+		if (!$data || !Json::validate($data))
+		{
+			return null;
+		}
+
+		return (array) Json::decode($data);
+	}
 }

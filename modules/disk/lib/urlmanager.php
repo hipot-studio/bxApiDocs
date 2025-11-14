@@ -11,7 +11,6 @@ use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\FolderTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\ParameterSigner;
-use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration as UnifiedLinkConfiguration;
 use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
 use Bitrix\Disk\View\Video;
 use Bitrix\Main\Config\Option;
@@ -664,10 +663,11 @@ class UrlManager implements IErrorable
 
 	public function getUrlForViewBoard(File $file, $absolute = false, $c_element = null): string
 	{
-		if (UnifiedLinkConfiguration::supportsUnifiedLink($file))
+		if ($file->supportsUnifiedLink())
 		{
 			return $this->getUnifiedLink($file, [
 				'absolute' => $absolute,
+				'additionalQueryParams' => $c_element ? ['c_element' => $c_element] : [],
 			]);
 		}
 
@@ -676,7 +676,7 @@ class UrlManager implements IErrorable
 
 	public function getUrlForViewBoardVersion(File $file, int $versionId, $absolute = false): string
 	{
-		if (UnifiedLinkConfiguration::supportsUnifiedLink($file))
+		if ($file->supportsUnifiedLink())
 		{
 			return $this->getUnifiedLink($file, [
 				'absolute' => $absolute,
@@ -689,11 +689,12 @@ class UrlManager implements IErrorable
 
 	public function getUrlForViewAttachedBoard(File $file, int $attachedFileId, $absolute = false, $c_element = null): string
 	{
-		if (UnifiedLinkConfiguration::supportsUnifiedLink($file))
+		if ($file->supportsUnifiedLink())
 		{
 			return $this->getUnifiedLink($file, [
 				'absolute' => $absolute,
 				'attachedId' => $attachedFileId,
+				'additionalQueryParams' => $c_element ? ['c_element' => $c_element] : [],
 			]);
 		}
 
@@ -1029,7 +1030,13 @@ class UrlManager implements IErrorable
 
 	/**
 	 * @param File $file
-	 * @param array{absolute: bool, attachedId: ?int, versionId: ?int, noRedirect: bool} $options
+	 * @param array{
+	 *     absolute?: bool,
+	 *     attachedId?: ?int,
+	 *     versionId?: ?int,
+	 *     noRedirect?: bool,
+	 *     additionalQueryParams?: array
+	 * } $options
 	 * @return string
 	 */
 	public function getUnifiedLink(File $file, array $options = []): string
@@ -1039,7 +1046,13 @@ class UrlManager implements IErrorable
 
 	/**
 	 * @param File $file
-	 * @param array{absolute: bool, attachedId: ?int, versionId: ?int, noRedirect: bool} $options
+	 * @param array{
+	 *     absolute?: bool,
+	 *     attachedId?: ?int,
+	 *     versionId?: ?int,
+	 *     noRedirect?: bool,
+	 *     additionalQueryParams?: array
+	 * } $options
 	 * @return string
 	 */
 	public function getUnifiedEditLink(File $file, array $options = []): string
@@ -1050,7 +1063,13 @@ class UrlManager implements IErrorable
 	/**
 	 * @param File $file
 	 * @param bool $editMode
-	 * @param array{absolute: bool, attachedId: ?int, versionId: ?int, noRedirect: bool} $options
+	 * @param array{
+	 *     absolute?: bool,
+	 *     attachedId?: ?int,
+	 *     versionId?: ?int,
+	 *     noRedirect?: bool,
+	 *     additionalQueryParams?: array
+	 * } $options
 	 * @return string
 	 */
 	private function buildUnifiedLink(File $file, bool $editMode, array $options): string
@@ -1059,11 +1078,13 @@ class UrlManager implements IErrorable
 		$attachedId = $options['attachedId'] ?? null;
 		$versionId = $options['versionId'] ?? null;
 		$noRedirect = $options['noRedirect'] ?? false;
+		$additionalQueryParams = is_array($options['additionalQueryParams']) ? $options['additionalQueryParams'] : [];
 
 		return $this->unifiedUrlGenerator
 			->forEditing($editMode)
 			->asAbsolute($absolute)
 			->withoutRedirect($noRedirect)
+			->setAdditionalQueryParams($additionalQueryParams)
 			->build($file, $attachedId, $versionId)
 		;
 	}

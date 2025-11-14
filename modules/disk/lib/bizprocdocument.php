@@ -2367,7 +2367,10 @@ class BizProcDocument implements \IBPWorkflowDocument
 			&& !\CBPRuntime::isFeatureEnabled()
 		)
 		{
-			throw new \Exception(Loc::getMessage('DISK_BZ_RESUME_RESTRICTED'));
+			throw new \Exception(
+				Loc::getMessage('DISK_BZ_RESUME_RESTRICTED'),
+				\CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED
+			);
 		}
 	}
 

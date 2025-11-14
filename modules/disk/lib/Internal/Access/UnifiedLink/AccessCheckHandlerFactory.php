@@ -5,37 +5,50 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
 use Bitrix\Disk\AttachedObject;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 
 final class AccessCheckHandlerFactory
 {
-	private ServiceLocator $serviceLocator;
+	/** @var array<string, ChainableAccessCheckHandler> */
+	private array $cacheForAuthorizedUser = [];
+	private ?ExternalLinkAccessCheckHandler $externalLinkAccessCheckHandler = null;
 
-	public function __construct()
+	public function create(?AttachedObject $attachedObject = null, int $userId = 0): AccessCheckHandler
 	{
-		$this->serviceLocator = ServiceLocator::getInstance();
-	}
-
-	public function create(?AttachedObject $attachedObject = null): AccessCheckHandler
-	{
-		$currentUserId = (int)CurrentUser::get()->getId();
-
-		if ($currentUserId > 0)
+		if ($userId === 0)
 		{
-			$unifiedLinkAccessCheckHandler = $this->serviceLocator->get(UnifiedLinkAccessCheckHandler::class);
-			$attachedObjectsAccessCheckHandler = new AttachedObjectsAccessCheckHandler($attachedObject);
-			$permissionSystemAccessCheckHandler = new PermissionSystemAccessCheckHandler();
-			
-			return (new ExternalLinkAccessCheckHandler())
-				->setNext($unifiedLinkAccessCheckHandler
-					->setNext($permissionSystemAccessCheckHandler
-						->setNext($attachedObjectsAccessCheckHandler),
-					),
-				)
-			;
+			$userId = (int)CurrentUser::get()->getId();
 		}
 
-		return new ExternalLinkAccessCheckHandler();
+		if ($userId > 0)
+		{
+			$cacheKey = $this->getCacheKey($attachedObject, $userId);
+
+			return $this->cacheForAuthorizedUser[$cacheKey] ??= $this->createForAuthorizedUser($userId, $attachedObject);
+		}
+
+		return $this->externalLinkAccessCheckHandler ??= new ExternalLinkAccessCheckHandler();
+	}
+
+	private function createForAuthorizedUser(int $userId, ?AttachedObject $attachedObject = null): ChainableAccessCheckHandler
+	{
+		$unifiedLinkAccessCheckHandler = new UnifiedLinkAccessCheckHandler($userId);
+		$attachedObjectsAccessCheckHandler = new AttachedObjectsAccessCheckHandler($userId, $attachedObject);
+		$permissionSystemAccessCheckHandler = new PermissionSystemAccessCheckHandler($userId);
+
+		return (new ExternalLinkAccessCheckHandler())
+			->setNext($unifiedLinkAccessCheckHandler
+				->setNext($permissionSystemAccessCheckHandler
+					->setNext($attachedObjectsAccessCheckHandler),
+				),
+			)
+		;
+	}
+
+	private function getCacheKey(?AttachedObject $attachedObject = null, int $userId = 0): string
+	{
+		$attachedObjectId = (int)$attachedObject?->getId();
+
+		return 'attached_object_' . $attachedObjectId . '_user_' . $userId;
 	}
 }

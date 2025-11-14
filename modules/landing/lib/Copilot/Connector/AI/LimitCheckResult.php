@@ -78,6 +78,7 @@ class LimitCheckResult
 			LimitType::Baas => Statuses::ErrorLimitBaas,
 			LimitType::Daily => Statuses::ErrorLimitDaily,
 			LimitType::Monthly => Statuses::ErrorLimitMonthly,
+			LimitType::Market => Statuses::ErrorMarket,
 			default => Statuses::ErrorB24,
 		};
 	}

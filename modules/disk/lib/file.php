@@ -4,6 +4,7 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Document\Online\UserInfoToken;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
 use Bitrix\Disk\Internals\AttachedObjectTable;
 use Bitrix\Disk\Internals\EditSessionTable;
 use Bitrix\Disk\Internals\Error\Error;
@@ -1894,5 +1895,19 @@ class File extends BaseObject
 			'signature' => ParameterSigner::getImageSignature($this->getId(), 640, 640),
 			'fileId' => $this->getId(),
 		]);
+	}
+
+	public function supportsUnifiedLink(): bool
+	{
+		$realObject = $this->getRealObject();
+
+		if ($realObject === null)
+		{
+			return false;
+		}
+
+		$unifiedLinkSupportService = Main\DI\ServiceLocator::getInstance()->get(UnifiedLinkSupportService::class);
+
+		return $unifiedLinkSupportService->supports($realObject);
 	}
 }

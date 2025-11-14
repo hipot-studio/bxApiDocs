@@ -6,12 +6,12 @@ namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\File;
-use Bitrix\Main\Engine\CurrentUser;
 
 class AttachedObjectsAccessCheckHandler extends ChainableAccessCheckHandler
 {
 	public function __construct(
-		private readonly ?AttachedObject $attachedObject
+		private readonly int $userId,
+		private readonly ?AttachedObject $attachedObject,
 	)
 	{
 	}
@@ -20,14 +20,12 @@ class AttachedObjectsAccessCheckHandler extends ChainableAccessCheckHandler
 	{
 		if ($this->attachedObject !== null)
 		{
-			$userId = (int)CurrentUser::get()->getId();
-
-			if ($this->attachedObject->canUpdate($userId))
+			if ($this->attachedObject->canUpdate($this->userId))
 			{
 				return UnifiedLinkAccessLevel::Edit;
 			}
 
-			if ($this->attachedObject->canRead($userId))
+			if ($this->attachedObject->canRead($this->userId))
 			{
 				return UnifiedLinkAccessLevel::Read;
 			}

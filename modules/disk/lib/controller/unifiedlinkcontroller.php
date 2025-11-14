@@ -90,18 +90,18 @@ class UnifiedLinkController extends Controller
 
 	#[LevelAccess(UnifiedLinkAccessLevel::Read)]
 	#[UrlGenerator([new UrlManager(), 'getUnifiedLink'])]
-	#[FileTypes(TypeFile::FLIPCHART)]
+	#[FileTypes(TypeFile::FLIPCHART, TypeFile::DOCUMENT, TypeFile::PDF)]
 	public function viewAction(?UnifiedLinkFileRenderer $service): HttpResponse
 	{
-		return $this->createResponse($service);
+		return $this->createResponse($service, UnifiedLinkAccessLevel::Read);
 	}
 
 	#[LevelAccess(UnifiedLinkAccessLevel::Edit)]
 	#[UrlGenerator([new UrlManager(), 'getUnifiedEditLink'])]
-	#[FileTypes(TypeFile::FLIPCHART)]
+	#[FileTypes(TypeFile::FLIPCHART, TypeFile::DOCUMENT)]
 	public function editAction(?UnifiedLinkFileRenderer $service): HttpResponse
 	{
-		return $this->createResponse($service);
+		return $this->createResponse($service, UnifiedLinkAccessLevel::Edit);
 	}
 
 	/**
@@ -109,7 +109,7 @@ class UnifiedLinkController extends Controller
 	 * @return HttpResponse
 	 * @throws ArgumentTypeException
 	 */
-	private function createResponse(?UnifiedLinkFileRenderer $service): HttpResponse
+	private function createResponse(?UnifiedLinkFileRenderer $service, UnifiedLinkAccessLevel $accessLevel): HttpResponse
 	{
 		if ($service === null)
 		{
@@ -119,7 +119,7 @@ class UnifiedLinkController extends Controller
 			;
 		}
 
-		$result = $service->render();
+		$result = $service->render($accessLevel);
 
 		return (new HttpResponse())
 			->setStatus($result->getStatus())

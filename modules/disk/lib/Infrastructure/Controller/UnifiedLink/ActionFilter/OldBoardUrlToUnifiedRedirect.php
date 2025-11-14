@@ -50,7 +50,7 @@ class OldBoardUrlToUnifiedRedirect extends Base
 			return null;
 		}
 
-		if (!Configuration::supportsUnifiedLink($file))
+		if (!$file->supportsUnifiedLink())
 		{
 			return null;
 		}

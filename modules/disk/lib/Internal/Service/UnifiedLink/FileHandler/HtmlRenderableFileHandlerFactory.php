@@ -20,7 +20,7 @@ class HtmlRenderableFileHandlerFactory
 
 		return match ($typeFile)
 		{
-			TypeFile::DOCUMENT => $this->getDocumentHandler($file, $documentSource),
+			TypeFile::DOCUMENT, TypeFile::PDF => $this->getDocumentHandler($file, $documentSource),
 			TypeFile::FLIPCHART => new BoardHtmlRenderableFileHandler($file, $documentSource),
 			default => new DefaultHtmlRenderableFileHandler($file),
 		};

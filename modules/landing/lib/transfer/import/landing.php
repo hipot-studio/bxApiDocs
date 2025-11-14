@@ -926,9 +926,9 @@ class Landing
 	protected static function prepareAdditionalFields(array $data, array $additional, array $ratio = null): array
 	{
 		$data['ADDITIONAL_FIELDS']['THEME_USE'] = 'N';
-		if (isset($additional['theme']) || isset($additional['theme_use_site']))
+		if (isset($additional['theme']))
 		{
-			$color = $additional['theme_use_site'] ?? $additional['theme'];
+			$color = $additional['theme'];
 			if ($color[0] !== '#')
 			{
 				$color = '#'.$color;
@@ -938,7 +938,7 @@ class Landing
 
 			// for variant if import only page in existing site
 			$isSinglePage = !is_array($ratio) || empty($ratio);
-			if ($isSinglePage && !$additional['theme_use_site'])
+			if ($isSinglePage)
 			{
 				$data['ADDITIONAL_FIELDS']['THEME_USE'] = 'Y';
 			}

@@ -245,15 +245,6 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 			}
 		}
 
-		if ($this->request('theme_use_site'))
-		{
-			$color = $this->request('theme_use_site');
-			$color = $this->prepareColor($color);
-			unset($data['ADDITIONAL_FIELDS']['THEME_CODE']);
-			$data['ADDITIONAL_FIELDS']['THEME_COLOR'] = $color;
-			$data['ADDITIONAL_FIELDS']['THEME_USE'] = 'N';
-		}
-
 		return $data;
 	}
 

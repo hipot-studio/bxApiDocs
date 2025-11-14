@@ -5,6 +5,7 @@ use Bitrix\Landing\Field;
 use Bitrix\Landing\Manager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Page\Asset;
 use Bitrix\UI;
 
 class Fonts extends \Bitrix\Landing\Hook\Page
@@ -169,10 +170,7 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 
 		if ($setFonts)
 		{
-			Manager::setPageView(
-				'BeforeHeadClose',
-				implode('', $setFonts)
-			);
+			Asset::getInstance()->addString(implode('', $setFonts));
 		}
 	}
 

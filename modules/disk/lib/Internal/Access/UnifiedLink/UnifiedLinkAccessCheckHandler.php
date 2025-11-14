@@ -10,7 +10,6 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
 use Bitrix\Disk\User;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -18,24 +17,27 @@ use Bitrix\Main\SystemException;
 class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 {
 	private CollabService $collabService;
-	private User $user;
 
-	public function __construct(CollabService $collabService)
+	public function __construct(
+		private readonly int $userId,
+	)
 	{
-		$this->collabService = $collabService;
-		$this->user = User::loadById((int)CurrentUser::get()->getId());
+		$this->collabService = new CollabService();
 	}
+	
 	protected function doCheck(File $file): UnifiedLinkAccessLevel
 	{
 		$unifiedLinkAccessLevel = UnifiedLinkAccessRepository::getByObjectId((int)$file->getId());
 		$checkAccessByLink = $unifiedLinkAccessLevel ?? Configuration::getDefaultAccessLevel();
 
-		if ($this->user->isIntranetUser())
+		$user = User::loadById($this->userId);
+
+		if ($user->isIntranetUser())
 		{
 			return $checkAccessByLink;
 		}
 
-		if ($this->user->isCollaber() && $this->isUserMemberOfCollab($file))
+		if ($user->isCollaber() && $this->isUserMemberOfCollab($file))
 		{
 			return $checkAccessByLink;
 		}
@@ -55,6 +57,6 @@ class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 	{
 		$collab = $this->collabService->getCollabByStorage($file->getStorage());
 
-		return $collab && in_array((int)$this->user->getId(), $collab->getUserMemberIds(), true);
+		return $collab && in_array($this->userId, $collab->getUserMemberIds(), true);
 	}
 }

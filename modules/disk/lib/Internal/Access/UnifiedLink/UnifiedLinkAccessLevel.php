@@ -17,6 +17,16 @@ enum UnifiedLinkAccessLevel: string
 		return $this === self::Edit;
 	}
 
+	public function canRead(): bool
+	{
+		return $this->value >= self::Read->value;
+	}
+
+	public function canEdit(): bool
+	{
+		return $this === self::Edit;
+	}
+
 	public function getTitle(): string
 	{
 		return match ($this)

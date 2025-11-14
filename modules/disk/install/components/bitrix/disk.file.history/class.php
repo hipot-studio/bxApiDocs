@@ -162,13 +162,22 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 				}
 			}
 
-			$attr = FileAttributes::tryBuildByFileId($version->getFileId(), new Uri($urlManager->getUrlForDownloadVersion($version)))
+			$fileFromVersion = $version->getObject();
+
+			$attr = FileAttributes::tryBuildByFileId($version->getFileId(), new Uri($urlManager->getUrlForDownloadVersion($version)), $fileFromVersion)
 				->setTitle($version->getName())
 				->setGroupBy($this->componentId)
 				->setVersionId($version->getId())
 			;
 
-			if ($this->file->getTypeFile() == TypeFile::FLIPCHART)
+			if ($fileFromVersion?->supportsUnifiedLink())
+			{
+				$attr->setUnifiedLinkOptions([
+					'noRedirect' => true,
+				]);
+			}
+
+			if ((int)$this->file->getTypeFile() === TypeFile::FLIPCHART)
 			{
 				$openUrl = $this->getUrlManager()->getUrlForViewBoardVersion($this->file, (int)$version->getId());
 				$attr->addAction([

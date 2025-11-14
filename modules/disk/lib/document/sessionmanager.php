@@ -227,7 +227,7 @@ abstract class SessionManager implements IErrorable
 				$filter['VERSION_ID'] = $this->attachedObject->getVersionId();
 			}
 		}
-		elseif($this->externalHash)
+		elseif ($this->externalHash)
 		{
 			$filter['EXTERNAL_HASH'] = $this->externalHash;
 		}

@@ -356,10 +356,15 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			$accessInfo = ['encryptedScope' => ''];
 			if ($attachedModel)
 			{
-				$accessInfo = $scopeTokenService->grantAccessWithScope(
+				$result = $scopeTokenService->grantAccessWithScope(
 					$attachedModel,
 					$this->getTokenScopeByAttachedObject($attachedModel)
 				);
+
+				if ($result !== null)
+				{
+					$accessInfo = $result;
+				}
 			}
 
 			$data = [
@@ -523,62 +528,98 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 						],
 						'extension' => 'disk.viewer.actions',
 						'buttonIconClass' => 'ui-btn-icon-cloud',
-					])
-					;
-				}
-
-				if ($attachedModel->getObject()->getTypeFile() == TypeFile::FLIPCHART && $attachedModel->canRead($userId))
-				{
-					$board = $attachedModel->getObject();
-					$openUrl = $this->getUrlManager()->getUrlForViewAttachedBoard($board, (int)$attachedModel->getId(), false, 'docs_attach');
-
-					$attr->addAction([
-						'type' => 'open',
-						'buttonIconClass' => ' ',
-						'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
-						'params' => [
-							'attachedObjectId' => $attachedModel->getId(),
-							'url' => $openUrl,
-						],
-					]);
-
-					$attr->addAction([
-						'type' => 'edit',
-						'buttonIconClass' => ' ',
-						'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
-						'params' => [
-							'attachedObjectId' => $attachedModel->getId(),
-							'url' => $openUrl,
-						],
 					]);
 				}
-				elseif ($data['CAN_UPDATE'] && !$this->arParams['DISABLE_LOCAL_EDIT'])
+
+				$file = $attachedModel->getObject();
+				$isBoard = $file && (int)$file->getTypeFile() === TypeFile::FLIPCHART;
+				$supportsUnifiedLink = $file && $file->supportsUnifiedLink();
+				$canUpdate = $data['CAN_UPDATE'] && !$this->arParams['DISABLE_LOCAL_EDIT'];
+
+				if ($supportsUnifiedLink)
 				{
-					$documentName = \CUtil::JSEscape($attachedModel->getName());
-					$forcedService = null;
-					$items = [];
-					if ($data['EDITABLE'])
+					$unifiedLinkOptions = [
+						'noRedirect' => true,
+					];
+
+					if ($isBoard)
 					{
-						foreach ($this->getDocumentHandlersForEditingFile() as $handlerData)
-						{
-							$items[] = [
-								'text' => $handlerData['name'],
-								'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '{$documentName}', attachedObjectId: {$attachedModel->getId()}, serviceCode: '{$handlerData['code']}'})",
-							];
-						}
+						$unifiedLinkOptions['additionalQueryParams'] = ['c_element' => 'docs_attach'];
 					}
 
-					$attr->addAction([
-						'type' => 'edit',
-						'buttonIconClass' => ' ',
-						'action' => 'BX.Disk.Viewer.Actions.runActionDefaultEdit',
-						'params' => [
-							'attachedObjectId' => $attachedModel->getId(),
-							'name' => $documentName,
-							'dependsOnService' => $items? null : LocalDocumentController::getCode(),
-						],
-						'items' => $items,
-					]);
+					$attr->setUnifiedLinkOptions($unifiedLinkOptions);
+
+					if ($canUpdate)
+					{
+						$editUnifiedLink = $urlManager->getUnifiedEditLink($file, [
+							'attachedId' => $attachedModel->getId(),
+						]);
+						$attr
+							->addAction([
+								'type' => 'edit',
+								'buttonIconClass' => ' ',
+								'action' => "BX.Disk.Viewer.Actions.openUnifiedLink",
+								'params' => [
+									'unifiedLinkToOpen' => $editUnifiedLink,
+								],
+							])
+						;
+					}
+				}
+				else
+				{
+					if ($isBoard)
+					{
+						$openUrl = $this->getUrlManager()->getUrlForViewAttachedBoard($file, (int)$attachedModel->getId(), false, 'docs_attach');
+
+						$attr->addAction([
+							'type' => 'open',
+							'buttonIconClass' => ' ',
+							'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+							'params' => [
+								'attachedObjectId' => $attachedModel->getId(),
+								'url' => $openUrl,
+							],
+						]);
+
+						$attr->addAction([
+							'type' => 'edit',
+							'buttonIconClass' => ' ',
+							'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+							'params' => [
+								'attachedObjectId' => $attachedModel->getId(),
+								'url' => $openUrl,
+							],
+						]);
+					}
+
+					if ($canUpdate)
+					{
+						$documentName = \CUtil::JSEscape($attachedModel->getName());
+						$items = [];
+						if ($data['EDITABLE'])
+						{
+							foreach ($this->getDocumentHandlersForEditingFile() as $handlerData)
+							{
+								$items[] = [
+									'text' => $handlerData['name'],
+									'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '{$documentName}', attachedObjectId: {$attachedModel->getId()}, serviceCode: '{$handlerData['code']}'})",
+								];
+							}
+						}
+
+						$attr->addAction([
+							'type' => 'edit',
+							'buttonIconClass' => ' ',
+							'action' => 'BX.Disk.Viewer.Actions.runActionDefaultEdit',
+							'params' => [
+								'attachedObjectId' => $attachedModel->getId(),
+								'name' => $documentName,
+								'dependsOnService' => $items ? null : LocalDocumentController::getCode(),
+							],
+							'items' => $items,
+						]);
+					}
 				}
 
 				$data['ATTRIBUTES_FOR_VIEWER'] = $attr;
@@ -602,8 +643,9 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 					'HEIGHT' => (int)$attachedObject->getExtra()->get('FILE_HEIGHT'),
 					'ORIGINAL_NAME' => $attachedObject->getName(),
 					'FILE_SIZE' => (int)$attachedObject->getExtra()->get('FILE_SIZE'),
+					FileAttributes::KEY_FILE_OBJECT => $attachedObject->getFile(),
 				],
-				$sourceUri
+				$sourceUri,
 			);
 
 			$attributes
@@ -614,17 +656,10 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			return $attributes;
 		}
 
-		try
-		{
-			return FileAttributes::buildByFileId($attachedObject->getFileId(), $sourceUri)
-				->setObjectId($attachedObject->getObjectId())
-				->setAttachedObjectId($attachedObject->getId())
-				;
-		}
-		catch (ArgumentException $exception)
-		{
-			return FileAttributes::buildAsUnknownType($sourceUri);
-		}
+		return FileAttributes::tryBuildByFileId($attachedObject->getFileId(), $sourceUri, $attachedObject->getFile())
+			->setObjectId($attachedObject->getObjectId())
+			->setAttachedObjectId($attachedObject->getId())
+		;
 	}
 
 	/**

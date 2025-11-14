@@ -4,9 +4,11 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Command;
 
 use Bitrix\Disk\Document\DocumentSessionResult;
+use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\File;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Application;
 use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\Engine\CurrentUser;
@@ -43,6 +45,7 @@ class CreateInternalSessionCommandHandler
 		$command->sessionManager
 			->setUserId((int)CurrentUser::get()->getId())
 			->setSessionType($command->type)
+			->setService($this->getSessionServiceByFile($fileFromSource))
 			->setSessionContext($documentSessionContext)
 			->setFile($command->documentSource->getFile())
 			->setVersion($command->documentSource->getVersion())
@@ -81,5 +84,16 @@ class CreateInternalSessionCommandHandler
 		}
 
 		return $result;
+	}
+
+	private function getSessionServiceByFile(File $file): DocumentService
+	{
+		$typeFile = (int)$file->getTypeFile();
+
+		return match ($typeFile)
+		{
+			TypeFile::FLIPCHART => DocumentService::FlipChart,
+			default => DocumentService::OnlyOffice,
+		};
 	}
 }

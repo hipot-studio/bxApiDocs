@@ -19,6 +19,7 @@ class UrlGenerator
 	private bool $absolute = false;
 	private bool $editMode = false;
 	private bool $withoutRedirect = false;
+	private array $additionalQueryParams = [];
 
 	public function __construct(
 		private readonly string $hostUrl
@@ -55,6 +56,11 @@ class UrlGenerator
 			$uri->toAbsolute();
 		}
 
+		if (!empty($this->additionalQueryParams))
+		{
+			$uri->addParams($this->additionalQueryParams);
+		}
+
 		$this->resetState();
 
 		return (string)$uri;
@@ -81,10 +87,18 @@ class UrlGenerator
 		return $this;
 	}
 
+	public function setAdditionalQueryParams(array $additionalQueryParams): static
+	{
+		$this->additionalQueryParams = $additionalQueryParams;
+
+		return $this;
+	}
+
 	private function resetState(): void
 	{
 		$this->absolute = false;
 		$this->editMode = false;
 		$this->withoutRedirect = false;
+		$this->additionalQueryParams = [];
 	}
 }

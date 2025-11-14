@@ -1542,27 +1542,30 @@ final class Sharing extends Internals\Model
 
 		if($sharingModel->approve())
 		{
-			$isFolder = $sharingModel->getLinkObject() instanceof Folder;
-			$isBoard = !$isFolder && $sharingModel->getLinkObject()->getTypeFile() == TypeFile::FLIPCHART;
+			$fileLink = $sharingModel->getLinkObject();
+			$isFolder = $fileLink instanceof Folder;
+			$isBoard = !$isFolder && (int)$fileLink->getTypeFile() === TypeFile::FLIPCHART;
 
 			$autoconnectFileMessage = $isBoard
 				? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_BOARD'
 				: 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE';
 
 			$objectName = $isBoard
-				? $sharingModel->getLinkObject()->getNameWithoutExtension()
-				: $sharingModel->getLinkObject()->getName();
+				? $fileLink->getNameWithoutExtension()
+				: $fileLink->getName();
+
+			$urlManager = Driver::getInstance()->getUrlManager();
 
 			if ($isBoard)
 			{
 				//$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
-				$linkToViewDocument = self::getBoardLink($sharingModel->getLinkObject());
+				$linkToViewDocument = self::getBoardLink($fileLink);
 			}
 			else
 			{
-				$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $sharingModel->getLinkObject());
+				$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $fileLink);
 			}
-			$pathInListing = Driver::getInstance()->getUrlManager()->getUrlFocusController('showObjectInGrid', array(
+			$pathInListing = $urlManager::getUrlFocusController('showObjectInGrid', array(
 				'objectId' => $sharingModel->getLinkObjectId(),
 				'type' => $isFolder ? 'folder' : 'file',
 			));

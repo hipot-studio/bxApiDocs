@@ -12,4 +12,5 @@ enum SliderCode: string
 	case BoostCopilotBox = 'limit_boost_copilot_box';
 	case RequestBox = 'limit_copilot_requests_box';
 	case Box = 'limit_copilot_box';
+	case Market = 'limit_subscription_market_access_buy_marketplus';
 }

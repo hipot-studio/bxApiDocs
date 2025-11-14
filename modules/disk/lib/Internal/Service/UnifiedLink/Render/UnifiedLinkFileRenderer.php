@@ -6,20 +6,19 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\Render;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\File;
-use Bitrix\Disk\Internal\Access\UnifiedLink\AccessCheckHandler;
-use Bitrix\Disk\Internal\Access\UnifiedLink\AccessCheckHandlerFactory;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\FileHandlerOperationResult;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableFileHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableFileHandlerFactory;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileResolver;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Version;
 use Bitrix\Main\DI\ServiceLocator;
 use LogicException;
 
 class UnifiedLinkFileRenderer
 {
-	private AccessCheckHandler $accessCheckHandler;
+	private UnifiedLinkAccessService $unifiedLinkAccessService;
 	private HtmlRenderableFileHandler $fileHandler;
 	private ?UnifiedLinkAccessLevel $accessLevel = null;
 
@@ -29,7 +28,7 @@ class UnifiedLinkFileRenderer
 		private readonly ?Version $version = null,
 	) {
 		$serviceLocator = ServiceLocator::getInstance();
-		$this->accessCheckHandler = $serviceLocator->get(AccessCheckHandlerFactory::class)->create($this->attachedObject);
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
 		$this->fileHandler = $serviceLocator->get(HtmlRenderableFileHandlerFactory::class)->createHandler(
 			$this->file,
 			$this->attachedObject,
@@ -42,7 +41,7 @@ class UnifiedLinkFileRenderer
 		if ($this->accessLevel === null)
 		{
 			$file = $this->resolveFile();
-			$this->accessLevel = $this->accessCheckHandler->check($file);
+			$this->accessLevel = $this->unifiedLinkAccessService->check($file, $this->attachedObject);
 		}
 
 		return $this->accessLevel;
@@ -53,9 +52,9 @@ class UnifiedLinkFileRenderer
 		return FileResolver::resolve($this->file, $this->version);
 	}
 
-	public function render(): RenderResult
+	public function render(?UnifiedLinkAccessLevel $accessLevel = null): RenderResult
 	{
-		$accessLevel = $this->getAccessLevel();
+		$accessLevel ??= $this->getAccessLevel();
 		if ($accessLevel === UnifiedLinkAccessLevel::Denied)
 		{
 			return new RenderResult(self::renderAccessDeniedPage(), 403);

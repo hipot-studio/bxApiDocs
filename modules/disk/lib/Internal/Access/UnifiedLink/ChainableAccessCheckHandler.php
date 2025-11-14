@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
 use Bitrix\Disk\File;
-use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 
 abstract class ChainableAccessCheckHandler implements AccessCheckHandler
 {
@@ -13,11 +12,6 @@ abstract class ChainableAccessCheckHandler implements AccessCheckHandler
 
 	public function check(File $file, ?UnifiedLinkAccessLevel $previousResult = null): UnifiedLinkAccessLevel
 	{
-		if (!Configuration::supportsUnifiedLink($file))
-		{
-			return UnifiedLinkAccessLevel::Denied;
-		}
-		
 		$result = $this->doCheck($file);
 		$result = (isset($previousResult) && $result->value < $previousResult->value)
 			? $previousResult
@@ -33,7 +27,7 @@ abstract class ChainableAccessCheckHandler implements AccessCheckHandler
 
 	abstract protected function doCheck(File $file): UnifiedLinkAccessLevel;
 
-	public function setNext(AccessCheckHandler $handler): AccessCheckHandler
+	public function setNext(AccessCheckHandler $handler): self
 	{
 		$this->next = $handler;
 

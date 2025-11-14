@@ -9,8 +9,10 @@ use Bitrix\Disk\Document\DocumentSource;
 use Bitrix\Disk\Document\Flipchart\Configuration;
 use Bitrix\Disk\Document\Flipchart\SessionManager;
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\SessionCommandFactory;
+use Bitrix\Disk\TrackedObjectManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
@@ -20,13 +22,16 @@ use Bitrix\Main\Web\Uri;
 
 class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 {
+	private TrackedObjectManager $trackedObjectManager;
 	private SessionCommandFactory $sessionCommandFactory;
 	private ExceptionHandler $exceptionHandler;
 
 	public function __construct(
 		private readonly File $file,
-		DocumentSource $documentSource,
+		private readonly DocumentSource $documentSource,
 	) {
+		$this->trackedObjectManager = Driver::getInstance()->getTrackedObjectManager();
+
 		$this->sessionCommandFactory = new SessionCommandFactory($documentSource, new SessionManager());
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
 	}
@@ -61,7 +66,27 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 			return FileHandlerOperationResult::createError($sessionCreationResult->getErrorCollection());
 		}
 
-		return $this->showEditor($sessionCreationResult->getDocumentSession());
+		/** @var DocumentSession $documentSession */
+		$documentSession = $sessionCreationResult->getDocumentSession();
+		if ($documentSession->canUserRead($this->getCurrentUser()))
+		{
+			$this->trackObject();
+		}
+
+		return $this->showEditor($documentSession);
+	}
+
+	private function trackObject(): void
+	{
+		$userId = $this->getCurrentUser()->getId();
+		if ($this->documentSource->getAttachedObject() !== null)
+		{
+			$this->trackedObjectManager->pushAttachedObject($userId, $this->documentSource->getAttachedObject(), true);
+		}
+		else
+		{
+			$this->trackedObjectManager->pushFile($userId, $this->file, true);
+		}
 	}
 
 	private function showEditor(DocumentSession $documentSession): FileHandlerOperationResult
@@ -96,7 +121,7 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 					'CAN_EDIT_BOARD' => true,
 					'SHOW_TEMPLATES_MODAL' => false,
 					'EXTERNAL_LINK_MODE' => false,
-					'UNIFIED_LINK_MODE' => !$documentSession->canUserRead(CurrentUser::get()),
+					'UNIFIED_LINK_ACCESS_ONLY' => !$documentSession->canUserRead(CurrentUser::get()),
 					'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
 				],
 				'PLAIN_VIEW' => true,
@@ -107,5 +132,10 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 		);
 
 		return FileHandlerOperationResult::createSuccess($content);
+	}
+
+	private function getCurrentUser(): CurrentUser
+	{
+		return CurrentUser::get();
 	}
 }

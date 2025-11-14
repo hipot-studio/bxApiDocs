@@ -268,6 +268,7 @@ class Component extends Base
 			'extranet' => $isExtranetUser,
 			'isCollaber' => $this->isUserCollaber(),
 			'installedModules' => $installedModules,
+			'region' => \Bitrix\Main\Application::getInstance()->getLicense()->getRegion(),
 		]);
 		$file = new File(Application::getDocumentRoot() . "/bitrix/js/mobileapp/platform.js");
 		$export = $file->getContents();

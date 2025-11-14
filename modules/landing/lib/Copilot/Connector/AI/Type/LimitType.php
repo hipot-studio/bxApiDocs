@@ -12,5 +12,6 @@ enum LimitType: string
 	case Daily = 'daily';
 	case Monthly = 'monthly';
 	case Rate = 'rate';
+	case Market = 'market';
 	case Unregistered = 'unregistered';
 }

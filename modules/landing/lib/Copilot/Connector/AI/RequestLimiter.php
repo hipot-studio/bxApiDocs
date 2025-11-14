@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Copilot\Connector\AI;
 
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Context;
+use Bitrix\AI\Facade\Bitrix24;
 
 use Bitrix\Landing\Copilot\Connector\AI\Type\ErrorCode;
 use Bitrix\Landing\Copilot\Connector\AI\Type\HelpdeskCode;
@@ -133,9 +134,29 @@ class RequestLimiter
 	{
 		$code = $error->getCode();
 
-		//right 2 in board
+		//right 4 in board
+		if ($code === ErrorCode::BaasRateLimit->value)
+		{
+			return $this->createLimitResult(
+				LimitType::Rate,
+				true,
+				self::buildLimitMessage(MessageCode::BaasRateLimit)
+			);
+		}
+
 		if ($code === ErrorCode::LimitBaasCloud->value)
 		{
+			//right 3 in board
+			if (Bitrix24::isMarketAvailable())
+			{
+				return $this->createLimitResult(
+					LimitType::Market,
+					true,
+					self::buildLimitMessage(MessageCode::Market, SliderCode::Market)
+				);
+			}
+
+			//right 2 in board
 			return $this->createLimitResult(
 				LimitType::Baas,
 				true,
@@ -252,10 +273,31 @@ class RequestLimiter
 			return $this->createLimitResult(LimitType::None, false);
 		}
 
+		$errorLimit = $reservedRequest->getErrorLimit();
+		//right 4 in board
+		if ($errorLimit === ErrorLimit::BAAS_RATE_LIMIT)
+		{
+			return $this->createLimitResult(
+				LimitType::Rate,
+				true,
+				self::buildLimitMessage(MessageCode::BaasRateLimit)
+			);
+		}
+
 		$typeLimit = $reservedRequest->getTypeLimit();
-		//right 2 in board
+		if ($errorLimit === ErrorLimit::BAAS_LIMIT && Bitrix24::isMarketAvailable())
+		{
+			//right 3 in board
+			return $this->createLimitResult(
+				LimitType::Market,
+				true,
+				self::buildLimitMessage(MessageCode::Market, SliderCode::Market)
+			);
+		}
+
 		if ($typeLimit === TypeLimit::BAAS)
 		{
+			//right 2 in board
 			return $this->createLimitResult(
 				LimitType::Baas,
 				true,

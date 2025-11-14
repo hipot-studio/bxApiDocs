@@ -93,7 +93,7 @@ class SiteTable extends Entity\DataManager
 				'default_value' => 'Y'
 			)),
 			'DELETED' => new Entity\StringField('DELETED', array(
-				'title' => Loc::getMessage('LANDING_TABLE_FIELD_LANDING_DELETED'),
+				'title' => Loc::getMessage('LANDING_TABLE_FIELD_SITE_DELETED'),
 				'default_value' => 'N'
 			)),
 			'TITLE' => new Entity\StringField('TITLE', array(

@@ -28,8 +28,10 @@ enum TemplateRegions: string
 	case EnterpriseChineseEn = 'alaio.vibe_enterprise_chinese_en';
 	case EnterpriseChineseSc = 'alaio.vibe_enterprise_chinese_sc';
 	case EnterpriseChineseTc = 'alaio.vibe_enterprise_chinese_tc';
-	//for zones 'ru', 'by', 'kz'
+	//for zones 'ru', 'kz'
 	case EnterpriseRu = 'bitrix.vibe_enterprise_ru';
+	//for zone 'by'
+	case EnterpriseBy = 'bitrix.vibe_enterprise_by';
 	//Templates::Automation
 	case AutomationRu = 'bitrix.vibe_automation_ru';
 	case AutomationEn = 'alaio.vibe_automation_en';
@@ -112,6 +114,7 @@ enum TemplateRegions: string
 	case BookingChineseEn = 'alaio.vibe_booking_chinese_en';
 
 	private const CIS_ZONES = ['ru', 'kz', 'by', 'uz'];
+	private const DEFAULT_CIS_ZONE = 'ru';
 	private const CHINESE_ZONES = ['cn', 'tc', 'sc'];
 	private const CONFIG_SECTION_CIS = 'cis';
 	private const CONFIG_SECTION_CHINESE = 'chinese';
@@ -150,7 +153,9 @@ enum TemplateRegions: string
 		//is CIS zone
 		if (in_array($portalZone, self::CIS_ZONES, true))
 		{
-			return $templateConfig[self::CONFIG_SECTION_CIS];
+			$cis = $templateConfig[self::CONFIG_SECTION_CIS];
+
+			return $cis[$portalZone] ?? $cis[self::DEFAULT_CIS_ZONE];
 		}
 
 		$lang = Application::getInstance()->getContext()->getLanguage();
@@ -177,7 +182,10 @@ enum TemplateRegions: string
 	{
 		$templatesConfig =  [
 			Templates::Enterprise->value => [
-				self::CONFIG_SECTION_CIS => self::EnterpriseRu,
+				self::CONFIG_SECTION_CIS => [
+					'by' => self::EnterpriseBy,
+					self::DEFAULT_CIS_ZONE => self::EnterpriseRu,
+				],
 				self::CONFIG_SECTION_CHINESE => [
 					'sc' => self::EnterpriseChineseSc,
 					'tc' => self::EnterpriseChineseTc,
@@ -204,7 +212,9 @@ enum TemplateRegions: string
 				],
 			],
 			Templates::Automation->value => [
-				self::CONFIG_SECTION_CIS => self::AutomationRu,
+				self::CONFIG_SECTION_CIS => [
+					self::DEFAULT_CIS_ZONE => self::AutomationRu,
+				],
 				self::CONFIG_SECTION_CHINESE => [
 					'sc' => self::AutomationChineseSc,
 					'tc' => self::AutomationChineseTc,
@@ -229,7 +239,9 @@ enum TemplateRegions: string
 				],
 			],
 			Templates::Collaboration->value => [
-				self::CONFIG_SECTION_CIS => self::CollaborationRu,
+				self::CONFIG_SECTION_CIS => [
+					self::DEFAULT_CIS_ZONE => self::CollaborationRu,
+				],
 				self::CONFIG_SECTION_CHINESE => [
 					'sc' => self::CollaborationChineseSc,
 					'tc' => self::CollaborationChineseTc,
@@ -254,7 +266,9 @@ enum TemplateRegions: string
 				],
 			],
 			Templates::Boards->value => [
-				self::CONFIG_SECTION_CIS => self::BoardsRu,
+				self::CONFIG_SECTION_CIS => [
+					self::DEFAULT_CIS_ZONE => self::BoardsRu,
+				],
 				self::CONFIG_SECTION_CHINESE => [
 					'sc' => self::BoardsChineseSc,
 					'tc' => self::BoardsChineseTc,
@@ -279,7 +293,9 @@ enum TemplateRegions: string
 				],
 			],
 			Templates::Booking->value => [
-				self::CONFIG_SECTION_CIS => self::BookingRu,
+				self::CONFIG_SECTION_CIS => [
+					self::DEFAULT_CIS_ZONE => self::BookingRu,
+				],
 				self::CONFIG_SECTION_CHINESE => [
 					'sc' => self::BookingChineseSc,
 					'tc' => self::BookingChineseTc,
