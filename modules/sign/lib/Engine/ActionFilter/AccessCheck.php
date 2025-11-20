@@ -298,12 +298,6 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 
 			return $this->templateFolderRepository->getByIds($ids);
 		}
-		elseif (is_string($firstIdOrUid))
-		{
-			$uids = array_map(static fn(mixed $value) => (string)$value, $idsOrUids);
-
-			return $this->templateFolderRepository->listByUids($uids);
-		}
 
 		return new TemplateFolderCollection();
 	}

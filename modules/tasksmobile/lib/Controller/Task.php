@@ -255,7 +255,7 @@ class Task extends Base
 	public function getDashboardSettingsAction(Settings $settings, int $projectId = 0, int $ownerId = 0): array
 	{
 		return [
-			'view' => $settings->getDashboardSelectedView($projectId),
+			'view' => 'LIST',
 			'displayFields' => KanbanFieldsProvider::getFullState($this->getCurrentUser()?->getId() ?? 0),
 			'calendarSettings' => \Bitrix\Tasks\Util\Calendar::getSettings(),
 		];

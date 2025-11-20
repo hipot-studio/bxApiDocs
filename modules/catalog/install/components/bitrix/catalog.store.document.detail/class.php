@@ -324,15 +324,24 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$documentType = $documentType['DOC_TYPE'];
 
 		$tableClass = StoreDocumentTableManager::getTableClassByType($documentType) ?: StoreDocumentTable::class;
+		$filter = [
+			'=ID' => $this->documentId,
+		];
+		$accessStoreFilter = $this->accessController->getEntityFilter(
+			ActionDictionary::ACTION_STORE_VIEW,
+			StoreDocumentTable::class
+		);
+		if ($accessStoreFilter)
+		{
+			$filter[] = $accessStoreFilter;
+		}
 		$document = $tableClass::getRow([
 			'select' => [
 				'*',
 				'UF_*',
 				'CONTRACTOR_REF_' => 'CONTRACTOR',
 			],
-			'filter' => [
-				'=ID' => $this->documentId,
-			],
+			'filter' => $filter,
 		]);
 		if ($document)
 		{
@@ -343,6 +352,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		else
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_DOCUMENT_NOT_FOUND_ERROR');
+
+			return;
 		}
 
 		if (!$this->checkDocumentReadRights())

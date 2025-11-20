@@ -23,7 +23,6 @@ class TemplateFolderRepository
 {
 	public function add(Item\Document\TemplateFolder $item): Result
 	{
-		$item->uid = $this->generateUniqueUid();
 		$model = $this
 			->extractModelFromItem($item)
 		;
@@ -58,23 +57,6 @@ class TemplateFolderRepository
 		$item->initOriginal();
 
 		return (new UpdateTemplateFolderResult($item));
-	}
-
-	public function getByUid(string $uid): ?Item\Document\TemplateFolder
-	{
-		$model = TemplateFolderTable::query()
-			->setSelect(['*'])
-			->where('UID', $uid)
-			->setLimit(1)
-			->fetchObject()
-		;
-
-		if ($model === null)
-		{
-			return null;
-		}
-
-		return $this->extractItemFromModel($model);
 	}
 
 	public function getById(int $id): ?Item\Document\TemplateFolder
@@ -260,34 +242,6 @@ class TemplateFolderRepository
 		return TemplateFolderTable::update($folderId, ['VISIBILITY' => $visibility->toInt()]);
 	}
 
-	private function generateUniqueUid(): string
-	{
-		do
-		{
-			$uid = $this->generateUid();
-		}
-		while ($this->existByUid($uid));
-
-		return $uid;
-	}
-
-	private function generateUid(): string
-	{
-		return Random::getStringByAlphabet(32, Random::ALPHABET_ALPHALOWER | Random::ALPHABET_NUM);
-	}
-
-	private function existByUid(string $uid): bool
-	{
-		$row = TemplateFolderTable::query()
-			->setSelect(['ID'])
-			->where('UID', $uid)
-			->setLimit(1)
-			->fetch()
-		;
-
-		return !empty($row);
-	}
-
 	private function extractModelFromItem(Item\Document\TemplateFolder $item): TemplateFolder
 	{
 		return $this->getFilledModelFromItem($item, TemplateFolderTable::createObject(false));
@@ -298,7 +252,6 @@ class TemplateFolderRepository
 		return $model
 			->setCreatedById($item->createdById)
 			->setDateCreate($item->dateCreate)
-			->setUid($item->uid)
 			->setTitle($item->title)
 			->setVisibility($item->visibility->toInt())
 			->setDateModify($item->dateModify)
@@ -313,7 +266,6 @@ class TemplateFolderRepository
 			title: $model->getTitle(),
 			createdById: $model->getCreatedById(),
 			id: $model->getId(),
-			uid: $model->getUid(),
 			modifiedById: $model->getModifiedById(),
 			dateModify: Type\DateTime::createFromMainDateTimeOrNull($model->getDateModify()),
 			dateCreate: Type\DateTime::createFromMainDateTime($model->getDateCreate()),
@@ -332,21 +284,5 @@ class TemplateFolderRepository
 		}
 
 		return $items;
-	}
-
-	public function listByUids(array $uids): Item\Document\TemplateFolderCollection
-	{
-		if (empty($uids))
-		{
-			return new Item\Document\TemplateFolderCollection();
-		}
-
-		$models = TemplateFolderTable::query()
-			->setSelect(['*'])
-			->whereIn('UID', $uids)
-			->fetchCollection()
-		;
-
-		return $this->extractItemCollectionFromModelCollection($models);
 	}
 }

@@ -12,10 +12,10 @@ class Row implements Contract\Item
 {
 	public function __construct(
 		public int $id,
-		public string $uid,
 		public string $title,
 		public int $createdById,
 		public EntityType $entityType,
+		public ?string $uid = null,
 		public ?bool $parentId = null,
 		public ?int $modifiedById = null,
 		public ?DateTime $dateModify = null,

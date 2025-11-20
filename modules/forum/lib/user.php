@@ -550,11 +550,9 @@ class User implements \ArrayAccess {
 			return null;
 		}
 
-		try
-		{
-			$topic = Topic::getById($topicId);
-		}
-		catch (Main\ObjectNotFoundException $e)
+		$topic = Topic::getById($topicId);
+
+		if (empty($topic))
 		{
 			return null;
 		}

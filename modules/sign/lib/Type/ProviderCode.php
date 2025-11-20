@@ -41,7 +41,7 @@ final class ProviderCode
 			array_map([self::class, 'toRepresentativeString'], self::getAll())
 		);
 	}
-	
+
 	public static function isValid(string $providerCode): bool
 	{
 		return in_array($providerCode, self::getAll(), true);

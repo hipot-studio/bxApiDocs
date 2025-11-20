@@ -3,7 +3,9 @@
 namespace Bitrix\Catalog\Controller;
 
 use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\Internal\Service\RestValidator\Entity;
 use Bitrix\Catalog\StoreTable;
+use Bitrix\Main\Engine;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use CCatalogStore;
@@ -12,6 +14,68 @@ final class Store extends Controller
 {
 	use ListAction; // default listAction realization
 	use CheckExists; // default implementation of existence check
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function processBeforeAction(Engine\Action $action): ?bool
+	{
+		$result = new Result();
+
+		switch ($action->getName())
+		{
+			case 'add':
+			case 'update':
+				$result = $this->processBeforeModify($action);
+				break;
+			case 'list':
+				$result = $this->processBeforeList($action);
+				break;
+		}
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return parent::processBeforeAction($action);
+	}
+
+	protected function processBeforeModify(Engine\Action $action): Result
+	{
+		$arguments = $action->getArguments();
+		$fields = $arguments['fields'] ?? null;
+		if (is_array($fields))
+		{
+			$validator = new Entity\StoreValidator();
+			$result = $validator->run($fields);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+		}
+
+		return new Result();
+	}
+
+	protected function processBeforeList(Engine\Action $action): Result
+	{
+		$arguments = $action->getArguments();
+		$filter = $arguments['filter'] ?? [];
+		if (!is_array($filter))
+		{
+			$result = new Result();
+			$result->addError(new Error('Incorrect filter format'));
+
+			return $result;
+		}
+
+		$validator = new Entity\StoreFilterValidator();
+
+		return $validator->run($filter);
+	}
 
 	//region Actions
 	public function getFieldsAction(): array

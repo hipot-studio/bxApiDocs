@@ -28,7 +28,7 @@ final class BIAnalytics extends Column
 	private function init(): void
 	{
 		$this->id = 'BI_ANALYTICS';
-		$this->name = Loc::getMessage('TASKS_FLOW_LIST_COLUMN_BIANALYTICS');
+		$this->name = Loc::getMessage('TASKS_FLOW_LIST_COLUMN_BIANALYTICS_MSGVER_1');
 		$this->sort = '';
 		$this->default = true;
 		$this->editable = false;

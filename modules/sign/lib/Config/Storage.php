@@ -153,12 +153,8 @@ class Storage
 			return "{$proto}://{$host}";
 		}
 
-		$address = Main\Config\Option::get('sign', 'service_address');
-		if (!$address)
-		{
-			$region = $region ?: Main\Application::getInstance()->getLicense()->getRegion();
-			$address = $this->read('service.address')[$region] ?? null;
-		}
+		$region = $region ?: Main\Application::getInstance()->getLicense()->getRegion();
+		$address = $this->read('service.address')[$region] ?? null;
 
 		if ($address && !preg_match("#^https?://#", $address))
 		{

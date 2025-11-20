@@ -31,7 +31,6 @@ class TemplateGridRepository
 				{
 					$data[] = new Row(
 						id: $folder->getId(),
-						uid: $folder->getUid(),
 						title: $folder->getTitle(),
 						createdById: $folder->getCreatedById(),
 						entityType: EntityType::from($entityType),
@@ -50,10 +49,10 @@ class TemplateGridRepository
 				{
 					$data[] = new Row(
 						id: $template->getId(),
-						uid: $template->getUid(),
 						title: $template->getTitle(),
 						createdById: $template->getCreatedById(),
 						entityType: EntityType::from($entityType),
+						uid: $template->getUid(),
 						modifiedById: $template->getModifiedById(),
 						dateModify: new DateTime($template->getDateModify()),
 						dateCreate: new DateTime($template->getDateCreate()),
@@ -80,10 +79,10 @@ class TemplateGridRepository
 
 			$data[] = new Row(
 				id: $template->getId(),
-				uid: $template->getUid(),
 				title: $template->getTitle(),
 				createdById: $template->getCreatedById(),
 				entityType: EntityType::from($entityType),
+				uid: $template->getUid(),
 				modifiedById: $template->getModifiedById(),
 				dateModify: new DateTime($template->getDateModify()),
 				dateCreate: new DateTime($template->getDateCreate()),
@@ -118,7 +117,6 @@ class TemplateGridRepository
 			$folder = $item->get('FOLDER');
 			$data[] = new Row(
 				id: $folder->getId(),
-				uid: $folder->getUid(),
 				title: $folder->getTitle(),
 				createdById: $folder->getCreatedById(),
 				entityType: EntityType::FOLDER,

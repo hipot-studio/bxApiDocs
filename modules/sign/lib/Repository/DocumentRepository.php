@@ -425,21 +425,39 @@ class DocumentRepository
 		return $document === null ? null : $this->extractItemFromModel($document);
 	}
 
-	public function getLastCompanyProvidersByUser(int $userId, array $companyUuids = []): Item\ProviderDateCollection
+	/**
+	 * @param string[] $companyUids
+	 */
+	public function getLastCompanyProvidersByUser(
+		int $userId,
+		array $companyUids = [],
+		?DateTime $fromDate = null,
+	): Item\ProviderDateCollection
 	{
+		if ($userId < 1)
+		{
+			return new Item\ProviderDateCollection();
+		}
+
 		$query = Internal\DocumentTable::query()
 			->setSelect([
 				'COMPANY_UID',
-				new \Bitrix\Main\Entity\ExpressionField('MAX_DATE_CREATE', 'MAX(DATE_CREATE)'),
+				'COMPANY_ENTITY_ID',
+				new \Bitrix\Main\Entity\ExpressionField('LAST_USED', 'MAX(DATE_CREATE)'),
 			])
 			->where('CREATED_BY_ID', $userId)
 			->whereNotNull('PROVIDER_CODE')
-			->setGroup(['COMPANY_UID'])
+			->setGroup(['COMPANY_UID', 'COMPANY_ENTITY_ID'])
 		;
 
-		if ($companyUuids)
+		if ($fromDate)
 		{
-			$query->whereIn('COMPANY_UID', $companyUuids);
+			$query->where('DATE_CREATE', '>', $fromDate);
+		}
+
+		if ($companyUids)
+		{
+			$query->whereIn('COMPANY_UID', $companyUids);
 		}
 
 		$rows = $query->fetchAll();
@@ -448,7 +466,8 @@ class DocumentRepository
 			...array_map(
 			static fn(array $row) => new Item\ProviderDate(
 				companyUid: $row['COMPANY_UID'],
-				dateCreate: $row['MAX_DATE_CREATE'],
+				companyId: $row['COMPANY_ENTITY_ID'],
+				dateLastUsed: $row['LAST_USED'],
 			),
 			$rows,
 		));

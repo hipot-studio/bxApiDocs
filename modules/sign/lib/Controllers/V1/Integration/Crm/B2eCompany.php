@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Controllers\V1\Integration\Crm;
 
 use Bitrix\Main\Context;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -58,13 +59,13 @@ class B2eCompany extends Controller
 
 		$companies = $this->getVisibleFilledRegisteredCompanies($myCompanies, $initiatedByType);
 
-		$activeCompanyUuids = [];
+		$activeCompanyUids = [];
 		/** @var Company $company */
 		foreach ($companies as $company)
 		{
 			foreach ($company->providers as $provider)
 			{
-				$activeCompanyUuids[] = $provider->uid;
+				$activeCompanyUids[] = $provider->uid;
 			}
 		}
 
@@ -72,15 +73,16 @@ class B2eCompany extends Controller
 			->getDocumentRepository()
 			->getLastCompanyProvidersByUser(
 				(int)CurrentUser::get()->getId(),
-				$activeCompanyUuids,
+				$activeCompanyUids,
+				(new DateTime())->add('-30 days'),
 			)
 		;
 
 		// sort providers
 		$companies = $companies->sortProviders(
 			function(CompanyProvider $a, CompanyProvider $b) use ($lastProviders) {
-				$dateA = $lastProviders->getByUid($a->uid)?->dateCreate ?? null;
-				$dateB = $lastProviders->getByUid($b->uid)?->dateCreate ?? null;
+				$dateA = $lastProviders->getLastUsedByUid($a->uid)?->dateLastUsed ?? null;
+				$dateB = $lastProviders->getLastUsedByUid($b->uid)?->dateLastUsed ?? null;
 
 				$tsForCompareA = max($dateA?->getTimestamp() ?? 0, $a->timestamp);
 				$tsForCompareB = max($dateB?->getTimestamp() ?? 0, $b->timestamp);
@@ -89,22 +91,14 @@ class B2eCompany extends Controller
 			},
 		);
 
-		// sort companies using providers
+		// sort companies
 		$companies = $companies->getSorted(
 			function(Company $a, Company $b) use ($lastProviders) {
-				$recentProviderA = $a->providers[0] ?? null;
-				$recentProviderB = $b->providers[0] ?? null;
+				$dateA = $lastProviders->getLastUsedByCompanyId($a->id)?->dateLastUsed ?? null;
+				$dateB = $lastProviders->getLastUsedByCompanyId($b->id)?->dateLastUsed ?? null;
 
-				if (!$recentProviderA || !$recentProviderB)
-				{
-					return $recentProviderB ? 1 : -1;
-				}
-
-				$dateA = $lastProviders->getByUid($recentProviderA->uid)?->dateCreate ?? null;
-				$dateB = $lastProviders->getByUid($recentProviderB->uid)?->dateCreate ?? null;
-
-				$tsForCompareA = max($dateA?->getTimestamp() ?? 0, $recentProviderA->timestamp);
-				$tsForCompareB = max($dateB?->getTimestamp() ?? 0, $recentProviderB->timestamp);
+				$tsForCompareA = $dateA?->getTimestamp() ?? 0;
+				$tsForCompareB = $dateB?->getTimestamp() ?? 0;
 
 				return $tsForCompareB <=> $tsForCompareA;
 			}

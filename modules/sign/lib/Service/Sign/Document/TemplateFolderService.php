@@ -192,15 +192,6 @@ final class TemplateFolderService
 	}
 
 	/**
-	 * @param string $folderUid
-	 * @return TemplateFolder|null
-	 */
-	public function getByUid(string $folderUid): ?TemplateFolder
-	{
-		return $this->templateFolderRepository->getByUid($folderUid);
-	}
-
-	/**
 	 * @param list<int> $folderIds
 	 * @return TemplateFolderCollection
 	 */

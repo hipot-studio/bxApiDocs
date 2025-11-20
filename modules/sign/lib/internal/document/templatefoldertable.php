@@ -50,10 +50,6 @@ class TemplateFolderTable extends Entity\DataManager
 				->configurePrimary()
 				->configureAutocomplete()
 			,
-			(new StringField('UID'))
-				->configureRequired()
-				->addValidator(new Entity\Validator\Length(32, 32))
-			,
 			(new StringField('TITLE'))
 				->configureRequired()
 				->addValidator(new Entity\Validator\Length(null, 255))

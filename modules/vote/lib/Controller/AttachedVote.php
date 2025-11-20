@@ -220,7 +220,7 @@ class AttachedVote extends Controller
 		$entityIds = array_filter(array_map(fn($value) => (int)$value, $entityIds));
 		if (count($entityIds) > self::ENTITY_IDS_LIMIT)
 		{
-			$this->addError(new Error('To many entity ids'));
+			$this->addError(new Error('Too many entity ids'));
 
 			return [];
 		}

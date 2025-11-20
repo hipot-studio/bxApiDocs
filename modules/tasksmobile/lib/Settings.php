@@ -70,26 +70,4 @@ final class Settings
 	{
 		return FlowFeature::isOn();
 	}
-
-	public function getDashboardSelectedView(int $projectId = 0): string
-	{
-		Task::setUserId($this->userId);
-		Task::setGroupId($projectId);
-
-		$listState = Task::getListStateInstance()->getState();
-		$selectedView = $listState['VIEW_SELECTED']['CODENAME'];
-		$map = [
-			'VIEW_MODE_LIST' => 'LIST',
-			'VIEW_MODE_KANBAN' => 'KANBAN',
-			'VIEW_MODE_TIMELINE' => 'DEADLINE',
-			'VIEW_MODE_PLAN' => 'PLANNER',
-		];
-
-		if (!isset($map[$selectedView]) || ($map[$selectedView] === 'KANBAN' && $projectId === 0))
-		{
-			return 'LIST';
-		}
-
-		return $map[$selectedView];
-	}
 }
