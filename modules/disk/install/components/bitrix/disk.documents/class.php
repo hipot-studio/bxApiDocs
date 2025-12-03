@@ -169,6 +169,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				->addAction([
 					'type' => 'download',
 				])
+				->setUseUnifiedEditLink()
 			;
 
 			$documentName = \CUtil::JSEscape($item['NAME']);
@@ -185,11 +186,13 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 
 				if ($file->supportsUnifiedLink())
 				{
-					$attr->setUnifiedLinkOptions([
-						'additionalQueryParams' => [
-							'c_element' => $cElementParam,
-						],
-					]);
+					$attr
+						->setUnifiedLinkOptions([
+							'additionalQueryParams' => [
+								'c_element' => $cElementParam,
+							],
+						])
+					;
 				}
 				else
 				{

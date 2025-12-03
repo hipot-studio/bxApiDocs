@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\UnifiedLink\UniqueCodeBackfiller;
 use Bitrix\Disk\Internals\Entity\ModelSynchronizer;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectNameService;
@@ -12,8 +13,8 @@ use Bitrix\Disk\Realtime\Events\ObjectEvent;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Ui\Avatar;
 use Bitrix\Im\Model\ChatTable;
-use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Event;
@@ -273,6 +274,13 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 	public function getUniqueCode(): ?string
 	{
+		if (empty($this->uniqueCode))
+		{
+			$uniqueCodeBackfiller = ServiceLocator::getInstance()->get(UniqueCodeBackfiller::class);
+
+			return $uniqueCodeBackfiller->getBackfilledUniqueCode((int)$this->getId());
+		}
+
 		return $this->uniqueCode;
 	}
 

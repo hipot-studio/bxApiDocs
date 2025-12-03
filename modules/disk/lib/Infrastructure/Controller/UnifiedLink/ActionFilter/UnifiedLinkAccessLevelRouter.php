@@ -9,6 +9,7 @@ use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta\ActionsMetadata;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
 use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Engine\ActionFilter\Base;
@@ -119,6 +120,13 @@ class UnifiedLinkAccessLevelRouter extends Base
 		$request = $this->controller->getRequest();
 
 		if ($request->get(UrlGenerator::QUERY_PARAM_NO_REDIRECT) !== null)
+		{
+			return false;
+		}
+
+		// disable redirects to document editing to avoid exceeding editing limits
+		$isDocument = (int)$file->getTypeFile() === TypeFile::DOCUMENT;
+		if ($isDocument && $fileAccessLevel === UnifiedLinkAccessLevel::Edit)
 		{
 			return false;
 		}

@@ -844,7 +844,7 @@ final class OnlyOffice extends Engine\Controller
 			'id' => $newFile->getId(),
 			'name' => $newFile->getName(),
 			'size' => $newFile->getSize(),
-			'openUrl' => Driver::getInstance()->getUrlManager()->getUnifiedLink($newFile),
+			'openUrl' => Driver::getInstance()->getUrlManager()->getUnifiedEditLink($newFile),
 		];
 	}
 

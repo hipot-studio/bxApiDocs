@@ -34,6 +34,7 @@ final class FileAttributes extends ItemAttributes
 
 	private bool $needSetUnifiedLink = false;
 	private array $unifiedLinkOptions = [];
+	private bool $useUnifiedEditLink = false;
 
 	public static function tryBuildByFileId($fileId, $sourceUri, ?File $file = null): self
 	{
@@ -94,7 +95,10 @@ final class FileAttributes extends ItemAttributes
 				$unifiedLinkOptions['attachedId'] = $attachedObjectId;
 			}
 
-			$unifiedLink = Driver::getInstance()->getUrlManager()->getUnifiedLink($file, $unifiedLinkOptions);
+			$urlManager = Driver::getInstance()->getUrlManager();
+			$unifiedLink = $this->useUnifiedEditLink
+				? $urlManager->getUnifiedEditLink($file, $unifiedLinkOptions)
+				: $urlManager->getUnifiedLink($file, $unifiedLinkOptions);
 
 			$this->setAttribute(self::ATTRIBUTE_UNIFIED_LINK, $unifiedLink);
 		}
@@ -113,6 +117,13 @@ final class FileAttributes extends ItemAttributes
 	public function setUnifiedLinkOptions(array $options): self
 	{
 		$this->unifiedLinkOptions = $options;
+
+		return $this;
+	}
+
+	public function setUseUnifiedEditLink(bool $use = true): self
+	{
+		$this->useUnifiedEditLink = $use;
 
 		return $this;
 	}

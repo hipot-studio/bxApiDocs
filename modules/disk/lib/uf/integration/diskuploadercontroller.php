@@ -383,7 +383,7 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 		if (!$isBoard && $supportsUnifiedLink)
 		{
-			$unifiedLinkOptions = ['noRedirect' => true];
+			$unifiedLinkOptions = [];
 			if ($attachedObjectId > 0)
 			{
 				$unifiedLinkOptions['attachedId'] = $attachedObjectId;

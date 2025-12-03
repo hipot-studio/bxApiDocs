@@ -792,25 +792,8 @@ class Generation
 			default => Metrika\Statuses::ErrorB24,
 		};
 
-		$scenario = $this->getScenario();
-		if ($scenario)
-		{
-			$stepsMap = $scenario->getMap();
-			if (isset($stepsMap[$this->step]))
-			{
-				$step = $stepsMap[$this->step];
-			}
-		}
-
-		if (isset($step))
-		{
-			$analyticEvent = $step->getAnalyticEvent();
-		}
-
-		if (!isset($analyticEvent))
-		{
-			$analyticEvent = Metrika\Events::unknown;
-		}
+		$step = $this->scenarist->getCurrentStep();
+		$analyticEvent = $step?->step->getAnalyticEvent() ?? Metrika\Events::unknown;
 
 		$metrika = $this->getMetrika($analyticEvent);
 		$metrika->setStatus($status);

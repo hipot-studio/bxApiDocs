@@ -170,13 +170,6 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 				->setVersionId($version->getId())
 			;
 
-			if ($fileFromVersion?->supportsUnifiedLink())
-			{
-				$attr->setUnifiedLinkOptions([
-					'noRedirect' => true,
-				]);
-			}
-
 			if ((int)$this->file->getTypeFile() === TypeFile::FLIPCHART)
 			{
 				$openUrl = $this->getUrlManager()->getUrlForViewBoardVersion($this->file, (int)$version->getId());

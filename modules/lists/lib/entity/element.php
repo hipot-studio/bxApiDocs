@@ -2,6 +2,7 @@
 
 namespace Bitrix\Lists\Entity;
 
+use Bitrix\Iblock\Public\Service\RestValidator as IblockRestValidator;
 use Bitrix\Lists\Service\Param;
 use Bitrix\Main\Error;
 use Bitrix\Main\Errorable;
@@ -135,10 +136,11 @@ class Element implements Controllable, Errorable
 		}
 		else
 		{
-			if ($elementObject->LAST_ERROR)
+			$error = $elementObject->getLastError();
+			if ($error)
 			{
 				$this->errorCollection->setError(
-					new Error($elementObject->LAST_ERROR, self::ERROR_ADD_ELEMENT)
+					new Error($error, self::ERROR_ADD_ELEMENT)
 				);
 			}
 			else
@@ -241,10 +243,11 @@ class Element implements Controllable, Errorable
 		}
 		else
 		{
-			if ($elementObject->LAST_ERROR)
+			$error = $elementObject->getLastError();
+			if ($error)
 			{
 				$this->errorCollection->setError(
-					new Error($elementObject->LAST_ERROR, self::ERROR_UPDATE_ELEMENT)
+					new Error($error, self::ERROR_UPDATE_ELEMENT)
 				);
 			}
 			else
@@ -458,6 +461,23 @@ class Element implements Controllable, Errorable
 							}
 						}
 						break;
+				}
+			}
+		}
+
+		if (!empty($this->params['FIELDS']) && is_array($this->params['FIELDS']))
+		{
+			$validator = IblockRestValidator\Format\SimpleNoFilePropertyValueValidator::getInstance();
+			$validator->setIblockId($this->iblockId);
+			$internalResult = $validator->run($this->params['FIELDS']);
+			if (!$internalResult->isSuccess())
+			{
+				foreach ($internalResult->getErrorMessages() as $message)
+				{
+					$this->errorCollection->setError(new Error(
+						$message,
+						self::ERROR_ELEMENT_FIELD_VALUE
+					));
 				}
 			}
 		}
@@ -1003,6 +1023,29 @@ class Element implements Controllable, Errorable
 			"CHECK_PERMISSIONS" => "Y",
 		];
 		$filter = $this->getInputFilter($filter);
+
+		$validator = IblockRestValidator\Format\ElementFilterFieldValidator::getInstance();
+		$internalResult = $validator->run($filter);
+		if (!$internalResult->isSuccess())
+		{
+			$this->errorCollection->add($internalResult->getErrors());
+
+			return [];
+		}
+		if ($this->iblockId)
+		{
+			/** @var IblockRestValidator\Format\PropertyValueFilterValidator $validator */
+			$validator = IblockRestValidator\Format\PropertyValueFilterValidator::getInstance();
+			$validator->setIblockId($this->iblockId);
+			$internalResult = $validator->run($filter);
+			if (!$internalResult->isSuccess())
+			{
+				$this->errorCollection->add($internalResult->getErrors());
+
+				return [];
+			}
+		}
+
 		$queryObject = \CIBlockElement::getList($order, $filter, false, $navData, $elementSelect);
 		while ($result = $queryObject->fetch())
 		{

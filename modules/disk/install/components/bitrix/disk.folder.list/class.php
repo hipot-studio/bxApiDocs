@@ -655,7 +655,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 				if ($isFile && !$isBoard && $supportsUnifiedLink)
 				{
-					$viewUnifiedLink = $urlManager->getUnifiedLink($object, ['noRedirect' => true]);
+					$viewUnifiedLink = $urlManager->getUnifiedLink($object);
 					$actions[] = [
 						'id' => 'view',
 						'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_OPEN'),

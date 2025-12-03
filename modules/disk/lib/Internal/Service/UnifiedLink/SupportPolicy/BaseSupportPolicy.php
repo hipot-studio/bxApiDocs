@@ -6,11 +6,18 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\SupportPolicy;
 
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UniqueCodeBackfiller;
 
 class BaseSupportPolicy implements SupportPolicy
 {
 	/** @var array<int, bool> Cache of supported file types. */
 	private array $supportedFileTypes = [];
+
+	public function __construct(
+		private readonly UniqueCodeBackfiller $uniqueCodeBackfiller,
+	)
+	{
+	}
 
 	/**
 	 * Checks if the given file has unified link support.
@@ -23,13 +30,9 @@ class BaseSupportPolicy implements SupportPolicy
 			&& $this->passesSpecializedChecks($file);
 	}
 
-	final public function supportsFileType(int $fileType): bool
-	{
-		return $this->passesConfigurationChecks($fileType);
-	}
-
 	/**
-	 * Basic checks that are common for all support policies.
+	 * Basic checks common to all support policies.
+	 * Has side effects: backfills the file's unique code.
 	 * @param File $file
 	 * @return bool
 	 */
@@ -38,8 +41,16 @@ class BaseSupportPolicy implements SupportPolicy
 		$uniqueCode = $file->getUniqueCode();
 		$fileType = (int)$file->getTypeFile();
 
-		return ((string)$uniqueCode !== '')
-			&& $this->passesConfigurationChecks($fileType);
+		$isSetUniqueCode = (string)$uniqueCode !== '';
+		$passesConfigurationChecks = $this->passesConfigurationChecks($fileType);
+
+		if (!$isSetUniqueCode && $passesConfigurationChecks)
+		{
+			$isSetUniqueCode = $this->uniqueCodeBackfiller->backfillUniqueCode((int)$file->getId());
+		}
+
+		return $isSetUniqueCode
+			&& $passesConfigurationChecks;
 	}
 
 	/**

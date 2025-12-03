@@ -538,12 +538,11 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				if ($supportsUnifiedLink)
 				{
-					$unifiedLinkOptions = [
-						'noRedirect' => true,
-					];
+					$unifiedLinkOptions = [];
 
 					if ($isBoard)
 					{
+						$unifiedLinkOptions['noRedirect'] = true;
 						$unifiedLinkOptions['additionalQueryParams'] = ['c_element' => 'docs_attach'];
 					}
 

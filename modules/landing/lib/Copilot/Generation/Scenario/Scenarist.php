@@ -79,6 +79,7 @@ class Scenarist
 	{
 		foreach ($this->scenario->getMap() as $stepId => $step)
 		{
+			$step->init($this->generation, $stepId);
 			$scenarioStep = new ScenarioStepDto(
 				$stepId,
 				$step,
@@ -182,7 +183,6 @@ class Scenarist
 				&& $step->status->value < StepStatuses::Finished->value
 			)
 			{
-				$step->step->init($this->generation, $step->stepId);
 				$step->step->clearErrors();
 				$this->saveStepStatus($step, StepStatuses::New);
 			}
@@ -295,40 +295,33 @@ class Scenarist
 			$this->sendMetrikaStart();
 		}
 
-		foreach ($this->steps as $stepId => $step)
+		foreach ($this->steps as $stepId => $stepDto)
 		{
 			if ($stepId > $this->stepId)
 			{
 				break;
 			}
 
-			if (!$this->isNeedExecuteStep($step))
+			if (!$this->isNeedExecuteStep($stepDto))
 			{
 				continue;
 			}
 
 			try
 			{
-				$this->executeStep($step);
+				$this->executeStep($stepDto);
 			}
 			catch (GenerationException $e)
 			{
-				$this->saveStepStatus($step, StepStatuses::Error);
+				$this->saveStepStatus($stepDto, StepStatuses::Error);
 				throw $e;
 			}
 
 			if (
-				$step->step->isFinished()
-				|| $step->step->isAsync()
+				$this->changeStep($stepDto)
+				|| $stepDto->step->isFinished()
 			)
 			{
-				$this->stepId = $this->getNextStep($stepId);
-				if (!$this->stepId)
-				{
-					break;
-				}
-
-				$this->callOnStepChange();
 				$this->callOnSave();
 			}
 		}
@@ -340,11 +333,11 @@ class Scenarist
 		}
 	}
 
-	private function isNeedExecuteStep(ScenarioStepDto $step): bool
+	private function isNeedExecuteStep(ScenarioStepDto $stepDto): bool
 	{
 		if (
-			$step->status === StepStatuses::Finished
-			|| $step->status === StepStatuses::Error
+			$stepDto->status === StepStatuses::Finished
+			|| $stepDto->status === StepStatuses::Error
 		)
 		{
 			return false;
@@ -356,7 +349,7 @@ class Scenarist
 			foreach ($relations as $parent => $dependents)
 			{
 				if (
-					in_array($step->stepId, $dependents, true)
+					in_array($stepDto->stepId, $dependents, true)
 					&& !$this->steps[$parent]?->step->isFinished()
 				)
 				{
@@ -366,6 +359,30 @@ class Scenarist
 		}
 
 		return true;
+	}
+
+	private function changeStep(ScenarioStepDto $executedStep): bool
+	{
+		if (
+			$executedStep->step->isFinished()
+			|| $executedStep->step->isAsync()
+		)
+		{
+			$newStep = $this->getNextStep($executedStep->stepId);
+			if (!$newStep)
+			{
+				return false;
+			}
+			if ($newStep > $this->stepId)
+			{
+				$this->stepId = $newStep;
+				$this->callOnStepChange();
+
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function getNextStep(int $stepId): ?int
@@ -396,6 +413,20 @@ class Scenarist
 	}
 
 	/**
+	 * Get step DTO for current step ID
+	 * @return ScenarioStepDto|null
+	 */
+	public function getCurrentStep(): ?ScenarioStepDto
+	{
+		if (!$this->scenario->checkStep($this->stepId))
+		{
+			return null;
+		}
+
+		return $this->steps[$this->stepId];
+	}
+
+	/**
 	 * Executes a single scenario step, handling quota checks and status updates.
 	 *
 	 * @param ScenarioStepDto $step The step to execute.
@@ -406,8 +437,6 @@ class Scenarist
 	 */
 	private function executeStep(ScenarioStepDto $step): void
 	{
-		$step->step->init($this->generation, $step->stepId);
-
 		if (
 			!$step->step->isStarted()
 			&& $step->stepId === $this->scenario->getQuotaCalculateStep()
@@ -513,6 +542,7 @@ class Scenarist
 		if (!$requestLimiter->checkQuota($this->getRequestQuotasSum()))
 		{
 			$isRequestQuotaExceeded = false;
+			// todo: can change to this->scenario?
 			$this->generation->getScenario()?->getChatbot()?->onRequestQuotaOk(
 				new ChatBotMessageDto(
 					$this->generation->getChatId(),

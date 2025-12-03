@@ -274,7 +274,11 @@ class Json
 				}
 			}
 
-			if ($blockResponse === null)
+			if (
+				!is_array($blockResponse)
+				|| !isset($blockResponse['nodes'])
+				|| !is_array($blockResponse['nodes'])
+			)
 			{
 				continue;
 			}

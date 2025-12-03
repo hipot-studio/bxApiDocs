@@ -131,8 +131,6 @@ class CDiskUfVersionComponent extends BaseComponent
 			{
 				if ($file->supportsUnifiedLink())
 				{
-					$attr->setUnifiedLinkOptions(['noRedirect' => true]);
-
 					$editUnifiedLink = $urlManager->getUnifiedEditLink($file, [
 						'versionId' => $attachedModel->getVersionId(),
 						'attachedId' => $attachedModel->getId(),
