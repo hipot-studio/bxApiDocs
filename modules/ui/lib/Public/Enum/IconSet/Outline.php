@@ -584,4 +584,24 @@ enum Outline: string
 	case LEGAL_PROCESSES = 'o-legal-processes';
 	case MARKETING = 'o-marketing';
 	case ROLES_LIBRARY = 'o-roles-library';
+	case AI_ROBOT = 'o-ai-robot';
+	case CONDITION = 'o-condition';
+	case DATA_READING = 'o-data-reading';
+	case FRAME_CREATE = 'o-frame-create';
+	case MCP = 'o-mcp';
+	case MCP_LETTERS = 'o-mcp-letters';
+	case MERGE = 'o-merge';
+	case STICKER_SMILE = 'o-sticker-smile';
+	case CLIENT_LETTER = 'o-client-letter';
+	case CONNECTION = 'o-connection';
+	case COPIED = 'o-copied';
+	case CRM_ONLINE_STORE = 'o-crm-online-store';
+	case CRM_PAYMENT_AND_DELIVERY = 'o-crm-payment-and-delivery';
+	case LIGHTNING_PLUS = 'o-lightning-plus';
+	case UNC_1 = 'o-unc-1';
+
+	case DOCUMENT_SIGN = 'o-document-sign';
+
+	case BLACK_LIST = 'o-black-list';
+	case IMPORTANT_TASK = 'o-important-task';
 }

@@ -4,6 +4,7 @@ namespace Bitrix\UI\EntitySelector;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\Type\Dictionary;
 use Bitrix\Main\UI\EntitySelector\EntityUsageTable;
 
 class Dialog implements \JsonSerializable
@@ -51,6 +52,9 @@ class Dialog implements \JsonSerializable
 
 	/** @var int */
 	protected int $recentItemsLimit = 50;
+
+	/** @var Dictionary */
+	protected $customData;
 
 	protected const MAX_RECENT_ITEMS_LIMIT = 50;
 
@@ -100,6 +104,11 @@ class Dialog implements \JsonSerializable
 		if (isset($options['recentItemsLimit']) && is_int($options['recentItemsLimit']))
 		{
 			$this->recentItemsLimit = max(1, min($options['recentItemsLimit'], static::MAX_RECENT_ITEMS_LIMIT));
+		}
+
+		if (isset($options['customData']) && is_array($options['customData']))
+		{
+			$this->setCustomData($options['customData']);
 		}
 	}
 
@@ -298,6 +307,26 @@ class Dialog implements \JsonSerializable
 	public function getEntity(string $entityId): ?Entity
 	{
 		return $this->entities[$entityId] ?? null;
+	}
+
+	public function setCustomData(array $customData): self
+	{
+		$this->getCustomData()->setValues($customData);
+
+		return $this;
+	}
+
+	/**
+	 * @return Dictionary
+	 */
+	public function getCustomData(): Dictionary
+	{
+		if ($this->customData === null)
+		{
+			$this->customData = new Dictionary();
+		}
+
+		return $this->customData;
 	}
 
 	/**
@@ -772,6 +801,11 @@ class Dialog implements \JsonSerializable
 		if ($this->getPreselectedCollection()->count() > 0)
 		{
 			$json['preselectedItems'] = $this->getPreselectedCollection();
+		}
+
+		if ($this->customData !== null && $this->getCustomData()->count() > 0)
+		{
+			$json['customData'] = $this->getCustomData()->getValues();
 		}
 
 		if ($this->getErrors()->count() > 0)

@@ -64,7 +64,7 @@ class CrmAccessCodesConverterAgent extends AgentBase
 			->fetch()
 		;
 
-		return (bool)$result['ID'];
+		return (bool)($result['ID'] ?? false);
 	}
 
 	private function execute(): bool

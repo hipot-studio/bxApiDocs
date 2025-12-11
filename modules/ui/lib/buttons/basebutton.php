@@ -9,7 +9,6 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\UI\Extension;
 use Bitrix\UI\Contract;
 use Bitrix\UI\counter\Counter;
-use Bitrix\UI\Counter\CounterColor;
 use Bitrix\UI\Counter\CounterStyle;
 
 //We know about lazy load. So, the code loads common messages for default buttons,
@@ -134,6 +133,11 @@ class BaseButton implements Contract\Renderable
 		if (!empty($params['link']))
 		{
 			$this->setLink($params['link']);
+
+			if (isset($params['target']) && is_string($params['target']))
+			{
+				$this->setTarget($params['target']);
+			}
 		}
 
 		if (!empty($params['click']))
@@ -158,6 +162,20 @@ class BaseButton implements Contract\Renderable
 				$this->addDataAttribute($name, $value);
 			}
 		}
+	}
+
+	/**
+	 * @param "_blank" $target
+	 * @return $this
+	 */
+	public function setTarget(string $target)
+	{
+		if (in_array($target, LinkTarget::LINK_TARGETS, true))
+		{
+			$this->getAttributeCollection()['target'] = $target;
+		}
+
+		return $this;
 	}
 
 	protected function listExtensions()

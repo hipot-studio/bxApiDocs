@@ -62,10 +62,24 @@ abstract class Icon
 	public const SCRIPT = 'ui-btn-icon-script';
 	public const PRINT2 = 'ui-btn-icon-print-2';
 	public const FUNNEL = 'ui-btn-icon-funnel';
+	public const FORWARD = 'ui-btn-icon-forward';
+	public const COPY = 'ui-btn-icon-copy';
 	public const AI = 'ui-btn-icon-ai ui-icon-set__scope';
 	public const BUSINESS_NEW = 'ui-btn-icon-business-new';
+	public const OUTLINE_ADD = 'ui-btn-icon-outline-add';
+	public const HELP = 'ui-btn-icon-help';
+	public const CHECK = 'ui-btn-icon-check';
+	public const CHEVRON_LEFT_S = 'ui-btn-icon-chevron-left-s';
+	public const CHEVRON_RIGHT_S = 'ui-btn-icon-chevron-right-s';
+	public const REFRESH = 'ui-btn-icon-refresh';
+	public const APPS = 'ui-btn-icon-apps';
+	public const IMAGE = 'ui-btn-icon-image';
 	public const RELOAD = 'ui-btn-icon-reload';
 	public const CITY = 'ui-btn-icon-city';
 	public const TWO_PERSONS = 'ui-btn-icon-two-persons';
 	public const COPILOT = 'ui-btn-icon-copilot';
+	public const WORKFLOW = 'ui-btn-icon-workflow';
+	public const PERSON = 'ui-btn-icon-person';
+	public const WORKFLOW_STOP = 'ui-btn-icon-workflow-stop';
+	public const MARKET = 'ui-btn-icon-market';
 }
