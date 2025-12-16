@@ -69,6 +69,9 @@ class ServiceTable extends ORM\Data\DataManager
 			(new ORM\Fields\StringField('HELPER_CODE'))
 				->configureTitle('Code for help article')
 			,
+			(new ORM\Fields\StringField('ADVERTISING_STRATEGY'))
+				->configureTitle('The advertising strategy for the service from market or from landing page')
+			,
 			(new ORM\Fields\IntegerField('CURRENT_VALUE'))
 				->configureTitle('Value')
 				->configureRequired()

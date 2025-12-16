@@ -237,7 +237,7 @@ class CExtranet
 			&& (mb_strpos($curPage, "/bitrix/") !== 0)
 			&& (mb_strpos($curPage, "/upload/") !== 0)
 			&& (mb_strpos($curPage, "/oauth/") !== 0)
-			&& (mb_strpos($curPage, "/desktop_app/") !== 0)
+			&& !self::isUnredirectableDesktopPage($scriptFile)
 			&& (mb_strpos($curPage, "/docs/pub/") !== 0)
 			&& (mb_strpos($curPage, "/extranet/confirm/") !== 0)
 			&& (mb_strpos($curPage, "/mobile/ajax.php") !== 0)
@@ -270,6 +270,8 @@ class CExtranet
 								$scriptFile
 							]
 						) && ($scriptFile !== '/desktop_app/router.php'))
+					|| self::isRedirectableDesktopPage($scriptFile)
+					|| str_starts_with($scriptFile, '/video/')
 				)
 				{
 					self::calculateExtranetRedirect($curPage, $arExtranetSite, $USER->GetID());
@@ -280,6 +282,11 @@ class CExtranet
 					&& ToolsManager::getInstance()->checkAvailabilityByToolId('collab')
 				)
 				{
+					if (str_starts_with($curPage, '/online/'))
+					{
+						// save GET parameters
+						LocalRedirect($arExtranetSite["DIR"] . mb_substr($curPage, 1));
+					}
 					self::redirectCollabToHomePage($arExtranetSite);
 				}
 			}
@@ -297,6 +304,70 @@ class CExtranet
 		{
 			self::redirectCollabToBlockPage($USER->GetID());
 		}
+
+		if (self::isExtranetSite())
+		{
+			self::calculateSpecialCaseSEFFolderExtranetRedirect($curPage);
+		}
+	}
+
+	private static function calculateSpecialCaseSEFFolderExtranetRedirect(string $curPage): void
+	{
+		$rules = [
+			['user_page', '/company/personal/', SITE_DIR . 'contacts/personal/'],
+			['workgroups_page', 'workgroups/', SITE_DIR . 'workgroups/'],
+		];
+
+		foreach ($rules as [$option, $specialCaseUserSEFFolder, $userSEFFolder])
+		{
+			$specialPath = SITE_DIR . ltrim(
+					COption::GetOptionString('socialnetwork', $option, $specialCaseUserSEFFolder, \CSite::GetDefSite()),
+					'/'
+			);
+
+			if (str_starts_with($curPage, $specialPath))
+			{
+				$targetPath = COption::GetOptionString('socialnetwork', $option, $userSEFFolder, SITE_ID);
+
+				if ($targetPath !== $specialPath)
+				{
+					$remaining = substr($curPage, strlen($specialPath));
+					$redirectUrl = $targetPath . $remaining;
+					LocalRedirect($redirectUrl, true, '307 Temporary Redirect');
+				}
+			}
+		}
+	}
+
+	/**
+	 * Checks if the current script is a desktop application service script that should NOT be redirected.
+	 *
+	 * A script is considered "unredirectable" if it resides within the /desktop_app/ directory
+	 * but is not the specific entry point explicitly marked as redirectable. This prevents
+	 * service scripts like router.php, pull.php, etc., from being redirected.
+	 *
+	 * @param string $scriptFile
+	 * @return bool
+	 */
+	private static function isUnredirectableDesktopPage(string $scriptFile): bool
+	{
+		return str_starts_with($scriptFile, "/desktop_app/") // It's a forbidden page if we are in the /desktop_app/ section...
+			&& !self::isRedirectableDesktopPage($scriptFile) // ...and the script is NOT the main index file.
+		;
+	}
+
+	/**
+	 * Checks if the script is the specific desktop app entry point that has an extranet equivalent.
+	 *
+	 * Currently, only /desktop_app/index.php is considered redirectable.
+	 *
+	 * @param string $scriptFile
+	 * @return bool
+	 */
+	private static function isRedirectableDesktopPage(string $scriptFile): bool
+	{
+		return false;
+		//return $scriptFile === '/desktop_app/index.php';
 	}
 
 	private static function calculateExtranetRedirect(string $curPage, array $arExtranetSite, int $userId): void
@@ -313,6 +384,12 @@ class CExtranet
 		)
 		{
 			$URLToRedirect = '/extranet/collab/403/';
+		}
+
+		$scriptFile = \Bitrix\Main\Application::getInstance()->getContext()->getRequest()->getScriptFile();
+		if (self::isRedirectableDesktopPage($scriptFile))
+		{
+			$URLToRedirect = $arExtranetSite["DIR"] . mb_substr($curPage, 1);
 		}
 
 		if ($userSEFFolder && str_starts_with($curPage, $userSEFFolder))
@@ -338,16 +415,22 @@ class CExtranet
 			$URLToRedirect = self::replaceVoteResultUrl($curPage, $arExtranetSite['DIR'] ?? '');
 		}
 
+		if (self::isTaskCommentsUrl($curPage))
+		{
+			$URLToRedirect = self::replaceTaskCommentsResultUrl($curPage, $arExtranetSite['DIR'] ?? '');
+		}
+
 		if (!$URLToRedirect)
 		{
 			$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
 
 			if ($isCollaber && str_ends_with($URLToRedirect, '/'))
 			{
-				$uri = (new Uri($URLToRedirect . 'online/'));
+				$uri = (new Uri($URLToRedirect));
 
 				if (preg_match("/^\\/online\\/([\\.\\-0-9a-zA-Z]+)(\\/?)([^\\/]*)$/i", $curPage, $matches))
 				{
+					$uri = (new Uri($URLToRedirect . 'online/'));
 					$alias = $matches[1] ?? null;
 
 					if ($alias)
@@ -398,10 +481,20 @@ class CExtranet
 		LocalRedirect($URLToRedirect, true, '307 Temporary Redirect');
 	}
 
+	/**
+	 * Redirects the user to the extranet site root.
+	 *
+	 * This method performs a generic redirect to the extranet's main page.
+	 * Any specific routing logic for collabers
+	 * is handled by the index.php script of the extranet site itself.
+	 *
+	 * @param array $arExtranetSite The extranet site parameters array.
+	 * @return void
+	 */
 	private static function redirectCollabToHomePage($arExtranetSite)
 	{
 		$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
-		$uri = (new Uri($URLToRedirect . 'online/'));
+		$uri = (new Uri($URLToRedirect));
 		LocalRedirect($uri->getLocator(), true, '307 Temporary Redirect');
 	}
 
@@ -806,15 +899,6 @@ class CExtranet
 
 		// if current user is not authorized
 		if (!$USER->IsAuthorized())
-		{
-			return false;
-		}
-
-		// if intranet and current user is not employee
-		if (
-			!self::IsExtranetSite($site_id)
-			&& !self::IsIntranetUser()
-		)
 		{
 			return false;
 		}
@@ -1739,6 +1823,18 @@ class CExtranet
 			->deleteParams(['signedAttachId'])
 			->getUri()
 		;
+	}
+
+	private static function isTaskCommentsUrl(string $currentUrl): bool
+	{
+		return str_starts_with($currentUrl, '/task/comments');
+	}
+
+	private static function replaceTaskCommentsResultUrl(string $currentUrl, string $extranetSiteDir): string
+	{
+		$extranetUrl = rtrim($extranetSiteDir, '/') . $currentUrl;
+
+		return (new \Bitrix\Main\Web\Uri($extranetUrl))->getUri();
 	}
 }
 

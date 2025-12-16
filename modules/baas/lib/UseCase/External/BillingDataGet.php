@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace Bitrix\Baas\UseCase\External;
 
 use Bitrix\Baas;
+use Bitrix\Baas\Internal\Service\MarketplaceService;
 
 class BillingDataGet extends BaseClientAction
 {
 	protected string $languageId = 'en';
+	protected MarketplaceService $marketplaceService;
 
 	public function __construct(
 		Baas\UseCase\External\Request\BillingDataGetRequest $request,
+		?MarketplaceService $marketplaceService = null,
 	)
 	{
 		parent::__construct($request);
 		$this->languageId = $request->languageId;
+		$this->marketplaceService = $marketplaceService ?? MarketplaceService::createInstance();
 	}
 
 	protected function run(): Response\BillingDataGetResult
@@ -84,7 +88,7 @@ class BillingDataGet extends BaseClientAction
 				continue;
 			}
 			$localizedInfo = reset($datum['languageInfo']);
-			$services->add(Baas\Model\ServiceTable::createObject()
+			$service = Baas\Model\ServiceTable::createObject()
 				->setCode($datum['code'])
 				->setTitle($datum['title'] ?? $localizedInfo['title'] ?? $datum['code'])
 				->setIconClass($datum['iconClass'] ?? '')
@@ -95,10 +99,21 @@ class BillingDataGet extends BaseClientAction
 				->setDescription($datum['description'] ?? $localizedInfo['description'] ?? '')
 				->setFeaturePromotionCode($datum['featurePromotionCode'] ?? '')
 				->setHelperCode($datum['helperCode'] ?? '')
+//				->setAdvertisingStrategy($datum['advertisingStrategy'] ?? '') // Set later after detection. Here for clarity
 				->setRenewable($datum['renewable'] ?? 'N')
 				->setCurrentValue($datum['currentValue'] ?? 0)
-				->setLanguageInfo($datum['languageInfo'] ?? ''),
+				->setLanguageInfo($datum['languageInfo'] ?? '')
+			;
+			$service->setAdvertisingStrategy(
+				$this
+					->marketplaceService
+					->detectAdvertisingStrategy($service, $datum['advertisingStrategy'] ?? '')
+					->value
 			);
+
+			$this->marketplaceService->adaptFeaturePromotionAndHelperCodes($service);
+
+			$services->add($service);
 		}
 
 		return $services;
@@ -164,18 +179,30 @@ class BillingDataGet extends BaseClientAction
 				->setActive($datum['sellable'] ?? 'N')
 				->setFeaturePromotionCode($datum['featurePromotionCode'] ?? '')
 				->setHelperCode($datum['helperCode'] ?? '')
+//				->setDistributionStrategy($datum['distributionStrategy'] ?? '') // Set later after adding services but here for clarity
 				->setLanguageInfo($datum['languageInfo'] ?? '')
 			;
 			$packages->add($package);
 
 			foreach ($datum['servicesInPack'] as $serviceCode => $serviceMaxValueInPackage)
 			{
-				$servicesInPackage->add(Baas\Model\ServiceInPackageTable::createObject()
+				$serviceInPackage = Baas\Model\ServiceInPackageTable::createObject()
 					->setServiceCode($serviceCode)
 					->setValue($serviceMaxValueInPackage)
-					->setPackageCode($package->getCode()),
-				);
+					->setPackageCode($package->getCode())
+				;
+				$servicesInPackage->add($serviceInPackage);
+				$package->addToServiceInPackage($serviceInPackage);
 			}
+
+			$package->setDistributionStrategy(
+				$this->marketplaceService->detectDistributionStrategy(
+					$package,
+					$datum['distributionStrategy'] ?? null,
+				)->value,
+			);
+			// delete serviceInPackage temporary collection to avoid problems during next iteration
+			$package->unsetServiceInPackage();
 
 			if (!empty($datum['purchaseInfo']) && is_array($datum['purchaseInfo']))
 			{

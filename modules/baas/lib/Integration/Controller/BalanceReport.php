@@ -56,7 +56,7 @@ final class BalanceReport
         ]];
 		$services = [];
 
-		foreach (Baas\Service\PackageService::getInstance()->getAll() as $package)
+		foreach (Baas\Public\Provider\PackageProvider::create()->getDistributedByBaas() as $package)
 		{
 			$formattedPurchases = [];
 			foreach ($package->getPurchases() as $purchase)

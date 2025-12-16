@@ -4,6 +4,7 @@ namespace Bitrix\Baas\Model;
 
 use Bitrix\Main;
 use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Query\Join;
 
 /**
  * Class PackageTable
@@ -80,18 +81,20 @@ class PackageTable extends ORM\Data\DataManager
 			(new ORM\Fields\StringField('HELPER_CODE'))
 				->configureSize(50)
 			,
+			(new ORM\Fields\StringField('DISTRIBUTION_STRATEGY'))
+				->configureTitle('The plan distribution strategy for the package from market or from checkout page')
+			,
 			(new ORM\Fields\IntegerField('SORT'))
 				->configureTitle('Sort order')
 			,
 			(new Main\ORM\Fields\ArrayField('LANGUAGE_INFO'))
 				->configureSerializationJson()
 			,
-			new Main\ORM\Fields\Relations\Reference(
+			(new Main\ORM\Fields\Relations\OneToMany(
 				'SERVICE_IN_PACKAGE',
 				ServiceInPackageTable::class,
-				['=this.CODE' => 'ref.PACKAGE_CODE'],
-				['join_type' => 'LEFT'],
-			),
+				'PACKAGE',
+			))->configureJoinType(Join::TYPE_LEFT),
 		];
 	}
 }

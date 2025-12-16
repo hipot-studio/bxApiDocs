@@ -6,6 +6,8 @@ namespace Bitrix\Baas\Repository;
 
 use Bitrix\Baas;
 use Bitrix\Main;
+use Bitrix\Baas\Internal\Entity;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 
 class PackageRepository implements PackageRepositoryInterface
 {
@@ -64,11 +66,36 @@ class PackageRepository implements PackageRepositoryInterface
 		;
 	}
 
-	public function getByService(Baas\Entity\Service $service): Baas\Model\EO_Package_Collection
+	public function getDistributedByBaas(): Baas\Model\EO_Package_Collection
+	{
+		$res = Baas\Model\PackageTable::query()
+			->setSelect(['*'])
+			->setOrder(['SORT' => 'ASC'])
+			->setCacheTtl(86400)
+			->where(
+				(new ConditionTree())
+					->logic(ConditionTree::LOGIC_OR)
+					->where('DISTRIBUTION_STRATEGY', Entity\Enum\PackageDistributionStrategy::BY_BAAS->value)
+					->whereNull('DISTRIBUTION_STRATEGY')
+			)
+			->exec()
+			->fetchCollection()
+		;
+
+		return $res;
+	}
+
+	public function getDistributedByBaasForService(Baas\Entity\Service $service): Baas\Model\EO_Package_Collection
 	{
 		return Baas\Model\PackageTable::query()
 			->setSelect(['*'])
 			->where('SERVICE_IN_PACKAGE.SERVICE_CODE', $service->getCode())
+			->where(
+				(new ConditionTree())
+					->logic(ConditionTree::LOGIC_OR)
+					->where('DISTRIBUTION_STRATEGY', Entity\Enum\PackageDistributionStrategy::BY_BAAS->value)
+					->whereNull('DISTRIBUTION_STRATEGY')
+			)
 			->setOrder(['SORT' => 'ASC'])
 			->setCacheTtl(86400)
 			->exec()

@@ -3,7 +3,6 @@
 namespace Bitrix\Baas\Entity;
 
 use Bitrix\Baas;
-use Bitrix\UI;
 
 class Package implements \JsonSerializable, Baas\Contract\Package
 {
@@ -89,9 +88,9 @@ class Package implements \JsonSerializable, Baas\Contract\Package
 		return $purchasedServices;
 	}
 
-	public function getPurchaseInfo(): Baas\Contract\PurchasesSummary
+	public function getPurchaseInfo(bool $includeDepleted = false): Baas\Contract\PurchasesSummary
 	{
-		$purchases = $this->getPurchases();
+		$purchases = $this->getPurchases($includeDepleted);
 
 		$packBalance = [];
 		/** @var Baas\Model\Dto\Purchase $purchase */
@@ -112,11 +111,7 @@ class Package implements \JsonSerializable, Baas\Contract\Package
 			}
 		}
 
-		$balance = array_reduce(
-			$packBalance,
-			fn($carry, $item) => $item['max'] > 0 ? min($carry, round($item['current'] / $item['max'] * 100)) : 100,
-			100,
-		);
+		$balance = $this->calculatePackBalance($packBalance);
 
 		return new Baas\Model\Dto\PurchasesSummary($balance, $purchases);
 	}
@@ -129,9 +124,9 @@ class Package implements \JsonSerializable, Baas\Contract\Package
 	/**
 	 * @return array<Baas\Contract\Purchase>
 	 */
-	public function getPurchases(): array
+	public function getPurchases(bool $includeDepleted = false): array
 	{
-		return Baas\Service\PurchaseService::getInstance()->getByPackageCode($this->getCode());
+		return Baas\Service\PurchaseService::getInstance()->getByPackageCode($this->getCode(), $includeDepleted);
 	}
 
 	/**
@@ -180,12 +175,31 @@ class Package implements \JsonSerializable, Baas\Contract\Package
 				'value' => $this->getPrice(),
 				'description' => $this->getPriceDescription(),
 			],
-			'purchaseInfo' => $this->getPurchaseInfo()->__serialize(),
+			'purchaseInfo' => $this->getPurchaseInfo(includeDepleted: true)->__serialize(),
 		];
 	}
 
 	public function __serialize(): array
 	{
 		return $this->jsonSerialize();
+	}
+
+	private function calculatePackBalance(array $packBalance): float
+	{
+		return array_reduce(
+			$packBalance,
+			function ($carry, $item)
+			{
+				if ($item['max'] <= 0)
+				{
+					return 100;
+				}
+
+				$balancePercentage = $item['current'] / $item['max'] * 100;
+
+				return min($carry, $balancePercentage < 1 ? $balancePercentage : round($balancePercentage));
+			},
+			100,
+		);
 	}
 }

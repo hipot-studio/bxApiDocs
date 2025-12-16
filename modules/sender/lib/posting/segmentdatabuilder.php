@@ -322,19 +322,28 @@ INNER JOIN (
 					'WAITING_RECIPIENT' => 'N'
 				]);
 
+				$notifyTitleCallback = fn (?string $languageId = null) => Loc::getMessage(
+					'SENDER_SEGMENT_BUILDER_GROUP_PREPARED_TITLE',
+					language: $languageId,
+				);
+
+				$notifyMessageCallback = fn (?string $languageId = null) => Loc::getMessage(
+					'SENDER_SEGMENT_BUILDER_GROUP_PREPARED',
+					[
+						"#SEGMENT_ID#" => $groupId,
+						"#SEGMENT_NAME#" => htmlspecialcharsbx($group['NAME']),
+					],
+					$languageId,
+				);
+
 				$messageFields = [
 					"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
 					"NOTIFY_MODULE" => "sender",
 					"NOTIFY_EVENT" => "group_prepared",
 					"TO_USER_ID" => $mailing['USER_ID'],
 					"NOTIFY_TAG" => "SENDER|GROUP_PREPARED|" . $groupId . "|" . $mailing['USER_ID'],
-					"NOTIFY_MESSAGE" => Loc::getMessage(
-						"SENDER_SEGMENT_BUILDER_GROUP_PREPARED",
-						[
-							"#SEGMENT_ID#" => $groupId,
-							"#SEGMENT_NAME#" => htmlspecialcharsbx($group['NAME'])
-						]
-					)
+					"NOTIFY_TITLE" => $notifyTitleCallback,
+					"NOTIFY_MESSAGE" => $notifyMessageCallback,
 				];
 
 				\CIMNotify::Add($messageFields);

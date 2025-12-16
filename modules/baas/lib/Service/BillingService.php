@@ -19,7 +19,6 @@ class BillingService
 	protected function __construct(
 		protected Baas\Config\Client $clientConfigs,
 		protected Baas\UseCase\External\UseCaseFactory $useCaseFactory,
-		protected Baas\Repository\ConsumptionRepositoryInterface $consumptionRepository,
 	)
 	{
 	}
@@ -158,64 +157,27 @@ class BillingService
 		int $units,
 		bool $force = false,
 		?array $attributes = null,
-	):
-		Baas\UseCase\External\Response\ConsumeServiceResult
-		|Baas\UseCase\Internal\Response\ConsumeServiceResult
-	{
-		//TODO Delete after migration period
-		if ($this->needToMigrate())
-		{
-			$consumptionResult = (new Baas\UseCase\Internal\ConsumeService(
-				consumptionRepository: $this->consumptionRepository,
-			))(new Baas\UseCase\Internal\Request\ConsumeServiceRequest(
-				service: $service,
-				units: $units,
-				force: $force,
-			));
-		}
-		else
-		{
-			$consumptionResult = $this->fulfill(
-				$this->useCaseFactory->createConsumeService(
-					$service,
-					$units,
-					$force,
-					$attributes,
-				),
-			);
-		}
-
-		return $consumptionResult;
+	): Baas\UseCase\External\Response\ConsumeServiceResult {
+		return $this->fulfill(
+			$this->useCaseFactory->createConsumeService(
+				$service,
+				$units,
+				$force,
+				$attributes,
+			),
+		);
 	}
 
 	public function refundService(
 		Baas\Entity\Service $service,
 		string $consumptionId,
 		?array $attributes = null,
-	):
-		Baas\UseCase\External\Response\RefundServiceResult
-		|Baas\UseCase\Internal\Response\RefundServiceResult
-	{
-		//TODO Delete after migration period
-		if ($this->needToMigrate())
-		{
-			$refundingResult = (new Baas\UseCase\Internal\RefundService(
-				consumptionRepository: $this->consumptionRepository,
-			))(new Baas\UseCase\Internal\Request\RefundServiceRequest(
-				service: $service,
-				consumptionId: $consumptionId,
-			));
-		}
-		else
-		{
-			$refundingResult = $this->fulfill($this->useCaseFactory->createRefundService(
-				$service,
-				$consumptionId,
-				$attributes,
-			));
-		}
-
-		return $refundingResult;
+	): Baas\UseCase\External\Response\RefundServiceResult {
+		return $this->fulfill($this->useCaseFactory->createRefundService(
+			$service,
+			$consumptionId,
+			$attributes,
+		));
 	}
 
 	public function convertServiceBalance(
@@ -229,7 +191,6 @@ class BillingService
 		)();
 	}
 
-
 	protected function isDomainRegistered(): bool
 	{
 		return $this->clientConfigs->isRegistered();
@@ -240,27 +201,6 @@ class BillingService
 		[, $hostSecret] = array_values($this->clientConfigs->getRegistrationData());
 
 		return $hostSecret ?? null;
-	}
-
-	public function needToMigrate(): bool
-	{
-		return $this->consumptionRepository->isEnabled()
-			&& $this->clientConfigs->isConsumptionsLogMigrated() === false;
-	}
-
-	public function planToMigrate():void
-	{
-		if ($this->backgroundJob === null)
-		{
-			$this->backgroundJob = function () {
-				$this->fulfill(
-					$this->useCaseFactory->createMigrateConsumptionLog(
-						$this->consumptionRepository,
-					),
-				);
-			};
-			Main\Application::getInstance()->addBackgroundJob($this->backgroundJob);
-		}
 	}
 
 	private function fulfill(callable $callback, int $depth = 0): mixed
@@ -334,7 +274,6 @@ class BillingService
 					Baas\Repository\PackageRepository::getInstance(),
 					Baas\Repository\PurchaseRepository::getInstance(),
 				),
-				Baas\Repository\ConsumptionRepository::getInstance(),
 			);
 		}
 

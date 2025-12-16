@@ -67,4 +67,29 @@ class ServiceRepository implements ServiceRepositoryInterface
 
 		return $query->fetchObject();
 	}
+
+	public function getAll(): Baas\Model\EO_Service_Collection
+	{
+		return Baas\Model\ServiceTable::query()
+			->setSelect(['*'])
+			->setOrder(['CODE' => 'ASC'])
+			->setCacheTtl(86400)
+			->fetchCollection()
+		;
+	}
+
+	public function getList(
+		?int $offset = null,
+		?int $limit = null,
+	): Baas\Model\EO_Service_Collection
+	{
+		return Baas\Model\ServiceTable::query()
+			->setSelect(['*'])
+			->setOrder(['CODE' => 'ASC'])
+			->setCacheTtl(86400)
+			->setOffset($offset)
+			->setLimit($limit)
+			->fetchCollection()
+		;
+	}
 }

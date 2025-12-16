@@ -24,34 +24,6 @@ class Client extends Config
 		))->getUri();
 	}
 
-	//region Only  for migration period and only for clouds. Delete in 2025
-	/**
-	 * This method only for migration period and should be removed after migration
-	 * @return bool
-	 */
-	public function isConsumptionsLogMigrated(): bool
-	{
-		return $this->get('migration_to_controller', 'has not even started yet') === 'finished';
-	}
-
-	/**
-	 * This method only for migration period and should be removed after migration
-	 */
-	public function setConsumptionsLogMigrated(bool $finished = true): static
-	{
-		if ($finished === true)
-		{
-			$this->set('migration_to_controller', 'finished');
-		}
-		else
-		{
-			$this->delete('migration_to_controller');
-		}
-
-		return $this;
-	}
-	// endregion
-
 	public function getSynCode(): ?string
 	{
 		return $this->get('verification_code');
@@ -109,11 +81,6 @@ class Client extends Config
 		return (int)$this->get('synchronization:last_sync_time');
 	}
 
-	public function getSyncInterval(): int
-	{
-		return (int)$this->get('synchronization:ttl', '86400');
-	}
-
 	public function getSyncDelta(): int
 	{
 		$delta = (int)$this->get('synchronization:delta', 0);
@@ -148,32 +115,6 @@ class Client extends Config
 		return $this;
 	}
 
-	//region Migration. It is temporary
-	public function getMigrationDelay(): int
-	{
-		return (int)$this->get('migration_delay', '0');
-	}
-
-	public function setMigrationDelay(int $seconds = 0): static
-	{
-		$this->set('migration_delay', (string)$seconds);
-
-		return $this;
-	}
-
-	public function setMigrationLastSyncTime(int $timestamp): static
-	{
-		$this->set('last_migration_attempt', (string)$timestamp);
-
-		return $this;
-	}
-
-	public function getMigrationLastSyncTime(): int
-	{
-		return (int)$this->get('last_migration_attempt', 0);
-	}
-	//endregion
-
 	public function isLoggingEnabled(): bool
 	{
 		return $this->get('enabled_logging', 'N') === 'Y';
@@ -191,15 +132,5 @@ class Client extends Config
 		$this->delete('enabled_logging');
 
 		return $this;
-	}
-
-	public function getBaasRegions(): array
-	{
-		if ($regions = $this->get('regions'))
-		{
-			$regions = json_decode($regions);
-		}
-
-		return is_array($regions) ? $regions : ['ru', 'kz', 'by'];
 	}
 }

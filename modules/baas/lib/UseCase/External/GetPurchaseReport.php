@@ -42,7 +42,6 @@ class GetPurchaseReport extends BaseClientAction
 			->performRequest('getPurchaseReport', $request)
 			?->getData()
 		;
-		AddMessage2Log(['$response' => $response]);
 
 		$result = [];
 		if (is_array($response)

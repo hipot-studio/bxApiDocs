@@ -7,9 +7,10 @@ namespace Bitrix\Baas\UseCase\Internal\Request;
 class PackAvailablePurchaseInfoRequest
 {
 	public function __construct(
-		public ?string $packageCode = null,
-		public ?string $purchaseCode = null,
-		public ?bool $onlyEnabled = true,
+		public readonly ?string $packageCode = null,
+		public readonly ?string $purchaseCode = null,
+		public readonly bool $onlyEnabled = true,
+		public readonly bool $includeDepleted = false,
 	)
 	{
 	}

@@ -19,15 +19,15 @@ class PackAvailablePurchaseInfo
 
 		if ($onlyEnabled !== true)
 		{
-			$data = $this->purchaseRepository->getNotExpiredPurchases();
+			$data = $this->purchaseRepository->getActualPurchasesDistributedByBaas();
 		}
 		elseif (is_string($packageCode) && $packageCode !== '')
 		{
-			$data = $this->purchaseRepository->getAvailableByPackageCode($packageCode);
+			$data = $this->purchaseRepository->getAvailableByPackageCode($packageCode, $request->includeDepleted);
 		}
 		else
 		{
-			$data = $this->purchaseRepository->getAvailable();
+			$data = $this->purchaseRepository->getAvailablePurchasesDistributedByBaas();
 		}
 
 		return (new Response\PackAvailablePurchaseInfoResult())

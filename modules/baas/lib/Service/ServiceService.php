@@ -8,13 +8,10 @@ use Bitrix\Main;
 use Bitrix\Baas;
 use Bitrix\Baas\UseCase\External;
 use Bitrix\Baas\UseCase\Internal;
+use Bitrix\Baas\Public\Provider;
 
-class ServiceService extends LocalService implements Baas\Contract\ServiceService
+class ServiceService extends Provider\ServiceProvider implements Baas\Contract\ServiceService
 {
-	/** @var Baas\Entity\Service[]  */
-	private array $repo = [];
-	protected Baas\Model\EO_Service_Collection $services;
-
 	public function __construct(
 		protected Baas\Service\BillingService $billingService,
 		protected Baas\Service\ProxyService $proxyService,
@@ -22,27 +19,10 @@ class ServiceService extends LocalService implements Baas\Contract\ServiceServic
 		protected Baas\Repository\PurchaseRepositoryInterface $purchaseRepository,
 	)
 	{
-		parent::__construct();
-	}
-
-	public function getByCode(string $code): Baas\Contract\Service
-	{
-		if (!array_key_exists($code, $this->repo))
-		{
-			$this->repo[$code] = new Baas\Entity\Service($code, $this->getServiceDataByCode($code));
-		}
-
-		return $this->repo[$code];
-	}
-
-	public function getAll(): iterable
-	{
-		$services = Baas\Model\ServiceTable::getList(['select' => ['CODE'], 'order' => ['CODE' => 'ASC']]);
-
-		foreach ($services as $service)
-		{
-			yield $this->getByCode($service['CODE']);
-		}
+		parent::__construct(
+			$serviceRepository,
+			$purchaseRepository,
+		);
 	}
 
 	public function consumeService(
@@ -50,9 +30,7 @@ class ServiceService extends LocalService implements Baas\Contract\ServiceServic
 		int $units,
 		bool $force = false,
 		?array $attributes = null,
-	): External\Response\ConsumeServiceResult
-		|Internal\Response\ConsumeServiceResult
-		|Main\Result
+	): External\Response\ConsumeServiceResult|Main\Result
 	{
 		Baas\Internal\Diag\Logger::getInstance()->info(
 			'Consumption begins',
@@ -84,9 +62,7 @@ class ServiceService extends LocalService implements Baas\Contract\ServiceServic
 		Baas\Contract\Service $service,
 		string $consumptionId,
 		?array $attributes = null,
-	):  External\Response\RefundServiceResult
-		|Internal\Response\RefundServiceResult
-		|Main\Result
+	): External\Response\RefundServiceResult|Main\Result
 	{
 		$result = $this->billingService->refundService($service, $consumptionId, $attributes);
 
@@ -168,17 +144,5 @@ class ServiceService extends LocalService implements Baas\Contract\ServiceServic
 				serviceInPurchasedPackages: $serviceInPurchasedPackages,
 			)
 		);
-	}
-
-	private function getServiceDataByCode(string $code): ?Baas\Model\EO_Service
-	{
-		if (!isset($this->services))
-		{
-			$this->services = Baas\Model\ServiceTable::getList([
-				'select' => ['*'],
-			])->fetchCollection();
-		}
-
-		return $this->services->getByPrimary($code) ?? null;
 	}
 }

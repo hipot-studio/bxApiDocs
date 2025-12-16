@@ -20,4 +20,9 @@ interface ServiceRepositoryInterface {
 		Baas\Entity\Service $service,
 		string $languageId,
 	): ?Baas\Model\EO_ServiceAds;
+
+	public function getList(
+		int $offset,
+		int $limit,
+	): Baas\Model\EO_Service_Collection;
 }

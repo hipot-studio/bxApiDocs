@@ -2,7 +2,9 @@
 
 namespace Bitrix\Baas;
 
-use Bitrix\Baas\Service\PackageService;
+use Bitrix\Baas\Public\Provider;
+use Bitrix\Baas\Internal\Service\BillingSynchronizationService;
+use Bitrix\Baas\Internal\Service\BaasService;
 use Bitrix\Baas\Service\PurchaseService;
 use Bitrix\Main;
 
@@ -15,6 +17,7 @@ class Baas
 	protected Config\Client $config;
 	protected Service\ServiceService $serviceManager;
 	protected Service\InstantMessageService $imService;
+	protected Provider\PackageProvider $packageProvider;
 
 	protected function __construct(Contract\License $license, Config\Client $config)
 	{
@@ -58,10 +61,10 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 		{
 			if ($force === true)
 			{
-				return Service\BillingSynchronizationService::getInstance()->sync();
+				return BillingSynchronizationService::getInstance()->sync();
 			}
 
-			return Service\BillingSynchronizationService::getInstance()->syncIfNeeded();
+			return BillingSynchronizationService::getInstance()->syncIfNeeded();
 		}
 
 		return (new Main\Result())->addError(new Main\Error('Baas is not available'));
@@ -87,7 +90,7 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 	 */
 	public function getPackagesWithActivePurchases(): array
 	{
-		$allPackages = PackageService::getInstance()->getAll();
+		$allPackages = $this->getPackageProvider()->getDistributedByBaas();
 		$packagesWithActivePurchases = [];
 
 		foreach ($allPackages as $package)
@@ -106,7 +109,7 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 	 */
 	public function getPackagesWithoutActivePurchases(): array
 	{
-		$allPackages = PackageService::getInstance()->getAll();
+		$allPackages = $this->getPackageProvider()->getDistributedByBaas();
 		$packagesWithoutActivePurchases = [];
 
 		foreach ($allPackages as $package)
@@ -120,6 +123,9 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 		return $packagesWithoutActivePurchases;
 	}
 
+	/**
+	 * @deprecated use Provider\ServiceProvider()
+	 */
 	public function getServiceManager(): Contract\ServiceService
 	{
 		if (!isset($this->serviceManager))
@@ -138,6 +144,16 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 	public function getService(string $serviceCode): Contract\Service
 	{
 		return $this->getServiceManager()->getByCode($serviceCode);
+	}
+
+	protected function getPackageProvider(): Provider\PackageProvider
+	{
+		if (!isset($this->packageProvider))
+		{
+			$this->packageProvider = Provider\PackageProvider::create();
+		}
+
+		return $this->packageProvider;
 	}
 
 	protected function getIMService(): Service\InstantMessageService
@@ -174,11 +190,7 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 	{
 		if (!isset(static::$instance))
 		{
-			$configs = new Config\Client();
-			$cloudLicense = new Integration\Bitrix24\License($configs);
-			$license = $cloudLicense->isAvailable() ? $cloudLicense : new Integration\Main\License($configs);
-
-			static::$instance = new self($license, $configs);
+			static::$instance = new self(BaasService::getInstance()->getLicense(), new Config\Client());
 		}
 
 		return static::$instance;

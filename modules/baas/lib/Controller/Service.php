@@ -4,9 +4,11 @@ namespace Bitrix\Baas\Controller;
 
 use \Bitrix\Main;
 use \Bitrix\Baas;
+use \Bitrix\Baas\Internal;
 
 class Service extends Main\Engine\Controller
 {
+
 	public function getAllAction(): Main\Engine\Response\Json
 	{
 		return $this->getAction(Baas\Entity\Service::CODE_MAIN_SERVICE);
@@ -16,9 +18,10 @@ class Service extends Main\Engine\Controller
 	{
 		$baas = Baas\Baas::getInstance();
 		$service = $baas->getService($code);
+		$packageProvider = Baas\Public\Provider\PackageProvider::create();
 		$packages = $code === Baas\Entity\Service::CODE_MAIN_SERVICE
-			? $this->getPackageManager()->getAll()
-			: $this->getPackageManager()->getByService($service);
+			? $packageProvider->getDistributedByBaas()
+			: $packageProvider->getDistributedByBaasForService($service);
 
 		$data = [
 			'service' => $service,
@@ -60,10 +63,5 @@ class Service extends Main\Engine\Controller
 		}
 
 		return $result;
-	}
-
-	private function getPackageManager(): Baas\Service\PackageService
-	{
-		return Baas\Service\PackageService::getInstance();
 	}
 }

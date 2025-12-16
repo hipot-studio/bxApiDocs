@@ -217,24 +217,6 @@ class UseCaseFactory
 		);
 	}
 
-	/**
-	 * @param Baas\Repository\ConsumptionRepositoryInterface $consumptionRepository
-	 * @return MigrateConsumptionLog
-	 * @throws Exception\ClientIsNotRegistered
-	 */
-	public function createMigrateConsumptionLog(
-		Baas\Repository\ConsumptionRepositoryInterface $consumptionRepository,
-	): MigrateConsumptionLog
-	{
-		return new Baas\UseCase\External\MigrateConsumptionLog(
-			new Baas\UseCase\External\Request\MigrateConsumptionLogRequest(
-				server: $this->server,
-				client: $this->client,
-				consumptionRepository: $consumptionRepository,
-			),
-		);
-	}
-
 	public function createGetSalesStatus(): GetBaasSalesStatus
 	{
 		return new Baas\UseCase\External\GetBaasSalesStatus(

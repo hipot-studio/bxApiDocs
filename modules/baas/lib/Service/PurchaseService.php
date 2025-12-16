@@ -34,13 +34,14 @@ class PurchaseService extends LocalService implements Contract\PurchaseService
 	/**
 	 * @inheritDoc
 	 */
-	public function getByPackageCode(string $code): array
+	public function getByPackageCode(string $code, bool $includeDepleted = false): array
 	{
 		return (new UseCase\Internal\PackAvailablePurchaseInfo(
 			$this->purchaseRepository
 		))(
 			new UseCase\Internal\Request\PackAvailablePurchaseInfoRequest(
 				packageCode: $code,
+				includeDepleted: $includeDepleted
 			)
 		)->getData();
 	}

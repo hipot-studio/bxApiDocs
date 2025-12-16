@@ -25,7 +25,7 @@ interface Package
 	 */
 	public function getPurchasedServices(): array;
 
-	public function getPurchaseInfo(): PurchasesSummary;
+	public function getPurchaseInfo(bool $includeDepleted = false): PurchasesSummary;
 
 	public function getPurchases(): array;
 }

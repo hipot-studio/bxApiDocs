@@ -20,6 +20,7 @@ class NotifyAboutPurchase
 		$purchaseCode = $request->purchaseCode;
 
 		$servicesInAPurchase = $this->purchaseRepository->getServicesInPurchase(
+			$packageCode,
 			$purchaseCode,
 		);
 		if (empty($servicesInAPurchase))

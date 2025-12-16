@@ -244,6 +244,7 @@ class Service implements \JsonSerializable, Baas\Contract\Service
 			'description' => $this->getDescription(),
 			'featurePromotionCode' => $this->data?->getFeaturePromotionCode(),
 			'helperCode' => $this->data?->getHelperCode(),
+			'advertisingStrategy' => $this->data?->getAdvertisingStrategy(),
 			'icon' => [
 				'className' => $this->data?->getIconClass(),
 				'color' => $this->data?->getIconColor(),
