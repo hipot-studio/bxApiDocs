@@ -605,6 +605,3 @@ class CAllAgent
 	}
 }
 
-class CAgent extends CAllAgent
-{
-}
