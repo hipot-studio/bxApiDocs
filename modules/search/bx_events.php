@@ -8,8 +8,7 @@
 class _CEventsSearch
 {
 	/**
-	 * <p>Событие "BeforeIndex" вызывается перед индексацией элемента методом <a
-	 * href="http://dev.1c-bitrix.ru/api_help/search/classes/csearch/indexs.php">CSearch::Index</a>.</p>
+	 * <p>Событие "BeforeIndex" вызывается перед индексацией элемента методом <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearch/indexs.php">CSearch::Index</a>.</p>
 	 *
 	 *
 	 * @param array $arFields Массив следующего содержания:                 <ul> <li> <b>MODULE_ID</b> -
@@ -26,7 +25,7 @@ class _CEventsSearch
 	 * относительно корня сайта, по которому доступен данный элемент;</li>
 	 *                </ul>
 	 *
-	 * @return mixed
+	 * @return array
 	 *
 	 * <h4>Example</h4>
 	 * <pre bgcolor="#323232" style="padding:5px;">
@@ -46,7 +45,7 @@ class _CEventsSearch
 	 *    return $arFields;
 	 *     }
 	 * }
-	 * ?&gt;
+	 *
 	 * // регистрируем обработчик
 	 * AddEventHandler("search", "BeforeIndex", "BeforeIndexHandler");
 	 *  // создаем обработчик события "BeforeIndex"
@@ -56,11 +55,12 @@ class _CEventsSearch
 	 *       return $arFields;
 	 *    if($arFields["MODULE_ID"] == "iblock")
 	 *    {
-	 *       $db_props = CIBlockElement::GetProperty(                        // Запросим свойства индексируемого элемента
-	 *                                     $arFields["PARAM2"],         // BLOCK_ID индексируемого свойства
-	 *                                     $arFields["ITEM_ID"],          // ID индексируемого свойства
-	 *                                     array("sort" =&gt; "asc"),       // Сортировка (можно упустить)
-	 *                                     Array("CODE"=&gt;"CML2_ARTICLE")); // CODE свойства (в данном случае артикул)
+	 *       // Запросим свойства индексируемого элемента
+	 *       $db_props = CIBlockElement::GetProperty(
+	 *          $arFields["PARAM2"],         // BLOCK_ID индексируемого свойства
+	 *          $arFields["ITEM_ID"],          // ID индексируемого свойства
+	 *          array("sort" =&gt; "asc"),       // Сортировка (можно упустить)
+	 *          array("CODE"=&gt;"CML2_ARTICLE")); // CODE свойства (в данном случае артикул)
 	 *       if($ar_props = $db_props-&gt;Fetch())
 	 *          $arFields["TITLE"] .= " ".$ar_props["VALUE"];   // Добавим свойство в конец заголовка индексируемого элемента
 	 *    }
@@ -72,16 +72,17 @@ class _CEventsSearch
 	 *
 	 *
 	 * <h4>See Also</h4>
-	 * <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearch/indexs.php">CSearch::Index</a></li>    </ul><a
+	 * <ul> <li><a href="https://dev.1c-bitrix.ru/api_help/search/classes/csearch/indexs.php">CSearch::Index</a></li>    </ul><a
 	 * name="examples"></a>
 	 *
 	 *
 	 * @static
-	 * @link http://dev.1c-bitrix.ru/api_help/search/events/beforeindex.php
+	 * @link https://dev.1c-bitrix.ru/api_help/search/events/beforeindex.php
 	 * @author Bitrix
 	 */
 	public static function BeforeIndex($arFields)
 	{
+		return [];
 	}
 
 	/**
