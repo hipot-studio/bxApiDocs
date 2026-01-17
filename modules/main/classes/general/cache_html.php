@@ -1,4 +1,4 @@
-<?
+<?php
 /**
  * This file is used only for compatibility.
  * Some scripts could include cache_html.php using code like this

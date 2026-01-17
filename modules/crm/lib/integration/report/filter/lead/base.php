@@ -37,7 +37,10 @@ class Base extends BaseFilter
 	{
 		$fieldsList = parent::getFieldsList();
 		$leadFilter = Factory::createEntityFilter(
-			new LeadSettings(array('ID' => static::getBoardKey()))
+			new LeadSettings([
+				'ID' => static::getBoardKey(),
+				'disableDepartmentSelector' => true,
+			]),
 		);
 
 		$fields = $leadFilter->getFields();

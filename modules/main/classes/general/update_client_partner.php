@@ -24,8 +24,6 @@ if (!defined("US_BASE_MODULE"))
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/update_class.php");
 
-$GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] = "";
-
 class CUpdateClientPartner
 {
 	public static function RegisterModules(&$strError, $lang = false, $stableVersionsOnly = false)
@@ -1495,7 +1493,7 @@ class CUpdateClientPartner
 
 		$replyContentRange = "";
 		$replyContentLength = 0;
-		for ($i = 1; $i < count($replyHeaderArray); $i++)
+		for ($i = 1, $n = count($replyHeaderArray); $i < $n; $i++)
 		{
 			if (str_contains($replyHeaderArray[$i], "Content-Range"))
 				$replyContentRange = trim(mb_substr($replyHeaderArray[$i], mb_strpos($replyHeaderArray[$i], ":") + 1, mb_strlen($replyHeaderArray[$i]) - mb_strpos($replyHeaderArray[$i], ":") + 1));
@@ -1864,12 +1862,7 @@ class CUpdateClientPartner
 	{
 		global $DBType, $DB, $APPLICATION, $USER;
 
-		if (!isset($GLOBALS["UPDATE_STRONG_UPDATE_CHECK"])
-			|| ($GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] != "Y" && $GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] != "N"))
-		{
-			$GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] = ((US_CALL_TYPE != "DB") ? COption::GetOptionString("main", "strong_update_check", "Y") : "Y");
-		}
-		$strongUpdateCheck = $GLOBALS["UPDATE_STRONG_UPDATE_CHECK"];
+		$strongUpdateCheck = (US_CALL_TYPE != "DB" ? COption::GetOptionString("main", "strong_update_check", "Y") : "Y");
 
 		$DOCUMENT_ROOT = $_SERVER["DOCUMENT_ROOT"];
 

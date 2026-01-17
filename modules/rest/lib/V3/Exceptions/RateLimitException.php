@@ -8,6 +8,6 @@ class RateLimitException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_RATE_LIMIT_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_RATELIMITEXCEPTION';
 	}
 }

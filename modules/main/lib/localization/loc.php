@@ -391,7 +391,7 @@ final class Loc
 
 		if (!isset(self::$messages[$language][$code]) && defined("BX_MESS_LOG"))
 		{
-			file_put_contents(BX_MESS_LOG, $code . ": not found for " . $currentFile . "\n", FILE_APPEND);
+			file_put_contents(BX_MESS_LOG, "[" . $language . "]" . $code . ": not found for " . $currentFile . "\n", FILE_APPEND);
 		}
 	}
 
@@ -462,7 +462,16 @@ final class Loc
 	 */
 	public static function getDefaultLang($lang)
 	{
-		static $subst = ['ua' => 'en', 'kz' => 'ru', 'by' => 'ru', 'ru' => 'ru', 'en' => 'en', 'de' => 'en'];
+		static $subst = [
+			'ua' => 'en',
+			'kz' => 'ru',
+			'by' => 'ru',
+			'ru' => 'ru',
+			'en' => 'en',
+			'de' => 'en',
+			'uz' => 'ru',
+		];
+
 		if (isset($subst[$lang]))
 		{
 			return $subst[$lang];
@@ -497,10 +506,10 @@ final class Loc
 	 */
 	public static function getMessagePlural(string $code, int $value, ?array $replace = null, ?string $language = null): ?string
 	{
-		$result = self::getMessage($code . '_PLURAL_' . self::getPluralForm($value, $language), $replace);
+		$result = self::getMessage($code . '_PLURAL_' . self::getPluralForm($value, $language), $replace, $language);
 		if ($result === null)
 		{
-			$result = self::getMessage($code . '_PLURAL_1', $replace);
+			$result = self::getMessage($code . '_PLURAL_1', $replace, $language);
 		}
 
 		return $result;

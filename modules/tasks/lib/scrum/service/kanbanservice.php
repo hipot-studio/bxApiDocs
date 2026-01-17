@@ -399,6 +399,8 @@ class KanbanService implements Errorable
 				if (!empty($ids))
 				{
 					$stageService->clearRelations($ids);
+					$taskObject = new \CTasks;
+					$taskObject->update($taskId, ['STAGE_ID' => 0]);
 				}
 			}
 

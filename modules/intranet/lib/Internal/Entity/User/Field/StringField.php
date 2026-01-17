@@ -11,38 +11,14 @@ class StringField extends SingleField
 		public readonly string $title,
 		public readonly bool $isEditable,
 		public readonly bool $isShowAlways,
+		public readonly bool $isVisible,
 		public readonly mixed $value = '',
 	)
 	{
 	}
 
-	public function getId(): string
+	public function isValid(mixed $value): bool
 	{
-		return $this->id;
-	}
-
-	public function getValue(): string
-	{
-		return $this->isValid() ? $this->value : '';
-	}
-
-	public function getTitle(): string
-	{
-		return $this->title;
-	}
-
-	public function isEditable(): bool
-	{
-		return $this->isEditable;
-	}
-
-	public function isShowAlways(): bool
-	{
-		return $this->isShowAlways;
-	}
-
-	public function isValid(mixed $value = null): bool
-	{
-		return is_string($value ?? $this->value);
+		return is_string($value);
 	}
 }

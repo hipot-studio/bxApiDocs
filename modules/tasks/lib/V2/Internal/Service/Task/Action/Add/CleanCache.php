@@ -6,6 +6,8 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add;
 
 use Bitrix\Main\Data\Cache;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Repository\SubTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ParticipantTrait;
 use Bitrix\Tasks\Internals\CacheConfig;
@@ -35,6 +37,11 @@ class CleanCache
 		foreach ($participants as $userId)
 		{
 			$cacheManager->ClearByTag("tasks_user_" . $userId);
+		}
+
+		if ($fullTaskData['PARENT_ID'])
+		{
+			Container::getInstance()->get(SubTaskRepositoryInterface::class)->invalidate((int)$fullTaskData['PARENT_ID']);
 		}
 
 		$cache = Cache::createInstance();

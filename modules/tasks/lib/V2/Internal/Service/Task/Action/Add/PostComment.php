@@ -38,7 +38,7 @@ class PostComment
 		if (!$isDeferred)
 		{
 			$commentPoster->disableDeferredPostMode();
-			$commentPoster->postComments();
+			$commentPoster->postComments(['fromWorkFlow' => $this->config->isFromWorkFlow()]);
 			$commentPoster->clearComments();
 		}
 

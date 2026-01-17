@@ -154,11 +154,16 @@ class Dynamic extends Kanban\Entity
 		$settings = new Filter\ItemSettings([
 			'ID' => $this->getGridId(),
 			'categoryId' => $this->getCategoryId(),
+			'isRecurring' => $this->isRecurring(),
 		], $this->factory->getType());
 		$provider = new ItemDataProvider($settings, $this->factory);
 		$ufProvider = new Filter\ItemUfDataProvider($settings);
 
-		return new Filter\Filter($settings->getID(), $provider, [$ufProvider]);
+		return new Filter\Filter(
+			$settings->getID(),
+			$provider,
+			[$ufProvider],
+		);
 	}
 
 	protected function getTotalSumFieldName(): string

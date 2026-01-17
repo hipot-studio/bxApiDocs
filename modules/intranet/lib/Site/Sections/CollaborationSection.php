@@ -88,7 +88,7 @@ class CollaborationSection
 			$result[] = [
 				'ID' => $menuData['menu_item_id'] ?? $item['id'],
 				'TEXT' => $item['title'],
-				'URL' => $item['url'],
+				'URL' => $item['url'] ?? '',
 				'COUNTER_ID' => $menuData['counter_id'] ?? '',
 				'COUNTER' => $menuData['counter_num'] ?? 0,
 				'SUB_LINK' => $menuData['sub_link'] ?? '',
@@ -453,20 +453,14 @@ class CollaborationSection
 			);
 		}
 
-		$url = (
-		static::isDiskEnabled()
-			? SITE_DIR . 'company/personal/user/' . CurrentUser::get()->getId() . '/disk/path/'
-			: SITE_DIR . 'company/personal/user/' . CurrentUser::get()->getId() . '/files/lib/'
-		);
-
 		return [
 			'id' => 'disk',
 			'title' => static::getTitle('disk'),
 			'available' => $available,
 			'url' => SITE_DIR . 'docs/',
 			'menuData' => [
-				'real_link' => $url,
 				'menu_item_id' => 'menu_files',
+				'sub_menu' => DiskSection::getSubmenuItems(),
 			],
 		];
 	}
@@ -479,11 +473,15 @@ class CollaborationSection
 			&& \CIntranetUtils::isExternalMailAvailable()
 		);
 
+		$mailAnalyticParams = '?source=horizontal_menu';
+		$url = Option::get('intranet', 'path_mail_client', SITE_DIR . 'mail/');
+		$url .= $mailAnalyticParams;
+
 		return [
 			'id' => 'mail',
 			'title' => static::getTitle('mail'),
 			'available' => $available,
-			'url' => Option::get('intranet', 'path_mail_client', SITE_DIR . 'mail/'),
+			'url' => $url,
 			'menuData' => [
 				'counter_id' => 'mail_unseen',
 				'menu_item_id' => 'menu_external_mail',

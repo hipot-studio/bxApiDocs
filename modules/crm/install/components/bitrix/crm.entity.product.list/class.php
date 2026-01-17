@@ -26,9 +26,11 @@ use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Iblock;
 use Bitrix\Iblock\Url\AdminPage\BuilderManager;
 use Bitrix\Main;
+use Bitrix\Main\Context;
 use Bitrix\Main\Grid\Editor\Types;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
 use Bitrix\Sale;
 use Bitrix\UI\Util;
@@ -149,6 +151,8 @@ final class CCrmEntityProductListComponent
 		$this->prepareProducts($params);
 		$this->prepareSettings($params);
 		$this->prepareEntitySettings($params);
+
+		$this->arParams['IS_COPY_MODE'] ??= false;
 
 		// white column list
 		// black column list
@@ -1106,6 +1110,19 @@ final class CCrmEntityProductListComponent
 				}
 				unset($row);
 			}
+			if (
+				$this->arParams['IS_COPY_MODE']
+				&& !AccessController::getCurrent()->checkByValue(
+					\Bitrix\Catalog\Access\ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+					$this->entity['TYPE_ID'],
+				)
+			)
+			{
+				$this->rows = Container::getInstance()->getProductRowChecker()->updateCatalogPrices(
+					$this->rows,
+					$this->currency['ID'],
+				);
+			}
 		}
 
 		if ($this->rows && $this->isAllowedReservation())
@@ -1209,7 +1226,12 @@ final class CCrmEntityProductListComponent
 
 		$this->arResult['URL_BUILDER_CONTEXT'] = ProductBuilder::TYPE_ID;
 		$this->arResult['PRODUCT_DATA_FIELD_NAME'] = $this->arParams['PRODUCT_DATA_FIELD_NAME'];
-		$this->arResult['DEFAULT_DATE_RESERVATION'] = (string)ReservationService::getInstance()->getDefaultDateReserveEnd();
+
+		$dateFormat = Date::convertFormatToPhp(Context::getCurrent()->getCulture()->getDateFormat());
+		$this->arResult['DEFAULT_DATE_RESERVATION'] = ReservationService::getInstance()
+			->getDefaultDateReserveEndWithTime()
+			->format($dateFormat)
+		;
 
 		$this->arResult['IS_INVENTORY_MANAGEMENT_TOOL_ENABLED'] = Catalog\Restriction\ToolAvailabilityManager::getInstance()->checkInventoryManagementAvailability();
 		$this->arResult['IS_EXTERNAL_CATALOG'] = Catalog\Config\State::isExternalCatalog();
@@ -1703,33 +1725,36 @@ final class CCrmEntityProductListComponent
 				'width' => $columnDefaultWidth,
 			];
 
-			$result['RESERVE_INFO'] = [
-				'id' => 'RESERVE_INFO',
-				'name' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_STORE_FROM_RESERVED_MSGVER_1'),
-				'title' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_STORE_FROM_RESERVED_MSGVER_1'),
-				'hint' => Loc::getMessage(
-					'CRM_ENTITY_PRODUCT_LIST_COLUMN_STORE_FROM_RESERVED_HINT',
-					[
-						'#HELPER_HTML_LINK#' => $articleLinkHtml
-					]
-				),
-				'hintHtml' => true,
-				'hintInteractivity' => true,
-				'sort' => 'INPUT_RESERVE_QUANTITY',
-				'align' => 'right',
-			];
+			if (!EnableWizard\Manager::isOnecMode())
+			{
+				$result['RESERVE_INFO'] = [
+					'id' => 'RESERVE_INFO',
+					'name' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_STORE_FROM_RESERVED_MSGVER_1'),
+					'title' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_STORE_FROM_RESERVED_MSGVER_1'),
+					'hint' => Loc::getMessage(
+						'CRM_ENTITY_PRODUCT_LIST_COLUMN_STORE_FROM_RESERVED_HINT',
+						[
+							'#HELPER_HTML_LINK#' => $articleLinkHtml
+						]
+					),
+					'hintHtml' => true,
+					'hintInteractivity' => true,
+					'sort' => 'INPUT_RESERVE_QUANTITY',
+					'align' => 'right',
+				];
 
-			$result['ROW_RESERVED'] = [
-				'id' => 'ROW_RESERVED',
-				'name' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_RESERVED_INTO_DEAL_MSGVER_1'),
-				'title' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_RESERVED_INTO_DEAL_MSGVER_1'),
-				'hint' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_RESERVED_INTO_DEAL_HINT'),
-				'hintInteractivity' => true,
-				'sort' => 'ROW_RESERVED',
-				'align' => 'right',
-				'editable' => false,
-				'width' => $columnDefaultWidth,
-			];
+				$result['ROW_RESERVED'] = [
+					'id' => 'ROW_RESERVED',
+					'name' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_RESERVED_INTO_DEAL_MSGVER_1'),
+					'title' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_RESERVED_INTO_DEAL_MSGVER_1'),
+					'hint' => Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_COLUMN_RESERVED_INTO_DEAL_HINT'),
+					'hintInteractivity' => true,
+					'sort' => 'ROW_RESERVED',
+					'align' => 'right',
+					'editable' => false,
+					'width' => $columnDefaultWidth,
+				];
+			}
 
 			$result['DEDUCTED_INFO'] = [
 				'id' => 'DEDUCTED_INFO',

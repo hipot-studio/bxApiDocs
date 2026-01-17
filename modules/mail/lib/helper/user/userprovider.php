@@ -2,6 +2,9 @@
 
 namespace Bitrix\Mail\Helper\User;
 
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
 
 final class UserProvider
@@ -79,9 +82,9 @@ final class UserProvider
 	 *     PERSONAL_PHOTO: string,
 	 *     WORK_POSITION: string,
 	 * }
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
 	private function getUsers(array $userIds): array
 	{

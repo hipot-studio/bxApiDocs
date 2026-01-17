@@ -24,9 +24,7 @@ class DeleteReminderCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$reminderRepository = Container::getInstance()->getReminderRepository();
-
-		$handler = new DeleteReminderHandler($reminderRepository);
+		$handler = Container::getInstance()->get(DeleteReminderHandler::class);
 
 		try
 		{

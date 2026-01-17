@@ -10,14 +10,20 @@ use Bitrix\Tasks\V2\Internal\Repository\Mapper\StageMapper;
 
 class StageRepository implements StageRepositoryInterface
 {
-	public function __construct(private readonly StageMapper $stageMapper)
+	public function __construct(
+		private readonly StageMapper $stageMapper,
+	)
 	{
 	}
 
 	public function getById(int $id): ?Entity\Stage
 	{
 		$select = [
-			'ID', 'TITLE', 'COLOR',
+			'ID',
+			'TITLE',
+			'COLOR',
+			'SORT',
+			'SYSTEM_TYPE',
 		];
 
 		$stage = StagesTable::getByPrimary($id, ['select' => $select])->fetch();
@@ -29,7 +35,7 @@ class StageRepository implements StageRepositoryInterface
 		return $this->stageMapper->mapToEntity($stage);
 	}
 
-	public function getByGroupId(int $groupId): ?Entity\StageCollection
+	public function getByGroupId(int $groupId): Entity\StageCollection
 	{
 		$workMode = StagesTable::getWorkMode();
 
@@ -40,5 +46,22 @@ class StageRepository implements StageRepositoryInterface
 		StagesTable::setWorkMode($workMode);
 
 		return $this->stageMapper->mapToCollection($stages);
+	}
+
+	public function getFirstIdByGroupId(int $groupId): ?int
+	{
+		$stage = StagesTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'ENTITY_ID' => $groupId,
+				'=ENTITY_TYPE' => StagesTable::WORK_MODE_GROUP,
+			],
+			'order' => [
+				'SORT' => 'ASC',
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return $stage ? (int)$stage['ID'] : null;
 	}
 }

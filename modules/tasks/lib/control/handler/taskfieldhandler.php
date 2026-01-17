@@ -51,6 +51,8 @@ class TaskFieldHandler
 {
 	private $taskId;
 	private array $skipTimeZoneFields = [];
+	private bool $fromWorkFlow = false;
+	private bool $fromAgent = false;
 
 	public function __construct(private int $userId, private array $fields = [], private ?array $taskData = null)
 	{
@@ -60,6 +62,20 @@ class TaskFieldHandler
 	public function skipTimeZoneFields(string ...$fields): static
 	{
 		$this->skipTimeZoneFields = $fields;
+		return $this;
+	}
+
+	public function setFromWorkFlow(bool $fromWorkFlow): static
+	{
+		$this->fromWorkFlow = $fromWorkFlow;
+
+		return $this;
+	}
+
+	public function setFromAgent(bool $fromAgent): static
+	{
+		$this->fromAgent = $fromAgent;
+
 		return $this;
 	}
 
@@ -87,7 +103,7 @@ class TaskFieldHandler
 
 		try
 		{
-			$handler->modify($this->fields, $this->taskData);
+			$handler->modify($this->fields, $this->skipTimeZoneFields, $this->taskData);
 		}
 		catch (FlowTaskException|FlowNotFoundException $e)
 		{
@@ -688,6 +704,7 @@ class TaskFieldHandler
 			&& isset($this->fields['MATCH_WORK_TIME'])
 			&& $this->fields['MATCH_WORK_TIME'] == 'Y'
 			&& !isset($this->fields['FLOW_ID']) // skip, because the deadline has already been set
+			&& !$this->isTimeZoneSkip('DEADLINE')
 		)
 		{
 			$this->fields['DEADLINE'] = $this->getDeadlineMatchWorkTime($this->fields['DEADLINE']);
@@ -1018,6 +1035,11 @@ class TaskFieldHandler
 		return $fields;
 	}
 
+	public function getSkipTimeZoneFields(): array
+	{
+		return $this->skipTimeZoneFields;
+	}
+
 	/**
 	 * @return bool
 	 */
@@ -1314,7 +1336,7 @@ class TaskFieldHandler
 	private function prepareDeadLine(): void
 	{
 		$isNewTask = $this->isNewTask();
-		if ($isNewTask)
+		if ($isNewTask && !$this->fromWorkFlow && !$this->fromAgent)
 		{
 			$handler = new DeadlineFieldHandler($this->userId);
 			$handler->modify($this->fields);

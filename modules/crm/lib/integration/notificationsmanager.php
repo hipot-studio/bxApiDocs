@@ -7,13 +7,18 @@ use Bitrix\Crm\Integration\ImOpenLines\GoToChat;
 use Bitrix\Crm\MessageSender\Channel;
 use Bitrix\Crm\MessageSender\ICanSendMessage;
 use Bitrix\Crm\MessageSender\NotificationsPromoManager;
+use Bitrix\Crm\Service\Container;
 use Bitrix\ImConnector;
 use Bitrix\ImOpenLines\Common;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber\Format;
 use Bitrix\Main\PhoneNumber\Formatter;
 use Bitrix\Main\PhoneNumber\Parser;
+use Bitrix\Main\Security\Sign\BadSignatureException;
+use Bitrix\Main\Security\Sign\TimeSigner;
+use Bitrix\Main\Web\Json;
 use Bitrix\Notifications\Account;
 use Bitrix\Notifications\Billing;
 use Bitrix\Notifications\FeatureStatus;
@@ -26,6 +31,7 @@ use Bitrix\Notifications\Model\MessageTable;
 use Bitrix\Notifications\Model\QueueTable;
 use Bitrix\Notifications\ProviderEnum;
 use Bitrix\Notifications\Settings;
+use Bitrix\Notifications\Template;
 
 //use Bitrix\Main\DI\ServiceLocator;
 
@@ -40,10 +46,15 @@ class NotificationsManager implements ICanSendMessage
 {
 	private const CONTACT_NAME_TEMPLATE_PLACEHOLDER = 'NAME';
 
+	private const SALT = 'crm_notifications_template';
+	private const SIGNATURE_TTL = '+7 days';
+
 	/** @var bool */
 	private static $canUse;
 
 	/**
+	 * All modules installed, notifications in general are available in this region and on current tariff
+	 *
 	 * @return bool
 	 */
 	public static function canUse(): bool
@@ -51,13 +62,19 @@ class NotificationsManager implements ICanSendMessage
 		if (static::$canUse === null)
 		{
 			static::$canUse = (
-				Loader::includeModule('notifications')
-				&& Loader::includeModule('imconnector')
+				self::isAllModulesInstalled()
 				&& \Bitrix\Notifications\Limit::isAvailable()
 			);
 		}
 
 		return static::$canUse;
+	}
+
+	private static function isAllModulesInstalled(): bool
+	{
+		return Loader::includeModule('notifications')
+			&& Loader::includeModule('imconnector')
+		;
 	}
 
 	public static function getSenderCode(): string
@@ -75,7 +92,7 @@ class NotificationsManager implements ICanSendMessage
 			return false;
 		}
 
-		return static::isEnabled();
+		return static::isCrmPaymentScenarioAvailableInRegion();
 	}
 
 	/**
@@ -102,7 +119,7 @@ class NotificationsManager implements ICanSendMessage
 			return null;
 		}
 
-		if (!static::isEnabled())
+		if (!static::isCrmPaymentScenarioAvailableInRegion())
 		{
 			return null;
 		}
@@ -160,7 +177,7 @@ class NotificationsManager implements ICanSendMessage
 
 	public static function getChannelsList(array $toListByType, int $userId): array
 	{
-		if (!self::canUse())
+		if (!self::isAllModulesInstalled())
 		{
 			return [];
 		}
@@ -191,10 +208,23 @@ class NotificationsManager implements ICanSendMessage
 	{
 		$result = new \Bitrix\Main\Result();
 
-		if (!self::canUse())
+		if (!self::isAllModulesInstalled())
 		{
 			return $result->addError(Channel\ErrorCode::getNotEnoughModulesError());
 		}
+
+		if (self::isAllModulesInstalled() && !self::canUse())
+		{
+			return $result->addError(Channel\ErrorCode::getNotAvailableError());
+		}
+
+		if (empty($channel->getFromList()))
+		{
+			// for consistency with other senders
+			return $result->addError(Channel\ErrorCode::getNoFromError());
+		}
+
+		// we dont check crm-payment scenario here. GOTOCHAT for example dont use that scenario.
 
 		return $result;
 	}
@@ -507,12 +537,11 @@ class NotificationsManager implements ICanSendMessage
 	}
 
 	/**
-	 *
 	 * @return bool
 	 * @throws \Bitrix\Main\LoaderException
 	 * @see \Bitrix\ImConnector\Tools\Connectors\Notifications::isEnabled
 	 */
-	private static function isEnabled(): bool
+	final public static function isCrmPaymentScenarioAvailableInRegion(): bool
 	{
 		if (!Loader::includeModule('notifications'))
 		{
@@ -520,6 +549,16 @@ class NotificationsManager implements ICanSendMessage
 		}
 
 		return Settings::getScenarioAvailability(Settings::SCENARIO_CRM_PAYMENT) !== FeatureStatus::UNAVAILABLE;
+	}
+
+	final public static function isCrmPaymentScenarioLimited(): bool
+	{
+		if (!Loader::includeModule('notifications'))
+		{
+			return true;
+		}
+
+		return Settings::getScenarioAvailability(Settings::SCENARIO_CRM_PAYMENT) === FeatureStatus::LIMITED;
 	}
 
 	private static function checkTemplateCode(string $templateCode, string $languageId): bool
@@ -551,5 +590,160 @@ class NotificationsManager implements ICanSendMessage
 		}
 
 		return in_array($templateCode, $allLangTemplates, true);
+	}
+
+	/**
+	 * @param string $code Template code
+	 * @param string|null $lang By default - default notification language
+	 * @return null|array{
+	 *      LANGUAGE_ID: string,
+	 *      TITLE: string,
+	 *      TEXT: string,
+	 *      TEXT_SMS: string
+	 *  } - null on error, empty array if not found
+	 */
+	final public static function getTemplateTranslation(string $code, ?string $lang = null): ?array
+	{
+		if (!Loader::includeModule('notifications'))
+		{
+			return null;
+		}
+
+		$lang ??= self::getDefaultNotificationLanguageId();
+
+		$result = Template::getTranslations($code, $lang);
+		if (!$result->isSuccess())
+		{
+			Container::getInstance()->getLogger('Default')->error(
+				'{method}: Failed to get template translations for {code} {errors}',
+				[
+					'method' => __METHOD__,
+					'code' => $code,
+					'lang' => $lang,
+					'errors' => $result->getErrors(),
+				],
+			);
+
+			return null;
+		}
+
+		$data = $result->getData();
+		$translation = $data[0] ?? null;
+
+		return is_array($translation) ? $translation : [];
+	}
+
+	final public static function getDefaultNotificationLanguageId(): string
+	{
+		return \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?? LANGUAGE_ID;
+	}
+
+	/**
+	 * @param string $templateCode
+	 * @param array<array{name: string, value: string|null>|null $placeholders
+	 * @return string
+	 */
+	final public static function signTemplate(string $templateCode, ?array $placeholders): string
+	{
+		$payload = [
+			'template' => $templateCode,
+		];
+		if (is_array($placeholders))
+		{
+			$payload['placeholders'] = self::normalizeSignablePlaceholders($placeholders);
+		}
+
+		$serializedPayload = base64_encode(Json::encode($payload));
+
+		$signer = new TimeSigner();
+
+		return $signer->sign($serializedPayload, self::SIGNATURE_TTL, self::SALT);
+	}
+
+	private static function normalizeSignablePlaceholders(array $placeholders): array
+	{
+		$result = [];
+
+		foreach ($placeholders as $placeholder)
+		{
+			if (!is_array($placeholder))
+			{
+				continue;
+			}
+
+			if (!isset($placeholder['name']) || !is_string($placeholder['name']))
+			{
+				continue;
+			}
+
+			$normalized = ['name' => $placeholder['name']];
+
+			if (array_key_exists('value', $placeholder))
+			{
+				$value = $placeholder['value'];
+
+				if (!is_string($value) && !is_null($value))
+				{
+					continue;
+				}
+
+				$normalized['value'] = $value;
+			}
+
+			$result[] = $normalized;
+		}
+
+		return $result;
+	}
+
+
+	/**
+	 * @param string $signedTemplate
+	 * @return null|array{
+	 *     template: string,
+	 *     placeholders?: array<array{name: string, value: string|null}>
+	 * } - null on error
+	 */
+	final public static function unsignTemplate(string $signedTemplate): ?array
+	{
+		$signer = new TimeSigner();
+
+		try
+		{
+			$serializedPayload = $signer->unsign($signedTemplate, self::SALT);
+		}
+		catch (BadSignatureException)
+		{
+			return null;
+		}
+
+		try
+		{
+			$payload = Json::decode(base64_decode($serializedPayload));
+		}
+		catch (ArgumentException)
+		{
+			return null;
+		}
+
+		if (!is_array($payload))
+		{
+			return null;
+		}
+
+		if (!isset($payload['template']) || !is_string($payload['template']))
+		{
+			return null;
+		}
+
+		$normalizedPayload = [
+			'template' => $payload['template'],
+		];
+		if (isset($payload['placeholders']) && is_array($payload['placeholders']))
+		{
+			$normalizedPayload['placeholders'] = self::normalizeSignablePlaceholders($payload['placeholders']);
+		}
+
+		return $normalizedPayload;
 	}
 }

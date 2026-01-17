@@ -434,6 +434,16 @@ class Engine
 	}
 
 	/**
+	 * Returns whether the engine requires personal data obfuscation.
+	 *
+	 * @return bool
+	 */
+	public function requiresPersonalDataObfuscation(): bool
+	{
+		return $this->engine->requiresPersonalDataObfuscation();
+	}
+
+	/**
 	 * Returns true, if current Engine has no agreement or current user accepted it.
 	 *
 	 * @return bool
@@ -543,6 +553,40 @@ class Engine
 		$this->engine->setResponseJsonMode($enable);
 
 		return $this;
+	}
+
+	/**
+	 * Enable or disable reasoning mode for engine with reasoning quality support.
+	 *
+	 * @param bool $enable
+	 *
+	 * @return $this
+	 */
+	public function setReasoningMode(bool $enable): self
+	{
+		$this->engine->setReasoningMode($enable);
+
+		return $this;
+	}
+
+	/**
+	 * Returns true, if reasoning is supported by current engine.
+	 *
+	 * @return bool
+	 */
+	public function supportsReasoning(): bool
+	{
+		return $this->engine->supportsReasoning();
+	}
+
+	/**
+	 * Returns current state of reasoningMode flag.
+	 *
+	 * @return bool
+	 */
+	public function isReasoningEnabled(): bool
+	{
+		return $this->engine->isReasoningEnabled();
 	}
 
 	/**
@@ -832,6 +876,13 @@ class Engine
 			return;
 		}
 
+		if ($reservedRequest->getErrorLimit() === ErrorLimit::BAAS_RATE_LIMIT)
+		{
+			$this->throwError(self::ERRORS['LIMIT_IS_EXCEEDED'], '_BAAS_RATE_LIMIT');
+
+			return;
+		}
+
 		$suffixErrorCode = null;
 		if (!empty($reservedRequest->getPromoLimitCode()))
 		{
@@ -887,9 +938,30 @@ class Engine
 	 */
 	private function throwError(string $errorCode, ?string $suffixErrorCode = null): void
 	{
+		$customData = null;
+		$rewriteErrorMessage = null;
+		if ($suffixErrorCode === '_BAAS_RATE_LIMIT' && Bitrix24::isMarketAvailable())
+		{
+			$rewriteErrorMessage = $customData['msgForIm'] = Loc::getMessage('AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET');
+			$customData['showSliderWithMsg'] = false;
+		}
+
+		if ($suffixErrorCode === '_BAAS' && Bitrix24::isMarketAvailable())
+		{
+			$customData['msgForIm'] = Loc::getMessage(
+				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET',
+				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_subscription_market_access_buy_marketplus']
+			);
+			$customData['showSliderWithMsg'] = false;
+		}
+
 		call_user_func(
 			[$this, 'internalErrorCallback'],
-			new Error(Loc::getMessage("AI_ENGINE_ERROR_$errorCode"), $errorCode . $suffixErrorCode),
+			new Error(
+				$rewriteErrorMessage ?? Loc::getMessage("AI_ENGINE_ERROR_$errorCode"),
+				$errorCode . $suffixErrorCode,
+				$customData
+			),
 		);
 	}
 

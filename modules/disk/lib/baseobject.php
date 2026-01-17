@@ -651,9 +651,14 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 
 		$newName = $result->getName();
+		$now = new DateTime();
 
 		$oldName = $this->name;
-		$success = $this->update(['NAME' => $newName, 'SYNC_UPDATE_TIME' => new DateTime()]);
+		$success = $this->update([
+			'NAME' => $newName,
+			'SYNC_UPDATE_TIME' => $now,
+			'UPDATE_TIME' => $now,
+		]);
 		if (!$success)
 		{
 			return false;

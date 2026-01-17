@@ -39,9 +39,9 @@ class ReplayedMessageCollection extends MessageCollection
 		$result = [];
 		foreach ($messageCollection as $message)
 		{
-			if ($message->getParams()->isSet(Params::REPLY_ID))
+			if ($message->hasReply())
 			{
-				$result[] = $message->getParams()->get(Params::REPLY_ID)->getValue();
+				$result[] = $message->getReplyId();
 			}
 		}
 

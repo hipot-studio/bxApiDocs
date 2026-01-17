@@ -303,19 +303,7 @@ class Signaling
 
 	public function sendFinish()
 	{
-		$push = [
-			'send_immediately' => 'Y',
-			//'expiry' => 0,
-			'params' => [],
-			'advanced_params' => [
-				'id' => 'IM_CALL_'.$this->call->getId().'_FINISH',
-				'notificationsToCancel' => ['IM_CALL_'.$this->call->getId()],
-				'callkit' => true,
-				'filterCallback' => [static::class, 'filterPushesForApple'],
-			]
-		];
-
-		return $this->send('Call::finish', $this->call->getUsers(), [], $push, 3600);
+		return $this->sendFinishInternal($this->call->getUsers());
 	}
 
 	public function sendSwitchTrackRecordStatus(int $senderId, bool $isTrackRecordOn, string $errorCode = '')
@@ -359,6 +347,24 @@ class Signaling
 			'JSON' => true
 		]);
 	}
+
+	protected function sendFinishInternal(array $users): bool
+	{
+		$push = [
+			'send_immediately' => 'Y',
+				//'expiry' => 0,
+			'params' => [],
+			'advanced_params' => [
+				'id' => 'IM_CALL_'.$this->call->getId().'_FINISH',
+				'notificationsToCancel' => ['IM_CALL_'.$this->call->getId()],
+				'callkit' => true,
+				'filterCallback' => [static::class, 'filterPushesForApple'],
+			]
+		];
+
+		return $this->send('Call::finish', $users, [], $push, 3600);
+	}
+
 
 	protected function send(string $command, $users, array $params = [], $push = null, $ttl = 5)
 	{

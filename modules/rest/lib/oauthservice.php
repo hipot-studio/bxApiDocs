@@ -86,7 +86,7 @@ class OAuthService
 			);
 		}
 
-		if($result["error"])
+		if (!empty($result["error"]))
 		{
 			throw new SystemException($result["error"]);
 		}

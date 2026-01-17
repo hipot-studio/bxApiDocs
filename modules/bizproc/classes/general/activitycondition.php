@@ -11,6 +11,7 @@ abstract class CBPActivityCondition
 
 	abstract public function evaluate(CBPActivity $ownerActivity);
 
+	/** @return static */
 	public static function createInstance($code, $data)
 	{
 		if (preg_match("#[^a-zA-Z0-9_]#", $code))
@@ -26,6 +27,18 @@ abstract class CBPActivityCondition
 	public function collectUsages(CBPActivity $ownerActivity)
 	{
 		return [];
+	}
+
+	protected function collectExpressionUsages(array &$usages, CBPActivity $ownerActivity, string $value): void
+	{
+		$expressions = $ownerActivity::findExpressions($value);
+		foreach ($expressions as $expression)
+		{
+			$usages[] = \Bitrix\Bizproc\Workflow\Template\SourceType::getObjectSourceType(
+				$expression['object'],
+				$expression['field']
+			);
+		}
 	}
 
 	public static function validateProperties($value = null, CBPWorkflowTemplateUser $user = null)

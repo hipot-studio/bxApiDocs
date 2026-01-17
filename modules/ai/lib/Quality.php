@@ -28,6 +28,10 @@ class Quality
 		'scoring' => 'scoring',
 		// can transcribe voice messages in chat
 		'transcribe_chat_voice_messages' => 'transcribe_chat_voice_messages',
+		// can process audio messages transcriptions to analyze for tasks
+		'chat_task_creation_from_transcription' => 'chat_task_creation_from_transcription',
+		// reasoning ability
+		'reasoning' => 'reasoning',
 	];
 
 	private array|string $qualities;

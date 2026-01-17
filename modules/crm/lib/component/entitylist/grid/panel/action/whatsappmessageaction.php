@@ -97,24 +97,7 @@ class WhatsAppMessageAction implements Action
 
 	private function updateAnalyticsParams(string $ednaManageUrl): string
 	{
-		$section = null;
-
-		if ($this->entityTypeId === \CCrmOwnerType::Contact)
-		{
-			$section = Dictionary::SECTION_CONTACT;
-		}
-
-		if ($this->entityTypeId === \CCrmOwnerType::Company)
-		{
-			$section = Dictionary::SECTION_COMPANY;
-		}
-
-		$section = Dictionary::getSectionByCategoryId($this->entityTypeId, $this->categoryId) ?? $section;
-
-		if (!$section)
-		{
-			return $ednaManageUrl;
-		}
+		$section = Dictionary::getSectionByEntityType($this->entityTypeId, $this->categoryId);
 
 		$current = new Uri($ednaManageUrl);
 		$current->addParams([

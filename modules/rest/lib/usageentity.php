@@ -142,9 +142,8 @@ class UsageEntityTable extends Main\Entity\DataManager
 		$key = $entityType.'|'.$entityId;
 		if (!isset(static::$info[$key]))
 		{
-			if ($entityType == self::ENTITY_TYPE_APPLICATION)
+			if ($entityType == self::ENTITY_TYPE_APPLICATION && ($appInfo = AppTable::getByClientId($entityId)))
 			{
-				$appInfo = AppTable::getByClientId($entityId);
 				static::$info[$key] = array(
 					'ENTITY_ID' => $appInfo['ID'],
 					'ENTITY_CODE' => $appInfo['CLIENT_ID'],

@@ -7,6 +7,7 @@ use Bitrix\Disk\SystemUser;
 use \Bitrix\Im as IM;
 use Bitrix\Im\V2\Entity\File\Param\Transcribable;
 use Bitrix\Im\V2\Entity\File\ParamCollection;
+use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
@@ -520,7 +521,12 @@ class CIMDisk
 		$attach = $options['ATTACH'] ?? null;
 		$asFile = isset($options['AS_FILE']) && $options['AS_FILE'] === 'Y';
 		$params = isset($options['PARAMS']) && is_array($options['PARAMS']) ? $options['PARAMS'] : null;
-		$transcribableFileIds = $options['TRANSCRIBABLE_FILE_IDS'] ?? [];
+		$fileParams =
+			isset($options['FILE_PARAMS']) && is_array($options['FILE_PARAMS'])
+				? $options['FILE_PARAMS']
+				: null
+		;
+
 		$waitFullExecution = $options['WAIT_FULL_EXECUTION'] ?? 'Y';
 		if ($chat->getEntityType() === 'LINES' || $chat->getEntityType() === 'LIVECHAT')
 		{
@@ -549,21 +555,29 @@ class CIMDisk
 		$result['FILES'] = [];
 		$result['DISK_ID'] = [];
 		$result['FILE_MODELS'] = [];
+		$uploadedFileIds = [];
 		foreach ($files as $fileId)
 		{
+			$uploaded = false;
 			if (mb_substr($fileId, 0, 6) === 'upload')
 			{
-				$newFile = self::uploadFromLocalDisk($chatId, mb_substr($fileId, 6), $skipUserCheck ? 0 : $userId, $asFile);
+				$uploaded = true;
+				$newFile = self::uploadFromLocalDisk($chatId, (int)mb_substr($fileId, 6), $skipUserCheck ? 0 : $userId, $asFile);
 			}
 			else
 			{
-				$newFile = self::SaveFromLocalDisk($chatId, mb_substr($fileId, 4), $makeSymlink, $skipUserCheck? 0: $userId);
+				$newFile = self::SaveFromLocalDisk($chatId, (int)mb_substr($fileId, 4), $makeSymlink, $skipUserCheck? 0: $userId);
 			}
 
 			if ($newFile)
 			{
 				$result['DISK_ID'][] = $newFile->getId();
 				$result['FILE_MODELS'][$fileId] = $newFile;
+
+				if ($uploaded)
+				{
+					$uploadedFileIds[] = $newFile->getId();
+				}
 
 				if ($robot)
 				{
@@ -618,24 +632,6 @@ class CIMDisk
 			return false;
 		}
 
-		if (!empty($transcribableFileIds))
-		{
-			self::markTranscribable($result['DISK_ID'], $transcribableFileIds);
-		}
-
-		foreach ($files as $fileId)
-		{
-			$fileObject = $result['FILE_MODELS'][$fileId] ?? null;
-			if ($fileObject instanceof File)
-			{
-				$result['FILES'][$fileId] = self::GetFileParams($chatId, $fileObject);
-			}
-			else
-			{
-				$result['FILES'][$fileId]['id'] = 0;
-			}
-		}
-
 		$result['MESSAGE_ID'] = 0;
 
 		$ar = [
@@ -666,6 +662,30 @@ class CIMDisk
 		if ($params)
 		{
 			$ar['PARAMS'] = $params;
+		}
+
+		if ($fileParams !== null)
+		{
+			$fileParams = self::prepareFileParams(
+				$ar['FILE_MODELS'],
+				$fileParams,
+				$result['DISK_ID'],
+				$uploadedFileIds
+			);
+			IM\V2\Entity\File\ParamCollection::addParams($fileParams);
+		}
+
+		foreach ($files as $fileId)
+		{
+			$fileObject = $result['FILE_MODELS'][$fileId] ?? null;
+			if ($fileObject instanceof File)
+			{
+				$result['FILES'][$fileId] = self::GetFileParams($chatId, $fileObject);
+			}
+			else
+			{
+				$result['FILES'][$fileId]['id'] = 0;
+			}
 		}
 
 		if ($attach)
@@ -768,23 +788,48 @@ class CIMDisk
 		return $result;
 	}
 
-	protected static function markTranscribable(array $fileIds, array $transcribableFileIds): void
+	/**
+	 * @param File[] $fileModels
+	 * @param array $params
+	 * @return array
+	 */
+	protected static function prepareFileParams(
+		array $fileModels,
+		array $params,
+		array $fileIds,
+		array $uploadedFileIds
+	): array
 	{
+		$result = [];
+		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER);
 		$fileIds = array_map('intval', $fileIds);
-		$transcribableFileIds = array_map('intval', $transcribableFileIds);
+		$uploadedFileIds = array_map('intval', $uploadedFileIds);
 
-		$params = [];
-		foreach ($transcribableFileIds as $fileId)
+		foreach ($fileModels as $file)
 		{
+			$fileId = (int)$file->getId();
+
 			if (!in_array($fileId, $fileIds, true))
 			{
 				continue;
 			}
 
-			$params[] = Transcribable::formatForDb($fileId, true);
+			foreach ($params[$fileId] ?? [] as $name => $value)
+			{
+				$name = $converter->process($name);
+				$uploaded = in_array($fileId, $uploadedFileIds, true);
+
+				$param = IM\V2\Entity\File\Param\ParamName::tryFrom($name);
+				if (!$param?->isValidForFile($file, $uploaded))
+				{
+					continue;
+				}
+
+				$result[] = IM\V2\Entity\File\Param\BaseParam::getInstance($fileId, $param, $value)->toArray();
+			}
 		}
 
-		ParamCollection::addParams($params);
+		return $result;
 	}
 
 	protected static function checkDirectlyUseFileAccess(

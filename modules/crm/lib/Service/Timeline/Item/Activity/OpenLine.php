@@ -4,8 +4,13 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\Provider\ProviderManager;
 use Bitrix\Crm\Badge\Model\BadgeTable;
+use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
+use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
+use Bitrix\Crm\Service\Timeline\Item\Interfaces\HasCopilot;
+use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Animation;
@@ -15,16 +20,24 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Client;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ClientMark;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockWithTitle;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Link;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Header\ChangeStreamButton;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
 use Bitrix\Main\Localization\Loc;
 use CCrmActivity;
+use CCrmOwnerType;
 
-class OpenLine extends Activity
+final class OpenLine extends Activity implements HasCopilot
 {
+	use CopilotHelper;
+
+	private const SUMMARIZE_TRANSCRIPTION_LIMIT = 10;
+	private const DEFAULT_ADDITIONAL_ICON_CODE = 'livechat';
+
 	protected function getActivityTypeId(): string
 	{
 		return 'OpenLine';
@@ -32,15 +45,14 @@ class OpenLine extends Activity
 
 	public function getIconCode(): ?string
 	{
-		return Icon::OPENLINE_INCOMING_MESSAGE;
+		return Icon::IM;
 	}
 
 	public function getTitle(): string
 	{
-		return Loc::getMessage(
-			$this->isScheduled()
-				? 'CRM_TIMELINE_TITLE_OPEN_LINE_MSGVER_1'
-				: 'CRM_TIMELINE_TITLE_OPEN_LINE_DONE'
+		return Loc::getMessage($this->isScheduled()
+			? 'CRM_TIMELINE_TITLE_OPEN_LINE_MSGVER_1'
+			: 'CRM_TIMELINE_TITLE_OPEN_LINE_DONE'
 		);
 	}
 
@@ -51,40 +63,16 @@ class OpenLine extends Activity
 
 	public function getLogo(): ?Layout\Body\Logo
 	{
-		$logoCode = Layout\Common\Logo::CHANNEL_CHAT; // default icon
-
-		// logos map, see connector codes OpenLineManager::$supportedConnectors
-		$logoMap = [
-			'avito' => Layout\Common\Logo::CHANNEL_AVITO,
-			'imessage' => Layout\Common\Logo::CHANNEL_APPLE,
-			'facebook' => Layout\Common\Logo::CHANNEL_FACEBOOK,
-			'facebookmessenger' => Layout\Common\Logo::CHANNEL_FACEBOOK_CHAT,
-			'facebookcomments' => Layout\Common\Logo::CHANNEL_FACEBOOK_CHAT,
-			'fbinstagram' => Layout\Common\Logo::CHANNEL_INSTAGRAM_DIRECT,
-			'fbinstagramdirect' => Layout\Common\Logo::CHANNEL_INSTAGRAM_DIRECT,
-			'livechat' => Layout\Common\Logo::CHANNEL_CHAT,
-			'network' => Layout\Common\Logo::CHANNEL_BITRIX,
-			'ok' => Layout\Common\Logo::CHANNEL_ODNOKLASSNIKI,
-			'telegram' => Layout\Common\Logo::CHANNEL_TELEGRAM,
-			'telegrambot' => Layout\Common\Logo::CHANNEL_TELEGRAM,
-			'viber' => Layout\Common\Logo::CHANNEL_VIBER,
-			'vkgroup' => Layout\Common\Logo::CHANNEL_VK,
-			'vkgrouporder' => Layout\Common\Logo::CHANNEL_VK_ORDER,
-			'whatsappbytwilio' => Layout\Common\Logo::CHANNEL_WHATSAPP_BITRIX,
-			'whatsappbyedna' => Layout\Common\Logo::CHANNEL_WHATSAPP,
-		];
-		$userCode = $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS')['USER_CODE'];
+		$additionalIconCode = self::DEFAULT_ADDITIONAL_ICON_CODE;
+		$userCode = $this->getOpenLineUserCode();
 		if (isset($userCode))
 		{
-			$connectorType = OpenLineManager::getLineConnectorType($userCode);
-			if (isset($logoMap[$connectorType]))
-			{
-				$logoCode = $logoMap[$connectorType];
-			}
+			$additionalIconCode = OpenLineManager::getLineConnectorType($userCode) ?? self::DEFAULT_ADDITIONAL_ICON_CODE;
 		}
 
-		return Layout\Common\Logo::getInstance($logoCode)
+		return Layout\Common\Logo::getInstance(Layout\Common\Logo::OPENLINE)
 			->createLogo()
+			?->setAdditionalIconCode($additionalIconCode)
 			?->setAction($this->getOpenChatAction())
 		;
 	}
@@ -92,8 +80,7 @@ class OpenLine extends Activity
 	public function getContentBlocks(): array
 	{
 		$result = [];
-		$userCode = $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS')['USER_CODE'];
-
+		$userCode = $this->getOpenLineUserCode();
 		$lineName = OpenLineManager::getLineTitle($userCode);
 		if ($lineName)
 		{
@@ -123,14 +110,14 @@ class OpenLine extends Activity
 			$channelName = $sourceList[$connectorType] ?? $sourceList['livechat'];
 			$result['chatTitle'] = (new ContentBlockWithTitle())
 				->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CHANNEL'))
-				->setContentBlock(ContentBlockFactory::createTitle($channelName))
+				->setContentBlock(ContentBlockFactory::createTitle($channelName)->setColor(Text::COLOR_BASE_90))
 				->setInline()
 			;
 		}
 
 		if (empty($result))
 		{
-			$subject = (string)$this->getAssociatedEntityModel()->get('SUBJECT');
+			$subject = (string)($this->getAssociatedEntityModel()?->get('SUBJECT') ?? '');
 			if (!empty($subject))
 			{
 				$result['subject'] = ContentBlockFactory::createTextOrLink(
@@ -140,10 +127,22 @@ class OpenLine extends Activity
 			}
 		}
 
+		$chatActivityBlock = $this->buildChatActivityBlock();
+		if (isset($chatActivityBlock))
+		{
+			$result['chatActivityBlock'] = $chatActivityBlock;
+		}
+
 		$clientMarkBlock = $this->buildClientMarkBlock();
 		if (isset($clientMarkBlock))
 		{
 			$result['clientMark'] = $clientMarkBlock;
+		}
+
+		$copilotSummaryBlock = $this->buildCopilotSummaryBlock();
+		if (isset($copilotSummaryBlock))
+		{
+			$result['copilotSummaryBlock'] = $copilotSummaryBlock->setScopeWeb();
 		}
 
 		return $result;
@@ -160,10 +159,14 @@ class OpenLine extends Activity
 		return [
 			'openChat' => (
 				new Button(
-					Loc::getMessage($this->isScheduled() ? 'CRM_TIMELINE_BUTTON_OPEN_CHAT_MSGVER_1' : 'CRM_TIMELINE_BUTTON_SEE_CHAT'),
+					Loc::getMessage($this->isScheduled()
+						? 'CRM_TIMELINE_BUTTON_OPEN_CHAT_MSGVER_1'
+						: 'CRM_TIMELINE_BUTTON_SEE_CHAT')
+					,
 					$this->isScheduled() ? Button::TYPE_PRIMARY : Button::TYPE_SECONDARY
 				)
-			)->setAction($openChatAction)
+			)->setAction($openChatAction),
+			'aiButton' => $this->getCopilotButton(),
 		];
 	}
 
@@ -179,7 +182,7 @@ class OpenLine extends Activity
 	{
 		$tags = [];
 
-		$userCode = $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS')['USER_CODE'];
+		$userCode = $this->getOpenLineUserCode();
 		$responsibleId = $this->getAssociatedEntityModel()?->get('RESPONSIBLE_ID');
 
 		// the tag will not be removed until the responsible user reads all messages
@@ -193,7 +196,7 @@ class OpenLine extends Activity
 				Tag::TYPE_WARNING
 			);
 		}
-		else if (BadgeTable::isActivityHasBadge($this->getActivityId()))
+		elseif (BadgeTable::isActivityHasBadge($this->getActivityId()))
 		{
 			$activity = CCrmActivity::GetByID($this->getActivityId(), false);
 			if (is_array($activity))
@@ -202,12 +205,33 @@ class OpenLine extends Activity
 			}
 		}
 
-		return $tags;
+		$aiTags = $this->getAiTags(
+			$this->getContext()->getIdentifier()->getEntityTypeId(),
+			$this->getContext()->getIdentifier()->getEntityId(),
+			$this->getActivityId()
+		);
+
+		return array_merge($tags, $aiTags);
 	}
 
 	public function needShowNotes(): bool
 	{
 		return true;
+	}
+
+	public function getCopilotButton(): ?BaseButton
+	{
+		$isButtonVisible = $this->isCopilotScope()
+			&& $this->hasUpdatePermission()
+			&& $this->isItemHashValid($this->getActivityId(), $this->getContext())
+		;
+
+		if (!$isButtonVisible)
+		{
+			return null;
+		}
+
+		return $this->createCopilotButton();
 	}
 
 	protected function getOpenChatAction(): ?Action
@@ -251,6 +275,31 @@ class OpenLine extends Activity
 		return $this->isScheduled();
 	}
 
+	private function buildChatActivityBlock(): ?ContentBlock
+	{
+		$userCode = $this->getOpenLineUserCode();
+		/** @var \Bitrix\Im\V2\Message $message */
+		$message = OpenLineManager::getLastMessage($userCode);
+		if ($message === null)
+		{
+			return null;
+		}
+
+		$isExtranetUser = $message->getAuthor()?->isExtranet();
+		$text = Loc::getMessage(
+			$isExtranetUser ? 'CRM_TIMELINE_BLOCK_TITLE_CHAT_ACTIVITY_CLIENT' : 'CRM_TIMELINE_BLOCK_TITLE_CHAT_ACTIVITY_MANAGER',
+			[
+				'#DATETIME#' => OpenLineManager::getMessageCreatedDate($message),
+			],
+		) ?? '';
+
+		return (new ContentBlockWithTitle())
+			->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CHAT_ACTIVITY'))
+			->setContentBlock(ContentBlockFactory::createTitle($text)->setColor(Text::COLOR_BASE_90))
+			->setInline()
+		;
+	}
+
 	private function buildClientMarkBlock(): ?ContentBlock
 	{
 		$sessionData = $this->getSessionData();
@@ -273,15 +322,50 @@ class OpenLine extends Activity
 
 		return (new ClientMark())
 			->setMark($clientMark)
-			->setText(
-				Loc::getMessage(
-					sprintf(
-						'CRM_TIMELINE_BLOCK_CLIENT_MARK_%s',
-						mb_strtoupper($clientMark)
-					)
-				)
-			)
+			->setText(Loc::getMessage(sprintf('CRM_TIMELINE_BLOCK_CLIENT_MARK_%s', mb_strtoupper($clientMark))))
 		;
+	}
+
+	private function buildCopilotSummaryBlock(): ?ContentBlock
+	{
+		if (!$this->isCopilotScope())
+		{
+			return null;
+		}
+
+		$activityId = $this->getActivityId();
+		$list = $this->getSummarizeTranscriptionList($activityId);
+		if (empty($list))
+		{
+			return null;
+		}
+
+		$block = new LineOfTextBlocks();
+
+		$blockTitle = ContentBlockFactory::createTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_VIEW_COPILOT_SUMMARY'))
+			->setColor(Text::COLOR_BASE_60)
+		;
+		$block->addContentBlock('copilotSummaryBlockTitle', $blockTitle);
+
+		$viewLink = (new Link())
+			->setValue(Loc::getMessage('CRM_TIMELINE_BUTTON_SEE_CHAT'))
+			->setAction((new JsEvent('Openline:ShowCopilotSummary'))
+				->addActionParamInt('activityId', $activityId)
+				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+				->addActionParamArray('summarizeTranscriptionList', $list)
+			)
+			->setDecoration(Text::DECORATION_DASHED)
+		;
+		if (count($list) > 1)
+		{
+			$viewLink->setIcon('chevron');
+		}
+
+		$itemId = $this->model->getId();
+		$block->addContentBlock("copilotSummaryBlockLink_$itemId", $viewLink);
+
+		return $block;
 	}
 
 	private function getSessionData(): array
@@ -290,7 +374,8 @@ class OpenLine extends Activity
 
 		return $sessionId > 0
 			? OpenLineManager::getSessionData($sessionId)
-			: [];
+			: []
+		;
 	}
 
 	private function mapClientMark(int $vote): ?string
@@ -311,5 +396,33 @@ class OpenLine extends Activity
 		}
 
 		return null;
+	}
+
+	private function getOpenLineUserCode(): ?string
+	{
+		return $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS')['USER_CODE'];
+	}
+
+	private function getSummarizeTranscriptionList(int $activityId): array
+	{
+		$rawData = QueueTable::query()
+			->setSelect(['ID', 'FINISHED_TIME'])
+			->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
+			->where('ENTITY_ID', $activityId)
+			->where('TYPE_ID', SummarizeCallTranscription::TYPE_ID)
+			->where('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_SUCCESS)
+			->setOrder(['FINISHED_TIME' => 'DESC'])
+			->setLimit(self::SUMMARIZE_TRANSCRIPTION_LIMIT)
+			->fetchCollection()
+			->getAll()
+		;
+
+		$result = [];
+		foreach ($rawData as $item)
+		{
+			$result[$item->getId()] = $item->getFinishedTime()?->getTimestamp();
+		}
+
+		return $result;
 	}
 }

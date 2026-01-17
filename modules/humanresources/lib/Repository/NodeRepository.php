@@ -804,6 +804,8 @@ class NodeRepository implements Contract\Repository\NodeRepository
 				continue;
 			}
 
+			$accessCode = str_replace('DR', 'D', $accessCode);
+
 			$iBlockAccessCodes[] = $accessCode;
 		}
 

@@ -2,11 +2,14 @@
 
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationAvailabilityChecker;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
+use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Component\EntityList\NearestActivity;
 use Bitrix\Crm\Component\EntityList\NearestActivity\ManagerFactory;
+use Bitrix\Crm\Component\EntityList\UserField\GridHeaders;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Field;
 use Bitrix\Crm\Filter\FieldsTransform;
 use Bitrix\Crm\Filter\UiFilterOptions;
 use Bitrix\Crm\Integration;
@@ -16,8 +19,10 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Model\Dynamic\RecurringTable;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Recurring\Manager;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\ItemsMutator;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -157,6 +162,16 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		);
 
 		$this->arResult['customSectionId'] = IntranetManager::getCustomSectionByEntityTypeId($this->entityTypeId)?->getId();
+		if ($this->arResult['customSectionId'])
+		{
+			$customSectionId = (int)$this->arResult['customSectionId'];
+			$solution = Container::getInstance()->getAutomatedSolutionManager()->getAutomatedSolutionByIntranetCustomSectionId($customSectionId);
+			if (is_array($solution) && AutomatedSolutionTable::isImportedFromMarketplace((int)$solution['SOURCE_ID']))
+			{
+				$this->arResult['isImportedAutomatedSolution'] = true;
+				$this->arResult['automatedSolutionCode'] = htmlspecialcharsbx($solution['CODE']);
+			}
+		}
 	}
 
 	public function executeComponent()
@@ -278,6 +293,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			$gridId .= 'parent_' . $this->parentEntityTypeId;
 		}
 
+		if ($this->isRecurring())
+		{
+			$gridId .= '_recurring';
+		}
+
 		return $gridId;
 	}
 
@@ -299,6 +319,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	private function getGridColumns(): array
 	{
 		$this->gridColumns ??= array_merge($this->provider->getGridColumns(), $this->ufProvider->getGridColumns());
+
+		if (empty($this->gridOptions->GetVisibleColumns()))
+		{
+			GridHeaders::removeExcessUfFromGridParams($this->gridColumns);
+		}
 
 		if (LastCommunicationAvailabilityChecker::getInstance()->isEnabled())
 		{
@@ -408,6 +433,15 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$grid['CURRENT_PAGE'] = $pageNavigation->getCurrentPage();
 		$grid['ENABLE_NEXT_PAGE'] = $this->enableNextPage;
 
+		$entityTypeId = $this->arParams['entityTypeId'] ?? null;
+		if (empty($rows) && IntranetManager::isEntityTypeInCustomSection($entityTypeId))
+		{
+			$grid['STUB'] = [
+				'title' => Loc::getMessage('CRM_ITEM_LIST_AUTOMATED_SOLUTION_STUB_TITLE'),
+				'description' => Loc::getMessage('CRM_ITEM_LIST_AUTOMATED_SOLUTION_STUB_DESCRIPTION'),
+			];
+		}
+
 		$actionPanel = $this->getPanel()->getControls();
 		$showActionPanel = !empty($actionPanel) && !$this->isEmbedded();
 
@@ -457,6 +491,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'MODE' => $this->isExportMode() ? \Bitrix\Crm\Component\EntityList\Grid\Settings\ItemSettings::MODE_EXCEL : \Bitrix\Crm\Component\EntityList\Grid\Settings\ItemSettings::MODE_HTML,
 			]);
 
+			$settings->setIsRecurring($this->arParams['isRecurring'] ?? false);
 			$settings->setCategoryId($this->getCategoryId());
 			$settings->setIsAllItemsCategory($this->category === null);
 
@@ -650,6 +685,10 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		$filterFields = $this->getDefaultFilterFields();
 		$requestFilter = $this->filterOptions->getFilter($filterFields);
+		$requestFilter = FieldsTransform\UserBasedField::breakDepartmentsToUsers(
+			$requestFilter,
+			$this->filter->getFields(),
+		);
 
 		$filter = $this->isEmbedded() ? $filter : [];
 		$this->provider->prepareListFilter($filter, $requestFilter);
@@ -670,10 +709,14 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		if ($this->factory->isRecurringEnabled())
 		{
-			$filter['=IS_RECURRING'] = $this->isRecurring() ? 'Y' : 'N';
 			if ($this->isRecurring())
 			{
+				$filter['=IS_RECURRING'] = 'Y';
 				$this->applyRecurringSubFilter($filter);
+			}
+			else
+			{
+				$filter['!=IS_RECURRING'] = 'Y';
 			}
 		}
 
@@ -700,12 +743,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		foreach ($filterFieldNames as $fieldName)
 		{
 			if (
-				str_ends_with($fieldName, Item::FIELD_NAME_RECURRING_ACTIVE)
-				|| str_ends_with($fieldName, Item::FIELD_NAME_RECURRING_COUNTER_REPEAT)
-				|| str_ends_with($fieldName, Item::FIELD_NAME_RECURRING_NEXT_EXECUTION)
-				|| str_ends_with($fieldName, Item::FIELD_NAME_RECURRING_START_DATE)
-				|| str_ends_with($fieldName, Item::FIELD_NAME_RECURRING_LIMIT_DATE)
-				|| str_ends_with($fieldName, Item::FIELD_NAME_RECURRING_LIMIT_REPEAT)
+				str_ends_with($fieldName, RecurringFieldEditorAdapter::RECURRING_ACTIVE)
+				|| str_ends_with($fieldName, RecurringFieldEditorAdapter::RECURRING_COUNTER_REPEAT)
+				|| str_ends_with($fieldName, RecurringFieldEditorAdapter::RECURRING_NEXT_EXECUTION)
+				|| str_ends_with($fieldName, RecurringFieldEditorAdapter::RECURRING_START_DATE)
+				|| str_ends_with($fieldName, RecurringFieldEditorAdapter::RECURRING_LIMIT_DATE)
+				|| str_ends_with($fieldName, RecurringFieldEditorAdapter::RECURRING_LIMIT_REPEAT)
 			)
 			{
 				$recurringFilterFieldName = str_replace('RECURRING_', '', $fieldName);
@@ -716,7 +759,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		if (!empty($recurringFilter))
 		{
-			$recurringQuery = \Bitrix\Crm\Model\Dynamic\RecurringTable::query()
+			$recurringQuery = RecurringTable::query()
 				->setSelect(['ITEM_ID'])
 				->setFilter($recurringFilter)
 				->getQuery()
@@ -946,15 +989,16 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			$list = $listById;
 			unset($listById);
 
-			if ($this->factory->isRecurringMode())
+			if ($this->isRecurring())
 			{
 				$this->appendRecurringData($itemsData, $list);
 			}
 
 			$displayOptions =
 				(new Display\Options())
-					->setMultipleFieldsDelimiter($this->isExportMode() ? ', ' : ',<br />')
+					->setMultipleFieldsDelimiter($this->isExportMode() ? ', ' : '<br />')
 					->setGridId($this->getGridId())
+					->setFilterFields($this->filterOptions->getFilter($this->getDefaultFilterFields()))
 			;
 			$restrictedItemIds = [];
 			$itemIds = array_column($itemsData, 'ID');
@@ -1096,12 +1140,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			$itemColumns[$itemId] = array_merge(
 				$itemColumns[$itemId],
 				[
-					Item::FIELD_NAME_RECURRING_ACTIVE => $recurringItem->getActive(),
-					Item::FIELD_NAME_RECURRING_COUNTER_REPEAT => $recurringItem->getCounterRepeat(),
-					Item::FIELD_NAME_RECURRING_NEXT_EXECUTION => $recurringItem->getNextExecution(),
-					Item::FIELD_NAME_RECURRING_START_DATE => $recurringItem->getStartDate(),
-					Item::FIELD_NAME_RECURRING_LIMIT_DATE => $recurringItem->getLimitDate(),
-					Item::FIELD_NAME_RECURRING_LIMIT_REPEAT => $recurringItem->getLimitRepeat(),
+					RecurringFieldEditorAdapter::RECURRING_ACTIVE => $recurringItem->getActive(),
+					RecurringFieldEditorAdapter::RECURRING_COUNTER_REPEAT => $recurringItem->getCounterRepeat(),
+					RecurringFieldEditorAdapter::RECURRING_NEXT_EXECUTION => $recurringItem->getNextExecution(),
+					RecurringFieldEditorAdapter::RECURRING_START_DATE => $recurringItem->getStartDate(),
+					RecurringFieldEditorAdapter::RECURRING_LIMIT_DATE => $recurringItem->getLimitDate(),
+					RecurringFieldEditorAdapter::RECURRING_LIMIT_REPEAT => $recurringItem->getLimitRepeat(),
 				],
 			);
 		}
@@ -1226,7 +1270,17 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$context = ($this->isExportMode() ? Display\Field::EXPORT_CONTEXT : Display\Field::GRID_CONTEXT);
 		foreach ($visibleColumns as $fieldName)
 		{
-			$baseField = $fieldsCollection->getField($fieldName);
+			$baseField = null;
+			if ($this->isRecurring() && str_starts_with($fieldName, 'RECURRING_'))
+			{
+				$baseField = $this->createRecurringField($fieldName);
+			}
+
+			if ($baseField === null)
+			{
+				$baseField = $fieldsCollection->getField($fieldName);
+			}
+
 			if ($baseField)
 			{
 				if ($baseField->isUserField())
@@ -1250,6 +1304,19 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		return $displayFields;
+	}
+
+	private function createRecurringField(string $fieldName): ?Field
+	{
+		$recurringFields = RecurringTable::getFieldsInfo();
+
+		$recurringFieldName = str_replace('RECURRING_', '', $fieldName);
+		if (isset($recurringFields[$recurringFieldName]))
+		{
+			return new Field($fieldName, $recurringFields[$recurringFieldName]);
+		}
+
+		return null;
 	}
 
 	//todo move rendering of all fields to Display (even these fields that don't exist in reality)
@@ -1401,12 +1468,9 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 	protected function getTitle(): string
 	{
-		if (
-			Manager::isAvailableEntityTypeId($this->entityTypeId)
-			&& $this->isRecurring()
-		)
+		if ($this->isRecurring())
 		{
-			return Manager::getEntityListTitle($this->entityTypeId);
+			return Manager::getEntityListTitle($this->entityTypeId) ?? '';
 		}
 
 		return $this->kanbanEntity->getTitle();

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Command\Task\Plan;
 
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
+use Bitrix\Tasks\V2\Internal\Service\Task\PlanService;
 
 class UpdatePlanHandler
 {
 	public function __construct(
-		private readonly UpdateTaskService $updateTaskService,
+		private readonly PlanService $planService,
 	)
 	{
 
@@ -27,9 +27,6 @@ class UpdatePlanHandler
 			matchesSubTasksTime: $command->matchesSubTasksTime,
 		);
 
-		return $this->updateTaskService->update(
-			task: $entity,
-			config: $command->config,
-		);
+		return $this->planService->update($entity, $command->config);
 	}
 }

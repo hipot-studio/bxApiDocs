@@ -10,13 +10,13 @@ class Group
 	private Collection $items;
 	private ?ItemRelations $itemRelations = null;
 
-	private function __construct(
+	protected function __construct(
 		private string $code,
 		private string $title,
-		private ?string $description,
-		private int|string|null $helpdesk,
-		private ?array $icon,
-		private ?int $sort,
+		private ?string $description = null,
+		private int|string|null $helpdesk = null,
+		private ?array $icon = null,
+		private ?int $sort = null,
 	) {}
 
 	public static function create(string $code, array $data): ?self

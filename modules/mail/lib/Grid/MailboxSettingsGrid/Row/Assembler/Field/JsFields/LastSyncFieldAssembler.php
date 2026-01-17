@@ -15,6 +15,7 @@ class LastSyncFieldAssembler extends JsExtensionFieldAssembler
 			'lastSync' => $rawValue['LAST_ACTIVITY'] ?? null,
 			'mailboxId' => $rawValue['ID'] ?? null,
 			'hasError' => $rawValue['HAS_ERROR'] ?? null,
+			'canEdit' => $rawValue['CAN_EDIT'] ?? false,
 		];
 	}
 

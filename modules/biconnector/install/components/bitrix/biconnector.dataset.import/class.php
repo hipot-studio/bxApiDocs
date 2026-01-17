@@ -46,6 +46,7 @@ class DatasetImportComponent extends CBitrixComponent
 				'connectionId' => (int)($arParams['connection']['connectionId'] ?? 0),
 				'connectionType' => (string)($arParams['connection']['connectionType'] ?? ''),
 				'tableName' => (string)($arParams['connection']['tableName'] ?? ''),
+				'connectionIsSupportMapping' => (($arParams['connection']['connectionIsSupportMapping'] ?? '') === 'true'),
 			];
 			$arParams['connection'] = $connection;
 		}
@@ -156,11 +157,25 @@ class DatasetImportComponent extends CBitrixComponent
 					Application::getInstance()->terminate();
 				}
 
+				if ($source->getType() === \Bitrix\BIConnector\ExternalSource\Type::Rest->value)
+				{
+					$isSupportMapping = ExternalSourceRestTable::getList([
+						'select' => [ 'CONNECTOR.SUPPORT_MAPPING'],
+						'filter' => ['SOURCE_ID' => $source->getId()],
+						'limit' => 1,
+					])
+						->fetchObject()
+						?->getConnector()
+						->getSupportMapping()
+					;
+				}
+
 				$result['connectionProperties'] = [
 					'connectionId' => $source->getId(),
 					'connectionType' => $source->getType(),
 					'connectionName' => $source->getTitle(),
 					'tableName' => $dataset->getExternalName(),
+					'connectionIsSupportMapping' => $isSupportMapping ?? false,
 				];
 			}
 		}
@@ -406,6 +421,18 @@ class DatasetImportComponent extends CBitrixComponent
 				{
 					$source['AVATAR'] = $restIcons[$source['ID']];
 				}
+				$connector = ExternalSourceRestTable::getList([
+					'select' => ['CONNECTOR.SUPPORT_MAPPING'],
+					'filter' => [
+						'SOURCE_ID' => $source['ID'],
+					],
+					'limit' => 1,
+				])
+					->fetchObject()
+				;
+				$isSupportMapping = $connector->getConnector()->getSupportMapping();
+
+				$source['IS_SUPPORT_MAPPING'] = $isSupportMapping;
 			}
 			else
 			{

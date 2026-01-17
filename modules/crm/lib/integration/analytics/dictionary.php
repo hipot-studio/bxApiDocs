@@ -2,9 +2,8 @@
 
 namespace Bitrix\Crm\Integration\Analytics;
 
-use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
+use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Factory\SmartDocument;
 use CCrmOwnerType;
 
 final class Dictionary
@@ -22,6 +21,7 @@ final class Dictionary
 	public const CATEGORY_COMMUNICATION = 'communication';
 	public const CATEGORY_BANNERS = 'banners';
 	public const CATEGORY_SYSTEM_INFORM = 'system_inform';
+	public const CATEGORY_FUNNELS = 'funnels';
 
 	// region Event const
 	public const EVENT_ENTITY_ADD_OPEN = 'entity_add_open';
@@ -72,6 +72,9 @@ final class Dictionary
 	public const TYPE_AUTOMATED_SOLUTION = 'automated_solution';
 	public const TYPE_DEAL = 'deal';
 	public const TYPE_DYNAMIC = 'dynamic';
+	public const TYPE_FUNNEL = 'funnel';
+	public const TYPE_STAGE = 'stage';
+	public const TYPE_TUNNEL = 'tunnel';
 
 	public const TYPE_CONTACT_CENTER = 'contact_center';
 	public const TYPE_ITEM_INDUSTRY = 'item_industry';
@@ -85,6 +88,7 @@ final class Dictionary
 	public const SECTION_CRM = 'crm';
 	public const SECTION_AUTOMATION = 'automation';
 	public const SECTION_REST = 'rest';
+	public const SECTION_AI = 'ai';
 	public const SECTION_LEAD = 'lead_section';
 	public const SECTION_DEAL = 'deal_section';
 	public const SECTION_CONTACT = 'contact_section';
@@ -112,7 +116,9 @@ final class Dictionary
 	public const SECTION_WEBFORM = 'webform';
 	public const SECTION_SITE_WIDGET = 'site_widget_section';
 	public const SECTION_REPEAT_SALE = 'rs';
+	public const SECTION_DOCUMENT = 'document_section';
 	public const SIGN_CONTACT_SECTION = 'sign_contact_section';
+	public const SECTION_SALESCENTER_SLIDER = 'sale_center_slider_section';
 	// endregion
 
 	// region Sub Section const
@@ -131,6 +137,7 @@ final class Dictionary
 
 	public const SUB_SECTION_GRID_ROW_MENU = 'grid_row_menu';
 	public const SUB_SECTION_REPEAT_SALE_SYSTEM = 'repeat_sale_sys';
+	public const SUB_SECTION_FUNNEL = 'funnel';
 	// endregion
 
 	// region Element const
@@ -216,49 +223,29 @@ final class Dictionary
 		return 'crmMode_' . mb_strtolower(\Bitrix\Crm\Settings\Mode::getCurrentName());
 	}
 
-	public static function getSectionByCategoryId(int $entityTypeId, ?int $categoryId): ?string
+	public static function getSectionByEntityType(int $entityTypeId, ?int $categoryId = null): string
 	{
-		if (!$categoryId)
+		if (
+			($entityTypeId === CCrmOwnerType::Contact || $entityTypeId === CCrmOwnerType::Company)
+			&& $categoryId !== null
+		)
 		{
-			return null;
-		}
+			$category = Container::getInstance()->getFactory($entityTypeId)?->getCategory($categoryId);
 
-		$section = null;
-
-		if ($entityTypeId === \CCrmOwnerType::Contact)
-		{
-			$smartDocumentCategory = Container::getInstance()
-				->getFactory(\CCrmOwnerType::Contact)
-				->getCategoryByCode(SmartDocument::CONTACT_CATEGORY_CODE)
-			;
-			$contractorCategory = Container::getInstance()
-				->getFactory(\CCrmOwnerType::Contact)
-				->getCategoryByCode(CategoryRepository::CATALOG_CONTRACTOR_CONTACT)
-			;
-
-			if ($smartDocumentCategory)
+			if (!empty($category?->getCode()))
 			{
-				$section = 'sign_contact_section';
-			}
-			elseif ($contractorCategory)
-			{
-				$section = self::SIGN_CONTACT_SECTION;
+				return self::getAnalyticsEntityType($entityTypeId) . '_' . mb_strtolower($category->getCode()) . '_section';
 			}
 		}
 
-		if ($entityTypeId === \CCrmOwnerType::Company)
+		if (
+			CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId)
+			&& IntranetManager::isEntityTypeInCustomSection($entityTypeId)
+		)
 		{
-			$contractorCategory = Container::getInstance()
-				->getFactory(\CCrmOwnerType::Contact)
-				->getCategoryByCode(CategoryRepository::CATALOG_CONTRACTOR_COMPANY)
-			;
-
-			if ($contractorCategory)
-			{
-				$section = self::SECTION_CATALOG_CONTRACTOR_COMPANY;
-			}
+			return self::SECTION_CUSTOM;
 		}
 
-		return $section;
+		return self::getAnalyticsEntityType($entityTypeId) . '_section';
 	}
 }

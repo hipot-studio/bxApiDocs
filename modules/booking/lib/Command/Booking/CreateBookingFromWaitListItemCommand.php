@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Command\Booking;
 
 use Bitrix\Booking\Command\AbstractCommand;
+use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Main\Result;
@@ -19,6 +20,7 @@ class CreateBookingFromWaitListItemCommand extends AbstractCommand
 		public readonly int $createdBy,
 		public readonly string|null $name = null,
 		public readonly bool $allowOverbooking = false,
+		public readonly BookingSource|null $source = null,
 	)
 	{
 	}
@@ -32,6 +34,7 @@ class CreateBookingFromWaitListItemCommand extends AbstractCommand
 			'createdBy' => $this->createdBy,
 			'name' => $this->name,
 			'allowOverbooking' => $this->allowOverbooking,
+			'source' => $this->source?->value,
 		];
 	}
 

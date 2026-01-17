@@ -21,7 +21,7 @@ class OnTaskPingSent implements TimeLineEvent
 	{
 		return [
 			'AUTHOR_ID' => $this->userId,
-			'TASK_ID' => $this->task->getId(),
+			'TASK_ID' => $this->task?->getId(),
 			'REFRESH_TASK_ACTIVITY' => false,
 		];
 	}

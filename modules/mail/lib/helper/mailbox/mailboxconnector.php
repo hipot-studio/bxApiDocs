@@ -3,13 +3,20 @@
 namespace Bitrix\Mail\Helper\Mailbox;
 
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\MailboxSearchIndexHelper;
+use Bitrix\Mail\Integration\Crm\Permissions;
 use Bitrix\Main;
 use Bitrix\Mail;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Mail\Address;
 use Bitrix\Mail\MailServicesTable;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\Mail\Internal\SenderTable;
 
 final class MailboxConnector
 {
@@ -28,6 +35,13 @@ final class MailboxConnector
 
 	private bool $isSMTPAvailable = false;
 
+	private ?MailboxConnectDTO $mailboxConnectDTO = null;
+
+	public function setMailboxConnectDTO(MailboxConnectDTO $mailboxConnectDTO): void
+	{
+		$this->mailboxConnectDTO = $mailboxConnectDTO;
+	}
+
 	public function getSuccess(): bool
 	{
 		return $this->isSuccess;
@@ -43,21 +57,43 @@ final class MailboxConnector
 		return $this->errorCollection;
 	}
 
-	protected function addError(string $error): void
+	public function clearErrors(): void
 	{
-		$this->errorCollection[] = new Main\Error($error);
+		$this->errorCollection = [];
 	}
 
-	protected function addErrors(
-		Main\ErrorCollection $errors,
+	private function addError(string $error, int $code = 0, array|string|null $customData = null): void
+	{
+		if (!$customData)
+		{
+			$customData = $this->prepareErrorCustomData();
+		}
+
+		$this->errorCollection[] = new Main\Error($error, $code, $customData);
+	}
+
+	private function prepareErrorCustomData(): array
+	{
+		if ($this->mailboxConnectDTO === null)
+		{
+			return [];
+		}
+
+		return [
+			'userIdToConnect' => $this->mailboxConnectDTO->userIdToConnect,
+		];
+	}
+
+	private function addErrors(
+		Main\ErrorCollection $errorCollection,
 		bool $isOAuth = false,
-		bool $isSender = false
+		bool $isSender = false,
 	): void
 	{
 		$messages = [];
 		$details  = [];
 
-		foreach ($errors as $item)
+		foreach ($errorCollection as $item)
 		{
 			if ($item->getCode() < 0)
 			{
@@ -92,63 +128,41 @@ final class MailboxConnector
 			$moreDetailsSection = true;
 		}
 
-		$reduce = function($error)
-		{
-			return $error->getMessage();
-		};
+		$reduce = (static fn($error) => $error->getMessage());
 
-		if($moreDetailsSection)
-		{
-			$this->errorCollection[] = new Main\Error(
-				implode(': ', array_map($reduce, $messages)),
-				0,
-				implode(': ', array_map($reduce, $details))
-			);
-		}
-		else
-		{
-			$this->errorCollection[] = new Main\Error(
-				implode(': ', array_map($reduce, $messages)),
-				0,
-			);
-		}
+		$message = implode(': ', array_map($reduce, $messages));
+		$code = 0;
+		$moreDetails = $moreDetailsSection
+			? implode(': ', array_map($reduce, $details))
+			: null
+		;
+
+		$this->addError($message, $code, $moreDetails);
 	}
 
 	private function setError(int $code = self::STANDARD_ERROR_KEY): void
 	{
-		switch ($code) {
-			case self::STANDARD_ERROR_KEY:
-				$this->addError(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR'));
-				break;
-			case self::LIMIT_ERROR_KEY:
-				$this->addError(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_LIMIT_ERROR'));
-				break;
-			case self::OAUTH_ERROR_KEY:
-				$this->addError(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_OAUTH_ERROR'));
-				break;
-			case self::EXISTS_ERROR_KEY:
-				$this->addError(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_EMAIL_EXISTS_ERROR'));
-				break;
-			case self::NO_MAIL_SERVICES_ERROR_KEY:
-				$this->addError(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_THERE_ARE_NO_MAIL_SERVICES'));
-				break;
-			case self::SMTP_PASS_BAD_SYMBOLS_ERROR_KEY:
-				$this->addError(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_SMTP_PASS_BAD_SYMBOLS'));
-				break;
-		}
+		$message = match ($code) {
+			self::LIMIT_ERROR_KEY => Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_LIMIT_ERROR'),
+			self::OAUTH_ERROR_KEY => Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_OAUTH_ERROR'),
+			self::EXISTS_ERROR_KEY => Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_EMAIL_EXISTS_ERROR'),
+			self::NO_MAIL_SERVICES_ERROR_KEY => Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_THERE_ARE_NO_MAIL_SERVICES'),
+			self::SMTP_PASS_BAD_SYMBOLS_ERROR_KEY => Loc::getMessage('MAIL_MAILBOX_CONNECTOR_SMTP_PASS_BAD_SYMBOLS'),
+			default => Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR'),
+		};
+
+		$this->addError($message);
 	}
 
-	private static function getUserOwnedMailboxCount()
+	private static function getUserOwnedMailboxCount(int $userId)
 	{
-		global $USER;
-
 		$res = Mail\MailboxTable::getList([
 			'select' => [
-				new Main\Entity\ExpressionField('OWNED', 'COUNT(%s)', 'ID'),
+				new ExpressionField('OWNED', 'COUNT(%s)', 'ID'),
 			],
 			'filter' => [
 				'=ACTIVE' => 'Y',
-				'=USER_ID' => $USER->getId(),
+				'=USER_ID' => $userId,
 				'=SERVER_TYPE' => 'imap',
 			],
 		])->fetch();
@@ -156,15 +170,24 @@ final class MailboxConnector
 		return $res['OWNED'];
 	}
 
-	public static function canConnectNewMailbox(): bool
+	public static function canConnectNewMailbox(?int $userId = null): bool
 	{
-		$userMailboxesLimit = LicenseManager::getUserMailboxesLimit();
-		if ($userMailboxesLimit >= 0)
+		global $USER;
+
+		if (!$userId)
 		{
-			if (self::getUserOwnedMailboxCount() >= $userMailboxesLimit)
-			{
-				return false;
-			}
+			$userId = (int)$USER->getId();
+		}
+
+		$userMailboxesLimit = LicenseManager::getUserMailboxesLimit();
+		if ($userMailboxesLimit < 0)
+		{
+			return true;
+		}
+
+		if (self::getUserOwnedMailboxCount($userId) >= $userMailboxesLimit)
+		{
+			return false;
 		}
 
 		return true;
@@ -172,7 +195,7 @@ final class MailboxConnector
 
 	private function syncMailbox(int $mailboxId): void
 	{
-		Main\Application::getInstance()->addBackgroundJob(function ($mailboxId) {
+		Main\Application::getInstance()->addBackgroundJob(function ($mailboxId): void {
 			$mailboxHelper = Mailbox::createInstance($mailboxId, false);
 			$mailboxHelper->sync();
 		},[$mailboxId]);
@@ -185,35 +208,21 @@ final class MailboxConnector
 			|| $defaultMailConfiguration['enabled'];
 	}
 
-	private function getSmtpAvailable(): bool
-	{
-		return $this->isSMTPAvailable;
-	}
-
 	/**
 	 * Is OAuth for SMTP enabled for service
 	 *
 	 * @param string $serviceName Service name
-	 *
-	 * @return bool
 	 */
 	public static function isOauthSmtpEnabled(string $serviceName): bool
 	{
-		switch ($serviceName)
+		return match ($serviceName)
 		{
-			case 'gmail':
-				return Main\Config\Option::get('mail', '~disable_gmail_oauth_smtp') !== 'Y';
-			case 'yandex':
-				return Main\Config\Option::get('mail', '~disable_yandex_oauth_smtp') !== 'Y';
-			case 'mail.ru':
-				return Main\Config\Option::get('mail', '~disable_mailru_oauth_smtp') !== 'Y';
-			case 'office365':
-			case 'outlook.com':
-			case 'exchangeOnline':
-				return Main\Config\Option::get('mail', '~disable_microsoft_oauth_smtp') !== 'Y';
-			default:
-				return false;
-		}
+			'gmail' => Main\Config\Option::get('mail', '~disable_gmail_oauth_smtp') !== 'Y',
+			'yandex' => Main\Config\Option::get('mail', '~disable_yandex_oauth_smtp') !== 'Y',
+			'mail.ru' => Main\Config\Option::get('mail', '~disable_mailru_oauth_smtp') !== 'Y',
+			'office365', 'outlook.com', 'exchangeOnline' => Main\Config\Option::get('mail', '~disable_microsoft_oauth_smtp') !== 'Y',
+			default => false,
+		};
 	}
 
 	public static function isValidMailHost(string $host): bool
@@ -236,12 +245,10 @@ final class MailboxConnector
 	 *
 	 * @param array $senderFields Sender fields data
 	 * @param string $userPrincipalName User Principal Name, appears in outlook oauth data only
-	 *
-	 * @return array
 	 */
 	public static function appendSender(array $senderFields, string $userPrincipalName, int $mailboxId = 0): array
 	{
-		if($mailboxId)
+		if ($mailboxId)
 		{
 			$senderFields['PARENT_ID'] = $mailboxId;
 			$senderFields['PARENT_MODULE_ID'] = 'mail';
@@ -260,163 +267,54 @@ final class MailboxConnector
 				$result = Main\Mail\Sender::add($senderFields);
 			}
 		}
+
 		return $result;
 	}
 
+	public function connectMailboxWithDefaultCrm(MailboxConnectDTO $mailboxConnectDTO): array
+	{
+		return $this->connectMailboxAndSaveIndex($mailboxConnectDTO, defaultCrm: true);
+	}
+
+	public function connectMailboxWithCustomCrm(?MailboxConnectDTO $mailboxConnectDTO = null, bool $useClassDto = false): array
+	{
+		if ($useClassDto && $this->mailboxConnectDTO)
+		{
+			return $this->connectMailboxAndSaveIndex($this->mailboxConnectDTO);
+		}
+
+		if ($mailboxConnectDTO)
+		{
+			return $this->connectMailboxAndSaveIndex($mailboxConnectDTO);
+		}
+
+		return [];
+	}
+
 	public function connectMailbox(
-		string $login = '',
-		string $password = '',
-		int $serviceId = 0,
-		string $server = '',
-		int $port = 993,
-		bool $ssl = true,
-		string $storageOauthUid = '',
-		bool $syncAfterConnection = true,
-		bool $useSmtp = true,
-		string $serverSmtp = '',
-		int $portSmtp = 587,
-		bool $sslSmtp = true,
-		string $loginSmtp = '',
-		string $passwordSMTP = '',
-		bool $useLimitSmtp = false,
-		int $limitSmtp = null,
-		string $mailboxName = '',
-		string $senderName = '',
+		MailboxConnectDTO $mailboxConnectDTO,
+		?bool $defaultCrm = false,
 	): array
 	{
-		$login = trim($login);
-		$password = trim($password);
-		$server = trim($server);
-
-		$currentSite = \CSite::getById(SITE_ID)->fetch();
 		global $USER;
+		$mailboxConnectDTO->userIdToConnect ??= $USER->getId();
+		$mailboxConnectDTO->email = trim($mailboxConnectDTO->email);
+		$mailboxConnectDTO->login = trim($mailboxConnectDTO->login);
+		$mailboxConnectDTO->password = trim($mailboxConnectDTO->password);
 
-		$this->setIsSmtpAvailable();
-
-		$service = Mail\MailServicesTable::getList([
-			'filter' => [
-				'=ID' => $serviceId,
-				'SERVICE_TYPE' => 'imap',
-			],
-		])->fetch();
-
-		if (empty($service))
+		$validatedMailboxConnectionData = $this->getMailboxConnectionData($mailboxConnectDTO);
+		if ($validatedMailboxConnectionData === null)
 		{
-			$this->setError(self::NO_MAIL_SERVICES_ERROR_KEY);
 			return [];
 		}
 
-		if ($service['ACTIVE'] !== 'Y')
-		{
-			$this->setError();
-			return [];
-		}
+		$mailboxConnectDTO->service = $validatedMailboxConnectionData['service'];
+		$mailboxConnectDTO->site = $validatedMailboxConnectionData['site'];
+		$mailboxConnectDTO->login = $validatedMailboxConnectionData['login'];
+		$mailboxConnectDTO->password = $validatedMailboxConnectionData['password'];
+		$isOAuth = $validatedMailboxConnectionData['isOAuth'];
 
-		if (!$this->canConnectNewMailbox())
-		{
-			$this->setError(self::LIMIT_ERROR_KEY);
-			return [];
-		}
-
-		if ($ssl)
-		{
-			$ssl = 'Y';
-		}
-		else
-		{
-			$ssl = 'N';
-		}
-
-		if ($sslSmtp)
-		{
-			$sslSmtp = 'Y';
-		}
-		else
-		{
-			$sslSmtp = 'N';
-		}
-
-		$mailboxData = [
-			'USERNAME' => $senderName ?: '',
-			'SERVER'   => $service['SERVER'] ?: trim($server),
-			'PORT'     => $service['PORT'] ?: $port,
-			'USE_TLS'  => $service['ENCRYPTION'] ?: $ssl,
-			'LINK'     => $service['LINK'],
-			'EMAIL'    => $login,
-			'NAME'     => $mailboxName ?? $login,
-			'PERIOD_CHECK' => 60 * 24,
-			'OPTIONS'  => [
-				'flags'     => [],
-				'sync_from' => time(),
-				'crm_sync_from' => time(),
-				'activateSync' => false,
-				'name' => '',
-			],
-		];
-
-		if ('N' == $service['UPLOAD_OUTGOING'] || empty($service['UPLOAD_OUTGOING']))
-		{
-			$mailboxData['OPTIONS']['flags'][] = 'deny_upload';
-		}
-
-		$isOAuth = false;
-		if ($storageOauthUid !== '' && $oauthHelper = Mail\MailServicesTable::getOAuthHelper($service))
-		{
-			$oauthHelper->getStoredToken($storageOauthUid);
-			$mailboxData['LOGIN'] = $mailboxData['EMAIL'];
-			$mailboxData['PASSWORD'] = $oauthHelper->buildMeta();
-			$isOAuth = true;
-		}
-		else
-		{
-			$mailboxData['LOGIN'] = $login;
-			$mailboxData['PASSWORD'] = $password;
-		}
-
-		if (empty($mailbox['EMAIL']))
-		{
-			$address = new Address($mailboxData['EMAIL']);
-			if (!$address->validate())
-			{
-				$this->setError(self::OAUTH_ERROR_KEY);
-				return [];
-			}
-
-			$mailboxData['EMAIL'] = $address->getEmail();
-			$this->email = $mailboxData['EMAIL'];
-		}
-		else
-		{
-			$this->email = $mailbox['EMAIL'];
-		}
-
-		if (empty($mailbox))
-		{
-			$mailbox = Mail\MailboxTable::getList([
-				'filter' => [
-					'=EMAIL' => $mailboxData['EMAIL'],
-					'=USER_ID' => $USER->getId(),
-					'=ACTIVE' => 'Y',
-					'=LID' => $currentSite['LID'],
-				],
-			])->fetch();
-
-			if (!empty($mailbox))
-			{
-				$this->setError(self::EXISTS_ERROR_KEY);
-				return [];
-			}
-		}
-
-		if (empty($mailboxData['NAME']))
-		{
-			$mailboxData['NAME'] = $mailboxData['EMAIL'];
-		}
-
-		if (!in_array($mailboxData['USE_TLS'], array('Y', 'S')))
-		{
-			$mailboxData['USE_TLS'] = 'N';
-		}
+		$mailboxData = $this->buildMailboxData($mailboxConnectDTO);
 
 		$unseen = Mail\Helper::getImapUnseen($mailboxData, 'inbox', $error, $errors);
 		if ($unseen === false)
@@ -429,257 +327,649 @@ final class MailboxConnector
 			{
 				$this->setError();
 			}
+
 			return [];
 		}
 
-		$isSmtpOauthEnabled = !empty(MailServicesTable::getOAuthHelper($service))
-			&& self::isOauthSmtpEnabled($service['NAME']);
-		$useSmtp = $useSmtp || $isSmtpOauthEnabled;
+		$mailboxConnectDTO->messageMaxAge ??= self::MESSAGE_MAX_AGE;
+		$mailboxData['OPTIONS']['sync_from'] = strtotime('today UTC 00:00' . sprintf('-%u days', $mailboxConnectDTO->messageMaxAge));
 
-		if ($this->getSmtpAvailable() && !$useSmtp && !empty($mailbox))
+		if (!$defaultCrm)
 		{
-			$res = Main\Mail\Internal\SenderTable::getList(array(
-				'filter' => array(
-					'IS_CONFIRMED' => true,
-					'=EMAIL' => $mailboxData['EMAIL'],
-				),
-			));
-			while ($item = $res->fetch())
+			if ($mailboxConnectDTO->crmOptions['enabled'] === 'Y')
 			{
-				if (!empty($item['OPTIONS']['smtp']['server']))
-				{
-					unset($item['OPTIONS']['smtp']);
-					Main\Mail\Internal\SenderTable::update(
-						$item['ID'],
-						array(
-							'OPTIONS' => $item['OPTIONS'],
-						)
-					);
-				}
-			}
-
-			Main\Mail\Sender::clearCustomSmtpCache($mailboxData['EMAIL']);
-		}
-
-		if ($this->getSmtpAvailable() && $useSmtp)
-		{
-			$senderFields = [
-				'NAME' => $mailboxData['USERNAME'],
-				'EMAIL' => $mailboxData['EMAIL'],
-				'USER_ID' => $USER->getId(),
-				'IS_CONFIRMED' => false,
-				'IS_PUBLIC' => false,
-				'OPTIONS' => [
-					'source' => 'mail.client.config',
-				],
-			];
-
-			$mailboxSenders = Main\Mail\Internal\SenderTable::query()
-				->setSelect(['ID', 'OPTIONS'])
-				->where('IS_CONFIRMED', true)
-				->where('EMAIL', $senderFields['EMAIL'])
-				->where('USER_ID', $senderFields['USER_ID'])
-				->fetchAll()
-			;
-
-			foreach ($mailboxSenders as $sender)
-			{
-				if (empty($smtpConfirmed))
-				{
-					if (!empty($sender['OPTIONS']['smtp']['server']) && empty($sender['OPTIONS']['smtp']['encrypted']))
-					{
-						$smtpConfirmed = $sender['OPTIONS']['smtp'];
-					}
-				}
+				$mailboxData = $this->applyCrmOptions($mailboxData, $mailboxConnectDTO->crmOptions['config']);
 			}
 		}
-
-		if (!empty($senderFields))
+		else
 		{
-			$smtpConfig = array(
-				'server'   => $service['SMTP_SERVER'] ?: trim($serverSmtp),
-				'port'     => $service['SMTP_PORT'] ?: $portSmtp,
-				'protocol' => ('Y' == ($service['SMTP_ENCRYPTION'] ?: $sslSmtp) ? 'smtps' : 'smtp'),
-				'login'    => $service['SMTP_LOGIN_AS_IMAP'] == 'Y' ? $mailboxData['LOGIN'] : $loginSmtp,
-				'password' => '',
+			$mailboxData = $this->setDefaultCrmOptions($mailboxData);
+		}
+
+		if (Loader::includeModule('calendar'))
+		{
+			$mailboxData['OPTIONS']['ical_access'] = $mailboxConnectDTO->iCalAccess;
+		}
+
+		if ($mailboxConnectDTO->useSmtp !== 'Y')
+		{
+			$this->resetExistingSmtp($mailboxData['EMAIL']);
+		}
+
+		$senderFields = $this->prepareSmtpSender($mailboxData, $mailboxConnectDTO);
+
+		if ($this->hasErrors())
+		{
+			return [];
+		}
+
+		return $this->createMailboxInternal($mailboxData, $senderFields, $isOAuth, $mailboxConnectDTO->syncAfterConnection);
+	}
+
+	public function getMailboxConnectionData(MailboxConnectDTO $mailboxConnectDTO): ?array
+	{
+		try
+		{
+			$this->validateConnectionPrerequisites(
+				$mailboxConnectDTO->email,
+				$mailboxConnectDTO->userIdToConnect,
+				$mailboxConnectDTO->serviceConfig,
+				$mailboxConnectDTO->serviceId,
 			);
 
-			if (!empty($smtpConfirmed) && is_array($smtpConfirmed))
-			{
-				// server, port, protocol, login, password
-				$smtpConfig = array_filter($smtpConfig) + $smtpConfirmed;
-			}
+			return $this->prepareConnectionData(
+				$mailboxConnectDTO->login,
+				$mailboxConnectDTO->password,
+				$mailboxConnectDTO->storageOauthUid,
+				$mailboxConnectDTO->serviceConfig,
+				$mailboxConnectDTO->serviceId,
+			);
+		}
+		catch (\Exception $e)
+		{
+			$this->setError($e->getMessage());
 
-			if ($useLimitSmtp)
-			{
-				$smtpConfig['limit'] = $limitSmtp;
-			}
+			return null;
+		}
+	}
 
-			if ($service['SMTP_PASSWORD_AS_IMAP'] == 'Y' && (!$storageOauthUid || $isSmtpOauthEnabled))
-			{
-				$smtpConfig['password'] = $mailboxData['PASSWORD'];
-				$smtpConfig['isOauth'] = !empty($storageOauthUid) && $isSmtpOauthEnabled;
-			}
-			else if ($passwordSMTP <> '')
-			{
-				if (preg_match('/^\^/', $passwordSMTP))
-				{
-					$this->setError(self::SMTP_PASS_BAD_SYMBOLS_ERROR_KEY);
-					return [];
-				}
-				else if (preg_match('/\x00/', $passwordSMTP))
-				{
-					$this->setError(self::SMTP_PASS_BAD_SYMBOLS_ERROR_KEY);
-					return [];
-				}
+	private function connectMailboxAndSaveIndex(MailboxConnectDTO $mailboxConnectDTO, bool $defaultCrm = false): array
+	{
+		$connectResult = $this->connectMailbox($mailboxConnectDTO, $defaultCrm);
 
-				$smtpConfig['password'] = $passwordSMTP;
-				$smtpConfig['isOauth'] = !empty($storageOauthUid) && $isSmtpOauthEnabled;
-			}
-
-			if (!$service['SMTP_SERVER'])
-			{
-				$regex = '/^(?:(?:http|https|ssl|tls|smtp):\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)$/i';
-				if (!preg_match($regex, $smtpConfig['server'], $matches) && $matches[1] <> '')
-				{
-					$this->setError(self::OAUTH_ERROR_KEY);
-					return [];
-				}
-
-				$smtpConfig['server'] = $matches[1];
-
-				if (!self::isValidMailHost($smtpConfig['server']))
-				{
-					$this->setError(self::OAUTH_ERROR_KEY);
-					return [];
-				}
-			}
-
-			if (!$service['SMTP_PORT'])
-			{
-				if ($smtpConfig['port'] <= 0 || $smtpConfig['port'] > 65535)
-				{
-					$this->setError(self::OAUTH_ERROR_KEY);
-					return [];
-				}
-			}
-
-			$senderFields['OPTIONS']['smtp'] = $smtpConfig;
-
-			if (!empty($smtpConfirmed))
-			{
-				$senderFields['IS_CONFIRMED'] = !array_diff(
-					array('server', 'port', 'protocol', 'login', 'password', 'isOauth'),
-					array_keys(array_intersect_assoc($smtpConfig, $smtpConfirmed))
-				);
-			}
+		if (isset($connectResult['id']) && empty($this->getErrors()))
+		{
+			MailboxSearchIndexHelper::saveSearchIndexForMailbox($connectResult['id']);
 		}
 
-		if (\Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm())
+		return $connectResult;
+	}
+
+	private function validateConnectionPrerequisites(
+		string $email,
+		int $userId,
+		?array $serviceConfig = null,
+		?int $serviceId = null,
+	)
+	: void
+	{
+		if (!self::canConnectNewMailbox($userId))
 		{
-			$crmAvailable = $USER->isAdmin() || $USER->canDoOperation('bitrix24_config')
-				|| \COption::getOptionString('intranet', 'allow_external_mail_crm', 'Y', SITE_ID) == 'Y';
+			throw new \Exception(self::LIMIT_ERROR_KEY);
+		}
 
-			$mailboxData['OPTIONS']['sync_from'] = strtotime('today UTC 00:00'.sprintf('-%u days', self::MESSAGE_MAX_AGE));
+		$service = $this->getMailService($serviceId, $serviceConfig);
 
-			if ($crmAvailable)
+		if ($service['ACTIVE'] !== 'Y')
+		{
+			throw new \Exception();
+		}
+
+		$address = new Address($email);
+		if (!$address->validate())
+		{
+			throw new \Exception(self::OAUTH_ERROR_KEY);
+		}
+
+		$currentSite = \CSite::getById(SITE_ID)->fetch();
+		$email = $address->getEmail() ?? '';
+
+		$existingMailbox = Mail\MailboxTable::getList([
+			'filter' => [
+				'=EMAIL' => $email,
+				'=USER_ID' => $userId,
+				'=ACTIVE' => 'Y',
+				'=LID' => $currentSite['LID'],
+			],
+		])->fetch();
+
+		if (!empty($existingMailbox))
+		{
+			throw new \Exception(self::EXISTS_ERROR_KEY);
+		}
+	}
+
+	private function prepareConnectionData(
+		string $login,
+		string $password,
+		string $storageOauthUid,
+		?array $serviceConfig = null,
+		?int $serviceId = null,
+	): array
+	{
+		$service = $this->getMailService($serviceId, $serviceConfig);
+
+		$oauthHelper = $this->getOauthHelper($service, $storageOauthUid);
+		if ($oauthHelper)
+		{
+			$oauthHelper->getStoredToken($storageOauthUid);
+			$password = $oauthHelper->buildMeta();
+			$isOAuth = true;
+		}
+		else
+		{
+			$isOAuth = false;
+		}
+
+		$currentSite = \CSite::getById(SITE_ID)->fetch();
+
+		return [
+			'service' => $service,
+			'site' => $currentSite,
+			'login' => $login,
+			'password' => $password,
+			'isOAuth' => $isOAuth,
+		];
+	}
+
+	private function getMailService(?int $serviceId = null, ?array $serviceConfig = null): array
+	{
+		$service = null;
+
+		if (is_int($serviceId) && $serviceId > 0)
+		{
+			$service = Mail\MailServicesTable::getById($serviceId)->fetch();
+		}
+		elseif ($serviceConfig)
+		{
+			$service =
+				Mail\MailServicesTable::query()
+					->setSelect(['*'])
+					->where('SERVICE_TYPE', $serviceConfig['serviceType'])
+					->where('NAME', $serviceConfig['name'])
+					->fetch()
+			;
+		}
+
+		if (empty($service) || $service['SERVICE_TYPE'] !== 'imap')
+		{
+			throw new \Exception(self::NO_MAIL_SERVICES_ERROR_KEY);
+		}
+
+		return $service;
+	}
+
+	private function getOauthHelper(array $service, string $storageOauthUid): ?Mail\Helper\OAuth
+	{
+		if (empty($storageOauthUid))
+		{
+			return null;
+		}
+
+		$oauthHelper = Mail\MailServicesTable::getOAuthHelper($service);
+
+		return $oauthHelper ?: null;
+	}
+
+	private function buildMailboxData(MailboxConnectDTO $mailboxConnectDTO): array
+	{
+		$useTls = $mailboxConnectDTO->ssl;
+
+		$mailboxData = [
+			'LID'         => $mailboxConnectDTO->site['LID'],
+			'ACTIVE'      => 'Y',
+			'SERVICE_ID'  => $mailboxConnectDTO->service['ID'],
+			'SERVER_TYPE' => $mailboxConnectDTO->service['SERVICE_TYPE'],
+			'CHARSET'     => $mailboxConnectDTO->site['CHARSET'],
+			'USER_ID'     => $mailboxConnectDTO->userIdToConnect,
+			'SYNC_LOCK'   => time(),
+			'EMAIL'       => $mailboxConnectDTO->email,
+			'LOGIN'       => $mailboxConnectDTO->login,
+			'PASSWORD'    => $mailboxConnectDTO->password,
+			'USERNAME'    => $mailboxConnectDTO->senderName ?: '',
+			'NAME'        => $mailboxConnectDTO->mailboxName ?: $mailboxConnectDTO->email,
+			'SERVER'      => $mailboxConnectDTO->service['SERVER'] ?: trim($mailboxConnectDTO->server),
+			'PORT'        => $mailboxConnectDTO->service['PORT'] ?: $mailboxConnectDTO->port,
+			'USE_TLS'     => $mailboxConnectDTO->service['ENCRYPTION'] ?: $useTls,
+			'LINK'        => $mailboxConnectDTO->service['LINK'],
+			'PERIOD_CHECK' => 60 * 24,
+			'OPTIONS'     => [
+				'flags'     => [],
+				'sync_from' => time(),
+				'crm_sync_from' => time(),
+				'activateSync' => false,
+				'version'   => 6,
+			],
+			'SERVICE_NAME' => $mailboxConnectDTO->service['NAME'],
+		];
+
+		if (($mailboxConnectDTO->service['UPLOAD_OUTGOING'] ?? 'Y') === 'N')
+		{
+			$mailboxData['OPTIONS']['flags'][] = 'deny_upload';
+		}
+
+		return $mailboxData;
+	}
+
+	private function applyCrmOptions(array $mailboxData, array $crmOptions): array
+	{
+			if ($this->isCrmIntegrationAvailableForCurrentUser())
 			{
+				$mailboxData['OPTIONS']['flags'][] = 'crm_connect';
+
+				if (($crmOptions['crm_public'] ?? 'N') === 'Y')
+				{
+					$interval = (int)Option::get('mail', 'public_mailbox_sync_interval', 0);
+					$mailboxData['PERIOD_CHECK'] = $interval > 0 ? $interval : 10;
+					$mailboxData['OPTIONS']['flags'][] = 'crm_public_bind';
+				}
+
+				$syncDays = $crmOptions['crm_sync_days'] ?? self::CRM_MAX_AGE;
+				$mailboxData['OPTIONS']['crm_sync_from'] = strtotime(sprintf('-%u days', $syncDays));
+
+				foreach ($crmOptions as $optionName => $optionValue)
+				{
+					$mailboxData['OPTIONS'][$optionName] = $optionValue;
+				}
+
+				$mailboxData['OPTIONS']['crm_new_lead_for'] = [];
+				if (!empty($crmOptions['crm_new_lead_for']))
+				{
+					$newLeadFor = preg_split('/[\r\n,;]+/', (string)$crmOptions['crm_new_lead_for']);
+					foreach ($newLeadFor as $i => $item)
+					{
+						$address = new Address($item, ['checkingPunycode' => true]);
+
+						$newLeadFor[$i] = $address->validate() ? $address->getEmail() : null;
+					}
+
+					$mailboxData['OPTIONS']['crm_new_lead_for'] = array_values(array_unique(array_filter($newLeadFor)));
+				}
+			}
+
+		return $mailboxData;
+	}
+
+	private function setDefaultCrmOptions(array $mailboxData): array
+	{
+		global $USER;
+
+		if ($this->isCrmIntegrationAvailableForCurrentUser())
+		{
 				$maxAge = self::CRM_MAX_AGE;
 				$mailboxData['OPTIONS']['flags'][] = 'crm_connect';
 				$mailboxData['OPTIONS']['crm_sync_from'] = strtotime(sprintf('-%u days', $maxAge));
 				$mailboxData['OPTIONS']['crm_new_entity_in'] = \CCrmOwnerType::LeadName;
 				$mailboxData['OPTIONS']['crm_new_entity_out'] = \CCrmOwnerType::ContactName;
 				$mailboxData['OPTIONS']['crm_lead_source'] = 'EMAIL';
-				$mailboxData['OPTIONS']['crm_lead_resp'] = [empty($mailbox) ? $USER->getId() : $mailbox['USER_ID']];
+				$mailboxData['OPTIONS']['crm_lead_resp'] = [empty($mailboxData) ? $USER->getId() : $mailboxData['USER_ID']];
+		}
+
+		return $mailboxData;
+	}
+
+	private function isCrmIntegrationAvailableForCurrentUser(): bool
+	{
+		global $USER;
+
+		if (!Loader::includeModule('crm'))
+		{
+			return false;
+		}
+
+		if (!Permissions::getInstance()->hasAccessToCrm())
+		{
+			return false;
+		}
+
+		return $USER->isAdmin()
+			|| $USER->canDoOperation('bitrix24_config')
+			|| Option::get('intranet', 'allow_external_mail_crm', 'Y', SITE_ID) === 'Y';
+	}
+
+	private function resetExistingSmtp(string $email): void
+	{
+		if (!$this->isSMTPAvailable)
+		{
+			return;
+		}
+
+		$res = Main\Mail\Internal\SenderTable::getList([
+			'filter' => [
+				'IS_CONFIRMED' => true,
+				'=EMAIL' => $email,
+			],
+		]);
+
+		while ($item = $res->fetch())
+		{
+			if (!empty($item['OPTIONS']['smtp']['server']))
+			{
+				unset($item['OPTIONS']['smtp']);
+
+				Main\Mail\Internal\SenderTable::update(
+					$item['ID'],
+					['OPTIONS' => $item['OPTIONS']],
+				);
 			}
 		}
 
-		$mailboxData['OPTIONS']['version'] = 6;
+		Main\Mail\Sender::clearCustomSmtpCache($email);
+	}
 
-		if (empty($mailbox))
+	private function prepareSmtpSender(
+		array $mailboxData,
+		MailboxConnectDTO $mailboxConnectDTO,
+	): ?array
+	{
+		$this->setIsSmtpAvailable();
+		$isSmtpOauthEnabled =
+			!empty(MailServicesTable::getOAuthHelper($mailboxConnectDTO->service))
+			&& self::isOauthSmtpEnabled($mailboxConnectDTO->service['NAME'])
+		;
+
+		$service = $mailboxConnectDTO->service;
+
+		$mailboxConnectDTO->useSmtp = ($mailboxConnectDTO->useSmtp === 'Y' || $isSmtpOauthEnabled) ? 'Y' : 'N';
+
+		if (!$this->isSMTPAvailable || $mailboxConnectDTO->useSmtp !== 'Y')
 		{
-			$mailboxData = array_merge([
-				'LID'         => $currentSite['LID'],
-				'ACTIVE'      => 'Y',
-				'SERVICE_ID'  => $service['ID'],
-				'SERVER_TYPE' => $service['SERVICE_TYPE'],
-				'CHARSET'     => $currentSite['CHARSET'],
-				'USER_ID'     => $USER->getId(),
-				'SYNC_LOCK'   => time()
-			], $mailboxData);
-
-			$result = $mailboxId = \CMailbox::add($mailboxData);
-
-			addEventToStatFile('mail', 'add_mailbox', $service['NAME'], ($result > 0 ? 'success' : 'failed'));
+			return null;
 		}
-		else
+
+		$senderFields = [
+			'NAME' => $mailboxData['USERNAME'],
+			'EMAIL' => $mailboxData['EMAIL'],
+			'USER_ID' => $mailboxConnectDTO->userIdToConnect,
+			'IS_CONFIRMED' => false,
+			'IS_PUBLIC' => false,
+			'OPTIONS' => ['source' => 'mail.client.config'],
+		];
+
+		$mailboxSenders = Main\Mail\Internal\SenderTable::query()
+			->setSelect(['ID', 'OPTIONS'])
+			->where('IS_CONFIRMED', true)
+			->where('EMAIL', $senderFields['EMAIL'])
+			->where('USER_ID', $senderFields['USER_ID'])
+			->fetchAll()
+		;
+
+		$smtpConfirmed = $this->findReusableSmtpConfig($mailboxSenders);
+
+		$useSsl = $mailboxConnectDTO->sslSmtp;
+		$smtpConfig = [
+			'server'   => $service['SMTP_SERVER'] ?: trim($mailboxConnectDTO->serverSmtp),
+			'port'     => $service['SMTP_PORT'] ?: $mailboxConnectDTO->portSmtp,
+			'protocol' => ($service['SMTP_ENCRYPTION'] ?: $useSsl) === 'Y' ? 'smtps' : 'smtp',
+			'login'    => $service['SMTP_LOGIN_AS_IMAP'] === 'Y' ? $mailboxData['LOGIN'] : $mailboxConnectDTO->loginSmtp,
+			'password' => '',
+		];
+
+		if (!empty($smtpConfirmed) && is_array($smtpConfirmed))
 		{
-			$this->setError(self::EXISTS_ERROR_KEY);
-			return [];
+			$smtpConfig = array_filter($smtpConfig) + $smtpConfirmed;
 		}
 
-		if (!($result > 0))
+		$isLimitEnabledAndExist = $mailboxConnectDTO->useLimitSmtp && $mailboxConnectDTO->limitSmtp !== null;
+		if ($isLimitEnabledAndExist)
 		{
+			$smtpConfig['limit'] = $mailboxConnectDTO->limitSmtp;
+		}
+
+		if ($this->canReuseImapCredentialsForSmtp($service, $isSmtpOauthEnabled, $mailboxConnectDTO->storageOauthUid))
+		{
+			$smtpConfig['password'] = $mailboxData['PASSWORD'];
+			$smtpConfig['isOauth'] = !empty($mailboxConnectDTO->storageOauthUid) && $isSmtpOauthEnabled;
+		}
+		elseif ($mailboxConnectDTO->passwordSMTP !== '')
+		{
+			if ($this->hasBadSymbolsInPassword($mailboxConnectDTO->passwordSMTP))
+			{
+				$this->setError(self::SMTP_PASS_BAD_SYMBOLS_ERROR_KEY);
+
+				return null;
+			}
+
+			$smtpConfig['password'] = $mailboxConnectDTO->passwordSMTP;
+			$smtpConfig['isOauth'] = !empty($mailboxConnectDTO->storageOauthUid) && $isSmtpOauthEnabled;
+		}
+
+		if (empty($service['SMTP_SERVER']))
+		{
+			$hostname = $this->extractHostnameFromServerString((string)$smtpConfig['server']);
+			if ($hostname === null)
+			{
+				$this->setError(self::OAUTH_ERROR_KEY);
+
+				return null;
+			}
+
+			$smtpConfig['server'] = $hostname;
+
+			if (!self::isValidMailHost($smtpConfig['server']))
+			{
+				$this->setError(self::OAUTH_ERROR_KEY);
+
+				return null;
+			}
+		}
+
+		if (empty($service['SMTP_PORT']))
+		{
+			if ($smtpConfig['port'] <= 0 || $smtpConfig['port'] > 65535)
+			{
+				$this->setError(self::OAUTH_ERROR_KEY);
+
+				return null;
+			}
+		}
+
+		$senderFields['OPTIONS']['smtp'] = $smtpConfig;
+
+		return $senderFields;
+	}
+
+	private function findReusableSmtpConfig(array $mailboxSenders): ?array
+	{
+		foreach ($mailboxSenders as $sender)
+		{
+			$smtpOptions = $sender['OPTIONS']['smtp'] ?? null;
+
+			if (!empty($smtpOptions['server']) && empty($smtpOptions['encrypted']))
+			{
+				return $smtpOptions;
+			}
+		}
+
+		return null;
+	}
+
+	private function canReuseImapCredentialsForSmtp(
+		array $service,
+		bool $isSmtpOauthEnabled,
+		string $storageOauthUid,
+	): bool
+	{
+		if (($service['SMTP_PASSWORD_AS_IMAP']) !== 'Y')
+		{
+			return false;
+		}
+
+		$isSimplePasswordAuth = ($storageOauthUid === '' || $storageOauthUid === '0');
+
+		return $isSimplePasswordAuth || $isSmtpOauthEnabled;
+	}
+
+	private function hasBadSymbolsInPassword(string $password): bool
+	{
+		return preg_match('/^\^/', $password) || preg_match('/\x00/', $password);
+	}
+
+	private function extractHostnameFromServerString(string $serverString): ?string
+	{
+		$regex = '/^(?:(?:http|https|ssl|tls|smtp):\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)$/i';
+
+		if (preg_match($regex, $serverString, $matches) && !empty($matches[1]))
+		{
+			return $matches[1];
+		}
+
+		return null;
+	}
+
+	private function createMailboxInternal(
+		array $mailboxData,
+		?array $senderFields,
+		bool $isOAuth,
+		string $syncAfterConnection,
+	): array
+	{
+		$mailboxId = \CMailbox::add($mailboxData);
+		if (!($mailboxId > 0))
+		{
+			addEventToStatFile('mail', 'add_mailbox', $mailboxData['SERVICE_NAME'], 'failed');
+
 			$this->setError();
+
 			return [];
 		}
+
+		addEventToStatFile('mail', 'add_mailbox', $mailboxData['SERVICE_NAME'], 'success');
 
 		if (!empty($senderFields) && empty($senderFields['IS_CONFIRMED']))
 		{
-			$result = $this->appendSender($senderFields, (string)($fields['user_principal_name'] ?? ''), (int)$mailboxId);
+			$result = self::appendSender($senderFields, '', (int)$mailboxId);
 
 			if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
 			{
 				$this->addErrors($result['errors'], $isOAuth, true);
+
 				return [];
 			}
-			else if (!empty($result['error']))
+
+			if (!empty($result['error']))
 			{
 				$this->addError($result['error']);
+
 				return [];
 			}
-			else if (empty($result['confirmed']))
+
+			if (empty($result['confirmed']))
 			{
 				$this->addError('MAIL_CLIENT_CONFIG_SMTP_CONFIRM');
+
 				return [];
 			}
 		}
 
-		$ownerAccessCode = 'U' . (empty($mailbox) ? $USER->getId() : $mailbox['USER_ID']);
-		$access = array($ownerAccessCode);
+		Mail\Internals\MailboxAccessTable::add([
+			'MAILBOX_ID' => $mailboxId,
+			'TASK_ID' => 0,
+			'ACCESS_CODE' => 'U' . $mailboxData['USER_ID'],
+		]);
 
-		foreach (array_unique($access) as $item)
+		if (in_array('crm_connect', $mailboxData['OPTIONS']['flags'] ?? [], true))
 		{
-			Mail\Internals\MailboxAccessTable::add(array(
+			\CMailFilter::add([
 				'MAILBOX_ID' => $mailboxId,
-				'TASK_ID' => 0,
-				'ACCESS_CODE' => $item,
-			));
+				'NAME' => sprintf('CRM IMAP %u', $mailboxId),
+				'ACTION_TYPE' => 'crm_imap',
+				'WHEN_MAIL_RECEIVED' => 'Y',
+				'WHEN_MANUALLY_RUN' => 'Y',
+			]);
 		}
 
-		$mailboxHelper = Mailbox::createInstance($mailboxId);
-		$mailboxHelper->cacheDirs();
-
-		$filterFields = [
-			'MAILBOX_ID'	=> $mailboxId,
-			'NAME'	=> sprintf('CRM IMAP %u', $mailboxId),
-			'ACTION_TYPE'	=> 'crm_imap',
-			'WHEN_MAIL_RECEIVED'	=> 'Y',
-			'WHEN_MANUALLY_RUN'	=> 'Y',
-		];
-
-		\CMailFilter::add($filterFields);
+		Mailbox::createInstance($mailboxId)->cacheDirs();
 
 		$this->setSuccess();
 
-		if ($syncAfterConnection)
+		if ($syncAfterConnection === 'Y')
 		{
 			$this->syncMailbox($mailboxId);
 		}
 
 		return [
 			'id' => $mailboxId,
-			'email' => trim($mailboxData['EMAIL']),
+			'email' => trim((string)$mailboxData['EMAIL']),
 		];
+	}
+
+	private function hasErrors(): bool
+	{
+		return !empty($this->errorCollection);
+	}
+
+	private static function deleteMailboxSender(int $mailboxId, string $email): void
+	{
+		$sender = SenderTable::query()
+			->setSelect(['ID'])
+			->where('IS_CONFIRMED', true)
+			->where('PARENT_MODULE_ID', 'mail')
+			->where('EMAIL', $email)
+			->where('PARENT_ID', $mailboxId)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		if ($sender)
+		{
+			Main\Mail\Sender::delete([$sender['ID']]);
+			Main\Mail\Sender::clearCustomSmtpCache($email);
+		}
+	}
+
+	public static function deleteMailbox(int $id): Main\Result
+	{
+		$result = new Main\Result();
+
+		global $USER;
+
+		$mailbox = Mail\MailboxTable::getList(array(
+			'filter' => array(
+				'=ID' => $id,
+				'=ACTIVE' => 'Y',
+				'=SERVER_TYPE' => 'imap',
+			),
+		))->fetch();
+
+		if (empty($mailbox))
+		{
+			$result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_NO_MAILBOX')));
+
+			return $result;
+		}
+
+		$canManage = Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailbox['ID']);
+
+		if (!$canManage)
+		{
+			$result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_DENIED')));
+
+			return $result;
+		}
+
+		\CMailbox::update($mailbox['ID'], array('ACTIVE' => 'N'));
+
+		self::deleteMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL']);
+
+		\CUserCounter::clear($USER->getId(), 'mail_unseen', $mailbox['LID']);
+
+		$mailboxSyncManager = new \Bitrix\Mail\Helper\Mailbox\MailboxSyncManager($mailbox['USER_ID']);
+
+		$mailboxSyncManager->deleteSyncData($mailbox['ID']);
+
+		\CAgent::addAgent(sprintf('Bitrix\Mail\Helper::deleteMailboxAgent(%u);', $mailbox['ID']), 'mail', 'N', 60);
+
+		return $result;
 	}
 }

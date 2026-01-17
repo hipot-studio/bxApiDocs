@@ -1,9 +1,14 @@
-<?
+<?php
 namespace Bitrix\Tasks\Internals;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
-//Loc::loadMessages(__FILE__);
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\TextField;
+use Bitrix\Main\ORM\Fields\DatetimeField;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
+use Bitrix\Tasks\Internals\Task\SystemLogObject;
 
 /**
  * Class SystemLogTable
@@ -16,89 +21,55 @@ use Bitrix\Main,
  * @method static EO_SystemLog_Result getById($id)
  * @method static EO_SystemLog_Result getList(array $parameters = [])
  * @method static EO_SystemLog_Entity getEntity()
- * @method static \Bitrix\Tasks\Internals\EO_SystemLog createObject($setDefaultValues = true)
+ * @method static \Bitrix\Tasks\Internals\Task\SystemLogObject createObject($setDefaultValues = true)
  * @method static \Bitrix\Tasks\Internals\EO_SystemLog_Collection createCollection()
- * @method static \Bitrix\Tasks\Internals\EO_SystemLog wakeUpObject($row)
+ * @method static \Bitrix\Tasks\Internals\Task\SystemLogObject wakeUpObject($row)
  * @method static \Bitrix\Tasks\Internals\EO_SystemLog_Collection wakeUpCollection($rows)
  */
-class SystemLogTable extends Main\Entity\DataManager
+class SystemLogTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	public const ENTITY_TYPE_TEMPLATE = 1;
 	public const TYPE_MESSAGE = 1;
 	public const TYPE_ERROR = 3;
 
-	/**
-	 * Returns DB table name for entity.
-	 *
-	 * @return string
-	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_tasks_syslog';
 	}
 
-	/**
-	 * @return static
-	 */
-	public static function getClass()
+	public static function getClass(): string
 	{
-		return get_called_class();
+		return static::class;
 	}
 
-	/**
-	 * Returns entity map definition.
-	 *
-	 * @return array
-	 */
-	public static function getMap()
+	public static function getObjectClass(): string
 	{
-		return array(
-			'ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-				'autocomplete' => true,
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_ID_FIELD'),
-			),
-			'TYPE' => array(
-				'data_type' => 'integer',
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_TYPE_FIELD'),
-			),
-			'CREATED_DATE' => array(
-				'data_type' => 'datetime',
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_CREATED_DATE_FIELD'),
-			),
-			'MESSAGE' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateMessage'),
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_MESSAGE_FIELD'),
-			),
-			'ENTITY_ID' => array(
-				'data_type' => 'integer',
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_ENTITY_ID_FIELD'),
-			),
-			'ENTITY_TYPE' => array(
-				'data_type' => 'integer',
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_ENTITY_TYPE_FIELD'),
-			),
-			'PARAM_A' => array(
-				'data_type' => 'integer',
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_PARAM_A_FIELD'),
-			),
-			'ERROR' => array(
-				'data_type' => 'text',
-				//'title' => Loc::getMessage('SYSLOG_ENTITY_ERROR_FIELD'),
-			),
-		);
+		return SystemLogObject::class;
 	}
-	/**
-	 * Returns validators for MESSAGE field.
-	 *
-	 * @return array
-	 */
-	public static function validateMessage()
+
+	public static function getMap(): array
 	{
-		return array(
-			new Main\Entity\Validator\Length(null, 255),
-		);
+		return [
+			(new IntegerField('ID'))
+				->configurePrimary()
+				->configureAutocomplete(),
+
+			(new IntegerField('TYPE')),
+
+			(new DatetimeField('CREATED_DATE')),
+
+			(new StringField('MESSAGE'))
+				->addValidator(new LengthValidator(null, 255)),
+
+			(new IntegerField('ENTITY_ID')),
+
+			(new IntegerField('ENTITY_TYPE')),
+
+			(new IntegerField('PARAM_A')),
+
+			(new TextField('ERROR')),
+		];
 	}
 }

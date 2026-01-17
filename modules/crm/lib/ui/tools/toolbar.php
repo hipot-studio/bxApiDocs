@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\UI\Tools;
 
-use Bitrix\Crm\RepeatSale\Widget\WidgetManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router;
 use Bitrix\Main\Localization\Loc;
@@ -120,6 +119,22 @@ class ToolBar
 
 	public static function getKanbanSettings(): array
 	{
+		$mainCanHandleTooltips = method_exists(
+			\Bitrix\Main\UserField\Dispatcher::class,
+			'prepareFieldInfo',
+		);
+
+		$tooltipExt = 'ui.entity-editor.user-field-configurators.tooltip-configurator';
+		$uiCanHandleTooltips = in_array($tooltipExt, Extension::getDependencyList('ui.entity-editor'), true);
+
+		$buttonClass = '';
+		$toggleTooltipVisibilityButton = [];
+		if ($mainCanHandleTooltips && $uiCanHandleTooltips)
+		{
+			$buttonClass = 'menu-popup-item-none';
+			$toggleTooltipVisibilityButton = (new Buttons\ToggleTooltipVisibility())->getArrayParams();
+		}
+
 		return [
 			'id' => 'crm-kanban-settings-sub-menu',
 			'text' => Loc::getMessage('CRM_KANBAN_SETTINGS_TITLE'),
@@ -128,12 +143,15 @@ class ToolBar
 				// see crm.kanban.sort extension
 				[
 					'text' => Loc::getMessage('CRM_KANBAN_SETTINGS_FIELDS_VIEW'),
+					'className' => $buttonClass,
 					'onclick' => new JsEvent('crm-kanban-settings-fields-view'),
 				],
 				[
 					'text' => Loc::getMessage('CRM_KANBAN_SETTINGS_FIELDS_EDIT'),
+					'className' => $buttonClass,
 					'onclick' => new JsEvent('crm-kanban-settings-fields-edit'),
 				],
+				$toggleTooltipVisibilityButton,
 			],
 		];
 	}

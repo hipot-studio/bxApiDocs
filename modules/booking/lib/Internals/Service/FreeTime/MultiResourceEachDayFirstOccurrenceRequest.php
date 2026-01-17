@@ -13,7 +13,8 @@ class MultiResourceEachDayFirstOccurrenceRequest
 		public readonly array $resourceCollections,
 		public readonly BookingCollection $eventCollection,
 		public readonly DateTimeCollection $searchDates,
-		public readonly int|null $sizeInMinutes = null
+		public readonly int|null $sizeInMinutes = null,
+		public readonly bool $ignorePastTime = true,
 	)
 	{
 	}

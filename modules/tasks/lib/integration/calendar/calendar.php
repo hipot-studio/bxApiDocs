@@ -31,17 +31,21 @@ class Calendar
 		return $this->schedule;
 	}
 
+	/**
+	 * @return DateTime in user timezone
+	 */
 	public function getClosestDate(
-		\Bitrix\Main\Type\DateTime $date,
+		\Bitrix\Main\Type\DateTime $userDateTime,
 		int $offsetInSeconds,
 		bool $matchSchedule = false,
 		bool $matchWorkTime = false,
+		bool $roundDate = true,
 	): DateTime
 	{
-		$date = DateTime::createFromDateTime($date);
-		$date->stripSeconds();
+		$userDateTime = DateTime::createFromDateTime($userDateTime);
+		$userDateTime->stripSeconds();
 
-		$possibleDate = clone $date;
+		$possibleDate = clone $userDateTime;
 		$possibleDate = $possibleDate->disableUserTime();
 
 		if ($offsetInSeconds <= 0)
@@ -62,9 +66,14 @@ class Calendar
 			$matchWorkTime,
 		);
 
-		$closestWorkDate = $closestWorkDateStrategy->getClosestWorkDate($date, $offsetInSeconds);
+		$closestWorkDate = $closestWorkDateStrategy->getClosestWorkDate($userDateTime, $offsetInSeconds);
 
-		return $this->roundDate($closestWorkDate);
+		if ($roundDate)
+		{
+			return $this->roundDate($closestWorkDate);
+		}
+
+		return $closestWorkDate;
 	}
 
 	protected function roundDate(DateTime $date): DateTime

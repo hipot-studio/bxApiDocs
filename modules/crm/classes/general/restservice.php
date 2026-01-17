@@ -12,6 +12,8 @@ use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Funnel;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Bitrix24Manager;
 use Bitrix\Crm\Integration\DiskManager;
 use Bitrix\Crm\Integration\Rest\AppPlacement;
@@ -4018,21 +4020,18 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 			unset($descriptionType, $description, $isNeedSanitize);
 		}
 
-		if (class_exists('\Bitrix\Iblock\Public\Service\RestValidator\Format\SimplePropertyValueValidator'))
+		$validator = IblockRestValidator\Format\SimplePropertyValueValidator::getInstance();
+		$validator->setFileValidator(new IblockRestValidator\Format\Type\IblockFile());
+		$validator->setIblockId($catalogID);
+		$internalResult = $validator->run($fields);
+		if (!$internalResult->isSuccess())
 		{
-			$validator = IblockRestValidator\Format\SimplePropertyValueValidator::getInstance();
-			$validator->setFileValidator(new IblockRestValidator\Format\Type\IblockFile());
-			$validator->setIblockId($catalogID);
-			$internalResult = $validator->run($fields);
-			if (!$internalResult->isSuccess())
+			foreach ($internalResult->getErrorMessages() as $message)
 			{
-				foreach ($internalResult->getErrorMessages() as $message)
-				{
-					$errors[] = $message;
-				}
-
-				return false;
+				$errors[] = $message;
 			}
+
+			return false;
 		}
 
 		// Product properties
@@ -4447,21 +4446,18 @@ class CCrmProductRestProxy extends CCrmRestProxyBase
 			unset($descriptionType, $description, $isNeedSanitize);
 		}
 
-		if (class_exists('\Bitrix\Iblock\Public\Service\RestValidator\Format\SimplePropertyValueValidator'))
+		$validator = IblockRestValidator\Format\SimplePropertyValueValidator::getInstance();
+		$validator->setFileValidator(new IblockRestValidator\Format\Type\IblockFile());
+		$validator->setIblockId($catalogID);
+		$internalResult = $validator->run($fields);
+		if (!$internalResult->isSuccess())
 		{
-			$validator = IblockRestValidator\Format\SimplePropertyValueValidator::getInstance();
-			$validator->setFileValidator(new IblockRestValidator\Format\Type\IblockFile());
-			$validator->setIblockId($catalogID);
-			$internalResult = $validator->run($fields);
-			if (!$internalResult->isSuccess())
+			foreach ($internalResult->getErrorMessages() as $message)
 			{
-				foreach ($internalResult->getErrorMessages() as $message)
-				{
-					$errors[] = $message;
-				}
-
-				return false;
+				$errors[] = $message;
 			}
+
+			return false;
 		}
 
 		// Product properties
@@ -5023,18 +5019,15 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 			return false;
 		}
 
-		if (class_exists('\Bitrix\Iblock\Public\Service\RestValidator\Format\PropertyScalarFilterValidator'))
+		$validator = IblockRestValidator\Format\PropertyScalarFilterValidator::getInstance();
+		$internalResult = $validator->run($filter);
+		if (!$internalResult->isSuccess())
 		{
-			$validator = IblockRestValidator\Format\PropertyScalarFilterValidator::getInstance();
-			$internalResult = $validator->run($filter);
-			if (!$internalResult->isSuccess())
+			foreach ($internalResult->getErrorMessages() as $message)
 			{
-				foreach ($internalResult->getErrorMessages() as $message)
-				{
-					$errors[] = $message;
+				$errors[] = $message;
 
-					return false;
-				}
+				return false;
 			}
 		}
 
@@ -6772,50 +6765,86 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
+			$this->sendCreateAnalyticsEvent(Dictionary::STATUS_ERROR);
+
 			return false;
 		}
 
 		try
 		{
-			return DealCategory::add($fields);
+			$result = DealCategory::add($fields);
+			$this->sendCreateAnalyticsEvent($result ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR);
+
+			return $result;
 		}
 		catch(Main\SystemException $ex)
 		{
 			$errors[] = $ex->getMessage();
+			$this->sendCreateAnalyticsEvent(Dictionary::STATUS_ERROR);
+
 			return false;
 		}
 	}
+
+	protected function sendCreateAnalyticsEvent(string $status): void
+	{
+		(new Funnel\CreateEvent(section: Dictionary::SECTION_REST))
+			->setStatus($status)
+			->buildEvent()
+			->send()
+		;
+	}
+
 	protected function innerUpdate($ID, &$fields, &$errors, array $params = null)
 	{
 		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
+			$this->sendRenameAnalyticsEvent(Dictionary::STATUS_ERROR);
+
 			return false;
 		}
 
 		if(!DealCategory::exists($ID))
 		{
 			$errors[] = 'Not found.';
+			$this->sendRenameAnalyticsEvent(Dictionary::STATUS_ERROR);
+
 			return false;
 		}
 
 		try
 		{
 			DealCategory::update($ID, $fields);
+			$this->sendRenameAnalyticsEvent(Dictionary::STATUS_SUCCESS);
+
 			return true;
 		}
 		catch(Main\SystemException $ex)
 		{
 			$errors[] = $ex->getMessage();
+			$this->sendRenameAnalyticsEvent(Dictionary::STATUS_ERROR);
+
 			return false;
 		}
 	}
+
+	protected function sendRenameAnalyticsEvent(string $status): void
+	{
+		(new Funnel\RenameEvent(section: Dictionary::SECTION_REST))
+			->setStatus($status)
+			->buildEvent()
+			->send()
+		;
+	}
+
 	protected function innerDelete($ID, &$errors, array $params = null)
 	{
 		$container = \Bitrix\Crm\Service\Container::getInstance();
 		if (!$container->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
+			$this->sendDeleteAnalyticsEvent(Dictionary::STATUS_ERROR);
 
 			return false;
 		}
@@ -6823,6 +6852,7 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 		if (!DealCategory::exists($ID))
 		{
 			$errors[] = 'Not found.';
+			$this->sendDeleteAnalyticsEvent(Dictionary::STATUS_ERROR);
 
 			return false;
 		}
@@ -6832,13 +6862,26 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 		$deleteResult = $category->delete();
 		if ($deleteResult->isSuccess())
 		{
+			$this->sendDeleteAnalyticsEvent(Dictionary::STATUS_SUCCESS);
+
 			return true;
 		}
 
 		$errors = array_merge($errors, $deleteResult->getErrorMessages());
+		$this->sendDeleteAnalyticsEvent(Dictionary::STATUS_ERROR);
 
 		return false;
 	}
+
+	protected function sendDeleteAnalyticsEvent(string $status): void
+	{
+		(new Funnel\DeleteEvent(section: Dictionary::SECTION_REST))
+			->setStatus($status)
+			->buildEvent()
+			->send()
+		;
+	}
+
 	public function resolveStatusEntityID($ID)
 	{
 		return $ID > 0 ? DealCategory::convertToStatusEntityID($ID) : 'DEAL_STAGE';
@@ -9133,6 +9176,11 @@ class CCrmStatusRestProxy extends CCrmRestProxyBase
 		if($entityID === '')
 		{
 			throw new RestException('The parameter entityId is not defined or invalid.');
+		}
+
+		if (!is_string($entityID))
+		{
+			throw new RestException('The parameter entityId must be a string.');
 		}
 
 		//return CCrmStatus::GetStatusList($entityID);

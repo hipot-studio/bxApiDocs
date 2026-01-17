@@ -66,7 +66,11 @@ class Rest extends Sender\Base
 			return $list;
 		}
 
-		$result = RestAppTable::getList();
+		$result = RestAppTable::query()
+			->setSelect(['ID', 'APP_ID', 'CODE'])
+			->setCacheTtl(3600)
+			->exec()
+		;
 		while ($row = $result->fetch())
 		{
 			$list[] = [
@@ -75,7 +79,9 @@ class Rest extends Sender\Base
 					$this->getLangField($row['ID'], 'APP_NAME'),
 					$this->getLangField($row['ID'], 'NAME')
 				),
-				'description' => $this->getLangField($row['ID'], 'DESCRIPTION')
+				'description' => $this->getLangField($row['ID'], 'DESCRIPTION'),
+				'appName' => $this->getLangField($row['ID'], 'APP_NAME'),
+				'appFromName' => $this->getLangField($row['ID'], 'NAME'),
 			];
 		}
 		return $list;
@@ -273,7 +279,11 @@ class Rest extends Sender\Base
 	{
 		if (static::$langFields === null)
 		{
-			$orm = RestAppLangTable::getList();
+			$orm = RestAppLangTable::query()
+				->setSelect(['APP_ID', 'LANGUAGE_ID', 'NAME', 'APP_NAME', 'DESCRIPTION'])
+				->setCacheTtl(3600)
+				->exec()
+			;
 			while ($row = $orm->fetch())
 			{
 				static::$langFields[$row['APP_ID']]['NAME'][$row['LANGUAGE_ID']] = $row['NAME'];

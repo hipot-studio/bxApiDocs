@@ -2,9 +2,7 @@
 
 namespace Bitrix\Tasks\Integration;
 
-use Bitrix\Tasks\Integration;
-
-class TasksMobile extends Integration
+class TasksMobile extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'tasksmobile';
 }

@@ -11,7 +11,7 @@ final class SettingsV2Feature extends FeatureFlag
 {
 	public function isEnabled(): bool
 	{
-		return (bool)Option::get('mobile', 'feature_settings_v2_enabled', false);
+		return (bool)Option::get('mobile', 'feature_settings_v2_enabled', true);
 	}
 
 	public function enable(): void

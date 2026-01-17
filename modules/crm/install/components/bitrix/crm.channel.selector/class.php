@@ -88,7 +88,14 @@ class CrmChannelSelectorComponent extends Base
 
 		if (empty($channels))
 		{
-			$channels = $this->getPhoneChannels($communications);
+			if ($this->arParams['needCommonPhoneChannel'])
+			{
+				$channels[] = $this->getCommonPhoneChannel($communications);
+			}
+			else
+			{
+				$channels = $this->getPhoneChannels($communications);
+			}
 			$channels[] = $this->getEmailChannel($communications);
 			$channels[] = $this->getOpenlineChannel($communications);
 		}
@@ -136,6 +143,23 @@ class CrmChannelSelectorComponent extends Base
 			'entityId' => $this->itemIdentifier->getEntityId(),
 			'entityTypeName' => \CCrmOwnerType::ResolveName($this->itemIdentifier->getEntityTypeId()),
 			'hasVisibleChannels' => $hasVisibleChannels,
+			'messageSenderSceneId' => $this->arParams['messageSenderSceneId'],
+			'analytics' => $this->arParams['analytics'] ?? [],
+		];
+	}
+
+	protected function getCommonPhoneChannel(array $communications): array
+	{
+		return [
+			'type' => Phone::ID,
+			'status' => !empty($communications[Phone::ID])
+				? Loc::getMessage('CRM_CHANNEL_SELECTOR_CHANNEL_STATUS_AVAILABLE')
+				: Loc::getMessage('CRM_CHANNEL_SELECTOR_PHONE_CHANNEL_STATUS_NOT_AVAILABLE'),
+			'canBeShown' => true,
+			'isAvailable' => !empty($communications[Phone::ID]),
+			'id' => 'message-sender-editor',
+			'signedTemplate' => $this->arParams['signedTemplate'],
+			'title' => Loc::getMessage('CRM_CHANNEL_SELECTOR_PHONE_CHANNEL_TITLE'),
 		];
 	}
 
@@ -145,7 +169,7 @@ class CrmChannelSelectorComponent extends Base
 
 		$userId = Service\Container::getInstance()->getContext()->getUserId();
 
-		if (!empty($this->arParams['templateCode']) && Product::isRegionRussian(true))
+		if (!empty($this->arParams['signedTemplate']) && Product::isRegionRussian(true))
 		{
 			foreach(Integration\NotificationsManager::getChannelsList([], $userId) as $channel)
 			{
@@ -155,8 +179,7 @@ class CrmChannelSelectorComponent extends Base
 					'canBeShown' => Integration\NotificationsManager::canUse(),
 					'isAvailable' => Integration\NotificationsManager::canSendMessage(),
 					'id' => $channel->getId(),
-					'templateCode' => $this->arParams['templateCode'],
-					'templatePlaceholders' => $this->arParams['templatePlaceholders'],
+					'signedTemplate' => $this->arParams['signedTemplate'],
 					'categoryTitle' => Loc::getMessage('CRM_CHANNEL_SELECTOR_CATEGORY_SMS_2'),
 				];
 			}
@@ -205,6 +228,9 @@ class CrmChannelSelectorComponent extends Base
 		return [
 			'id' => Email::ID,
 			'type' => Email::ID,
+			'status' => !empty($communications[Email::ID])
+				? Loc::getMessage('CRM_CHANNEL_SELECTOR_CHANNEL_STATUS_AVAILABLE')
+				: Loc::getMessage('CRM_CHANNEL_SELECTOR_EMAIL_CHANNEL_STATUS_NOT_AVAILABLE'),
 			'title' => 'E-mail',
 			'canBeShown' => !empty($communications[Email::ID]),
 			'isAvailable' => !empty($communications[Email::ID]),
@@ -221,6 +247,9 @@ class CrmChannelSelectorComponent extends Base
 		return [
 			'id' => \Bitrix\Crm\Multifield\Type\Im::ID,
 			'type' => \Bitrix\Crm\Multifield\Type\Im::ID,
+			'status' => $isAvailable && !empty($communications[\Bitrix\Crm\Multifield\Type\Im::ID])
+				? Loc::getMessage('CRM_CHANNEL_SELECTOR_IM_CHANNEL_STATUS_AVAILABLE')
+				: Loc::getMessage('CRM_CHANNEL_SELECTOR_IM_CHANNEL_STATUS_NOT_AVAILABLE'),
 			'title' => Loc::getMessage('CRM_CHANNEL_SELECTOR_OPENLINE_CHANNEL_TITLE'),
 			'canBeShown' => !empty($communications[\Bitrix\Crm\Multifield\Type\Im::ID]),
 			'isAvailable' =>
@@ -317,7 +346,7 @@ class CrmChannelSelectorComponent extends Base
 			$config = $this->getDefaultConfig();
 		}
 
-		return $config;
+		return array_merge($this->getDefaultConfig(), $config);
 	}
 
 	protected function loadConfig(): ?array
@@ -343,6 +372,10 @@ class CrmChannelSelectorComponent extends Base
 	protected function getDefaultConfig(): array
 	{
 		return [
+			[
+				'id' => 'message-sender-editor',
+				'isHidden' => false,
+			],
 			[
 				'id' => 'twilio',
 				'isHidden' => false,

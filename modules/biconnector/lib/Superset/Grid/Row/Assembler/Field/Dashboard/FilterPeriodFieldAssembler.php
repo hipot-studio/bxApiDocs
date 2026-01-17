@@ -28,7 +28,7 @@ class FilterPeriodFieldAssembler extends FieldAssembler
 			$dateEnd->toString();
 		}
 
-		$preparedValue = "{$dateStart} - {$dateEnd}";
+		$preparedValue = "{$dateStart} – {$dateEnd}";
 
 		if ($value['INCLUDE_LAST_FILTER_DATE'])
 		{

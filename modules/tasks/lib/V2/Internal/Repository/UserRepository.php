@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UserTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserMapper;
 use Bitrix\Tasks\Util;
-use CAllGroup;
+use CGroup;
 
 class UserRepository implements UserRepositoryInterface
 {
@@ -28,6 +29,8 @@ class UserRepository implements UserRepositoryInterface
 		{
 			return new UserCollection();
 		}
+
+		Collection::normalizeArrayValuesByInt($userIds, false);
 
 		$select = [
 			'ID',
@@ -59,11 +62,27 @@ class UserRepository implements UserRepositoryInterface
 
 	public function getAdmins(): Entity\UserCollection
 	{
-		$adminIds = CAllGroup::GetGroupUser(1);
+		$adminIds = CGroup::GetGroupUser(1);
 		Collection::normalizeArrayValuesByInt($adminIds, false);
 
 		return $this->userMapper->mapToCollection(
 			array_map(static fn(int $adminId): array => ['ID' => $adminId], $adminIds),
 		);
+	}
+
+	public function isExists(int $userId): bool
+	{
+		if ($userId < 1)
+		{
+			return false;
+		}
+
+		$result = UserTable::query()
+			->setSelect([new ExpressionField('CNT', 'COUNT(1)')])
+			->where('ID', $userId)
+			->setLimit(1)
+			->fetch();
+
+		return is_array($result) && (int)$result['CNT'] > 0;
 	}
 }

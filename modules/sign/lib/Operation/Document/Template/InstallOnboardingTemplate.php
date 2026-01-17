@@ -85,7 +85,7 @@ class InstallOnboardingTemplate implements Operation
 
 		$onboardingTemplate = $this->templateService->getById($templateId);
 
-		return (new CompleteOnboardingTemplateFilling($onboardingTemplate))->launch();
+		return (new CompleteOnboardingTemplateFilling($onboardingTemplate, $this->createdById))->launch();
 	}
 
 	private function unserializeAndImport(string $serializedTemplate): Main\Result

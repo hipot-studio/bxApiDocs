@@ -18,7 +18,8 @@ class BookingHandlerService
 			return;
 		}
 
-		$bookingCollection = Container::getBookingRepository()->getList(
+		$bookingRepository = Container::getBookingRepository();
+		$bookingCollection = $bookingRepository->getList(
 			filter: new BookingFilter([
 				'ID' => $ids,
 			]),
@@ -29,8 +30,14 @@ class BookingHandlerService
 				'EXTERNAL_DATA',
 				'CLIENTS',
 				'RESOURCES',
+				'SKUS',
 			]))->prepareSelect(),
 		);
+
+		if (!$bookingCollection->isEmpty())
+		{
+			$bookingRepository->withSkus($bookingCollection);
+		}
 
 		foreach ($bookingCollection as $booking)
 		{

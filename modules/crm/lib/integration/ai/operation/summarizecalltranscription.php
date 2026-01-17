@@ -5,18 +5,22 @@ namespace Bitrix\Crm\Integration\AI\Operation;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
 use Bitrix\Crm\Activity\Provider\Call;
+use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\Config;
 use Bitrix\Crm\Integration\AI\Dto\SummarizeCallTranscriptionPayload;
+use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
+use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\SummaryEvent;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Timeline\AI\Call\Controller;
+use Bitrix\Crm\Timeline\AI\Controller;
+use Bitrix\Main;
 use CCrmActivity;
 use CCrmOwnerType;
 
@@ -27,6 +31,10 @@ class SummarizeCallTranscription extends AbstractOperation
 
 	public const SUPPORTED_TARGET_ENTITY_TYPE_IDS = [
 		CCrmOwnerType::Activity,
+	];
+	public const SUPPORTED_ACTIVITY_PROVIDER_IDS = [
+		Call::ACTIVITY_PROVIDER_ID,
+		OpenLine::ACTIVITY_PROVIDER_ID,
 	];
 
 	protected const PAYLOAD_CLASS = SummarizeCallTranscriptionPayload::class;
@@ -59,7 +67,7 @@ class SummarizeCallTranscription extends AbstractOperation
 			if (
 				$activity
 				&& isset($activity['PROVIDER_ID'])
-				&& $activity['PROVIDER_ID'] === Call::ACTIVITY_PROVIDER_ID
+				&& in_array($activity['PROVIDER_ID'], self::SUPPORTED_ACTIVITY_PROVIDER_IDS, true)
 			)
 			{
 				return true;
@@ -69,7 +77,46 @@ class SummarizeCallTranscription extends AbstractOperation
 		return false;
 	}
 
-	protected function getAIPayload(): \Bitrix\Main\Result
+	protected static function checkPreviousJobs(ItemIdentifier $target, int $parentId): Main\Result
+	{
+		$activity = Container::getInstance()->getActivityBroker()->getById($target->getEntityId());
+		if (!Scenario::isScenarioWithSkipTranscription($activity['PROVIDER_ID']))
+		{
+			return parent::checkPreviousJobs($target, $parentId);
+		}
+
+		$result = new Main\Result();
+
+		$previousJob = self::findDuplicateJob($target, $parentId);
+		if (!$previousJob)
+		{
+			return $result; // new job
+		}
+
+		if ($previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_SUCCESS)
+		{
+			return $result; // success previous job
+		}
+
+		if ($previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_PENDING)
+		{
+			return $result->addError(ErrorCode::getJobAlreadyExistsError()); // previous job in progress
+		}
+
+		if (
+			$previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_ERROR
+			&& $previousJob->requireRetryCount() >= Result::MAX_RETRY_COUNT
+		)
+		{
+			return $result->addError(ErrorCode::getJobMaxRetriesExceededError());
+		}
+
+		$result->setData(['previousJob' => $previousJob]); // update only error jobs
+
+		return $result;
+	}
+
+	protected function getAIPayload(): Main\Result
 	{
 		return PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
 			->setMarkers([
@@ -99,11 +146,15 @@ class SummarizeCallTranscription extends AbstractOperation
 
 		if ($nextTarget)
 		{
+			$activityId = $result->getTarget()?->getEntityId();
+
 			Controller::getInstance()->onStartRecordTranscriptSummary(
 				$nextTarget,
-				$result->getTarget()?->getEntityId(),
+				$activityId,
 				$result->getUserId(),
 			);
+
+			self::saveActivitySettings($activityId);
 		}
 	}
 
@@ -115,7 +166,9 @@ class SummarizeCallTranscription extends AbstractOperation
 			Controller::getInstance()->onFinishRecordTranscriptSummary(
 				$nextTarget,
 				$result->getTarget()?->getEntityId(),
-				[],
+				[
+					'JOB_ID' => $result->getJobId(),
+				],
 				$result->getUserId(),
 			);
 		}
@@ -177,5 +230,22 @@ class SummarizeCallTranscription extends AbstractOperation
 		{
 			$engine->getIEngine()->setQuality(Quality::QUALITIES['summarize']);
 		}
+	}
+
+	private static function saveActivitySettings(int $activityId): void
+	{
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+		if ($activity['PROVIDER_ID'] !== OpenLine::getId())
+		{
+			return;
+		}
+
+		// save additional setting to avoid re-fetching messages in each job retry
+		$messages = OpenLine::getMessagesForCopilot($activityId);
+
+		CCrmActivity::Update($activityId, ['SETTINGS' => [
+			...$activity['SETTINGS'],
+			'LAST_MESSAGES_VOLUME' => (int)(mb_strlen($messages, 'UTF-8')),
+		]]);
 	}
 }

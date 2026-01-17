@@ -4,18 +4,31 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
+
 class UserField extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	public function __construct(
-		public readonly string $key,
-		public readonly array $value,
+		public readonly ?string $key = null,
+		public readonly mixed $value = null,
 	)
 	{
-		if (!str_starts_with($this->key, 'UF_AUTO_'))
-		{
-			// todo: replace with meaningful exception
-			throw new \Exception('unsupported userfield key');
-		}
+
+	}
+
+	public function getId(): string
+	{
+		return $this->key;
+	}
+
+	public static function mapFromArray(array $props): static
+	{
+		return new static(
+			key: static::mapString($props, 'key'),
+			value: static::mapMixed($props, 'value'),
+		);
 	}
 
 	public function toArray(): array
@@ -24,18 +37,5 @@ class UserField extends AbstractEntity
 			'key' => $this->key,
 			'value' => $this->value,
 		];
-	}
-
-	public function getId(): mixed
-	{
-		return $this->key;
-	}
-
-	public static function mapFromArray(array $props): static
-	{
-		return new self(
-			$props['key'],
-			$props['value'],
-		);
 	}
 }

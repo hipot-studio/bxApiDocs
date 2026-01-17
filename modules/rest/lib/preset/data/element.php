@@ -19,12 +19,17 @@ Loc::loadMessages(__FILE__);
 class Element extends Base
 {
 	private const CACHE_DIR = '/rest/integration/element/';
+
+	public const VALUE_YES = 'Y';
+	public const VALUE_NO = 'N';
+	public const VALUE_DEFAULT = 'D';
+
 	private const DEFAULT_DATA = [
 		'application' => [
 			'CODE' => 'application',
 			'ELEMENT_CODE' => 'application',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1003_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1003_DESCRIPTION',
 			'DESCRIPTION_FULL.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1003_DESCRIPTION_FULL',
 			'SECTION_CODE' => 'standard',
@@ -48,7 +53,7 @@ class Element extends Base
 			'CODE' => 'out-hook',
 			'ELEMENT_CODE' => 'out-hook',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1002_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1002_DESCRIPTION',
 			'SECTION_CODE' => 'standard',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -68,7 +73,7 @@ class Element extends Base
 			'CODE' => 'in-hook',
 			'ELEMENT_CODE' => 'in-hook',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1001_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1001_DESCRIPTION',
 			'SECTION_CODE' => 'standard',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -94,7 +99,7 @@ class Element extends Base
 			'CODE' => 'contact-sync',
 			'ELEMENT_CODE' => 'contact-sync',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_10_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_10_DESCRIPTION',
 			'SECTION_CODE' => 'external',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -138,7 +143,7 @@ class Element extends Base
 			'SECTION_CODE' => 'migration',
 			'ELEMENT_CODE' => 'contact-add',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_2_TITLE',
-			'ACTIVE' => 'N',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_2_DESCRIPTION',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
 			'OPTIONS' => [
@@ -204,7 +209,7 @@ class Element extends Base
 			'CODE' => 'export-email-new-contact',
 			'ELEMENT_CODE' => 'export-email-new-contact',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_3_TITLE',
-			'ACTIVE' => 'N',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_3_DESCRIPTION',
 			'SECTION_CODE' => 'migration',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -255,7 +260,7 @@ class Element extends Base
 			'CODE' => 'user-add',
 			'ELEMENT_CODE' => 'user-add',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_4_TITLE',
-			'ACTIVE' => 'N',
+			'ACTIVE' => self::VALUE_NO,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_4_DESCRIPTION',
 			'SECTION_CODE' => 'migration',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -303,7 +308,7 @@ class Element extends Base
 			'CODE' => 'lead-change-status',
 			'ELEMENT_CODE' => 'lead-change-status',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_5_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_5_DESCRIPTION',
 			'SECTION_CODE' => 'auto-sales',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -346,7 +351,7 @@ class Element extends Base
 			'CODE' => 'tasks-task-add',
 			'ELEMENT_CODE' => 'tasks-task-add',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_6_TITLE',
-			'ACTIVE' => 'N',
+			'ACTIVE' => self::VALUE_NO,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_6_DESCRIPTION',
 			'SECTION_CODE' => 'auto-control',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -393,7 +398,7 @@ class Element extends Base
 			'CODE' => 'send-notify',
 			'ELEMENT_CODE' => 'send-notify',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_7_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_7_DESCRIPTION',
 			'SECTION_CODE' => 'auto-control',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -439,7 +444,7 @@ class Element extends Base
 			'CODE' => 'blogpost-add',
 			'ELEMENT_CODE' => 'blogpost-add',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_8_TITLE_MSGVER_1',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_8_DESCRIPTION_MSGVER_1',
 			'SECTION_CODE' => 'auto-control',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -486,7 +491,7 @@ class Element extends Base
 			'CODE' => 'deal-change-status',
 			'ELEMENT_CODE' => 'deal-change-status',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_9_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_9_DESCRIPTION',
 			'SECTION_CODE' => 'auto-sales',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -533,7 +538,7 @@ class Element extends Base
 			'CODE' => 'tasks-task-get',
 			'ELEMENT_CODE' => 'tasks-task-get',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_11_TITLE',
-			'ACTIVE' => 'N',
+			'ACTIVE' => self::VALUE_NO,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_11_DESCRIPTION',
 			'SECTION_CODE' => 'auto-control',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -580,7 +585,7 @@ class Element extends Base
 			'CODE' => 'widget-contact-detail-tab',
 			'ELEMENT_CODE' => 'widget-contact-detail-tab',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_12_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_12_DESCRIPTION',
 			'SECTION_CODE' => 'widget',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -627,7 +632,7 @@ class Element extends Base
 			'CODE' => 'widget-contact-detail-activity',
 			'ELEMENT_CODE' => 'widget-contact-detail-activity',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_13_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_13_DESCRIPTION',
 			'SECTION_CODE' => 'widget',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -674,7 +679,7 @@ class Element extends Base
 			'CODE' => 'widget-call-cart',
 			'ELEMENT_CODE' => 'widget-call-cart',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_14_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_14_DESCRIPTION',
 			'SECTION_CODE' => 'widget',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -722,7 +727,7 @@ class Element extends Base
 			'CODE' => 'creat-invoice-by-tasks-time',
 			'ELEMENT_CODE' => 'creat-invoice-by-tasks-time',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_15_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_15_DESCRIPTION',
 			'SECTION_CODE' => 'widget',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -770,7 +775,7 @@ class Element extends Base
 			'CODE' => 'custom-widget',
 			'ELEMENT_CODE' => 'custom-widget',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_17_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_17_DESCRIPTION',
 			'SECTION_CODE' => 'migration',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -811,7 +816,7 @@ class Element extends Base
 			'CODE' => 'bot-notify-staff',
 			'ELEMENT_CODE' => 'bot-notify-staff',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_18_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_18_DESCRIPTION',
 			'SECTION_CODE' => 'chat-bot',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -860,7 +865,7 @@ class Element extends Base
 			'SECTION_CODE' => 'external',
 			'ELEMENT_CODE' => 'lead-add',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1_TITLE',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_1_DESCRIPTION',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
 			'ADMIN_ONLY' => 'Y',
@@ -922,7 +927,7 @@ class Element extends Base
 			'CODE' => 'bot-action-chat',
 			'ELEMENT_CODE' => 'bot-action-chat',
 			'TITLE.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_19_TITLE_MSGVER_1',
-			'ACTIVE' => 'Y',
+			'ACTIVE' => self::VALUE_YES,
 			'DESCRIPTION.MESSAGE_CODE' => 'REST_INTEGRATION_PATTERNS_19_DESCRIPTION',
 			'SECTION_CODE' => 'chat-bot',
 			'ICON_CLASS' => 'rest-integration-tile-img-hidden',
@@ -989,7 +994,7 @@ class Element extends Base
 	{
 		$result = [];
 		$cache = Cache::createInstance();
-		if ($cache->initCache(static::CACHE_TIME, 'item_v3_' . $code . LANGUAGE_ID, static::CACHE_DIR))
+		if ($cache->initCache(static::CACHE_TIME, 'item_v4_' . $code . LANGUAGE_ID, static::CACHE_DIR))
 		{
 			$result = $cache->getVars();
 		}
@@ -1032,7 +1037,7 @@ class Element extends Base
 	{
 		$result = [];
 		$cache = Cache::createInstance();
-		if ($cache->initCache(static::CACHE_TIME, 'section_v3_' . $sectionCode . LANGUAGE_ID, static::CACHE_DIR))
+		if ($cache->initCache(static::CACHE_TIME, 'section_v4_' . $sectionCode . LANGUAGE_ID, static::CACHE_DIR))
 		{
 			$result = $cache->getVars();
 		}

@@ -22,17 +22,6 @@ class MailActivityAttachmentLoader
 
 	public function loadByActivityArray(array $activity): Result|MailActivityUpdatedResult
 	{
-		if (!empty($activity['STORAGE_ELEMENT_IDS']))
-		{
-			return (new Result())->addError(new Error('Attachments already loaded'));
-		}
-
-		$notLoadedAttachments = $activity['SETTINGS'][\CCrmEMail::ACTIVITY_SETTINGS_NOT_LOADED_ATTACHMENTS_FIELD] ?? null;
-		if ($notLoadedAttachments === 0 || $notLoadedAttachments < 0)
-		{
-			return (new Result())->addError(new Error('Nothing to load'));
-		}
-
 		if (!Client::isReadyToUse())
 		{
 			return (new Result())->addError(new Error('Module mail not ready to use'));
@@ -56,26 +45,30 @@ class MailActivityAttachmentLoader
 			return (new Result())->addError(new Error('Message not found'));
 		}
 
-		if (empty($message['OPTIONS']['attachments']))
+		$notLoadedAttachments = $activity['SETTINGS'][\CCrmEMail::ACTIVITY_SETTINGS_NOT_LOADED_ATTACHMENTS_FIELD] ?? null;
+		$messageAttachmentCount = (int)($message['OPTIONS']['attachments'] ?? 0);
+		$activityAttachmentIsEmpty = empty($activity['STORAGE_ELEMENT_IDS']);
+
+		if (($notLoadedAttachments > 0 || $activityAttachmentIsEmpty) && $messageAttachmentCount > 0)
 		{
-			if ($notLoadedAttachments === null)
+			$lock = new MailActivityAttachmentLock($activityId);
+			if (!$lock->lock())
 			{
-				$this->markAsNothingToLoad($activity);
+				return (new Result())->addError(new Error('Attachment loading in progress'));
 			}
 
-			return (new Result())->addError(new Error('Nothing to load from message'));
+			$result = $this->loadByActivityId($activityId, $messageId, $message);
+			$lock->release();
+
+			return $result;
 		}
 
-		$lock = new MailActivityAttachmentLock($activityId);
-		if (!$lock->lock())
+		if ($notLoadedAttachments === null && $messageAttachmentCount === 0)
 		{
-			return (new Result())->addError(new Error('Attachment loading in progress'));
+			$this->markAsNothingToLoad($activity);
 		}
 
-		$result = $this->loadByActivityId($activityId, $messageId, $message);
-		$lock->release();
-
-		return $result;
+		return (new Result())->addError(new Error('Nothing to load from message'));
 	}
 
 	private function getActivity(int $activityId): array|false
@@ -110,11 +103,13 @@ class MailActivityAttachmentLoader
 	{
 		$activity = $this->getActivity($activityId);
 		$notLoadedAttachments = $activity['SETTINGS'][\CCrmEMail::ACTIVITY_SETTINGS_NOT_LOADED_ATTACHMENTS_FIELD] ?? null;
-		if ($notLoadedAttachments === 0 || $notLoadedAttachments < 0 || !empty($activity['STORAGE_ELEMENT_IDS']))
+		$messageAttachmentCount = (int)($message['OPTIONS']['attachments'] ?? 0);
+		$activityAttachmentIsEmpty = empty($activity['STORAGE_ELEMENT_IDS']);
+
+		if ($notLoadedAttachments <= 0 && (!$activityAttachmentIsEmpty || $messageAttachmentCount === 0))
 		{
 			return (new Result())->addError(new Error('Attachments already loaded'));
 		}
-
 		$this->downloadAttachmentsIfNeed($message);
 
 		$filesToSave = $this->saver->getAttachmentFilesForSave(

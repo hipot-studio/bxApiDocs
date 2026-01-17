@@ -6,17 +6,18 @@ namespace Bitrix\Tasks\V2\Internal\Entity\Trait;
 
 use BackedEnum;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\V2\Internal\Entity\AbstractBackedEnumCollection;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntityCollection;
 use Bitrix\Tasks\V2\Internal\Entity\ValueObjectInterface;
 
 trait MapTypeTrait
 {
-	public static function mapInteger(array $props, string $key): ?int
+	public static function mapInteger(array $props, string $key, ?int $default = null): ?int
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default ?? null;
 		}
 
 		$value = $props[$key];
@@ -28,11 +29,11 @@ trait MapTypeTrait
 		return (int)$value;
 	}
 
-	public static function mapString(array $props, string $key): ?string
+	public static function mapString(array $props, string $key, ?string $default = null): ?string
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default ?? null;
 		}
 
 		$value = $props[$key];
@@ -47,11 +48,16 @@ trait MapTypeTrait
 	/**
 	 * @param class-string<BackedEnum> $enumClass
 	 */
-	public static function mapBackedEnum(array $props, string $key, string $enumClass): ?BackedEnum
+	public static function mapBackedEnum(
+		array $props,
+		string $key,
+		string $enumClass,
+		?BackedEnum $default = null
+	): ?BackedEnum
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default instanceof $enumClass ? $default : null;
 		}
 
 		$value = $props[$key];
@@ -66,11 +72,11 @@ trait MapTypeTrait
 		return $value !== null ? $enumClass::tryFrom($value) : null;
 	}
 
-	public static function mapBool(array $props, string $key): ?bool
+	public static function mapBool(array $props, string $key, ?bool $default = null): ?bool
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default ?? null;
 		}
 
 		$value = $props[$key];
@@ -82,11 +88,16 @@ trait MapTypeTrait
 		return $value;
 	}
 
-	public static function mapArray(array $props, string $key, null|string|callable $typeCallback = null): ?array
+	public static function mapArray(
+		array $props,
+		string $key,
+		null|string|callable $typeCallback = null,
+		?array $default = null
+	): ?array
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default ?? null;
 		}
 
 		$value = $props[$key];
@@ -106,11 +117,21 @@ trait MapTypeTrait
 	/**
 	 * @param class-string<AbstractEntity> $entityClass
 	 */
-	public static function mapEntity(array $props, string $key, string $entityClass): ?AbstractEntity
+	public static function mapEntity(
+		array $props,
+		string $key,
+		string $entityClass,
+		?AbstractEntity $default = null
+	): ?AbstractEntity
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			if (isset($props["{$key}Id"]))
+			{
+				return $entityClass::mapFromId($props["{$key}Id"]);
+			}
+
+			return $default instanceof $entityClass ? $default : null;
 		}
 
 		$value = $props[$key];
@@ -131,11 +152,16 @@ trait MapTypeTrait
 	/**
 	 * @param class-string<ValueObjectInterface> $valueObjectClass
 	 */
-	public static function mapValueObject(array $props, string $key, string $valueObjectClass): ?ValueObjectInterface
+	public static function mapValueObject(
+		array $props,
+		string $key,
+		string $valueObjectClass,
+		?ValueObjectInterface $default = null
+	): ?ValueObjectInterface
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default instanceof $valueObjectClass ? $default : null;
 		}
 
 		$value = $props[$key];
@@ -156,11 +182,21 @@ trait MapTypeTrait
 	/**
 	 * @param class-string<AbstractEntityCollection> $entityCollectionClass
 	 */
-	public static function mapEntityCollection(array $props, string $key, string $entityCollectionClass): ?AbstractEntityCollection
+	public static function mapEntityCollection(
+		array $props,
+		string $key,
+		string $entityCollectionClass,
+		?AbstractEntityCollection $default = null
+	): ?AbstractEntityCollection
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			if (isset($props["{$key}Ids"]))
+			{
+				return $entityCollectionClass::mapFromIds($props["{$key}Ids"]);
+			}
+
+			return $default instanceof $entityCollectionClass ? $default : null;
 		}
 
 		$value = $props[$key];
@@ -178,16 +214,46 @@ trait MapTypeTrait
 		return $entityCollectionClass::mapFromArray($value);
 	}
 
+	/**
+	 * @param class-string<AbstractBackedEnumCollection> $enumCollectionClass
+	 */
+	public static function mapBackedEnumCollection(
+		array $props,
+		string $key,
+		string $enumCollectionClass,
+		?AbstractBackedEnumCollection $default = null,
+	): ?AbstractBackedEnumCollection
+	{
+		if (!isset($props[$key]))
+		{
+			return $default instanceof $enumCollectionClass ? $default : null;
+		}
+
+		$value = $props[$key];
+		if ($value instanceof $enumCollectionClass)
+		{
+			/** @var AbstractBackedEnumCollection $value */
+			return $value;
+		}
+
+		if (!is_array($value))
+		{
+			return null;
+		}
+
+		return $enumCollectionClass::mapFromArray($value);
+	}
+
 	public static function mapMixed(array $props, string $key): mixed
 	{
 		return $props[$key] ?? null;
 	}
 
-	public static function mapDateTime(array $props, string $key): ?DateTime
+	public static function mapDateTime(array $props, string $key, ?DateTime $default = null): ?DateTime
 	{
 		if (!isset($props[$key]))
 		{
-			return null;
+			return $default ?? null;
 		}
 
 		$value = $props[$key];

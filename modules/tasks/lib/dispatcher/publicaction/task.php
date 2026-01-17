@@ -25,6 +25,8 @@ use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\Item;
 use Bitrix\Tasks\Manager;
 use Bitrix\Tasks\Util;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
 
 final class Task extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 {
@@ -1051,8 +1053,7 @@ final class Task extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 
 		if ($taskData)
 		{
-			$commentPoster = CommentPoster::getInstance($id, $userId);
-			$commentPoster && $commentPoster->postCommentsOnTaskStatusPinged($taskData);
+			Container::getInstance()->get(PingActionInterface::class)->execute($id, $userId, $taskData);
 
 			\CTaskNotifications::sendPingStatusMessage($taskData, $userId);
 		}

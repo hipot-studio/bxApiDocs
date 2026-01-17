@@ -19,8 +19,23 @@ class AddResultHandler
 
 	public function __invoke(AddResultCommand $command): Entity\Result
 	{
-		return $this->consistencyResolver->resolve('task.result.add')->wrap(
-			fn (): Entity\Result => $this->resultService->create($command->result, $command->userId)
-		);
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.result.add')->wrap(
+				fn (): Entity\Result => $this->resultService->create(
+					$command->result,
+					$command->userId,
+					$command->skipNotification,
+				),
+			);
+		}
+		else
+		{
+			return $this->resultService->create(
+				$command->result,
+				$command->userId,
+				$command->skipNotification,
+			);
+		}
 	}
 }

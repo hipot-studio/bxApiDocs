@@ -2,6 +2,8 @@
 
 namespace Bitrix\Mobile\Tab;
 
+use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\UI\LeftMenu\Preset;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
@@ -14,6 +16,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
 use Bitrix\Mobile\Context;
 
@@ -112,6 +115,8 @@ class Manager
 		{
 			$this->config["presets"]["manual"] = $this->getActiveTabs();
 		}
+
+		$this->migratePresetsByVersion();
 	}
 
 	/**
@@ -194,11 +199,12 @@ class Manager
 	/**
 	 * Set up custom preset of tab list
 	 * @param array $config
+	 * @param boolean $isManually
 	 * @return array|SystemException
 	 * @throws ArgumentException
 	 * @throws ArgumentOutOfRangeException
 	 */
-	public function setCustomConfig(array $config = [])
+	public function setCustomConfig(array $config = [], bool $isManually = false)
 	{
 		global $CACHE_MANAGER;
 
@@ -221,6 +227,11 @@ class Manager
 		$this->config["presets"]["manual"] = $config;
 		$CACHE_MANAGER->ClearByTag('mobile_custom_menu' . $this->context->userId);
 
+		if ($isManually)
+		{
+			$this->setPresetManuallySet();
+		}
+
 		return $this->getActiveTabs();
 	}
 
@@ -229,14 +240,73 @@ class Manager
 		return $this->config["presets"]["default"];
 	}
 
+	public function getPresetIdByWebPreset(?string $siteId): string
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return '';
+		}
+
+		$map = [
+			Preset\Boards::CODE => 'task',
+			Preset\Collab::CODE => '',
+			Preset\Crm::CODE => 'crm',
+			Preset\CrmStore::CODE => 'crm',
+			Preset\Shop::CODE => 'collaboration',
+			Preset\Sites::CODE => 'collaboration',
+			Preset\Social::CODE => 'collaboration',
+			Preset\Tasks::CODE => 'task',
+		];
+		$webPreset = Preset\Manager::getPreset(null, $siteId);
+
+		return $map[$webPreset->getCode()] ?? 'collaboration';
+	}
+
+	public function isPresetManuallySet(): bool
+	{
+		$optionValue = \CUserOptions::GetOption(
+			'mobile',
+			'tabs_preset_manually_set',
+			'N',
+			$this->context->userId,
+		);
+
+		return $optionValue === 'Y';
+	}
+
+	private function setPresetManuallySet(): void
+	{
+		\CUserOptions::SetOption(
+			'mobile',
+			'tabs_preset_manually_set',
+			'Y',
+			false,
+			$this->context->userId,
+		);
+	}
+
+	public function canSyncWithWebPresetForUser(): bool
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return false;
+		}
+
+		$userDateRegister = CurrentUser::get()->getDateRegister()?->getTimestamp();
+		$minDateRegisterToSync = (new Date('06.11.2025', 'd.m.Y'))->getTimestamp();
+
+		return $userDateRegister && $userDateRegister > $minDateRegisterToSync;
+	}
+
 	/**
 	 * Set up preset by name
 	 * @param string $name
+	 * @param boolean $isManually
 	 * @return array|null
 	 * @throws ArgumentOutOfRangeException
 	 * @throws ArgumentNullException
 	 */
-	public function setPresetName($name = "default")
+	public function setPresetName($name = "default", bool $isManually = false)
 	{
 		global $CACHE_MANAGER;
 
@@ -245,6 +315,11 @@ class Manager
 			Option::set("mobile", "tabs_preset_{$this->context->userId}", $name, $this->context->siteId);//set preset name
 			Option::set("mobile", "tabs_{$this->context->userId}", "", $this->context->siteId);//reset custom config
 			$CACHE_MANAGER->ClearByTag('mobile_custom_menu' . $this->context->userId);
+
+			if ($isManually)
+			{
+				$this->setPresetManuallySet();
+			}
 
 			return $this->getActiveTabs();
 		}
@@ -466,5 +541,34 @@ class Manager
 		$this->setCustomConfig($defaultTabs);
 
 		return $defaultTabs;
+	}
+
+	private function migratePresetsByVersion(): void
+	{
+		$currentVersion = $this->config['presetLegacy']['currentVersion'];
+		$migrationVersion = \CUserOptions::GetOption(
+			'mobile',
+			'tabs_presets_migration_version',
+			0,
+			$this->context->userId
+		);
+
+		if ($currentVersion > $migrationVersion)
+		{
+			$currentPresetName = $this->getPresetName();
+
+			if ($this->config['presetLegacy'][$currentPresetName])
+			{
+				$this->setCustomConfig($this->config['presetLegacy'][$currentPresetName]);
+			}
+
+			\CUserOptions::SetOption(
+				'mobile',
+				'tabs_presets_migration_version',
+				$currentVersion,
+				false,
+				$this->context->userId
+			);
+		}
 	}
 }

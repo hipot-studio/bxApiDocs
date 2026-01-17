@@ -798,16 +798,9 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 
 	private function getCompanyLink($company): string
 	{
-		$companyId = (int)$company['ID'];
-		$title = htmlspecialcharsbx($company['TITLE']);
-
-		$companyUrl = "/crm/company/details/{$companyId}/";
-		$userId = "COMPANY_{$companyId}";
-
-		return "<a href='{$companyUrl}'
-		 		   bx-tooltip-user-id='{$userId}'
-		 		   bx-tooltip-loader='/bitrix/components/bitrix/crm.company.show/card.ajax.php'
-		 		   bx-tooltip-classname='crm_balloon_company'>{$title}</a>";
+		return (new MiniCardHtmlBuilder(CCrmOwnerType::Company, (int)$company['ID']))
+			->setTitle($company['TITLE'])
+			->build();
 	}
 
 	private function getUserDisplay($column, $userId, $userReferenceName)

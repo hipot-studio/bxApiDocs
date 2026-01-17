@@ -682,7 +682,18 @@ class CheckListFields
 	 */
 	public function setMembers($members)
 	{
-		$this->members = $members;
+		$validatedMembers = [];
+
+		foreach ($members as $key => $member)
+		{
+			if (is_array($member) && !isset($member['ID']))
+			{
+				$member['ID'] = is_numeric($key) ? $key : (int)$key;
+			}
+			$validatedMembers[] = $member;
+		}
+
+		$this->members = $validatedMembers;
 	}
 
 	/**

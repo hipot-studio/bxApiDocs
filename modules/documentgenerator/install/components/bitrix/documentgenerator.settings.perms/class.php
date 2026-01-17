@@ -1,143 +1,100 @@
 <?php
 
-if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die();
+if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
+{
+	die();
+}
 
+use Bitrix\DocumentGenerator\Infrastructure\Agent\Access\DepartmentAccessCodesMigrateAgent;
+use Bitrix\DocumentGenerator\Driver;
 use Bitrix\DocumentGenerator\Integration\Bitrix24Manager;
-use Bitrix\DocumentGenerator\Model\Role;
+use Bitrix\DocumentGenerator\Integration\UI\AccessRights\V2\AccessRightsProvider;
+use Bitrix\DocumentGenerator\Repository\RoleRepository;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
+use Bitrix\UI\AccessRights\V2\AccessRightsBuilder;
+use Bitrix\UI\AccessRights\V2\Options;
+use Bitrix\UI\AccessRights\V2\Options\AdditionalMemberOptions;
+use Bitrix\UI\Toolbar\Facade\Toolbar;
+use Bitrix\Main\Error;
+use Bitrix\DocumentGenerator\Integration\UI\InfoError;
 
 class DocumentGeneratorSettingsPermsComponent extends CBitrixComponent
 {
-	public function executeComponent()
+	private AccessRightsBuilder $accessRightsBuilder;
+
+	private const ACCESS_RIGHTS_CONTAINER_ID = 'documentgenerator__access-rights-container';
+
+	private function init(): Result
 	{
-		if(!Loader::includeModule('documentgenerator'))
+		$result = $this->includeModules();
+		if (!$result->isSuccess())
 		{
-			$this->showError(Loc::getMessage('DOCGEN_SETTINGS_PERMS_MODULE_DOCGEN_ERROR'));
+			return $result;
+		}
+
+		if (!Driver::getInstance()->getUserPermissions()->canModifySettings())
+		{
+			$error = new Error(Loc::getMessage('DOCGEN_SETTINGS_PERMS_PERMISSIONS_ERROR'));
+
+			return $result->addError($error);
+		}
+
+		$roleRepository = new RoleRepository();
+		$accessRightsProvider = new AccessRightsProvider($roleRepository);
+		$this->accessRightsBuilder =  new AccessRightsBuilder($accessRightsProvider);
+
+		return $result;
+	}
+
+	private function includeModules(): Result
+	{
+		$result = new Result();
+
+		if (!Loader::includeModule('documentgenerator'))
+		{
+			return $result->addError(new Error(Loc::getMessage('DOCGEN_SETTINGS_PERMS_MODULE_DOCGEN_ERROR')));
+		}
+
+		if (!Loader::includeModule('ui'))
+		{
+			return $result->addError(new Error(Loc::getMessage('DOCGEN_SETTINGS_PERMS_MODULE_UI_ERROR')));
+		}
+
+		return $result;
+	}
+
+	public function executeComponent(): void
+	{
+		$result = $this->init();
+		if (!$result->isSuccess())
+		{
+			InfoError::fromResult($result)?->include();
+
 			return;
 		}
 
-		if(!\Bitrix\DocumentGenerator\Driver::getInstance()->getUserPermissions()->canModifySettings())
-		{
-			$this->showError(Loc::getMessage('DOCGEN_SETTINGS_PERMS_PERMISSIONS_ERROR'));
-			return;
-		}
+		Toolbar::deleteFavoriteStar();
+		$this->configureAccessRightsOptions();
 
-		if (Loader::includeModule('ui'))
-		{
-			\Bitrix\UI\Toolbar\Facade\Toolbar::deleteFavoriteStar();
-		}
-
-		$this->arResult['isPermissionsFeatureEnabled'] = Bitrix24Manager::isPermissionsFeatureEnabled();
-
-		$this->arResult['roles'] = \Bitrix\DocumentGenerator\Model\RoleTable::getList()->fetchCollection();
-		$roleAccessCodes = $accessCodes = [];
-		$roleAccessList = \Bitrix\DocumentGenerator\Model\RoleAccessTable::getList(['select' => [
-			'ID', 'ROLE_ID', 'ROLE_NAME' => 'ROLE.NAME', 'ACCESS_CODE',
-		]]);
-		while($roleAccessCode = $roleAccessList->fetch())
-		{
-			$roleAccessCodes[$roleAccessCode['ID']] = $roleAccessCode;
-			$accessCodes[] = $roleAccessCode['ACCESS_CODE'];
-		}
-
-		if(isset($this->arParams['roleId']))
-		{
-			$this->setTitle(Loc::getMessage('DOCGEN_SETTINGS_PERMS_ADD_ROLE_TITLE'));
-			if($this->arParams['roleId'] > 0)
-			{
-				$roles = $this->arResult['roles'];
-				/** @var \Bitrix\Main\ORM\Objectify\Collection $roles */
-				$role = $roles->getByPrimary($this->arParams['roleId']);
-				if($role)
-				{
-					/** @var Role $role */
-					$this->setTitle(Loc::getMessage('DOCGEN_SETTINGS_PERMS_EDIT_ROLE_TITLE', ['#ROLE#' => $role->getName()]));
-				}
-				else
-				{
-					$this->showError(Loc::getMessage('DOCGEN_SETTINGS_PERMS_EDIT_ROLE_NOT_FOUND'));
-					$role = new \Bitrix\DocumentGenerator\Model\Role();
-				}
-			}
-			else
-			{
-				$role = new \Bitrix\DocumentGenerator\Model\Role();
-			}
-			$this->arResult['role'] = $role;
-
-			$this->includeComponentTemplate('edit_role');
-			return;
-		}
-
-		$accessCodes = $this->getAccessCodesInfo($accessCodes);
-		foreach($roleAccessCodes as $id => $roleAccessCode)
-		{
-			if(isset($accessCodes[$roleAccessCode['ACCESS_CODE']]))
-			{
-				$codeDescription = $accessCodes[$roleAccessCode['ACCESS_CODE']];
-				$roleAccessCodes[$id]['ACCESS_PROVIDER'] = $codeDescription['provider'];
-				$roleAccessCodes[$id]['ACCESS_NAME'] = $codeDescription['name'];
-			}
-			else
-			{
-				$roleAccessCodes[$id]['ACCESS_NAME'] = Loc::getMessage('DOCGEN_SETTINGS_PERMS_UNKNOWN_ACCESS_CODE');
-			}
-		}
-		$this->arResult['roleAccessCodes'] = $roleAccessCodes;
-
-		$this->setTitle(Loc::getMessage('DOCGEN_SETTINGS_PERMS_TITLE'));
 		$this->includeComponentTemplate();
 	}
 
-	/**
-	 * @param \Bitrix\DocumentGenerator\Model\Role $role
-	 * @return bool|string
-	 */
-	public function getEditRoleUrl(\Bitrix\DocumentGenerator\Model\Role $role = null)
+	private function configureAccessRightsOptions(): void
 	{
-		static $componentPath;
-		if($componentPath === null)
-		{
-			$componentPath = \CComponentEngine::makeComponentPath('bitrix:documentgenerator.settings.perms');
-			$componentPath = getLocalPath('components'.$componentPath.'/slider.php');
-		}
-		if(!$componentPath)
-		{
-			return false;
-		}
-		$roleId = 0;
-		if($role)
-		{
-			$roleId = $role->getId();
-		}
-		$uri = new \Bitrix\Main\Web\Uri($componentPath);
-		$uri->addParams(['roleId' => $roleId]);
+		$options = new Options($this->getName(), self::ACCESS_RIGHTS_CONTAINER_ID);
+		$options
+			->setActionSave('save')
+			->setBodyType('json')
+			->setIsSaveOnlyChangedRights(false)
+			->configureAdditionalMembersParams(static function (AdditionalMemberOptions $options): void {
+				$options
+					->setUseStructureDepartmentsProviderTab(DepartmentAccessCodesMigrateAgent::isDone());
+			})
+			->setAccessRights($this->accessRightsBuilder->buildAccessRights())
+			->setUserGroups($this->accessRightsBuilder->buildUserGroups());
 
-		return $uri->getLocator();
-	}
-
-	/**
-	 * @param array $accessCodes
-	 * @return array
-	 */
-	protected function getAccessCodesInfo(array $accessCodes)
-	{
-		$accessManager = new CAccess();
-		return $accessManager->GetNames($accessCodes);
-	}
-
-	protected function showError($error)
-	{
-		ShowError($error);
-	}
-
-	/**
-	 * @param string $title
-	 */
-	protected function setTitle($title)
-	{
-		global $APPLICATION;
-		$APPLICATION->SetTitle($title);
+		$this->arResult['accessRightsOptions'] = $options;
 	}
 }

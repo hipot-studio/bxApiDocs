@@ -16,7 +16,7 @@ use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Timeline\Ai\Call\Controller;
+use Bitrix\Crm\Timeline\Ai\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Web\Uri;
 use CCrmActivity;

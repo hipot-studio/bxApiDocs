@@ -15,7 +15,7 @@ class MobilePromoterDeal extends MobilePromoter
 			return false;
 		}
 
-		return $this->isEntityTypeUsed(\CCrmOwnerType::Deal);
+		return $this->hasItemsByAssigned(\CCrmOwnerType::Deal);
 	}
 
 	protected function getTitle(): string

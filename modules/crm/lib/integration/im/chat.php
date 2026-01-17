@@ -277,7 +277,8 @@ class Chat
 			if($currentOwnerID > 0)
 			{
 				$chat->AddUser($chatID, [ $currentOwnerID ], false, false);
-				$chat->SetOwner($chatID, $currentOwnerID, false);
+				$chatWithAdminPermissions = new \CIMChat(0);
+				$chatWithAdminPermissions->SetOwner($chatID, $currentOwnerID, false);
 			}
 
 			if($currentTitle !== '')
@@ -874,17 +875,15 @@ class Chat
 		{
 			if ($factory->isMultiFieldsEnabled())
 			{
-				$fields [] = 'HAS_PHONE';
-				$fields [] = 'HAS_EMAIL';
+				$fields[] = 'HAS_PHONE';
+				$fields[] = 'HAS_EMAIL';
 			}
 			$item = $factory->getItem($entityId, $fields);
-			$fields = array_fill_keys($fields, true);
-			foreach ($item->getData() as $fieldName => $value)
+
+			$entityData = [];
+			foreach ($fields as $fieldName)
 			{
-				if (isset($fields[$fieldName]))
-				{
-					$entityData[$fieldName] = $value;
-				}
+				$entityData[$fieldName] = $item?->get($fieldName);
 			}
 			if ($entityData['HAS_PHONE'] ?? false)
 			{

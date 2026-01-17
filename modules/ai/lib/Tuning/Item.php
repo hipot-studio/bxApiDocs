@@ -10,6 +10,8 @@ class Item
 	private const AVAILABLE_TYPES = [
 		Type::BOOLEAN,
 		Type::LIST,
+		Type::ALERT,
+		Type::BLOCK,
 	];
 
 	private mixed $value;
@@ -40,7 +42,7 @@ class Item
 	 */
 	private array $additional = [];
 
-	private function __construct(
+	protected function __construct(
 		private string $code,
 		private string $title,
 		private string $type,

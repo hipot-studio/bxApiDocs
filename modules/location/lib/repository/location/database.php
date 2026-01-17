@@ -14,6 +14,7 @@ use Bitrix\Location\Repository\Location\Capability\IFindByText;
 use Bitrix\Location\Repository\Location\Capability\IFindParents;
 use Bitrix\Location\Repository\Location\Capability\ISaveParents;
 use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -193,9 +194,14 @@ final class Database
 
 		$fields = Location\Converter\DbFieldConverter::convertToDbFields($location);
 
-		if($location->getId() > 0)
+		$result = new Result();
+		if ($location->getId() > 0)
 		{
-			$result = $this->locationTable::update($location->getId(), $fields);
+			try
+			{
+				$result = $this->locationTable::update($location->getId(), $fields);
+			}
+			catch (DuplicateEntryException) {}
 		}
 		else
 		{

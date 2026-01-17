@@ -27,6 +27,8 @@ use Bitrix\Main\Type\DateTime;
  */
 class EntityConversionMapTable extends DataManager
 {
+	use Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
+
 	/** @var EO_EntityConversionMap|null */
 	private static $lastDeleted;
 

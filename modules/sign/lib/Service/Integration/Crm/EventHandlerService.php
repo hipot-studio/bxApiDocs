@@ -197,10 +197,15 @@ class EventHandlerService
 		);
 	}
 
-	private function getDealRelation(int $smartDocumentId): ?Item
+	private function getDealRelation(int $smartDocumentId, int $entityTypeId): ?Item
 	{
+		if ($entityTypeId !== \CCrmOwnerType::SmartDocument)
+		{
+			return null;
+		}
+
 		$itemId = new \Bitrix\Crm\ItemIdentifier(
-			\CCrmOwnerType::SmartDocument,
+			$entityTypeId,
 			$smartDocumentId,
 		);
 
@@ -225,7 +230,7 @@ class EventHandlerService
 		$document = $eventData->getDocumentItem();
 		$member = $eventData->getMemberItem();
 
-		$deal = $this->getDealRelation($item->getId());
+		$deal = $this->getDealRelation($item->getId(), $item->getEntityTypeId());
 
 		$bindings = [];
 

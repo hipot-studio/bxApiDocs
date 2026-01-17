@@ -92,6 +92,7 @@ class PropertyRepository implements PropertyRepositoryContract
 		/** @var \Bitrix\Catalog\v2\BaseIblockElementEntity $parentEntity */
 		$parentEntity = null;
 		$props = [];
+		$fileIdsToDelete = [];
 
 		/** @var \Bitrix\Catalog\v2\Property\Property $property */
 		foreach ($entities as $property)
@@ -108,20 +109,32 @@ class PropertyRepository implements PropertyRepositoryContract
 
 			$valueCollection = $property->getPropertyValueCollection();
 
-			$props[$property->getId()] = $valueCollection->toArray();
+			$propertyId = $property->getId();
+			$props[$propertyId] = $valueCollection->toArray();
 
 			if ($property->getPropertyType() === PropertyTable::TYPE_FILE)
 			{
-				foreach ($props[$property->getId()] as $id => $prop)
+				$isComplexId = $property->isStorageSeparate() && !$property->isMultiple();
+				foreach ($props[$propertyId] as $id => $prop)
 				{
 					if (is_numeric($id))
 					{
-						$props[$property->getId()][$id] = \CIBlock::makeFilePropArray(
+						if ($isComplexId)
+						{
+							unset($props[$propertyId][$id]);
+							$id = $id . ':' . $propertyId;
+						}
+
+						$props[$propertyId][$id] = \CIBlock::makeFilePropArray(
 							$prop,
 							$prop['VALUE'] === '',
 							$prop['DESCRIPTION'],
-							['allow_file_id' => true]
+							['allow_file_id' => true],
 						);
+						if ((int)$prop['VALUE'] > 0)
+						{
+							$fileIdsToDelete[] = (int)$prop['VALUE'];
+						}
 					}
 				}
 
@@ -133,7 +146,7 @@ class PropertyRepository implements PropertyRepositoryContract
 					}
 
 					$fieldsToDelete = \CIBlock::makeFilePropArray($removed->getFields(), true);
-					$props[$property->getId()][$removed->getId()] = $fieldsToDelete;
+					$props[$propertyId][$removed->getId()] = $fieldsToDelete;
 				}
 			}
 		}
@@ -173,6 +186,11 @@ class PropertyRepository implements PropertyRepositoryContract
 				);
 				$ipropValues->clearValues();
 				unset($ipropValues);
+
+				foreach ($fileIdsToDelete as $fileIdToDelete)
+				{
+					\CFile::Delete($fileIdToDelete);
+				}
 			}
 		}
 

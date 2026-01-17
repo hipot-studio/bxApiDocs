@@ -22,6 +22,8 @@ use Bitrix\Crm\History\HistoryEntryType;
  */
 class LeadStatusHistoryTable extends Entity\DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+
 	public static function getTableName()
 	{
 		return 'b_crm_lead_status_history';
@@ -67,33 +69,7 @@ class LeadStatusHistoryTable extends Entity\DataManager
 
 		Main\Application::getConnection()->queryExecute("DELETE FROM b_crm_lead_status_history WHERE OWNER_ID = {$ownerID}");
 	}
-	public static function deleteByFilter(array $filter,  $borderID = 0)
-	{
-		$ownerID = isset($filter['OWNER_ID']) ? (int)$filter['OWNER_ID'] : 0;
-		if($ownerID <= 0)
-		{
-			throw new Main\ArgumentException("Filter parameter 'OWNER_ID' must be greater than zero.", 'filter');
-		}
 
-		$typeID = isset($filter['TYPE_ID']) ? $filter['TYPE_ID'] : '';
-		if(!HistoryEntryType::isDefined($typeID))
-		{
-			throw new Main\ArgumentException("Filter parameter 'TYPE_ID' value is not supported in current context.", 'filter');
-		}
-
-		if(!is_int($borderID))
-		{
-			$borderID = (int)$borderID;
-		}
-
-		$sql = "DELETE from b_crm_lead_status_history WHERE OWNER_ID = {$ownerID} AND TYPE_ID = {$typeID}";
-		if($borderID > 0)
-		{
-			$sql .= " AND ID < {$borderID}";
-		}
-
-		Main\Application::getConnection()->queryExecute($sql);
-	}
 	public static function synchronize($ownerID, array $data)
 	{
 		if(!is_int($ownerID))

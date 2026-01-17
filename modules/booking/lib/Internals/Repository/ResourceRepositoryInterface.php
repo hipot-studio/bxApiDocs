@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository;
 
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Provider\Params\FilterInterface;
-use Bitrix\Booking\Provider\Params\SelectInterface;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 
 interface ResourceRepositoryInterface
@@ -16,11 +16,13 @@ interface ResourceRepositoryInterface
 		int|null $offset = null,
 		FilterInterface $filter = null,
 		array|null $sort = null,
-		SelectInterface|null $select = null,
+		array|null $select = null,
 		int|null $userId = null,
 	): Entity\Resource\ResourceCollection;
 	public function getTotal(ConditionTree|null $filter = null, int|null $userId = null): int;
 	public function getById(int $id, int|null $userId = null): Entity\Resource\Resource|null;
 	public function save(Entity\Resource\Resource $resource): int;
 	public function remove(int $resourceId): void;
+	public function withSkus(ResourceCollection $collection): self;
+	public function withSkusYandex(ResourceCollection $collection): self;
 }

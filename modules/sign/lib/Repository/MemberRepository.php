@@ -2260,4 +2260,59 @@ class MemberRepository
 
 		return $userIdsByDocumentIds;
 	}
+
+	public function listDoneSignersWithoutResultFile(): Item\MemberCollection
+	{
+		$query = Internal\MemberTable::query()
+			->addSelect('*')
+			->registerRuntimeField('',
+				new \Bitrix\Main\ORM\Fields\Relations\Reference(
+					'RESULT_FILE',
+					Internal\FileTable::getEntity(),
+					\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.ENTITY_ID')
+						->where('ref.ENTITY_TYPE_ID', \Bitrix\Sign\Type\EntityType::MEMBER)
+						->where('ref.CODE', \Bitrix\Sign\Type\EntityFileCode::SIGNED)
+					,
+					['join_type' => \Bitrix\Main\ORM\Query\Join::TYPE_LEFT]
+				)
+			)
+			->where('SIGNED', MemberStatus::DONE)
+			->where('ROLE', $this->convertRoleToInt(Role::SIGNER))
+			->whereNull('RESULT_FILE.ID');
+
+		return $this->extractItemCollectionFromModelCollection($query->fetchCollection());
+	}
+
+	public function listDoneAssigneesWithoutResultFile(): Item\MemberCollection
+	{
+		$query = Internal\MemberTable::query()
+			->addSelect('*')
+			->registerRuntimeField('',
+				new \Bitrix\Main\ORM\Fields\Relations\Reference(
+					'RESULT_FILE',
+					Internal\FileTable::getEntity(),
+					\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.ENTITY_ID')
+						->where('ref.ENTITY_TYPE_ID', \Bitrix\Sign\Type\EntityType::MEMBER)
+						->where('ref.CODE', \Bitrix\Sign\Type\EntityFileCode::SIGNED)
+					,
+					['join_type' => \Bitrix\Main\ORM\Query\Join::TYPE_LEFT]
+				)
+			)
+			->registerRuntimeField('',
+				(new Main\ORM\Fields\Relations\Reference(
+					"DOCUMENT",
+					Internal\DocumentTable::getEntity(),
+					Main\ORM\Query\Join::on("this.DOCUMENT_ID", 'ref.ID'),
+					[
+						'join_type' => Main\ORM\Query\Join::TYPE_INNER,
+					],
+				)),
+			)
+			->where('SIGNED', MemberStatus::DONE)
+			->where('ROLE', $this->convertRoleToInt(Role::ASSIGNEE))
+			->where('DOCUMENT.SCHEME', Type\Document\SchemeType::ORDER_ID)
+			->whereNull('RESULT_FILE.ID');
+
+		return $this->extractItemCollectionFromModelCollection($query->fetchCollection());
+	}
 }

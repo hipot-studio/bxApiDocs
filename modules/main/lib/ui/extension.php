@@ -578,7 +578,7 @@ class Extension
 		$config = \CJSCore::getExtInfo($name);
 		if ($config)
 		{
-			if (!$config['skip_core'] && !in_array('core', $alreadyResolved))
+			if ((!isset($config['skip_core']) || !$config['skip_core']) && !in_array('core', $alreadyResolved))
 			{
 				$coreConfig = \CJSCore::GetCoreConfig();
 				if ($storeConfig)

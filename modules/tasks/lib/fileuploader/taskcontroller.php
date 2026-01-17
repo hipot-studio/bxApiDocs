@@ -48,7 +48,7 @@ class TaskController extends UploaderController
 			return true;
 		}
 
-		return TaskAccessController::can(User::getId(), ActionDictionary::ACTION_TASK_EDIT, $taskId);
+		return TaskAccessController::can(User::getId(), ActionDictionary::ACTION_TASK_ATTACH_FILE, $taskId);
 	}
 
 	public function verifyFileOwner(FileOwnershipCollection $files): void

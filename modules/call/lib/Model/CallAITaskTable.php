@@ -56,12 +56,7 @@ class CallAITaskTable extends DataManager
 				->configureNullable(),
 
 			(new EnumField('TYPE'))
-				->configureValues([
-					SenseType::TRANSCRIBE->value,
-					SenseType::SUMMARY->value,
-					SenseType::OVERVIEW->value,
-					SenseType::INSIGHTS->value,
-				])
+				->configureValues(array_column(SenseType::cases(), 'value'))
 				->configureNullable(),
 
 			(new DatetimeField('DATE_CREATE'))

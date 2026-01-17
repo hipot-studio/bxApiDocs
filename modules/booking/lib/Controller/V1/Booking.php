@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Controller\V1;
 
 use Bitrix\Booking\Command\Booking\CreateBookingFromWaitListItemCommand;
-use Bitrix\Booking\Controller\V1\Filter\AllowByFeature;
+use Bitrix\Booking\Command\Booking\CreateDealForBookingCommand;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Container;
@@ -18,37 +18,14 @@ use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Provider\Params\Booking\BookingSort;
 use Bitrix\Booking\Provider\Params\GridParams;
+use Bitrix\Booking\Provider\ResourceProvider;
+use Bitrix\Booking\Service\BookingFeature;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
 use Bitrix\Main\UI\PageNavigation;
 
 class Booking extends BaseController
 {
-	public function configureActions(): array
-	{
-		return [
-			'add' => [
-				'+prefilters' => [
-					new AllowByFeature(),
-				],
-			],
-			'addList' => [
-				'+prefilters' => [
-					new AllowByFeature(),
-				],
-			],
-			'update' => [
-				'+prefilters' => [
-					new AllowByFeature(),
-				],
-			],
-			'createFromWaitListItem' => [
-				'+prefilters' => [
-					new AllowByFeature(),
-				],
-			],
-		];
-	}
-
 	public function listAction(
 		PageNavigation $navigation,
 		array $filter = [],
@@ -57,6 +34,7 @@ class Booking extends BaseController
 		bool $withCounters = false,
 		bool $withClientData = false,
 		bool $withExternalData = false,
+		bool $withSkus = false,
 	): Entity\Booking\BookingCollection
 	{
 		$userId = (int)CurrentUser::get()->getId();
@@ -86,6 +64,22 @@ class Booking extends BaseController
 		if ($withExternalData)
 		{
 			$provider->withExternalData($bookings);
+		}
+
+		if ($withSkus)
+		{
+			$provider->withSkus($bookings);
+
+			$resourcesCollection = new Entity\Resource\ResourceCollection();
+			/** @var Entity\Booking\Booking $booking */
+			foreach ($bookings as $booking)
+			{
+				foreach ($booking->getResourceCollection() as $resource)
+				{
+					$resourcesCollection->add($resource);
+				}
+			}
+			(new ResourceProvider())->withSkus($resourcesCollection);
 		}
 
 		return $bookings;
@@ -138,6 +132,16 @@ class Booking extends BaseController
 			return null;
 		}
 
+		if (
+			!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+			&& $booking->getResourceCollection()->count() > 1
+		)
+		{
+			$this->addError(new Error('Multi-resource booking feature is not available'));
+
+			return null;
+		}
+
 		$addBookingCommand = new AddBookingCommand(
 			createdBy: (int)CurrentUser::get()->getId(),
 			booking: $booking,
@@ -168,6 +172,14 @@ class Booking extends BaseController
 			catch (Exception $exception)
 			{
 				$booking = null;
+			}
+
+			if (
+				!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+				&& $booking->getResourceCollection()->count() > 1
+			)
+			{
+				continue;
 			}
 
 			if ($booking === null)
@@ -215,6 +227,16 @@ class Booking extends BaseController
 		catch (Exception $exception)
 		{
 			$this->addError(ErrorBuilder::buildFromException($exception));
+
+			return null;
+		}
+
+		if (
+			!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+			&& $booking->getResourceCollection()->count() > 1
+		)
+		{
+			$this->addError(new Error('Multi-resource booking feature is not available'));
 
 			return null;
 		}
@@ -276,6 +298,16 @@ class Booking extends BaseController
 		array $datePeriod,
 	): Entity\Booking\Booking|null
 	{
+		if (
+			!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+			&& count($resources) > 1
+		)
+		{
+			$this->addError(new Error('Multi-resource booking feature is not available'));
+
+			return null;
+		}
+
 		$createFromWaitListItemCommand = new CreateBookingFromWaitListItemCommand(
 			waitListItemId: $waitListItemId,
 			resources: $resources,
@@ -285,6 +317,27 @@ class Booking extends BaseController
 		);
 
 		$result = $createFromWaitListItemCommand->run();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getBooking();
+	}
+
+	public function createDealAction(
+		CurrentUser $currentUser,
+		int $bookingId,
+	): Entity\Booking\Booking|null
+	{
+		$createDealForBookingCommand = new CreateDealForBookingCommand(
+			bookingId: $bookingId,
+			updatedBy: (int)$currentUser->getId(),
+		);
+
+		$result = $createDealForBookingCommand->run();
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());

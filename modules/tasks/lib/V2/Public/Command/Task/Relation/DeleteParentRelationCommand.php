@@ -18,6 +18,7 @@ class DeleteParentRelationCommand extends AbstractCommand
 		public readonly int $taskId,
 		#[PositiveNumber]
 		public readonly int $userId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -26,10 +27,7 @@ class DeleteParentRelationCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$parentService = Container::getInstance()->getParentService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new DeleteParentRelationHandler($parentService, $consistencyResolver);
+		$handler = Container::getInstance()->get(DeleteParentRelationHandler::class);
 
 		try
 		{

@@ -6,7 +6,8 @@ if (!CModule::IncludeModule('bizproc'))
 }
 
 use Bitrix\Crm;
-use \Bitrix\Crm\Service;
+use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
+use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 
@@ -1536,6 +1537,14 @@ class CCrmDocument
 			return self::$USER_PERMISSION_CHECK[$key];
 		}
 
+		$entityTypeId = CCrmOwnerType::ResolveID($arDocumentID['TYPE'] ?? '');
+		if (self::isOperationInLockedAutomatedSolution((int)$operation, $entityTypeId))
+		{
+			self::$USER_PERMISSION_CHECK[$key] = false;
+
+			return false;
+		}
+
 		if (!array_key_exists('AllUserGroups', $arParameters))
 		{
 			if (!array_key_exists('UserGroups', $arParameters))
@@ -1605,6 +1614,12 @@ class CCrmDocument
 			throw new CBPArgumentNullException('documentId');
 		}
 
+		$entityTypeId = CCrmOwnerType::ResolveID($documentType);
+		if (self::isOperationInLockedAutomatedSolution((int)$operation, $entityTypeId))
+		{
+			return false;
+		}
+
 		$userId = intval($userId);
 		if (!array_key_exists('AllUserGroups', $arParameters))
 		{
@@ -1628,7 +1643,6 @@ class CCrmDocument
 
 		$permissionEntity = static::ResolvePermissionEntity($arDocumentID, $arParameters);
 		$userPermissions = CCrmPerms::GetUserPermissions($userId);
-		$entityTypeId = CCrmOwnerType::ResolveID($documentType);
 
 		if (
 			$operation == \CBPCanUserOperateOperation::CreateWorkflow
@@ -1668,6 +1682,23 @@ class CCrmDocument
 		}
 
 		return CCrmAuthorizationHelper::CheckCreatePermission($permissionEntity, $userPermissions);
+	}
+
+	private static function isOperationInLockedAutomatedSolution(int $operation, int $entityTypeId): bool
+	{
+		$lockedOperations = [
+			CBPCanUserOperateOperation::CreateAutomation,
+			CBPCanUserOperateOperation::CreateWorkflow,
+			CBPCanUserOperateOperation::StartWorkflow,
+			CBPCanUserOperateOperation::WriteDocument,
+		];
+
+		if (!in_array($operation, $lockedOperations, true))
+		{
+			return false;
+		}
+
+		return CapabilityAccessChecker::getInstance()->isLockedEntityType($entityTypeId);
 	}
 
 	public static function DeleteDocument($documentId)

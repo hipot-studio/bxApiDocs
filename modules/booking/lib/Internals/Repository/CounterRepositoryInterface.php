@@ -16,14 +16,15 @@ interface CounterRepositoryInterface
 	/**
 	 * @param int[] $entityIds
 	 * @param CounterDictionary[] $types
+	 * @param int[] $userIds
 	 */
-	public function downMultiple(array $entityIds, array $types, int|null $userId = null): void;
+	public function downMultiple(array $entityIds, array $types, array $userIds = []): void;
 
 	/**
 	 * @param int[] $entityIds
 	 * @param CounterDictionary[] $types
-	 * @return array
+	 * @return int[]
 	 */
-	public function getUsersByCounterType(array $entityIds, array $types): array;
+	public function getUserIdsByCounterType(array $entityIds, array $types): array;
 	public function getList(int $userId): array;
 }

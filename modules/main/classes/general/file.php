@@ -397,7 +397,7 @@ class CFile
 			"ORIGINAL_NAME" => $arFile["ORIGINAL_NAME"],
 			"DESCRIPTION" => ($arFile["description"] ?? ''),
 			"HANDLER_ID" => ($arFile["HANDLER_ID"] ?? ''),
-			"EXTERNAL_ID" => ($arFile["external_id"] ?? md5(mt_rand())),
+			"EXTERNAL_ID" => ($arFile["external_id"] ?? Security\Random::getString(32)),
 			"FILE_HASH" => ($original === null ? $arFile["FILE_HASH"] : ''),
 		]);
 
@@ -1300,14 +1300,15 @@ class CFile
 				if ($newPath <> '')
 				{
 					$strNewFile = $strDirName . "/" . ltrim($newPath, "/");
+					$zr["SUBDIR"] = mb_substr($strNewFile, mb_strlen($strDirName) + 1, -(mb_strlen(bx_basename($strNewFile)) + 1));
 				}
 				else
 				{
-					$strNewFile = $strDirName . "/" . $zr["SUBDIR"] . "/" . md5(uniqid(mt_rand())) . strrchr($zr["FILE_NAME"], ".");
+					$random = Security\Random::getString(32);
+					$strNewFile = $strDirName . "/" . $zr["SUBDIR"] . "/" . $random . strrchr($zr["FILE_NAME"], ".");
 				}
 
 				$zr["FILE_NAME"] = bx_basename($strNewFile);
-				$zr["SUBDIR"] = mb_substr($strNewFile, mb_strlen($strDirName) + 1, -(mb_strlen(bx_basename($strNewFile)) + 1));
 
 				if ($newPath <> '')
 				{
@@ -2073,7 +2074,7 @@ function ImgShw(ID, width, height, alt)
 			{
 				$http = new Web\HttpClient();
 				$http->setPrivateIp(false);
-				$temp_path = static::GetTempName('', 'tmp.' . md5(mt_rand()));
+				$temp_path = static::GetTempName('', 'tmp.' . Security\Random::getString(32));
 				if ($http->download($path, $temp_path))
 				{
 					$arFile = static::MakeFileArray($temp_path);
@@ -2108,7 +2109,7 @@ function ImgShw(ID, width, height, alt)
 
 				if ($content <> '')
 				{
-					$temp_path = static::GetTempName('', 'tmp.' . md5(mt_rand()));
+					$temp_path = static::GetTempName('', 'tmp.' . Security\Random::getString(32));
 					if (RewriteFile($temp_path, $content))
 					{
 						$arFile = static::MakeFileArray($temp_path);

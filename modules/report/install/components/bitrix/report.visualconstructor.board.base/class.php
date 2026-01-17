@@ -22,6 +22,11 @@ class ReportVisualConstructorBoardBase extends CBitrixComponent
 	 */
 	public function executeComponent()
 	{
+		if (\Bitrix\Report\VisualConstructor\Helper\Db::isPgSqlDb())
+		{
+			LocalRedirect('/');
+		}
+
 		Dashboard::renewDefaultDashboard($this->arParams['BOARD_ID']);
 		$this->arResult['BOARD_ID'] = $this->arParams['BOARD_ID']; //TODO@ add check for required params such us BOARD_ID
 		$this->arResult['FILTER'] = $this->arParams['FILTER'] instanceof Filter ? $this->arParams['FILTER'] : null;

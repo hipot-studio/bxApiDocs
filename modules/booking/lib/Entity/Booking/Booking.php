@@ -17,9 +17,7 @@ use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
 use Bitrix\Booking\Entity\Message\BookingMessageCollection;
 use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
-use Bitrix\Booking\Internals\Exception\Booking\ConfirmBookingException;
 use Bitrix\Booking\Internals\Container;
-use Bitrix\Booking\Internals\Service\Feature\BookingConfirmReminder;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Service\Rrule;
 use Bitrix\Booking\Internals\Service\Time;
@@ -48,6 +46,7 @@ class Booking implements
 
 	private ResourceCollection $resourceCollection;
 	private ClientCollection $clientCollection;
+	private BookingSkuCollection $skuCollection;
 	private ExternalDataCollection $externalDataCollection;
 	private BookingMessageCollection $messageCollection;
 
@@ -61,11 +60,13 @@ class Booking implements
 	private int|null $createdAt = null;
 	private int|null $updatedAt = null;
 	private string|null $note = null;
+	private string|null $clientNote = null;
 
 	public function __construct()
 	{
 		$this->resourceCollection = new ResourceCollection();
 		$this->clientCollection = new ClientCollection();
+		$this->skuCollection = new BookingSkuCollection();
 		$this->externalDataCollection = new ExternalDataCollection();
 		$this->messageCollection = new BookingMessageCollection();
 	}
@@ -156,6 +157,18 @@ class Booking implements
 		return $this->clientCollection;
 	}
 
+	public function setSkuCollection(BookingSkuCollection $skuCollection): self
+	{
+		$this->skuCollection = $skuCollection;
+
+		return $this;
+	}
+
+	public function getSkuCollection(): BookingSkuCollection
+	{
+		return $this->skuCollection;
+	}
+
 	public function getDatePeriod(): DatePeriod|null
 	{
 		return $this->datePeriod;
@@ -214,6 +227,18 @@ class Booking implements
 	public function setNote(string|null $note): self
 	{
 		$this->note = $note;
+
+		return $this;
+	}
+
+	public function getClientNote(): string|null
+	{
+		return $this->clientNote;
+	}
+
+	public function setClientNote(string|null $note): self
+	{
+		$this->clientNote = $note;
 
 		return $this;
 	}
@@ -329,21 +354,6 @@ class Booking implements
 		return $this;
 	}
 
-	public function isAutoConfirmed(): bool
-	{
-		$startFrom = $this->getDatePeriod()?->getDateFrom();
-
-		if (!$startFrom)
-		{
-			throw new ConfirmBookingException('DatePeriod is not specified');
-		}
-
-		$now = new DateTimeImmutable();
-		$startFromWithConfirmedPeriod = $startFrom->sub((new BookingConfirmReminder())->bookingAutoConfirmedPeriod());
-
-		return $now->getTimestamp() > $startFromWithConfirmedPeriod->getTimestamp();
-	}
-
 	public function getVisitStatus(): BookingVisitStatus
 	{
 		return $this->visitStatus ?? BookingVisitStatus::Unknown;
@@ -413,6 +423,7 @@ class Booking implements
 			,
 			'resources' => $this->resourceCollection->toArray(),
 			'clients' => $this->clientCollection->toArray(),
+			'skus' => $this->skuCollection->toArray(),
 			'externalData' => $this->externalDataCollection->toArray(),
 			'messages' => $this->messageCollection->toArray(),
 			'primaryClient' => $this->getPrimaryClient(),
@@ -424,6 +435,7 @@ class Booking implements
 			'counter' => $this->counter,
 			'counters' => $this->counters,
 			'note' => $this->note,
+			'clientNote' => $this->clientNote,
 			'visitStatus' => $this->getVisitStatus()->value,
 			'source' => $this->getSource()->value,
 		];
@@ -482,6 +494,13 @@ class Booking implements
 			);
 		}
 
+		if (isset($props['skus']))
+		{
+			$result->setSkuCollection(
+				BookingSkuCollection::mapFromArray((array)$props['skus'])
+			);
+		}
+
 		if (isset($props['externalData']))
 		{
 			$result->setExternalDataCollection(
@@ -524,6 +543,11 @@ class Booking implements
 		if (isset($props['note']))
 		{
 			$result->setNote((string)$props['note']);
+		}
+
+		if (isset($props['clientNote']))
+		{
+			$result->setClientNote((string)$props['clientNote']);
 		}
 
 		if (isset($props['visitStatus']))

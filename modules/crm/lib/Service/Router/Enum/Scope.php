@@ -11,6 +11,9 @@ enum Scope
 	case AutomatedSolution;
 	case AutomatedSolutionWithoutPage;
 
+	/**
+	 * @return string[]
+	 */
 	public function roots(): array
 	{
 		$router = Container::getInstance()->getRouter();

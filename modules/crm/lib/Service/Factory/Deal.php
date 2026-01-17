@@ -634,7 +634,7 @@ final class Deal extends Factory
 				)
 				->addAction(
 					Operation::ACTION_BEFORE_SAVE,
-					new Reservation\Actions\PrepareReservationFields()
+					new Reservation\Actions\PrepareReservationFieldsOnAdd()
 				)
 				->addAction(
 					Operation::ACTION_AFTER_SAVE,
@@ -686,10 +686,6 @@ final class Deal extends Factory
 			)
 			->addAction(
 				Operation::ACTION_AFTER_SAVE,
-				new Operation\Action\UpdateMlScoring(),
-			)
-			->addAction(
-				Operation::ACTION_AFTER_SAVE,
 				new Operation\Action\Compatible\SendEvent('OnAfterCrmDealUpdate'),
 			)
 			->addAction(
@@ -705,7 +701,7 @@ final class Deal extends Factory
 			$operation
 				->addAction(
 					Operation::ACTION_BEFORE_SAVE,
-					new Reservation\Actions\PrepareReservationFields()
+					new Reservation\Actions\PrepareReservationFieldsOnUpdate()
 				)
 				->addAction(
 					Operation::ACTION_BEFORE_SAVE,
@@ -803,6 +799,16 @@ final class Deal extends Factory
 	}
 
 	public function isCommunicationRoutingSupported(): bool
+	{
+		return true;
+	}
+
+	public function isRecurringEnabled(): bool
+	{
+		return $this->isRecurringSupported();
+	}
+
+	public function isRecurringSupported(): bool
 	{
 		return true;
 	}

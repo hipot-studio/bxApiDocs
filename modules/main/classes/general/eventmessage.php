@@ -15,7 +15,7 @@ IncludeModuleLangFile(__FILE__);
 /**
  * @deprecated
  */
-class CAllEventMessage
+class CEventMessage
 {
 	var $LAST_ERROR;
 
@@ -580,10 +580,6 @@ class CAllEventMessage
 
 		return $res;
 	}
-}
-
-class CEventMessage extends CAllEventMessage
-{
 }
 
 class CEventType

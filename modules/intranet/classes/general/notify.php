@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
@@ -377,17 +378,17 @@ class CIntranetNotify
 							}
 						}
 
-						$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
-							->departmentRepository();
+						$departmentRepository = new HrDepartmentRepository();
+
 						$departmentId = is_array($arUser['UF_DEPARTMENT'])
 							? (int)$arUser['UF_DEPARTMENT'][0]
 							: (int)$arUser['UF_DEPARTMENT'];
-						$department = $departmentRepository->getById($departmentId);
+						$department = $departmentRepository->findAllByIblockIds([$departmentId])->first();
 						if ($department)
 						{
 							$arResult['CREATED_BY']['FORMATTED'] = (
 								$url <> ''
-									? '<a href="'.str_replace('#ID#', $department->getId(), $url).'">'.htmlspecialcharsEx($department->getName()).'</a>'
+									? '<a href="'.str_replace('#ID#', $department->getIblockSectionId(), $url).'">'.htmlspecialcharsEx($department->getName()).'</a>'
 									: htmlspecialcharsEx($department->getName())
 							);
 						}

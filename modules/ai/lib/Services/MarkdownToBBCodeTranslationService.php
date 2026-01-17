@@ -11,21 +11,34 @@ class MarkdownToBBCodeTranslationService
 	 */
 	private array $codeBlocks = [];
 
+	/**
+	 * @var array<string, string>
+	 */
+	private array $htmlTags = [];
+
+	/**
+	 * @var array<string, string>
+	 */
+	private array $images = [];
+
 	private string $text = '';
 
 	public function convert(string $text): string
 	{
 		$this->text = $text;
 		$this->extractCodeBlocks();
-		$this->processImages();
+		$this->extractHtmlTags();
+		$this->extractAndProcessImages();
 		$this->processHeadings();
 		$this->processHorizontalRule();
+		$this->processLinks();
 		$this->processMarkdownEmphasis();
 		$this->processStrikethrough();
-		$this->processLinks();
 		$this->processLists();
 		$this->processBlockQuotes();
+		$this->restoreHtmlTags();
 		$this->restoreCodeBlocks();
+		$this->restoreImages();
 
 		return $this->text;
 	}
@@ -70,6 +83,70 @@ class MarkdownToBBCodeTranslationService
 		}
 	}
 
+	private function extractHtmlTags(): void
+	{
+		$this->htmlTags = [];
+		$this->text = preg_replace_callback(
+			'/<[^>]+>/s',
+			function (array $matches): string {
+				$html = $matches[0];
+				$hash = md5($html);
+				$this->htmlTags[$hash] = $html;
+
+				return "@@HTMLTAG{$hash}@@";
+			},
+			$this->text,
+		);
+	}
+
+	private function restoreHtmlTags(): void
+	{
+		foreach ($this->htmlTags as $hash => $html)
+		{
+			$ph = "@@HTMLTAG{$hash}@@";
+			$this->text = str_replace($ph, $html, $this->text);
+		}
+	}
+
+	private function extractAndProcessImages(): void
+	{
+		$this->images = [];
+		$this->text = preg_replace_callback(
+			'/!\[(.*?)]\((.*?)\)/',
+			function (array $m): string {
+				$alt = trim($m[1]);
+				$url = $this->sanitizeUrl($m[2]);
+
+				if ($url === '')
+				{
+					return '';
+				}
+
+				$size = 'medium';
+				if (preg_match('/\bsize=(small|medium|large)\b/i', $alt, $sm))
+				{
+					$size = strtolower($sm[1]);
+				}
+
+				$imageContent = "[img size={$size}]{$url} [/img]";
+				$hash = md5($imageContent);
+				$this->images[$hash] = $imageContent;
+
+				return "@@IMAGE{$hash}@@";
+			},
+			$this->text,
+		);
+	}
+
+	private function restoreImages(): void
+	{
+		foreach ($this->images as $hash => $imageContent)
+		{
+			$ph = "@@IMAGE{$hash}@@";
+			$this->text = str_replace($ph, $imageContent, $this->text);
+		}
+	}
+
 	private function processLists(): void
 	{
 		$lines = explode("\n", $this->text);
@@ -94,77 +171,55 @@ class MarkdownToBBCodeTranslationService
 		$this->text = implode("\n", $out);
 	}
 
-	private function processImages(): void
-	{
-		$this->text = preg_replace_callback(
-			'/!\[(.*?)]\((.*?)\)/',
-			function (array $m): string {
-				$alt = trim($m[1]);
-				$url = trim($m[2]);
-				$url = $this->sanitizeUrl($url);
-
-				if ($url === '')
-				{
-					return ''; // If URL is invalid, don't return anything
-				}
-				// TODO: At some point we will be able to use tag [img] for images
-
-				return $url . "\n" . $alt;
-			},
-			$this->text,
-		);
-	}
-
 	protected function processHeadings(): void
 	{
 		for ($i = 6; $i >= 1; $i--)
 		{
 			$hashes = str_repeat('#', $i);
-			$size = 25 - ($i - 1) * 2;
 			$pattern = '/^' . preg_quote($hashes, '/') . ' (.*)$/m';
-			$this->text = preg_replace($pattern, "[size={$size}]$1[/size]", $this->text);
+			$this->text = preg_replace($pattern, "[b]$1[/b]", $this->text);
 		}
 	}
 
 	private function processMarkdownEmphasis(): void
 	{
 		// Step 1: Handle italic with bold inside (\*italic \*\*bold\*\*\*)
-		$this->text = preg_replace_callback('/\*([^*]*)\*\*([^*]*?)\*\*\*/', function ($matches) {
-			return '[i]' . $matches[1] . '[b]' . $matches[2] . '[/b][/i]';
+		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])\*([^*]*)\*\*([^*]*?)\*\*\*/um', function ($matches) {
+			return $matches[1] . '[i]' . $matches[2] . '[b]' . $matches[3] . '[/b][/i]';
 		}, $this->text);
 
 		// Step 2: Handle bold with italic inside (\*\*bold \*italic\*\*\*)
-		$this->text = preg_replace_callback('/\*\*([^*]*)\*([^*]*?)\*\*\*/', function ($matches) {
-			return '[b]' . $matches[1] . '[i]' . $matches[2] . '[/i][/b]';
+		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])\*\*([^*]*)\*([^*]*?)\*\*\*/um', function ($matches) {
+			return $matches[1] . '[b]' . $matches[2] . '[i]' . $matches[3] . '[/i][/b]';
 		}, $this->text);
 
 		// Step 3: Handle bold+italic (\*\*\*text\*\*\*)
-		$this->text = preg_replace('/\*\*\*([^*]+?)\*\*\*/', '[b][i]$1[/i][/b]', $this->text);
+		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])\*\*\*([^*]+?)\*\*\*/um', '$1[b][i]$2[/i][/b]', $this->text);
 
 		// Step 4: Handle remaining bold (\*\*text\*\*)
-		$this->text = preg_replace('/\*\*([^*]+?)\*\*/', '[b]$1[/b]', $this->text);
+		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])\*\*([^*]+?)\*\*/um', '$1[b]$2[/b]', $this->text);
 
 		// Step 5: Handle remaining italic (\*text\*)
-		$this->text = preg_replace('/\*([^*]+?)\*/', '[i]$1[/i]', $this->text);
+		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])\*([^*]+?)\*/um', '$1[i]$2[/i]', $this->text);
 
 		// Step 6: Handle underlined italic with bold inside (_italic __bold___)
-		$this->text = preg_replace_callback('/_([^_]*)__([^_]*?)___/', function ($matches) {
-			return '[i]' . $matches[1] . '[b]' . $matches[2] . '[/b][/i]';
+		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])_([^_]*)__([^_]*?)___/um', function ($matches) {
+			return $matches[1] . '[i]' . $matches[2] . '[b]' . $matches[3] . '[/b][/i]';
 		}, $this->text);
 
 		// Step 7: Handle underlined bold with italic inside (__bold _italic___)
-		$this->text = preg_replace_callback('/__([^_]*)_([^_]*?)___/', function ($matches) {
-			return '[b]' . $matches[1] . '[i]' . $matches[2] . '[/i][/b]';
+		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])__([^_]*)_([^_]*?)___/um', function ($matches) {
+			return $matches[1] . '[b]' . $matches[2] . '[i]' . $matches[3] . '[/i][/b]';
 		}, $this->text);
 
 		// Step 8: Handle underlined bold+italic (___text___)
-		$this->text = preg_replace('/___([^_]+?)___/', '[b][i]$1[/i][/b]', $this->text);
+		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])___([^_]+?)___/um', '$1[b][i]$2[/i][/b]', $this->text);
 
 		// Step 9: Handle underlined remaining bold (__text__)
-		$this->text = preg_replace('/__([^_]+?)__/', '[b]$1[/b]', $this->text);
+		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])__([^_]+?)__/um', '$1[b]$2[/b]', $this->text);
 
 		// Step 10: Handle underlined remaining italic (_text_)
-		$this->text = preg_replace('/_([^_]+?)_/', '[i]$1[/i]', $this->text);
+		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])_([^_]+?)_/um', '$1[i]$2[/i]', $this->text);
 	}
 
 	protected function processStrikethrough(): void
@@ -194,7 +249,7 @@ class MarkdownToBBCodeTranslationService
 
 	private function processHorizontalRule(): void
 	{
-		$this->text = preg_replace('/^\s*---\s*$/m', "───────────", $this->text);
+		$this->text = preg_replace('/^\s*---\s*$/m', "\n", $this->text);
 	}
 
 	private function processBlockQuotes(): void
@@ -205,15 +260,21 @@ class MarkdownToBBCodeTranslationService
 		$quoteBuffer = [];
 		$separator = "------------------------------------------------------";
 
-		foreach ($lines as $line) {
-			if (preg_match('/^>\s*(.+)$/', $line, $matches)) {
-				if (!$inQuote) {
+		foreach ($lines as $line)
+		{
+			if (preg_match('/^>\s*(.+)$/', $line, $matches))
+			{
+				if (!$inQuote)
+				{
 					$inQuote = true;
 					$result[] = $separator;
 				}
 				$quoteBuffer[] = $matches[1];
-			} else {
-				if ($inQuote) {
+			}
+			else
+			{
+				if ($inQuote)
+				{
 					$result = array_merge($result, $quoteBuffer);
 					$result[] = $separator;
 					$quoteBuffer = [];
@@ -223,7 +284,8 @@ class MarkdownToBBCodeTranslationService
 			}
 		}
 
-		if ($inQuote) {
+		if ($inQuote)
+		{
 			$result = array_merge($result, $quoteBuffer);
 			$result[] = $separator;
 		}

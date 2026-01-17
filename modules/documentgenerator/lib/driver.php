@@ -4,7 +4,9 @@ namespace Bitrix\DocumentGenerator;
 
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\DocumentGenerator\DataProvider\Filterable;
+use Bitrix\DocumentGenerator\Infrastructure\Agent\Access\DepartmentAccessCodesMigrateAgent;
 use Bitrix\DocumentGenerator\Integration\Bitrix24Manager;
+use Bitrix\DocumentGenerator\Integration\HumanResources;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\DocumentGenerator\Model\RegionTable;
 use Bitrix\DocumentGenerator\Model\Role;
@@ -592,23 +594,52 @@ final class Driver
 		return '';
 	}
 
-	public static function installDefaultRoles()
+	public static function installDefaultRoles(): string
 	{
-		global $DB;
-		if(!$DB->TableExists(RoleTable::getTableName()))
-		{
+		$delayLaunch = static function () {
+			global $pPERIOD;
+			$pPERIOD = 86400;
+
 			return '\\Bitrix\\DocumentGenerator\\Driver::installDefaultRoles();';
+		};
+
+		global $DB;
+		if (!$DB->TableExists(RoleTable::getTableName()))
+		{
+			return $delayLaunch();
 		}
+
 		$rolesCount = RoleTable::getCount();
 		if($rolesCount > 0)
 		{
 			return '';
 		}
 
+		if (!HumanResources::getInstance()->getStorageService()->isCompanyStructureConverted(false))
+		{
+			return $delayLaunch();
+		}
+
+		$rootNode = HumanResources::getInstance()->getNodeService()->getRootDepartment();
+		if ($rootNode === null)
+		{
+			return $delayLaunch();
+		}
+
+		$accessCode = HumanResources::getInstance()
+			->getAccessCodeService()
+			->buildAccessCode('SND', $rootNode->id)
+		;
+
+		if ($accessCode === null)
+		{
+			return $delayLaunch();
+		}
+
 		$role = new Role();
 		$role->setCode('ADMIN')->setName('ADMIN');
 		$addResult = $role->save();
-		if($addResult->isSuccess())
+		if ($addResult->isSuccess())
 		{
 			$role->setPermissions([
 				UserPermissions::ENTITY_SETTINGS => [
@@ -622,16 +653,17 @@ final class Driver
 					UserPermissions::ACTION_VIEW => UserPermissions::PERMISSION_ANY,
 				],
 			]);
-			RoleAccessTable::add(array(
+
+			RoleAccessTable::add([
 				'ROLE_ID' => $role->getId(),
 				'ACCESS_CODE' => 'G1'
-			));
+			]);
 		}
 
 		$role = new Role();
 		$role->setCode('MANAGER')->setName('MANAGER');
 		$addResult = $role->save();
-		if($addResult->isSuccess())
+		if ($addResult->isSuccess())
 		{
 			$role->setPermissions([
 				UserPermissions::ENTITY_SETTINGS => [
@@ -645,22 +677,14 @@ final class Driver
 					UserPermissions::ACTION_VIEW => UserPermissions::PERMISSION_ANY,
 				],
 			]);
-			if(Loader::includeModule('intranet'))
-			{
-				$departmentTree = \CIntranetUtils::GetDeparmentsTree();
-				$rootDepartment = (int)$departmentTree[0][0];
 
-				if ($rootDepartment > 0)
-				{
-					RoleAccessTable::add(array(
-						'ROLE_ID' => $role->getId(),
-						'ACCESS_CODE' => 'DR'.$rootDepartment
-					));
-				}
-			}
+			RoleAccessTable::add([
+				'ROLE_ID' => $role->getId(),
+				'ACCESS_CODE' => $accessCode,
+			]);
 		}
 
-		return "";
+		return '';
 	}
 
 	public static function moveTemplateFilesToFolder()
@@ -729,4 +753,16 @@ final class Driver
 		];
 	}
 	//endregion
+
+	public static function getPermissionsUri(): ?\Bitrix\Main\Web\Uri
+	{
+		$componentPath = \CComponentEngine::makeComponentPath('bitrix:documentgenerator.settings.perms');
+		$componentPath = getLocalPath('components'.$componentPath.'/slider.php');
+		if($componentPath)
+		{
+			return new \Bitrix\Main\Web\Uri($componentPath);
+		}
+
+		return null;
+	}
 }

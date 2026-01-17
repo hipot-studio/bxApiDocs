@@ -72,7 +72,7 @@ final class DynamicDefaultEntityConfig extends AbstractDefaultEntityConfig
 			];
 		}
 
-		if ($this->factory->isRecurringEnabled() && !$this->isSkipField(Item::FIELD_NAME_RECURRING))
+		if ($this->factory->isRecurringEnabled())
 		{
 			$sections[] = [
 				'name' => 'recurring',

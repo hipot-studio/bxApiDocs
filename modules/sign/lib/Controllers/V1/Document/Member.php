@@ -546,6 +546,13 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		$result = $this->memberService->setupB2eMembers($documentUid, $memberCollection, $representativeId, excludeRejected: $excludeRejected);
 		if (!$result->isSuccess())
 		{
+			if ($result->getErrorCollection()->getErrorByCode('COMPANY_DOESNT_EXIST'))
+			{
+				$this->addErrorByMessage(Main\Localization\Loc::getMessage('SIGN_CONTROLLERS_V1_B2E_DOCUMENT_TEMPLATE_ERROR_COMPANY_DOESNT_EXIST'));
+
+				return [];
+			}
+
 			$this->addErrors($result->getErrors());
 
 			return [];

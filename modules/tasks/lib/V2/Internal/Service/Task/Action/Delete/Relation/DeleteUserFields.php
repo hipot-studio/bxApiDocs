@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Relation;
 
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\UserFieldTrait;
-use Bitrix\Tasks\Util\UserField\Task;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
 
 class DeleteUserFields
 {
@@ -13,6 +15,8 @@ class DeleteUserFields
 
 	public function __invoke(array $fullTaskData): void
 	{
-		$this->getUfManager()->Delete(Task::getEntityCode(), $fullTaskData['ID']);
+		$this->getUfManager()->Delete(UserField::TASK, $fullTaskData['ID']);
+
+		Container::getInstance()->get(CrmItemRepositoryInterface::class)->invalidate((int)$fullTaskData['ID']);
 	}
 }

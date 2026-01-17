@@ -14,6 +14,7 @@ class ResourceWizardResponseResponse implements \JsonSerializable
 		public readonly string $companyScheduleUrl,
 		public readonly string $weekStart,
 		public readonly bool $isChannelChoiceAvailable,
+		public readonly array $catalogSkuEntityOptions,
 	)
 	{
 	}
@@ -28,6 +29,7 @@ class ResourceWizardResponseResponse implements \JsonSerializable
 			'companyScheduleUrl' => $this->companyScheduleUrl,
 			'weekStart' => $this->weekStart,
 			'isChannelChoiceAvailable' => $this->isChannelChoiceAvailable,
+			'catalogSkuEntityOptions' => $this->catalogSkuEntityOptions,
 		];
 	}
 }

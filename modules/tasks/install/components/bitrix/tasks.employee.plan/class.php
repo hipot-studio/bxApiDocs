@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Tasks\Internals\Task\MemberTable;
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -560,7 +562,7 @@ class TasksEmployeePlanComponent extends TasksBaseComponent
 		if (!empty($userIds)) // some users match the user filter, take their tasks
 		{
 			$taskParameters['runtime']['M'] = [
-				'data_type' => '\Bitrix\Tasks\MemberTable',
+				'data_type' => MemberTable::class,
 				'reference' => [
 					'=this.ID' => 'ref.TASK_ID',
 					'=ref.TYPE' => ['?', 'A'],

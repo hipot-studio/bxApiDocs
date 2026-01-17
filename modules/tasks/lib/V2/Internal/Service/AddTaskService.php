@@ -10,6 +10,7 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddUserFields;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Integration\RunCrm;
 use Bitrix\Tasks\V2\Internal\Service\Task\AddService;
 
 class AddTaskService
@@ -26,9 +27,9 @@ class AddTaskService
 	 * @throws TaskNotExistsException
 	 * @throws TaskAddException
 	 */
-	public function add(Task $task, AddConfig $config, bool $useConsistency = true): Task
+	public function add(Task $task, AddConfig $config): Task
 	{
-		if ($useConsistency)
+		if ($config->isUseConsistency())
 		{
 			[$task, $fields] = $this->consistencyResolver->resolve('task.add')->wrap(
 				fn (): array => $this->addService->add($task, $config)
@@ -40,6 +41,7 @@ class AddTaskService
 		}
 
 		(new AddUserFields($config))($fields);
+		(new RunCrm($config))($fields);
 
 		return $task;
 	}

@@ -4,88 +4,72 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
-use Bitrix\Main\Engine\Response\Converter;
-use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
-use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
-use Bitrix\Tasks\V2\Internal\Entity\Task\Priority;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\ReplicateParamsMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\TypeMapper;
 
 class TemplateMapper
 {
-	public function mapFromTemplateObject(TemplateObject $templateObject): Template
+	public function __construct(
+		private readonly PriorityMapper $priorityMapper,
+		private readonly UserFieldMapper $userFieldMapper,
+		private readonly ReplicateParamsMapper $replicateParamsMapper,
+		private readonly TypeMapper $typeMapper,
+	)
+	{
+
+	}
+
+	public function mapFromTemplateObject(
+		TemplateObject $templateObject,
+		?Template\TagCollection $tags = null,
+		?Group $group = null,
+		?UserCollection $members = null,
+		?array $crmItemIds = null,
+		?array $checkListIds = null,
+		?array $aggregates = null,
+		?Template\PermissionCollection $permissions = null,
+		?array $fileIds = null,
+		null|Task|Template $parent = null,
+	): Template
 	{
 		return new Template(
-			id:              $templateObject->getId(),
-			title:           $templateObject->getTitle(),
-			description:     $templateObject->getDescription(),
-			creator:         $this->mapMember($templateObject->getCreatedBy()),
-			responsibleCollection:	$this->mapMemberCollection($templateObject->getResponsibleMemberId()),
-			deadlineAfterTs: $templateObject->getDeadlineAfter(),
-			startDatePlanTs: $templateObject->getStartDatePlanAfter(),
-			endDatePlanTs:   $templateObject->getEndDatePlanAfter(),
-			replicate:		 $templateObject->getReplicate(),
-			checklist:       $this->mapChecklist($templateObject),
-			group:           $this->mapGroup($templateObject),
-			priority:        $this->mapPriority($templateObject),
-			accomplices:     $this->mapMemberCollection($templateObject->getAccompliceMembersIds()),
-			auditors:        $this->mapMemberCollection($templateObject->getAuditorMembersIds()),
+			id: $templateObject->getId(),
+			title: $templateObject->getTitle(),
+			description: $templateObject->getDescription(),
+			creator: $members?->findOneById($templateObject->getCreatedBy()),
+			responsibleCollection: $members?->findAllByIds((array)$templateObject->getMembers()?->getResponsibleIds()),
+			deadlineAfter: $templateObject->getDeadlineAfter(),
+			startDatePlanAfter: $templateObject->getStartDatePlanAfter(),
+			endDatePlanAfter: $templateObject->getEndDatePlanAfter(),
+			allowsChangeDeadline: $templateObject->getAllowChangeDeadline(),
+			allowsTimeTracking: $templateObject->getAllowTimeTracking(),
+			matchesWorkTime: $templateObject->getMatchWorkTime(),
+			needsControl: $templateObject->getTaskControl(),
+			replicate: $templateObject->getReplicate(),
+			replicateParams: $this->replicateParamsMapper->mapToValueObject($templateObject->getReplicateParams()),
+			group: $group,
+			estimatedTime: $templateObject->getTimeEstimate(),
+			tags: $tags,
+			parent: $parent instanceof Task ? $parent : null,
+			base: $parent instanceof Template ? $parent : null,
+			type: $this->typeMapper->mapToEnum((int)$templateObject->getTparamType()),
+			fileIds: $fileIds,
+			checklist: $checkListIds,
+			priority: $this->priorityMapper->mapToEnum((int)$templateObject->getPriority()),
+			accomplices: $members?->findAllByIds((array)$templateObject->getMembers()?->getAccompliceIds()),
+			auditors: $members?->findAllByIds((array)$templateObject->getMembers()?->getAuditorIds()),
+			siteId: $templateObject->getSiteId(),
+			permissions: $permissions,
+			userFields: $this->userFieldMapper->mapToCollection($templateObject->collectValues()),
+			crmItemIds: $crmItemIds,
+			containsRelatedTasks: $aggregates['containsRelatedTasks'] ?? null,
+			containsChecklist: $aggregates['containsCheckList'] ?? null,
+			containsSubTemplates: $aggregates['containsSubTemplates'] ?? null,
 		);
-	}
-
-	private function mapChecklist(TemplateObject $templateObject): ?array
-	{
-		$items = TaskCheckListFacade::getList(filter: ['TASK_ID' => $templateObject->getId()]);
-
-		return Converter::toJson()->process($items);
-	}
-
-	private function mapGroup(TemplateObject $templateObject): ?Group
-	{
-		// TODO: frontend
-		if ($templateObject->isGroupIdFilled() && $templateObject->getGroupId() !== 0)
-		{
-			$group = \Bitrix\Tasks\Internals\Registry\GroupRegistry::getInstance()->get($templateObject->getGroupId());
-
-			if (!$group)
-			{
-				return null;
-			}
-
-			$groupId = (int)$group['ID'];
-			$groupData = \Bitrix\Tasks\Integration\SocialNetwork\Group::getGroupData($groupId);
-
-			return Group::mapFromArray([
-				'id' => (int)$group['ID'],
-				'name' => $group['NAME'],
-				'image' => $groupData['IMAGE'] ?? '',
-				'type' => $group['TYPE'],
-			]);
-		}
-
-		return null;
-	}
-
-	private function mapMember(int $userId): User
-	{
-		return User::mapFromArray(['id' => $userId]);
-	}
-
-	private function mapMemberCollection(array $userIds): UserCollection
-	{
-		$userIds = array_map(static fn(int $id) => ['id' => $id], $userIds);
-
-		return UserCollection::mapFromArray($userIds);
-	}
-
-	private function mapPriority(TemplateObject $templateObject): ?Priority
-	{
-		return match ((int)$templateObject->getPriority()) {
-			\Bitrix\Tasks\Internals\Task\Priority::LOW => Priority::Low,
-			\Bitrix\Tasks\Internals\Task\Priority::AVERAGE => Priority::Average,
-			\Bitrix\Tasks\Internals\Task\Priority::HIGH => Priority::High,
-		};
 	}
 }

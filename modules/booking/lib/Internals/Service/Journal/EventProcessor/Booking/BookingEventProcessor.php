@@ -9,9 +9,8 @@ use Bitrix\Booking\Command\Booking\UpdateBookingCommand;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Integration\Im\Chat;
 use Bitrix\Booking\Internals\Service\Agent\ComingSoonBookingAgentManager;
-use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
+use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
-use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
@@ -21,26 +20,22 @@ use Bitrix\Main\Event;
 use DateTimeImmutable;
 use DateInterval;
 
-class BookingEventProcessor implements EventProcessor
+class BookingEventProcessor extends AbstractEventProcessor
 {
-	public function process(JournalEventCollection $eventCollection): void
+	public function processOne(JournalEvent $event): void
 	{
-		/** @var JournalEvent $event */
-		foreach ($eventCollection as $event)
+		match ($event->type)
 		{
-			match ($event->type)
-			{
-				JournalType::BookingAdded => $this->processBookingAddedEvent($event),
-				JournalType::BookingUpdated => $this->processBookingUpdatedEvent($event),
-				JournalType::BookingDeleted => $this->processBookingDeletedEvent($event),
-				JournalType::BookingCanceled => $this->processBookingCanceledEvent($event),
-				JournalType::BookingComingSoonNotificationSent => $this->processBookingComingSoonNotificationSentEvent($event),
-				JournalType::BookingConfirmed => $this->processBookingConfirmedEvent($event),
-				JournalType::BookingDelayedCounterActivated => $this->processBookingDelayedCounterActivatedEvent($event),
-				JournalType::BookingConfirmCounterActivated => $this->processBookingConfirmCounterActivatedEvent($event),
-				default => '',
-			};
-		}
+			JournalType::BookingAdded => $this->processBookingAddedEvent($event),
+			JournalType::BookingUpdated => $this->processBookingUpdatedEvent($event),
+			JournalType::BookingDeleted => $this->processBookingDeletedEvent($event),
+			JournalType::BookingCanceled => $this->processBookingCanceledEvent($event),
+			JournalType::BookingComingSoonNotificationSent => $this->processBookingComingSoonNotificationSentEvent($event),
+			JournalType::BookingConfirmed => $this->processBookingConfirmedEvent($event),
+			JournalType::BookingDelayedCounterActivated => $this->processBookingDelayedCounterActivatedEvent($event),
+			JournalType::BookingConfirmCounterActivated => $this->processBookingConfirmCounterActivatedEvent($event),
+			default => '',
+		};
 	}
 
 	private function processBookingAddedEvent(JournalEvent $journalEvent): void

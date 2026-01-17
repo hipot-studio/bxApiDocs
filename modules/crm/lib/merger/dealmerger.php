@@ -477,7 +477,7 @@ class DealMerger extends EntityMerger
 		Timeline\MarkEntry::rebind(\CCrmOwnerType::Deal, $seedID, $targID);
 		Timeline\CommentEntry::rebind(\CCrmOwnerType::Deal, $seedID, $targID);
 		Timeline\LogMessageEntry::rebind(\CCrmOwnerType::Deal, $seedID, $targID);
-		Timeline\AI\Call\Entry::rebind(\CCrmOwnerType::Deal, $seedID, $targID);
+		Timeline\AI\Entry::rebind(\CCrmOwnerType::Deal, $seedID, $targID);
 
 		Crm\Tracking\Entity::rebindTrace(
 			\CCrmOwnerType::Deal, $seedID,

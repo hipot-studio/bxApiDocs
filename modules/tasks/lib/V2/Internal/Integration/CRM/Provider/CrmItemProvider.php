@@ -31,4 +31,17 @@ class CrmItemProvider
 
 		return $this->crmItemRepository->getByIds($ids);
 	}
+
+	public function getByIdsByTemplateId(array $ids, int $templateId, int $userId): CrmItemCollection
+	{
+		if (!Loader::includeModule('crm'))
+		{
+			return new CrmItemCollection();
+		}
+
+		$ids = $this->crmAccessService->filterByTemplate($ids, $templateId);
+		$ids = $this->crmAccessService->filterCrmItemsWithAccess($ids, $userId);
+
+		return $this->crmItemRepository->getByIds($ids);
+	}
 }

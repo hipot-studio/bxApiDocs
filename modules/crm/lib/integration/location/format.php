@@ -47,6 +47,10 @@ class Format
 				$result = 'RU';
 				break;
 
+			case EntityAddressFormatter::UZ:
+				$result = 'UZ';
+				break;
+
 			default:
 				$result = '';
 
@@ -77,6 +81,10 @@ class Format
 
 			case 'RU':
 				$result = EntityAddressFormatter::RUS;
+				break;
+
+			case 'UZ':
+				$result = EntityAddressFormatter::UZ;
 				break;
 
 			default:

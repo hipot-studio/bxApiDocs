@@ -11,12 +11,13 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Repository\RelatedTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
 class RelatedTaskService
 {
 	public function __construct(
 		private readonly RelatedTaskRepositoryInterface $relatedTaskRepository,
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateService,
 		private readonly HistoryService $historyService,
 	)
 	{
@@ -25,14 +26,21 @@ class RelatedTaskService
 	public function add(int $taskId, array $relatedTaskIds, int $userId): Task
 	{
 		Collection::normalizeArrayValuesByInt($relatedTaskIds, false);
-		if (empty($relatedTaskIds))
-		{
-			throw new ArgumentException('Empty related task IDs array provided.', 'relatedTaskIds');
-		}
 
 		if (in_array($taskId, $relatedTaskIds, true))
 		{
-			throw new ArgumentException('Task cannot depend on itself.');
+			foreach ($relatedTaskIds as $i => $relatedTaskId)
+			{
+				if ($relatedTaskId === $taskId)
+				{
+					unset($relatedTaskIds[$i]);
+				}
+			}
+		}
+
+		if (empty($relatedTaskIds))
+		{
+			return new Task(id: $taskId);
 		}
 
 		$previous = $this->relatedTaskRepository->getRelatedTaskIds($taskId);
@@ -84,14 +92,21 @@ class RelatedTaskService
 	public function set(int $taskId, array $relatedTaskIds, int $userId): Task
 	{
 		Collection::normalizeArrayValuesByInt($relatedTaskIds, false);
-		if (empty($relatedTaskIds))
-		{
-			throw new ArgumentException('Empty related task IDs array provided.', 'relatedTaskIds');
-		}
 
 		if (in_array($taskId, $relatedTaskIds, true))
 		{
-			throw new ArgumentException('Task cannot depend on itself.');
+			foreach ($relatedTaskIds as $i => $relatedTaskId)
+			{
+				if ($relatedTaskId === $taskId)
+				{
+					unset($relatedTaskIds[$i]);
+				}
+			}
+		}
+
+		if (empty($relatedTaskIds))
+		{
+			return new Task(id: $taskId);
 		}
 
 		$previous = $this->relatedTaskRepository->getRelatedTaskIds($taskId);
@@ -137,11 +152,9 @@ class RelatedTaskService
 			changedBy: new User(id: $userId),
 		);
 
-		[$task] = $this->updateService->update(
+		return $this->updateService->update(
 			task: $task,
 			config: new UpdateConfig($userId),
 		);
-
-		return $task;
 	}
 }

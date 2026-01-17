@@ -10,28 +10,23 @@ use Bitrix\Booking\Command\Counter\UpCounterCommand;
 use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
-use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
+use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
-use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 
-class CounterEventProcessor implements EventProcessor
+class CounterEventProcessor extends AbstractEventProcessor
 {
-	public function process(JournalEventCollection $eventCollection): void
+	public function processOne(JournalEvent $event): void
 	{
-		/** @var JournalEvent $event */
-		foreach ($eventCollection as $event)
+		match ($event->type)
 		{
-			match ($event->type)
-			{
-				JournalType::BookingConfirmed => $this->processBookingConfirmed($event),
-				JournalType::BookingUpdated => $this->processBookingUpdated($event),
-				JournalType::BookingDeleted => $this->processBookingDeleted($event),
-				JournalType::BookingDelayedCounterActivated => $this->processBookingDelayedCounterActivated($event),
-				JournalType::BookingConfirmCounterActivated => $this->processBookingConfirmCounterActivated($event),
-				default	=> '',
-			};
-		}
+			JournalType::BookingConfirmed => $this->processBookingConfirmed($event),
+			JournalType::BookingUpdated => $this->processBookingUpdated($event),
+			JournalType::BookingDeleted => $this->processBookingDeleted($event),
+			JournalType::BookingDelayedCounterActivated => $this->processBookingDelayedCounterActivated($event),
+			JournalType::BookingConfirmCounterActivated => $this->processBookingConfirmCounterActivated($event),
+			default	=> '',
+		};
 	}
 
 	private function processBookingConfirmed(JournalEvent $event): void
@@ -89,7 +84,11 @@ class CounterEventProcessor implements EventProcessor
 		$booking->setConfirmed(false);
 		Container::getBookingRepository()->save($booking);
 
-		$this->runUpCounterCommand($booking->getId(), CounterDictionary::BookingDelayed);
+		$this->runUpCounterCommand(
+			$booking->getId(),
+			CounterDictionary::BookingDelayed,
+			$booking->getCreatedBy(),
+		);
 	}
 
 	private function processBookingConfirmCounterActivated(JournalEvent $event): void
@@ -101,7 +100,11 @@ class CounterEventProcessor implements EventProcessor
 			return;
 		}
 
-		$this->runUpCounterCommand($booking->getId(), CounterDictionary::BookingUnConfirmed);
+		$this->runUpCounterCommand(
+			$booking->getId(),
+			CounterDictionary::BookingUnConfirmed,
+			$booking->getCreatedBy(),
+		);
 	}
 
 	private function runDropCounterCommand(int $entityId, CounterDictionary $type): void
@@ -109,8 +112,16 @@ class CounterEventProcessor implements EventProcessor
 		(new DropCounterCommand(entityId: $entityId, type: $type))->run();
 	}
 
-	private function runUpCounterCommand(int $entityId, CounterDictionary $type): void
+	private function runUpCounterCommand(
+		int $entityId,
+		CounterDictionary $type,
+		int|null $userId,
+	): void
 	{
-		(new UpCounterCommand(entityId: $entityId, type: $type))->run();
+		(new UpCounterCommand(
+			entityId: $entityId,
+			type: $type,
+			userId: $userId,
+		))->run();
 	}
 }

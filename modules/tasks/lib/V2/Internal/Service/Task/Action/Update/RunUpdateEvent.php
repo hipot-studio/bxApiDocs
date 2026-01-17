@@ -7,7 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ApplicationErrorTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\ApplicationErrorTrait;
 use Bitrix\Tasks\Internals\Log\LogFacade;
 
 class RunUpdateEvent
@@ -15,7 +15,7 @@ class RunUpdateEvent
 	use ConfigTrait;
 	use ApplicationErrorTrait;
 
-	public function __invoke(array $fields, array $sourceTaskData): array
+	public function __invoke(array $fields, array $sourceTaskData, ?callable $eventFilter = null): array
 	{
 		$fields['META:PREV_FIELDS'] = $sourceTaskData;
 
@@ -25,6 +25,11 @@ class RunUpdateEvent
 		{
 			foreach (GetModuleEvents('tasks', 'OnTaskUpdate', true) as $event)
 			{
+				if ($eventFilter !== null && !$eventFilter($event))
+				{
+					continue;
+				}
+
 				ExecuteModuleEventEx($event, [(int)$sourceTaskData['ID'], &$fields, &$eventTaskData]);
 			}
 		}

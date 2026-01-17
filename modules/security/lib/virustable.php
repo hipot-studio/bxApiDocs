@@ -3,6 +3,10 @@
 namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\Session\Handlers\Table\UserSessionTable;
+use Bitrix\Main\Application;
 
 /**
  * Class VirusTable
@@ -20,7 +24,7 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\Virus wakeUpObject($row)
  * @method static \Bitrix\Security\Viruss wakeUpCollection($rows)
  */
-class VirusTable extends \Bitrix\Main\Entity\DataManager
+class VirusTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -29,9 +33,9 @@ class VirusTable extends \Bitrix\Main\Entity\DataManager
 
 	public static function getConnectionName()
 	{
-		$connectionName = \Bitrix\Main\Session\Handlers\Table\UserSessionTable::CONNECTION_NAME;
+		$connectionName = UserSessionTable::CONNECTION_NAME;
 
-		$pool = \Bitrix\Main\Application::getInstance()->getConnectionPool();
+		$pool = Application::getInstance()->getConnectionPool();
 		$isConnectionExists = $pool->getConnection($connectionName) !== null;
 		if (!$isConnectionExists)
 		{
@@ -47,18 +51,18 @@ class VirusTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			(new \Bitrix\Main\Entity\StringField('ID'))
+			(new Fields\StringField('ID'))
 				->configurePrimary()
 				->configureSize(32),
-			(new \Bitrix\Main\Entity\DatetimeField('TIMESTAMP_X'))
+			(new Fields\DatetimeField('TIMESTAMP_X'))
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\StringField('SITE_ID'))
+			(new Fields\StringField('SITE_ID'))
 				->configureSize(2)
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\EnumField('SENT'))
+			(new Fields\EnumField('SENT'))
 				->configureValues(['Y', 'N'])
 				->configureDefaultValue('N'),
-			(new \Bitrix\Main\Entity\TextField('INFO'))
+			(new Fields\TextField('INFO'))
 				->configureLong(),
 		];
 	}

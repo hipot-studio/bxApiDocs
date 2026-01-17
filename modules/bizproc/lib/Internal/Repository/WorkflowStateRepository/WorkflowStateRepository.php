@@ -5,10 +5,10 @@ namespace Bitrix\Bizproc\Internal\Repository\WorkflowStateRepository;
 use Bitrix\Bizproc\Internal\Entity\WorkflowState\WorkflowStateCollection;
 use Bitrix\Bizproc\Internal\Repository\Mapper\WorkflowStateMapper;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
-use Bitrix\Main\ORM\Query\QueryHelper;
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 
-class WorkflowStateRepository implements WorkflowStateRepositoryInterface
+class WorkflowStateRepository
 {
 	public function __construct(private readonly WorkflowStateMapper $mapper)
 	{
@@ -30,12 +30,27 @@ class WorkflowStateRepository implements WorkflowStateRepositoryInterface
 		;
 		$ormWorkflowStates = $query->fetchCollection();
 
-		$workflowStates = [];
-		foreach ($ormWorkflowStates as $ormWorkflowState)
-		{
-			$workflowStates[] = $this->mapper->convertFromOrm($ormWorkflowState);
-		}
+		return $this->mapper->convertCollectionFromOrm($ormWorkflowStates);
+	}
 
-		return new WorkflowStateCollection(...$workflowStates);
+	public function getStuckWorkflows(
+		array $select,
+		DateTime $startPeriod,
+		DateTime $endPeriod,
+		Date $beforeDate,
+		int $limit
+	): WorkflowStateCollection
+	{
+		$query =
+			WorkflowStateTable::query()
+				->setSelect($select)
+				->where('STARTED', '>=', $startPeriod)
+				->where('STARTED', '<', $endPeriod)
+				->where('INSTANCE.OWNED_UNTIL', '<', $beforeDate)
+				->setLimit($limit)
+		;
+		$ormWorkflowStates = $query->fetchCollection();
+
+		return $this->mapper->convertCollectionFromOrm($ormWorkflowStates);
 	}
 }

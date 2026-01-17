@@ -4,6 +4,7 @@ namespace Bitrix\AI\Tuning;
 
 use Bitrix\AI\Config;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\Main\Event;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Web\Json;
@@ -121,14 +122,6 @@ class Manager
 			[
 				'configKey' => 'bitrixgpt_options',
 				'engineCode' => Engine\Cloud\Bitrix24::ENGINE_CODE,
-			],
-			[
-				'configKey' => 'bitrixaudio_availableIn',
-				'engineCode' => Engine\Cloud\BitrixAudio::ENGINE_CODE,
-			],
-			[
-				'configKey' => 'bitrixaudio_availableIn',
-				'engineCode' => 'BitrixAudioCall',
 			]
 		];
 
@@ -146,10 +139,6 @@ class Manager
 			{
 				$availableInItems = $decodedValue['availableIn'];
 			}
-			elseif (is_array($decodedValue) && $config['configKey'] === 'bitrixaudio_availableIn')
-			{
-				$availableInItems = $decodedValue;
-			}
 
 			if (empty($availableInItems))
 			{
@@ -157,6 +146,11 @@ class Manager
 			}
 
 			$this->removeEngineFromGroups($availableInItems, $config['engineCode']);
+		}
+
+		if (Bitrix24::shouldUseB24() && in_array(Bitrix24::getPortalZone(), ['ru', 'by'], true))
+		{
+			$this->removeEngineFromGroups(['landing_site_text_provider'], 'ChatGPT');
 		}
 	}
 

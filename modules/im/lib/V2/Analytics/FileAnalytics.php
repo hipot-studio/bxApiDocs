@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Analytics;
 
-use Bitrix\Im\V2\Analytics\Event\AudioMessageEvent;
 use Bitrix\Im\V2\Analytics\Event\FileMessageEvent;
+use Bitrix\Im\V2\Analytics\Event\MediaMessageEvent;
+use Bitrix\Im\V2\Entity\File\Param\ParamName;
+use Bitrix\Im\V2\Entity\File\ParamCollection;
 use Bitrix\Im\V2\Integration\AI\Transcription\Result\TranscribeResult;
 use Bitrix\Im\V2\Message;
 
@@ -18,26 +20,20 @@ class FileAnalytics extends AbstractAnalytics
 	public function addStartTranscript(TranscribeResult $result): void
 	{
 		$statusCode = $this->getTranscriptStatusCode($result);
+		$fileParams = ParamCollection::getInstance($result->getFileItem()->diskFileId);
 
-		$this->async(function () use ($statusCode) {
-			$this
-				->createAudioMessageEvent(self::START_TRANSCRIPT)
-				?->setStatus($statusCode)
-				?->send()
-			;
+		$this->async(function () use ($statusCode, $fileParams) {
+			$this->sendTranscriptEvent(self::START_TRANSCRIPT, $statusCode, $fileParams);
 		});
 	}
 
 	public function addFinishTranscript(TranscribeResult $result): void
 	{
 		$statusCode = $this->getTranscriptStatusCode($result);
+		$fileParams = ParamCollection::getInstance($result->getFileItem()->diskFileId);
 
-		$this->async(function () use ($statusCode) {
-			$this
-				->createAudioMessageEvent(self::FINISH_TRANSCRIPT)
-				?->setStatus($statusCode)
-				?->send()
-			;
+		$this->async(function () use ($statusCode, $fileParams) {
+			$this->sendTranscriptEvent(self::FINISH_TRANSCRIPT, $statusCode, $fileParams);
 		});
 	}
 
@@ -69,16 +65,31 @@ class FileAnalytics extends AbstractAnalytics
 		return $statusCode;
 	}
 
-	protected function createAudioMessageEvent(
-		string $eventName,
-	): ?AudioMessageEvent
+	protected function sendTranscriptEvent(string $eventName, string $statusCode, ParamCollection $fileParams): void
+	{
+		$category = match (true)
+		{
+			$fileParams->getParam(ParamName::IsVoiceNote)?->getValue() => 'audiomessage',
+			$fileParams->getParam(ParamName::IsVideoNote)?->getValue() => 'videomessage',
+			default => null,
+		};
+
+		if ($category !== null)
+		{
+			$this->createMediaMessageEvent($eventName, $category)
+				?->setStatus($statusCode)
+				?->send();
+		}
+	}
+
+	protected function createMediaMessageEvent(string $eventName, string $category): ?MediaMessageEvent
 	{
 		if (!$this->isChatTypeAllowed($this->chat))
 		{
 			return null;
 		}
 
-		return (new AudioMessageEvent($eventName, $this->chat, $this->userId));
+		return (new MediaMessageEvent($eventName, $this->chat, $this->getContext()->getUserId(), $category));
 	}
 
 	protected function createFileMessageEvent(
@@ -90,6 +101,6 @@ class FileAnalytics extends AbstractAnalytics
 			return null;
 		}
 
-		return (new FileMessageEvent($eventName, $this->chat, $this->userId));
+		return (new FileMessageEvent($eventName, $this->chat, $this->getContext()->getUserId()));
 	}
 }

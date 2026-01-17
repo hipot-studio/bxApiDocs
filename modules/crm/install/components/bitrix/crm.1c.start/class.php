@@ -25,37 +25,7 @@ class OnecStartComponent extends CBitrixComponent
 	 */
 	public function executeComponent()
 	{
-		global $APPLICATION, $USER;
-
-		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
-		if($request->isPost() && check_bitrix_sessid())
-		{
-			if(\Bitrix\Main\Loader::includeModule('faceId'))
-			{
-				if($request['action'] == 'acceptAgreement' && \Bitrix\FaceId\FaceCard::licenceIsRestricted() === false)
-				{
-					if(\Bitrix\FaceId\FaceCard::agreementIsAccepted($USER->GetID()) === false)
-					{
-						\Bitrix\Faceid\AgreementTable::add([
-							'USER_ID' => $USER->GetID(),
-							'NAME' => $USER->GetFullName(),
-							'EMAIL' => $USER->GetEmail(),
-							'DATE' => new \Bitrix\Main\Type\DateTime,
-							'IP_ADDRESS' => \Bitrix\Main\Context::getCurrent()->getRequest()->getRemoteAddress()
-						]);
-					}
-
-					$APPLICATION->RestartBuffer();
-
-					Header('Content-Type: application/json');
-					echo \Bitrix\Main\Web\Json::encode([
-						'success' => true
-					]);
-					\CMain::FinalActions();
-					die();
-				}
-			}
-		}
+		global $USER;
 
 		$componentPage = '';
 		$arDefaultUrlTemplates404 = [
@@ -119,17 +89,6 @@ class OnecStartComponent extends CBitrixComponent
 
 		switch ($componentPage)
 		{
-			case 'facecard':
-				$this->arResult['RESTRICTED_LICENCE'] = \Bitrix\FaceId\FaceCard::licenceIsRestricted();
-				$this->arResult['LICENSE_ACCEPTED'] = (
-					$componentPage !== 'facecard'
-					|| \Bitrix\FaceId\FaceCard::agreementIsAccepted($USER->GetID())
-				);
-				$this->arResult['LICENSE_TEXT'] = \Bitrix\Faceid\AgreementTable::getAgreementText(true);
-				break;
-		}
-		switch ($componentPage)
-		{
 			case 'realtime':
 			case 'tracker':
 			case 'report':
@@ -150,37 +109,8 @@ class OnecStartComponent extends CBitrixComponent
 				$this->arResult['INTEGRATION_TILE_ID'] = 'crm-onec-integration';
 				$this->arResult['PLACEMENT_ITEMS_ID'] = 'crm-onec-placement';
 				$this->arResult['PLACEMENT_ITEMS'] = [];
-
-				$appSettings = COption::GetOptionString(
-					'rest',
-					'options_' . \Bitrix\Rest\AppTable::getByClientId(\CRestUtil::BITRIX_1C_APP_CODE)['CLIENT_ID'],
-					''
-				);
-				if (!empty($appSettings))
-				{
-					$appSettings = unserialize($appSettings, ['allowed_classes' => false]);
-				}
-
 				$this->arResult['ITEMS'] = [];
 				$this->arResult['INTEGRATION_ITEMS'] = [];
-
-				if (
-					\Bitrix\Main\ModuleManager::isModuleInstalled('rest')
-					&& \Bitrix\Main\Loader::includeModule('faceId')
-					&& \Bitrix\FaceId\FaceId::isAvailable()
-				)
-				{
-					$this->arResult['ITEMS'][] = [
-						'id' => 'facecard',
-						'name' => Loc::getMessage('CRM_1C_START_FACE_CARD'),
-						'iconClass' => 'ui-icon ui-icon-service-1c',
-						'iconColor' => '',
-						'selected' => isset($appSettings['facecard']) && $appSettings['facecard'] == 'Y' ? true : false,
-						'data' => [
-							'url' => '/onec/facecard/'
-						],
-					];
-				}
 
 				$exch1cEnabled = COption::GetOptionString('crm', 'crm_exch1c_enable', 'N');
 				if ($exch1cEnabled)
@@ -408,18 +338,6 @@ class OnecStartComponent extends CBitrixComponent
 
 				break;
 			case 'facecard':
-				if(\Bitrix\Main\Loader::includeModule('faceId') && !\Bitrix\FaceId\FaceId::isAvailable())
-				{
-					$error[] = 'faceCard';
-					$redirectUrl = 'tracker/';
-				}
-
-				if(!\Bitrix\Main\Loader::includeModule('faceId'))
-				{
-					$error[] = 'faceId';
-					$redirectUrl = 'tracker/';
-				}
-
 				if(!\Bitrix\Main\Loader::includeModule('rest'))
 				{
 					$error[] = 'rest';

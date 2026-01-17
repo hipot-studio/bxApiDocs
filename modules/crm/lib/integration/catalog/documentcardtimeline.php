@@ -15,7 +15,8 @@ class DocumentCardTimeline
 	{
 		\Bitrix\Main\Page\Asset::getInstance()->addJs('/bitrix/js/crm/common.js');
 
-		$documentId = $event->getParameter('DOCUMENT_ID');
+		$rawDocumentId = $event->getParameter('DOCUMENT_ID');
+		$documentId = (string)$rawDocumentId;
 		$documentFields = $event->getParameter('DOCUMENT_FIELDS');
 		$guid = str_replace('#ID#', $documentId, self::TIMELINE_GUID_TEMPLATE);
 		$editorId = str_replace('#ID#', $documentId, self::EDITOR_GUID_TEMPLATE);
@@ -33,15 +34,15 @@ class DocumentCardTimeline
 		];
 
 		$entityInfo = [
-			'ENTITY_ID' => $documentId,
+			'ENTITY_ID' => $rawDocumentId,
 			'ENTITY_TYPE_ID' => \CCrmOwnerType::StoreDocument,
 			'ENTITY_TYPE_NAME' => \CCrmOwnerType::StoreDocumentName,
-			'TITLE' => $documentFields['TITLE']
+			'TITLE' => $documentFields['TITLE'] ?? ''
 		];
 
 		$timelineParams = [
 			'GUID' => $guid,
-			'ENTITY_ID' => $documentId,
+			'ENTITY_ID' => $rawDocumentId,
 			'ENTITY_TYPE_ID' => \CCrmOwnerType::StoreDocument,
 			'ENTITY_TYPE_NAME' => \CCrmOwnerType::StoreDocumentName,
 			'ENTITY_INFO' => $entityInfo,

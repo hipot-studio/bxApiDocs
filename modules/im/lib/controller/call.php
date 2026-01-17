@@ -62,20 +62,21 @@ class Call extends Engine\Controller
 			$call = CallFactory::searchActive($type, $provider, $entityType, $entityId);
 		}
 
+		// Check if target user is busy (for PROVIDER_PLAIN)
+		$targetUserIsBusy = false;
 		if (!$call && ($provider == \Bitrix\Im\Call\Call::PROVIDER_PLAIN))
 		{
 			if (CallFactory::hasUserActiveCalls((int)$entityId))
 			{
+				$targetUserIsBusy = true;
+
+				// Send busy notification to initiator
 				$chat = ChatFactory::getInstance()->getPrivateChat($currentUserId, (int)$entityId);
 				if ($chat->getId() > 0)
 				{
 					$notifyService = NotifyService::getInstance();
 					$notifyService->sendOpponentBusyMessage($currentUserId, (int)$entityId);
 				}
-
-				$this->addError(new Error('User is currently busy on another call', 'user_is_busy'));
-				Application::getConnection()->unlock($lockName);
-				return null;
 			}
 		}
 
@@ -161,11 +162,26 @@ class Call extends Engine\Controller
 				}
 
 				$initiator = $call->getUser($currentUserId);
+				$initiator->updateState(CallUser::STATE_READY);
 				$initiator->update([
-					'STATE' => CallUser::STATE_READY,
 					'LAST_SEEN' => new DateTime(),
 					'FIRST_JOINED' => new DateTime()
 				]);
+
+				// If target user is busy, add them to call with STATE_BUSY and finish immediately
+				if ($targetUserIsBusy && $provider == \Bitrix\Im\Call\Call::PROVIDER_PLAIN)
+				{
+					$targetUserId = (int)$entityId;
+					$targetUser = $call->addUser($targetUserId);
+					if ($targetUser)
+					{
+						$targetUser->updateState(CallUser::STATE_BUSY);
+					}
+
+					// Finish call immediately so it won't be found by searchActive next time
+					$call->setActionUserId($currentUserId)->finish();
+				}
+
 			}
 		}
 		catch(\Exception $e)
@@ -180,6 +196,13 @@ class Call extends Engine\Controller
 		}
 
 		Application::getConnection()->unlock($lockName);
+
+		// Return error if target user is busy (but call was already created for logging)
+		if ($targetUserIsBusy && $provider == \Bitrix\Im\Call\Call::PROVIDER_PLAIN)
+		{
+			$this->addError(new Error('User is currently busy on another call', 'user_is_busy'));
+			return null;
+		}
 
 		return $this->formatCallResponse($call, 0, $isNew);
 	}
@@ -561,8 +584,8 @@ class Call extends Engine\Controller
 				return null;
 			}
 
+			$callUser->updateState(CallUser::STATE_READY);
 			$callUser->update([
-				'STATE' => CallUser::STATE_READY,
 				'LAST_SEEN' => new DateTime(),
 				'FIRST_JOINED' => $callUser->getFirstJoined() ?: new DateTime(),
 				'IS_MOBILE' => $isLegacyMobile ? 'Y' : 'N',

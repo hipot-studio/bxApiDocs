@@ -54,6 +54,11 @@ final class StagesCollector implements ContextCollector
 			return [];
 		}
 
+		if (!$this->canReadStages())
+		{
+			return [];
+		}
+
 		$additionalData = $this->getAdditionalData();
 
 		$result = [];
@@ -145,5 +150,12 @@ final class StagesCollector implements ContextCollector
 		}
 
 		return $result;
+	}
+
+	private function canReadStages(): bool
+	{
+		return $this->permissions->isAdminForEntity($this->entityTypeId, $this->categoryId)
+			|| $this->permissions->entityType()->canReadItemsInCategory($this->entityTypeId, $this->categoryId ?? 0)
+		;
 	}
 }

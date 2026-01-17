@@ -65,7 +65,7 @@ class Lang
 			$langList = static::listLanguage();
 			foreach ($langList as $lang)
 			{
-				if (is_array($data[static::KEY_LANG_ALL][$lang]))
+				if (!empty($data[static::KEY_LANG_ALL][$lang])  && is_array($data[static::KEY_LANG_ALL][$lang]))
 				{
 					$useLang = $lang;
 					break;

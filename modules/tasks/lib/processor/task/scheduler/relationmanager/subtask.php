@@ -103,14 +103,17 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 			if($current)
 			{
 				// MODIFY SUBTREE: if it is a "bracket" task, it will shift its subtree
-				if($current['INHERIT_DATES'] == 'Y')
+				if(
+					($current['INHERIT_DATES'] === 'Y' || ($settings['INHERIT_FOR'][$id] ?? null) === true)
+					&& ($settings['INHERIT_FOR'][$id] ?? null) !== false
+				)
 				{
 					$this->shiftSubTree($rootImpact, $parentTreeFragment);
 				}
 			}
 
 			// MODIFY PATH: for each task we need to calculate min and max dates of its sub-tasks
-			$this->resizeBrackets($parentTreeFragment);
+			$this->resizeBrackets($parentTreeFragment, $settings);
 		}
 	}
 
@@ -244,12 +247,12 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 	 * @param Fragment $fragment
 	 * @return array
 	 */
-	public function getInitialBoundaries($id, $fragment)
+	public function getInitialBoundaries($id, $fragment, array $settings = [])
 	{
-		return $this->internalGetInitialBoundaries($id, $fragment);
+		return $this->internalGetInitialBoundaries($id, $fragment, $settings);
 	}
 
-	private function internalGetInitialBoundaries($id, $fragment)
+	private function internalGetInitialBoundaries($id, $fragment, array $settings = [])
 	{
 		$min = null;
 		$max = null;
@@ -257,7 +260,7 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 		$impactData = $this->getScheduler()->getImpactById($id);
 		$nodeData = $fragment->getNodeData($id);
 
-		if(!static::isBracketTaskData($impactData) && !static::isBracketTaskData($nodeData))
+		if(!static::isBracketTaskData($impactData, $id, $settings) && !static::isBracketTaskData($nodeData, $id, $settings))
 		{
 			$data = $nodeData;
 			if($impactData)
@@ -275,14 +278,17 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 		);
 	}
 
-	private static function isBracketTaskData($data)
+	private static function isBracketTaskData($data, $id, array $settings = [])
 	{
 		if(!is_array($data) && !is_object($data))
 		{
 			return false;
 		}
 
-		if($data['INHERIT_DATES'] == 'Y')
+		if(
+			($data['INHERIT_DATES'] === 'Y' || ($settings['INHERIT_FOR'][$id] ?? null) === true)
+			&& ($settings['INHERIT_FOR'][$id] ?? null) !== false
+		)
 		{
 			return true;
 		}
@@ -302,7 +308,7 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 		return false;
 	}
 
-	private function resizeBrackets(Fragment $fragment)
+	private function resizeBrackets(Fragment $fragment, array $settings = [])
 	{
 		$scheduler = $this->getScheduler();
 
@@ -310,14 +316,14 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 
 		$miniMaxes = array();
 		$self = &$this; // [BUGS] 0083454
-		$walkResult = $fragment->walkDepth(function($item, $id, $itemData, $parentId) use (&$miniMaxes, $scheduler, $fragment, $debug, $self) {
+		$walkResult = $fragment->walkDepth(function($item, $id, $itemData, $parentId) use (&$miniMaxes, $scheduler, $fragment, $debug, $self, $settings) {
 
 			$debug && _print_r('After ID = '.$id);
 
 			if(!isset($miniMaxes[$parentId]))
 			{
 				// get from fragment or impact
-				$miniMaxes[$parentId] = $self->getInitialBoundaries($parentId, $fragment);
+				$miniMaxes[$parentId] = $self->getInitialBoundaries($parentId, $fragment, $settings);
 				$debug && _print_r('---------- initialized '.$parentId.' '.((string) $miniMaxes[$parentId]['MIN']).' : '.((string) $miniMaxes[$parentId]['MAX']).')');
 			}
 
@@ -373,7 +379,11 @@ final class SubTask extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 
 			/** @var DateTime[]|mixed[] $taskData */
 			$taskData = $fragment->getNodeData($taskId);
-			if($taskData['INHERIT_DATES'] == 'Y') // resize only "bracket" tasks
+
+			if(
+				($taskData['INHERIT_DATES'] === 'Y' || ($settings['INHERIT_FOR'][$taskId] ?? null) === true)
+				&& ($settings['INHERIT_FOR'][$taskId] ?? null) !== false
+			) // resize only "bracket" tasks
 			{
 				$impact = $scheduler->getImpactById($taskId);
 				if($impact)

@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\ExternalSource\Source;
 
+use Bitrix\BIConnector\ExternalSource\DatasetManager;
 use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRest;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector;
@@ -260,6 +261,8 @@ class Rest extends Base
 		$query = array_intersect_key($query, array_flip(['limit', 'filter', 'select']));
 		$query = $this->fillConnectionSettings($query);
 		$query['table'] = $tableName;
+		$mapFields = $this->getMapFields($tableName, $query['select'] ?? []);
+		$query['mapFields'] = $mapFields;
 
 		return $this->query($this->source->getConnector()?->getUrlData(), $query);
 	}
@@ -272,7 +275,10 @@ class Rest extends Base
 	 */
 	public function getFirstNData(string $entityName, int $n, array $fields = []): array
 	{
-		$fieldsForCacheKey = implode(',', array_keys($fields));
+		$fieldsForCacheKey =
+			implode(',', array_keys($fields))
+			. implode(',', array_values($fields))
+		;
 		$cacheKey = "biconnector_rest_preview_data_{$entityName}_{$n}_{$this->source->getSourceId()}_{$fieldsForCacheKey}";
 		$cacheManager = \Bitrix\Main\Application::getInstance()->getManagedCache();
 
@@ -445,5 +451,12 @@ class Rest extends Base
 		$queryFields['connection'] = $settingFields;
 
 		return $queryFields;
+	}
+
+	private function getMapFields(string $tableName, array $select): array
+	{
+		$mapFields = DatasetManager::getMapFieldsByTableName($tableName);
+
+		return $select ? array_intersect($mapFields, $select) : $mapFields;
 	}
 }

@@ -80,9 +80,16 @@ class ReactionMessage implements RestConvertible, PopupDataAggregatable
 		return $this->messageId;
 	}
 
+
+	/**
+	 * Micro-optimization: if all reactions have counters <= COUNT_DISPLAYED_USERS,
+	 * ownReactions are already filled in ReactionMessages::fillUsers().
+	 *
+	 * @return bool
+	 */
 	public function needToFillOwnReactions(): bool
 	{
-		return empty($this->ownReactions) && $this->haveUndisplayedUsers;
+		return $this->haveUndisplayedUsers;
 	}
 
 	public function haveReactions(): bool
@@ -97,7 +104,7 @@ class ReactionMessage implements RestConvertible, PopupDataAggregatable
 
 	public function toRestFormat(array $option = []): array
 	{
-		$converter = new Converter(Converter::KEYS | Converter::VALUES | Converter::TO_LOWER | Converter::LC_FIRST);
+		$converter = new Converter(Converter::KEYS | Converter::VALUES | Converter::TO_CAMEL | Converter::LC_FIRST);
 		$rest = [
 			'messageId' => $this->messageId,
 			'reactionCounters' => $converter->process($this->reactionCounters),
@@ -106,7 +113,8 @@ class ReactionMessage implements RestConvertible, PopupDataAggregatable
 
 		if (!isset($option['WITHOUT_OWN_REACTIONS']) || $option['WITHOUT_OWN_REACTIONS'] === false)
 		{
-			$rest['ownReactions'] = $converter->process($this->ownReactions);
+			$ownReactions = array_values(array_unique($this->ownReactions));
+			$rest['ownReactions'] = $converter->process($ownReactions);
 		}
 
 		return $rest;

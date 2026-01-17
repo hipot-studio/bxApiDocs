@@ -4,20 +4,28 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
-use Bitrix\Main\Type\Collection;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Validation\Rule\NotEmpty;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Duration;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ElapsedTime;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Gantt\LinkType;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Mark;
-use Bitrix\Tasks\V2\Internal\Entity\Task\Priority;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ReminderCollection;
+use Bitrix\Tasks\V2\Internal\Entity\Task\ScenarioCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
+use Bitrix\Tasks\V2\Internal\Entity\Task\TimerCollection;
+use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Source;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Entity\Chat;
+use Bitrix\Tasks\V2\Internal\Integration\Mail\Entity\Email;
+use Bitrix\Tasks\V2\Internal\Service\Task\Role;
 
+/**
+ * @method Task cloneWith(array $props)
+ */
 class Task extends AbstractEntity
 {
 	use MapTypeTrait;
@@ -27,6 +35,7 @@ class Task extends AbstractEntity
 		#[NotEmpty(allowZero: true)]
 		public readonly ?string $title = null,
 		public readonly ?string $description = null,
+		public readonly ?string $descriptionChecksum = null,
 		#[NotEmpty]
 		#[Validatable]
 		public readonly ?User $creator = null,
@@ -44,6 +53,8 @@ class Task extends AbstractEntity
 		#[Validatable]
 		public readonly ?Group $group = null,
 		public readonly ?Stage $stage = null,
+		public readonly ?int $epicId = null,
+		public readonly ?string $storyPoints = null,
 		#[Validatable]
 		public readonly ?Flow $flow = null,
 		public readonly ?Priority $priority = null,
@@ -58,13 +69,19 @@ class Task extends AbstractEntity
 		public readonly ?bool $containsSubTasks = null,
 		public readonly ?bool $containsRelatedTasks = null,
 		public readonly ?bool $containsGanttLinks = null,
+		public readonly ?bool $containsPlacements = null,
+		public readonly ?int $numberOfReminders = null,
+		public readonly ?TimerCollection $timers = null,
+		public readonly ?int $timeSpent = null,
 		public readonly ?int $chatId = null,
+		public readonly ?Chat $chat = null,
 		public readonly ?int $plannedDuration = null,
 		public readonly ?int $actualDuration = null,
 		public readonly ?Duration $durationType = null,
 		public readonly ?int $startedTs = null,
 		public readonly ?int $estimatedTime = null,
 		public readonly ?bool $replicate = null,
+		public readonly ?ReplicateParams $replicateParams = null,
 		public readonly ?int $changedTs = null,
 		#[Validatable]
 		public readonly ?User $changedBy = null,
@@ -101,6 +118,7 @@ class Task extends AbstractEntity
 		public readonly ?CrmItemCollection $crmItems = null,
 		public readonly ?ReminderCollection $reminders = null,
 		public readonly ?ElapsedTime $elapsedTime = null,
+		public readonly ?int $numberOfElapsedTimes = null,
 		public readonly ?bool $requireResult = null,
 		public readonly ?bool $matchesSubTasksTime = null,
 		public readonly ?bool $autocompleteSubTasks = null,
@@ -112,6 +130,14 @@ class Task extends AbstractEntity
 		public readonly ?Source $source = null,
 		public readonly ?array $dependsOn = null,
 		public readonly ?array $ganttLinks = null,
+		public readonly ?bool $containsResults = null,
+		public readonly ?Email $email = null,
+		public readonly ?DateTime $maxDeadlineChangeDate = null,
+		public readonly ?int $maxDeadlineChanges = null,
+		public readonly ?bool $requireDeadlineChangeReason = null,
+		public ?string $deadlineChangeReason = null,
+		public readonly ?UserCollection $multiResponsibles = null,
+		public ?ScenarioCollection $scenarios = null,
 	) {
 
 	}
@@ -121,25 +147,52 @@ class Task extends AbstractEntity
 		return $this->id;
 	}
 
+	public function getMembers(
+		array $roles = [Role::Creator, Role::Responsible, Role::Accomplice, Role::Auditor]
+	): UserCollection
+	{
+		$members = new UserCollection();
+		if ($this->creator !== null && in_array(Role::Creator, $roles, true))
+		{
+			$members->add($this->creator);
+		}
+		if ($this->responsible !== null && in_array(Role::Responsible, $roles, true))
+		{
+			$members->add($this->responsible);
+		}
+		if ($this->accomplices !== null && in_array(Role::Accomplice, $roles, true))
+		{
+			$members->merge($this->accomplices);
+		}
+		if ($this->auditors !== null && in_array(Role::Auditor, $roles, true))
+		{
+			$members->merge($this->auditors);
+		}
+
+		return $members->unique();
+	}
+
 	public function getMemberIds(): array
 	{
-		$memberIds = array_merge(
-			[$this->creator?->getId(), $this->responsible?->getId()],
-			$this->accomplices?->getIds() ?? [],
-			$this->auditors?->getIds() ?? [],
-		);
-
-		Collection::normalizeArrayValuesByInt($memberIds);
-
-		return $memberIds;
+		return $this->getMembers()->getIdList();
 	}
 
 	public static function mapFromArray(array $props): static
 	{
+		if (isset($props['maxDeadlineChangeDate']) && is_string($props['maxDeadlineChangeDate']))
+		{
+			try
+			{
+				$props['maxDeadlineChangeDate'] = new DateTime($props['maxDeadlineChangeDate']);
+			}
+			catch (\Exception) {}
+		}
+
 		return new static(
 			id: static::mapInteger($props, 'id'),
 			title: static::mapString($props, 'title'),
 			description: static::mapString($props, 'description'),
+			descriptionChecksum: static::mapString($props, 'descriptionChecksum'),
 			creator: static::mapEntity($props, 'creator', User::class),
 			createdTs: static::mapInteger($props, 'createdTs'),
 			responsible: static::mapEntity($props, 'responsible', User::class),
@@ -152,6 +205,8 @@ class Task extends AbstractEntity
 			checklist: static::mapArray($props, 'checklist'),
 			group: static::mapEntity($props, 'group', Group::class),
 			stage: static::mapEntity($props, 'stage', Stage::class),
+			epicId: static::mapInteger($props, 'epicId'),
+			storyPoints: static::mapString($props, 'storyPoints'),
 			flow: static::mapEntity($props, 'flow', Flow::class),
 			priority: static::mapBackedEnum($props, 'priority', Priority::class),
 			status: static::mapBackedEnum($props, 'status', Status::class),
@@ -163,13 +218,19 @@ class Task extends AbstractEntity
 			containsSubTasks: static::mapBool($props, 'containsSubTasks'),
 			containsRelatedTasks: static::mapBool($props, 'containsRelatedTasks'),
 			containsGanttLinks: static::mapBool($props, 'containsGanttLinks'),
+			containsPlacements: static::mapBool($props, 'containsPlacements'),
+			numberOfReminders: static::mapInteger($props, 'numberOfReminders'),
+			timers: static::mapEntityCollection($props, 'timers', TimerCollection::class),
+			timeSpent: static::mapInteger($props, 'timeSpent'),
 			chatId: static::mapInteger($props, 'chatId'),
+			chat: static::mapEntity($props, 'chat', Chat::class),
 			plannedDuration: static::mapInteger($props, 'plannedDuration'),
 			actualDuration: static::mapInteger($props, 'actualDuration'),
 			durationType: static::mapBackedEnum($props, 'durationType', Duration::class),
 			startedTs: static::mapInteger($props, 'startedTs'),
 			estimatedTime: static::mapInteger($props, 'estimatedTime'),
 			replicate: static::mapBool($props, 'replicate'),
+			replicateParams: static::mapValueObject($props, 'replicateParams', ReplicateParams::class),
 			changedTs: static::mapInteger($props, 'changedTs'),
 			changedBy: static::mapEntity($props, 'changedBy', User::class),
 			statusChangedBy: static::mapEntity($props, 'statusChangedBy', User::class),
@@ -202,6 +263,7 @@ class Task extends AbstractEntity
 			crmItems: static::mapEntityCollection($props, 'crmItems', CrmItemCollection::class),
 			reminders: static::mapEntityCollection($props, 'reminders', ReminderCollection::class),
 			elapsedTime: static::mapEntity($props, 'elapsedTime', ElapsedTime::class),
+			numberOfElapsedTimes: static::mapInteger($props, 'numberOfElapsedTimes'),
 			requireResult: static::mapBool($props, 'requireResult'),
 			matchesSubTasksTime: static::mapBool($props, 'matchesSubTasksTime'),
 			autocompleteSubTasks: static::mapBool($props, 'autocompleteSubTasks'),
@@ -213,6 +275,14 @@ class Task extends AbstractEntity
 			source: static::mapValueObject($props, 'source', Source::class),
 			dependsOn: static::mapArray($props, 'dependsOn', 'intval'),
 			ganttLinks: static::mapArray($props, 'ganttLinks', static fn (mixed $value): ?LinkType => is_string($value) ? LinkType::tryFrom($value) : null),
+			containsResults: static::mapBool($props, 'containsResults'),
+			email: static::mapEntity($props, 'email', Email::class),
+			maxDeadlineChangeDate: static::mapDateTime($props, 'maxDeadlineChangeDate'),
+			maxDeadlineChanges: static::mapInteger($props, 'maxDeadlineChanges'),
+			requireDeadlineChangeReason: static::mapBool($props, 'requireDeadlineChangeReason'),
+			deadlineChangeReason: static::mapString($props, 'deadlineChangeReason'),
+			multiResponsibles: static::mapEntityCollection($props, 'multiResponsibles', UserCollection::class),
+			scenarios: static::mapBackedEnumCollection($props, 'scenarios', ScenarioCollection::class),
 		);
 	}
 
@@ -222,6 +292,7 @@ class Task extends AbstractEntity
 			'id' => $this->id,
 			'title' => $this->title,
 			'description' => $this->description,
+			'descriptionChecksum' => $this->descriptionChecksum,
 			'creator' => $this->creator?->toArray(),
 			'createdTs' => $this->createdTs,
 			'responsible' => $this->responsible?->toArray(),
@@ -234,6 +305,8 @@ class Task extends AbstractEntity
 			'checklist' => $this->checklist,
 			'group' => $this->group?->toArray(),
 			'stage' => $this->stage?->toArray(),
+			'epicId' => $this->epicId,
+			'storyPoints' => $this->storyPoints,
 			'flow' => $this->flow?->toArray(),
 			'priority' => $this->priority?->value,
 			'status' => $this->status?->value,
@@ -245,13 +318,17 @@ class Task extends AbstractEntity
 			'containsSubTasks' => $this->containsSubTasks,
 			'containsRelatedTasks' => $this->containsRelatedTasks,
 			'containsGanttLinks' => $this->containsGanttLinks,
+			'containsPlacements' => $this->containsPlacements,
+			'numberOfReminders' => $this->numberOfReminders,
 			'chatId' => $this->chatId,
+			'chat' => $this->chat?->toArray(),
 			'plannedDuration' => $this->plannedDuration,
 			'actualDuration' => $this->actualDuration,
 			'durationType' => $this->durationType?->value,
 			'startedTs' => $this->startedTs,
 			'estimatedTime' => $this->estimatedTime,
 			'replicate' => $this->replicate,
+			'replicateParams' => $this->replicateParams,
 			'changedTs' => $this->changedTs,
 			'statusChangedBy' => $this->statusChangedBy?->toArray(),
 			'changedBy' => $this->changedBy?->toArray(),
@@ -284,6 +361,9 @@ class Task extends AbstractEntity
 			'crmItems' => $this->crmItems?->toArray(),
 			'reminders' => $this->reminders?->toArray(),
 			'elapsedTime' => $this->elapsedTime?->toArray(),
+			'timers' => $this->timers,
+			'timeSpent' => $this->timeSpent,
+			'numberOfElapsedTimes' => $this->numberOfElapsedTimes,
 			'requireResult' => $this->requireResult,
 			'matchesSubTasksTime' => $this->matchesSubTasksTime,
 			'autocompleteSubTasks' => $this->autocompleteSubTasks,
@@ -295,6 +375,14 @@ class Task extends AbstractEntity
 			'source' => $this->source?->toArray(),
 			'dependsOn' => $this->dependsOn,
 			'ganttLinks' => $this->ganttLinks,
+			'containsResults' => $this->containsResults,
+			'email' => $this->email?->toArray(),
+			'maxDeadlineChangeDate' => $this->maxDeadlineChangeDate?->format(DateTime::getFormat()),
+			'maxDeadlineChanges' => $this->maxDeadlineChanges,
+			'requireDeadlineChangeReason' => $this->requireDeadlineChangeReason,
+			'deadlineChangeReason' => $this->deadlineChangeReason,
+			'multiResponsibles' => $this->multiResponsibles?->toArray(),
+			'scenarios' => $this->scenarios?->toArray(),
 		];
 	}
 }

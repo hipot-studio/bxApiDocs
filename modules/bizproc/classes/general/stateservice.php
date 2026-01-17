@@ -4,10 +4,12 @@ use Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 
 class CBPStateService extends CBPRuntimeService
 {
-	const COUNTERS_CACHE_TAG_PREFIX = 'b_bp_wfi_cnt_';
+	public const COUNTERS_CACHE_TAG_PREFIX = 'b_bp_wfi_cnt_';
+	private const NEW_STATE_VALUE = 'Queued';
 
 	protected static array $statesCache = [];
 
@@ -101,7 +103,7 @@ class CBPStateService extends CBPRuntimeService
 		return false;
 	}
 
-	public function	AddWorkflow($workflowId, $workflowTemplateId, $documentId, $starterUserId = 0)
+	public function	addWorkflow($workflowId, $workflowTemplateId, $documentId, $starterUserId = 0)
 	{
 		$docId = CBPHelper::ParseDocumentId($documentId);
 
@@ -132,6 +134,8 @@ class CBPStateService extends CBPRuntimeService
 			'DOCUMENT_ID_INT' => (int)$docId[2],
 			'WORKFLOW_TEMPLATE_ID' => $workflowTemplateId,
 			'STARTED_BY' => $starterUserId ?: null,
+			'STATE' => self::NEW_STATE_VALUE,
+			'STATE_TITLE' => Loc::getMessage('BP_STATE_SERVICE_QUEUED_STATE_TITLE'),
 		]);
 
 		if ($starterUserId > 0 && $addResult->isSuccess())
@@ -543,8 +547,10 @@ class CBPStateService extends CBPRuntimeService
 		$state = trim($arState["STATE"]);
 		$stateTitle = trim($arState["TITLE"]);
 		$stateParameters = "";
-		if (count($arState["PARAMETERS"]) > 0)
-			$stateParameters = serialize($arState["PARAMETERS"]);
+		if (count($arState['PARAMETERS'] ?? []) > 0)
+		{
+			$stateParameters = serialize($arState['PARAMETERS']);
+		}
 
 		$DB->Query(
 			"UPDATE b_bp_workflow_state SET ".

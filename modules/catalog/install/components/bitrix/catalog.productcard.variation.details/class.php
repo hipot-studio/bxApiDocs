@@ -252,23 +252,25 @@ class CatalogProductVariationDetailsComponent
 					$propertyType = $property->getPropertyType();
 				}
 
-				// grid file properties
-				if (!empty($fields[$name.'_custom']['isFile']))
-				{
-					$field = $this->prepareFilePropertyFromGrid($fields[$name.'_custom']);
-					if (empty($field))
-					{
-						$field = '';
-					}
-					unset($fields[$name.'_custom']);
-				}
 				// editor file properties
-				elseif ($propertyType === PropertyTable::TYPE_FILE)
+				if ($propertyType === PropertyTable::TYPE_FILE)
 				{
 					$descriptions = $fields[$name.'_descr'] ?? [];
 					$deleted = $fields[$name.'_del'] ?? [];
 
-					$editorFiles = $this->prepareFilePropertyFromEditor($fields[$name] ?? [], $descriptions, $deleted);
+					if (isset($fields[$name . '_tile_widget']))
+					{
+						$controlId = BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader';
+						if (in_array($index, $this->filePropertyIdsFromGrid))
+						{
+							$controlId = BaseForm::GRID_FIELD_PREFIX . $controlId;
+						}
+						$field = $fields[$name . '_tile_widget'];
+						$field = $this->getForm()->parseTileWidgetFileField($property, $controlId, $field);
+
+						unset($fields[$name . '_tile_widget']);
+					}
+					$editorFiles = $this->prepareFilePropertyFromEditor($field ?? [], $descriptions, $deleted);
 					$editorFiles = array_column($editorFiles ?? [], 'VALUE');
 					$checkedField = [];
 
@@ -295,20 +297,8 @@ class CatalogProductVariationDetailsComponent
 								$checkedField[] = $editorFile; // array file ['tmp_name', 'size', ...], no need to check
 							}
 						}
+						$field = $checkedField;
 					}
-					else
-					{
-						$controlId = BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader';
-						if (in_array($index, $this->filePropertyIdsFromGrid))
-						{
-							$controlId = BaseForm::GRID_FIELD_PREFIX . $controlId;
-						}
-						$checkedField = \Bitrix\Main\UI\FileInputUtility::instance()->checkFiles(
-							$controlId,
-							$editorFiles
-						);
-					}
-					$field = $checkedField;
 					if (empty($field))
 					{
 						$field = '';
@@ -714,63 +704,63 @@ class CatalogProductVariationDetailsComponent
 
 			if ($variation)
 			{
-				$this->parseGridFields($fields);
-				$propertyFields = $this->parsePropertyFields($fields);
-				$this->checkCompatiblePictureFields($variation, $propertyFields);
-				$priceFields = $this->parsePriceFields($fields);
-				$measureRatioField = $this->parseMeasureRatioFields($fields);
-
-				if (!empty($fields))
-				{
-					$this->prepareDescriptionFields($fields);
-					$this->preparePictureFields($fields);
-					$this->prepareCatalogFields($fields);
-					$this->prepareDateFields($fields);
-
-					if (isset($fields['PURCHASING_PRICE']))
-					{
-						if (is_string($fields['PURCHASING_PRICE']))
-						{
-							$fields['PURCHASING_PRICE'] = str_replace(
-								',', '.', trim($fields['PURCHASING_PRICE'])
-							);
-						}
-						if ($fields['PURCHASING_PRICE'] === '')
-						{
-							$fields['PURCHASING_PRICE'] = null;
-						}
-					}
-
-					$variation->setFields($fields);
-
-					if (isset($fields['BARCODE']))
-					{
-						$variation
-							->getBarcodeCollection()
-							->setSimpleBarcodeValue($fields['BARCODE'])
-						;
-					}
-				}
-
-				if (!empty($propertyFields))
-				{
-					$variation->getPropertyCollection()->setValues($propertyFields);
-				}
-
-				if (!empty($priceFields) && $this->getForm()->isPricesEditable())
-				{
-					$variation->getPriceCollection()->setValues($priceFields);
-				}
-
-				if (!empty($measureRatioField))
-				{
-					$variation->getMeasureRatioCollection()->setDefault($measureRatioField);
-				}
-
 				$connection = Application::getConnection();
 				$connection->startTransaction();
+
 				try
 				{
+					$this->parseGridFields($fields);
+					$propertyFields = $this->parsePropertyFields($fields);
+					$this->checkCompatiblePictureFields($variation, $propertyFields);
+					$priceFields = $this->parsePriceFields($fields);
+					$measureRatioField = $this->parseMeasureRatioFields($fields);
+
+					if (!empty($fields))
+					{
+						$this->prepareDescriptionFields($fields);
+						$this->preparePictureFields($fields);
+						$this->prepareCatalogFields($fields);
+						$this->prepareDateFields($fields);
+
+						if (isset($fields['PURCHASING_PRICE']))
+						{
+							if (is_string($fields['PURCHASING_PRICE']))
+							{
+								$fields['PURCHASING_PRICE'] = str_replace(
+									',', '.', trim($fields['PURCHASING_PRICE'])
+								);
+							}
+							if ($fields['PURCHASING_PRICE'] === '')
+							{
+								$fields['PURCHASING_PRICE'] = null;
+							}
+						}
+
+						$variation->setFields($fields);
+
+						if (isset($fields['BARCODE']))
+						{
+							$variation
+								->getBarcodeCollection()
+								->setSimpleBarcodeValue($fields['BARCODE'])
+							;
+						}
+					}
+
+					if (!empty($propertyFields))
+					{
+						$variation->getPropertyCollection()->setValues($propertyFields);
+					}
+
+					if (!empty($priceFields) && $this->getForm()->isPricesEditable())
+					{
+						$variation->getPriceCollection()->setValues($priceFields);
+					}
+
+					if (!empty($measureRatioField))
+					{
+						$variation->getMeasureRatioCollection()->setDefault($measureRatioField);
+					}
 					$result = $variation->save();
 				}
 				catch (SqlQueryException)

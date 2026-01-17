@@ -9,6 +9,7 @@ enum View: string
 	public const STATE_PARAMETER  = 'F_STATE';
 
 	case LIST = 'sV80';
+	case CHAT = 'sVag';
 	case KANBAN = 'sVo0';
 	case TIMELINE = 'sV100';
 	case PLAN = 'sV180';

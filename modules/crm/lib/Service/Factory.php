@@ -14,9 +14,11 @@ use Bitrix\Crm\Currency;
 use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\EO_Status_Collection;
 use Bitrix\Crm\Field;
+use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Service\EventHistory\TrackedObject;
 use Bitrix\Crm\Service\Operation\Action\Compatible\SocialNetwork\ProcessSendNotification;
@@ -38,6 +40,7 @@ use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\UserField;
+use CCrmOwnerType;
 
 abstract class Factory
 {
@@ -49,7 +52,6 @@ abstract class Factory
 	protected $userType;
 	protected $editorAdapter;
 	protected $isParentFieldsAdded = false;
-	protected bool $isRecurringMode = false;
 	protected $itemsCategoryCache = [];
 	private array $itemsStageCache = [];
 
@@ -201,16 +203,6 @@ abstract class Factory
 			$item->addImplementation(new Item\FieldImplementation\File($entityObject, $fileFields, $this->getFieldsMap()));
 		}
 
-		if ($this->isRecurringEnabled())
-		{
-			$item->addImplementation(
-				new Item\FieldImplementation\Recurring(
-					$this->getEntityTypeId(),
-					$item->getId(),
-				),
-			);
-		}
-
 		if ($item->isCategoriesSupported())
 		{
 			$item->refreshCategoryDependentDisabledFields();
@@ -247,7 +239,7 @@ abstract class Factory
 		if (ParentFieldManager::isParentFieldName($commonFieldName))
 		{
 			$parentEntityTypeId = ParentFieldManager::getEntityTypeIdFromFieldName($commonFieldName);
-			return \CCrmOwnerType::GetDescription($parentEntityTypeId);
+			return CCrmOwnerType::GetDescription($parentEntityTypeId);
 		}
 
 		if (!$this->isFieldExists($commonFieldName))
@@ -279,7 +271,7 @@ abstract class Factory
 			EditorAdapter::FIELD_UTM => Loc::getMessage('CRM_COMMON_UTM'),
 			EditorAdapter::FIELD_LAST_COMMUNICATION => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_LAST_COMMUNICATION_TIME'),
 			EditorAdapter::FIELD_REPEAT_SALE_SEGMENT_ID => Loc::getMessage('CRM_TYPE_ITEM_FIELD_NAME_REPEAT_SALE_SEGMENT_ID'),
-			Item::FIELD_NAME_RECURRING => Loc::getMessage('CRM_TYPE_DYNAMIC_FIELD_RECURRING'),
+			RecurringFieldEditorAdapter::FIELD_RECURRING => Loc::getMessage('CRM_TYPE_DYNAMIC_FIELD_RECURRING'),
 		];
 	}
 
@@ -624,11 +616,6 @@ abstract class Factory
 		$params = $this->replaceCommonFieldNames(['filter' => $filter]);
 		$normalizedFilter = $params['filter'] ?? [];
 
-		if ($this->isRecurringEnabled())
-		{
-			$normalizedFilter['IS_RECURRING'] = 'N';
-		}
-
 		$cache = [];
 		if ($ttl > 0)
 		{
@@ -777,28 +764,27 @@ abstract class Factory
 			$select[] = Item::FIELD_NAME_PRODUCTS . '.PRODUCT_ROW_RESERVATION';
 		}
 
-		$selectWithoutRecurring = array_diff($select, [Item::FIELD_NAME_RECURRING]);
-
-		return $selectWithoutRecurring;
+		return $select;
 	}
 
-	private function prepareFilter(array $filter): array
+	private function prepareFilter(array $filter, bool $isInternal = false): array
 	{
 		$processed = [];
+
 		foreach ($filter as $key => $value)
 		{
 			if (is_array($value))
 			{
-				$value = $this->prepareFilter($value);
+				$value = $this->prepareFilter($value, true);
 			}
 
 			if (is_string($key) && !$this->isReference($key))
 			{
-				if (mb_strpos($key, Item::FIELD_NAME_CONTACT_IDS) !== false)
+				if (str_contains($key, Item::FIELD_NAME_CONTACT_IDS))
 				{
 					$key = str_replace(Item::FIELD_NAME_CONTACT_IDS, Item::FIELD_NAME_CONTACT_BINDINGS . '.CONTACT_ID', $key);
 				}
-				elseif (mb_strpos($key, Item\Contact::FIELD_NAME_COMPANY_IDS) !== false)
+				elseif (str_contains($key, Item\Contact::FIELD_NAME_COMPANY_IDS))
 				{
 					$key = str_replace(
 						Item\Contact::FIELD_NAME_COMPANY_IDS,
@@ -806,7 +792,7 @@ abstract class Factory
 						$key,
 					);
 				}
-				elseif (mb_strpos($key, Item::FIELD_NAME_OBSERVERS) !== false)
+				elseif (str_contains($key, Item::FIELD_NAME_OBSERVERS))
 				{
 					$key = str_replace(Item::FIELD_NAME_OBSERVERS, Item::FIELD_NAME_OBSERVERS . '.USER_ID', $key);
 				}
@@ -981,7 +967,7 @@ abstract class Factory
 	 */
 	public function getUserFieldEntityId(): string
 	{
-		return \CCrmOwnerType::ResolveUserFieldEntityID($this->getEntityTypeId());
+		return CCrmOwnerType::ResolveUserFieldEntityID($this->getEntityTypeId());
 	}
 
 	/**
@@ -991,7 +977,7 @@ abstract class Factory
 	 */
 	public function getEntityName(): string
 	{
-		return \CCrmOwnerType::ResolveName($this->getEntityTypeId());
+		return CCrmOwnerType::ResolveName($this->getEntityTypeId());
 	}
 
 	/**
@@ -1011,7 +997,7 @@ abstract class Factory
 	 */
 	public function getEntityDescription(): string
 	{
-		return \CCrmOwnerType::GetDescription($this->getEntityTypeId());
+		return CCrmOwnerType::GetDescription($this->getEntityTypeId());
 	}
 
 	/**
@@ -1021,7 +1007,7 @@ abstract class Factory
 	 */
 	public function getEntityDescriptionInPlural(): string
 	{
-		return \CCrmOwnerType::GetCategoryCaption($this->getEntityTypeId());
+		return CCrmOwnerType::GetCategoryCaption($this->getEntityTypeId());
 	}
 
 	/**
@@ -1776,17 +1762,27 @@ abstract class Factory
 	 *
 	 * @return bool
 	 */
+	public function isDocumentGenerationSupported(): bool
+	{
+		return DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvider($this->getEntityTypeId(), false) !== null;
+	}
+
+	/**
+	 * Returns true if integration with 'documentgenerator' module is enabled for this entity
+	 *
+	 * @return bool
+	 */
 	public function isDocumentGenerationEnabled(): bool
 	{
 		return true;
 	}
 
-	public function isRecurringAvailable(): bool
+	public function isRecurringEnabled(): bool
 	{
 		return false;
 	}
 
-	public function isRecurringEnabled(): bool
+	public function isRecurringSupported(): bool
 	{
 		return false;
 	}
@@ -2236,22 +2232,5 @@ abstract class Factory
 	public function hasCustomPermissionsUI(): bool
 	{
 		return false;
-	}
-
-	public function setIsRecurringMode(bool $isRecurringMode): self
-	{
-		if (!$this->isRecurringAvailable())
-		{
-			throw new \RuntimeException('Entity type ' . $this->getEntityName() . ' does not support recurring mode');
-		}
-
-		$this->isRecurringMode = $isRecurringMode;
-
-		return $this;
-	}
-
-	public function isRecurringMode(): bool
-	{
-		return $this->isRecurringEnabled() && $this->isRecurringMode;
 	}
 }

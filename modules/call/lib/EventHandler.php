@@ -8,6 +8,7 @@ use Bitrix\Im\Call\Call;
 use Bitrix\Im\V2\Call\CallFactory;
 use Bitrix\Im\Call\Integration\EntityType;
 use Bitrix\Call\Cache\ActiveCallsCache;
+use Bitrix\Call\Service\CallLogService;
 
 
 class EventHandler
@@ -181,4 +182,55 @@ class EventHandler
 			\Bitrix\Call\Call::updateCallCache($call->getId());
 		}
 	}
+
+	/**
+	 * Handles call user state change events for logging
+	 *
+	 * @event 'im:OnCallUserStateChange'
+	 * @see \Bitrix\Im\Call\CallUser::updateState
+	 * @param Event $event
+	 * @return EventResult
+	 */
+	public static function onCallUserStateChange(Event $event): EventResult
+	{
+		$result = new EventResult(EventResult::SUCCESS);
+
+		$eventData = $event->getParameters();
+		$callId = $eventData['callId'] ?? null;
+		$userId = $eventData['userId'] ?? null;
+		$oldState = $eventData['oldState'] ?? null;
+		$newState = $eventData['newState'] ?? null;
+
+		if (!$callId || !$userId || !$newState)
+		{
+			return $result;
+		}
+
+		$statusMap = [
+			'unavailable:ready' => 'initiated',
+			'declined:ready' => 'answered',
+			'calling:ready' => 'answered',
+			':declined' => 'declined',
+			':busy' => 'missed',
+			'unavailable:idle' => 'missed',
+			'calling:idle' => 'missed',
+		];
+
+		$transitionKey = $oldState . ':' . $newState;
+		$status = $statusMap[$transitionKey] ?? null;
+		if (!$status)
+		{
+			$status = $statusMap[':' . $newState] ?? null;
+		}
+		if (!$status)
+		{
+			return $result;
+		}
+
+		$service = new CallLogService();
+		$service->addOrUpdateEvent('call', $callId, $userId, $status);
+
+		return $result;
+	}
+
 }

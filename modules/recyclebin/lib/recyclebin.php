@@ -11,6 +11,7 @@ use Bitrix\Recyclebin\Internals\Models\RecyclebinDataTable;
 use Bitrix\Recyclebin\Internals\Models\RecyclebinFileTable;
 use Bitrix\Recyclebin\Internals\Models\RecyclebinTable;
 use Bitrix\Recyclebin\Internals\User;
+use Bitrix\Recyclebin\Internals\Models\RecyclebinUfTable;
 
 class Recyclebin
 {
@@ -33,6 +34,8 @@ class Recyclebin
 		{
 			return new Result();
 		}
+
+		$entity->onMoveFromRecyclebin();
 
 		$result = call_user_func([$handler, 'moveFromRecyclebin'], $entity);
 
@@ -61,7 +64,10 @@ class Recyclebin
 		{
 			$recyclebin = RecyclebinTable::getById($recyclebinId)->fetch();
 
-			$data = $files = [];
+			$data = [];
+			$files = [];
+			$userFields = [];
+
 			if ($recyclebin)
 			{
 				$recyclebinData = RecyclebinDataTable::getList(['filter' => ['=RECYCLEBIN_ID' => $recyclebinId]])->fetchAll();
@@ -83,6 +89,16 @@ class Recyclebin
 						$files[$storage['FILE_ID']] = $storage;
 					}
 				}
+
+				$userFields = RecyclebinUfTable::getList([
+					'filter' => [
+						'=RECYCLEBIN_ID' => $recyclebinId,
+					],
+					'select' => [
+						'UF_ENTITY_ID',
+						'DATA',
+					],
+				])->fetch() ?: [];
 			}
 
 			$entity = new Entity($recyclebin['ENTITY_ID'], $recyclebin['ENTITY_TYPE'], $recyclebin['MODULE_ID']);
@@ -95,6 +111,12 @@ class Recyclebin
 			$entity->setFiles($files);
 			$entity->setOwnerId($recyclebin['USER_ID']);
 			$entity->setDateTime($recyclebin['TIMESTAMP']);
+
+			if ($userFields['UF_ENTITY_ID'] ?? null)
+			{
+				$entity->setUserFieldEntityId($userFields['UF_ENTITY_ID']);
+				$entity->setUserFieldsValues($userFields['DATA']);
+			}
 
 			return $entity;
 		}
@@ -184,6 +206,7 @@ class Recyclebin
 			{
 				RecyclebinDataTable::deleteByRecyclebinId($recyclebinId);
 				RecyclebinFileTable::deleteByRecyclebinId($recyclebinId);
+				RecyclebinUfTable::deleteByRecyclebinId($recyclebinId);
 			}
 
 			return true;
@@ -216,6 +239,8 @@ class Recyclebin
 		{
 			return new Result();
 		}
+
+		$entity->onRemoveFromRecyclebin();
 
 		$result = call_user_func([$handler, 'removeFromRecyclebin'], $entity, $params);
 

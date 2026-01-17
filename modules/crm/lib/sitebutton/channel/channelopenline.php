@@ -34,6 +34,8 @@ class ChannelOpenLine implements iProvider
 	private static array $connectorWithGeneratedUrl = [
 		ImConnector\Library::ID_NOTIFICATIONS_CONNECTOR,
 		ImConnector\Library::ID_EDNA_WHATSAPP_CONNECTOR,
+		ImConnector\Library::ID_MAX_CONNECTOR,
+		ImConnector\Library::ID_WAZZUP_CONNECTOR,
 	];
 
 	private static array $trackingDetectingDisabled = [

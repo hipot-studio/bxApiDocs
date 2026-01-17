@@ -11,7 +11,7 @@ final class Project extends Base
 	protected const ITEM = 'PROJECT';
 	protected const LIST = 'PROJECTS';
 
-	protected const VIEWED_TYPE = Comments\Viewed\Enum::PROJECT;
+	protected const VIEWED_TYPE = 2;
 
 	/**
 	 * @param $fields
@@ -22,27 +22,6 @@ final class Project extends Base
 	{
 		$fields['GROUP_ID'] = ($fields['GROUP_ID'] ?? null);
 		$fields['ROLE'] = ($fields['ROLE'] ?? null);
-
-		if (Comments\Viewed\Group::isOn())
-		{
-			$r = (new Comments\Viewed\Group())->markAsRead(
-				$fields['GROUP_ID'],
-				Comments\Viewed\Group::ROLE_ALL,
-				Comments\Viewed\Enum::resolveTypeById(Comments\Viewed\Enum::PROJECT)
-			);
-
-			if ($r->isSuccess() === false)
-			{
-				$this->addErrors($r->getErrors());
-				return null;
-			}
-
-			$params = Comments\Viewed\Event::prepare($fields);
-			Comments\Viewed\Event::addByTypeCounterService(Comments\Viewed\Enum::PROJECT,  $params);
-			Comments\Viewed\Event::addByTypePushService(Comments\Viewed\Enum::PROJECT, $params);
-
-			return true;
-		}
 
 		return $this->forward(new Comment(), 'readAll', ['groupId' => $fields['GROUP_ID']]);
 	}

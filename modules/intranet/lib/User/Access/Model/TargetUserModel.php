@@ -15,7 +15,7 @@ final class TargetUserModel implements AccessibleItem
 	private static array $cachedTargetUserModel = [];
 
 	private function __construct(
-		private User $user,
+		private ?User $user,
 	)
 	{}
 
@@ -75,25 +75,25 @@ final class TargetUserModel implements AccessibleItem
 
 	public function getId(): int
 	{
-		return $this->user->getId() ?? 0;
+		return $this->user?->getId() ?? 0;
 	}
 
 	public function isIntegrator(): bool
 	{
-		return $this->user->isIntegrator() ?? false;
+		return $this->user?->isIntegrator() ?? false;
 	}
 
 	public function isAdmin(): bool
 	{
-		return $this->user->isAdmin() ?? false;
+		return $this->user?->isAdmin() ?? false;
 	}
 
 	public function getInviteStatus(): ?InvitationStatus
 	{
-		return $this->user->getInviteStatus();
+		return $this->user?->getInviteStatus() ?? InvitationStatus::NOT_REGISTERED;
 	}
 
-	public function getUserEntity(): User
+	public function getUserEntity(): ?User
 	{
 		return $this->user;
 	}

@@ -1234,4 +1234,14 @@ class MemberService
 	{
 		return $this->memberRepository->isUserMemberOrInitiatorWithDoneStatus($userId);
 	}
+
+	public function listMembersWithResultFileMissing(): Item\MemberCollection
+	{
+		return $this->memberRepository->listDoneSignersWithoutResultFile();
+	}
+
+	public function listAssigneesWithResultFileMissing(): Item\MemberCollection
+	{
+		return $this->memberRepository->listDoneAssigneesWithoutResultFile();
+	}
 }

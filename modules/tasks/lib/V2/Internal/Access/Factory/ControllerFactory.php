@@ -12,13 +12,16 @@ use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
 use Bitrix\SocialNetwork\Collab\Access\Model\CollabModel;
 use Bitrix\Socialnetwork\Permission\GroupAccessController;
 use Bitrix\Socialnetwork\Permission\Model\GroupModel;
+use Bitrix\Tasks\Access\Model\ResultModel;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\Model\TemplateModel;
+use Bitrix\Tasks\Access\ResultAccessController;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Flow\Access\FlowAccessController;
 use Bitrix\Tasks\Flow\Access\FlowModel;
 use Bitrix\Tasks\Internals\Trait\SingletonTrait;
+use Bitrix\Tasks\V2\Internal\Access\Adapter\ElapsedTimeModelAdapter;
 use Bitrix\Tasks\V2\Internal\Access\Adapter\EntityModelAdapterInterface;
 use Bitrix\Tasks\V2\Internal\Access\Adapter\GroupModelAdapter;
 use Bitrix\Tasks\V2\Internal\Access\Adapter\ReminderModelAdapter;
@@ -27,6 +30,8 @@ use Bitrix\Tasks\V2\Internal\Access\Adapter\TaskModelAdapter;
 use Bitrix\Tasks\V2\Internal\Access\Adapter\TemplateModelAdapter;
 use Bitrix\Tasks\V2\Internal\Access\Reminder\ReminderAccessController;
 use Bitrix\Tasks\V2\Internal\Access\Reminder\ReminderModel;
+use Bitrix\Tasks\V2\Internal\Access\Tracking\Elapsed\ElapsedTimeAccessController;
+use Bitrix\Tasks\V2\Internal\Access\Tracking\Elapsed\ElapsedTimeModel;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Result;
@@ -67,6 +72,7 @@ final class ControllerFactory implements ControllerFactoryInterface
 			Group::class => new GroupModelAdapter($entity),
 			Result::class => new ResultModelAdapter($entity),
 			Task\Reminder::class => new ReminderModelAdapter($entity),
+			Task\ElapsedTime::class => new ElapsedTimeModelAdapter($entity),
 			default => null,
 		};
 	}
@@ -80,6 +86,8 @@ final class ControllerFactory implements ControllerFactoryInterface
 			Type::Group => GroupModel::createFromId(0),
 			Type::Collab => CollabModel::createFromId(0),
 			Type::Reminder => ReminderModel::createFromId(0),
+			Type::Result => ResultModel::createFromId(0),
+			Type::ElapsedTime => ElapsedTimeModel::createFromId(0),
 		};
 	}
 
@@ -92,6 +100,8 @@ final class ControllerFactory implements ControllerFactoryInterface
 			Type::Group => GroupAccessController::class,
 			Type::Collab => CollabAccessController::class,
 			Type::Reminder => ReminderAccessController::class,
+			Type::Result => ResultAccessController::class,
+			Type::ElapsedTime => ElapsedTimeAccessController::class,
 		};
 	}
 

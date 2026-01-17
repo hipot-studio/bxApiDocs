@@ -3001,8 +3001,47 @@ class CAllCrmInvoice
 	public static function installExternalEntities()
 	{
 		global $DB;
-		$errMsg = array();
+
+		$errMsg = [];
 		$bError = false;
+
+		$recurringColumnAppendAgent = '~CRM_RECURRING_COLUMN_APPEND_AGENT';
+		if ((string)COption::GetOptionString('crm', $recurringColumnAppendAgent, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $recurringColumnAppendAgent, 'Y');
+
+			/**
+			 * @see Bitrix\Crm\Agent\Entity\Recurring\ColumnAppendAgent
+			 */
+			\CAgent::AddAgent(
+				'Bitrix\Crm\Agent\Entity\Recurring\ColumnAppendAgent::run();',
+				'crm',
+				'N',
+				60,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+			);
+		}
+
+		$recurringSectionAppendToCustomConfigAgent = '~CRM_RECURRING_SECTION_APPEND_TO_CC_AGENT';
+		if ((string)COption::GetOptionString('crm', $recurringSectionAppendToCustomConfigAgent, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $recurringSectionAppendToCustomConfigAgent, 'Y');
+
+			/**
+			 * @see Bitrix\Crm\Agent\Entity\Recurring\SectionAppendToCustomConfigAgent
+			 */
+			\CAgent::AddAgent(
+				'Bitrix\Crm\Agent\Entity\Recurring\SectionAppendToCustomConfigAgent::run();',
+				'crm',
+				'N',
+				60,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+			);
+		}
 
 		$recreateJobExecutorAgent = '~CRM_RECREATE_JOB_EXECUTOR_AGENT';
 		if ((string)COption::GetOptionString('crm', $recreateJobExecutorAgent, 'N') === 'N')
@@ -4011,9 +4050,17 @@ class CAllCrmInvoice
 				'ERROR_MESSAGE' => array('ru' => '', 'en' => ''),
 				'HELP_MESSAGE' => array('ru' => '', 'en' => '')
 			);
+
+			$logger = Container::getInstance()->getLogger('Default');
+			$logger->info('installExternalEntities Try to add UF ' . $fieldName . ' to CRM_INVOICE ' . microtime(true));
+
 			$userFieldId = $obUserField->Add($arOrderUserField);
+
 			if ($userFieldId <= 0)
 			{
+				global $APPLICATION;
+				$logger->critical('installExternalEntitiesError Add UF ' . $fieldName . ' to CRM_INVOICE error: ' .$APPLICATION->GetException()->GetString() . ' [' . $APPLICATION->GetException()->GetID() . ']');
+
 				$result->addError(
 					new Bitrix\Main\Error(
 						GetMessage(

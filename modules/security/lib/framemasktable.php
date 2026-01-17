@@ -3,6 +3,8 @@
 namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
 
 /**
  * Class FrameMaskTable
@@ -20,7 +22,7 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\FrameMask wakeUpObject($row)
  * @method static \Bitrix\Security\FrameMasks wakeUpCollection($rows)
  */
-class FrameMaskTable extends \Bitrix\Main\Entity\DataManager
+class FrameMaskTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -30,21 +32,21 @@ class FrameMaskTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			(new \Bitrix\Main\Entity\IntegerField('ID'))
+			(new Fields\IntegerField('ID'))
 				->configurePrimary()
 				->configureAutocomplete(),
-			(new \Bitrix\Main\Entity\IntegerField('SORT'))
+			(new Fields\IntegerField('SORT'))
 				->configureDefaultValue(10),
-			(new \Bitrix\Main\Entity\StringField('SITE_ID'))
+			(new Fields\StringField('SITE_ID'))
 				->configureSize(2)
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\StringField('FRAME_MASK'))
+			(new Fields\StringField('FRAME_MASK'))
 				->configureSize(250)
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\StringField('LIKE_MASK'))
+			(new Fields\StringField('LIKE_MASK'))
 				->configureSize(250)
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\StringField('PREG_MASK'))
+			(new Fields\StringField('PREG_MASK'))
 				->configureSize(250)
 				->configureNullable(),
 

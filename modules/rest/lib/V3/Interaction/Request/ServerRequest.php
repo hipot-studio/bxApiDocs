@@ -6,7 +6,7 @@ use Bitrix\Main\HttpRequest;
 
 final class ServerRequest
 {
-	protected ?string $scope = null;
+	protected array $scopes = [];
 
 	protected ?string $token = null;
 
@@ -35,14 +35,14 @@ final class ServerRequest
 		return $this;
 	}
 
-	public function getScope(): ?string
+	public function getScopes(): array
 	{
-		return $this->scope;
+		return $this->scopes;
 	}
 
-	public function setScope(?string $scope): self
+	public function setScopes(array $scopes): self
 	{
-		$this->scope = $scope;
+		$this->scopes = $scopes;
 
 		return $this;
 	}

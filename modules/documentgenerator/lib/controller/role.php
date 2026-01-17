@@ -33,7 +33,7 @@ class Role extends Base
 	{
 		$data = $role->collectValues();
 		$data['NAME'] = $role->getName();
-		$data['PERMISSIONS'] = $role->getPermissions();
+		$data['PERMISSIONS'] = $role->getNormalizedPermissions();
 		return ['role' => $this->convertKeysToCamelCase($data)];
 	}
 

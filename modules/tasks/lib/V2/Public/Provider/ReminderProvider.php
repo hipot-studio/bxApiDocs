@@ -17,13 +17,13 @@ class ReminderProvider
 
 	}
 
-	public function getByTaskId(int $taskId, int $userId, PagerInterface $pager): ReminderCollection
+	public function getByTaskId(int $taskId, int $userId, ?PagerInterface $pager = null): ReminderCollection
 	{
 		return $this->reminderReadRepository->getByTaskId(
 			taskId: $taskId,
 			userId: $userId,
-			offset: $pager->getOffset(),
-			limit: $pager->getLimit(),
+			offset: $pager?->getOffset(),
+			limit: $pager?->getLimit(),
 		);
 	}
 }

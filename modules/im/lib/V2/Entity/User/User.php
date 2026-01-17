@@ -71,7 +71,7 @@ class User implements RestEntity
 
 	public static function getInstance(?int $id): self
 	{
-		if (!isset($id))
+		if (!isset($id) || $id <= 0)
 		{
 			return new NullUser();
 		}
@@ -352,6 +352,8 @@ class User implements RestEntity
 			'phones' => empty($this->getPhones()) ? false : $this->getPhones(),
 			'botData' => null,
 			'type' => $this->getType()->value,
+			'website' => $this->getWebsite(),
+			'email' => $this->getEmail(),
 		];
 	}
 
@@ -459,9 +461,14 @@ class User implements RestEntity
 		return $this->userData['EXTERNAL_AUTH_ID'] ?? 'default';
 	}
 
-	public function isInternalType(): bool
+	/**
+	 * @param string[] $skipTypes Type list to skip out.
+	 */
+	public function isInternalType(array $skipTypes = []): bool
 	{
-		return !in_array($this->getExternalAuthId(), \Bitrix\Im\Model\UserTable::getExternalUserTypes(), true);
+		$externalTypes = \Bitrix\Im\Model\UserTable::filterExternalUserTypes($skipTypes);
+
+		return !in_array($this->getExternalAuthId(), $externalTypes, true);
 	}
 
 	public function getWebsite(): string

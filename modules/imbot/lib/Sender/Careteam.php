@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImBot\Sender;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Result;
 
 class Careteam extends Base
@@ -17,6 +18,7 @@ class Careteam extends Base
 			'botcontroller.Careteam.sendKeyboardCommand',
 			[
 				'messageFields' => \Bitrix\Main\Web\Json::encode($messageFields),
+				'region' => Application::getInstance()->getLicense()->getRegion() ?: 'ru',
 			]
 		);
 	}
@@ -27,6 +29,7 @@ class Careteam extends Base
 			'botcontroller.Careteam.sendMessage',
 			[
 				'messageFields' => \Bitrix\Main\Web\Json::encode($messageFields),
+				'region' => Application::getInstance()->getLicense()->getRegion() ?: 'ru',
 			]
 		);
 	}

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call\Controller;
 
+use Bitrix\Call\Call\ConferenceCall;
 use Bitrix\Call\Idempotence;
 use Bitrix\Call\Signaling;
 use Bitrix\Main\Application;
@@ -185,6 +186,66 @@ class Call extends JwtController
 			$roomId = $callRequest->roomId ?: $callRequest->callUuid;
 			$entityId = \Bitrix\Im\Dialog::getDialogId($callRequest->chatId, $userId);
 
+			$lockName = static::getLockNameWithCallId('call_state', $roomId);
+			if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+			{
+				$this->addError(new \Bitrix\Main\Error('Could not get exclusive lock', 'could_not_lock'));
+				return null;
+			}
+
+			if ($callRequest->provider == \Bitrix\Im\Call\Call::PROVIDER_PLAIN)
+			{
+				if (CallFactory::hasUserActiveCalls((int)$entityId))
+				{
+					$targetUserId = (int)$entityId;
+					$chat = \Bitrix\Im\V2\Chat\ChatFactory::getInstance()->getPrivateChat($userId, $targetUserId);
+					if ($chat->getId() > 0)
+					{
+						$notifyService = \Bitrix\Call\NotifyService::getInstance();
+						$notifyService->sendOpponentBusyMessage($userId, $targetUserId);
+					}
+
+					Application::getConnection()->unlock($lockName);
+
+					$callFields = [
+						'TYPE' => $callRequest->callType,
+						'PROVIDER' => $callRequest->provider,
+						'ENTITY_TYPE' => EntityType::CHAT,
+						'ENTITY_ID' => $chat->getId(),
+						'INITIATOR_ID' => $userId,
+						'UUID' => $roomId,
+						'SCHEME' => \Bitrix\Im\Call\Call::SCHEME_JWT,
+						'STATE' => \Bitrix\Im\Call\Call::STATE_FINISHED,
+					];
+					$callObject = CallFactory::getCallInstance($callRequest->provider, $callFields);
+
+					$callObject->save();
+
+					$participants = [
+						['id' => $userId, 'state' => CallUser::STATE_READY],
+						['id' => $targetUserId, 'state' => CallUser::STATE_BUSY],
+					];
+
+					foreach ($participants as $user)
+					{
+						CallUser::create([
+							 'CALL_ID' => $callObject->getId(),
+							 'USER_ID' => $user['id'],
+							 'STATE' => $user['state'],
+							 'LAST_SEEN' => null
+						 ])->save();
+					}
+
+					$callObject->getSignaling()->sendFinishToInitiator($userId);
+
+					return [
+						'result' => false,
+						'errorCode' => 'user_is_busy',
+						'errorMessage' => 'User is currently busy on another call',
+					];
+				}
+			}
+
 			// Terminate ALL active calls in this chat before starting new one
 			\Bitrix\Call\Call::terminateAllCallsInChat($callRequest->chatId, null);
 
@@ -207,13 +268,6 @@ class Call extends JwtController
 				$prevCall->finish();
 			}
 
-			$lockName = static::getLockNameWithCallId('call_state', $roomId);
-			if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
-			{
-				$this->addError(new \Bitrix\Main\Error('Could not get exclusive lock', 'could_not_lock'));
-				return null;
-			}
-
 			$call = CallFactory::createWithEntity(
 				type: $callRequest->callType,
 				provider: $callRequest->provider,
@@ -230,37 +284,38 @@ class Call extends JwtController
 				return null;
 			}
 
+
 			\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
 
 			$this->setUserStateReady($call, $userId, $callRequest->legacyMobile);
 
 			$users = array_diff($call->getUsers(), [$userId]);
 			$this->inviteUsers(
-				$call,
-				$users,
-				$callRequest->video,
-				'N',
-				'Y',
-				'N',
-				Signaling::MODE_WEB
+				call: $call,
+				userIds: $users,
+				isVideo: $callRequest->video,
+				isLegacyMobile: false,
+				isShow: true,
+				isRepeated: false,
+				sendMode: Signaling::MODE_WEB
 			);
 
 			Application::getConnection()->unlock($lockName);
-
-			$callAIError = CallAISettings::isAIAvailableInCall();
 
 			if ($callRequest->requestId)
 			{
 				Idempotence::addKey($callRequest->requestId);
 			}
 
+			$aiAvailability = CallAISettings::checkAIAvailabilityInCall();
+
 			return [
 				'callId' => $call->getId(),
 				'tokenVersion' => $tokenVersion,
 				'autoStartAIRecording' => $call->autoStartRecording(),
-				'AIAvailableInCall' => !$callAIError,
-				'AIErrorCode' => $callAIError?->getCode(),
-				'AIErrorMessage' => $callAIError?->getMessage(),
+				'AIAvailableInCall' => $aiAvailability->isSuccess(),
+				'AIErrorCode' => $aiAvailability->getError()?->getCode(),
+				'AIErrorMessage' => $aiAvailability->getError()?->getMessage(),
 			];
 		}
 		catch (\Throwable $e)
@@ -278,7 +333,8 @@ class Call extends JwtController
 	 */
 	public function startPushAction(DTO\CallPushRequest $pushRequest): ?array
 	{
-		try {
+		try
+		{
 			Loader::includeModule('im');
 
 			$callUuid = $pushRequest->roomId ?: $pushRequest->callUuid;
@@ -290,12 +346,14 @@ class Call extends JwtController
 				return null;
 			}
 
-			if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED) {
+			if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+			{
 				$this->addError(new Error('Call already finished', 'call_finished'));
 				return null;
 			}
 
-			if (!$call->hasActiveUsers(false)) {
+			if (!$call->hasActiveUsers(false))
+			{
 				$this->addError(new Error('Call has no active users', 'call_inactive'));
 				return null;
 			}
@@ -313,19 +371,20 @@ class Call extends JwtController
 			$allUsers = array_map('intval', $call->getUsers());
 			$userIds = array_diff($allUsers, $excluded);
 
-			$userIds = array_filter($userIds, function ($userId) use ($call) {
+			$userIds = array_filter($userIds, function ($userId) use ($call)
+			{
 				return $call->checkAccess($userId);
 			});
 
 			if (!empty($userIds))
 			{
 				$call->sendInviteUsers(
-					$pushRequest->initiatorUserId,
-					$userIds,
-					$pushRequest->legacyMobile,
-					$pushRequest->video,
-					true,
-					Signaling::MODE_ALL
+					senderId: $pushRequest->initiatorUserId,
+					toUserIds: $userIds,
+					isLegacyMobile: ($pushRequest->legacyMobile == 'Y'),
+					video: ($pushRequest->video == 'Y'),
+					sendPush: true,
+					sendMode: Signaling::MODE_ALL
 				);
 			}
 
@@ -404,11 +463,11 @@ class Call extends JwtController
 
 	protected function inviteUsers(
 		\Bitrix\Im\Call\Call $call,
-		$userIds,
-		$isVideo = 'N',
-		$isLegacyMobile = 'N',
-		$isShow = 'Y',
-		$isRepeated = 'N',
+		array $userIds,
+		bool $isVideo = false,
+		bool $isLegacyMobile = false,
+		bool $isShow = true,
+		bool $isRepeated = false,
 		string $sendMode = Signaling::MODE_ALL
 	): void
 	{
@@ -448,23 +507,33 @@ class Call extends JwtController
 			$call->getAssociatedEntity()->onExistingUsersInvite($existingUsers);
 		}
 
-		if (count($usersToInvite) === 0)
+		if (count($usersToInvite) === 0 && !($call instanceof ConferenceCall))
 		{
 			$this->addError(new \Bitrix\Main\Error("No users to invite", "empty_users"));
 			return;
 		}
 
-		$sendPush = $isRepeated !== true;
-		$this->sendPushNotifications($call, $usersToInvite, $isLegacyMobile, $isVideo, $sendPush, $sendMode);
+		if (count($usersToInvite) !== 0)
+		{
+			$sendPush = $isRepeated !== true;
+			$this->sendPushNotifications(
+				call: $call,
+				usersToInvite: $usersToInvite,
+				isLegacyMobile: $isLegacyMobile,
+				isVideo: $isVideo,
+				sendPush: $sendPush,
+				sendMode: $sendMode
+			);
 
-		$allUsers = $call->getUsers();
-		$otherUsers = array_diff($allUsers, $userIds);
-		$call->getSignaling()->sendUsersInvited(
-			$this->getCurrentUser()->getId(),
-			$otherUsers,
-			$usersToInvite,
-			$isShow
-		);
+			$allUsers = $call->getUsers();
+			$otherUsers = array_diff($allUsers, $userIds);
+			$call->getSignaling()->sendUsersInvited(
+				senderId: $this->getCurrentUser()->getId(),
+				toUserIds: $otherUsers,
+				users: $usersToInvite,
+				show: $isShow
+			);
+		}
 
 		if ($call->getState() === \Bitrix\Im\Call\Call::STATE_NEW)
 		{
@@ -475,19 +544,19 @@ class Call extends JwtController
 	protected function sendPushNotifications(
 		\Bitrix\Im\Call\Call $call,
 		array $usersToInvite,
-		$isLegacyMobile,
-		$isVideo,
+		bool $isLegacyMobile,
+		bool $isVideo,
 		bool $sendPush,
 		string $sendMode = Signaling::MODE_ALL
 	): void
 	{
 		$call->sendInviteUsers(
-			$this->getCurrentUser()->getId(),
-			$usersToInvite,
-			$isLegacyMobile,
-			$isVideo,
-			$sendPush,
-			$sendMode
+			senderId: $this->getCurrentUser()->getId(),
+			toUserIds: $usersToInvite,
+			isLegacyMobile: $isLegacyMobile,
+			video: $isVideo,
+			sendPush: $sendPush,
+			sendMode: $sendMode
 		);
 	}
 
@@ -524,6 +593,7 @@ class Call extends JwtController
 		}
 
 		$this->setUserStateReady($call, $currentUserId, $isLegacyMobile);
+
 		Application::getConnection()->unlock($lockName);
 
 		$call->getSignaling()->sendAnswer($currentUserId, $userRequest->callInstanceId, $isLegacyMobile);
@@ -584,6 +654,7 @@ class Call extends JwtController
 		{
 			$callUser->updateState(CallUser::STATE_DECLINED);
 		}
+
 		$callUser->updateLastSeen(new DateTime());
 		Application::getConnection()->unlock($lockName);
 
@@ -703,24 +774,24 @@ class Call extends JwtController
 		$users = array_diff($childCall->getAssociatedEntity()->getUsers(), [$currentUserId]);
 
 		$this->inviteUsers(
-			$childCall,
-			$users,
-			$callRequest->video,
+			call: $childCall,
+			userIds: $users,
+			isVideo: $callRequest->video,
 		);
-
-		$callAIError = CallAISettings::isAIAvailableInCall();
 
 		if ($callRequest->requestId)
 		{
 			Idempotence::addKey($callRequest->requestId);
 		}
 
+		$aiAvailability = CallAISettings::checkAIAvailabilityInCall();
+
 		return [
 			'callId' => $childCall->getId(),
 			'autoStartAIRecording' => $childCall->autoStartRecording(),
-			'AIAvailableInCall' => !$callAIError,
-			'AIErrorCode' => $callAIError?->getCode(),
-			'AIErrorMessage' => $callAIError?->getMessage(),
+			'AIAvailableInCall' => $aiAvailability->isSuccess(),
+			'AIErrorCode' => $aiAvailability->getError()?->getCode(),
+			'AIErrorMessage' => $aiAvailability->getError()?->getMessage(),
 		];
 	}
 
@@ -772,7 +843,14 @@ class Call extends JwtController
 			return null;
 		}
 
-		$this->inviteUsers($call, $userIds, $isVideo, $isLegacyMobile, $isShow, $isRepeated);
+		$this->inviteUsers(
+			call: $call,
+			userIds: $userIds,
+			isVideo: $isVideo,
+			isLegacyMobile: $isLegacyMobile,
+			isShow: $isShow,
+			isRepeated: $isRepeated,
+		);
 
 		Application::getConnection()->unlock($lockName);
 		return true;
@@ -843,8 +921,8 @@ class Call extends JwtController
 		$callUser = $call->getUser($userId);
 		if ($callUser)
 		{
+			$callUser->updateState(CallUser::STATE_READY);
 			$callUser->update([
-				'STATE' => CallUser::STATE_READY,
 				'LAST_SEEN' => new DateTime(),
 				'FIRST_JOINED' => $callUser->getFirstJoined() ?: new DateTime(),
 				'IS_MOBILE' => $isLegacyMobile ? 'Y' : 'N',
@@ -999,6 +1077,12 @@ class Call extends JwtController
 			: []
 		;
 
+		$callToken = '';
+		if ($call->getChatId() > 0)
+		{
+			$callToken = JwtCall::getCallToken($call->getChatId());
+		}
+
 		$response = [
 			'call' => $call->toArray($initiatorId),
 			'connectionData' => $call->getConnectionData($currentUserId),
@@ -1006,7 +1090,7 @@ class Call extends JwtController
 			'userData' => Util::getUsers($users),
 			'publicChannels' => $publicChannels,
 			'logToken' => $call->getLogToken($currentUserId),
-			'callToken' => JwtCall::getCallToken($call->getChatId())
+			'callToken' => $callToken,
 		];
 		if ($isNew)
 		{

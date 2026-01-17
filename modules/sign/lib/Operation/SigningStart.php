@@ -11,12 +11,12 @@ use Bitrix\Sign\Item\Api\Document\Signing\StartRequest;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Repository\DocumentRepository;
-use Bitrix\Sign\Repository\MemberRepository;
+use Bitrix\Sign\Restriction;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\Crm\EventHandlerService;
-use Bitrix\Sign\Service\Sign\Document\SignUntilService;
 use Bitrix\Sign\Service\Sign\LegalLogService;
 use Bitrix\Sign\Type;
+use Bitrix\Sign\Type\DocumentScenario;
 
 class SigningStart implements Contract\Operation
 {
@@ -41,6 +41,11 @@ class SigningStart implements Contract\Operation
 		if (!$document)
 		{
 			return $result->addError(new Main\Error('Document not found'));
+		}
+
+		if ($this->isPhoneVerificationRequiredForDocument($document))
+		{
+			return $result->addError(new Main\Error('Phone verification is required'));
 		}
 
 		// allow old blanks without signUntil date
@@ -76,7 +81,7 @@ class SigningStart implements Contract\Operation
 				$message = "Failed to start reminder for document: {{documentId}}. Result errors: "
 					. implode('|| ', $result->getErrorMessages())
 				;
-				$this->logger->warning($message, ['documentId' => $document->id],);
+				$this->logger->warning($message, ['documentId' => $document->id]);
 			}
 		}
 
@@ -96,5 +101,13 @@ class SigningStart implements Contract\Operation
 		catch (ArgumentException|Main\ArgumentOutOfRangeException $e)
 		{
 		}
+	}
+
+	private function isPhoneVerificationRequiredForDocument(Document $document): bool
+	{
+		return
+			DocumentScenario::isB2bScenarioByDocument($document)
+			&& Restriction::isPhoneVerificationRequiredForB2b()
+		;
 	}
 }

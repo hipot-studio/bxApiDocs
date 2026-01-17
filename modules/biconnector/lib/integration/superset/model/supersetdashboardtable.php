@@ -25,6 +25,7 @@ use Bitrix\Rest\AppTable;
  * <li> TYPE enum mandatory
  * <li> APP_ID string(128)
  * <li> SOURCE_ID int
+ * <li> LANG char(2)
  * </ul>
  *
  * @package Bitrix\BIConnector
@@ -153,6 +154,11 @@ final class SupersetDashboardTable extends DataManager
 
 			(new Fields\IntegerField('OWNER_ID'))
 				->configureNullable(),
+
+			(new Fields\StringField('LANG'))
+				->configureSize(2)
+				->configureNullable()
+			,
 
 			(new Fields\Relations\ManyToMany('TAGS', SupersetTagTable::class))
 				->configureMediatorTableName('b_biconnector_superset_dashboard_tag')
@@ -291,5 +297,7 @@ final class SupersetDashboardTable extends DataManager
 				Logger::logErrors($deleteResult->getErrors(), ['Deleting url params of dashboard ' . $dashboardId]);
 			}
 		}
+
+		SupersetDashboardGroupBindingTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
 	}
 }

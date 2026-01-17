@@ -8,43 +8,42 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 use CUserTypeManager;
 
 class CrmItemService
 {
 	public function __construct(
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateTaskService,
 	)
 	{
 
 	}
 
-	public function set(int $taskId, int $userId, array $crmItemIds): void
+	public function set(int $taskId, int $userId, array $crmItemIds, bool $useConsistency = false): void
 	{
+		$changedBy = new User(id: $userId);
+
 		$task = new Task(
 			id: $taskId,
 			changedTs: time(),
-			changedBy: new User(id: $userId),
+			changedBy: $changedBy,
 			crmItemIds: $crmItemIds,
 		);
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig(
+			userId: $userId,
+			useConsistency: $useConsistency,
+		);
 
 		// update changelog
-		$this->updateService->update(
+		$this->updateTaskService->update(
 			task: $task,
 			config: $config,
 		);
-
-		$ufManager = $this->getUfManager();
-
-		$fields = [UserField::TASK_CRM => $crmItemIds];
-
-		$ufManager->Update(UserField::TASK, $taskId, $fields, $userId);
 	}
 
-	public function add(int $taskId, int $userId, array $crmItemIds): void
+	public function add(int $taskId, int $userId, array $crmItemIds, bool $useConsistency = false): void
 	{
 		if (empty($crmItemIds))
 		{
@@ -59,27 +58,26 @@ class CrmItemService
 		$new = array_unique(array_merge($current, $crmItemIds));
 		$new = array_values($new);
 
+		$changedBy = new User(id: $userId);
 		$task = new Task(
 			id: $taskId,
 			changedTs: time(),
-			changedBy: new User(id: $userId),
+			changedBy: $changedBy,
 			crmItemIds: $new,
 		);
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig(
+			userId: $userId,
+			useConsistency: $useConsistency,
+		);
 
-		// update changelog
-		$this->updateService->update(
+		$this->updateTaskService->update(
 			task: $task,
 			config: $config,
 		);
-
-		$fields = [UserField::TASK_CRM => $new];
-
-		$ufManager->Update(UserField::TASK, $taskId, $fields, $userId);
 	}
 
-	public function delete(int $taskId, int $userId, array $crmItemIds): void
+	public function delete(int $taskId, int $userId, array $crmItemIds, bool $useConsistency = false): void
 	{
 		if (empty($crmItemIds))
 		{
@@ -94,24 +92,23 @@ class CrmItemService
 		$new = array_diff($current, $crmItemIds);
 		$new = array_values($new);
 
+		$changedBy = new User(id: $userId);
 		$task = new Task(
 			id: $taskId,
 			changedTs: time(),
-			changedBy: new User(id: $userId),
+			changedBy: $changedBy,
 			crmItemIds: $new,
 		);
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig(
+			userId: $userId,
+			useConsistency: $useConsistency,
+		);
 
-		// update changelog
-		$this->updateService->update(
+		$this->updateTaskService->update(
 			task: $task,
 			config: $config,
 		);
-
-		$fields = [UserField::TASK_CRM => $new];
-
-		$ufManager->Update(UserField::TASK, $taskId, $fields, $userId);
 	}
 
 	private function getUfManager(): CUserTypeManager

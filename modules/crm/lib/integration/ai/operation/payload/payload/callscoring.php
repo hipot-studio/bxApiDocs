@@ -226,7 +226,7 @@ final class CallScoring extends AbstractPayload implements CalcMarkersInterface
 			)
 			->where('B.OWNER_ID', '=', $this->clientItem->getId())
 			->where('B.OWNER_TYPE_ID', '=', $entityTypeId)
-			->where('PROVIDER_ID', Call::ACTIVITY_PROVIDER_ID)
+			->where('PROVIDER_ID', Call::getId())
 			->whereNot('ID', $currentActivityId)
 			->whereNotNull('ORIGIN_ID')
 			->addOrder('CREATED', 'DESC')

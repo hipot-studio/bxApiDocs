@@ -33,6 +33,12 @@ class BookingFieldsMapper
 				'entityTypeId' => $externalData['entityTypeId'],
 				'value' => $externalData['value'],
 			], $booking['externalData'] ?? []),
+			'skus' => array_filter(
+				array_map(
+					static fn (array $sku) => isset($sku['name']) ? ['id' => $sku['id'], 'name' => $sku['name'],] : null,
+					$booking['skus'] ?? []
+				)
+			),
 			'name' => $booking['name'] ?? null,
 			'createdBy' => $booking['createdBy'] ?? null,
 			'note' => $booking['note'] ?? null,

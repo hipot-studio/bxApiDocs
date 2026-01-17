@@ -27,9 +27,7 @@ class PauseTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new PauseTaskHandler($statusService);
+		$handler = Container::getInstance()->get(PauseTaskHandler::class);
 
 		try
 		{

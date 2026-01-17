@@ -35,6 +35,7 @@ class Controller extends \Bitrix\Main\Engine\Controller
 				new Main\Engine\ActionFilter\HttpMethod(
 					[Main\Engine\ActionFilter\HttpMethod::METHOD_GET, Main\Engine\ActionFilter\HttpMethod::METHOD_POST],
 				),
+				new Main\Engine\ActionFilter\Csrf(),
 				new Intranet\ActionFilter\IntranetUser(),
 			];
 	}

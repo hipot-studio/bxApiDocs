@@ -127,7 +127,7 @@ class Parser
 			{
 				$portalZone = \CBitrix24::getPortalZone();
 
-				if(in_array($portalZone, array('br', 'cn', 'de', 'in', 'ru', 'ua', 'by', 'kz', 'fr', 'pl')))
+				if(in_array($portalZone, ['br', 'cn', 'de', 'in', 'ru', 'ua', 'by', 'kz', 'fr', 'pl', 'uz']))
 				{
 					$defaultCountry = $portalZone;
 				}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Integration\Humanresources;
 
+use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\NodeMember;
@@ -12,6 +13,7 @@ use Bitrix\Intranet\Dto\EntitySelector\EntitySelectorCodeDto;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
@@ -21,11 +23,13 @@ class DepartmentRepository
 {
 	private bool $isAvailable;
 	private DepartmentMapper $departmentMapper;
+	private UserRepository $userRepository;
 
 	public function __construct()
 	{
 		$this->isAvailable = Loader::includeModule('humanresources');
 		$this->departmentMapper = new DepartmentMapper();
+		$this->userRepository = new UserRepository();
 	}
 
 	public function getDepartmentHeadsByDepartmentCollection(DepartmentCollection $departmentCollection): UserCollection
@@ -37,12 +41,14 @@ class DepartmentRepository
 
 		$headRoleId = Container::getRoleRepository()
 			->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])
-			?->id;
+			?->id
+		;
 
 		$nodeCollection = $this->createNodeCollectionFromDepartmentCollection($departmentCollection);
 
 		$nodeMemberCollection = Container::getNodeMemberRepository()
-			->findAllByRoleIdAndNodeCollection($headRoleId, $nodeCollection);
+			->findAllByRoleIdAndNodeCollection($headRoleId, $nodeCollection)
+		;
 
 		$userIds = $nodeMemberCollection->getEntityIds();
 
@@ -53,21 +59,27 @@ class DepartmentRepository
 	{
 		$employeeRoleId = Container::getRoleRepository()
 			->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE'])
-			?->id;
+			?->id
+		;
+
+		if (!isset($employeeRoleId))
+		{
+			return new UserCollection();
+		}
 
 		$nodeCollection = Container::getNodeRepository()
-			->findAllByUserIdAndRoleId($userId, $employeeRoleId);
+			->findAllByUserIdAndRoleId($userId, $employeeRoleId)
+		;
 
-		$headRoleId = Container::getRoleRepository()
-			->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])
-			?->id;
+		$managers = \CIntranetUtils::GetDepartmentManager(
+			$nodeCollection->map(
+				fn (Node $node) => DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode),
+			),
+			$userId,
+			true,
+		);
 
-		$nodeMemberCollection = Container::getNodeMemberRepository()
-			->findAllByRoleIdAndNodeCollection($headRoleId, $nodeCollection);
-
-		$userIds = $nodeMemberCollection->getEntityIds();
-
-		return ServiceContainer::getInstance()->userRepository()->findUsersByIds($userIds);
+		return $this->userRepository->makeUserCollectionFromModelArray($managers);
 	}
 
 	public function getDepartmentsByEntitySelectorAccessCode(EntitySelectorCodeDto $accessCode): DepartmentCollection
@@ -98,7 +110,8 @@ class DepartmentRepository
 	public function getDepartmentsByUserId(int $userId): DepartmentCollection
 	{
 		$nodeCollection = Container::getNodeRepository()
-			->findAllByUserId($userId);
+			->findAllByUserId($userId)
+		;
 
 		return $this->createDepartmentCollectionFromNodeCollection($nodeCollection);
 	}

@@ -2,15 +2,29 @@
 
 namespace Bitrix\Mail\Helper;
 
+use Bitrix\HumanResources\Model\NodeMemberTable;
+use Bitrix\HumanResources\Model\NodePathTable;
+use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\MemberEntityType;
+use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\Mail\Access\Permission\PermissionDictionary;
+use Bitrix\Mail\Access\MailboxAccessController;
+use Bitrix\Mail\Access\Permission\PermissionVariablesDictionary;
+use Bitrix\Mail\Helper\Entity\Department\DepartmentProvider;
+use Bitrix\Mail\Helper\Entity\User\User;
 use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
 use Bitrix\Mail\Internals\MailEntityOptionsTable;
+use Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable;
 use Bitrix\Mail\MailServicesTable;
+use Bitrix\Main\Access\AccessCode;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Mail\Internals\MailboxAccessTable;
 use Bitrix\Mail\MailboxTable;
-use Bitrix\Mail\Helper\User\UserProvider;
+use Bitrix\Mail\Helper\Entity\User\UserProvider;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\Search\Content;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Type;
 use Bitrix\Main\Mail\Internal;
@@ -23,28 +37,24 @@ class MailboxSettingsGridHelper
 {
 	protected const DEFAULT_PAGE_SIZE = 20;
 	protected const DEFAULT_UNSEEN_LIMIT = 999;
+	protected const USER_ENTITY = 'USER';
+	protected const DEPARTMENT_ENTITY = 'DEPARTMENT';
 
 	private UserProvider $userProvider;
+	private DepartmentProvider $departmentProvider;
+	private int $currentUserId;
 
 	public function __construct()
 	{
 		$this->userProvider = new UserProvider();
+		$this->departmentProvider = new DepartmentProvider();
+		$this->currentUserId = (int)CurrentUser::get()->getId();
 	}
 
 	/**
 	 * @return array<array{
 	 *     ID: int,
-	 *     USERS_DATA: array<array{
-	 *         id: int,
-	 *         name: string,
-	 *         avatar: array{
-	 *             src: string,
-	 *             width: int,
-	 *             height: int,
-	 *             size: int,
-	 *         },
-	 *         pathToProfile: string,
-	 *     }>,
+	 *     ENTITIES_DATA: array,
 	 *     OWNER_DATA: array{
 	 *         id: int,
 	 *         name: string,
@@ -90,7 +100,13 @@ class MailboxSettingsGridHelper
 	 */
 	public function getGridData(int $limit, int $offset, array $filterData = []): array
 	{
+		if (!$this->currentUserId)
+		{
+			return [];
+		}
+
 		$mailboxes = $this->getMailboxesWithOwners($limit, $offset, $filterData);
+		$this->setCanEditFlag($mailboxes);
 
 		if (empty($mailboxes))
 		{
@@ -101,16 +117,11 @@ class MailboxSettingsGridHelper
 		$emails = array_column($mailboxes, 'EMAIL');
 
 		$emailLimitsAndCounters = $this->getEmailLimitsAndCounters($emails);
-		$userAccessData = $this->getUserAccessData($mailboxIds);
 
-		$allUserIds = [];
-		foreach ($userAccessData as $usersForMailbox)
-		{
-			foreach ($usersForMailbox as $userAccess)
-			{
-				$allUserIds[] = $userAccess['USER_ACCESS_ID'];
-			}
-		}
+		$entityAccessData = $this->getEntityAccessData($mailboxIds);
+
+		$allUserIds = array_column(($entityAccessData[self::USER_ENTITY] ?? []), 'ENTITY_ID');
+		$allDepartmentAccessCodes = array_column(($entityAccessData[self::DEPARTMENT_ENTITY] ?? []), 'ACCESS_CODE');
 
 		$ownerIds = [];
 		foreach ($mailboxes as &$mailbox)
@@ -119,11 +130,7 @@ class MailboxSettingsGridHelper
 
 			$options = $mailbox['OPTIONS'] ?? [];
 			$crmLeadResp = $options['crm_lead_resp'] ?? [];
-
-			foreach ($crmLeadResp as $userId)
-			{
-				$allUserIds[] = $userId;
-			}
+			$allUserIds = array_merge($allUserIds, $crmLeadResp);
 
 			if ($mailbox['OWNER_ID'])
 			{
@@ -137,22 +144,33 @@ class MailboxSettingsGridHelper
 		$errorMailboxIdsMap = array_flip($errorMailboxIds);
 
 		$allUserIds = array_unique(array_filter($allUserIds));
-		$users = $this->userProvider->getUsersInfo($allUserIds);
+		$users = $this->userProvider->getEntitiesInfo($allUserIds);
+
+		$allDepartmentAccessCodes = array_unique(array_filter($allDepartmentAccessCodes));
+		$departments = $this->departmentProvider->getEntitiesInfo($allDepartmentAccessCodes);
+
+		$allEntitiesInfo = [];
+		foreach ($entityAccessData[self::USER_ENTITY] as $userAccessData)
+		{
+			$keyValue = (string)$userAccessData['ENTITY_ID'];
+			$allEntitiesInfo[$userAccessData['MAILBOX_ID']][] = $users[$keyValue];
+		}
+
+		foreach ($entityAccessData[self::DEPARTMENT_ENTITY] as $departmentAccessData)
+		{
+			$keyValue = str_replace('DR', 'D', $departmentAccessData['ACCESS_CODE']);
+			$department = $departments[$keyValue];
+
+			if ($department)
+			{
+				$allEntitiesInfo[$departmentAccessData['MAILBOX_ID']][] = $department;
+			}
+		}
 
 		$rows = [];
 		foreach ($mailboxes as $mailbox)
 		{
-			$userAccessList = $userAccessData[$mailbox['ID']] ?? [];
-			$usersData = [];
-
-			foreach ($userAccessList as $userAccess)
-			{
-				if (isset($users[$userAccess['USER_ACCESS_ID']]))
-				{
-					$usersData[$userAccess['USER_ACCESS_ID']] = $users[$userAccess['USER_ACCESS_ID']];
-				}
-			}
-
+			$entitiesInfo = $allEntitiesInfo[$mailbox['ID']] ?? [];
 			$dataFromOptions = $this->extractDataFromOptions($mailbox);
 			$crmLeadRespIds = $dataFromOptions['crmLeadResp'];
 			$crmLeadRespData = [];
@@ -171,7 +189,7 @@ class MailboxSettingsGridHelper
 				$ownerData = $users[$mailbox['OWNER_ID']];
 			}
 
-			$rows[] = $this->prepareGridRow($mailbox, $usersData, $crmLeadRespData, $ownerData, $errorMailboxIdsMap);
+			$rows[] = $this->prepareGridRow($mailbox, $entitiesInfo, $crmLeadRespData, $ownerData, $errorMailboxIdsMap);
 		}
 
 		return $rows;
@@ -180,17 +198,7 @@ class MailboxSettingsGridHelper
 	/**
 	 * @return array<array{
 	 *     ID: int,
-	 *     USERS_DATA: array<array{
-	 *         id: int,
-	 *         name: string,
-	 *         avatar: array{
-	 *             src: string,
-	 *             width: int,
-	 *             height: int,
-	 *             size: int,
-	 *         },
-	 *         pathToProfile: string,
-	 *     }>,
+	 *     ENTITIES_DATA: array,
 	 *     OWNER_DATA: array{
 	 *         id: int,
 	 *         name: string,
@@ -334,17 +342,7 @@ class MailboxSettingsGridHelper
 	/**
 	 * @return array<array{
 	 *     ID: int,
-	 *     USERS_DATA: array<array{
-	 *         id: int,
-	 *         name: string,
-	 *         avatar: array{
-	 *             src: string,
-	 *             width: int,
-	 *             height: int,
-	 *             size: int,
-	 *         },
-	 *         pathToProfile: string,
-	 *     }>,
+	 *     ENTITIES_DATA: array,
 	 *     OWNER_DATA: array{
 	 *         id: int,
 	 *         name: string,
@@ -390,18 +388,18 @@ class MailboxSettingsGridHelper
 	 */
 	private function prepareGridRow(
 		array $mailbox,
-		array $usersData,
+		array $entitiesData,
 		array $crmLeadRespData = [],
-		User\User $ownerData = null,
+		?User $ownerData = null,
 		array $errorMailboxIdsMap = [],
 	): array
 	{
 		$dataFromOptions = $this->extractDataFromOptions($mailbox);
 
-		$usersFormattedData = [];
-		foreach ($usersData as $userData)
+		$entitiesFormattedData = [];
+		foreach ($entitiesData as $userData)
 		{
-			$usersFormattedData[] = $userData->toArray();
+			$entitiesFormattedData[] = $userData->toArray();
 		}
 
 		$crmLeadRespFormattedData = [];
@@ -427,7 +425,7 @@ class MailboxSettingsGridHelper
 
 		return [
 			'ID' => (int)$mailbox['ID'],
-			'USERS_DATA' => $usersFormattedData,
+			'ENTITIES_DATA' => $entitiesFormattedData,
 			'OWNER_DATA' => $ownerFormattedData,
 			'EMAIL' => $mailbox['EMAIL'],
 			'SERVICE_NAME' => $mailbox['SERVICE_NAME'],
@@ -448,6 +446,7 @@ class MailboxSettingsGridHelper
 				['#AMOUNT_OF_DATA#' => $volumeMb],
 			),
 			'HAS_ERROR' => isset($errorMailboxIdsMap[$mailbox['ID']]),
+			'CAN_EDIT' => $mailbox['CAN_EDIT'] ?? false,
 		];
 	}
 
@@ -578,46 +577,70 @@ class MailboxSettingsGridHelper
 				->where('ACTIVE', 'Y')
 		;
 
+		$this->applyNodeUserFilter($query);
+
 		return $query;
 	}
 
 	/**
-	 * @return array<int, array<array{
+	 * @return array<string, array<array{
 	 *     MAILBOX_ID: string,
 	 *     ACCESS_CODE: string,
-	 *     USER_ACCESS_ID: string
+	 *     ENTITY_TYPE: string,
+	 *     ENTITY_ID: int,
 	 * }>>
 	 */
-	private function getUserAccessData(array $mailboxIds): array
+	private function getEntityAccessData(array $mailboxIds): array
 	{
 		$query =
 			MailboxAccessTable::query()
-				->registerRuntimeField(
-					'USER_ACCESS_ID_FIELD',
-					new ExpressionField(
-						'USER_ACCESS_ID_FIELD',
-						'SUBSTRING(%s, 2)',
-						'ACCESS_CODE',
-					),
-				)
 				->setSelect([
 					'MAILBOX_ID',
 					'ACCESS_CODE',
-					'USER_ACCESS_ID' => 'USER_ACCESS_ID_FIELD',
 				])
 				->whereIn('MAILBOX_ID', $mailboxIds)
 				->where('TASK_ID', 0)
 		;
 
 		$result = $query->exec();
-		$userAccessData = [];
+		$entityAccessData = [];
+
+		$userPattern = sprintf("/%s/", AccessCode::AC_USER);
+		$departmentPattern = sprintf("/%s/", AccessCode::AC_DEPARTMENT);
+		$allDepartmentPattern = sprintf("/%s/", AccessCode::AC_ALL_DEPARTMENT);
 
 		while ($row = $result->fetch())
 		{
-			$userAccessData[$row['MAILBOX_ID']][] = $row;
+			$accessCode = $row['ACCESS_CODE'];
+			$entityType = '';
+			$entityId = 0;
+
+			if (preg_match($userPattern, $accessCode, $matches))
+			{
+				$entityType = self::USER_ENTITY;
+				$entityId = (int)$matches[2];
+			}
+			elseif (
+				preg_match($departmentPattern, $accessCode, $matches)
+				|| preg_match($allDepartmentPattern, $accessCode, $matches)
+			)
+			{
+				$entityType = self::DEPARTMENT_ENTITY;
+				$entityId = (int)$matches[2];
+			}
+
+			if ($entityType && $entityId)
+			{
+				$entityAccessData[$entityType][] = [
+					'MAILBOX_ID' => (int)$row['MAILBOX_ID'],
+					'ACCESS_CODE' => $accessCode,
+					'ENTITY_TYPE' => $entityType,
+					'ENTITY_ID' => $entityId,
+				];
+			}
 		}
 
-		return $userAccessData;
+		return $entityAccessData;
 	}
 
 	/**
@@ -769,17 +792,7 @@ class MailboxSettingsGridHelper
 	/**
 	 * @return array<array{
 	 *     ID: int,
-	 *     USERS_DATA: array<array{
-	 *         id: int,
-	 *         name: string,
-	 *         avatar: array{
-	 *             src: string,
-	 *             width: int,
-	 *             height: int,
-	 *             size: int,
-	 *         },
-	 *         pathToProfile: string,
-	 *     }>,
+	 *     ENTITIES_DATA: array,
 	 *     OWNER_DATA: array{
 	 *         id: int,
 	 *         name: string,
@@ -992,7 +1005,7 @@ class MailboxSettingsGridHelper
 						$fromBytes = (float)$filterData['DISK_SIZE_from'] * $bytesInMb;
 					}
 
-					if(is_numeric($filterData['DISK_SIZE_to']))
+					if (is_numeric($filterData['DISK_SIZE_to']))
 					{
 						$toBytes = (float)$filterData['DISK_SIZE_to'] * $bytesInMb;
 					}
@@ -1033,6 +1046,27 @@ class MailboxSettingsGridHelper
 
 							break;
 					}
+
+				case 'FIND':
+					if (!Content::canUseFulltextSearch($value))
+					{
+						break;
+					}
+
+					$query->registerRuntimeField(
+						'MAILBOX_SEARCH_INDEX',
+						[
+							'data_type' => MailboxListSearchIndexTable::class,
+							'reference' => [
+								'=this.ID' => 'ref.MAILBOX_ID',
+							],
+							'join_type' => 'INNER',
+						],
+					);
+					$query->whereMatch('MAILBOX_SEARCH_INDEX.SEARCH_INDEX', MailboxSearchIndexHelper::prepareStringToSearch($value));
+
+					break;
+
 				default:
 					break;
 			}
@@ -1055,5 +1089,150 @@ class MailboxSettingsGridHelper
 		}
 
 		return array_filter(array_unique($userIds));
+	}
+
+	private function applyNodeUserFilter(Query $query): void
+	{
+		$this->accessController = MailboxAccessController::getInstance($this->currentUserId);
+		$accessibleUser = $this->accessController->getUser();
+
+		if ($accessibleUser->isAdmin())
+		{
+			return;
+		}
+
+		$permissionValue = $accessibleUser->getPermission(PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_VIEW);
+		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_ALL)
+		{
+			return;
+		}
+
+		$nodeIds = Container::getNodeRepository()->findAllByUserId($this->currentUserId)->getIds();
+		if (empty($nodeIds))
+		{
+			return;
+		}
+
+		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS)
+		{
+			$subQuery = NodeMemberTable::query()
+				->setSelect(['ENTITY_ID'])
+				->where('ENTITY_TYPE', MemberEntityType::USER->value)
+				->whereIn('NODE_ID', $nodeIds)
+				->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+				->setDistinct()
+			;
+
+			$query->whereIn('USER_ID', $subQuery);
+
+			return;
+		}
+
+		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_DEPARTMENT_WITH_SUBDEPARTMENTS)
+		{
+			$descendantsQuery = NodePathTable::query()
+				->setSelect(['CHILD_ID'])
+				->whereIn('PARENT_ID', $nodeIds)
+				->where('DEPTH', '>=', 0)
+				->where('CHILD_NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+				->setDistinct()
+			;
+
+			$membersSubQuery = NodeMemberTable::query()
+				->setSelect(['ENTITY_ID'])
+				->where('ENTITY_TYPE', MemberEntityType::USER->value)
+				->whereIn('NODE_ID', $descendantsQuery)
+				->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+				->setDistinct()
+			;
+
+			$query->whereIn('USER_ID', $membersSubQuery);
+
+			return;
+		}
+
+		$query->where('USER_ID', $this->currentUserId);
+	}
+
+	private function setCanEditFlag(array &$mailboxes): void
+	{
+		$availableToEditOwnersIds = [$this->currentUserId];
+
+		$this->accessController = MailboxAccessController::getInstance($this->currentUserId);
+		$accessibleUser = $this->accessController->getUser();
+		$permissionValue = $accessibleUser->isAdmin()
+			? PermissionVariablesDictionary::VARIABLE_ALL
+			: $accessibleUser->getPermission(PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT)
+		;
+
+		if ($permissionValue !== PermissionVariablesDictionary::VARIABLE_NONE)
+		{
+			if ($permissionValue === PermissionVariablesDictionary::VARIABLE_ALL)
+			{
+				foreach ($mailboxes as &$mailbox)
+				{
+					$mailbox['CAN_EDIT'] = true;
+				}
+
+				return;
+			}
+
+			$allOwnersIds = array_unique(array_column($mailboxes, 'OWNER_ID'));
+			$nodeIds = Container::getNodeRepository()->findAllByUserId($this->currentUserId)->getIds();
+			if (!empty($nodeIds))
+			{
+				if ($permissionValue === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS)
+				{
+					$query = NodeMemberTable::query()
+						->setSelect(['ENTITY_ID'])
+						->where('ENTITY_TYPE', MemberEntityType::USER->value)
+						->whereIn('NODE_ID', $nodeIds)
+						->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+						->whereIn('ENTITY_ID', $allOwnersIds)
+						->setDistinct()
+					;
+
+					$rows = $query->fetchAll();
+					$availableToEditOwnersIds = array_merge(
+						$availableToEditOwnersIds,
+						array_map('intval', array_column($rows, 'ENTITY_ID')),
+					);
+				}
+
+				if ($permissionValue === PermissionVariablesDictionary::VARIABLE_DEPARTMENT_WITH_SUBDEPARTMENTS)
+				{
+					$descendantsQuery = NodePathTable::query()
+						->setSelect(['CHILD_ID'])
+						->whereIn('PARENT_ID', $nodeIds)
+						->where('DEPTH', '>=', 0)
+						->where('CHILD_NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+						->setDistinct()
+					;
+
+					$query = NodeMemberTable::query()
+						->setSelect(['ENTITY_ID'])
+						->where('ENTITY_TYPE', MemberEntityType::USER->value)
+						->whereIn('NODE_ID', $descendantsQuery)
+						->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+						->whereIn('ENTITY_ID', $allOwnersIds)
+						->setDistinct()
+					;
+
+					$rows = $query->fetchAll();
+					$availableToEditOwnersIds = array_merge(
+						$availableToEditOwnersIds,
+						array_map('intval', array_column($rows, 'ENTITY_ID')),
+					);
+				}
+			}
+		}
+
+		foreach ($mailboxes as &$mailbox)
+		{
+			if (in_array((int)($mailbox['OWNER_ID'] ?? 0), $availableToEditOwnersIds, true))
+			{
+				$mailbox['CAN_EDIT'] = true;
+			}
+		}
 	}
 }

@@ -52,21 +52,19 @@ class ClearOldCountersAgent
 	{
 		$counterRepository = Container::getCounterRepository();
 
-		$affectedUsers = $counterRepository->getUsersByCounterType(
+		$affectedUserIds = $counterRepository->getUserIdsByCounterType(
 			entityIds: $bookingIds,
 			types: self::SUPPORTED_TYPES,
 		);
-		if (empty($affectedUsers))
+		if (empty($affectedUserIds))
 		{
 			return;
 		}
 
 		$counterRepository->downMultiple($bookingIds, self::SUPPORTED_TYPES);
 
-		foreach ($affectedUsers as $row)
+		foreach ($affectedUserIds as $userId)
 		{
-			$userId = (int)$row['USER_ID'];
-
 			\CUserCounter::Set(
 				$userId,
 				CounterDictionary::LeftMenu->value,

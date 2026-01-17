@@ -20,10 +20,15 @@ class ResourceLinkedEntityDataMapper
 	public static function mapFromArray(
 		ResourceLinkedEntityType $resourceLinkedEntityType,
 		array $params,
-	): ResourceLinkedEntityDataInterface
+	): ResourceLinkedEntityDataInterface|null
 	{
 		/** @var ResourceLinkedEntityDataInterface $className */
 		$className = self::getDataClassByType($resourceLinkedEntityType);
+
+		if (!$className)
+		{
+			return null;
+		}
 
 		return $className::mapFromArray($params);
 	}

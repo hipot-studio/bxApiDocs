@@ -6,18 +6,19 @@ namespace Bitrix\Tasks\V2\Public\Command\Template;
 
 use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
-use Bitrix\Tasks\Control\Exception\TemplateAddException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Exception;
 
 class AddTemplateCommand extends AbstractCommand
 {
 	public function __construct(
 		#[Validatable]
 		public readonly Entity\Template $template,
-		public readonly int             $createdBy,
+		public readonly AddConfig $config,
 	)
 	{
 
@@ -25,15 +26,19 @@ class AddTemplateCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
+		$result = new Result();
+
+		$handler = Container::getInstance()->get(AddTemplateHandler::class);
+
 		try
 		{
-			$handler = new AddTemplateHandler(Container::getInstance()->getTemplateRepository());
+			$template = $handler($this);
 
-			return (new Result())->setObject($handler($this));
+			return $result->setObject($template);
 		}
-		catch (TemplateAddException $e)
+		catch (Exception $e)
 		{
-			return (new Result())->addError(new Error('Failed creating template'));
+			return $result->addError(Error::createFromThrowable($e));
 		}
 	}
 }

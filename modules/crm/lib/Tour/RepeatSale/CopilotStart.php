@@ -10,32 +10,19 @@ use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Item\Activity\RepeatSale\CopilotButton;
+use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\Type\CopilotButtonRepeatSale;
 use Bitrix\Crm\Tour\Base;
+use Bitrix\Crm\Tour\Mixin\HasEntitySupport;
 use Bitrix\Main\Localization\Loc;
 use CCrmOwnerType;
 
 final class CopilotStart extends Base
 {
+	use HasEntitySupport;
+
 	protected const OPTION_NAME = 'copilot-repeat-sale-start';
 
-	private ?int $entityTypeId = null;
-	private ?int $entityId = null;
 	private ?EO_Activity $activity = null;
-
-	public function setEntityTypeId(?int $entityTypeId): self
-	{
-		$this->entityTypeId = $entityTypeId;
-
-		return $this;
-	}
-
-	public function setEntityId(?int $entityId): self
-	{
-		$this->entityId = $entityId;
-
-		return $this;
-	}
 
 	protected function canShow(): bool
 	{
@@ -66,7 +53,7 @@ final class CopilotStart extends Base
 				'title' => Loc::getMessage('CRM_TOUR_COPILOT_REPEAT_SALE_TITLE'),
 				'text' => Loc::getMessage($textCode),
 				'position' => 'top',
-				'target' => sprintf('#%s', CopilotButton::BUTTON_TARGET_ID),
+				'target' => sprintf('#%s', CopilotButtonRepeatSale::BUTTON_TARGET_ID),
 				'article' => 25376986,
 			],
 		];

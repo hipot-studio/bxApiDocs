@@ -23,6 +23,7 @@ use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Item;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\SystemHistoryLog\ErrorCodeDictionary;
 
 Loc::loadMessages(__FILE__);
 
@@ -286,7 +287,7 @@ abstract class Task
 			$taskModel = TaskModel::createFromTaskItem($dstInstance);
 			if (!TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_SAVE, null, $taskModel))
 			{
-				$creationResult->getErrors()->add('ACCESS_DENIED.RESPONSIBLE_AND_ORIGINATOR_NOT_ALLOWED', Loc::getMessage('TASKS_REPLICATOR_ACCESS_DENIED_MSGVER_1'));
+				$creationResult->getErrors()->add(ErrorCodeDictionary::ACCESS_DENIED, Loc::getMessage('TASKS_REPLICATOR_ACCESS_DENIED_MSGVER_1'));
 				return $creationResult;
 			}
 

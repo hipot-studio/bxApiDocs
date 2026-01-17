@@ -25,29 +25,29 @@ class DropCounterCommandHandler
 		match ($command->type)
 		{
 			CounterDictionary::BookingUnConfirmed,
-			CounterDictionary::BookingDelayed => $this->handle($command),
+			CounterDictionary::BookingDelayed,
+			CounterDictionary::BookingNewYandexMaps => $this->handle($command),
 			default => '',
 		};
 	}
 
 	private function handle(DropCounterCommand $command): void
 	{
-		$affectedUsers = $this->counterRepository->getUsersByCounterType(
-			entityIds: [$command->entityId],
-			types: [$command->type],
-		);
-
-		if (empty($affectedUsers))
+		$affectedUserIds = $this->getAffectedUserIds($command);
+		if (empty($affectedUserIds))
 		{
 			return;
 		}
 
-		foreach ($affectedUsers as $row)
-		{
-			$userId = (int)$row['USER_ID'];
-			$this->counterRepository->down(entityId: $command->entityId, type: $command->type, userId: $userId);
-			$total = $this->counterRepository->get($userId, CounterDictionary::Total);
+		$this->counterRepository->downMultiple(
+			entityIds: [$command->entityId],
+			types: [$command->type],
+			userIds: $affectedUserIds,
+		);
 
+		foreach ($affectedUserIds as $userId)
+		{
+			$total = $this->counterRepository->get($userId, CounterDictionary::Total);
 			\CUserCounter::Set(
 				$userId,
 				CounterDictionary::LeftMenu->value,
@@ -64,5 +64,26 @@ class DropCounterCommandHandler
 				entityId: $command->entityId,
 			)
 		);
+	}
+
+	private function getAffectedUserIds(DropCounterCommand $command): array
+	{
+		if ($command->userId)
+		{
+			return [$command->userId];
+		}
+
+		$result = [];
+
+		$affectedUserIds = $this->counterRepository->getUserIdsByCounterType(
+			entityIds: [$command->entityId],
+			types: [$command->type],
+		);
+		foreach ($affectedUserIds as $affectedUserId)
+		{
+			$result[] = $affectedUserId;
+		}
+
+		return $result;
 	}
 }

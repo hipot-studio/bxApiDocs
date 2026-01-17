@@ -6,28 +6,38 @@ namespace Bitrix\Booking\Command\Resource;
 
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Exception\Resource\UpdateResourceException;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Repository\FavoritesRepositoryInterface;
 use Bitrix\Booking\Internals\Service\ResourceService;
+use Bitrix\Booking\Internals\Service\ResourceAvatarService;
+use Bitrix\Booking\Internals\Service\ResourceSkuService;
+use Bitrix\Booking\Service\BookingFeature;
 
 class UpdateResourceCommandHandler
 {
 	private FavoritesRepositoryInterface $favoritesRepository;
 	private ResourceService $resourceService;
+	private ResourceAvatarService $resourceAvatarService;
 	private JournalServiceInterface $journalService;
+	private ResourceSkuService $resourceSkuService;
 
 	public function __construct()
 	{
 		$this->favoritesRepository = Container::getFavoritesRepository();
 		$this->resourceService = Container::getResourceService();
+		$this->resourceAvatarService = Container::getResourceAvatarService();
 		$this->journalService = Container::getJournalService();
+		$this->resourceSkuService = Container::getResourceSkuService();
 	}
 
 	public function __invoke(UpdateResourceCommand $command): Entity\Resource\Resource
 	{
+		$this->checkFeatures();
+
 		$currentResource = Container::getResourceRepository()->getById($command->resource->getId());
 
 		if (!$currentResource || $currentResource->isDeleted())
@@ -42,11 +52,19 @@ class UpdateResourceCommandHandler
 
 		return Container::getTransactionHandler()->handle(
 			fn: function() use ($command, $currentResource) {
+				//update resource avatar
+				$currentAvatarId = $currentResource->getAvatar()?->getId();
+				$this->resourceAvatarService->handleAvatarUpdate($command->resource, $currentAvatarId);
+
 				// update slot ranges
 				$this->handleSlotRanges($command, $currentResource);
 				$resourceEntityChanges = $this->resourceService->handleResourceEntities(
 					$currentResource,
 					$command->resource->getEntityCollection(),
+				);
+				$this->resourceSkuService->handleSkuRelations(
+					$currentResource,
+					$command->resource->getSkuCollection(),
 				);
 
 				// update resource
@@ -124,6 +142,14 @@ class UpdateResourceCommandHandler
 		{
 			$rangesToAdd = $newRanges->diff($existedRanges);
 			Container::getResourceSlotRepository()->save($rangesToAdd);
+		}
+	}
+
+	private function checkFeatures(): void
+	{
+		if (!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_BOOKING))
+		{
+			throw new Exception('Feature is not available');
 		}
 	}
 }

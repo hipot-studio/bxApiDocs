@@ -2,14 +2,14 @@
 
 namespace Bitrix\Bizproc\Activity\Operator;
 
-use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Main\Localization\Loc;
 
 class NotEmptyOperator extends EmptyOperator
 {
 	public static function getCode(): string
 	{
-		return '!empty';
+		return Operator::NotEmpty->value;
 	}
 
 	public static function getTitle(): string

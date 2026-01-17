@@ -134,6 +134,21 @@ abstract class AbstractEntityCollection implements EntityCollectionInterface
 		return $this;
 	}
 
+	public function replaceMulti(EntityCollectionInterface $collection): void
+	{
+		foreach ($collection as $item)
+		{
+			$this->remove($item->getId());
+			$this->add($item);
+		}
+	}
+
+	public function replace(EntityInterface $item): void
+	{
+		$this->remove($item->getId());
+		$this->add($item);
+	}
+
 	public function __call(string $name, array $args = []): ?array
 	{
 		$operation = substr($name, 0, 3);
@@ -263,6 +278,29 @@ abstract class AbstractEntityCollection implements EntityCollectionInterface
 		return null;
 	}
 
+	public function sort(string $field = 'id', SortOrder $order = SortOrder::Asc): static
+	{
+		$entities = $this->entities;
+		usort($entities, static function (EntityInterface $itemA, EntityInterface $itemB) use ($field, $order) {
+			$valueA = property_exists($itemA, $field) ? $itemA->{$field} : null;
+			$valueB = property_exists($itemB, $field) ? $itemB->{$field} : null;
+
+			if ($valueA === $valueB)
+			{
+				return 0;
+			}
+
+			if ($order === SortOrder::Desc)
+			{
+				return ($valueA < $valueB) ? 1 : -1;
+			}
+
+			return ($valueA > $valueB) ? 1 : -1;
+		});
+
+		return new static(...$entities);
+	}
+
 	public function filter(callable $callback): static
 	{
 		return new static(...array_filter($this->entities, $callback));
@@ -271,5 +309,16 @@ abstract class AbstractEntityCollection implements EntityCollectionInterface
 	public function map(callable $callback): array
 	{
 		return array_map($callback, $this->entities);
+	}
+
+	public function unique(): static
+	{
+		$unique = [];
+		foreach ($this->entities as $entity)
+		{
+			$unique[$entity->getId()] = $entity;
+		}
+
+		return new static(...array_values($unique));
 	}
 }

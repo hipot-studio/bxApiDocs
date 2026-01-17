@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Internals\Task;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\SystemException;
@@ -30,6 +31,8 @@ use Exception;
  */
 class SearchIndexTable extends TaskDataManager
 {
+	use AddInsertIgnoreTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_tasks_search_index';
@@ -87,7 +90,7 @@ class SearchIndexTable extends TaskDataManager
 
 		if (!$row)
 		{
-			static::add([
+			static::addInsertIgnore([
 				'TASK_ID' => $taskId,
 				'MESSAGE_ID' => $messageId,
 				'SEARCH_INDEX' => $searchIndex,

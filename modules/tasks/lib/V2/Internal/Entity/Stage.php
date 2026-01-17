@@ -16,6 +16,8 @@ class Stage extends AbstractEntity
 		public readonly ?int $id = null,
 		public readonly ?string $title = null,
 		public readonly ?string $color = null,
+		public readonly ?string $systemType = null,
+		public readonly ?int $sort = null,
 	)
 	{
 
@@ -32,6 +34,8 @@ class Stage extends AbstractEntity
 			id: static::mapInteger($props, 'id'),
 			title: static::mapString($props, 'title'),
 			color: static::mapString($props, 'color'),
+			systemType: static::mapString($props, 'systemType'),
+			sort: static::mapString($props, 'sort'),
 		);
 	}
 
@@ -41,6 +45,8 @@ class Stage extends AbstractEntity
 			'id' => $this->id,
 			'title' => $this->title,
 			'color' => $this->color,
+			'systemType' => $this->systemType,
+			'sort' => $this->sort,
 		];
 	}
 }

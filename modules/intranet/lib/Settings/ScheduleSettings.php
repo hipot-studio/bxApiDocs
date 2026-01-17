@@ -13,6 +13,8 @@ use Bitrix\Intranet\Settings\Search\SearchEngine;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 
 class ScheduleSettings extends AbstractSettings
 {
@@ -232,5 +234,27 @@ class ScheduleSettings extends AbstractSettings
 		]);
 
 		return $searchEngine->find($query);
+	}
+
+	public function validate(): ErrorCollection
+	{
+		$errors = new ErrorCollection();
+
+		if (
+			isset($this->data['week_holidays'])
+			&& is_array($this->data['week_holidays'])
+			&& count($this->data['week_holidays']) === 7)
+		{
+			$errors->setError(new Error(
+					Loc::getMessage('INTRANET_SETTINGS_ALL_WEEKDAY_SELECTED_ERROR'),
+					static::ERROR_VALIDATION,
+					[
+						'page' => $this->getType(),
+						'field' => 'week_holidays[]',
+					])
+			);
+		}
+
+		return $errors;
 	}
 }

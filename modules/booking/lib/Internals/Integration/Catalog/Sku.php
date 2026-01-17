@@ -10,7 +10,7 @@ class Sku
 	private string $name;
 	private string|null $image = null;
 	private float|null $price = null;
-	private string|null $currency = null;
+	private string|null $currencyId = null;
 	private string|null $section = null;
 
 	public function __construct(int $id, string $name)
@@ -29,7 +29,7 @@ class Sku
 		return $this->name;
 	}
 
-	public function getImage(): ?string
+	public function getImage(): string|null
 	{
 		return $this->image;
 	}
@@ -41,7 +41,7 @@ class Sku
 		return $this;
 	}
 
-	public function getPrice(): ?float
+	public function getPrice(): float|null
 	{
 		return $this->price;
 	}
@@ -53,19 +53,19 @@ class Sku
 		return $this;
 	}
 
-	public function getCurrency(): ?string
+	public function getCurrencyId(): string|null
 	{
-		return $this->currency;
+		return $this->currencyId;
 	}
 
-	public function setCurrency(string|null $currency): Sku
+	public function setCurrencyId(string|null $currencyId): Sku
 	{
-		$this->currency = $currency;
+		$this->currencyId = $currencyId;
 
 		return $this;
 	}
 
-	public function getSection(): ?string
+	public function getSection(): string|null
 	{
 		return $this->section;
 	}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Main\Messenger\Internals\Storage\Db;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Messenger\Entity\MessageBox;
 use Bitrix\Main\Messenger\Entity\MessageBoxCollection;
 use Bitrix\Main\Messenger\Internals\Exception\Storage\MappingException;
@@ -103,48 +104,18 @@ class MessageRepository
 	}
 
 	/**
+	 * @internal
+	 *
 	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
+	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function getStaleMessages(): MessageBoxCollection
+	public function requeueStaleMessages(DateTime $thresholdDate): void
 	{
-		$collection = new MessageBoxCollection();
-
 		/** @var MessengerMessageTable $tableClass */
 		$tableClass = $this->tableEntity->getDataClass();
 
-		$thresholdDate = DateTime::createFromTimestamp(time() - 2 * 86400);
-
-		$query = $tableClass::query();
-
-		$query
-			->setSelect(['*'])
-			->where('STATUS', '=', MessageStatus::Processing->value)
-			->where('UPDATED_AT', '<', $thresholdDate)
-			->setOrder(['CREATED_AT' => 'ASC'])
-		;
-
-		$items = $query->fetchCollection();
-
-		if (!$items || $items->isEmpty())
-		{
-			return $collection;
-		}
-
-		foreach ($items as $ormItem)
-		{
-			if ($messageBox = $this->getEntityFromOrmItem($ormItem))
-			{
-				$collection->add($messageBox);
-			}
-			else
-			{
-				$ormItem->delete();
-			}
-		}
-
-		return $collection;
+		$tableClass::requeueStaleMessages($thresholdDate);
 	}
 
 	/**

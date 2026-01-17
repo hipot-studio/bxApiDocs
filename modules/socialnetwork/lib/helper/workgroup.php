@@ -342,8 +342,14 @@ class Workgroup
 		{
 			return $result;
 		}
+		$user = \CUser::GetByID($userId)->Fetch();
+		if (!$user)
+		{
+			return $result;
+		}
 
 		$isIntranet = \Bitrix\Socialnetwork\Integration\Intranet\User::isIntranet($userId) ? 'Y' : 'N';
+		$isExternal = in_array($user['EXTERNAL_AUTH_ID'], \Bitrix\Main\UserTable::getExternalUserTypes(), true) ? 'Y' : 'N';
 
 		$featuresSettings = \CSocNetAllowed::getAllowedFeatures();
 		if (
@@ -360,7 +366,7 @@ class Workgroup
 		}
 
 		$cacheTTL = 3600 * 24 * 30;
-		$cacheDir = '/sonet/features_perms_v3/' . FeatureTable::FEATURE_ENTITY_TYPE_GROUP . '/list/' . $userId;
+		$cacheDir = '/sonet/features_perms_v4/' . FeatureTable::FEATURE_ENTITY_TYPE_GROUP . '/list/' . $userId;
 		$cacheId = implode(' ', [ 'entities_list', $feature, $operation, $userId ]);
 
 		$cache = new \CPHPCache();
@@ -460,6 +466,7 @@ class Workgroup
 							%s NOT IN (\''.FeaturePermTable::PERM_OWNER.'\', \''.FeaturePermTable::PERM_MODERATOR.'\', \''.FeaturePermTable::PERM_USER.'\')
 							OR %s >= %s
 						)
+						AND \''. $isExternal . '\' = \'N\'
 					) THEN \'Y\'
 					WHEN
 					(

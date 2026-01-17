@@ -3,12 +3,14 @@
 namespace Bitrix\Tasks\Integration\Bizproc\Document;
 
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\UserTable;
 use Bitrix\Tasks\Flow\FlowRegistry;
 use Bitrix\Tasks\Flow\Path\FlowPathMaker;
 use Bitrix\Tasks\Integration\Bizproc\Automation\Factory;
+use Bitrix\Tasks\Integration\Bizproc\Starter\TasksModuleSettings;
 use Bitrix\Tasks\Internals\Task\Mark;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Main\Type\DateTime;
@@ -18,6 +20,9 @@ use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Socialnetwork;
 use Bitrix\Tasks\Util\UserField;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Bizproc\Service\ResultService;
 
 if (!Main\Loader::includeModule('bizproc'))
 {
@@ -70,7 +75,7 @@ class Task implements \IBPWorkflowDocument
 			{
 				$members = MemberTable::getList([
 					'filter' => ['=TASK_ID' => $documentId],
-					'select' => ['USER_ID']
+					'select' => ['USER_ID'],
 				])->fetchAll();
 
 				$members = array_column($members, 'USER_ID');
@@ -82,7 +87,7 @@ class Task implements \IBPWorkflowDocument
 			{
 				$creatorId = MemberTable::getList([
 					'filter' => ['=TASK_ID' => $documentId, '=TYPE' => 'O'],
-					'select' => ['USER_ID']
+					'select' => ['USER_ID'],
 				])->fetch()['USER_ID'];
 
 				return (int) $creatorId === (int) $userId;
@@ -186,17 +191,17 @@ class Task implements \IBPWorkflowDocument
 			'TITLE' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_TITLE'),
 				'Type' => 'string',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'DESCRIPTION' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DESCRIPTION'),
 				'Type' => 'text',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'IS_IMPORTANT' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_IS_IMPORTANT'),
 				'Type' => 'bool',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'STATUS' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS'),
@@ -235,17 +240,17 @@ class Task implements \IBPWorkflowDocument
 			'DEADLINE' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DEADLINE'),
 				'Type' => 'datetime',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'START_DATE_PLAN' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_START_DATE_PLAN'),
 				'Type' => 'datetime',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'END_DATE_PLAN' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_END_DATE_PLAN'),
 				'Type' => 'datetime',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'IS_EXPIRED' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_IS_EXPIRED'),
@@ -281,8 +286,8 @@ class Task implements \IBPWorkflowDocument
 				'Editable' => true,
 				'Options' => [
 					Mark::POSITIVE => Loc::getMessage('TASKS_BP_DOCUMENT_MARK_POSITIVE'),
-					Mark::NEGATIVE => Loc::getMessage('TASKS_BP_DOCUMENT_MARK_NEGATIVE')
-				]
+					Mark::NEGATIVE => Loc::getMessage('TASKS_BP_DOCUMENT_MARK_NEGATIVE'),
+				],
 			],
 			'ALLOW_CHANGE_DEADLINE' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_ALLOW_CHANGE_DEADLINE'),
@@ -292,7 +297,7 @@ class Task implements \IBPWorkflowDocument
 			'ALLOW_TIME_TRACKING' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_ALLOW_TIME_TRACKING'),
 				'Type' => 'bool',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'MATCH_WORK_TIME' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_MATCH_WORK_TIME'),
@@ -301,7 +306,7 @@ class Task implements \IBPWorkflowDocument
 			'TASK_CONTROL' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_TASK_CONTROL'),
 				'Type' => 'bool',
-				'Editable' => true
+				'Editable' => true,
 			],
 			'ADD_IN_REPORT' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_ADD_IN_REPORT'),
@@ -339,6 +344,10 @@ class Task implements \IBPWorkflowDocument
 				'Editable' => true,
 				'Multiple' => true,
 			],
+			'CHAT_ID' => [
+				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_CHAT_ID_INT'),
+				'Type' => 'int',
+			],
 		];
 
 		if (isset($documentType) && (self::isPlanTask($documentType) || self::isPersonalTask($documentType)))
@@ -351,11 +360,12 @@ class Task implements \IBPWorkflowDocument
 					'R' => Loc::getMessage('TASKS_BP_DOCUMENT_MEMBER_ROLE_R_V2'),
 					'A' => Loc::getMessage('TASKS_BP_DOCUMENT_MEMBER_ROLE_A'),
 					'U' => Loc::getMessage('TASKS_BP_DOCUMENT_MEMBER_ROLE_U'),
-				]
+				],
 			];
 		}
 
-		if (Main\Loader::includeModule('forum'))
+		$isV2Form = FormV2Feature::isOn('automation');
+		if ($isV2Form || Main\Loader::includeModule('forum'))
 		{
 			$fields['COMMENT_RESULT'] = [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_COMMENT_RESULT'),
@@ -369,7 +379,6 @@ class Task implements \IBPWorkflowDocument
 				//'Editable => true,
 				'Multiple' => false,
 			];
-
 		}
 
 		return array_merge($fields, self::getFieldsCreatedByUser());
@@ -412,7 +421,7 @@ class Task implements \IBPWorkflowDocument
 				'Type' => $field['USER_TYPE_ID'] === 'boolean' ? 'bool' : $field['USER_TYPE_ID'],
 				'Editable' => \CBPHelper::getBool($field['EDIT_IN_LIST']),
 				'Required' => \CBPHelper::getBool($field['MANDATORY']),
-				'Multiple' => \CBPHelper::getBool($field['MULTIPLE'])
+				'Multiple' => \CBPHelper::getBool($field['MULTIPLE']),
 			];
 		}
 
@@ -494,14 +503,11 @@ class Task implements \IBPWorkflowDocument
 			}
 		}
 
-		if (Main\Loader::includeModule('forum'))
-		{
-			$fields['COMMENT_RESULT'] =
-				(new \Bitrix\Tasks\Internals\Task\Result\ResultManager(0))
-					->getTaskResults((int)$documentId)
-			;
-			$fields['COMMENT_RESULT_LAST'] = \Bitrix\Tasks\Internals\Task\Result\ResultManager::getLastResult((int)$documentId);
-		}
+		$resultService = Container::getInstance()->get(ResultService::class);
+
+		$resultMap = ['COMMENT_RESULT' => true, 'COMMENT_RESULT_LAST' => true];
+
+		$fields = $resultService->enrichFieldsWithResult($fields, (int)$documentId, $resultMap);
 
 		$fields = self::setFlowMessages($fields);
 
@@ -763,6 +769,11 @@ class Task implements \IBPWorkflowDocument
 		return (int)mb_substr($documentType, mb_strlen('TASK_SCRUM_PROJECT_'));
 	}
 
+	public static function isBizprocTask($documentType): bool
+	{
+		return $documentType === 'TASK';
+	}
+
 	public static function isProjectTask($documentType)
 	{
 		return (mb_strpos($documentType, 'TASK_PROJECT_') === 0);
@@ -783,11 +794,11 @@ class Task implements \IBPWorkflowDocument
 		return null;
 	}
 
-	public static function createAutomationTarget($documentType)
+	public static function createAutomationTarget($documentType, $documentId)
 	{
 		if (mb_strpos($documentType, 'TASK_') === 0)
 		{
-			return Factory::createTarget($documentType);
+			return Factory::createTarget($documentType, $documentId);
 		}
 
 		return null;
@@ -823,7 +834,7 @@ class Task implements \IBPWorkflowDocument
 		{
 			$member = MemberTable::getList([
 				'filter' => ['=TASK_ID' => $documentId, '=TYPE' => MemberTable::MEMBER_TYPE_RESPONSIBLE],
-				'select' => ['USER_ID']
+				'select' => ['USER_ID'],
 			])->fetch();
 
 			return $member ? [$member['USER_ID']] : [];
@@ -850,7 +861,7 @@ class Task implements \IBPWorkflowDocument
 							'=GROUP_ID' => $projectId,
 						],
 						'cache' => [
-							'ttl' => 3600
+							'ttl' => 3600,
 						],
 					])->fetch();
 
@@ -864,7 +875,7 @@ class Task implements \IBPWorkflowDocument
 						'=GROUP_ID' => $projectId,
 					],
 					'cache' => [
-						'ttl' => 3600
+						'ttl' => 3600,
 					],
 				])->fetchAll();
 
@@ -1153,7 +1164,7 @@ class Task implements \IBPWorkflowDocument
 		$res = UserTable::query()
 			->where('ID', $userId)
 			->setSelect([
-				'NOTIFICATION_LANGUAGE_ID'
+				'NOTIFICATION_LANGUAGE_ID',
 			])
 			->exec()
 			->fetchObject()
@@ -1163,5 +1174,23 @@ class Task implements \IBPWorkflowDocument
 			? $res->getNotificationLanguageId()
 			: null
 			;
+	}
+
+	public static function getTriggerByCode(string $code, array $complexDocumentType): ?string
+	{
+		[$moduleId, $entity, $documentType] = $complexDocumentType;
+
+		$trigger = Factory::getTriggerByCode($code);
+		if ($trigger && $trigger::isSupported($documentType))
+		{
+			return $trigger;
+		}
+
+		return null;
+	}
+
+	public static function getStarterModuleSettings(array $complexDocumentType): TasksModuleSettings
+	{
+		return new \Bitrix\Tasks\Integration\Bizproc\Starter\TasksModuleSettings($complexDocumentType);
 	}
 }

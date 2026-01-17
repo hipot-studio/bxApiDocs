@@ -19,7 +19,7 @@ if (!Loader::includeModule('rest'))
 class Connector extends Base
 {
 	public const SCOPE = 'biconnector';
-	const ALLOWED_SELECT = ['ID', 'TITLE', 'DESCRIPTION', 'DATE_CREATE', 'LOGO', 'URL_CHECK', 'URL_TABLE_LIST', 'URL_TABLE_DESCRIPTION', 'URL_DATA', 'SETTINGS', 'SORT',];
+	private const ALLOWED_SELECT = ['ID', 'TITLE', 'DESCRIPTION', 'DATE_CREATE', 'LOGO', 'URL_CHECK', 'URL_TABLE_LIST', 'URL_TABLE_DESCRIPTION', 'URL_DATA', 'SETTINGS', 'SORT', 'SUPPORT_MAPPING'];
 
 	public static function OnRestServiceBuildDescription()
 	{
@@ -141,6 +141,14 @@ class Connector extends Base
 				'type' => 'datetime',
 				'isRequired' => true,
 				'isReadOnly' => true,
+				'isImmutable' => false,
+				'isMultiple' => false,
+			],
+			[
+				'title' => 'supportMapping',
+				'type' => 'boolean',
+				'isRequired' => false,
+				'isReadOnly' => false,
 				'isImmutable' => false,
 				'isMultiple' => false,
 			],

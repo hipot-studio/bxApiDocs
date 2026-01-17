@@ -2,13 +2,12 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
 use Bitrix\Crm\Security\Role\RolePermission;
-use Bitrix\Main;
 use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
+use Bitrix\Main;
 
 class CCrmRole
 {

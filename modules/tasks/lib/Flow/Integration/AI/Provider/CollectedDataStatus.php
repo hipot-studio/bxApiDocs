@@ -11,4 +11,5 @@ enum CollectedDataStatus: string
 	case SUCCESS = 'success';
 	case ERROR = 'error';
 	case LIMIT_EXCEEDED = 'limit_exceeded';
+	case RATE_LIMIT_EXCEEDED = 'rate_limit_exceeded';
 }

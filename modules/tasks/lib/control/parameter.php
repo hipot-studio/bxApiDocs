@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Control;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Internals\Task\ParameterTable;
 
 class Parameter
@@ -123,10 +124,21 @@ class Parameter
 				continue;
 			}
 
-			if (
-				!isset($row['VALUE'])
-				|| !in_array($row['VALUE'], ['N', 'Y'])
+			if (!isset($row['VALUE']))
+			{
+				$params[$k]['VALUE'] = self::DEFAULT_VALUE;
+			}
+			elseif (
+				$row['CODE'] === ParameterTable::PARAM_MAX_DEADLINE_CHANGE_DATE
+				|| $row['CODE'] === ParameterTable::PARAM_MAX_DEADLINE_CHANGES
 			)
+			{
+				if (!is_numeric($row['VALUE']) || (int)$row['VALUE'] < 0)
+				{
+					$params[$k]['VALUE'] = '';
+				}
+			}
+			elseif (!in_array($row['VALUE'], ['N', 'Y']))
 			{
 				$params[$k]['VALUE'] = self::DEFAULT_VALUE;
 			}

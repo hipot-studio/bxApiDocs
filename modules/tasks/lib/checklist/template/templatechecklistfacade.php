@@ -202,7 +202,7 @@ class TemplateCheckListFacade extends CheckListFacade
 	 */
 	private static function logToAnalyticsFile($parameters)
 	{
-		$analyticsData = $parameters['analyticsData'];
+		$analyticsData = ($parameters['analyticsData'] ?? null);
 
 		if (is_array($analyticsData) && !empty($analyticsData))
 		{

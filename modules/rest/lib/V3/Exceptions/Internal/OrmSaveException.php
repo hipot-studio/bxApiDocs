@@ -6,6 +6,6 @@ class OrmSaveException extends InternalException
 {
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_INTERNAL_ORM_SAVE_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_ORMSAVEEXCEPTION';
 	}
 }

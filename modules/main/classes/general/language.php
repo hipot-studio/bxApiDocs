@@ -5,9 +5,9 @@ use Bitrix\Main\Localization;
 
 IncludeModuleLangFile(__FILE__);
 
-class CAllLanguage
+class CLanguage
 {
-	var $LAST_ERROR;
+	public $LAST_ERROR;
 
 	public static function GetList($by = "sort", $order = "asc", $arFilter = [])
 	{
@@ -327,10 +327,6 @@ class CAllLanguage
 		}
 		return $result;
 	}
-}
-
-class CLanguage extends CAllLanguage
-{
 }
 
 class CLangAdmin extends CLanguage

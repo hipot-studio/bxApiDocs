@@ -46,6 +46,7 @@ final class Fetch implements Action
 				'INTRANET_CUSTOM_SECTION_ID',
 				'TITLE',
 				'CODE',
+				'SOURCE_ID',
 			])
 		;
 

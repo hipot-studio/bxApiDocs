@@ -38,4 +38,14 @@ class SyncMailboxAction extends JsGridAction
 			'mailboxId' => $rawFields['ID'],
 		];
 	}
+
+	public function getControl(array $rawFields): ?array
+	{
+		if (!($rawFields['CAN_EDIT'] ?? false))
+		{
+			return null;
+		}
+
+		return parent::getControl($rawFields);
+	}
 }

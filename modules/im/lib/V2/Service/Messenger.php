@@ -14,6 +14,7 @@ use Bitrix\Im\V2\Link\Task\TaskService;
 use Bitrix\Im\V2\Entity\Task\TaskItem;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Link\Task\TaskType;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
@@ -209,7 +210,12 @@ class Messenger
 
 	//region Task processing
 
-	public function registerTask(int $chatId, int $messageId, TaskObject $task): void
+	public function registerTask(
+		int $chatId,
+		int $messageId,
+		TaskObject $task,
+		TaskType $taskType = TaskType::Task,
+	): void
 	{
 		try
 		{
@@ -221,7 +227,7 @@ class Messenger
 				return;
 			}
 
-			$taskService->registerTask($chat, $messageId, TaskItem::initByTaskObject($task));
+			$taskService->registerTask($chat, $messageId, TaskItem::initByTaskObject($task), $taskType);
 		}
 		catch (\Bitrix\Main\SystemException $exception)
 		{

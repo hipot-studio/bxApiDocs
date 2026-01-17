@@ -13,14 +13,17 @@ class ProcessingException extends RuntimeException implements MessageBoxAwareExc
 {
 	use MessageBoxAwareExceptionTrait;
 
-	public function __construct(
-		MessageBox $messageBox,
-		string $message = '',
-		int $code = 0,
-		?\Throwable $previous = null
-	)
+	public function __construct(MessageBox $messageBox, \Throwable $previous)
 	{
-		parent::__construct($message, $code, $previous);
+		$message = sprintf(
+			'Message processing exception: "%s". Queue: "%s". Message: "%s". ItemId: "%s"',
+			$previous->getMessage(),
+			$messageBox->getQueueId(),
+			$messageBox->getId(),
+			$messageBox->getItemId()
+		);
+
+		parent::__construct($message, $previous->getCode(), $previous);
 
 		$this->messageBox = $messageBox;
 	}

@@ -5,7 +5,10 @@ namespace Bitrix\Im\V2\Entity\User;
 use Bitrix\Im\Model\StatusTable;
 use Bitrix\Im\V2\Entity\EntityCollection;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter\Helper;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Search\Content;
+use Bitrix\Main\UserIndexTable;
 use Bitrix\Main\UserTable;
 
 /**
@@ -68,6 +71,50 @@ class UserCollection extends EntityCollection
 		}
 	}
 
+	public static function findByName(string $searchString, array $excludeUserIds, int $limit): self
+	{
+		$matchString = self::prepareSearchString($searchString);
+
+		if ($matchString === null)
+		{
+			return new static();
+		}
+
+		$usersQuery = UserTable::query()
+			->setSelect(['ID'])
+			->registerRuntimeField(
+				'USER_INDEX',
+				new Reference(
+					'USER_INDEX',
+					UserIndexTable::class,
+					Join::on('this.ID', 'ref.USER_ID'),
+					['join_type' => 'INNER']
+				)
+			)
+			->where('ACTIVE', 'Y')
+			->where('IS_REAL_USER', true)
+			->whereNotIn('ID', $excludeUserIds)
+			->whereMatch('USER_INDEX.SEARCH_USER_CONTENT', $matchString)
+			->setLimit($limit);
+
+		$userIds = array_map('intval', array_column($usersQuery->fetchAll(), 'ID'));
+
+		return new static($userIds);
+	}
+
+	private static function prepareSearchString(string $query): ?string
+	{
+		$preparedString = Content::prepareStringToken($query);
+		$matchString = Helper::matchAgainstWildcard($preparedString);
+
+		if (!Content::canUseFulltextSearch($matchString))
+		{
+			return null;
+		}
+
+		return $matchString;
+	}
+
 	public static function filterUserIds(array $userIds, callable $predicate, ?int $limit = null): array
 	{
 		$filteredUserIds = [];
@@ -98,7 +145,10 @@ class UserCollection extends EntityCollection
 
 	public function toRestFormat(array $option = []): array
 	{
-		$this->fillOnlineData();
+		if (!($option['WITHOUT_ONLINE'] ?? false))
+		{
+			$this->fillOnlineData();
+		}
 
 		return parent::toRestFormat($option);
 	}

@@ -83,7 +83,7 @@ class ResourceService
 				'ID' => $resourceIds,
 				'INCLUDE_DELETED' => true,
 			]),
-			select: new ResourceSelect(),
+			select: (new ResourceSelect())->prepareSelect(),
 		);
 
 		$primaryResource = null;
@@ -151,7 +151,7 @@ class ResourceService
 					'TYPE_ID' => $externalTypeId,
 					'EXTERNAL_ID' => array_keys($typedExternalResources),
 				])),
-				select: new ResourceSelect(),
+				select: (new ResourceSelect())->prepareSelect(),
 			);
 
 			foreach ($typedExternalResources as $externalId => $externalResource)

@@ -3,8 +3,6 @@
 namespace Bitrix\Crm\Activity\Provider;
 
 use Bitrix\Crm\Restriction\RestrictionManager;
-use Bitrix\Faceid\AgreementTable;
-use Bitrix\FaceId\FaceId;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use CBitrix24;
@@ -101,14 +99,11 @@ class Visit extends Base
 
 	public static function getPopupParameters()
 	{
-		$faceIdInstalled = Loader::includeModule('faceid');
-		$faceIdEnabled = $faceIdInstalled && FaceId::isAvailable();
-
 		return [
 			'HAS_CONSENT' => self::hasConsent() ? 'Y' : 'N',
-			'FACEID_INSTALLED' => $faceIdInstalled ? 'Y' : 'N',
-			'FACEID_ENABLED' => $faceIdEnabled ? 'Y' : 'N',
-			'HAS_RECOGNIZE_CONSENT' => self::hasRecognizeConsent() ? 'Y' : 'N',
+			'FACEID_INSTALLED' => 'N',
+			'FACEID_ENABLED' => 'N',
+			'HAS_RECOGNIZE_CONSENT' => 'N',
 		];
 	}
 
@@ -186,26 +181,5 @@ class Visit extends Base
 		$consent = (array)CUserOptions::GetOption('crm.activity.visit', 'consent', []);
 
 		return ($consent['timestamp'] ?? 0) > 0;
-	}
-
-	protected static function hasRecognizeConsent()
-	{
-		if (!Loader::includeModule('faceid'))
-		{
-			return false;
-		}
-
-		global $USER;
-
-		$row = AgreementTable::getList(array(
-			'select' => [
-				'ID',
-			],
-			'filter' => [
-				'=USER_ID' => $USER->getId(),
-			]
-		))->fetch();
-
-		return (bool)$row;
 	}
 }

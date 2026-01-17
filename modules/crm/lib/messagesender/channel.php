@@ -25,6 +25,7 @@ final class Channel
 	 *     isDefault: bool,
 	 *     name: string,
 	 *     shortName: string,
+	 *     isTemplatesBased: bool,
 	 * } $channelInfo
 	 * @param Correspondents\From[] $fromList
 	 * @param Correspondents\To[] $toList
@@ -146,5 +147,15 @@ final class Channel
 		}
 
 		return '';
+	}
+
+	public function isTemplatesBased(): bool
+	{
+		if (isset($this->channelInfo['isTemplatesBased']) && is_bool($this->channelInfo['isTemplatesBased']))
+		{
+			return $this->channelInfo['isTemplatesBased'];
+		}
+
+		return false;
 	}
 }

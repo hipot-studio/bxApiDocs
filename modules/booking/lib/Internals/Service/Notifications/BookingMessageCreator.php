@@ -13,6 +13,7 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmContext;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmLink;
 use Bitrix\Booking\Internals\Service\ProviderManager;
+use Bitrix\Main\Localization\Loc;
 use DateTime;
 use DateTimeImmutable;
 use Bitrix\Main\Context;
@@ -124,7 +125,7 @@ abstract class BookingMessageCreator
 
 	protected function getManagerName(): string
 	{
-		$defaultManagerName = ' ';
+		$defaultManagerName = Loc::getMessage('BOOKING_NOTIFICATION_MANAGER_DEFAULT_NAME') ?? ' ';
 
 		$managerId = $this->booking->getCreatedBy();
 		if (!$managerId)
@@ -226,6 +227,30 @@ abstract class BookingMessageCreator
 	{
 		//@todo
 		return '';
+	}
+
+	protected function getServices(): string
+	{
+		$serviceNames = [];
+
+		$bookingSkuCollection = $this->booking->getSkuCollection();
+		foreach ($bookingSkuCollection as $sku)
+		{
+			$skuName = $sku->getName();
+			if (!$skuName)
+			{
+				continue;
+			}
+
+			$serviceNames[] = $sku->getName();
+		}
+
+		/**
+		 * We need to keep a space here so that to match EDNA templates containing services variable
+		 */
+		$nonEmptyValue = ' ';
+
+		return empty($serviceNames) ? $nonEmptyValue : implode(', ', $serviceNames);
 	}
 
 	private function getCultureFormat(string $formatCode): string

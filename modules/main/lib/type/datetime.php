@@ -158,11 +158,7 @@ class DateTime extends Date
 		$this->setDefaultTimeZone();
 
 		//second, adjust time according global timezone offset
-		static $diff = null;
-		if ($diff === null)
-		{
-			$diff = \CTimeZone::GetOffset();
-		}
+		$diff = \CTimeZone::GetOffset();
 		if ($diff <> 0)
 		{
 			$this->add(($diff < 0 ? "-" : "") . "PT" . abs($diff) . "S");
@@ -193,11 +189,7 @@ class DateTime extends Date
 
 		if (\CTimeZone::Enabled())
 		{
-			static $diff = null;
-			if ($diff === null)
-			{
-				$diff = \CTimeZone::GetOffset();
-			}
+			$diff = \CTimeZone::GetOffset();
 			if ($diff <> 0)
 			{
 				$time->add(($diff > 0 ? "-" : "") . "PT" . abs($diff) . "S");

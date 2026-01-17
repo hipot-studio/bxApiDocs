@@ -1607,6 +1607,7 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 						"NOTIFY_TYPE" => \IM_NOTIFY_SYSTEM,
 						"NOTIFY_MODULE" => self::MODULE_ID,
 						"NOTIFY_EVENT" => 'refresh_error',
+						'NOTIFY_TITLE' => Loc::getMessage('SUPPORT_BOX_NOTIFY_TITLE'),
 						"NOTIFY_SUB_TAG" => "IMBOT|SUPPORT|ERR",
 						"NOTIFY_MESSAGE" => $message,
 						"NOTIFY_MESSAGE_OUT" => $message,

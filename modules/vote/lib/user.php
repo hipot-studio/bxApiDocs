@@ -11,15 +11,12 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
 use \Bitrix\Main\Entity;
 use \Bitrix\Main\Error;
-use \Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Event;
 use \Bitrix\Main\Result;
 use \Bitrix\Main\Type\DateTime;
 use \Bitrix\Vote\Base\BaseObject;
 use \Bitrix\Vote\Vote;
-
-Loc::loadMessages(__FILE__);
 
 /**
  * Class VoteEventTable
@@ -73,36 +70,28 @@ class UserTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('V_TABLE_FIELD_ID'),
 			),
 			'COOKIE_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_AUTH_USER_ID'),
 			),
 			'AUTH_USER_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_AUTH_USER_ID'),
 			),
 			'COUNTER' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_COUNTER'),
 			),
 			'DATE_FIRST' => array(
 				'data_type' => 'datetime',
-				'title' => Loc::getMessage('V_TABLE_FIELD_DATE_FIRST'),
 			),
 			'DATE_LAST' => array(
 				'data_type' => 'datetime',
-				'title' => Loc::getMessage('V_TABLE_FIELD_DATE_LAST'),
 			),
 			'LAST_IP' => array(
 				'data_type' => 'string',
 				'size' => 15,
-				'title' => Loc::getMessage('V_TABLE_FIELD_STAT_SESSION_ID')
 			),
 			'STAT_GUEST_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_STAT_GUEST_ID'),
 			),
 			'USER' => array(
 				'data_type' => '\Bitrix\Main\UserTable',

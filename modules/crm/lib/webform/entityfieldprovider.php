@@ -12,6 +12,7 @@ use Bitrix\Crm\StatusTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Web\Json;
 
 Loc::loadMessages(__FILE__);
 
@@ -19,6 +20,7 @@ class EntityFieldProvider
 {
 	const TYPE_VIRTUAL = 'VIRTUAL';
 	protected static $statusTypes = null;
+	protected static $fieldsTreeCache = [];
 
 	public static function getFields(array $hiddenTypes = [], ?int $presetId = null)
 	{
@@ -98,6 +100,12 @@ class EntityFieldProvider
 
 	public static function getFieldsTree(array $hiddenTypes = [], ?int $presetId = null)
 	{
+		$cacheKey = md5(Json::encode($hiddenTypes) . '_' . ($presetId ?? 'null'));
+		if (isset(self::$fieldsTreeCache[$cacheKey]))
+		{
+			return self::$fieldsTreeCache[$cacheKey];
+		}
+
 		$fields = array();
 
 		//TODO: do refactoring
@@ -188,6 +196,7 @@ class EntityFieldProvider
 			];
 		}
 
+		self::$fieldsTreeCache[$cacheKey] = $fields;
 		return $fields;
 	}
 

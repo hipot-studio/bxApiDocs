@@ -5,7 +5,7 @@ IncludeModuleLangFile(__FILE__);
 /**
  * @deprecated
  */
-abstract class CAllFilterQuery
+class CFilterQuery
 {
 	var $cnt = 0;
 	var $m_query;
@@ -41,8 +41,6 @@ abstract class CAllFilterQuery
 		$this->clob_upper = $clob_upper;
 		$this->div_fields = $div_fields;
 	}
-
-	abstract public function BuildWhereClause($word);
 
 	public function GetQueryString($fields, $query)
 	{
@@ -255,10 +253,7 @@ abstract class CAllFilterQuery
 
 		return $qu;
 	}
-}
 
-class CFilterQuery extends CAllFilterQuery
-{
 	public function BuildWhereClause($word)
 	{
 		$this->cnt++;

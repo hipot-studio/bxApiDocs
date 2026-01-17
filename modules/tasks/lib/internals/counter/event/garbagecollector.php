@@ -108,7 +108,7 @@ class GarbageCollector
 	 * @throws \Bitrix\Main\DB\SqlQueryException
 	 * @throws \Bitrix\Tasks\Internals\Counter\Exception\UnknownCounterException
 	 */
-	private function readProjectComments(int $userId)
+	protected function readProjectComments(int $userId)
 	{
 		$sqlHelper = Application::getConnection()->getSqlHelper();
 		$viewedTime = $this->viewedTime;
@@ -148,7 +148,7 @@ class GarbageCollector
 		$topicIds = array_column($rows, 'FORUM_TOPIC_ID');
 
 		$this->readTasks($userId, $taskIds);
-		$this->readTopics($userId, $topicIds);
+		$this->readTopics($userId, $topicIds, $taskIds);
 
 		(new CounterController($userId))->recount(CounterDictionary::COUNTER_GROUP_COMMENTS, $taskIds);
 	}
@@ -186,11 +186,12 @@ class GarbageCollector
 	/**
 	 * @param int $userId
 	 * @param array $topicIds
+	 * @param array $taskIds
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 * @throws \Bitrix\Main\DB\SqlQueryException
 	 */
-	public function readTopics(int $userId, array $topicIds)
+	public function readTopics(int $userId, array $topicIds, array $taskIds)
 	{
 		$forumId = Comment::getForumId();
 

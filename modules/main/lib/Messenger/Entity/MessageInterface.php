@@ -9,5 +9,12 @@ namespace Bitrix\Main\Messenger\Entity;
  */
 interface MessageInterface extends \JsonSerializable
 {
+	/**
+	 * Create message instance from data array.
+	 *
+	 * @param  array            $data
+	 *
+	 * @return MessageInterface
+	 */
 	public static function createFromData(array $data): MessageInterface;
 }

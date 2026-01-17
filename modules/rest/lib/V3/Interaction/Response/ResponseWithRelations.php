@@ -2,7 +2,6 @@
 
 namespace Bitrix\Rest\V3\Interaction\Response;
 
-use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Rest\V3\Interaction\Relation;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 
@@ -51,7 +50,7 @@ abstract class ResponseWithRelations extends Response
 							$toField,
 							$item[$fromField],
 							$isFromFieldRequested,
-							$isToFieldRequested
+							$isToFieldRequested,
 						);
 					}
 				}
@@ -70,11 +69,12 @@ abstract class ResponseWithRelations extends Response
 						$toField,
 						$result['item'][$fromField],
 						$isFromFieldRequested,
-						$isToFieldRequested
+						$isToFieldRequested,
 					);
 				}
 			}
 		}
+
 		return $result;
 	}
 
@@ -105,9 +105,6 @@ abstract class ResponseWithRelations extends Response
 		return $this;
 	}
 
-	/**
-	 * Объединяет данные relation с основными данными
-	 */
 	private function mergeRelationData(
 		array &$data,
 		string $relationName,
@@ -117,7 +114,7 @@ abstract class ResponseWithRelations extends Response
 		string $toField,
 		$currentValue,
 		bool $isFromFieldRequested,
-		bool $isToFieldRequested
+		bool $isToFieldRequested,
 	): void {
 		$matchedItems = [];
 
@@ -135,7 +132,8 @@ abstract class ResponseWithRelations extends Response
 					$matchedItems[] = $relationItem;
 				}
 			}
-		} elseif (isset($relationData['item']))
+		}
+		elseif (isset($relationData['item']))
 		{
 			// GetResponse
 			if (isset($relationData['item'][$toField]) && $relationData['item'][$toField] === $currentValue)

@@ -9,6 +9,7 @@ use Bitrix\Crm\Security\Role\Manage\DTO\Restrictions;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
 use Bitrix\Crm\Security\Role\Model\RoleTable;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
@@ -20,6 +21,8 @@ use CCrmRole;
 class PermissionRepository
 {
 	use Singleton;
+
+	private ?array $automatedSolutionRoles = null;
 
 	public function getRole(int $roleId): ?array
 	{
@@ -239,5 +242,23 @@ class PermissionRepository
 		$this->updateRole($id, $name);
 
 		return $id;
+	}
+
+	public function getAutomatedSolutionRoles(): array
+	{
+		if ($this->automatedSolutionRoles === null)
+		{
+			$roleCollection = RoleTable::query()
+				->setSelect(['*', 'PERMISSIONS'])
+				->where('IS_SYSTEM', 'N')
+				->where('PERMISSIONS.PERM_TYPE', UserPermissions::OPERATION_READ)
+				->whereLike('GROUP_CODE', 'AUTOMATED_SOLUTION_%')
+				->fetchCollection()
+			;
+
+			$this->automatedSolutionRoles = $roleCollection->collectValues();
+		}
+
+		return $this->automatedSolutionRoles ?? [];
 	}
 }

@@ -27,7 +27,7 @@ final class MenuItemCreatorCrm extends BaseMenuItemCreator
 		if (!empty($menuItems))
 		{
 			$menuItems[] = [
-				'IS_DELIMITER' => true,
+				"IS_DELIMITER" => true,
 			];
 
 			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];

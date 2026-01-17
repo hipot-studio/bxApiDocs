@@ -91,7 +91,7 @@ abstract class Serial extends Base
 							'groupingField' => $data['config']['groupsLabelMap'][$res['groupBy']] ?? '-',
 						];
 					}
-					//$result['dataProvider'][$res['groupBy']]['bullet'] = "https://www.amcharts.com/lib/images/faces/A04.png";
+
 					$result['dataProvider'][$res['groupBy']]['value_' . $reportCount] = $res['value'];
 
 					if ($res['label'])

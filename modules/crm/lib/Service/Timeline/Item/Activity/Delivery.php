@@ -115,7 +115,7 @@ class Delivery extends Activity
 
 		if (
 			isset($deliveryShipment['PRICE_DELIVERY'])
-			&& isset($deliveryShipment['CURRENCY'])
+			&& !empty($deliveryShipment['CURRENCY'])
 		)
 		{
 			$result['priceDelivery'] =

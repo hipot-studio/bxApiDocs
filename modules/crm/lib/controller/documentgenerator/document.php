@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Controller\DocumentGenerator;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\CrmEntityDataProvider;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
+use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\DocumentGenerator\Context;
 use Bitrix\DocumentGenerator\DataProviderManager;
@@ -458,5 +459,46 @@ class Document extends Base
 		DataProviderManager::getInstance()->resetContext();
 
 		return $result;
+	}
+
+	/**
+	 * @see \Bitrix\DocumentGenerator\Controller\Document::enablePublicUrlAction()
+	 * @param \Bitrix\DocumentGenerator\Document $document
+	 * @return array
+	 */
+	public function getSignedTemplateAction(\Bitrix\DocumentGenerator\Document $document)
+	{
+		$result = $document->enablePublicUrl();
+		if($result->isSuccess())
+		{
+			return [
+				'signedTemplate' => $this->getSignedTemplate($document),
+			];
+		}
+		else
+		{
+			$this->errorCollection = $result->getErrorCollection();
+			return null;
+		}
+	}
+
+	private function getSignedTemplate(\Bitrix\DocumentGenerator\Document $document): ?string
+	{
+		$documentUrl = $document->getPublicUrl();
+
+		if (!$documentUrl)
+		{
+			return null;
+		}
+
+		return NotificationsManager::signTemplate(
+			'CRM_DOCUMENT_SHARING',
+			[
+				[
+					'name' => 'DOCUMENT_URL',
+					'value' => (string)$documentUrl,
+				],
+			],
+		);
 	}
 }

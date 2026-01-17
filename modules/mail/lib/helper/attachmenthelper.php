@@ -135,7 +135,7 @@ class AttachmentHelper
 		$error = [];
 		$structure = $this->client->fetch(true, $messageStructure->dirPath, $messageStructure->uid, '(BODYSTRUCTURE)', $error);
 
-		if ($error || empty($structure))
+		if ($error || empty($structure) || !isset($structure['BODYSTRUCTURE']) || !is_array($structure['BODYSTRUCTURE']))
 		{
 			return null;
 		}

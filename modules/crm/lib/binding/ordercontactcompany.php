@@ -8,7 +8,7 @@
 namespace Bitrix\Crm\Binding;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Entity;
+use Bitrix\Main\ORM;
 use Bitrix\Main\DB\SqlQueryException;
 
 /**
@@ -28,8 +28,10 @@ use Bitrix\Main\DB\SqlQueryException;
  * @method static \Bitrix\Crm\Binding\EO_OrderContactCompany wakeUpObject($row)
  * @method static \Bitrix\Crm\Binding\EO_OrderContactCompany_Collection wakeUpCollection($rows)
  */
-class OrderContactCompanyTable extends Entity\DataManager
+class OrderContactCompanyTable extends ORM\Data\DataManager
 {
+	use ORM\Data\AddStrategy\Trait\InsertIgnoreByDefaultTrait;
+
 	/**
 	 * Get table name.
 	 * @return string

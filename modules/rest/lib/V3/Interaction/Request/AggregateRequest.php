@@ -2,8 +2,8 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
-use Bitrix\Rest\V3\Structures\Aggregation\AggregationSelectStructure;
-use Bitrix\Rest\V3\Structures\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Aggregation\AggregationSelectStructure;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
 
 class AggregateRequest extends Request
 {

@@ -198,15 +198,19 @@ class Util
 		return $result;
 	}
 
-	public static function getLanguageList()
+	public static function getTemplateLanguages(): array
 	{
-		$list = array();
-		$langFromTemplate = array();
+		$langFromTemplate = [];
 
 		if (\Bitrix\Main\ModuleManager::isModuleInstalled("intranet"))
 		{
+
 			global $b24Languages;
-			$fileName = \Bitrix\Main\Application::getDocumentRoot() . getLocalPath('templates/bitrix24', BX_PERSONAL_ROOT) . "/languages.php";
+			$fileName =
+				\Bitrix\Main\Application::getDocumentRoot()
+				. getLocalPath('templates/bitrix24', BX_PERSONAL_ROOT)
+				. "/languages.php"
+			;
 			if (\Bitrix\Main\IO\File::isFileExists($fileName))
 			{
 				include_once $fileName;
@@ -216,6 +220,14 @@ class Util
 				$langFromTemplate = $b24Languages;
 			}
 		}
+
+		return $langFromTemplate;
+	}
+
+	public static function getLanguageList()
+	{
+		$list = array();
+		$langFromTemplate = self::getTemplateLanguages();
 
 		$langDir = \Bitrix\Main\Application::getDocumentRoot() . '/bitrix/modules/intranet/lang/';
 		$dir = new \Bitrix\Main\IO\Directory($langDir);

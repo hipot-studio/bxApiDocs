@@ -746,7 +746,6 @@ class Queue
 	 */
 	public static function isOperatorsActiveLine($idLine, $isCheckAvailable = 'Y', bool $ignorePause = false): bool
 	{
-		$result = false;
 
 		$res = self::getList([
 			'select' => [
@@ -766,14 +765,13 @@ class Queue
 		{
 			if(self::isOperatorActive($queueUser['USER_ID'], $isCheckAvailable, $ignorePause) === true)
 			{
-				$result = true;
-
-				break;
+				return true;
 			}
 		}
 
-		return $result;
+		return false;
 	}
+
 
 	/**
 	 * Returns whether the operator works according to the working time accounting.

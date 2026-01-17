@@ -33,7 +33,7 @@ class UpdateUserFieldsCommand extends AbstractCommand
 			{
 				$userFieldCollectionUnchangeable->add($userField);
 			}
-			elseif (!$userField->isValid())
+			elseif (!$userField->isValid($userField->getValue()))
 			{
 				$userFieldCollectionInvalid->add($userField);
 			}

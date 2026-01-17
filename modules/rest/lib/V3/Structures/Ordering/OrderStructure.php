@@ -4,13 +4,12 @@ namespace Bitrix\Rest\V3\Structures\Ordering;
 
 use Bitrix\Main\DB\Order;
 use Bitrix\Rest\V3\Attributes\Sortable;
-use Bitrix\Rest\V3\Dto\PropertyHelper;
+use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Exceptions\InvalidOrderException;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exceptions\Validation\DtoFieldRequiredAttributeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Structures\Structure;
-use ReflectionClass;
 
 final class OrderStructure extends Structure
 {
@@ -25,7 +24,10 @@ final class OrderStructure extends Structure
 
 		if (!empty($value))
 		{
-			$reflection = new ReflectionClass($dtoClass);
+			/** @var Dto $dto */
+			$dto = $dtoClass::create();
+
+			$fields = $dto->getFields();
 
 			foreach ($value as $property => $order)
 			{
@@ -34,15 +36,14 @@ final class OrderStructure extends Structure
 					throw new InvalidOrderException($order);
 				}
 
-				// check property
-				if (!PropertyHelper::isValidProperty($reflection, $property))
+				if (!isset($fields[$property]))
 				{
-					throw new UnknownDtoPropertyException($dtoClass, $property);
+					throw new UnknownDtoPropertyException($dto->getShortName(), $property);
 				}
 
-				if (!PropertyHelper::hasAttribute($reflection, $property, Sortable::class))
+				if (!$fields[$property]->isSortable())
 				{
-					throw new DtoFieldRequiredAttributeException($dtoClass, $property, Sortable::class);
+					throw new DtoFieldRequiredAttributeException($dto->getShortName(), $property, Sortable::class);
 				}
 
 				// check order asc/desc

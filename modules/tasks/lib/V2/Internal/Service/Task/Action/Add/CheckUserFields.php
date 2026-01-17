@@ -6,8 +6,9 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\UserFieldTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
 
 class CheckUserFields
 {
@@ -24,7 +25,7 @@ class CheckUserFields
 			return;
 		}
 
-		if (!$this->checkFields(0, $fields, $this->config->getUserId()))
+		if (!$this->checkFields(0, $fields, $this->config->getUserId(), UserField::TASK))
 		{
 			$message = $this->getApplicationError(Loc::getMessage('TASKS_UNKNOWN_ADD_ERROR'));
 			throw new TaskAddException($message);

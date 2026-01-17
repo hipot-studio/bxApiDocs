@@ -21,20 +21,29 @@ class SetRemindersHandler
 
 	public function __invoke(SetRemindersCommand $command): void
 	{
-		$this->consistencyResolver->resolve('task.reminder')->wrap(
-			function () use ($command): void
-			{
-				$this->reminderRepository->deleteByFilter(['=USER_ID' => $command->userId, '=TASK_ID' => $command->taskId]);
+		if ($command->useConsistency)
+		{
+			$this->consistencyResolver->resolve('task.reminder')->wrap(
+				fn() => $this->updateReminders($command),
+			);
+		}
+		else
+		{
+			$this->updateReminders($command);
+		}
+	}
 
-				if ($command->reminders->isEmpty())
-				{
-					return;
-				}
+	private function updateReminders(SetRemindersCommand $command): void
+	{
+		$this->reminderRepository->deleteByFilter(['=USER_ID' => $command->userId, '=TASK_ID' => $command->taskId]);
 
-				$reminders = $command->reminders->cloneWith(['userId' => $command->userId, 'taskId' => $command->taskId]);
+		if ($command->reminders->isEmpty())
+		{
+			return;
+		}
 
-				$this->reminderService->addMulti($reminders);
-			}
-		);
+		$reminders = $command->reminders->cloneWith(['userId' => $command->userId, 'taskId' => $command->taskId]);
+
+		$this->reminderService->addMulti($reminders);
 	}
 }

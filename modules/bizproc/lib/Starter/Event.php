@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter;
 
 use Bitrix\Bizproc\Automation\Trigger\BaseTrigger;
@@ -7,14 +9,15 @@ use Bitrix\Bizproc\Automation\Trigger\BaseTrigger;
 final class Event
 {
 	protected ?Document $document = null;
-	protected string $trigger;
-	protected array $parameters;
+	protected int $eventType = \CBPDocumentEventType::None;  // new type: event?
+	protected int $userId = 0;
 
-	public function __construct(string $trigger, array $parameters = [])
-	{
-		$this->trigger = $trigger;
-		$this->parameters = $parameters;
-	}
+	public function __construct(
+		protected string $triggerName = '',
+		protected array $parameters = [],
+		protected string $name = '',
+	)
+	{}
 
 	public function setDocument(Document $document): self
 	{
@@ -25,10 +28,24 @@ final class Event
 
 	public function getCode(): string
 	{
-		/** @var BaseTrigger $trigger  */
-		$trigger = $this->trigger;
+		$trigger = $this->triggerName;
 
-		return $trigger::getCode();
+		if ($this->isAutomationTrigger())
+		{
+			/** @var BaseTrigger $trigger */
+			return $trigger::getCode();
+		}
+
+		if (\CBPRuntime::getRuntime()->includeActivityFile($trigger))
+		{
+			$triggerInstance = \CBPActivity::createInstance($trigger, '');
+			if ($triggerInstance)
+			{
+				return $triggerInstance->getType();
+			}
+		}
+
+		return '';
 	}
 
 	public function getDocument(): ?Document
@@ -36,16 +53,61 @@ final class Event
 		return $this->document;
 	}
 
-	public function getTrigger(): string
+	public function getTriggerName(): string
 	{
-		return $this->trigger;
+		return $this->triggerName;
 	}
 
-	/**
-	 * @return array
-	 */
 	public function getParameters(): array
 	{
 		return $this->parameters;
+	}
+
+	public function setEventType(int $eventType): self
+	{
+		if (\CBPDocumentEventType::out($eventType) !== '')
+		{
+			$this->eventType = $eventType;
+		}
+
+		return $this;
+	}
+
+	public function getEventType(): int
+	{
+		return $this->eventType;
+	}
+
+	public function getUserId(): int
+	{
+		return $this->userId;
+	}
+
+	public function setUserId(int $userId): self
+	{
+		if ($userId > 0)
+		{
+			$this->userId = $userId;
+		}
+
+		return $this;
+	}
+
+	public function isAutomationTrigger(): bool
+	{
+		return is_subclass_of($this->triggerName, BaseTrigger::class);
+	}
+
+	public function isProcessTrigger(): bool
+	{
+		return !$this->isAutomationTrigger();
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getName(): string
+	{
+		return $this->name;
 	}
 }

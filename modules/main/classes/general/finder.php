@@ -1,14 +1,11 @@
-<?
+<?php
 
 use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
+
 class CFinder
 {
-	public function __construct()
-	{
-	}
-
 	public static function GetFinderAppearance($arParams, $arPanels)
 	{
 		$arResult['PROVIDER'] = CUtil::AddSlashes($arParams['PROVIDER']);
@@ -224,6 +221,7 @@ class CFinder
 
 		return $html;
 	}
+
 	private static function GetFinderItemStructure($arParams, $arItem)
 	{
 		$html = '';
@@ -295,6 +293,7 @@ class CFinder
 
 		return $html;
 	}
+
 	private static function GetFinderItemStructureItem($arParams, $arItem)
 	{
 		$arResult['PROVIDER'] = CUtil::AddSlashes($arParams['PROVIDER']);
@@ -315,5 +314,3 @@ class CFinder
 		return $html;
 	}
 }
-
-?>

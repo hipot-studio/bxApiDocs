@@ -5,15 +5,16 @@ namespace Bitrix\Rest\V3\Exceptions;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\RestExceptionInterface;
+use Bitrix\Rest\V3\DefaultLanguage;
 
 abstract class RestException extends SystemException implements RestExceptionInterface
 {
 	protected const STATUS = '400 Bad Request';
 	protected string $status;
 
-	public function __construct(\Throwable $previous = null, ?string $status = null)
+	public function __construct(?\Throwable $previous = null, ?string $status = null)
 	{
-		$this->message = $this->getLocalMessage('en');
+		$this->message = $this->getLocalMessage(DefaultLanguage::get());
 		$this->status = $status === null ? static::STATUS : $status;
 		parent::__construct(message: $this->message, previous: $previous);
 	}
@@ -24,11 +25,6 @@ abstract class RestException extends SystemException implements RestExceptionInt
 		$code = str_replace('\\', '_', $code);
 
 		return strtoupper($code);
-	}
-
-	protected function getGlobalMessage(): string
-	{
-		return $this->message;
 	}
 
 	protected function getLocalMessage(string $languageCode): string
@@ -45,19 +41,12 @@ abstract class RestException extends SystemException implements RestExceptionInt
 		);
 	}
 
-	public function output($localErrorLanguage = null): array
+	public function output(?string $responseLanguage = null): array
 	{
-		$out = [
+		return [
 			'code' => $this->getRegistryCode(),
-			'message' => $this->getGlobalMessage(),
+			'message' => $this->getLocalMessage($responseLanguage ?? DefaultLanguage::get()),
 		];
-
-		if (isset($localErrorLanguage))
-		{
-			$out['localMessage'] = $this->getLocalMessage($localErrorLanguage);
-		}
-
-		return $out;
 	}
 
 	abstract protected function getMessagePhraseCode(): string;

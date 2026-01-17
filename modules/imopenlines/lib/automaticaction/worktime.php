@@ -195,11 +195,11 @@ class WorkTime
 
 		if (
 			$this->config['WORKTIME_DAYOFF_RULE'] == Session::RULE_TEXT
-			&& isset($this->config['WORKTIME_DAYOFF_TEXT'])
+			&& !empty($this->config['WORKTIME_DAYOFF_TEXT'])
 			&& $this->session['SEND_NO_WORK_TIME_TEXT'] != 'Y'
 			&& $this->sessionManager->isEnableSendSystemMessage()
 			&& $this->sessionManager->getAction() != Session::ACTION_CLOSED
-			&& !$this->checkOperatorWorkTime($finish, $vote)
+			&& !$this->isWorkTimeLine()
 		)
 		{
 			$result = Im::addMessage([

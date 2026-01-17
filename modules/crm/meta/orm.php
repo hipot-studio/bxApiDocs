@@ -23992,7 +23992,7 @@ namespace Bitrix\Crm\Reservation\Internals {
 	 * @method \Bitrix\Crm\Reservation\ProductRowReservation resetReserveQuantity()
 	 * @method \Bitrix\Crm\Reservation\ProductRowReservation unsetReserveQuantity()
 	 * @method \float fillReserveQuantity()
-	 * @method \Bitrix\Main\Type\Date getDateReserveEnd()
+	 * @method \Bitrix\Main\Type\DateTime getDateReserveEnd()
 	 * @method \Bitrix\Crm\Reservation\ProductRowReservation setDateReserveEnd(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateReserveEnd)
 	 * @method bool hasDateReserveEnd()
 	 * @method bool isDateReserveEndFilled()

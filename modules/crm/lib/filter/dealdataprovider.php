@@ -174,6 +174,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'MOVED_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -413,6 +414,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'CREATED_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -420,6 +422,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'MODIFY_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			)
@@ -641,7 +644,6 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 		{
 			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
 
-
 			$isEnableAllUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 			$isEnableOtherUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 
@@ -654,15 +656,14 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				$referenceClass = ($factory ? $factory->getDataClass() : null);
 			}
 
-			return $this->getUserEntitySelectorParams(
+			return $this->getDepartmentSelectorParams(
 				EntitySelector::CONTEXT,
 				[
 					'fieldName' => $fieldID,
 					'referenceClass' => $referenceClass,
 					'isEnableAllUsers' => $isEnableAllUsers,
 					'isEnableOtherUsers' => $isEnableOtherUsers,
-					'isEnableStructureNode' => true,
-				]
+				],
 			);
 		}
 

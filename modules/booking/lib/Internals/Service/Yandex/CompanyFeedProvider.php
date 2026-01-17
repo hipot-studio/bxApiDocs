@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\Yandex;
 
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Collection\CompanyCollection;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\CompanyCollection;
 use Bitrix\Booking\Internals\Integration;
 
 class CompanyFeedProvider

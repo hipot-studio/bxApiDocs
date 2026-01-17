@@ -6,7 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add;
 
 use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ApplicationErrorTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\ApplicationErrorTrait;
 
 class RunBeforeAddEvent
 {

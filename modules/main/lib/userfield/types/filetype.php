@@ -2,14 +2,12 @@
 
 namespace Bitrix\Main\UserField\Types;
 
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\UI\FileInputUtility;
 use Bitrix\Main\UserField\File\ManualUploadRegistry;
-use Bitrix\Main\UserField\File\UploadedFilesRegistry;
-use Bitrix\UI\FileUploader\Uploader;
 use CUserTypeManager;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 Loc::loadMessages(__FILE__);
 
@@ -235,6 +233,12 @@ class FileType extends BaseType
 				return $isValid ? $value : false;
 			}
 
+			$isValid = self::validateUploadedFileViaUiFileUploader($userField, $value);
+			if ($isValid !== null)
+			{
+				return $isValid ? $value : false;
+			}
+
 			$isValid = self::validateUploadedFileViaCurrentUserFieldValue($userField, $value);
 			if ($isValid !== null)
 			{
@@ -333,10 +337,15 @@ class FileType extends BaseType
 		$checkResult = $fileInputUtility->checkFiles($controlId, [$value]);
 		if (in_array($value, $checkResult))
 		{
-			return self::tryMakeFilePersistent($userField, $value);
+			return true;
 		}
 
 		return null;
+	}
+
+	private static function validateUploadedFileViaUiFileUploader(array $userField, int $value): ?bool
+	{
+		return (new UiFileUploaderResultValidator($userField))->validate($value);
 	}
 
 	private static function validateUploadedFileViaCurrentUserFieldValue(array $userField, int $value): ?bool
@@ -444,40 +453,13 @@ class FileType extends BaseType
 		return true;
 	}
 
-	private static function tryMakeFilePersistent(array $userField, int $fileId): bool
-	{
-		$uploaderContextGenerator = (new \Bitrix\Main\UserField\File\UploaderContextGenerator(FileInputUtility::instance(), $userField));
-		$controlId = $uploaderContextGenerator->getControlId();
-
-		$uploadedFilesRegistry = UploadedFilesRegistry::getInstance();
-		$tempFileToken = $uploadedFilesRegistry->getTokenByFileId($controlId, $fileId);
-		if ($tempFileToken) // if token found, assume file was uploaded via \Bitrix\Main\FileUploader\FieldFileUploaderController
-		{
-			$cid = $uploadedFilesRegistry->getCidByFileId($controlId, $fileId);
-
-			if (!FileInputUtility::instance()->isCidRegistered($cid)) // cid not found, so $fileId cannot be made persistent. This case is not allowed to save due to possible data loss.
-			{
-				return false;
-			}
-
-			if (!Loader::includeModule('ui'))
-			{
-				return false;
-			}
-
-			$uploader = new Uploader(
-				new \Bitrix\Main\FileUploader\FieldFileUploaderController($uploaderContextGenerator->getContextInEditMode($cid))
-			);
-			$uploader->getPendingFiles([$tempFileToken])->makePersistent();
-
-			$uploadedFilesRegistry->unregisterFile($controlId, $fileId);
-		}
-
-		return true;
-	}
-
 	public static function isAvailableDefaultView(mixed $view): bool
 	{
 		return in_array($view, self::AVAILABLE_VIEWS, true);
+	}
+
+	public static function getCorrectViewOrNull(mixed $value): ?string
+	{
+		return self::isAvailableDefaultView($value) ? $value : null;
 	}
 }

@@ -19,7 +19,7 @@ class Feature extends BaseController
 	}
 
 	/**
-	 * @ajaxAction tasks.V2.Feature.turnOn
+	 * @ajaxAction tasks.V2.Feature.turnOff
 	 */
 	#[OnlyAllowedPortal]
 	public function turnOffAction(string $feature): bool

@@ -5,9 +5,9 @@ namespace Bitrix\Crm\Security\Role;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\AttributesProvider;
+use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
-use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened;
 
 class PermissionLevel
 {
@@ -241,7 +241,11 @@ class PermissionLevel
 
 		$userAttributes = $this->attributesProvider->getUserAttributes();
 
-		if (is_array($userAttributes['INTRANET']) && $permissionLevelValue->hasDepartmentPermissions())
+		if (
+			isset($userAttributes['INTRANET'])
+			&& is_array($userAttributes['INTRANET'])
+			&& $permissionLevelValue->hasDepartmentPermissions()
+		)
 		{
 			foreach ($userAttributes['INTRANET'] as $departmentAccessCode)
 			{
@@ -252,7 +256,11 @@ class PermissionLevel
 			}
 		}
 
-		if (is_array($userAttributes['SUBINTRANET']) && $permissionLevelValue->hasSubDepartmentsPermissions())
+		if (
+			isset($userAttributes['SUBINTRANET'])
+			&& is_array($userAttributes['SUBINTRANET'])
+			&& $permissionLevelValue->hasSubDepartmentsPermissions()
+		)
 		{
 			foreach ($userAttributes['SUBINTRANET'] as $departmentAccessCode)
 			{

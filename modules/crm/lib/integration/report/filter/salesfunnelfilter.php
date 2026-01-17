@@ -42,7 +42,10 @@ class SalesFunnelFilter extends Base
 		if (\Bitrix\Crm\Settings\LeadSettings::isEnabled())
 		{
 			$leadFilter = Factory::createEntityFilter(
-				new LeadSettings(['ID' => SalesFunnelBoard::BOARD_KEY])
+				new LeadSettings([
+					'ID' => SalesFunnelBoard::BOARD_KEY,
+					'disableDepartmentSelector' => true,
+				]),
 			);
 
 			$disabledFieldKeys = [
@@ -103,7 +106,8 @@ class SalesFunnelFilter extends Base
 					'categoryAccess' => [
 						'READ' => \CCrmDeal::getPermittedToReadCategoryIDs($userPermissions),
 					],
-					'flags' => DealSettings::FLAG_NONE
+					'flags' => DealSettings::FLAG_NONE,
+					'disableDepartmentSelector' => true,
 				]
 			)
 		);

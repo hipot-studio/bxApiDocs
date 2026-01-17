@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Tour\Sign;
 
 use Bitrix\Crm\Tour\Base;
+use Bitrix\Crm\Tour\Mixin\HasEntitySupport;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -11,11 +12,9 @@ use Bitrix\Sign\Type\DocumentStatus;
 
 final class SignB2eDocumentProcess extends Base
 {
+	use HasEntitySupport;
+
 	protected const OPTION_NAME = 'signB2e-document-process';
-
-	private ?int $entityTypeId = null;
-	private ?int $entityId = null;
-
 
 	protected function canShow(): bool
 	{
@@ -52,20 +51,6 @@ final class SignB2eDocumentProcess extends Base
 				],
 			],
 		];
-	}
-
-	public function setEntityTypeId(?int $entityTypeId): self
-	{
-		$this->entityTypeId = $entityTypeId;
-
-		return $this;
-	}
-
-	public function setEntityId(?int $entityId): self
-	{
-		$this->entityId = $entityId;
-
-		return $this;
 	}
 
 	private function isDocumentInProcess(): bool

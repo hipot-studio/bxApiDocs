@@ -1361,7 +1361,7 @@ class CommentPoster
 	/**
 	 * Posts comments from collection.
 	 */
-	public function postComments(): void
+	public function postComments(array $config = []): void
 	{
 		foreach ($this->comments as $comment)
 		{
@@ -1408,6 +1408,7 @@ class CommentPoster
 				'AUX' => 'Y',
 				'AUX_DATA' => $auxData,
 				'AUX_LIVE_PARAMS' => ($hasLiveData ? [ 'JSON' => Main\Web\Json::encode($auxData) ] : []),
+				'CONFIG' => $config,
 			]);
 		}
 	}

@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Command\Template;
 
 use Bitrix\Main\Error;
-use Bitrix\Tasks\Control\Exception\TemplateNotFoundException;
+use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
+use Exception;
 
 class DeleteTemplateCommand extends AbstractCommand
 {
 	public function __construct(
+		#[PositiveNumber]
 		public readonly int $templateId,
-		public readonly int $deletedBy,
+		public readonly DeleteConfig $config,
 	)
 	{
 
@@ -22,17 +25,19 @@ class DeleteTemplateCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
+		$result = new Result();
+
+		$handler = Container::getInstance()->get(DeleteTemplateHandler::class);
+
 		try
 		{
-			$handler = new DeleteTemplateHandler(Container::getInstance()->getTemplateRepository());
-
 			$handler($this);
 
-			return new Result();
+			return $result;
 		}
-		catch (TemplateNotFoundException $taskException)
+		catch (Exception $e)
 		{
-			return (new Result())->addError(new Error('Failed deleting template.'));
+			return $result->addError(Error::createFromThrowable($e));
 		}
 	}
 }

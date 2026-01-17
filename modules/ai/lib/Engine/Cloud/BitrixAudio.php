@@ -49,6 +49,7 @@ class BitrixAudio extends CloudEngine implements IQueueOptional
 	{
 		$prefer = [
 			Quality::QUALITIES['transcribe'],
+			Quality::QUALITIES['transcribe_chat_voice_messages'],
 		];
 
 		if ($quality === null)

@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Main\SidePanel;
 
@@ -11,6 +11,7 @@ use Bitrix\Main\ORM\Fields\Validators\ForeignValidator;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\ORM\Data\AddStrategy;
 
 /**
  * Class ToolbarItemTable
@@ -31,6 +32,7 @@ use Bitrix\Main\Type\DateTime;
 class ToolbarItemTable extends Data\DataManager
 {
 	use DeleteByFilterTrait;
+	use AddStrategy\Trait\MergeByDefaultTrait;
 
 	/**
 	 * @inheritdoc
@@ -96,5 +98,13 @@ class ToolbarItemTable extends Data\DataManager
 				})
 			,
 		];
+	}
+
+	protected static function getMergeStrategy(): AddStrategy\Contract\AddStrategy
+	{
+		return new AddStrategy\Merge(
+			self::getEntity(),
+			['TOOLBAR_ID', 'ENTITY_TYPE', 'ENTITY_ID'],
+		);
 	}
 }

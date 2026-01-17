@@ -12,7 +12,6 @@ use Bitrix\Main\Localization\Loc;
 class SmartInvoice extends Dynamic
 {
 	public const FIELD_NAME_ACCOUNT_NUMBER = 'ACCOUNT_NUMBER';
-	public const FIELD_NAME_IS_RECURRING = 'IS_RECURRING';
 
 	public function getTitle(): ?string
 	{

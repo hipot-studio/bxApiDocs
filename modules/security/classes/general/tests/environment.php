@@ -228,9 +228,9 @@ HTACCESS;
 	 */
 	protected static function getCurrentSiteUrl()
 	{
-		$url = $_SERVER['HTTPS'] == 'on' ? 'https://' : 'http://';
+		$url = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' ? 'https://' : 'http://';
 		$url .= self::getCurrentHost();
-		$url .= $_SERVER['SERVER_PORT'] ? ':'.$_SERVER['SERVER_PORT'] : '';
+		$url .= !empty($_SERVER['SERVER_PORT']) ? ':' . $_SERVER['SERVER_PORT'] : '';
 		return $url;
 	}
 

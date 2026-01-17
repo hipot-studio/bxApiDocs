@@ -20,12 +20,13 @@ class SetHighTaskPriorityHandler
 	public function __invoke(SetHighTaskPriorityCommand $command): Entity\Task
 	{
 		$entity = new Entity\Task(
-			id: $command->taskId,
-			priority: Entity\Task\Priority::High,
+			id:       $command->taskId,
+			priority: Entity\Priority::High,
 		);
 
 		$config = new UpdateConfig(
 			userId: $command->userId,
+			useConsistency: $command->useConsistency,
 		);
 
 

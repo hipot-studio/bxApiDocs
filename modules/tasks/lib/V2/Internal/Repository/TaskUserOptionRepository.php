@@ -114,4 +114,9 @@ class TaskUserOptionRepository implements TaskUserOptionRepositoryInterface
 			throw new UserOptionException($e->getMessage());
 		}
 	}
+
+	public function invalidate(int $taskId): void
+	{
+
+	}
 }

@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\ImageEditor;
 
@@ -197,6 +197,7 @@ class Proxy
 
 			//prevents proxy to LAN
 			$client->setPrivateIp(false);
+			$client->setHeader('User-Agent', 'Bitrix24 Sites');
 
 			$contents = $client->get($this->uri->getUri());
 			if($contents !== false)

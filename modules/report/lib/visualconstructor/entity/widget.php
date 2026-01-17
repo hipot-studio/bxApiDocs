@@ -547,19 +547,27 @@ class Widget extends ConfigurableModel
 	public static function removeCurrentUserWidgetByGId($widgetGId)
 	{
 		global $USER;
-		if ($USER)
-		{
-			$widget = static::load(
-				array(
-					'GID' => $widgetGId,
-					'ROW.DASHBOARD.USER_ID' => $USER->getId()
-				)
-			);
-			$widget->delete();
-			return $widgetGId;
-		}
-		return null;
 
+		if (!$USER)
+		{
+			return null;
+		}
+
+		$widget = static::load(
+			array(
+				'GID' => $widgetGId,
+				'ROW.DASHBOARD.USER_ID' => $USER->getId()
+			)
+		);
+
+		if (!$widget)
+		{
+			return null;
+		}
+		
+		$widget->delete();
+
+		return $widgetGId;
 	}
 
 	/**

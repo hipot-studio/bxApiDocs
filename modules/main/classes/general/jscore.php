@@ -697,4 +697,9 @@ JS;
 
 		Asset::getInstance()->addCssKernelInfo($bundleName, $files);
 	}
+
+	public static function resetLoadedExtensionsList()
+	{
+		static::$arCurrentlyLoadedExt = [];
+	}
 }

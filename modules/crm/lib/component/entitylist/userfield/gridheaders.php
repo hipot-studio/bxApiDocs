@@ -6,6 +6,7 @@ use Bitrix\Main\Localization\Loc;
 
 class GridHeaders
 {
+	private const MAX_USERFIELDS_IN_DEFAULT_GRID = 10;
 	private bool $withHtmlSpecialchars = true;
 	private bool $forImport = false;
 	private bool $withEnumFieldValues = false;
@@ -65,6 +66,38 @@ class GridHeaders
 
 			$headers[$fieldName] = $headerData;
 		}
+	}
+
+	public static function removeExcessUfFromGridParams(
+		array &$gridHeaders,
+		int $maxUfCnt = self::MAX_USERFIELDS_IN_DEFAULT_GRID,
+	): void
+	{
+		$currentUfCnt = 0;
+
+		foreach ($gridHeaders as &$arHeader)
+		{
+			if (
+				self::isUserfieldId($arHeader['id'])
+				&& isset($arHeader['default'])
+				&& $arHeader['default']
+			)
+			{
+				$currentUfCnt++;
+
+				if ($currentUfCnt > $maxUfCnt)
+				{
+					$arHeader['default'] = false;
+				}
+			}
+		}
+	}
+
+	private static function isUserfieldId(string $fieldName): bool
+	{
+		$regex = '/^UF_CRM_\w*$/';
+
+		return (bool)preg_match($regex, $fieldName);
 	}
 
 	private function getHeaderData(string $fieldName, array $userField): ?array
@@ -131,6 +164,7 @@ class GridHeaders
 			'default' => $userField['SHOW_IN_LIST'] == 'Y',
 			'editable' => $editable,
 			'type' => $sType,
+			'hint' => $userField['HELP_MESSAGE'] ?? null,
 		];
 	}
 

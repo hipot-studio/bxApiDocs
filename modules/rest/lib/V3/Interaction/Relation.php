@@ -2,6 +2,7 @@
 
 namespace Bitrix\Rest\V3\Interaction;
 
+use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Interaction\Response\ResponseWithRelations;
 
@@ -11,7 +12,7 @@ class Relation
 
 	public function __construct(
 		private string $name,
-		private string $method,
+		private Dto $dto,
 		private string $fromField,
 		private string $toField,
 		private Request $request,
@@ -22,11 +23,6 @@ class Relation
 	public function getName(): string
 	{
 		return $this->name;
-	}
-
-	public function getMethod(): string
-	{
-		return $this->method;
 	}
 
 	public function getFromField(): string
@@ -47,6 +43,11 @@ class Relation
 	public function isMultiply(): bool
 	{
 		return $this->multiply;
+	}
+
+	public function getDto(): Dto
+	{
+		return $this->dto;
 	}
 
 	public function getResponse(): ?ResponseWithRelations

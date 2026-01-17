@@ -64,7 +64,6 @@ use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Integration\SocialNetwork\Collab\Provider\CollabDefaultProvider;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Integration\Extranet;
-use Bitrix\Tasks\Internals\Counter\Collector\UserCollector;
 use Bitrix\Tasks\Internals\Counter\EffectiveTable;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
@@ -108,6 +107,8 @@ use Bitrix\Tasks\Component\Task\TasksFlowFormState;
 use Bitrix\Tasks\Component\Task\TasksTaskFormState;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Tasks\Helper\Analytics;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
 
 Loc::loadMessages(__FILE__);
 
@@ -916,7 +917,12 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			=== count($data)
 		)
 		{
-			$isAccess = TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_DEADLINE, $taskId);
+			$isAccess = TaskAccessController::can(
+				$this->userId,
+				ActionDictionary::ACTION_TASK_DEADLINE,
+				$taskId,
+				$data,
+			);
 		}
 		elseif (
 			count($data) === 1
@@ -1355,8 +1361,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 
 		if ($taskData)
 		{
-			$commentPoster = CommentPoster::getInstance($taskId, $this->userId);
-			$commentPoster && $commentPoster->postCommentsOnTaskStatusPinged($taskData);
+			Container::getInstance()->get(PingActionInterface::class)->execute($taskId, $this->userId, $taskData);
 
 			CTaskNotifications::sendPingStatusMessage($taskData, $this->userId);
 		}
@@ -2171,7 +2176,12 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 
 		$result = [];
 
-		$isAccess = TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_DEADLINE, $taskId);
+		$isAccess = TaskAccessController::can(
+			$this->userId,
+			ActionDictionary::ACTION_TASK_DEADLINE,
+			$taskId,
+			['DEADLINE' => $date],
+		);
 
 		if (!$isAccess)
 		{
@@ -3513,7 +3523,13 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		if ($tags = $this->request['TAGS'])
 		{
 			$currentTags = array_map('strtolower', $sourceData['DATA']['TAGS']);
-			$tags = array_map('strtolower', explode(',', $tags));
+			if (is_string($tags))
+			{
+				$tags = explode(',', $tags);
+			}
+
+			$tags = array_map('strtolower', $tags);
+
 			foreach ($tags as $tag)
 			{
 				if (!in_array($tag, $currentTags, true))
@@ -4516,7 +4532,8 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		{
 			if ($this->task != null)
 			{
-				$collector = UserCollector::getInstance((int)CurrentUser::get()->getId());
+				$collector = Container::getInstance()->getCounterUserCollector((int)$this->userId);
+
 				$this->arResult['DATA']['GROUP_VIEWED'] = [
 					'UNREAD_MID' => $collector->getUnReadForumMessageByFilter([
 						'id' => [

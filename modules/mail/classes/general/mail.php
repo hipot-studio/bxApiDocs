@@ -746,6 +746,7 @@ class CAllMailBox
 		$DB->query(sprintf('DELETE FROM b_mail_mailbox_dir WHERE MAILBOX_ID = %u', $ID));
 		$DB->query(sprintf('DELETE FROM b_mail_counter WHERE MAILBOX_ID = %u', $ID));
 		$DB->query(sprintf('DELETE FROM b_mail_entity_options WHERE MAILBOX_ID = %u', $ID));
+		$DB->query(sprintf('DELETE FROM b_mail_mailbox_list_search_index WHERE MAILBOX_ID = %u', $ID));
 
 		CMailbox::SMTPReload();
 

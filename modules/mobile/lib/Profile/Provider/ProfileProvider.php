@@ -97,7 +97,7 @@ class ProfileProvider
 	 */
 	public static function isNewProfileFeatureEnabled(): bool
 	{
-		return Option::get('mobile', 'profile_feature_enabled', 'N') === 'Y';
+		return Option::get('mobile', 'profile_feature_enabled', 'Y') === 'Y';
 	}
 
 	/**

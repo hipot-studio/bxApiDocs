@@ -29,11 +29,12 @@ use Bitrix\Main\Type\Date;
  */
 class LeadStatusHistoryWithSupposedTable extends DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+
 	public static function getTableName()
 	{
 		return 'b_crm_lead_status_history_with_supposed';
 	}
-
 
 	public static function getMap()
 	{

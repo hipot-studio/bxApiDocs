@@ -33,6 +33,7 @@ class CheckListItem extends AbstractEntity
 		public readonly ?array $actions = null,
 		public readonly ?bool $collapsed = null,
 		public readonly ?bool $expanded = null,
+		public readonly ?int $copiedId = null,
 	)
 	{
 
@@ -63,6 +64,7 @@ class CheckListItem extends AbstractEntity
 			actions: static::mapArray($props, 'actions'),
 			collapsed: static::mapBool($props, 'collapsed'),
 			expanded: static::mapBool($props, 'expanded'),
+			copiedId: static::mapInteger($props, 'copiedId'),
 		);
 	}
 
@@ -86,6 +88,7 @@ class CheckListItem extends AbstractEntity
 			'actions' => $this->actions,
 			'collapsed' => $this->collapsed,
 			'expanded' => $this->expanded,
+			'copiedId' => $this->copiedId,
 		];
 	}
 }

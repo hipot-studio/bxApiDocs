@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
@@ -8,18 +9,16 @@
 
 namespace Bitrix\Rest\SessionAuth;
 
-use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\Context;
-use Bitrix\Main\Loader;
 use Bitrix\Main\UserTable;
 
 class Auth
 {
-	const AUTH_TYPE = 'sessionauth';
+	public const AUTH_TYPE = 'sessionauth';
 
-	protected static $authQueryParams = array(
+	protected static $authQueryParams = [
 		'sessid',
-	);
+	];
 
 	public static function isAccessAllowed(): bool
 	{
@@ -27,7 +26,9 @@ class Auth
 
 		$externalAuthId = $USER->GetParam('EXTERNAL_AUTH_ID');
 
-		if ($USER->IsAdmin() || $externalAuthId === "__controller")
+		if ($USER->IsAdmin()
+			|| $externalAuthId === "__controller"
+			|| $externalAuthId === "email")
 		{
 			return true;
 		}
@@ -62,36 +63,37 @@ class Auth
 		global $USER;
 
 		$authKey = null;
-		foreach(static::$authQueryParams as $key)
+		foreach (static::$authQueryParams as $key)
 		{
-			if(array_key_exists($key, $query))
+			if (array_key_exists($key, $query))
 			{
 				$authKey = $query[$key];
+
 				break;
 			}
 		}
 
-		if($authKey !== null || Context::getCurrent()->getRequest()->getHeader('X-Bitrix-Csrf-Token') !== null)
+		if ($authKey !== null || Context::getCurrent()->getRequest()->getHeader('X-Bitrix-Csrf-Token') !== null)
 		{
 			static::checkHttpAuth();
 			static::checkCookieAuth();
 
-			if(!$USER->isAuthorized())
+			if (!$USER->isAuthorized())
 			{
 				$error = true;
-				$res = array('error' => 'access_denied', 'error_description' => 'User not authorized', 'additional' => array('sessid' => bitrix_sessid(), 'extended_error' => 'user_not_authorized'));
+				$res = ['error' => 'access_denied', 'error_description' => 'User not authorized', 'additional' => ['sessid' => bitrix_sessid(), 'extended_error' => 'user_not_authorized']];
 			}
-			else if(check_bitrix_sessid() || $authKey === bitrix_sessid())
+			elseif (check_bitrix_sessid() || $authKey === bitrix_sessid())
 			{
 				if (self::isAccessAllowed())
 				{
 					$error = false;
-					$res = array(
+					$res = [
 						'user_id' => $USER->GetID(),
 						'scope' => implode(',', \CRestUtil::getScopeList()),
 						'parameters_clear' => static::$authQueryParams,
 						'auth_type' => static::AUTH_TYPE,
-					);
+					];
 
 					self::setLastActivityDate($USER->GetID(), $query);
 
@@ -103,13 +105,13 @@ class Auth
 				else
 				{
 					$error = true;
-					$res = array('error' => 'access_denied', 'error_description' => 'Access denied for this type of user', 'additional' => array('type' => $USER->GetParam('EXTERNAL_AUTH_ID')));
+					$res = ['error' => 'access_denied', 'error_description' => 'Access denied for this type of user', 'additional' => ['type' => $USER->GetParam('EXTERNAL_AUTH_ID')]];
 				}
 			}
 			else
 			{
 				$error = true;
-				$res = array('error' => 'session_failed', 'error_description' => 'Sessid check failed', 'additional' => array('sessid' => bitrix_sessid()));
+				$res = ['error' => 'session_failed', 'error_description' => 'Sessid check failed', 'additional' => ['sessid' => bitrix_sessid()]];
 			}
 
 			return !$error;
@@ -126,7 +128,7 @@ class Auth
 			return false;
 		}
 
-		$useCache = isset($query['BX_LAST_ACTIVITY_USE_CACHE']) && $query['BX_LAST_ACTIVITY_USE_CACHE'] == 'N'? false: true;
+		$useCache = isset($query['BX_LAST_ACTIVITY_USE_CACHE']) && $query['BX_LAST_ACTIVITY_USE_CACHE'] == 'N' ? false : true;
 
 		if (isset($query['BX_MOBILE']) && $query['BX_MOBILE'] == 'Y')
 		{
@@ -154,10 +156,10 @@ class Auth
 	{
 		global $USER, $APPLICATION;
 
-		if(!$USER->IsAuthorized())
+		if (!$USER->IsAuthorized())
 		{
 			$httpAuth = $USER->LoginByHttpAuth();
-			if($httpAuth !== null)
+			if ($httpAuth !== null)
 			{
 				$APPLICATION->SetAuthResult($httpAuth);
 			}
@@ -168,7 +170,7 @@ class Auth
 	{
 		global $USER;
 
-		if(!$USER->IsAuthorized())
+		if (!$USER->IsAuthorized())
 		{
 			$USER->LoginByCookies();
 		}

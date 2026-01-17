@@ -9,6 +9,7 @@ use Bitrix\BIConnector\DataSource\Field\IntegerField;
 use Bitrix\BIConnector\DataSource\Field\StringField;
 use Bitrix\BIConnector\DataSource\Field\DateTimeField;
 use Bitrix\BIConnector\DataSource\Dataset;
+use Bitrix\BIConnector\DataSource\DatasetFilter;
 
 class WorkflowTemplate extends Dataset
 {
@@ -145,5 +146,19 @@ class WorkflowTemplate extends Dataset
 			,
 			(new StringField('TYPE')),
 		];
+	}
+
+	protected function getFilter(): ?DatasetFilter
+	{
+		return new DatasetFilter(
+			[
+				'=TYPE' => \Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType::Default->value,
+				'=IS_SYSTEM' => 'N',
+			],
+			[
+				new StringField('TYPE'),
+				new StringField('IS_SYSTEM'),
+			]
+		);
 	}
 }

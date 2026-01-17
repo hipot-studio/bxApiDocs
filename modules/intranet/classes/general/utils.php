@@ -7,6 +7,7 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\Main\Application;
 use Bitrix\Intranet\MainPage;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
 
 IncludeModuleLangFile(__FILE__);
@@ -1932,18 +1933,34 @@ class CIntranetUtils
 							in_array($_SERVER['SERVER_PORT'], array(80, 443)) ? '' : ':' . $_SERVER['SERVER_PORT']
 						);
 
-						CIMNotify::add(array(
+						$notifyTitleCallback = fn (?string $languageId = null) => Loc::getMessage(
+							'INTR_MAIL_DOMAINREADY_NOTICE_TITLE',
+							language: $languageId,
+						);
+
+						$notifyMessageCallback = fn (?string $languageId = null) => Loc::getMessage(
+							'INTR_MAIL_DOMAINREADY_NOTICE',
+							[
+								'#DOMAIN#' => htmlspecialcharsbx($service['SERVER']),
+								'#SERVER#' => $siteUrl,
+							],
+							$languageId,
+						);
+
+						CIMNotify::add([
 							'TO_USER_ID'     => $user_id,
 							'FROM_USER_ID'   => 0,
 							'NOTIFY_TYPE'    => IM_NOTIFY_SYSTEM,
 							'NOTIFY_MODULE'  => 'intranet',
 							'NOTIFY_EVENT' => 'admin_notification',
-							'NOTIFY_MESSAGE' => str_replace(
-								array('#DOMAIN#', '#SERVER#'),
-								array(htmlspecialcharsbx($service['SERVER']), $siteUrl),
-								getMessage('INTR_MAIL_DOMAINREADY_NOTICE')
-							)
-						));
+							'NOTIFY_TITLE' => $notifyTitleCallback,
+							'NOTIFY_MESSAGE' => $notifyMessageCallback,
+							"PARAMS" => [
+								'COMPONENT_PARAMS' => [
+									'SYSTEM_ICON' => 'mail',
+								],
+							],
+						]);
 					}
 
 					$timeout = new DateTime(intval($arAdmin['TIME_ZONE_OFFSET']).' seconds +7 days');

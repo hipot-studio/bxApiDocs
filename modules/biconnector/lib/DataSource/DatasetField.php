@@ -8,6 +8,7 @@ abstract class DatasetField
 	protected bool $isPrimary = false;
 	protected bool $isMultiple = false;
 	protected bool $isSystem = true;
+	protected bool $isDeprecated = false;
 	protected bool $metric = false;
 	protected string $separator = ', ';
 	protected mixed $callback = null;
@@ -63,6 +64,11 @@ abstract class DatasetField
 
 	protected function getName(): string
 	{
+		if ($this->isDeprecated)
+		{
+			return 'NULL';
+		}
+
 		$name =
 			!empty($this->name)
 				? $this->name
@@ -156,6 +162,19 @@ abstract class DatasetField
 	public function setMetric(bool $metric = true): static
 	{
 		$this->metric = $metric;
+
+		return $this;
+	}
+
+	/**
+	 * Mark field as deprecated. Return `NULL` instead of deprecated field. Made for compatibility with old selections.
+	 *
+	 * @param bool $deprecated
+	 * @return $this
+	 */
+	public function setDeprecated(bool $deprecated = true): static
+	{
+		$this->isDeprecated = $deprecated;
 
 		return $this;
 	}

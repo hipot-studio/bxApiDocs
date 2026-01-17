@@ -69,7 +69,8 @@ class SignMyDocumentsComponent extends SignBaseComponent
 		$this->prepareComponentParams();
 		$this->addCreateButton();
 		$this->addSalaryAndVacationButton();
-		$this->includeComponentTemplate();
+
+		parent::executeComponent();
 	}
 
 	private function addCreateButton(): void

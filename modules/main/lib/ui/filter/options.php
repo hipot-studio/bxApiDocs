@@ -7,6 +7,7 @@ use Bitrix\Main\Context;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\UI\Filter;
+use Bitrix\Main\ArgumentNullException;
 
 /**
  * Class Options of main.ui.filter
@@ -33,6 +34,11 @@ class Options
 	 */
 	public function __construct($filterId, $filterPresets = [], $commonPresetsId = null)
 	{
+		if (empty($filterId))
+		{
+			throw new ArgumentNullException('filterId');
+		}
+
 		$this->id = $filterId;
 		$this->options = $this->fetchOptions($this->id);
 		$this->useCommonPresets = false;
@@ -117,6 +123,15 @@ class Options
 				}
 			}
 		}
+	}
+
+	public static function hasOptions($filterId): bool
+	{
+		global $USER;
+
+		$options = \CUserOptions::getOption("main.ui.filter", $filterId, [], $USER->getId());
+
+		return !empty($options);
 	}
 
 	/**
@@ -331,6 +346,11 @@ class Options
 		}
 
 		$this->options["default"] = $presetId;
+	}
+
+	public function isPinned($presetId): bool
+	{
+		return $this->options["default"] === $presetId;
 	}
 
 	/**
@@ -608,7 +628,6 @@ class Options
 	 * @param string $key
 	 * @param array $filterFields
 	 * @return array
-	 * @throws \Bitrix\Main\ObjectException
 	 */
 	public static function fetchDateFieldValue($key = "", $filterFields = [])
 	{
@@ -824,7 +843,14 @@ class Options
 	 */
 	public function getAllUserOptions()
 	{
-		return \CUserOptions::getList(null, ["CATEGORY" => "main.ui.filter", "NAME" => $this->getId()]);
+		return \CUserOptions::getList(
+			null,
+			[
+				"CATEGORY" => "main.ui.filter",
+				"NAME" => $this->getId(),
+				"COMMON" => "N",
+			],
+		);
 	}
 
 	/**
@@ -839,51 +865,13 @@ class Options
 	/**
 	 * Saves filter options for all users
 	 */
-	public function saveForAll()
+	public function saveForAll(): void
 	{
 		global $USER;
 
-		if (self::isCurrentUserEditOtherSettings())
+		if ($USER->CanDoOperation("edit_other_settings"))
 		{
-			$allUserOptions = $this->getAllUserOptions();
-
-			if ($allUserOptions)
-			{
-				$currentOptions = $this->options;
-
-				$forAllPresets = [];
-
-				foreach ($currentOptions["filters"] as $key => $preset)
-				{
-					if ($preset["for_all"])
-					{
-						$forAllPresets[$key] = $preset;
-					}
-				}
-
-				while ($userOptions = $allUserOptions->fetch())
-				{
-					$currentUserOptions = unserialize($userOptions["VALUE"], ['allowed_classes' => false]);
-
-					if (is_array($currentUserOptions))
-					{
-						if (!self::isCommon($userOptions))
-						{
-							$currentUserOptions["deleted_presets"] = $currentOptions["deleted_presets"];
-							$currentUserOptions["filters"] = $forAllPresets;
-
-							if (!$USER->CanDoOperation("edit_other_settings", $userOptions["USER_ID"]))
-							{
-								$currentUserOptions["default_presets"] = $forAllPresets;
-							}
-						}
-
-						$this->saveOptionsForUser($currentUserOptions, $userOptions["USER_ID"]);
-					}
-				}
-
-				$this->saveCommon();
-			}
+			$this->saveCommon();
 		}
 	}
 
@@ -936,18 +924,11 @@ class Options
 	 */
 	public function saveCommon()
 	{
-		$presets = [];
 		$options = $this->getOptions();
 
-		foreach ($options["filters"] as $key => $preset)
-		{
-			if ($preset["for_all"])
-			{
-				$presets[$key] = $preset;
-			}
-		}
-
-		$options["filters"] = $presets;
+		$options["filters"] = array_filter($options["filters"], function ($preset) {
+			return $preset["for_all"];
+		});
 
 		\CUserOptions::setOption("main.ui.filter.common", $this->id, $options, true);
 	}
@@ -1026,33 +1007,25 @@ class Options
 	}
 
 	/**
-	 * @param array $settings
+	 * @param array $presets
 	 */
-	public function setFilterSettingsArray($settings = [])
+	public function setFilterSettingsArray($presets = [])
 	{
-		if (!empty($settings))
+		if (empty($presets))
 		{
-			foreach ($settings as $key => $preset)
-			{
-				if ($key !== "current_preset" && $key !== "common_presets_id")
-				{
-					$this->setFilterSettings($key, $preset, false);
-				}
-			}
+			return;
+		}
 
-			$this->options["filter"] = $settings["current_preset"];
-			$request = $this->getRequest();
+		foreach ($presets as $key => $preset)
+		{
+			$this->setFilterSettings($key, $preset, false);
+		}
 
-			if (
-				isset($request["params"]["forAll"])
-				&& (
-					$request["params"]["forAll"] === "true"
-					|| $request["params"]["forAll"] === true
-				)
-			)
-			{
-				$this->saveForAll();
-			}
+		$params = $this->getRequest()->getPost("params");
+		$forAll = $params["forAll"] ?? null;
+		if ($forAll === "true")
+		{
+			$this->saveForAll();
 		}
 	}
 
@@ -1218,7 +1191,6 @@ class Options
 	 * @param string $fieldId
 	 * @param array $source Source values
 	 * @param array $result Result values
-	 * @throws \Bitrix\Main\ObjectException
 	 */
 	public static function calcDates($fieldId, $source, &$result)
 	{

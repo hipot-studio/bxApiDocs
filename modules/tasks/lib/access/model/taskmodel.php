@@ -14,6 +14,8 @@ use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 
 class TaskModel implements AccessibleTask
 {
@@ -165,7 +167,7 @@ class TaskModel implements AccessibleTask
 		}
 
 		$groupId = 0;
-		if (isset($data['GROUP_ID']))
+		if (isset($data['GROUP_ID']) && $data['GROUP_ID'] > 0)
 		{
 			$groupId = (int) $data['GROUP_ID'];
 		}
@@ -379,7 +381,13 @@ class TaskModel implements AccessibleTask
 
 	public function getParentId(): ?int
 	{
-		return $this->parentId;
+		$task = $this->getTask(true);
+		if (!$task)
+		{
+			return false;
+		}
+
+		return $task['PARENT_ID'] ? (int)$task['PARENT_ID'] : null;
 	}
 
 	public function setParentId(int $parentId): self
@@ -420,13 +428,41 @@ class TaskModel implements AccessibleTask
 		return (int) $task['STATUS'];
 	}
 
-	public function isAllowedChangeDeadline(): bool
+	public function isAllowedChangeDeadline(int $userId = null, $params = null): bool
 	{
 		$task = $this->getTask();
 		if (!$task)
 		{
 			return false;
 		}
+
+		$inputDeadline = (is_array($params) && isset($params['DEADLINE'])) ? $params['DEADLINE'] : null;
+
+		if (\Bitrix\Tasks\V2\FormV2Feature::isOn() && $userId && $inputDeadline !== null)
+		{
+			$deadlineProvider = Container::getInstance()->getDeadlineProvider();
+			$taskParameterRepository = Container::getInstance()->getTaskParameterRepository();
+			$deadlineDate = \Bitrix\Tasks\Util\Type\DateTime::createFrom($inputDeadline);
+
+			$taskEntity = new Task(
+				id: $this->id,
+				creator: \Bitrix\Tasks\V2\Internal\Entity\User::mapFromId($task['CREATED_BY']),
+				deadlineTs: $deadlineDate?->getTimestamp(),
+				allowsChangeDeadline: $task['ALLOW_CHANGE_DEADLINE'] === 'Y',
+				maxDeadlineChangeDate: $taskParameterRepository->maxDeadlineChangeDate($this->id),
+				maxDeadlineChanges: $taskParameterRepository->maxDeadlineChanges($this->id),
+				requireDeadlineChangeReason: $taskParameterRepository->requireDeadlineChangeReason($this->id),
+				deadlineChangeReason: $params['DEADLINE_REASON'] ?? null,
+			);
+
+			$result = $deadlineProvider->canChangeDeadline($userId, $taskEntity);
+			if (!$result->isSuccess())
+			{
+				return false;
+			}
+		}
+
+
 		return $task['ALLOW_CHANGE_DEADLINE'] === 'Y';
 	}
 

@@ -46,7 +46,7 @@ class OrderShipmentController extends EntityController
 		}
 
 		$settingFields = [
-			'PRICE_DELIVERY' => $fields['PRICE_DELIVERY'],
+			'PRICE_DELIVERY' => $fields['PRICE_DELIVERY'] ?? 0,
 			'CURRENCY' => $fields['CURRENCY']
 		];
 

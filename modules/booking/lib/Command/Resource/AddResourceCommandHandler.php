@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Command\Resource;
 
+use Bitrix\Booking\Command\Booking\AddBookingCommand;
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Exception\Resource\CreateResourceException;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceSlotRepositoryInterface;
@@ -15,28 +17,37 @@ use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\ResourceService;
+use Bitrix\Booking\Internals\Service\ResourceAvatarService;
+use Bitrix\Booking\Internals\Service\ResourceSkuService;
+use Bitrix\Booking\Service\BookingFeature;
 
 class AddResourceCommandHandler
 {
 	private TransactionHandlerInterface $transactionHandler;
 	private ResourceRepositoryInterface $resourceRepository;
 	private ResourceService $resourceService;
+	private ResourceAvatarService $resourceAvatarService;
 	private JournalServiceInterface $journalService;
 	private ResourceTypeRepositoryInterface $resourceTypeRepository;
 	private ResourceSlotRepositoryInterface $resourceSlotRepository;
+	private ResourceSkuService $resourceSkuService;
 
 	public function __construct()
 	{
 		$this->transactionHandler = Container::getTransactionHandler();
 		$this->resourceRepository = Container::getResourceRepository();
 		$this->resourceService = Container::getResourceService();
+		$this->resourceAvatarService = Container::getResourceAvatarService();
 		$this->journalService = Container::getJournalService();
 		$this->resourceTypeRepository = Container::getResourceTypeRepository();
 		$this->resourceSlotRepository = Container::getResourceSlotRepository();
+		$this->resourceSkuService = Container::getResourceSkuService();
 	}
 
 	public function __invoke(AddResourceCommand $command): Entity\Resource\Resource
 	{
+		$this->checkFeatures();
+
 		if (!$this->isValidType($command))
 		{
 			throw new CreateResourceException('ResourceType not found');
@@ -44,6 +55,8 @@ class AddResourceCommandHandler
 
 		return $this->transactionHandler->handle(
 			fn: function() use ($command) {
+				$this->resourceAvatarService->handleAvatarCreate($command->resource);
+
 				// save resource
 				$command->resource->setCreatedBy($command->createdBy);
 				$resourceId = $this->resourceRepository->save($command->resource);
@@ -55,6 +68,10 @@ class AddResourceCommandHandler
 				}
 
 				$this->resourceService->handleResourceEntities($resource, $command->resource->getEntityCollection());
+				$this->resourceSkuService->handleSkuRelations(
+					$resource,
+					$command->resource->getSkuCollection(),
+				);
 
 				// save slot ranges if any provided
 				$this->handleSlotRanges($command, $resource);
@@ -107,6 +124,14 @@ class AddResourceCommandHandler
 
 			$this->resourceSlotRepository->save($slotRanges);
 			$resource->setSlotRanges($slotRanges);
+		}
+	}
+
+	private function checkFeatures(): void
+	{
+		if (!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_BOOKING))
+		{
+			throw new Exception('Feature is not available');
 		}
 	}
 }

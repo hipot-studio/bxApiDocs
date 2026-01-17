@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Controller\V1\BookingService\Yandex;
 
 use Bitrix\Booking\Controller\V1\BookingService\BaseReceiver;
+use Bitrix\Booking\Controller\V1\BookingService\Yandex\Filter\AccountRegistered;
 use Bitrix\Booking\Controller\V1\BookingService\Yandex\Filter\BookingDisabled;
+use Bitrix\Booking\Controller\V1\BookingService\Yandex\Filter\IntegrationAvailable;
 use Bitrix\Booking\Internals\Exception\Yandex\YandexException;
 use Bitrix\Main\Error;
 
@@ -16,6 +18,8 @@ class BaseController extends BaseReceiver
 		return [
 			...parent::getDefaultPreFilters(),
 			new BookingDisabled(),
+			new IntegrationAvailable(),
+			new AccountRegistered(),
 		];
 	}
 

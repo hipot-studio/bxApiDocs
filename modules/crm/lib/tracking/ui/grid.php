@@ -47,7 +47,7 @@ class Grid
 	public static function enrichSourceName($entityTypeId, $entityId, $sourceName)
 	{
 		ob_start();
-		/** @var \CALLMain {$GLOBALS['APPLICATION']} */
+		/** @var \CMain {$GLOBALS['APPLICATION']} */
 		$GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:crm.tracking.entity.path',
 			'',
@@ -80,7 +80,7 @@ class Grid
 	public static function appendRows($entityTypeId, $entityId, array &$rows)
 	{
 		ob_start();
-		/** @var \CALLMain {$GLOBALS['APPLICATION']} */
+		/** @var \CMain {$GLOBALS['APPLICATION']} */
 		$GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:crm.tracking.entity.path',
 			'',

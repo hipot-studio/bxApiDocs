@@ -7,16 +7,9 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/advertising/classes/gene
 
 class CAdvContract extends CAdvContract_all
 {
-	public static function err_mess()
-	{
-		$module_id = "advertising";
-		return "<br>Module: ".$module_id."<br>Class: CAdvContract<br>File: ".__FILE__;
-	}
-
 	// получаем список контрактов
 	public static function GetList($by = "s_sort", $order = "desc", $arFilter = [], $is_filtered = null, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvContract::err_mess())."<br>Function: GetList<br>Line: ";
 		global $DB, $USER;
 		if ($CHECK_RIGHTS=="Y")
 		{
@@ -233,7 +226,7 @@ class CAdvContract extends CAdvContract_all
 				$strSqlOrder
 				";
 		}
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -245,22 +238,15 @@ class CAdvContract extends CAdvContract_all
 
 class CAdvBanner extends CAdvBanner_all
 {
-	public static function err_mess()
-	{
-		$module_id = "advertising";
-		return "<br>Module: ".$module_id."<br>Class: CAdvBanner<br>File: ".__FILE__;
-	}
-
 	public static function Update($arFields, $BANNER_ID)
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: Update<br>Line: ";
 		global $DB;
 		$arrKeys = array_keys($arFields);
 		if (in_array("CODE", $arrKeys))
 		{
 			$arFields["CODE"] = "'".$DB->ForSql($arFields["CODE"])."'";
 		}
-		$DB->Update("b_adv_banner",$arFields,"WHERE ID='".intval($BANNER_ID)."'",$err_mess.__LINE__);
+		$DB->Update("b_adv_banner",$arFields,"WHERE ID='".intval($BANNER_ID)."'");
 	}
 
 	public static function getCTRSQL()
@@ -285,22 +271,19 @@ class CAdvBanner extends CAdvBanner_all
 
 	public static function Add($arFields)
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: Add<br>Line: ";
 		global $DB;
 		$arrKeys = array_keys($arFields);
 		if (in_array("CODE", $arrKeys))
 		{
 			$arFields["CODE"] = "'".$DB->ForSql($arFields["CODE"])."'";
 		}
-		$BANNER_ID = $DB->Insert("b_adv_banner",$arFields, $err_mess.__LINE__);
+		$BANNER_ID = $DB->Insert("b_adv_banner",$arFields);
 		return $BANNER_ID;
 	}
 
 	public static function GetList($by = 's_id', $order = 'desc', $arFilter = [], $is_filtered = null, $CHECK_RIGHTS = "Y")
 	{
 		global $DB, $USER;
-
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: GetList<br>Line: ";
 
 		if ($CHECK_RIGHTS=="Y")
 		{
@@ -610,7 +593,7 @@ class CAdvBanner extends CAdvBanner_all
 				$strSqlOrder
 				";
 		}
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -618,7 +601,6 @@ class CAdvBanner extends CAdvBanner_all
 	// фиксируем клик по изображению баннера
 	public static function Click($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: Click<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0) return false;
@@ -631,7 +613,7 @@ class CAdvBanner extends CAdvBanner_all
 			WHERE
 				B.ID = $BANNER_ID
 			";
-		$rsBanner = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rsBanner = $DB->Query($strSql);
 		if ($arBanner = $rsBanner->Fetch())
 		{
 			/********************
@@ -643,7 +625,7 @@ class CAdvBanner extends CAdvBanner_all
 					"CLICK_COUNT"		=> "CLICK_COUNT + 1",
 					"DATE_LAST_CLICK"	=> $DB->GetNowFunction(),
 					);
-			$rows = $DB->Update("b_adv_banner",$arFields,"WHERE ID = $BANNER_ID",$err_mess.__LINE__);
+			$rows = $DB->Update("b_adv_banner",$arFields,"WHERE ID = $BANNER_ID");
 			if (intval($rows)>0)
 			{
 				foreach (getModuleEvents('advertising', 'onBannerClick', true) as $arEvent)
@@ -657,7 +639,7 @@ class CAdvBanner extends CAdvBanner_all
 						BANNER_ID = $BANNER_ID
 					and	DATE_STAT = ".$DB->GetNowDate()."
 					";
-				$z = $DB->Query($strSql, false, $err_mess.__LINE__);
+				$z = $DB->Query($strSql);
 				$rows = $z->AffectedRowsCount();
 				if (intval($rows)<=0)
 				{
@@ -670,7 +652,7 @@ class CAdvBanner extends CAdvBanner_all
 							BANNER_ID = $BANNER_ID
 						and	DATE_STAT = ".$DB->GetNowDate()."
 						";
-					$w = $DB->Query($strSql, false, $err_mess.__LINE__);
+					$w = $DB->Query($strSql);
 					if (!$wr=$w->Fetch())
 					{
 						$strSql = "
@@ -679,7 +661,7 @@ class CAdvBanner extends CAdvBanner_all
 								$BANNER_ID,
 								1)
 							";
-						$DB->Query($strSql, true, $err_mess.__LINE__);
+						$DB->Query($strSql, true);
 					}
 				}
 			}
@@ -694,7 +676,7 @@ class CAdvBanner extends CAdvBanner_all
 			if ($CONTRACT_ID>0 && $DONT_USE_CONTRACT == "N")
 			{
 				$arFields = Array("CLICK_COUNT" => "CLICK_COUNT + 1");
-				$DB->Update("b_adv_contract",$arFields,"WHERE ID = $CONTRACT_ID",$err_mess.__LINE__);
+				$DB->Update("b_adv_contract",$arFields,"WHERE ID = $CONTRACT_ID");
 			}
 		}
 	}
@@ -702,7 +684,6 @@ class CAdvBanner extends CAdvBanner_all
 	// формирует массив весов всех возможных баннеров для текущей страницы
 	public static function GetPageWeights_RS()
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: GetPageWeights_RS<br>Line: ";
 		global $APPLICATION, $DB, $USER;
 
 		$stat_adv_id = intval($_SESSION["SESS_LAST_ADV_ID"]);
@@ -933,7 +914,7 @@ class CAdvBanner extends CAdvBanner_all
 				)
 				ORDER BY B.TYPE_SID desc";
 		}
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		return $rs;
 	}
 
@@ -942,13 +923,12 @@ class CAdvBanner extends CAdvBanner_all
 	{
 		set_time_limit(0);
 		ignore_user_abort(true);
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: CleanUpDynamics<br>Line: ";
 		global $DB;
 		$DAYS = intval(COption::GetOptionString("advertising", "BANNER_DAYS"));
 		$strSql = "DELETE FROM b_adv_banner_2_day WHERE to_days(now())-to_days(DATE_STAT)>=$DAYS";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		$strSql = "OPTIMIZE TABLE b_adv_banner_2_day";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return "CAdvBanner::CleanUpDynamics();";
 	}
 
@@ -956,12 +936,11 @@ class CAdvBanner extends CAdvBanner_all
 	{
 		set_time_limit(0);
 		ignore_user_abort(true);
-		$err_mess = CAdvBanner::err_mess()."<br>Function: CleanUpAllDynamics<br>Line: ";
 		global $DB;
 		$strSql = "DELETE FROM b_adv_banner_2_day WHERE 1 = 1";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		$strSql = "OPTIMIZE TABLE b_adv_banner_2_day";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return "CAdvBanner::CleanUpAllDynamics();";
 	}
 
@@ -1003,9 +982,4 @@ class CAdvBanner extends CAdvBanner_all
 
 class CAdvType extends CAdvType_all
 {
-	public static function err_mess()
-	{
-		$module_id = "advertising";
-		return "<br>Module: ".$module_id."<br>Class: CAdvType<br>File: ".__FILE__;
-	}
 }

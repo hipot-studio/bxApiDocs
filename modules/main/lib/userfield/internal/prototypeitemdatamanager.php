@@ -187,16 +187,23 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 		$oldData = static::getTemporaryStorage()->getData($id);
 
 		$multiValues = [];
-		foreach($fields as $fieldName => $field)
+		foreach ($fields as $fieldName => $field)
 		{
-			if(is_array($data[$fieldName]) && $field['MULTIPLE'] === 'Y')
+			if (
+				isset($data[$fieldName])
+				&& is_array($data[$fieldName])
+				&& $field['MULTIPLE'] === 'Y'
+			)
 			{
-				$multiValues[$fieldName] = array_filter($data[$fieldName], array('static', 'isNotNull'));
+				$multiValues[$fieldName] = array_filter($data[$fieldName], ['static', 'isNotNull']);
 				$multiValues[$fieldName] = array_filter($multiValues[$fieldName], static fn($item) => !is_array($item));
 			}
-			elseif($field['USER_TYPE']['BASE_TYPE'] === 'file')
+			elseif ($field['USER_TYPE']['BASE_TYPE'] === 'file')
 			{
-				if(is_numeric($oldData[$fieldName]) && array_key_exists($fieldName, $data) && (int) $oldData[$fieldName] !== (int) $data[$fieldName])
+				if (
+					is_numeric($oldData[$fieldName])
+					&& array_key_exists($fieldName, $data)
+					&& (int)$oldData[$fieldName] !== (int)$data[$fieldName])
 				{
 					\CFile::Delete($oldData[$fieldName]);
 				}

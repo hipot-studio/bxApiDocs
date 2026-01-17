@@ -32,32 +32,7 @@ final class DashboardGroupsField extends EntityEditorField
 			$arrayParams[] = $param->code();
 		}
 
-		$scopeParamsMap = [];
-		$globalParams = UrlParameter\ScopeMap::getGlobals();
-		$globalScopeKey = 'global';
-		foreach ($globalParams as $globalParam)
-		{
-			$scopeParamsMap[$globalScopeKey][] = [
-				'code' => $globalParam->code(),
-				'title' => $globalParam->title(),
-				'description' => $globalParam->description(),
-				'scope' => $globalScopeKey,
-			];
-		}
-
-		$map = UrlParameter\ScopeMap::getMap();
-		foreach ($map as $scopeCode => $scopeParams)
-		{
-			foreach ($scopeParams as $scopeParam)
-			{
-				$scopeParamsMap[$scopeCode][] = [
-					'code' => $scopeParam->code(),
-					'title' => $scopeParam->title(),
-					'description' => $scopeParam->description(),
-					'scope' => $scopeCode,
-				];
-			}
-		}
+		$paramList = UrlParameter\ScopeMap::getParamList();
 
 		if (!$ormDashboard->isGroupsFilled())
 		{
@@ -68,7 +43,7 @@ final class DashboardGroupsField extends EntityEditorField
 			'GROUPS' => $ormDashboard->getGroups()->getIdList(),
 			'SCOPE' => $scope,
 			'PARAMS' => $arrayParams,
-			'SCOPE_PARAMS_MAP' => $scopeParamsMap,
+			'PARAM_LIST' => $paramList,
 		];
 	}
 

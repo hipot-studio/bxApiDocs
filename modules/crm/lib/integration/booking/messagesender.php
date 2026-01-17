@@ -10,7 +10,6 @@ use Bitrix\Booking\Entity\Message\MessageStatus;
 use Bitrix\Booking\Entity\Message\MessageTemplateBased;
 use Bitrix\Booking\Provider\NotificationsAvailabilityProvider;
 use Bitrix\Booking\Provider\NotificationsLanguageProvider;
-use Bitrix\Booking\Service\BookingFeature;
 use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Item\Deal;
 use Bitrix\Crm\MessageSender\Channel\ChannelRepository;
@@ -19,6 +18,7 @@ use Bitrix\Crm\Multifield\Value;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use CCrmOwnerType;
 use Bitrix\Crm\ItemIdentifier;
@@ -84,13 +84,6 @@ class MessageSender implements \Bitrix\Booking\Interfaces\MessageSender
 			->setPlaceholders($message->getPlaceholders())
 			->setLanguageId($this->notificationsLanguageProvider->getLanguageId())
 		;
-
-		if (BookingFeature::isFeatureEnabledByTrial())
-		{
-			$facilitator->setAdditionalFields([
-				'SKIP_QUOTA' => true,
-			]);
-		}
 
 		return $facilitator->send();
 	}
@@ -213,6 +206,27 @@ class MessageSender implements \Bitrix\Booking\Interfaces\MessageSender
 
 	public function canUse(): bool
 	{
-		return NotificationsAvailabilityProvider::isAvailable() && NotificationsManager::canUse();
+		if (!$this->checkLicense())
+		{
+			return false;
+		}
+
+		return (
+			NotificationsAvailabilityProvider::isAvailable()
+			&& NotificationsManager::canUse()
+		);
+	}
+
+	public function checkLicense(): bool
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return (
+			\CBitrix24::IsLicensePaid()
+			|| \CBitrix24::IsNfrLicense()
+		);
 	}
 }

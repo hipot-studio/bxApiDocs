@@ -21,6 +21,8 @@ final class ChatUserCount extends Stepper
 	 */
 	public function execute(array &$result)
 	{
+		return false;
+
 		global $DB;
 
 		if (!Loader::includeModule(self::$moduleId))

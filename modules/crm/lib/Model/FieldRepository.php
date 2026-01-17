@@ -195,6 +195,22 @@ final class FieldRepository
 		;
 	}
 
+	public function getIsRecurring(int $entityTypeId): ScalarField
+	{
+		$code = (
+			$entityTypeId === \CCrmOwnerType::SmartInvoice
+				? 'CRM_TYPE_SMART_INVOICE_FIELD_IS_RECURRING'
+				: 'CRM_TYPE_DYNAMIC_FIELD_IS_RECURRING'
+		);
+
+		return
+			(new BooleanField(Item::FIELD_NAME_IS_RECURRING))
+				->configureTitle(Loc::getMessage($code))
+				->configureDefaultValue('N')
+				->configureStorageValues('N', 'Y')
+		;
+	}
+
 	public function getAssigned(string $fieldName = Item::FIELD_NAME_ASSIGNED): ScalarField
 	{
 		return

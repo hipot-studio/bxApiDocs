@@ -4,6 +4,7 @@ namespace Bitrix\SalesCenter\Controller;
 
 use Bitrix\Catalog\v2\IoC\ServiceContainer;
 use Bitrix\Crm\Entity\Contact;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline;
 use Bitrix\ImOpenLines\Im;
 use Bitrix\Main;
@@ -14,7 +15,6 @@ use Bitrix\SalesCenter\Integration\CatalogManager;
 use Bitrix\SalesCenter\Integration\CrmManager;
 use Bitrix\SalesCenter\Integration\ImOpenLinesManager;
 use Bitrix\Crm\Binding\OrderEntityTable;
-use CUtil;
 
 Loc::loadMessages(__FILE__);
 
@@ -360,7 +360,13 @@ class Compilation extends Base
 
 		if ($options['sendingMethod'] === 'sms')
 		{
-			$isSent = CrmManager::getInstance()->sendCompilationBySms($compilationId, $dealId, $compilationLink, $options['sendingMethodDesc']);
+			$isSent = CrmManager::getInstance()->sendCompilationBySms(
+				$compilationId,
+				$dealId,
+				$compilationLink,
+				$options['sendingMethodDesc'],
+				$options['messageData'] ?? null,
+			);
 			if (!$isSent)
 			{
 				$this->addError(
@@ -406,7 +412,20 @@ class Compilation extends Base
 		}
 		else
 		{
-			$smsTitle = str_replace('#LINK#', $compilationLink['link'], $options['sendingMethodDesc']['text']);
+			$messageDataBody = $options['messageData']['body'] ?? null;
+			if ($messageDataBody)
+			{
+				if (Container::getInstance()->getUserPermissions()->isCrmAdmin())
+				{
+					CrmManager::getInstance()->saveSmsTemplate($messageDataBody);
+				}
+				$smsTemplate = $messageDataBody;
+			}
+			else
+			{
+				$smsTemplate = $options['sendingMethodDesc']['text'];
+			}
+			$smsTitle = str_replace('#LINK#', $compilationLink['link'], $smsTemplate);
 			$data['compilation']['title'] = $smsTitle;
 			$data['compilation']['url'] = $compilationLink['link'];
 			$data['compilation']['productIds'] = $compilationLink['productIds'];

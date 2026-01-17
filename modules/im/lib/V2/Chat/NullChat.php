@@ -145,4 +145,14 @@ class NullChat extends Chat
 	{
 		return 0;
 	}
+
+	public function onAfterMessagesRead(MessageCollection $messages, int $readerId): Result
+	{
+		return new Result();
+	}
+
+	public function onAfterAllMessagesRead(int $readerId): Result
+	{
+		return new Result();
+	}
 }

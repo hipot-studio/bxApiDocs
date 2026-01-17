@@ -3423,27 +3423,34 @@ class CCrmViewHelper
 		return $userInfo;
 	}
 
-	public static function renderObservers(int $entityTypeId, int $entityId, ?array $input): string
+	public static function renderObservers(
+		string $gridId,
+		array $filterFields,
+		?array $input,
+	): string
 	{
 		if (empty($input))
 		{
 			return '';
 		}
 
-		$entityName = CCrmOwnerType::ResolveName($entityTypeId);
+		$observersUserIds = array_column($input, 'OBSERVER_USER_ID');
 
 		$result = [];
-		foreach ($input as $index => $row)
+		foreach ($input as $row)
 		{
-			$result[] = static::PrepareUserBaloonHtml([
-				'PREFIX' => "{$entityName}_{$entityId}_OBSERVER_{$index}",
-				'USER_ID' => $row['OBSERVER_USER_ID'],
-				'USER_NAME'=> $row['OBSERVER_USER_FORMATTED_NAME'] ?? '',
-				'USER_PROFILE_URL' => $row['OBSERVER_USER_SHOW_URL'] ?? '',
-			]);
+			$result[] =
+				\Bitrix\Crm\Grid\Render\User\ClickableUser::createByUserIds($observersUserIds)
+					->render(
+						$row['OBSERVER_USER_ID'],
+						'OBSERVER_IDS',
+						$gridId,
+						$filterFields,
+					)
+			;
 		}
 
-		return implode(',<br>'."\n", $result);
+		return implode('<br>', $result);
 	}
 
 	public static function renderRepeatSaleSegmentTitle(int $segmentId): string

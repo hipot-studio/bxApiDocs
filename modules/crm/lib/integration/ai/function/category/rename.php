@@ -5,6 +5,8 @@ namespace Bitrix\Crm\Integration\AI\Function\Category;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Category\Dto\RenameParameters;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Funnel\RenameEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Factory;
@@ -45,8 +47,17 @@ final class Rename implements AIFunction
 			return Result::failAccessDenied();
 		}
 
-		return $category
+		$result = $category
 			->setName($parameters->title)
-			->save();
+			->save()
+		;
+
+		(new RenameEvent(section: Dictionary::SECTION_AI))
+			->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
+			->buildEvent()
+			->send()
+		;
+
+		return $result;
 	}
 }

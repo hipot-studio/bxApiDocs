@@ -16,7 +16,7 @@ class ContentBlockWithTitle extends ContentBlock
 	protected ?int $titleBottomPadding = null;
 	protected ?bool $inline = null;
 	protected ?bool $wordWrap = null;
-    protected bool $fixedWidth = true;
+	protected bool $fixedWidth = true;
 	protected ?string $alignItems = null;
 	protected ?ContentBlock $contentBlock = null;
 
@@ -49,17 +49,17 @@ class ContentBlockWithTitle extends ContentBlock
 		return $this;
 	}
 
-    public function getFixedWidth(): bool
-    {
-        return $this->fixedWidth;
-    }
+	public function getFixedWidth(): bool
+	{
+		return $this->fixedWidth;
+	}
 
-    public function setFixedWidth(bool $fixedWidth): self
-    {
-        $this->fixedWidth = $fixedWidth;
+	public function setFixedWidth(bool $fixedWidth): self
+	{
+		$this->fixedWidth = $fixedWidth;
 
-        return $this;
-    }
+		return $this;
+	}
 
 	public function getAlignItems(): ?string
 	{
@@ -116,7 +116,7 @@ class ContentBlockWithTitle extends ContentBlock
 			'titleBottomPadding' => $this->getTitleBottomPadding(),
 			'inline' => $this->getInline(),
 			'wordWrap' => $this->getWordWrap(),
-            'fixedWidth' => $this->getFixedWidth(),
+			'fixedWidth' => $this->getFixedWidth(),
 			'alignItems' => $this->getAlignItems(),
 			'contentBlock' => $this->getContentBlock(),
 		];

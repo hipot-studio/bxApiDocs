@@ -448,7 +448,6 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		$names[Item::FIELD_NAME_LAST_ACTIVITY_BY] = Item::FIELD_NAME_LAST_ACTIVITY_BY;
 		$names[Item::FIELD_NAME_COMMENTS] = Item::FIELD_NAME_COMMENTS;
 		$names[Item::FIELD_NAME_LOCATION_ID] = Item::FIELD_NAME_LOCATION_ID;
-		$names[Item::FIELD_NAME_RECURRING] = Item::FIELD_NAME_RECURRING;
 		$names[Item::FIELD_NAME_IS_RECURRING] = Item::FIELD_NAME_IS_RECURRING;
 		$names[SmartInvoice::FIELD_NAME_ACCOUNT_NUMBER] = SmartInvoice::FIELD_NAME_ACCOUNT_NUMBER;
 		$names[SmartDocument::FIELD_NAME_NUMBER] = SmartDocument::FIELD_NAME_NUMBER;

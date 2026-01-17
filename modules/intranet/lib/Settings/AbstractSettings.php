@@ -9,6 +9,7 @@ use Bitrix\Main\Result;
 abstract class AbstractSettings implements SettingsInterface
 {
 	public const TYPE = 'abstract';
+	public const ERROR_VALIDATION = 400;
 
 	protected array $data;
 

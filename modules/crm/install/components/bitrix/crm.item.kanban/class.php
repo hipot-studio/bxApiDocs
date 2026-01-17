@@ -1,17 +1,19 @@
 <?php
 
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)
+{
+	die();
+}
+
+use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router;
 use Bitrix\Crm\UI\Tools\ToolBar;
-
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)
-{
-	die();
-}
 
 \Bitrix\Main\Loader::includeModule('crm');
 
@@ -63,6 +65,14 @@ class CrmItemKanbanComponent extends Bitrix\Crm\Component\ItemList
 		if ($this->arResult['customSectionId'] > 0)
 		{
 			$section = Dictionary::SECTION_CUSTOM;
+
+			$customSectionId = (int)$this->arResult['customSectionId'];
+			$solution = Container::getInstance()->getAutomatedSolutionManager()->getAutomatedSolutionByIntranetCustomSectionId($customSectionId);
+			if (is_array($solution) && AutomatedSolutionTable::isImportedFromMarketplace((int)$solution['SOURCE_ID']))
+			{
+				$this->arResult['isImportedAutomatedSolution'] = true;
+				$this->arResult['automatedSolutionCode'] = htmlspecialcharsbx($solution['CODE']);
+			}
 		}
 		else
 		{

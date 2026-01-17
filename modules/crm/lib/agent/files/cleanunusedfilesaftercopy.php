@@ -8,6 +8,10 @@ use Bitrix\Crm\MultiValueStoreService;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Type\DateTime;
 
+/**
+ * @deprecated
+ * Will be removed soon. Cleaning of unused files is not be used anymore.
+ */
 class CleanUnusedFilesAfterCopy extends AgentBase
 {
 	const FILES_LIFE_DAYS = 7;

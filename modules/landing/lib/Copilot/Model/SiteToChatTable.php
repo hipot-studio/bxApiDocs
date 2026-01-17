@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Model;
 
-use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\ORM\Data\DataManager;
 
 /**
  * Class SiteToChatTable
@@ -23,7 +22,7 @@ use Bitrix\Main\Type\DateTime;
  * @method static \Bitrix\Landing\Copilot\Model\EO_SiteToChat wakeUpObject($row)
  * @method static \Bitrix\Landing\Copilot\Model\EO_SiteToChat_Collection wakeUpCollection($rows)
  */
-class SiteToChatTable extends Entity\DataManager
+class SiteToChatTable extends DataManager
 {
 	/**
 	 * @inheritdoc

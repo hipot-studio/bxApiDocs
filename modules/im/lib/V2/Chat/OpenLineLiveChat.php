@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Result;
 
 class OpenLineLiveChat extends EntityChat
@@ -68,5 +69,10 @@ class OpenLineLiveChat extends EntityChat
 	protected function addIndex(): Chat
 	{
 		return $this;
+	}
+
+	protected function transcribeFilesAfterMessageSend(Message $message): void
+	{
+		return;
 	}
 }

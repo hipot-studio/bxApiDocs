@@ -446,7 +446,8 @@ class Update
 					)
 					||
 					(
-						$this->newData['STATUS'] >= Session::STATUS_ANSWER
+						isset($this->newData['STATUS'])
+						&& $this->newData['STATUS'] >= Session::STATUS_ANSWER
 						&& !in_array($this->newData['STATUS'], [Session::STATUS_CLIENT, Session::STATUS_CLIENT_AFTER_OPERATOR])
 					)
 				)

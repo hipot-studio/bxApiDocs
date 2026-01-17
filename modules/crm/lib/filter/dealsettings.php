@@ -12,7 +12,7 @@ class DealSettings extends EntitySettings implements ISettingsSupportsCategory
 	/** @var array|null */
 	protected $categoryAccess = null;
 
-	function __construct(array $params)
+	public function __construct(array $params)
 	{
 		parent::__construct($params);
 

@@ -32,7 +32,6 @@ use Bitrix\Main\UserTable;
 class BulkInviteUsersToCollabAndPortal
 {
 	private Contract\Repository\UserRepository $userRepository;
-//	private Service\InviteService $inviteService;
 	private bool $currentUserIsIntranet;
 
 	/**
@@ -119,10 +118,10 @@ class BulkInviteUsersToCollabAndPortal
 	}
 
 	private function distributeEmailDtoCollection(
-		Dto\Invitation\UserInvitationDtoCollection           $userInvitationDtoCollectionByEmail,
-		UserCollection                                       $userCollectionRegisteredByEmail,
+		Dto\Invitation\UserInvitationDtoCollection $userInvitationDtoCollectionByEmail,
+		UserCollection $userCollectionRegisteredByEmail,
 		Intranet\Public\Type\Collection\InvitationCollection $invitationToPortalAndGroupCollection,
-		UserCollection                                       $userCollectionForInviteOnlyToGroup,
+		UserCollection $userCollectionForInviteOnlyToGroup,
 	): void
 	{
 		$userInvitationDtoCollectionByEmail->forEach(
@@ -160,10 +159,10 @@ class BulkInviteUsersToCollabAndPortal
 	}
 
 	private function distributePhoneDtoCollection(
-		Dto\Invitation\UserInvitationDtoCollection           $userInvitationDtoCollectionByPhone,
-		UserCollection                                       $userCollectionRegisteredByPhone,
+		Dto\Invitation\UserInvitationDtoCollection $userInvitationDtoCollectionByPhone,
+		UserCollection $userCollectionRegisteredByPhone,
 		Intranet\Public\Type\Collection\InvitationCollection $invitationToPortalAndGroupCollection,
-		UserCollection                                       $userCollectionForInviteOnlyToGroup,
+		UserCollection $userCollectionForInviteOnlyToGroup,
 	): void
 	{
 		$userInvitationDtoCollectionByPhone->forEach(
@@ -232,9 +231,9 @@ class BulkInviteUsersToCollabAndPortal
 	 * @throws SystemException
 	 */
 	private function executeInvite(
-		int                                                  $collabId,
+		int $collabId,
 		Intranet\Public\Type\Collection\InvitationCollection $invitationToPortalAndGroupCollection,
-		UserCollection                                       $userCollectionForInviteOnlyToGroup,
+		UserCollection $userCollectionForInviteOnlyToGroup,
 	): Result
 	{
 		$usersInvitedPortalAndGroup = [];

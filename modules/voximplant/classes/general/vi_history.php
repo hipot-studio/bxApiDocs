@@ -188,6 +188,45 @@ class CVoxImplantHistory
 
 		$arFields['ID'] = $insertResult->getId();
 
+		// Get call participants before deleting the call
+		$callParticipants = [];
+		$callParticipants[] = (int)$call->getUserId();
+		if ($call->getPortalUserId() && $call->getPortalUserId() != $call->getUserId())
+		{
+			$callParticipants[] = (int)$call->getPortalUserId();
+		}
+
+		// Add all users from call_user table and find initiator by ROLE
+		$initiatorId = 0;
+		foreach ($call->getUsers() as $userId => $userData)
+		{
+			if (!in_array((int)$userId, $callParticipants))
+			{
+				$callParticipants[] = (int)$userId;
+			}
+			// Find initiator by ROLE = caller
+			if (isset($userData['ROLE']) && $userData['ROLE'] === 'caller')
+			{
+				$initiatorId = (int)$userId;
+			}
+		}
+		$callParticipants = array_filter(array_unique($callParticipants));
+
+		// Fallback to getUserId if no caller role found
+		if (!$initiatorId)
+		{
+			$initiatorId = (int)$call->getUserId();
+		}
+
+		// Fire event for call log integration
+		$eventManager = EventManager::getInstance();
+		$event = new Event('voximplant', 'OnAfterStatisticAdd', [
+			'statisticId' => $insertResult->getId(),
+			'participants' => $callParticipants,
+			'initiatorId' => $initiatorId
+		]);
+		$eventManager->send($event);
+
 		//recording a missed call
 		if (
 			$arFields["CALL_FAILED_CODE"] == 304

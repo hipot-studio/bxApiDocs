@@ -427,7 +427,7 @@ class CIMMessageParam
 			{
 				$value = $ar["PARAM_VALUE"];
 			}
-			if (in_array($ar["PARAM_NAME"], Array('KEYBOARD', 'MENU', 'COMPONENT_PARAMS')))
+			if (in_array($ar["PARAM_NAME"], Array('KEYBOARD', 'MENU', 'COMPONENT_PARAMS', 'STICKER_PARAMS')))
 			{
 				$arResult[$ar["MESSAGE_ID"]][$ar["PARAM_NAME"]] = $value;
 			}
@@ -622,7 +622,8 @@ class CIMMessageParam
 				$key == 'IMOL_DATE_CLOSE_VOTE' ||
 				$key == 'IMOL_TIME_LIMIT_VOTE' ||
 				$key == 'CRM_FORM_ID' ||
-				$key == 'CRM_FORM_SEC'
+				$key == 'CRM_FORM_SEC' ||
+				$key == 'IS_PINNED'
 			)
 			{
 				$arValues[$key] = isset($value[0])? $value[0]: '';
@@ -739,6 +740,7 @@ class CIMMessageParam
 			'CRM_FORM_SEC' => '',
 			'CRM_FORM_FILLED' => 'N',
 			'COPILOT_PROMPT_CODE' => null,
+			'STICKER_PARAMS' => [],
 		];
 
 		return $arDefault;
@@ -1552,7 +1554,7 @@ class CIMMessageLink
 		return $attachArray;
 	}
 
-	public static function formatAttach($linkParam)
+	public static function formatAttach($linkParam, int $userId = 0)
 	{
 		$attach = null;
 		$typeLinkParam = $linkParam['TYPE'] ?? null;
@@ -1606,7 +1608,7 @@ class CIMMessageLink
 		}
 		else if ($linkParam['TYPE'] == UrlPreview\UrlMetadataTable::TYPE_DYNAMIC)
 		{
-			$attach = UrlPreview\UrlPreview::getImAttach($linkParam['URL'], true);
+			$attach = UrlPreview\UrlPreview::getImAttach($linkParam['URL'], true, $userId);
 			if ($attach && $attach instanceof CIMMessageParamAttach)
 			{
 				$attach->SetId($linkParam['ID']);

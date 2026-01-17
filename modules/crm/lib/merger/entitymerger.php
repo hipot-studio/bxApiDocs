@@ -6,6 +6,7 @@ use Bitrix\Crm\Integrity;
 use Bitrix\Crm\Recovery;
 use Bitrix\Fileman\UserField\Types\AddressType;
 use Bitrix\Main;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 abstract class EntityMerger
 {
@@ -1745,12 +1746,15 @@ abstract class EntityMerger
 					$fileOptions['ENABLE_UPLOAD_CHECK'] = $options['ENABLE_UPLOAD_CHECK'];
 				}
 
+				$validator = new UiFileUploaderResultValidator($fieldInfo);
 				if(!$isMultiple)
 				{
 					if(!isset($targ[$fieldID]) && isset($seed[$fieldID]))
 					{
 						$file = null;
-						if(\CCrmFileProxy::TryResolveFile($seed[$fieldID], $file, $fileOptions))
+						$fileWasDeleted = is_numeric($seed[$fieldID]) && ($validator->validate($seed[$fieldID]) === false); // file was deleted by user before saving
+
+						if(!$fileWasDeleted && \CCrmFileProxy::TryResolveFile($seed[$fieldID], $file, $fileOptions))
 						{
 							$targ[$fieldID] = $file;
 						}
@@ -1822,6 +1826,10 @@ abstract class EntityMerger
 									{
 										continue;
 									}
+									if ($validator->validate($fileID) === false) // file was deleted by user before saving
+									{
+										continue;
+									}
 
 									$targ[$fieldID][] = $data;
 								}
@@ -1831,6 +1839,10 @@ abstract class EntityMerger
 
 									//Check if already added from previous values
 									if(array_search($fileID, $previousFileIDs, true) !== false)
+									{
+										continue;
+									}
+									if ($validator->validate($fileID) === false) // file was deleted by user before saving
 									{
 										continue;
 									}

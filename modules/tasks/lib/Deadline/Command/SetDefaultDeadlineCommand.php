@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Deadline\Command;
 
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Tasks\Deadline\Entity\DeadlineUserOption;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Exception;
 
 /**
  * @method self setEntity(DeadlineUserOption $entity)
@@ -23,16 +23,22 @@ class SetDefaultDeadlineCommand extends AbstractCommand
 	{
 	}
 
-	/**
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
 	protected function execute(): Result
 	{
-		(new SetDefaultDeadlineHandler())($this);
+		$result = new Result();
 
-		return new Result();
+		$handler = Container::getInstance()->get(SetDefaultDeadlineHandler::class);
+
+		try
+		{
+			$handler($this);
+
+			return $result;
+		}
+		catch (Exception $e)
+		{
+			return $result->addError(Error::createFromThrowable($e));
+		}
 	}
 
 	public function toArray(): array

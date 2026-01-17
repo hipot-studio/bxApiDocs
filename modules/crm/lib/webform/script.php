@@ -236,9 +236,9 @@ class Script
 		return $uri->getLocator();
 	}
 
-	public static function getUrlContext($formData, $formPath = null)
+	public static function getUrlContext($formData, $formPath = null, bool $multipleLoad = false)
 	{
-		if ($landingUrl = Internals\LandingTable::getLandingPublicUrl($formData['ID']))
+		if ($landingUrl = Internals\LandingTable::getLandingPublicUrl($formData['ID'], $multipleLoad))
 		{
 			return $landingUrl;
 		}

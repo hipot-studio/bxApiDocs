@@ -15,6 +15,7 @@ class BaseInfoDto implements \JsonSerializable
 		public string $role,
 		public string $url,
 		public ?string $avatar = null,
+		public ?string $personalGender = null,
 	) {}
 
 	public function jsonSerialize(): array
@@ -28,6 +29,7 @@ class BaseInfoDto implements \JsonSerializable
 			'status' => $this->status,
 			'role' => $this->role,
 			'url' => $this->url,
+			'personalGender' => $this->personalGender,
 		];
 	}
 }

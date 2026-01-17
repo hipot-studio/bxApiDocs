@@ -7,7 +7,7 @@
  * @copyright 2001-2023 Bitrix
  */
 
-class CAllOperation
+class COperation
 {
 	public static function GetList($arOrder = ['MODULE_ID' => 'asc'], $arFilter = [])
 	{
@@ -155,8 +155,4 @@ class CAllOperation
 
 		return $desc;
 	}
-}
-
-class COperation extends CAllOperation
-{
 }

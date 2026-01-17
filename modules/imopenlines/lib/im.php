@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\ImOpenLines;
 
+use Bitrix\Im\V2\Pull\Event\ChatHide;
 use \Bitrix\Main\Loader,
 	\Bitrix\Main\UserTable,
 	\Bitrix\Main\Data\Cache,
@@ -201,6 +202,7 @@ class Im
 			return false;
 		}
 
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
 		$recentItems = \Bitrix\Im\Model\RecentTable::getList([
 			'select' => [
 				'USER_ID'
@@ -225,23 +227,7 @@ class Im
 			}
 		}
 
-		if (
-			!empty($pushList)
-			&& \Bitrix\Main\Loader::includeModule('pull')
-		)
-		{
-			\Bitrix\Pull\Event::add($pushList, [
-				'module_id' => 'im',
-				'command' => 'chatHide',
-				'expiry' => 3600,
-				'params' => [
-					'dialogId' => 'chat' . $chatId,
-					'chatId' => $chatId,
-					'lines' => true
-				],
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			]);
-		}
+		(new ChatHide($chat, $pushList))->send();
 
 		return true;
 	}

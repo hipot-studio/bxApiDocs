@@ -4,30 +4,43 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Mail\Repository\EmailRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Rest\Service\PlacementService;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
+use Bitrix\Tasks\V2\Internal\Service\Task\ChecksumService;
+use Bitrix\Tasks\V2\Public\Provider\TaskElapsedTimeProvider;
 
 class TaskReadRepository implements TaskReadRepositoryInterface
 {
 	public function __construct(
+		private readonly ChecksumService $checksumService,
 		private readonly GroupRepositoryInterface $groupRepository,
-		private readonly FlowRepositoryInterface  $flowRepository,
+		private readonly FlowRepositoryInterface $flowRepository,
 		private readonly StageRepositoryInterface $stageRepository,
-		private readonly UserRepositoryInterface  $userRepository,
-		private readonly CheckListRepository      $checkListRepository,
-		private readonly ChatRepositoryInterface  $chatRepository,
+		private readonly UserRepositoryInterface $userRepository,
+		private readonly CheckListRepository $checkListRepository,
+		private readonly ChatRepositoryInterface $chatRepository,
 		private readonly TaskParameterRepositoryInterface $taskParameterRepository,
 		private readonly CrmItemRepositoryInterface $crmItemRepository,
 		private readonly TaskUserOptionRepositoryInterface $userOptionRepository,
 		private readonly SubTaskRepositoryInterface $subTaskRepository,
 		private readonly RelatedTaskRepositoryInterface $relatedTaskRepository,
+		private readonly ReminderReadRepositoryInterface $remindersReadRepository,
 		private readonly TaskTagRepositoryInterface $taskTagRepository,
 		private readonly GanttLinkRepositoryInterface $ganttLinkRepository,
-		private readonly TaskMapper               $taskMapper,
+		private readonly PlacementService $placementService,
+		private readonly TaskResultRepositoryInterface $taskResultRepository,
+		private readonly EmailRepositoryInterface $emailRepository,
+		private readonly TimerRepositoryInterface $timerRepository,
+		private readonly TaskScenarioRepositoryInterface $scenarioRepository,
+		private readonly TaskMapper $taskMapper,
+		private readonly TaskElapsedTimeProvider $elapsedTimeProvider,
 	)
 	{
 	}
@@ -35,28 +48,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 	public function getById(int $id, ?Select $select = null): ?Entity\Task
 	{
 		$selectFields = [
-			'ID',
-			'TITLE',
-			'PARENT_ID',
-			'GROUP_ID',
-			'STAGE_ID',
-			'STATUS',
-			'STATUS_CHANGED_DATE',
-			'ALLOW_CHANGE_DEADLINE',
-			'ALLOW_TIME_TRACKING',
-			'MATCH_WORK_TIME',
-			'DEADLINE',
-			'TASK_CONTROL',
-			'PRIORITY',
-			'DESCRIPTION',
-			'FORUM_TOPIC_ID',
-			'RESPONSIBLE_ID',
-			'CREATED_BY',
-			'CLOSED_DATE',
-			'CREATED_DATE',
-			'START_DATE_PLAN',
-			'END_DATE_PLAN',
-			'SITE_ID',
+			'*',
 		];
 
 		$select ??= new Select();
@@ -74,6 +66,11 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		if ($select->favorite)
 		{
 			$selectFields[] = 'FAVORITE_TASK';
+		}
+
+		if ($select->userFields)
+		{
+			$selectFields[] = 'UF_*';
 		}
 
 		$task =
@@ -101,21 +98,33 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		}
 
 		$flow = null;
-		if ($select->flow && $task->getFlowTask()?->getId() > 0)
+		if ($select->flow && $task->getFlowTask()?->getFlowId() > 0)
 		{
-			$flow = $this->flowRepository->getById($task->getFlowTask()->getId());
+			$flow = $this->flowRepository->getById($task->getFlowTask()->getFlowId());
 		}
 
 		$stage = null;
-		if ($select->stage && $task->getStageId() > 0)
+		if ($select->stage && $task->getGroupId() > 0)
 		{
-			$stage = $this->stageRepository->getById($task->getStageId());
+			$stageId = $task->getStageId();
+			if ($stageId <= 0)
+			{
+				$stageId = $this->stageRepository->getFirstIdByGroupId($task->getGroupId());
+			}
+
+			if ($stageId > 0)
+			{
+				$stage = $this->stageRepository->getById($stageId);
+			}
 		}
 
 		$members = null;
 		if ($select->members)
 		{
-			$memberIds = array_merge($task->getMemberList()->getUserIdList(), [$task->getCreatedBy(), $task->getResponsibleId()]);
+			$memberIds = array_merge(
+				$task->getMemberList()->getUserIdList(),
+				[$task->getCreatedBy(), $task->getResponsibleId(), $task->getClosedBy(), $task->getStatusChangedBy(), $task->getChangedBy()]
+			);
 
 			Collection::normalizeArrayValuesByInt($memberIds, false);
 
@@ -128,11 +137,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			$checkListIds = $this->checkListRepository->getIdsByEntity($id, Entity\CheckList\Type::Task);
 		}
 
-		$chatId = null;
-		if ($select->chat)
-		{
-			$chatId = $this->chatRepository->getChatIdByTaskId($id);
-		}
+		$chat = $this->chatRepository->getByTaskId($id);
 
 		$crmItemIds = null;
 		if ($select->crm)
@@ -152,10 +157,40 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			$containsRelatedTasks = $this->relatedTaskRepository->containsRelatedTasks($id);
 		}
 
+		$numberOfReminders = 0;
+		if ($select->reminders)
+		{
+			$userId = (int)CurrentUser::get()->getId();
+			$numberOfReminders = $this->remindersReadRepository->getNumberOfReminders($id, $userId);
+		}
+
 		$containsGanttLinks = false;
 		if ($select->gantt)
 		{
 			$containsGanttLinks = $this->ganttLinkRepository->containsLinks($id);
+		}
+
+		$containsPlacements = false;
+		if ($select->placements)
+		{
+			$containsPlacements = $this->placementService->existsTaskCardPlacement();
+		}
+
+		$containsResults = null;
+		if ($select->results)
+		{
+			$containsResults = $this->taskResultRepository->containsResults($id);
+		}
+
+		$timers = null;
+		$timeSpent = null;
+		$numberOfElapsedTimes = 0;
+		if ($task->getAllowTimeTracking())
+		{
+			$timers = $this->timerRepository->getRunningTimersByTaskId($id);
+
+			$timeSpent = $this->elapsedTimeProvider->getTimeSpentOnTask($task->getId());
+			$numberOfElapsedTimes = $this->elapsedTimeProvider->getNumberOfElapsedTimes($task->getId());
 		}
 
 		$aggregates = [
@@ -163,6 +198,12 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			'containsSubTasks' => $containsSubTasks,
 			'containsRelatedTasks' => $containsRelatedTasks,
 			'containsGanttLinks' => $containsGanttLinks,
+			'containsPlacements' => $containsPlacements,
+			'containsResults' => $containsResults,
+			'numberOfReminders' => $numberOfReminders,
+			'timers' => $timers,
+			'timeSpent' => $timeSpent,
+			'numberOfElapsedTimes' => $numberOfElapsedTimes,
 		];
 
 		$userOptions = null;
@@ -176,8 +217,33 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		{
 			$taskParameters = [
 				'matchesSubTasksTime' => $this->taskParameterRepository->matchesSubTasksTime($id),
+				'autocompleteSubTasks' => $this->taskParameterRepository->autocompleteSubTasks($id),
 				'allowsChangeDatePlan' => $this->taskParameterRepository->allowsChangeDatePlan($id),
+				'requireResult' => $this->taskParameterRepository->isResultRequired($id),
+				'maxDeadlineChangeDate' => $this->taskParameterRepository->maxDeadlineChangeDate($id),
+				'maxDeadlineChanges' => $this->taskParameterRepository->maxDeadlineChanges($id),
+				'requireDeadlineChangeReason' => $this->taskParameterRepository->requireDeadlineChangeReason($id),
 			];
+		}
+
+		$fileIds = $task->get(Entity\UF\UserField::TASK_ATTACHMENTS);
+		if (empty($fileIds))
+		{
+			$fileIds = null;
+		}
+
+		$checksum = $this->checksumService->calculateChecksum((string)$task->getDescription());
+
+		$email = null;
+		if ($select->email)
+		{
+			$email = $this->emailRepository->getByTaskId($id);
+		}
+
+		$scenarios = null;
+		if ($select->scenarios)
+		{
+			$scenarios = $this->scenarioRepository->getById($id);
 		}
 
 		return $this->taskMapper->mapToEntity(
@@ -187,12 +253,16 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			stage: $stage,
 			members: $members,
 			aggregates: $aggregates,
-			chatId: $chatId,
+			chat: $chat,
 			checkListIds: $checkListIds,
 			crmItemIds: $crmItemIds,
 			taskParameters: $taskParameters,
 			userOptions: $userOptions,
 			tags: $tags,
+			fileIds: $fileIds,
+			checksum: $checksum,
+			email: $email,
+			scenarios: $scenarios,
 		);
 	}
 

@@ -2,92 +2,76 @@
 
 namespace Bitrix\Tasks\Control;
 
-use Bitrix\Main\Application;
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\DB\SqlQueryException;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
-use Bitrix\Tasks\Control\Exception\TemplateNotFoundException;
-use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
 use Bitrix\Tasks\Internals\Task\Template\TemplateTagTable;
 
 class TemplateTag
 {
-	use BaseTemplateControlTrait;
-
-	private const FIELD_TAGS = 'TAGS';
-
-	/* @var TemplateObject $template */
-	private $template;
-
-	public function __construct(private int $userId, private int $templateId)
+	public function __construct(
+		private readonly int $templateId,
+		private readonly int $userId,
+	)
 	{
 	}
 
-	/**
-	 * @throws TemplateNotFoundException
-	 * @throws ArgumentException
-	 * @throws SqlQueryException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	public function set(array $data): void
+	public function add(array $data): void
 	{
 		if (
-			!array_key_exists(self::FIELD_TAGS, $data)
-			|| !is_array($data[self::FIELD_TAGS])
+			!array_key_exists('TAGS', $data)
+			|| !is_array($data['TAGS'])
 		)
 		{
 			return;
 		}
 
-		$this->loadByTemplate();
-		$this->deleteByTemplate();
+		$this->saveTags($data);
+	}
 
-		if (empty($data[self::FIELD_TAGS]))
+	public function set(array $data): void
+	{
+		if (
+			!array_key_exists('TAGS', $data)
+			|| !is_array($data['TAGS'])
+		)
 		{
 			return;
 		}
 
-		$tags = array_values($data[self::FIELD_TAGS]);
+		$this->deleteByTemplateId();
+
+		$this->saveTags($data);
+	}
+
+	private function saveTags(array $data): void
+	{
+		if (empty($data['TAGS']))
+		{
+			return;
+		}
+
+		$tags = array_values($data['TAGS']);
 
 		if (empty($tags))
 		{
 			return;
 		}
 
-		$dbHelper = Application::getConnection()->getSqlHelper();
-
-		$insertRows = [];
+		$templateTags = [];
 		foreach ($tags as $tag)
 		{
-			if (empty($tag))
-			{
-				continue;
-			}
-			$insertRows[] = '('.$this->templateId.', '. $this->userId .', \''. $dbHelper->forSql($tag) .'\')';
+			$templateTags[] = [
+				'NAME' => $tag,
+				'TEMPLATE_ID' => $this->templateId,
+				'USER_ID' => $this->userId,
+			];
 		}
 
-		$sql = $this->getInsertIgnore(
-			'(TEMPLATE_ID, USER_ID, NAME)',
-			"VALUES ". implode(", ", $insertRows)
-		);
-
-		Application::getConnection()->query($sql);
+		TemplateTagTable::addInsertIgnoreMulti($templateTags, true);
 	}
 
-	/**
-	 * @throws TemplateNotFoundException
-	 * @throws SystemException
-	 */
-	private function loadByTemplate(): void
+	private function deleteByTemplateId(): void
 	{
-		$this->loadTemplate();
-		$this->template->fillTagList();
-	}
-
-	public function getTableClass(): string
-	{
-		return TemplateTagTable::class;
+		TemplateTagTable::deleteList([
+			'TEMPLATE_ID' => $this->templateId,
+		]);
 	}
 }

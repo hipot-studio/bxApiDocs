@@ -13,10 +13,12 @@ use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\MysqlCommonConnection;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Collection;
@@ -46,6 +48,7 @@ class RightsManager implements IErrorable
 	const DOMAIN_SHARING = 'share';
 	const DOMAIN_BIZPROC = 'bp';
 	const DOMAIN_BASE    = null;
+	private int $backgroundJobPriority = 10_000;
 
 	/** @var  ErrorCollection */
 	protected $errorCollection;
@@ -61,11 +64,11 @@ class RightsManager implements IErrorable
 
 	/**
 	 * Rewrite if exists.
-	 * @param \Bitrix\Disk\BaseObject|BaseObject $object
-	 * @param array                      $rights
-	 * @throws \Bitrix\Main\SystemException
-	 * @throws \Bitrix\Main\ArgumentException
+	 * @param BaseObject|BaseObject $object
+	 * @param array $rights
 	 * @return bool
+	 * @throws SystemException
+	 * @throws LoaderException
 	 */
 	public function set(BaseObject $object, array $rights)
 	{
@@ -94,10 +97,12 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		$simpleBuilder = new SimpleReBuilder($object, $rights);
-		$simpleBuilder->run();
+		Application::getInstance()->addBackgroundJob(function () use ($object, $rights) {
+			$simpleBuilder = new SimpleReBuilder($object, $rights);
+			$simpleBuilder->run();
 
-		Driver::getInstance()->getIndexManager()->recalculateRights($object);
+			Driver::getInstance()->getIndexManager()->recalculateRights($object);
+		}, [], --$this->backgroundJobPriority);
 
 		return true;
 	}
@@ -186,10 +191,12 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		$simpleBuilder = new SimpleReBuilder($object, $rights);
-		$simpleBuilder->run();
+		Application::getInstance()->addBackgroundJob(function () use ($object, $rights) {
+			$simpleBuilder = new SimpleReBuilder($object, $rights);
+			$simpleBuilder->run();
 
-		Driver::getInstance()->getIndexManager()->recalculateRights($object);
+			Driver::getInstance()->getIndexManager()->recalculateRights($object);
+		}, [], --$this->backgroundJobPriority);
 
 		return true;
 	}
@@ -551,6 +558,14 @@ class RightsManager implements IErrorable
 		;
 
 		return $query->exec()->fetchAll();
+	}
+
+	public function hasDescendantRights(int $objectId): bool
+	{
+		return RightTable::getCount([
+			'PATH_CHILD.PARENT_ID' => $objectId,
+			'!PATH_CHILD.OBJECT_ID' => $objectId,
+		]) > 0;
 	}
 
 	/**
@@ -1249,6 +1264,8 @@ final class SimpleReBuilder
 	const SCENARIO_FULL_RECALC = 'recalc';
 	const SCENARIO_SKIP        = 'skip';
 
+	private const BATCH_SIZE = 5_000;
+
 	/** @var \Bitrix\Disk\BaseObject */
 	protected $object;
 	/** @var array */
@@ -1279,7 +1296,8 @@ final class SimpleReBuilder
 		$this->scenario = self::SCENARIO_FULL_RECALC;
 
 		$this->runByOnceObject();
-		$this->fillChildren();
+		//$this->fillChildren();
+		$this->fillDescendants();
 
 		$this->finalize();
 	}
@@ -1467,91 +1485,277 @@ final class SimpleReBuilder
 		return array($canRead, $cannotRead);
 	}
 
+	/**
+	 * @deprecated
+	 * @see fillDescendants
+	 * @return void
+	 * @throws ArgumentException
+	 */
 	private function fillChildren()
 	{
-		if($this->object instanceof File)
+		if ($this->object instanceof File)
 		{
 			return;
 		}
 
-		$specificRightsByObjectId = array(
+		$specificRightsByObjectId = [
 			$this->object->getId() => $this->specificRights,
-		);
+		];
 		//store all rights on object (all inherited rights)
-		$inheritedRightsByObjectId = array(
+		$inheritedRightsByObjectId = [
 			$this->object->getId() => $this->getParentRights(),
-		);
+		];
 
 		$childrenRights = Driver::getInstance()->getRightsManager()->getDescendantsRights($this->object->getId());
-		if(!$childrenRights)
+		if (!$childrenRights)
 		{
 			TmpSimpleRight::fillDescendants($this->object->getId(), $this->setupSession->getId());
+
 			return;
 		}
 
 		//store all specific rights on object
 		foreach ($childrenRights as $right)
 		{
-			if(!isset($specificRightsByObjectId[$right['OBJECT_ID']]))
+			if (!isset($specificRightsByObjectId[$right['OBJECT_ID']]))
 			{
-				$specificRightsByObjectId[$right['OBJECT_ID']] = array();
+				$specificRightsByObjectId[$right['OBJECT_ID']] = [];
 			}
 			$specificRightsByObjectId[$right['OBJECT_ID']][] = $right;
 		}
 		unset($right, $childrenRights);
 
-		$simpleRightsByObjectId = array(
+		$simpleRightsByObjectId = [
 			$this->object->getId() => $this->simpleRights,
-		);
+		];
 
-		$query = ObjectTable::getDescendants($this->object->getId(), array('select' => array('ID', 'PARENT_ID')));
-		while($object = $query->fetch())
+		$query = ObjectTable::getDescendants($this->object->getId(), ['select' => ['ID', 'PARENT_ID']]);
+		while ($object = $query->fetch())
 		{
 			//specific rights on object
-			if(!isset($specificRightsByObjectId[$object['ID']]))
+			if (!isset($specificRightsByObjectId[$object['ID']]))
 			{
-				$specificRightsByObjectId[$object['ID']] = array();
+				$specificRightsByObjectId[$object['ID']] = [];
 			}
-			if(!isset($inheritedRightsByObjectId[$object['ID']]))
+			if (!isset($inheritedRightsByObjectId[$object['ID']]))
 			{
-				$inheritedRightsByObjectId[$object['ID']] = array();
+				$inheritedRightsByObjectId[$object['ID']] = [];
 			}
-			if(!isset($simpleRightsByObjectId[$object['PARENT_ID']]))
+			if (!isset($simpleRightsByObjectId[$object['PARENT_ID']]))
 			{
-				$simpleRightsByObjectId[$object['PARENT_ID']] = array();
+				$simpleRightsByObjectId[$object['PARENT_ID']] = [];
 			}
-			if(isset($inheritedRightsByObjectId[$object['PARENT_ID']]))
+			if (isset($inheritedRightsByObjectId[$object['PARENT_ID']]))
 			{
 				$inheritedRightsByObjectId[$object['ID']] = array_merge(
 					$inheritedRightsByObjectId[$object['PARENT_ID']],
-					($specificRightsByObjectId[$object['PARENT_ID']]?: array())
+					($specificRightsByObjectId[$object['PARENT_ID']] ?: []),
 				);
 			}
 			else
 			{
-				$inheritedRightsByObjectId[$object['PARENT_ID']] = array();
+				$inheritedRightsByObjectId[$object['PARENT_ID']] = [];
 			}
 
 			$simpleRightsByObjectId[$object['ID']] = $this->uniqualizeSimpleRights(
 				$this->getNewSimpleRight(
 					$specificRightsByObjectId[$object['ID']],
 					$inheritedRightsByObjectId[$object['ID']],
-					$simpleRightsByObjectId[$object['PARENT_ID']]
+					$simpleRightsByObjectId[$object['PARENT_ID']],
 			));
 
-			$items = array();
-			foreach($simpleRightsByObjectId[$object['ID']] as $right)
+			$items = [];
+			foreach ($simpleRightsByObjectId[$object['ID']] as $right)
 			{
-				$items[] = array(
+				$items[] = [
 					'OBJECT_ID' => $object['ID'],
 					'ACCESS_CODE' => $right['ACCESS_CODE'],
-				);
+				];
 			}
 			unset($right);
 
 			TmpSimpleRight::insertBatchBySessionId($items, $this->setupSession->getId());
 		}
 		unset($object);
+	}
+
+	/**
+	 * @return void
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	private function fillDescendants(): void
+	{
+		if ($this->object instanceof File)
+		{
+			return;
+		}
+
+		$rootFolderId = $this->object->getId();
+
+		$hasDescendantRights = Driver::getInstance()->getRightsManager()->hasDescendantRights($rootFolderId);
+
+		if (!$hasDescendantRights)
+		{
+			TmpSimpleRight::fillDescendants($rootFolderId, $this->setupSession->getId());
+
+			return;
+		}
+
+		$offset = 0;
+		$hasItems = true;
+		$rootDepthLevel = 0;
+
+		// initialize rights
+		$specificRightsByObjectId = [
+			$rootDepthLevel => [
+				$rootFolderId => $this->specificRights,
+			],
+		];
+		$inheritedRightsByObjectId = [
+			$rootDepthLevel => [
+				$rootFolderId => $this->getParentRights(),
+			],
+		];
+		$simpleRights = [
+			$rootDepthLevel => [
+				$rootFolderId => $this->simpleRights,
+			],
+		];
+
+		$hierarchyLevel = 1;
+		while ($hasItems)
+		{
+			$descendants = $this->getDescendants($rootFolderId, $offset);
+
+			if (empty($descendants))
+			{
+				$hasItems = false;
+
+				continue;
+			}
+
+			$offset += self::BATCH_SIZE;
+
+			$objectIds = array_column($descendants, 'ID');
+			$depthLevels = array_combine($objectIds, array_column($descendants, 'DEPTH_LEVEL'));
+
+			$descendantsSpecificRights = $this->getSpecificRightsForObjects($objectIds);
+			foreach ($descendantsSpecificRights as $descendantRight)
+			{
+				$descendantRightObjectId = $descendantRight['OBJECT_ID'];
+				$descendantRightObjectDepthLevel = $depthLevels[$descendantRightObjectId];
+				$specificRightsByObjectId[$descendantRightObjectDepthLevel][$descendantRightObjectId][] = $descendantRight;
+			}
+
+			$allItems = [];
+			foreach ($descendants as $descendant)
+			{
+				$objectId = (int)$descendant['ID'];
+				$parentId = (int)$descendant['PARENT_ID'];
+				$hasChildren = $descendant['IS_LEAF'] === '0';
+				$depthLevel = (int)$descendant['DEPTH_LEVEL'];
+				$prevDepthLevel = $depthLevel - 1;
+
+				$inheritedRights = [];
+				$parentSimpleRights = $simpleRights[$prevDepthLevel][$parentId];
+				$specificRights = $specificRightsByObjectId[$depthLevel][$objectId] ?? [];
+
+				//calculate inherited rights
+				if (isset($inheritedRightsByObjectId[$prevDepthLevel][$parentId]))
+				{
+					$inheritedRights = $inheritedRightsByObjectId[$prevDepthLevel][$parentId];
+					$specificParentRights = $specificRightsByObjectId[$prevDepthLevel][$parentId] ?? [];
+					foreach ($specificParentRights as $parentSpecificRight)
+					{
+						$inheritedRights[] = $parentSpecificRight;
+					}
+				}
+				else
+				{
+					$inheritedRightsByObjectId[$prevDepthLevel][$parentId] = [];
+				}
+
+				$descendantSimpleRights = $this->uniqualizeSimpleRights(
+					$this->getNewSimpleRight(
+						$specificRights,
+						$inheritedRights,
+						$parentSimpleRights,
+					),
+				);
+
+				foreach ($descendantSimpleRights as $right)
+				{
+					$allItems[] = [
+						'OBJECT_ID' => $objectId,
+						'ACCESS_CODE' => $right['ACCESS_CODE'],
+					];
+				}
+
+				// save only if needed for next levels
+				if ($hasChildren)
+				{
+					$inheritedRightsByObjectId[$depthLevel][$objectId] = $inheritedRights;
+					$simpleRights[$depthLevel][$objectId] = $descendantSimpleRights;
+				}
+
+				// cleanup memory
+				if ($depthLevel > $hierarchyLevel)
+				{
+					$grandParentDepthLevel = $prevDepthLevel - 1;
+					unset(
+						$specificRightsByObjectId[$grandParentDepthLevel],
+						$inheritedRightsByObjectId[$grandParentDepthLevel],
+						$simpleRights[$grandParentDepthLevel],
+					);
+					$hierarchyLevel = $depthLevel;
+				}
+			}
+
+			if (!empty($allItems))
+			{
+				TmpSimpleRight::insertBatchBySessionId($allItems, $this->setupSession->getId());
+			}
+		}
+	}
+
+	/**
+	 * @param int $rootFolderId
+	 * @param int $offset
+	 * @return array
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	public function getDescendants(int $rootFolderId, int $offset): array
+	{
+		return ObjectTable::getDescendants($rootFolderId, [
+			'select' => ['ID', 'PARENT_ID', 'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL', 'IS_LEAF'],
+			'offset' => $offset,
+			'limit' => self::BATCH_SIZE,
+			'order' => ['DEPTH_LEVEL' => 'ASC'],
+			'runtime' => [
+				new \Bitrix\Main\ORM\Fields\ExpressionField(
+					'IS_LEAF',
+					'CASE WHEN NOT EXISTS(
+							SELECT 1 
+							FROM b_disk_object_path sub_path 
+							WHERE sub_path.PARENT_ID = %s 
+							AND sub_path.DEPTH_LEVEL = 1
+						) THEN 1 ELSE 0 END',
+					['ID'],
+				),
+			],
+		])->fetchAll();
+	}
+
+	private function getSpecificRightsForObjects(array $objectIds): array
+	{
+		return RightTable::getList([
+			'select' => ['*'],
+			'filter' => [
+				'@OBJECT_ID' => $objectIds,
+			],
+		])->fetchAll();
 	}
 }
 

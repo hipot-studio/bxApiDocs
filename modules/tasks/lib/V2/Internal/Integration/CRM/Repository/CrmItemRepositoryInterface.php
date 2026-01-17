@@ -9,8 +9,10 @@ use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 interface CrmItemRepositoryInterface
 {
 	public function getIdsByTaskId(int $taskId): array;
+	public function getIdsByTemplateId(int $templateId): array;
 
 	public function getIdsByTaskIds(array $taskIds): array;
 
 	public function getByIds(array $ids): CrmItemCollection;
+	public function invalidate(int $taskId): void;
 }

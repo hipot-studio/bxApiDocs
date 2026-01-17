@@ -60,7 +60,7 @@ class Copilot extends Controller
 		$metrika = new Metrika\Metrika(
 			Metrika\Categories::BlockEdition,
 			Metrika\Events::select,
-			Metrika\Tools::ai
+			Metrika\Tools::Ai,
 		);
 		$metrika
 			->setSection(Metrika\Sections::siteEditor)

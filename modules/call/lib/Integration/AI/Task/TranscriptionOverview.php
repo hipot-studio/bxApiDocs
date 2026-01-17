@@ -2,8 +2,6 @@
 
 namespace Bitrix\Call\Integration\AI\Task;
 
-use Bitrix\Im\V2\Chat;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
@@ -12,35 +10,29 @@ use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Integration\AI\Outcome\Transcription;
 
 class TranscriptionOverview extends AITask
 {
-	public const PROMPT_ID = 'meeting_overview';
+	public const PROMPT_ID = 'meeting_overview_reasoning_updated';
 
 	protected static string
 		$promptFields =<<<JSON
 			{
 				"topic": "string or null",
+				"meeting_type": {
+					"explanation": "string or null",
+					"type_tag": "string or null" 
+				},
 				"agenda": {
 					"is_mentioned": "bool",
 					"explanation": "string or null",
 					"quote": "string or null"
 				},
-				"meeting_details": {
-					"type": "string or null",
-					"is_exception_meeting": "bool",
-					"explanation": "string or null"
-				},
 				"detailed_takeaways": "long string or null",
 				"agreements": [
 					{
 						"agreement": "string or null",
-						"quote": "string or null"
-					}
-				],
-				"tasks": [
-					{
-						"task": "string or null",
 						"quote": "string or null"
 					}
 				],
@@ -55,29 +47,19 @@ class TranscriptionOverview extends AITask
 						"meeting": "string or null",
 						"quote": "string or null"
 					}
-				],
-				"efficiency": 
-				{
-					"agenda_clearly_stated": {
-						"value": "bool",
-						"explanation": "string or null"
-					},
-					"agenda_items_covered": {
-						"value": "bool",
-						"explanation": "string or null"
-					},
-					"conclusions_and_actions_outlined": {
-						"value": "bool",
-						"explanation": "string or null"
-					},
-					"time_exceed_penalty": {
-						"value": "bool",
-						"explanation": "string or null"
-					}
-				}
+				]
 			}
 		JSON
 	;
+
+	/**
+	 * Outcome version for compatibility with previous variant.
+	 * @return int
+	 */
+	public function getVersion(): int
+	{
+		return 3;
+	}
 
 	/**
 	 * Provides payload for AI task.
@@ -94,6 +76,10 @@ class TranscriptionOverview extends AITask
 				->setOutcome($payload)
 				->setOutcomeId($payload->getId())
 			;
+			if ($payload->getLanguageId())
+			{
+				$this->task->setLanguageId($payload->getLanguageId());
+			}
 		}
 
 		return $this;
@@ -118,27 +104,36 @@ class TranscriptionOverview extends AITask
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
-		/** @var \Bitrix\Call\Integration\AI\Outcome\Transcription $transcription */
 		$transcription = $outcome->getSenseContent();
-		if ($transcription->isEmpty)
+		if (
+			!($transcription instanceof Transcription)
+			|| $transcription->isEmpty
+		)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
-		$mentionService = MentionService::getInstance();
-
-		$callId = $outcome->getCallId();
-		$content = '';
-		foreach ($transcription->transcriptions as $row)
+		if (
+			!empty($transcription->language)
+			&& $this->task->getLanguageId() !== $transcription->language
+		)
 		{
-			$userName = addslashes($mentionService->getAIMention($row->userId, $callId));
-			$text = addslashes($row->text);
-			// "00:00-00:45", "user", "phrase",
-			$content .= sprintf('"%s-%s", "%s", "%s"', $row->start, $row->end, $userName, $text). "\n";
+			$this->task->setLanguageId($transcription->language);
 		}
 
 		$payload = new \Bitrix\AI\Payload\Prompt(static::PROMPT_ID);
-		$payload->setMarkers(['transcripts' => $content, 'json_call' => static::getAIPromptFields()]);
+		$markers = [
+			'transcripts' => $transcription->prepareTextForAi(),
+		];
+
+		$meeting = $this->getMeetingEvent($this->getCallId());
+		if ($meeting)
+		{
+			$markers['meeting_name'] = $meeting->title;
+			$markers['meeting_description'] = $meeting->description;
+		}
+
+		$payload->setMarkers($markers);
 
 		return $result->setData(['payload' => $payload]);
 	}
@@ -173,12 +168,16 @@ class TranscriptionOverview extends AITask
 		return SenseType::OVERVIEW->value;
 	}
 
+	/**
+	 * Allows outputting the chat error message then a task failed.
+	 * @return bool
+	 */
 	public function allowNotifyTaskFailed(): bool
 	{
 		return true;
 	}
 
-	public static function getAIPromptFields(): array
+	protected static function getAIPromptFields(): array
 	{
 		static $fields;
 		if (empty($fields))
@@ -204,7 +203,7 @@ class TranscriptionOverview extends AITask
 				{
 					$findFieldToConvert($field);
 				}
-				elseif (is_string($field) && str_contains($field, 'string or null'))
+				elseif (is_string($field) && str_contains($field, 'string'))
 				{
 					$fieldsConvert[$code] = true;
 				}
@@ -227,56 +226,5 @@ class TranscriptionOverview extends AITask
 		})($jsonData);
 
 		return $jsonData;
-	}
-
-	/**
-	 * @param \Bitrix\AI\Result $aiResult
-	 * @return Outcome
-	 */
-	public function buildOutcome(\Bitrix\AI\Result $aiResult): Outcome
-	{
-		$outcome = parent::buildOutcome($aiResult);
-		[$calendar, $overhead, $duration] = $this->checkMeetingTimeOverhead($this->getCallId());
-		if ($calendar)
-		{
-			$value = new \stdClass;
-			$value->duration = $duration;
-			$value->overhead = $overhead;
-			$outcome->setProperty('calendar', $value);
-		}
-
-		return $outcome;
-	}
-
-	public static function checkMeetingTimeOverhead(int $callId): array
-	{
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);
-
-		$calendar = false;
-		$overhead = false;
-		$duration = -1;
-		if (
-			($chatId = $call?->getChatId())
-			&& ($chat = Chat::getInstance($chatId))
-			&& $chat->getEntityType() == Chat\ExtendedType::Calendar->value
-			&& Loader::includeModule('calendar')
-			&& ($entryId = $chat->getEntityId())
-			&& ($event = \Bitrix\Calendar\Internals\EventTable::getById($entryId)?->fetchObject())
-		)
-		{
-			$calendar = true;
-			$eventStart = $event->getDateFrom()->getTimestamp();
-			$eventEnd = $event->getDateTo()->getTimestamp();
-			$callStart = $call->getStartDate()->getTimestamp();
-			$callEnd = $call->getEndDate() ?? new DateTime();
-			if ($eventStart <= $callStart && $callStart <= $eventEnd)
-			{
-				$callDuration = $callEnd->getTimestamp() - $callStart;
-				$duration = $eventEnd - $eventStart;
-				$overhead = ($callDuration - $duration) > 60;
-			}
-		}
-
-		return [$calendar, $overhead, $duration];
 	}
 }

@@ -310,7 +310,7 @@ class BasketHelper
 				$arShoppingCartItem['DIMENSIONS'] = $dimensions;
 				unset($dimensions);
 				$arShoppingCartItem['VAT_RATE'] = (float)($arShoppingCartItem['VAT_RATE'] ?? null);
-				$arShoppingCartItem['DISCOUNT_PRICE'] = round(($arShoppingCartItem['DISCOUNT_PRICE'] ?? null), SALE_VALUE_PRECISION);
+				$arShoppingCartItem['DISCOUNT_PRICE'] = round(($arShoppingCartItem['DISCOUNT_PRICE'] ?? 0), SALE_VALUE_PRECISION);
 
 				if ($arShoppingCartItem['VAT_RATE'] > 0)
 				{

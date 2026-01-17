@@ -13,7 +13,7 @@ class CompanySettings extends EntitySettings implements ISettingsSupportsCategor
 
 	private bool $isMyCompanyMode = false;
 
-	function __construct(array $params)
+	public function __construct(array $params)
 	{
 		parent::__construct($params);
 		$this->isMyCompanyMode = ($params['MYCOMPANY_MODE'] ?? false) === true;

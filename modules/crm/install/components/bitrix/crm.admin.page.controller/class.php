@@ -383,7 +383,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 					{
 						$this->listMenuItems[$menuItemId]['PARENT_ID'] = 'menu_sale_goods_and_documents';
 						$this->listMenuItems[$menuItemId]['SORT'] = 100;
-						$this->listMenuItems[$menuItemId]['URL'] = '/shop/documents/';
+						$this->listMenuItems[$menuItemId]['URL'] = SITE_DIR . 'shop/documents/';
 						if (Manager::isOnecMode())
 						{
 							\Bitrix\Main\UI\Extension::load('catalog.external-catalog-stub');
@@ -456,7 +456,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				$catalogRights = null;
 				if (Catalog\Config\Feature::isAccessControllerCheckingEnabled())
 				{
-					$catalogRightsUrl = '/shop/settings/permissions/';
+					$catalogRightsUrl = SITE_DIR . 'shop/settings/permissions/';
 					$catalogRights = [
 						'ID' => 'menu_catalog_permissions',
 						'PARENT_ID' => 'menu_sale_goods_and_documents',
@@ -772,7 +772,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				"text" => GetMessage("SHOP_MENU_BUYER_GROUP_TITLE"),
 				"title" => GetMessage("SHOP_MENU_BUYER_GROUP_TITLE"),
 				"additional" => "Y",
-				"url" => "/shop/buyer_group/",
+				"url" => SITE_DIR . "shop/buyer_group/",
 				"url_constant" => true,
 				"items_id" => "buyer_group_settings",
 			],
@@ -782,7 +782,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				"text" => GetMessage("SHOP_MENU_SETTINGS_SALE_SETTINGS"),
 				"title" => GetMessage("SHOP_MENU_SETTINGS_SALE_SETTINGS"),
 				"additional" => "Y",
-				"url" => "/crm/configs/sale/?type=common",
+				"url" => SITE_DIR . "crm/configs/sale/?type=common",
 				"url_constant" => true,
 				"items_id" => "csc_sale_settings",
 			],
@@ -792,7 +792,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				"text" => GetMessage("SHOP_MENU_ORDER_FORM_SETTINGS_TITLE"),
 				"title" => GetMessage("SHOP_MENU_ORDER_FORM_SETTINGS_TITLE"),
 				"additional" => "Y",
-				"url" => "/shop/orderform/",
+				"url" => SITE_DIR . "shop/orderform/",
 				"url_constant" => true,
 				"items_id" => "form_order_settings",
 			],
@@ -810,7 +810,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 						"sort" => 709.2,
 						"text" => GetMessage("SHOP_MENU_SETTINGS_STATUS_ORDER"),
 						"title" => GetMessage("SHOP_MENU_SETTINGS_STATUS_ORDER"),
-						"url" => "/crm/configs/sale/?type=order",
+						"url" => SITE_DIR . "crm/configs/sale/?type=order",
 						"url_constant" => true,
 						"items_id" => "crm_sale_status_orders",
 					],
@@ -819,7 +819,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 						"sort" => 709.3,
 						"text" => GetMessage("SHOP_MENU_SETTINGS_STATUS_ORDER_SHIPMENT"),
 						"title" => GetMessage("SHOP_MENU_SETTINGS_STATUS_ORDER_SHIPMENT"),
-						"url" => "/crm/configs/sale/?type=shipment",
+						"url" => SITE_DIR . "crm/configs/sale/?type=shipment",
 						"url_constant" => true,
 						"items_id" => "crm_sale_status_shipment",
 					],
@@ -831,7 +831,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				"text" => GetMessage("SHOP_MENU_SETTINGS_USER_FIELDS"),
 				"title" => GetMessage("SHOP_MENU_SETTINGS_USER_FIELDS"),
 				"additional" => "Y",
-				"url" => "/crm/configs/sale/?type=fields",
+				"url" => SITE_DIR . "crm/configs/sale/?type=fields",
 				"url_constant" => true,
 				"items_id" => "userfield_edit",
 			],
@@ -861,7 +861,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 
 			if (Catalog\Config\Feature::isAccessControllerCheckingEnabled())
 			{
-				$accessRightsButton['url'] = "/shop/settings/permissions/";
+				$accessRightsButton['url'] = SITE_DIR . "shop/settings/permissions/";
 				$accessRightsButton['url_constant'] = true;
 			}
 			else
@@ -895,7 +895,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				'text' => Loc::getMessage('SHOP_MENU_SITES'),
 				'title' => Loc::getMessage('SHOP_MENU_SITES'),
 				'additional' => 'Y',
-				'url' => '/sites/',
+				'url' => SITE_DIR . 'sites/',
 				'url_constant' => true,
 				'items_id' => 'sites',
 			];
@@ -909,7 +909,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				"text" => GetMessage("SHOP_MENU_SHOP_TITLE"),
 				"title" => GetMessage("SHOP_MENU_SHOP_TITLE"),
 				"additional" => "Y",
-				"url" => "/shop/stores/",
+				"url" => SITE_DIR . "shop/stores/",
 				"url_constant" => true,
 				"items_id" => "stores",
 			);
@@ -1031,7 +1031,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 				'text' => Loc::getMessage('SHOP_MENU_TERMINAL'),
 				'title' => Loc::getMessage('SHOP_MENU_TERMINAL'),
 				'additional' => 'Y',
-				'url' => '/shop/terminal/',
+				'url' => SITE_DIR . 'shop/terminal/',
 				'url_constant' => true,
 				'items_id' => 'terminal',
 			];
@@ -1510,10 +1510,10 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 	 */
 	private static function getOrderMenuUrl(): string
 	{
-		$result = '/shop/orders/';
+		$result = SITE_DIR . 'shop/orders/';
 		if (OrderSettings::getCurrent()->getCurrentListViewID() == OrderSettings::VIEW_KANBAN)
 		{
-			$result = '/shop/orders/kanban/';
+			$result = SITE_DIR . 'shop/orders/kanban/';
 		}
 
 		return $result;

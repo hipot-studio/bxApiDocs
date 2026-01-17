@@ -4,10 +4,10 @@ namespace Bitrix\Rest\V3\Data;
 
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
-use Bitrix\Rest\V3\Structures\Filtering\FilterStructure;
-use Bitrix\Rest\V3\Structures\Ordering\OrderStructure;
-use Bitrix\Rest\V3\Structures\PaginationStructure;
-use Bitrix\Rest\V3\Structures\SelectStructure;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Ordering\OrderStructure;
+use Bitrix\Rest\V3\Structure\PaginationStructure;
+use Bitrix\Rest\V3\Structure\SelectStructure;
 
 /**
  * Repository for base actions get, list

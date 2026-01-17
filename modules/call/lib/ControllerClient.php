@@ -335,6 +335,22 @@ class ControllerClient extends BaseSender
 		return $this->performRequest('callcontroller.Settings.checkPublicUrl', ['publicUrl' => $publicUrl]);
 	}
 
+	/**
+	 * @see \Bitrix\CallController\Controller\InternalApi::aiFollowUpTelemetryAction
+	 * @param array $telemetryData
+	 * @return Result
+	 */
+	public function sendAIFollowUpTelemetry(array $telemetryData): Result
+	{
+		$this->httpClientParameters = [
+			'waitResponse' => false,
+			'socketTimeout' => 5,
+			'streamTimeout' => 5,
+		];
+
+		return $this->performRequest('callcontroller.InternalApi.aiFollowUpTelemetry', $telemetryData);
+	}
+
 	public function getHttpClientParameters(): array
 	{
 		return array_merge(

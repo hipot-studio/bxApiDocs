@@ -31,4 +31,7 @@ abstract class ModuleSettings
 	{
 		return $document ? [$document] : [];
 	}
+
+	public function onBeforeRunAutomationOnUpdate(mixed $documentId): void
+	{}
 }

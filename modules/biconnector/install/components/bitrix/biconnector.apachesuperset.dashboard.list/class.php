@@ -16,8 +16,10 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
+use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
@@ -61,6 +63,12 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 		if (!$dashboardsExist)
 		{
+			MarketDashboardLogger::logInfo('ApacheSupersetDashboardListComponent: start actualizeSystemDashboards', [
+				'group_option_status' => Feature::isCheckPermissionsByGroup() ? 'Y' : 'N',
+				'count_system_groups' => SupersetDashboardGroupTable::getCount([
+					'=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM,
+				]),
+			]);
 			SystemDashboardManager::actualizeSystemDashboards();
 		}
 
@@ -93,10 +101,9 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->initGridFilter();
 		$this->initCreateButton();
 		$this->initToolbar();
+		$this->prepareSecondDbConnectWarning();
 		$this->arResult['SHOW_DELETE_INSTANCE_BUTTON'] = UIHelper::needShowDeleteInstanceButton();
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
-		$this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_CREATE);
-		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY);
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 	}
 
@@ -187,10 +194,8 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function initCreateButton(): void
 	{
-		Extension::load('biconnector.apache-superset-market-manager');
-		$isMarketExists = $this->arParams['IS_MARKET_EXISTS'] ? 'true' : 'false';
-		$marketUrl = CUtil::JSEscape($this->arParams['MARKET_URL']);
-		$openMarketScript = "BX.BIConnector.ApacheSupersetMarketManager.openMarket({$isMarketExists}, '{$marketUrl}', 'menu')";
+		$this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_CREATE);
+		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY);
 
 		$splitButton = new Buttons\Split\CreateButton([
 			'dataset' => [
@@ -199,7 +204,14 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		]);
 
 		$mainButton = $splitButton->getMainButton();
-		$mainButton->getAttributeCollection()['onclick'] = $openMarketScript;
+		if ($this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'])
+		{
+			$mainButton->getAttributeCollection()['onclick'] = "BX.BIConnector.SupersetDashboardGridManager.Instance.openCreationSlider()";
+		}
+		else
+		{
+			$mainButton->getAttributeCollection()['onclick'] = "BX.BIConnector.SupersetDashboardGridManager.Instance.notifyPermissionErrorOpenCreationSlider()";
+		}
 
 		$menuButton = $splitButton->getMenuButton();
 		$showMenuScript = "BX.BIConnector.SupersetDashboardGridManager.Instance.showCreationMenu(event)";
@@ -333,5 +345,36 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		return !$guideOption['is_over'];
+	}
+
+	private function prepareSecondDbConnectWarning(): void
+	{
+		$this->arResult['SHOW_SECOND_DB_KEY_UPDATE'] = false;
+		$this->arResult['SHOW_SECOND_DB_CONNECTION'] = false;
+		$this->arResult['SECOND_DB_LINK_HELP'] = \Bitrix\Main\Application::getInstance()->getLicense()->isCis()
+			? "https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=48&LESSON_ID=2884#additional_connection"
+			: "https://training.bitrix24.com/support/training/course/index.php?COURSE_ID=178&LESSON_ID=25230#additional_connection"
+		;
+
+		if (IsModuleInstalled('bitrix24'))
+		{
+			return;
+		}
+
+		$manager = Manager::getInstance();
+		$isExistBiConnection = $manager->isExistBiConnection();
+		$isSupersetKeyUseBiConnection = $manager->isSupersetKeyUseBiConnection();
+
+		if (!$isExistBiConnection)
+		{
+			$this->arResult['SHOW_SECOND_DB_CONNECTION'] = true;
+
+			return;
+		}
+
+		if (!$isSupersetKeyUseBiConnection)
+		{
+			$this->arResult['SHOW_SECOND_DB_KEY_UPDATE'] = true;
+		}
 	}
 }

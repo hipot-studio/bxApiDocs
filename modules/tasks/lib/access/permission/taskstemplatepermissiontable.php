@@ -1,15 +1,11 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage tasks
- * @copyright 2001-2021 Bitrix
- */
 
 namespace Bitrix\Tasks\Access\Permission;
 
 use Bitrix\Main\Access\Permission\AccessPermissionTable;
-use Bitrix\Main\Entity;
+use Bitrix\Main\Access\Permission\PermissionDictionary;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\StringField;
 
 /**
  * Class TasksTemplatePermissionTable
@@ -44,35 +40,35 @@ class TasksTemplatePermissionTable extends AccessPermissionTable
 		return TasksTemplatePermissionCollection::class;
 	}
 
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return [
-			new Entity\IntegerField('ID', [
-				'autocomplete' => true,
-				'primary' => true,
-			]),
-			new Entity\IntegerField('TEMPLATE_ID', [
-				'required' => true,
-			]),
-			new Entity\StringField('ACCESS_CODE', [
-				'required' => true,
-			]),
-			new Entity\StringField('PERMISSION_ID', [
-				'required' => true,
-			]),
-			new Entity\IntegerField('VALUE', [
-				'required' => true,
-			]),
+			(new IntegerField('ID'))
+				->configurePrimary()
+				->configureAutocomplete(),
+
+			(new IntegerField('TEMPLATE_ID'))
+				->configureRequired(),
+
+			(new StringField('ACCESS_CODE'))
+				->configureRequired(),
+
+			(new StringField('PERMISSION_ID'))
+				->configureRequired(),
+
+			(new IntegerField('VALUE'))
+				->configureRequired(),
 		];
 	}
 
-	protected static function updateChildPermission($primary, array $data)
+	protected static function updateChildPermission($primary, array $data): void
 	{
 		$data = self::loadUpdateRow($primary, $data);
-		if ((int) $data['VALUE'] === PermissionDictionary::VALUE_YES)
+		if ((int)$data['VALUE'] === PermissionDictionary::VALUE_YES)
 		{
 			return;
 		}
+
 		$sql = "
 			UPDATE `". static::getTableName() ."` 
 			SET VALUE = ". PermissionDictionary::VALUE_NO ."
@@ -81,6 +77,7 @@ class TasksTemplatePermissionTable extends AccessPermissionTable
 				AND ACCESS_CODE = ". $data['ACCESS_CODE'] ."
 				AND PERMISSION_ID LIKE '". $data['PERMISSION_ID'] .".%' 
 		";
+
 		static::getEntity()->getConnection()->query($sql);
 	}
 
@@ -95,10 +92,10 @@ class TasksTemplatePermissionTable extends AccessPermissionTable
 		$res = self::getList([
 			'select' => ['VALUE'],
 			'filter' => [
-				'=TEMPLATE_ID'		=> (int) $data['TEMPLATE_ID'],
-				'=ACCESS_CODE' 		=> $data['ACCESS_CODE'],
-				'%=PERMISSION_ID' 	=> $parentPermissions,
-				'=VALUE' 			=> PermissionDictionary::VALUE_NO,
+				'=TEMPLATE_ID' => (int) $data['TEMPLATE_ID'],
+				'=ACCESS_CODE' => $data['ACCESS_CODE'],
+				'%=PERMISSION_ID' => $parentPermissions,
+				'=VALUE' => PermissionDictionary::VALUE_NO,
 			],
 			'limit' => 1,
 		])->fetchAll();

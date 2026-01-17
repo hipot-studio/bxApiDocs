@@ -22,33 +22,34 @@ class IntranetHelpdeskComponent extends CBitrixComponent
 		$this->arResult['LAST_CHECK_NOTIFICATIONS_TIME'] = '';
 		$this->arResult['IM_BAR_EXISTS'] = Loader::includeModule('im')
 			&& CBXFeatures::IsFeatureEnabled('WebMessenger')
-			&& !defined('BX_IM_FULLSCREEN')
-		;
+			&& !defined('BX_IM_FULLSCREEN');
 
-		if (
-			Loader::includeModule('bitrix24')
-			&& !(Loader::includeModule('extranet')
-				&& SITE_ID === CExtranet::GetExtranetSiteID())
-		)
+		if (Loader::includeModule('bitrix24'))
 		{
 			$helpNotify = CUserOptions::GetOption('bitrix24', self::OPTION_CONFIG_NAME);
 
-			if (!isset($helpNotify['counter_update_date']))
+			if (
+				!(Loader::includeModule('extranet')
+				&& CExtranet::GetExtranetSiteID() === SITE_ID)
+			)
 			{
-				$helpNotify['counter_update_date'] = time();
-				CUserOptions::SetOption('bitrix24', self::OPTION_CONFIG_NAME, $helpNotify);
-			}
+				if (!isset($helpNotify['counter_update_date']))
+				{
+					$helpNotify['counter_update_date'] = time();
+					CUserOptions::SetOption('bitrix24', self::OPTION_CONFIG_NAME, $helpNotify);
+				}
 
-			$this->arResult['COUNTER_UPDATE_DATE'] = $helpNotify['counter_update_date']; //time when user read notifications last time
+				$this->arResult['COUNTER_UPDATE_DATE'] = $helpNotify['counter_update_date']; //time when user read notifications last time
 
-			if (!isset($helpNotify['time']) || $helpNotify['time'] < time())
-			{
-				$this->arResult['NEED_CHECK_HELP_NOTIFICATION'] = 'Y';
-			}
+				if (!isset($helpNotify['time']) || $helpNotify['time'] < time())
+				{
+					$this->arResult['NEED_CHECK_HELP_NOTIFICATION'] = 'Y';
+				}
 
-			if (isset($helpNotify['num']))
-			{
-				$this->arResult['HELP_NOTIFY_NUM'] = (int)$helpNotify['num'];
+				if (isset($helpNotify['num']))
+				{
+					$this->arResult['HELP_NOTIFY_NUM'] = (int)$helpNotify['num'];
+				}
 			}
 
 			if (isset($helpNotify['notifications']))

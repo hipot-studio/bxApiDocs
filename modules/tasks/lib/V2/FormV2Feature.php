@@ -16,6 +16,11 @@ class FormV2Feature
 			return true;
 		}
 
+		if ($feature === 'old_form')
+		{
+			return Option::get('tasks', 'tasks_old_form', 'N') === 'Y';
+		}
+
 		if (in_array($groupId, self::getAllowedGroups(), true))
 		{
 			return true;
@@ -49,6 +54,10 @@ class FormV2Feature
 			'move' => 'tasks_form_v2_move',
 			'reminder' => 'tasks_form_v2_reminder',
 			'gantt' => 'tasks_form_v2_gantt',
+			'automation' => 'tasks_form_v2_automation',
+			// @todo Remove 'team_form' before release
+			'team_form' => 'tasks_form_v2_team_form',
+			'template' => 'tasks_form_v2_template',
 			default => '',
 		};
 
@@ -70,6 +79,11 @@ class FormV2Feature
 		}
 
 		Option::set('tasks', $option, 'Y');
+		$turnedOnTime = Option::get('tasks', $option . '_time', null);
+		if ($turnedOnTime === null)
+		{
+			Option::set('tasks', $option . '_time', time());
+		}
 
 		return true;
 	}

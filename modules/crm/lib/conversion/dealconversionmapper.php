@@ -416,6 +416,7 @@ class DealConversionMapper extends EntityConversionMapper
 
 				if(isset($dstFields['PRODUCT_ROWS']) && is_array($dstFields['PRODUCT_ROWS']))
 				{
+					$dstFields = $this->prepareProductRowsPrices($dstEntityTypeID, $dstFields, $options);
 					$totalInfo = \CCrmProductRow::CalculateTotalInfo(
 						\CCrmQuote::OWNER_TYPE,
 						0,

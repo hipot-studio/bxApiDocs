@@ -3183,18 +3183,19 @@ class Chat
 					"NOTIFY_MODULE" => "imopenlines",
 					"NOTIFY_EVENT" => $type == self::RATING_TYPE_CLIENT? 'rating_client': 'rating_head',
 					"NOTIFY_SUB_TAG" => "IMOL|RATING|".$type.'|'.$sessionId,
-					"NOTIFY_MESSAGE" => '[b]'.Loc::getMessage('IMOL_CHAT_NOTIFY_RATING_TITLE').'[/b][br]'.Loc::getMessage($notifyMessageName, Array(
+					"NOTIFY_TITLE" => Loc::getMessage('IMOL_CHAT_NOTIFY_RATING_TITLE'),
+					"NOTIFY_MESSAGE" => Loc::getMessage($notifyMessageName, [
 							'#NUMBER#' => '[CHAT=imol|'.$sessionId.']'.$sessionId.'[/CHAT]',
 							'#USER#' => '[USER='.$fromUserId.']'.$userName.'[/USER]',
 							'#RATING#' => $ratingImage,
 							'#COMMENT#' => $commentText,
-						)),
-					"NOTIFY_MESSAGE_OUT" => '[b]'.Loc::getMessage('IMOL_CHAT_NOTIFY_RATING_TITLE').'[/b][br]'.Loc::getMessage($notifyMessageName, Array(
+						]),
+					"NOTIFY_MESSAGE_OUT" => Loc::getMessage($notifyMessageName, [
 							'#NUMBER#' => '[URL=/online/?IM_HISTORY=imol|'.$sessionId.']'.$sessionId.'[/URL]',
 							'#USER#' => $userName,
 							'#RATING#' => $ratingText,
 							'#COMMENT#' => $commentText,
-						)),
+						]),
 					"RECENT_ADD" => $userViewChat? 'Y': 'N'
 				));
 

@@ -4,28 +4,36 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart;
 
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\ErrorCode;
-use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
-use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
-use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
+use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\CallChannelSettings;
+use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\ChannelSettingsFactory;
+use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\ChannelSettingsInterface;
+use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\ChatChannelSettings;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
-use CCrmActivityDirection;
 use CCrmOwnerType;
+use JsonSerializable;
 
-final class FillFieldsSettings implements \JsonSerializable, AutoStartInterface
+final class FillFieldsSettings implements AutoStartInterface, JsonSerializable
 {
-	private const DEFAULT_CALL_DIRECTION = CCrmActivityDirection::Incoming;
+	private array $channelSettings;
 
-	public function __construct(
-		private readonly array $autostartOperationTypes,
-		private readonly bool $autostartTranscriptionOnlyOnFirstCallWithRecording,
-		private array $autostartCallDirections
-	)
+	public function __construct(array $channelSettings = [])
 	{
+		$this->channelSettings = $channelSettings;
+	}
+
+	public function addChannelSettings(ChannelSettingsInterface $settings): void
+	{
+		$this->channelSettings[$settings->getChannelType()] = $settings;
+	}
+
+	public function getChannelSettings(string $channelType): ?ChannelSettingsInterface
+	{
+		return $this->channelSettings[$channelType] ?? null;
 	}
 
 	public function shouldAutostart(
@@ -42,86 +50,79 @@ final class FillFieldsSettings implements \JsonSerializable, AutoStartInterface
 			return false;
 		}
 
-		$isAllowedOperationType = in_array($operationType, $this->autostartOperationTypes, true);
-		$isAllowedDirection = in_array($callDirection, $this->autostartCallDirections, true);
-
-		if ($operationType !== TranscribeCallRecording::TYPE_ID) // only autostart of first step should be configured
+		// backwards compatibility for calls
+		$callSettings = $this->getChannelSettings(CallChannelSettings::CHANNEL_TYPE);
+		if ($callSettings === null)
 		{
-			return true;
+			return false;
 		}
 
-		return $isAllowedOperationType && $isAllowedDirection;
+		return $callSettings->shouldAutostart($operationType, [
+			'callDirection' => $callDirection,
+			'checkAutomaticProcessingParams' => $checkAutomaticProcessingParams,
+		]);
 	}
 
 	public function isAutostartTranscriptionOnlyOnFirstCallWithRecording(): bool
 	{
-		return $this->autostartTranscriptionOnlyOnFirstCallWithRecording
-			&& in_array(self::DEFAULT_CALL_DIRECTION, $this->autostartCallDirections, true)
-		;
+		// backwards compatibility for calls
+		$callSettings = $this->getChannelSettings(CallChannelSettings::CHANNEL_TYPE);
+		if ($callSettings instanceof CallChannelSettings)
+		{
+			return $callSettings->isAutostartTranscriptionOnlyOnFirstCallWithRecording();
+		}
+
+		return false;
 	}
 
 	public function jsonSerialize(): array
 	{
+		$result = array_map(static function ($settings) {
+			return $settings->toArray();
+		}, $this->channelSettings);
+
 		return [
-			'autostartOperationTypes' => $this->autostartOperationTypes,
-			'autostartTranscriptionOnlyOnFirstCallWithRecording' => $this->autostartTranscriptionOnlyOnFirstCallWithRecording,
-			'autostartCallDirections' => $this->autostartCallDirections,
+			'channels' => $result,
 		];
 	}
 
 	public static function fromJson(array $json): ?self
 	{
-		$types = $json['autostartOperationTypes'] ?? null;
-		if (is_array($types))
+		// backwards compatibility for calls
+		if (!isset($json['channels']))
 		{
-			$validTypes = AIManager::getAllOperationTypes();
-			$types = array_filter(
-				array_map('intval', $json['autostartOperationTypes']),
-				static fn(int $x) => in_array($x, $validTypes, true)
-			);
+			$callSettings = CallChannelSettings::fromArray($json);
+			if ($callSettings !== null)
+			{
+				return new self([
+					CallChannelSettings::CHANNEL_TYPE => $callSettings,
+					ChatChannelSettings::CHANNEL_TYPE => ChatChannelSettings::getDefault(),
+				]);
+			}
+
+			return null;
 		}
 
-		$autostartTranscriptionOnlyOnFirstCallWithRecording =
-			$json['autostartTranscriptionOnlyOnFirstCallWithRecording'] ?? null
-		;
-
-		// Incoming call by default (for old saved records)
-		$autostartCallDirections = $json['autostartCallDirections'] ?? null;
-		if (is_array($autostartCallDirections))
+		// new format
+		$channelSettings = [];
+		foreach ($json['channels'] as $channelType => $data)
 		{
-			$validDirections = [CCrmActivityDirection::Incoming, CCrmActivityDirection::Outgoing];
-			$autostartCallDirections = array_filter(
-				array_map('intval', $json['autostartCallDirections']),
-				static fn(int $x) => in_array($x, $validDirections, true)
-			);
+			$settings = ChannelSettingsFactory::create($channelType, $data);
+			if ($settings !== null)
+			{
+				$channelSettings[$channelType] = $settings;
+			}
 		}
 
-		if (
-			is_array($types)
-			&& is_bool($autostartTranscriptionOnlyOnFirstCallWithRecording)
-			&& is_array($autostartCallDirections)
-		)
-		{
-			return new self(
-				$types,
-				$autostartTranscriptionOnlyOnFirstCallWithRecording,
-				$autostartCallDirections
-			);
-		}
-
-		return null;
+		return new self($channelSettings);
 	}
 
 	public static function getDefault(): self
 	{
-		return new self(
-			[
-				SummarizeCallTranscription::TYPE_ID,
-				FillItemFieldsFromCallTranscription::TYPE_ID,
-			],
-			false,
-			[self::DEFAULT_CALL_DIRECTION]
-		);
+		return new self([
+			CallChannelSettings::CHANNEL_TYPE => CallChannelSettings::getDefault(),
+			ChatChannelSettings::CHANNEL_TYPE => ChatChannelSettings::getDefault(),
+		]);
 	}
 
 	public static function get(int $entityTypeId, ?int $categoryId = null): self
@@ -142,13 +143,8 @@ final class FillFieldsSettings implements \JsonSerializable, AutoStartInterface
 		}
 
 		$settings = self::fromJson($settingsJson);
-		$settings = $settings instanceof self ? $settings : self::getDefault();
-		if (!isset($settings->autostartCallDirections))
-		{
-			$settings->autostartCallDirections = [self::DEFAULT_CALL_DIRECTION];
-		}
 
-		return $settings;
+		return $settings instanceof self ? $settings : self::getDefault();
 	}
 
 	public static function save(self $settings, int $entityTypeId, ?int $categoryId = null): Result
@@ -169,23 +165,6 @@ final class FillFieldsSettings implements \JsonSerializable, AutoStartInterface
 		return $result;
 	}
 
-	private static function getOptionName(int $entityTypeId, ?int $categoryId): string
-	{
-		$factory = Container::getInstance()->getFactory($entityTypeId);
-		if ($factory?->isCategoriesSupported() && $categoryId === null)
-		{
-			$categoryId = $factory?->createDefaultCategoryIfNotExist()->getId();
-		}
-
-		$typeKey = "{$entityTypeId}";
-		if ($categoryId !== null)
-		{
-			$typeKey .= "_{$categoryId}";
-		}
-
-		return "ai_autostart_settings_{$typeKey}";
-	}
-
 	public static function checkSavePermissions(int $entityTypeId, ?int $categoryId = null, ?int $userId = null): bool
 	{
 		return self::checkReadPermissions($entityTypeId, $categoryId, $userId);
@@ -198,5 +177,22 @@ final class FillFieldsSettings implements \JsonSerializable, AutoStartInterface
 			? $userPermissions->canUpdateItems($entityTypeId)
 			: $userPermissions->canUpdateItemsInCategory($entityTypeId, $categoryId)
 		;
+	}
+
+	private static function getOptionName(int $entityTypeId, ?int $categoryId): string
+	{
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		if ($factory?->isCategoriesSupported() && $categoryId === null)
+		{
+			$categoryId = $factory?->createDefaultCategoryIfNotExist()->getId();
+		}
+
+		$typeKey = (string)($entityTypeId);
+		if ($categoryId !== null)
+		{
+			$typeKey .= "_$categoryId";
+		}
+
+		return "ai_autostart_settings_$typeKey";
 	}
 }

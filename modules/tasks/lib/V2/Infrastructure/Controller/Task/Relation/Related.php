@@ -12,8 +12,7 @@ use Bitrix\Main\Validation\Rule\ElementsType;
 use Bitrix\Main\Validation\Rule\Enum\Type;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\AddRelatedTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\DeleteRelatedTaskCommand;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
@@ -27,16 +26,17 @@ class Related extends BaseController
 	 */
 	public function listAction(
 		#[Permission\Read]
-		Task $task,
-		SelectInterface $relationTaskSelect,
+		Entity\Task $task,
 		PageNavigation $pageNavigation,
 		RelatedTaskProvider $relatedTaskProvider,
+		?SelectInterface $relationTaskSelect = null,
 		bool $withIds = true,
 	): array
 	{
 		$params = new RelationTaskParams(
 			userId: $this->userId,
 			taskId: (int)$task->id,
+			templateId: 0,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
 			checkRootAccess: false,
 			select: $relationTaskSelect,
@@ -74,20 +74,23 @@ class Related extends BaseController
 	 */
 	public function addAction(
 		#[Permission\Update]
-		Task $task,
-		#[Count(max: 50)]
+		Entity\Task $task,
+		#[Count(min: 1, max: 50)]
 		#[Permission\Read]
-		TaskCollection $tasks,
+		Entity\TaskCollection $tasks,
 	): ?array
 	{
 		$response = [];
+
 		foreach ($tasks as $relatedTask)
 		{
 			$relatedTaskId = (int)$relatedTask->id;
+
 			$result = (new AddRelatedTaskCommand(
 				taskId: (int)$task->id,
 				relatedTaskId: $relatedTaskId,
 				userId: $this->userId,
+				useConsistency: true,
 			))->run();
 
 			$response[$relatedTaskId] = $result->isSuccess();
@@ -105,10 +108,10 @@ class Related extends BaseController
 	 */
 	public function deleteAction(
 		#[Permission\Update]
-		Task $task,
-		#[Count(max: 50)]
+		Entity\Task $task,
+		#[Count(min: 1, max: 50)]
 		#[Permission\Read]
-		TaskCollection $tasks,
+		Entity\TaskCollection $tasks,
 	): ?array
 	{
 		$response = [];
@@ -119,6 +122,7 @@ class Related extends BaseController
 				taskId: (int)$task->id,
 				relatedTaskId: $relatedTaskId,
 				userId: $this->userId,
+				useConsistency: true,
 			))->run();
 
 			$response[$relatedTaskId] = $result->isSuccess();

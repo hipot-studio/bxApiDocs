@@ -40,14 +40,6 @@ class RestAdapter implements RestConvertible
 
 		$rest = $popupData->toRestFormat($option);
 
-		if (empty($rest))
-		{
-			if (count($this->entities) === 1)
-			{
-				return $this->entities[0]->toRestFormat($option);
-			}
-		}
-
 		foreach ($this->entities as $entity)
 		{
 			$rest[$entity::getRestEntityName()] = $entity->toRestFormat($option);

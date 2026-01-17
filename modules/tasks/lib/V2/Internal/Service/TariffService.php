@@ -23,6 +23,11 @@ class TariffService
 
 	}
 
+	public function canManageTemplatePermissions(): bool
+	{
+		return Bitrix24::checkFeatureEnabled($this->getTemplatesAccessPermissionsFeatureId());
+	}
+
 	public function canCreateDependence(int $userId): bool
 	{
 		if (Bitrix24\Task::checkFeatureEnabled(Bitrix24\FeatureDictionary::TASKS_GANTT))
@@ -43,9 +48,19 @@ class TariffService
 		return Loader::includeModule('bitrix24') && CBitrix24::IsDemoLicense();
 	}
 
-	public function getMailUserFeature(): string
+	public function isEnabled(string $featureName): bool
+	{
+		return Bitrix24::checkFeatureEnabled($featureName);
+	}
+
+	public function getMailUserFeatureId(): string
 	{
 		return Bitrix24\FeatureDictionary::TASK_MAIL_USER_INTEGRATION;
+	}
+
+	public function getStakeholderFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_OBSERVERS_PARTICIPANTS;
 	}
 
 	public function isStakeholderAvailable(): bool
@@ -53,14 +68,74 @@ class TariffService
 		return Bitrix24::checkFeatureEnabled(Bitrix24\FeatureDictionary::TASK_OBSERVERS_PARTICIPANTS);
 	}
 
-	public function isMailUserAvailable(): bool
+	public function getCrmIntegrationFeatureId(): string
 	{
-		return Bitrix24::checkFeatureEnabled(Bitrix24\FeatureDictionary::TASK_MAIL_USER_INTEGRATION);
+		return Bitrix24\FeatureDictionary::TASK_CRM_INTEGRATION;
 	}
 
-	public function isProjectAvailable(int $groupId = 0): bool
+	public function getTasksRecurrentFeatureId(): string
 	{
-		return ProjectLimit::isFeatureEnabled($groupId);
+		return Bitrix24\FeatureDictionary::TASK_RECURRING_TASKS;
+	}
+
+	public function getRelatedSubtaskDeadlinesFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_RELATED_SUBTASK_DEADLINES;
+	}
+
+	public function getRequiredResultFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_STATUS_SUMMARY;
+	}
+
+	public function getControlFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_CONTROL;
+	}
+
+	public function getTimeTrackingFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_TIME_TRACKING;
+	}
+
+	public function getDelegatingFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_DELEGATING;
+	}
+
+	public function getSkipWeekendsFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_SKIP_WEEKENDS;
+	}
+
+	public function getTimeElapsedFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_TIME_ELAPSED;
+	}
+
+	public function getRecurringTasksFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_RECURRING_TASKS;
+	}
+
+	public function getTemplatesSubtasksFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_TEMPLATES_SUBTASKS;
+	}
+
+	public function getTemplatesAccessPermissionsFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_TEMPLATE_ACCESS_PERMISSIONS;
+	}
+
+	public function getRobotsFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_ROBOTS;
+	}
+
+	public function getMarkFeatureId(): string
+	{
+		return Bitrix24\FeatureDictionary::TASK_RATE;
 	}
 
 	public function getProjectFeatureId(): string
@@ -68,9 +143,9 @@ class TariffService
 		return ProjectLimit::getFeatureId();
 	}
 
-	public function isEnabled(string $featureName): bool
+	public function isProjectAvailable(int $groupId = 0): bool
 	{
-		return Bitrix24::checkFeatureEnabled($featureName);
+		return ProjectLimit::isFeatureEnabled($groupId);
 	}
 
 	public function isLimitExceed(): bool

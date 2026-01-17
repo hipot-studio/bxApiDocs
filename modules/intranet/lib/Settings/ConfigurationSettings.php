@@ -7,6 +7,7 @@ use Bitrix\Bitrix24\License;
 use Bitrix\Bitrix24\Portal\Remove\Verification\VerificationFactory;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Integration\Market\Label;
+use Bitrix\Intranet\Internal\Integration\BIConnector\BIConnectorSettingsService;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
@@ -40,12 +41,14 @@ class ConfigurationSettings extends AbstractSettings
 	private const TIME_FORMAT_VALUE_24 = 24;
 	private const TIME_FORMAT_VALUE_12 = 12;
 	private bool $isBitrix24;
+	private bool $isBIConnectorAvailable;
 	private ?DateTime $dateTime = null;
 
 	public function __construct(array $data = [])
 	{
 		parent::__construct($data);
 		$this->isBitrix24 = IsModuleInstalled("bitrix24");
+		$this->isBIConnectorAvailable = BIConnectorSettingsService::isAvailable();
 	}
 
 	public function validate(): ErrorCollection
@@ -97,6 +100,11 @@ class ConfigurationSettings extends AbstractSettings
 		$this->setAllowMeasureStressLevel();
 		$this->setCollectGeoData();
 		$this->setShowSettingsAllUsers();
+
+		if ($this->isBIConnectorAvailable)
+		{
+			$this->setBIConnectorDashboardLanguage();
+		}
 
 		return new Result();
 	}
@@ -197,6 +205,17 @@ class ConfigurationSettings extends AbstractSettings
 				'show_settings_all_users',
 				$this->data["showSettingsAllUsers"]
 			);
+		}
+	}
+
+	private function setBIConnectorDashboardLanguage(): void
+	{
+		if (
+			isset($this->data["biconnectorDashboardLanguage"])
+			&& $this->data["biconnectorDashboardLanguage"] !== BIConnectorSettingsService::getCurrentLanguage()
+		)
+		{
+			BIConnectorSettingsService::setLanguage($this->data["biconnectorDashboardLanguage"]);
 		}
 	}
 
@@ -449,6 +468,18 @@ class ConfigurationSettings extends AbstractSettings
 			false
 		);
 
+		if ($this->isBIConnectorAvailable)
+		{
+			$data['sectionBIConnector'] = new Section(
+				'settings-configuration-section-biconnector',
+				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_BICONNECTOR_DASHBOARD_LANGUAGE'),
+				'ui-icon-set --graphs-settings',
+				false
+			);
+
+			$data["biconnectorDashboardLanguage"] = $this->getBIConnectorDashboardLanguage();
+		}
+
 		$data['sectionOther'] = new Section(
 			'settings-configuration-section-other',
 			Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_ADDITIONAL_SETTINGS'),
@@ -533,6 +564,32 @@ class ConfigurationSettings extends AbstractSettings
 			'main',
 			'show_settings_all_users',
 			'N'
+		);
+	}
+
+	private function getBIConnectorDashboardLanguage(): Selector
+	{
+		$currentLanguage = BIConnectorSettingsService::getCurrentLanguage();
+
+		$values = [];
+
+		$languages = \Bitrix\Intranet\Util::getTemplateLanguages();
+
+		foreach ($languages as $code => $language)
+		{
+			$values[] = [
+				'value' => $code,
+				'name' => $language['NAME'],
+				'selected' => $currentLanguage === $code,
+			];
+		}
+
+		return new Selector(
+			'settings-configuration-field-biconnector-dashboard-language',
+			'biconnectorDashboardLanguage',
+			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_LANGUAGE'),
+			$values,
+			$currentLanguage,
 		);
 	}
 
@@ -797,6 +854,12 @@ class ConfigurationSettings extends AbstractSettings
 		if (!empty($this->getMapsProviderCRM()))
 		{
 			$searchSections['settings-configuration-section-maps_in_crm'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS_LIST');
+		}
+
+		if ($this->isBIConnectorAvailable)
+		{
+			$searchSections['settings-configuration-section-biconnector'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_BICONNECTOR_DASHBOARD_LANGUAGE');
+			$searchSections['biconnectorDashboardLanguage'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_LANGUAGE');
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($searchSections + [

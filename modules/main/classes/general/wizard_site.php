@@ -1,4 +1,4 @@
-<?
+<?php
 
 define("BX_WIZARD_WELCOME_ID", "__welcome");
 define("BX_WIZARD_LICENSE_ID", "__license");
@@ -1465,5 +1465,3 @@ class CWizard
 	}
 
 }
-
-?>

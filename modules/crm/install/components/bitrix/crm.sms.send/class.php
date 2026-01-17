@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Service\Container;
@@ -34,9 +35,11 @@ class CCrmSmsSendComponent extends CBitrixComponent
 
 		Loc::loadLanguageFile(__FILE__);
 
+		$messageSender = Container::getInstance()->getUserPermissions()->messageSender();
 		$providerId = $this->getProviderId();
 		if (
-			($providerId === SmsManager::getSenderCode() && !SmsManager::canUse())
+			!$messageSender->canSend($this->entityTypeId,  $this->entityId)
+			|| ($providerId === SmsManager::getSenderCode() && !SmsManager::canUse())
 			|| (
 				$this->canUseBitrix24Provider()
 				&& $providerId === NotificationsManager::getSenderCode()
@@ -58,8 +61,14 @@ class CCrmSmsSendComponent extends CBitrixComponent
 		$this->arResult['providerId'] = $providerId;
 		$this->arResult['isProviderFixed'] = (string)($this->arParams['IS_PROVIDER_FIXED'] ?? null) === 'Y';
 
+		if (Feature::enabled(Feature\MessageSenderEditor::class))
+		{
+			$this->arResult['messageSenderSceneId'] = $this->arParams['MESSAGE_SENDER_SCENE_ID'] ?? '';
+			$this->arResult['analytics'] = $this->arParams['ANALYTICS'] ?? [];
+		}
+
 		global $APPLICATION;
-		$APPLICATION->SetTitle(Loc::getMessage('CRM_SMS_SEND_COMPONENT_TITLE'));
+		$APPLICATION->SetTitle(Loc::getMessage('CRM_SMS_SEND_COMPONENT_TITLE_MSGVER_1'));
 		if (Loader::includeModule('ui'))
 		{
 			\Bitrix\UI\Toolbar\Facade\Toolbar::deleteFavoriteStar();
@@ -113,16 +122,11 @@ class CCrmSmsSendComponent extends CBitrixComponent
 				];
 			}
 
-			$templateCode = $this->getTemplateCode();
-			if ($templateCode)
+			$template = $this->getUnsignedTemplate();
+			if ($template)
 			{
-				$config['templateCode'] = $templateCode;
-			}
-
-			$templatePlaceholders = $this->getTemplatePlaceholders();
-			if ($templatePlaceholders)
-			{
-				$config['templatePlaceholders'] = $templatePlaceholders;
+				$config['templateCode'] = $template['template'];
+				$config['templatePlaceholders'] = $template['placeholders'];
 			}
 		}
 
@@ -147,19 +151,33 @@ class CCrmSmsSendComponent extends CBitrixComponent
 		return ($this->arParams['IS_EDITABLE'] ?? 'Y') === 'Y';
 	}
 
-	private function getTemplateCode(): ?string
+	private function getUnsignedTemplate(): ?array
 	{
-		$whiteList = [
-			'CRM_DOCUMENT_SHARING',
-		];
+		if (!Feature::enabled(Feature\MessageSenderEditor::class))
+		{
+			if (!$this->arParams['SIGNED_TEMPLATE'])
+			{
+				return null;
+			}
 
-		$code = $this->arParams['TEMPLATE_CODE'] ?? null;
+			$signedTemplate = NotificationsManager::unsignTemplate($this->arParams['SIGNED_TEMPLATE']);
 
-		return (in_array($code, $whiteList, true) ? $code : null);
-	}
+			$result = [
+				'template' => $signedTemplate['template'],
+			];
+			foreach ($signedTemplate['placeholders'] as $templatePlaceholder)
+			{
+				$result['placeholders'][$templatePlaceholder['name']] = $templatePlaceholder['value'];
+			}
 
-	private function getTemplatePlaceholders(): ?array
-	{
-		return $this->arParams['TEMPLATE_PLACEHOLDERS'] ?? null;
+			return $result;
+		}
+
+		if (!$this->arParams['SIGNED_TEMPLATE'])
+		{
+			return null;
+		}
+
+		return NotificationsManager::unsignTemplate($this->arParams['SIGNED_TEMPLATE']);
 	}
 }

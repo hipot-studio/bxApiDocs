@@ -17,4 +17,7 @@ interface TaskMemberRepositoryInterface
 	public function getAccomplices(int $taskId): Entity\UserCollection;
 
 	public function getAuditors(int $taskId): Entity\UserCollection;
+
+	/** @return array<int, string> */
+	public function getMembershipForUserId(int $userId): array;
 }

@@ -194,8 +194,6 @@ class ContactTable extends ORM\Data\DataManager
 
 			$fieldRepository->getHasImol(),
 
-			$fieldRepository->getFaceId(),
-
 			$fieldRepository->getSearchContent(),
 
 			$fieldRepository->getCategoryId(Item::FIELD_NAME_CATEGORY_ID, \CCrmOwnerType::Contact)

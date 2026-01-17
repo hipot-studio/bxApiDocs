@@ -26,6 +26,8 @@ use Bitrix\Rest\OAuthService;
 use Bitrix\Rest\Analytic;
 use Bitrix\Im\Model\BotTable;
 use Bitrix\Im\Bot;
+use Bitrix\Rest\Internal;
+use Bitrix\Main;
 
 /**
  * Class Provider
@@ -363,22 +365,21 @@ class Provider
 		$errorList = [];
 		$id = (isset($requestData['ID']) && intVal($requestData['ID']) > 0) ? intVal($requestData['ID']) : $id;
 		$userId = $GLOBALS['USER']->getID();
-		$isAdmin = \CRestUtil::isAdmin();
-
+		$userContext = new Internal\Access\UserContext($userId);
+		$isAdmin = $userContext->isAdmin();
 		$presetData = Element::get($elementCode);
 
-		if (
-			!$isAdmin
-			&&
-			(
-				$presetData['ADMIN_ONLY'] === 'Y'
-				|| $presetData['OPTIONS']['WIDGET_NEEDED'] !== 'D'
-				|| $presetData['OPTIONS']['APPLICATION_NEEDED'] !== 'D'
-			)
-		)
+		try
+		{
+			(new Internal\Access\Preset\PresetAccessChecker(
+				$userContext
+			))->ensureCanSave($presetData);
+		}
+		catch (Main\SystemException $e)
 		{
 			$result['status'] = false;
-			$result['errors'][] = Loc::getMessage('INTEGRATION_PRESET_PROVIDER_ERROR_ACCESS_DENIED');
+			$result['errors'][] = $e->getMessage();
+
 			return $result;
 		}
 
@@ -404,7 +405,7 @@ class Provider
 			'USER_ID' => $USER->GetID(),
 			'TITLE' => $requestData['TITLE'],
 			'SCOPE' => is_array($requestData['SCOPE']) ? $requestData['SCOPE'] : [],
-			'QUERY' => $requestData['QUERY'],
+			'QUERY' => $requestData['QUERY'] ?? '',
 			'OUTGOING_HANDLER_URL' => trim($requestData['OUTGOING_HANDLER_URL'] ?? null),
 			'OUTGOING_EVENTS' => isset($requestData['OUTGOING_EVENTS']) && is_array($requestData['OUTGOING_EVENTS']) ? $requestData['OUTGOING_EVENTS'] : [],
 			'APPLICATION_ONLY_API' => (isset($requestData['APPLICATION_ONLY_API']) && $requestData['APPLICATION_ONLY_API'] === 'Y') ? 'Y' : 'N',
@@ -796,7 +797,7 @@ class Provider
 							'SCOPE' => $saveData['SCOPE'],
 							'ONLY_API' => ($saveData['APPLICATION_ONLY_API'] == 'Y') ? 'Y' : 'N',
 							'MOBILE' => ($saveData['APPLICATION_ONLY_API'] != 'Y'
-								&& $requestData['APPLICATION_MOBILE'] === 'Y') ? 'Y' : 'N',
+								&& ($requestData['APPLICATION_MOBILE'] ?? 'N') === 'Y') ? 'Y' : 'N',
 							'APP_NAME' => $saveData['TITLE'],
 						],
 						'LANG_NAME' => ($saveData['APPLICATION_ONLY_API'] != 'Y' && is_array($requestData['APPLICATION_LANG_NAME'])) ?
@@ -921,14 +922,14 @@ class Provider
 				$appFields = [
 					'URL' => $data['FIELDS']['URL'],
 					'URL_INSTALL' => $data['FIELDS']['URL_INSTALL'],
-					'CLIENT_ID' => $data['FIELDS']['CLIENT_ID'],
-					'CODE' => $data['FIELDS']['CLIENT_ID'],
+					'CLIENT_ID' => $data['FIELDS']['CLIENT_ID'] ?? '',
+					'CODE' => $data['FIELDS']['CLIENT_ID'] ?? '',
 					'SCOPE' => implode(',', $data['FIELDS']['SCOPE']),
 					'STATUS' => AppTable::STATUS_LOCAL,
 					'APP_NAME' => $data['FIELDS']['APP_NAME'],
 					'MOBILE' => $data['FIELDS']['MOBILE'],
 				];
-				if ($app['ID'] > 0)
+				if (!empty($app['ID']))
 				{
 					$result = AppTable::update($app['ID'], $appFields);
 				}
@@ -1035,7 +1036,7 @@ class Provider
 				$errorList[] = $e->getMessage();
 			}
 
-			if (empty($errorList) && $data['PLACEMENTS'])
+			if (empty($errorList) && !empty($data['PLACEMENTS']))
 			{
 				$title = '';
 				$placementListOld = [];

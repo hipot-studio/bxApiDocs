@@ -9,17 +9,15 @@ use Bitrix\Main\Result;
 
 class Role extends EO_Role
 {
-	protected $permissions;
+	protected ?array $permissions = null;
 
-	/**
-	 * @return array
-	 */
-	public function getPermissions()
+	public function getNormalizedPermissions(): array
 	{
-		if($this->permissions === null)
+		if ($this->permissions === null)
 		{
 			$this->permissions = [];
-			if($this->getId() > 0)
+
+			if ($this->getId() > 0)
 			{
 				$permissionList = RolePermissionTable::getList(['filter' => ['ROLE_ID' => $this->getId()]]);
 				while($permission = $permissionList->fetch())
@@ -27,6 +25,7 @@ class Role extends EO_Role
 					$this->permissions[$permission['ENTITY']][$permission['ACTION']] = $permission['PERMISSION'];
 				}
 			}
+
 			$this->permissions = $this->normalizePermissions($this->permissions);
 		}
 
@@ -40,7 +39,7 @@ class Role extends EO_Role
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function setPermissions(array $permissions)
+	public function setPermissions(array $permissions): Result
 	{
 		$result = new Result();
 		$roleId = $this->getId();
@@ -80,15 +79,12 @@ class Role extends EO_Role
 		return $result;
 	}
 
-	/**
-	 * @return string
-	 */
-	public function getName()
+	public function getName(): string
 	{
 		Loc::loadLanguageFile(__FILE__);
 		$name = parent::getName();
-		$langName = Loc::getMessage('DOCGEN_ROLE_NAME_'.$name);
-		if($langName)
+		$langName = Loc::getMessage("DOCGEN_ROLE_NAME_{$name}");
+		if ($langName)
 		{
 			return $langName;
 		}

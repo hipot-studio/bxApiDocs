@@ -23,10 +23,6 @@ class RunIntegration
 	{
 		$application = Application::getInstance();
 
-		(new TimeLineManager($taskBeforeUpdate->getId(), $this->config->getUserId()))
-			->onTaskUpdated($taskBeforeUpdate)
-			->save();
-
 		$runtime = $this->config->getRuntime();
 		if (!$this->config->isSkipBP())
 		{

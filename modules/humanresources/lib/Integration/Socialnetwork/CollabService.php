@@ -183,7 +183,7 @@ class CollabService
 				'ID',
 				new \Bitrix\Main\ORM\Fields\ExpressionField(
 					'NUM_SUFFIX',
-					"CAST(SUBSTRING(%s, $suffixPosition) AS UNSIGNED)",
+					"SUBSTRING(%s, $suffixPosition)",
 					['NAME'],
 				),
 			])

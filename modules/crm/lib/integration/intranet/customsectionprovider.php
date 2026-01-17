@@ -11,8 +11,8 @@ use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\Dynamic;
 use Bitrix\Crm\Service\Router;
-use Bitrix\Crm\Service\Router\Page\Item;
 use Bitrix\Crm\Service\Router\Enum\Scope;
+use Bitrix\Crm\Service\Router\Page\Item;
 use Bitrix\Intranet\CustomSection\DataStructures\CustomSection;
 use Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable;
 use Bitrix\Intranet\CustomSection\Manager;
@@ -307,6 +307,16 @@ class CustomSectionProvider extends Provider
 		{
 			if ($customSection->getCode() === $sectionCode)
 			{
+				$isAutomatedSolutionAdmin = Container::getInstance()
+					->getUserPermissions()
+					->automatedSolution()
+					->isAutomatedSolutionAdmin($customSection->getId())
+				;
+				if ($isAutomatedSolutionAdmin)
+				{
+					return true;
+				}
+
 				$pages = $customSection->getPages();
 				// system pages are available only if any entity pages are available:
 				foreach ($pages as $page)

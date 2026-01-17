@@ -1371,6 +1371,11 @@ class Absence
 			return true;
 		}
 
+		if (self::isReportListFullEnableForUser($currentUserId))
+		{
+			return true;
+		}
+
 		if (
 			!\Bitrix\Main\Loader::includeModule('intranet')
 			|| !\Bitrix\Main\Loader::includeModule('iblock')

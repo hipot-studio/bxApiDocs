@@ -4,6 +4,7 @@ namespace Bitrix\Booking\Command\WaitListItem;
 
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Exception\WaitListItem\UpdateWaitListItemException;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
@@ -14,6 +15,7 @@ use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Provider\WaitListItemProvider;
+use Bitrix\Booking\Service\BookingFeature;
 
 class UpdateWaitListItemCommandHandler
 {
@@ -36,6 +38,8 @@ class UpdateWaitListItemCommandHandler
 
 	public function __invoke(UpdateWaitListItemCommand $command): Entity\WaitListItem\WaitListItem
 	{
+		$this->checkFeatures();
+
 		$currentWaitListItem = $this->waitListItemProvider->getById(
 			$command->waitListItem->getId(),
 			$command->updatedBy,
@@ -101,5 +105,13 @@ class UpdateWaitListItemCommandHandler
 			},
 			errType: UpdateWaitListItemException::class,
 		);
+	}
+
+	private function checkFeatures(): void
+	{
+		if (!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_BOOKING))
+		{
+			throw new Exception('Feature is not available');
+		}
 	}
 }

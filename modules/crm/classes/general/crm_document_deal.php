@@ -329,14 +329,6 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 				"Editable" => false,
 				"Required" => false,
 			],
-			'WEBFORM_ID' => [
-				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
-				'Type' => 'select',
-				'Options' => static::getWebFormSelectOptions(),
-				'Filterable' => false,
-				'Editable' => false,
-				'Required' => false,
-			],
 			'IS_RETURN_CUSTOMER' => [
 				'Name' => GetMessage('CRM_DOCUMENT_DEAL_IS_RETURN_CUSTOMER'),
 				'Type' => 'bool',
@@ -370,6 +362,35 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 				'Required' => false,
 			],
 		];
+
+		if (!class_exists(\Bitrix\Bizproc\BaseType\EntitySelector::class))
+		{
+			$arResult['WEBFORM_ID'] = [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'select',
+				'Options' => static::getWebFormSelectOptions(),
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+			];
+		}
+		else
+		{
+			$arResult['WEBFORM_ID'] = [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'entityselector',
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+				'Settings' => [
+					'entity' => [
+						'id' => 'web_form',
+						'dynamicLoad' => true,
+						'dynamicSearch' => true,
+					],
+				],
+			];
+		}
 
 		$arResult += static::getCommunicationFields();
 
@@ -887,19 +908,7 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			Crm\Tracking\UI\Details::saveEntityData(\CCrmOwnerType::Deal, $id, $arFields);
 		}
 
-		$CCrmBizProc = new CCrmBizProc('DEAL');
-
-		if (false === $CCrmBizProc->CheckFields(false, true))
-		{
-			throw new Exception($CCrmBizProc->LAST_ERROR);
-		}
-
-		if (!$CCrmBizProc->StartWorkflow($id))
-		{
-			throw new Exception($CCrmBizProc->LAST_ERROR);
-		}
-
-		// no automation
+		// no automation, no processes
 
 		return \CCrmOwnerType::DealName . '_' . $id;
 	}

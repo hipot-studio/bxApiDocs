@@ -19,6 +19,7 @@ use Bitrix\Sign\Item;
 use Bitrix\Sign\Item\Document\BindingCollection;
 use Bitrix\Sign\Item\Document\Template\TemplateFolderRelation;
 use Bitrix\Sign\Main\User;
+use Bitrix\Sign\Operation\ChangeDocumentStatus;
 use Bitrix\Sign\Operation\CheckDocumentAccess;
 use Bitrix\Sign\Operation\ConfigureFillAndStart;
 use Bitrix\Sign\Operation\Document\Validation;
@@ -43,6 +44,7 @@ use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\ProviderCode;
 use Bitrix\Sign\Type\Template;
 use Bitrix\Sign\Type\Template\Visibility;
+use Bitrix\Sign\Type\Document\Version;
 
 class DocumentService
 {
@@ -208,6 +210,7 @@ class DocumentService
 			lang: $documentItem->langId,
 			scenario: $documentItem->scenario,
 			title: $documentItem->title,
+			version: $documentItem->version,
 		);
 		$documentRegisterResponse = $apiDocument->register($documentRegisterRequest);
 
@@ -626,7 +629,7 @@ class DocumentService
 			Type\Document\EntityType::SMART_B2E => Type\DocumentScenario::DSS_SECOND_PARTY_MANY_MEMBERS,
 			default => Type\DocumentScenario::SIMPLE_SIGN_MANY_PARTIES_ONE_MEMBERS,
 		};
-		$documentItem->version = 2;
+		$documentItem->version = Version::CURRENT;
 
 		$documentItem->entityTypeId = EntityType::getEntityTypeIdByType($documentItem->entityType);
 		$addResult = Service\Container::instance()
@@ -870,9 +873,11 @@ class DocumentService
 			$reuseResult = $this->reuse($document->uid, $blank->getId());
 			if ($reuseResult->isSuccess())
 			{
-				$document->status = DocumentStatus::UPLOADED;
-
-				return $this->documentRepository->update($document);
+				$operation = new ChangeDocumentStatus($document, Type\DocumentStatus::UPLOADED);
+				return $operation
+					->launch()
+					->setData(['document' => $operation->getDocument()])
+				;
 			}
 		}
 
@@ -904,9 +909,11 @@ class DocumentService
 			return (new Main\Result())->addErrors($documentUploadResponse->getErrors());
 		}
 
-		$document->status = DocumentStatus::UPLOADED;
-
-		return $this->documentRepository->update($document);
+		$operation = new ChangeDocumentStatus($document, Type\DocumentStatus::UPLOADED);
+		return $operation
+			->launch()
+			->setData(['document' => $operation->getDocument()])
+		;
 	}
 
 	/**
@@ -1636,5 +1643,17 @@ class DocumentService
 	private function isIntegrationDocumentSettingsAvailableForProvider(?string $providerCode): bool
 	{
 		return $providerCode && $providerCode !== ProviderCode::SES_RU;
+	}
+
+	public function hasMoreThan(int $count, string $scenarioType): bool
+	{
+		$scenarios = match ($scenarioType)
+		{
+			Type\DocumentScenario::SCENARIO_TYPE_B2B => Type\DocumentScenario::getB2BScenarios(),
+			Type\DocumentScenario::SCENARIO_TYPE_B2E => Type\DocumentScenario::getB2EScenarios(),
+			default => [],
+		};
+
+		return $this->documentRepository->countByScenarios($scenarios) > $count;
 	}
 }

@@ -130,4 +130,63 @@ class DepartmentProvider
 
 		return $result;
 	}
+
+	public function getTotalEmployeeCount(): int
+	{
+		return \Bitrix\HumanResources\Public\Service\Container::getUserDepartmentService()->getTotalEmployeeCount();
+	}
+
+	public function getEmployeesFromUserDepartments(int $currentUserId, ?int $limit = null): array
+	{
+		$userIds = [];
+		$nodeCollection = $this->nodeRepository->findAllByUserId($currentUserId);
+
+		if ($nodeCollection->count() === 0)
+		{
+			return [];
+		}
+
+		foreach ($nodeCollection as $node)
+		{
+			$nodeMemberCollection = $this->nodeMemberRepository->findAllByNodeId(
+				$node->id,
+				false,
+				$limit,
+			);
+
+			$newUserIds = $nodeMemberCollection->getEntityIds();
+			$userIds = array_unique(array_merge($userIds, $newUserIds));
+
+			if ($limit !== null && count($userIds) >= $limit)
+			{
+				return array_slice($userIds, 0, $limit);
+			}
+		}
+
+		return $userIds;
+	}
+
+	public function getAllEmployees(int $offset, int $limit): array
+	{
+		$structure = \Bitrix\HumanResources\Service\Container::getStructureRepository()->getByXmlId(\Bitrix\HumanResources\Item\Structure::DEFAULT_STRUCTURE_XML_ID);
+		if (!$structure)
+		{
+			return [];
+		}
+
+		$rootNode = $this->nodeRepository->getRootNodeByStructureId($structure->id);
+		if (!$rootNode)
+		{
+			return [];
+		}
+
+		$employees = $this->nodeMemberService->getPagedEmployees(
+			$rootNode->id,
+			true,
+			$offset,
+			$limit
+		);
+
+		return $employees->getEntityIds();
+	}
 }

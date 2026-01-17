@@ -10,7 +10,9 @@ use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\V2\Public\Command\CheckList\CollapseCheckListCommand;
+use Bitrix\Tasks\V2\Public\Command\CheckList\CompleteCheckListItemsCommand;
 use Bitrix\Tasks\V2\Public\Command\CheckList\ExpandCheckListCommand;
+use Bitrix\Tasks\V2\Public\Command\CheckList\RenewCheckListItemsCommand;
 use Bitrix\Tasks\V2\Public\Command\CheckList\SaveCheckListCommand;
 use Bitrix\Tasks\V2\Internal\Access\CheckList\Permission;
 use Bitrix\Tasks\V2\Internal\Access\Task;
@@ -43,11 +45,14 @@ class CheckList extends BaseController
 		#[Permission\Save]
 		Entity\Task $task,
 		CheckListProvider $checkListProvider,
+		bool $skipNotification = false,
 	): ?Arrayable
 	{
 		$result = (new SaveCheckListCommand(
 			task: $task,
 			updatedBy: $this->userId,
+			useConsistency: true,
+			skipNotification: $skipNotification,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -62,6 +67,52 @@ class CheckList extends BaseController
 			$this->userId,
 			Entity\CheckList\Type::Task
 		);
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.CheckList.complete
+	 */
+	public function completeAction(
+		#[Permission\Toggle]
+		Entity\Task $task,
+	): bool
+	{
+		$result = (new CompleteCheckListItemsCommand(
+			ids: array_column($task->checklist, 'id'),
+			userId: $this->userId,
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.CheckList.renew
+	 */
+	public function renewAction(
+		#[Permission\Toggle]
+		Entity\Task $task,
+	): bool
+	{
+		$result = (new RenewCheckListItemsCommand(
+			ids: array_column($task->checklist, 'id'),
+			userId: $this->userId,
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

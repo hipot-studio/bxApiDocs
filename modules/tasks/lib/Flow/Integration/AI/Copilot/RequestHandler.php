@@ -17,7 +17,6 @@ use Bitrix\Tasks\Flow\Integration\AI\Control\AdviceService;
 use Bitrix\Tasks\Flow\Integration\AI\Control\Command\ReplaceAdviceCommand;
 use Bitrix\Tasks\Flow\Integration\AI\Control\Command\ReplaceCollectedDataCommand;
 use Bitrix\Tasks\Flow\Integration\AI\Provider\CollectedDataStatus;
-use phpDocumentor\Reflection\Types\Self_;
 
 class RequestHandler
 {
@@ -25,6 +24,7 @@ class RequestHandler
 	public const ERROR_CODE_DAILY_LIMIT = 'LIMIT_IS_EXCEEDED_DAILY';
 	public const ERROR_CODE_MONTHLY_LIMIT = 'LIMIT_IS_EXCEEDED_MONTHLY';
 	public const ERROR_CODE_BAAS_LIMIT = 'LIMIT_IS_EXCEEDED_BAAS';
+	public const ERROR_CODE_BAAS_RATE_LIMIT = 'LIMIT_IS_EXCEEDED_BAAS_RATE_LIMIT';
 
 	public static function onCompletions(Result $result, int $flowId): void
 	{
@@ -70,6 +70,10 @@ class RequestHandler
 			PromoRequestsCountUpdatedAgent::addAgent();
 
 			$status = CollectedDataStatus::LIMIT_EXCEEDED;
+		}
+		elseif ($event->getCode() === self::ERROR_CODE_BAAS_RATE_LIMIT)
+		{
+			$status = CollectedDataStatus::RATE_LIMIT_EXCEEDED;
 		}
 		else
 		{

@@ -27,4 +27,15 @@ class DiskFileAccessService
 
 		return $controller::can($userId, ActionDictionary::ACTION_TASK_READ, $taskId);
 	}
+
+	public function canReadTemplateAttachments(int $templateId, int $userId): bool
+	{
+		$controller = $this->controllerFactory->create(Type::Template, $userId);
+		if ($controller === null)
+		{
+			return false;
+		}
+
+		return $controller::can($userId, ActionDictionary::ACTION_TEMPLATE_READ, $templateId);
+	}
 }

@@ -3,8 +3,7 @@
 namespace Bitrix\Main\FileUploader;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\UI\FileInputUtility;
-use Bitrix\Main\UserField\File\UploadedFilesRegistry;
+use Bitrix\Main\UserField\File\UploadSession;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\FileOwnershipCollection;
 use Bitrix\UI\FileUploader\UploaderController;
@@ -14,39 +13,15 @@ use Bitrix\Main\UserField\File\UploaderFileSigner;
 
 class FieldFileUploaderController extends UploaderController
 {
-	protected function isAuthorized(): bool
+	private array $signedOptions = [];
+	public function __construct(array $rawOptions)
 	{
-		$currentUser = (isset($USER) && $USER instanceof CUser) ? $USER : new CUser();
+		$signedOptions = $rawOptions['signed'] ?? '';
+		$this->signedOptions = (new UploaderFileSigner())->unsign($signedOptions);
 
-		return $currentUser->IsAuthorized();
-	}
-
-	public function __construct(array $options)
-	{
-		$options = [
-			'id' => (isset($options['id']) && $options['id'] > 0) ? (int)$options['id'] : 0,
-			'cid' => (
-			(
-				isset($options['cid'])
-				&& is_string($options['cid'])
-				&& preg_match('/^[a-f01-9]{32}$/', $options['cid'])
-			)
-				? $options['cid']
-				: ''
-			),
-			'entityId' => (isset($options['entityId']) && is_string($options['entityId'])) ? $options['entityId'] : '',
-			'fieldName' =>
-				(isset($options['fieldName']) && is_string($options['fieldName']))
-					? $options['fieldName']
-					: ''
-			,
-			'multiple' => (isset($options['multiple']) && is_bool($options['multiple']) && $options['multiple']),
-			'signedFileId' => (isset($options['signedFileId']) && is_string($options['signedFileId']))
-				? $options['signedFileId']
-				: ''
-		];
-
-		parent::__construct($options);
+		parent::__construct([
+			'signed' => $signedOptions,
+		]);
 	}
 
 	public function isAvailable(): bool
@@ -93,23 +68,10 @@ class FieldFileUploaderController extends UploaderController
 		$configuration = new Configuration();
 
 		$isSetMaxAllowedSize = false;
-		$fieldSettings = null;
-		$fieldName = $this->getOption('fieldName', '');
-		$fieldInfo =
-			$USER_FIELD_MANAGER->GetUserFields(
-				$this->getOption('entityId', ''),
-				0,
-				LANGUAGE_ID,
-				false,
-				[$this->getOption('fieldName', '')]
-			)
-		;
-		if (
-			isset($fieldInfo[$fieldName])
-			&& is_array($fieldInfo[$fieldName])
-			&& isset($fieldInfo[$fieldName]['SETTINGS'])
-			&& is_array($fieldInfo[$fieldName]['SETTINGS'])
-		)
+		$fieldName = $this->getSignedOption('fieldName', '');
+		$fieldInfo = $USER_FIELD_MANAGER->GetUserFields($this->getSignedOption('entityId', ''));
+
+		if (is_array($fieldInfo[$fieldName]['SETTINGS'] ?? null))
 		{
 			$fieldSettings = $fieldInfo[$fieldName]['SETTINGS'];
 			if (
@@ -146,57 +108,30 @@ class FieldFileUploaderController extends UploaderController
 
 	public function canUpload()
 	{
-		$cid = $this->getOptions()['cid'] ?? null;
-
-		return $cid && FileInputUtility::instance()->isCidRegistered($cid);
+		return (bool)$this->loadSession();
 	}
 
-	protected function isFileInputUtilityAccessible(): bool
+	protected function registerFileInSession(int $fileId, string $tempFileToken): void
 	{
-		return FileInputUtility::instance()->isAccessible();
-	}
+		$sessionId = $this->getSignedOption('sessionId');
+		$connection = Application::getConnection();
+		$connection->startTransaction();
 
-	protected function getControlId(): string
-	{
-		$options = $this->getOptions();
-		$userField = [
-			'ID' => $options['id'] ?? 0,
-			'ENTITY_ID' => $options['entityId'] ?? '',
-			'FIELD_NAME' => $options['fieldName'] ?? '',
-			'MULTIPLE' => $options['multiple'] ? 'Y' : 'N',
-		];
-
-		return FileInputUtility::instance()->getUserFieldCid($userField);
-	}
-
-	protected function registerControl(string $controlId): string
-	{
-		return FileInputUtility::instance()->registerControl($this->getOption('cid', ''), $controlId);
-	}
-
-	protected function registerFile(string $cid, int $fileId)
-	{
-		FileInputUtility::instance()->registerFile($cid, $fileId);
-	}
-
-	protected function registerUploaderFile(int $fileId, string $tempFileToken): void
-	{
-		if ($this->isFileInputUtilityAccessible())
+		if ($sessionId)
 		{
-			$controlId = $this->getControlId();
-			$cid = $this->registerControl($controlId);
-
-			if ($fileId > 0)
-			{
-				$this->registerFile($cid, $fileId);
-				$this->registerTemporaryFileData($fileId, $controlId, $cid, $tempFileToken);
-			}
+			$tempSession = \Bitrix\Main\UserField\File\UploadSession::getBySessionIdBypassingCache($sessionId);
+			$tempSession->registerFile(
+				$fileId,
+				[
+					'FIELD_ID' => $this->getSignedOption('id', 0),
+					'ENTITY_VALUE_ID' =>$this->getSignedOption('entityValueId', 0),
+					'TMP_FILE_TOKEN' => $tempFileToken,
+				]
+			);
+			$tempSession->save();
 		}
-	}
 
-	protected function checkFiles(array $fileIds): array
-	{
-		return FileInputUtility::instance()->checkFiles($this->getControlId(), $fileIds);
+		$connection->commitTransaction();
 	}
 
 	public function canView(): bool
@@ -206,33 +141,31 @@ class FieldFileUploaderController extends UploaderController
 
 	public function verifyFileOwner(FileOwnershipCollection $files): void
 	{
-		$options = $this->getOptions();
+		$fileId = $this->getSignedOption('fileId');
+		$sessionId =  $this->getSignedOption('sessionId');
 
-		if ($options['signedFileId']) // view mode
+		if ($fileId) // view mode
 		{
 			foreach ($files as $file)
 			{
-				$fileSigner = (new UploaderFileSigner($options['entityId'], $options['fieldName']));
-
-				if ($fileSigner->verify($options['signedFileId'], $file->getId()))
+				if ($file->getId() === $fileId)
 				{
 					$file->markAsOwn();
 				}
 			}
 		}
 
-		if ($options['cid']) // edit mode
+		if ($sessionId) // edit mode
 		{
-			foreach ($files as $file)
+			$tempSession = $this->loadSession();
+			if (!$tempSession)
 			{
-				$fileIds[] = $file->getId();
+				return;
 			}
 
-			$fileIds = $this->checkFiles($fileIds);
-
 			foreach ($files as $file)
 			{
-				if (in_array($file->getId(), $fileIds, true))
+				if ($tempSession->hasRegisteredFile($file->getId()))
 				{
 					$file->markAsOwn();
 				}
@@ -254,10 +187,6 @@ class FieldFileUploaderController extends UploaderController
 			return;
 		}
 
-		$session = Application::getInstance()->getSession();
-		$session->save();
-		$session->start();
-
 		$fileId = $fileInfo->getFileId();
 		$downloadUrl = $fileInfo->getPreviewUrl();
 		if (is_string($downloadUrl) && $downloadUrl !== '')
@@ -269,12 +198,36 @@ class FieldFileUploaderController extends UploaderController
 		{
 			$fileInfo->setPreviewUrl('', 0, 0);
 		}
-		$this->registerUploaderFile($fileId, $uploadResult->getToken());
+		$this->registerFileInSession($fileId, $uploadResult->getToken());
 		$fileInfo->setCustomData(['realFileId' => $fileId]);
 	}
 
-	private function registerTemporaryFileData(int $fileId, string $controlId, string $cid, string $tempFileToken): void
+	private function loadSession(): ?UploadSession
 	{
-		UploadedFilesRegistry::getInstance()->registerFile($fileId, $controlId, $cid, $tempFileToken);
+		$sessionId = $this->getSignedOption('sessionId');
+		if (!$sessionId)
+		{
+			return null;
+		}
+
+		$fileUploaderSession = \Bitrix\Main\UserField\File\UploadSession::loadBySessionId($sessionId);
+		if (!$fileUploaderSession)
+		{
+			$fileUploaderSession = \Bitrix\Main\UserField\File\UploadSession::getInstance($sessionId);
+		}
+
+		return $fileUploaderSession;
+	}
+
+	private function getSignedOption(string $option, $defaultValue = null)
+	{
+		return array_key_exists($option, $this->signedOptions) ? $this->signedOptions[$option] : $defaultValue;
+	}
+
+	private function isAuthorized(): bool
+	{
+		$currentUser = (isset($USER) && $USER instanceof CUser) ? $USER : new CUser();
+
+		return $currentUser->IsAuthorized();
 	}
 }

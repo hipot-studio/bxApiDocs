@@ -22,7 +22,9 @@ class EventDictionary
 
 		EVENT_AFTER_COMMENT_ADD 		= 'onAfterCommentAdd',
 		EVENT_AFTER_COMMENT_DELETE 		= 'onAfterCommentDelete',
+		EVENT_AFTER_USER_MENTIONED 		= 'onAfterUserMentioned',
 		EVENT_AFTER_COMMENTS_READ_ALL 	= 'onAfterCommentsReadAll',
+		EVENT_AFTER_COMMENTS_READ 		= 'onAfterCommentsRead',
 		EVENT_AFTER_PROJECT_READ_ALL 	= 'onAfterProjectReadAll',
 		EVENT_AFTER_SCRUM_READ_ALL 		= 'onAfterScrumReadAll',
 

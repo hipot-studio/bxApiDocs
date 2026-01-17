@@ -9,6 +9,7 @@ use Bitrix\Booking\Command\Booking\BookingResult;
 use Bitrix\Booking\Command\Booking\CreateBookingFromWaitListItemCommand;
 use Bitrix\Booking\Command\Booking\RemoveBookingCommand;
 use Bitrix\Booking\Command\Booking\UpdateBookingCommand;
+use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Provider\BookingProvider;
@@ -150,6 +151,7 @@ class Booking extends Controller
 					userId: $this->getUserId(),
 				)
 		;
+
 		$command = new AddBookingCommand(
 			createdBy: $this->getUserId(),
 			booking: $booking,
@@ -218,6 +220,7 @@ class Booking extends Controller
 		$command = new UpdateBookingCommand(
 			updatedBy: $this->getUserId(),
 			booking: $booking,
+			allowOverbooking: true,
 		);
 
 		$result = $command->run();
@@ -262,8 +265,6 @@ class Booking extends Controller
 			return $this->responseWithErrors($validationResult->getErrors());
 		}
 
-		$resources = $this->resourceFactory->createCollectionFromResourceIds($fields['RESOURCE_IDS'])->toArray();
-
 		$converter = new Converter(
 			Converter::KEYS
 			| Converter::LC_FIRST
@@ -274,10 +275,11 @@ class Booking extends Controller
 
 		$command = new CreateBookingFromWaitListItemCommand(
 			waitListItemId: $waitListId,
-			resources: $resources,
+			resources: $this->resourceFactory->createCollectionFromResourceIds($fields['RESOURCE_IDS'])->toArray(),
 			datePeriod: $datePeriod,
 			createdBy: $this->getUserId(),
 			allowOverbooking: true,
+			source: BookingSource::Rest,
 		);
 
 		$result = $command->run();

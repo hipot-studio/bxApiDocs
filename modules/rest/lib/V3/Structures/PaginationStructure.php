@@ -15,7 +15,7 @@ final class PaginationStructure extends Structure
 
 	protected int $offset = 0;
 
-	public static function create(mixed $value, string $dtoClass = null, Request $request = null): self
+	public static function create(mixed $value, ?string $dtoClass = null, ?Request $request = null): self
 	{
 		$structure = new self();
 

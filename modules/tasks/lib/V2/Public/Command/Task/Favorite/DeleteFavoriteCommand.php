@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Command\Task\Favorite;
 
+use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Exception;
 
 class DeleteFavoriteCommand extends AbstractCommand
 {
@@ -23,16 +25,19 @@ class DeleteFavoriteCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$favoriteTaskRepository = Container::getInstance()->getFavoriteTaskRepository();
-		$favoriteService = Container::getInstance()->getFavoriteService();
+		$result = new Result();
 
-		$handler = new DeleteFavoriteHandler(
-			$favoriteTaskRepository,
-			$favoriteService
-		);
+		$handler = Container::getInstance()->get(DeleteFavoriteHandler::class);
 
-		$handler($this);
+		try
+		{
+			$handler($this);
 
-		return new Result();
+			return $result;
+		}
+		catch (Exception $e)
+		{
+			return $result->addError(Error::createFromThrowable($e));
+		}
 	}
 }

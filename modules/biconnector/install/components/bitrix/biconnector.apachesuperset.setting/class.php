@@ -16,6 +16,7 @@ use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\KeyInfoField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DeleteSupersetField;
+use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DashboardLanguageField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\SettingsComponentController;
@@ -23,6 +24,7 @@ use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\PeriodFilterField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\ClearCacheField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\SettingsPanel;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
@@ -118,11 +120,17 @@ class ApacheSupersetSettingComponent
 			->setAjaxData($ajaxData)
 		;
 
+		if (BIConnector\Manager::isAdmin())
+		{
+			$settingsPanel->addSection($this->getDashboardLanguageSection());
+		}
+
 		if (SupersetInitializer::isSupersetExist())
 		{
 			$settingsPanel->addSection($this->getClearCacheSection());
 
 			$user = CurrentUser::get();
+
 			if (KeyManager::canManageKey($user))
 			{
 				$settingsPanel->addSection($this->getSupersetKeySection());
@@ -217,9 +225,36 @@ class ApacheSupersetSettingComponent
 		;
 	}
 
+	private function getDashboardLanguageSection(): EntityEditorSection
+	{
+		return
+			(new EntityEditorSection(
+				name: 'DASHBOARD_LANGUAGE_SECTION',
+				title: Loc::getMessage('BICONNECTOR_SUPERSET_SETTINGS_DASHBOARD_LANGUAGE'),
+		))
+			->setIconClass('--o-earth')
+			->addField(new DashboardLanguageField(DashboardLanguageField::FIELD_NAME))
+		;
+	}
+
 	private function getTitle(): string
 	{
 		return Loc::getMessage('BICONNECTOR_SUPERSET_SETTINGS_TITLE');
+	}
+
+	public function getDashboardLanguageAction(): ?array
+	{
+		$checkingResult = $this->checkAccess();
+		if (!$checkingResult->isSuccess())
+		{
+			$this->errorCollection->add($checkingResult->getErrors());
+
+			return null;
+		}
+
+		return [
+			'currentLanguage' => CultureFormatter::getLanguage(),
+		];
 	}
 
 	public function saveAction(array $data): ?array
@@ -234,7 +269,6 @@ class ApacheSupersetSettingComponent
 
 		$startTime = null;
 		$endTime = null;
-		$includeLastFilterDate = null;
 
 		if ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
@@ -250,8 +284,6 @@ class ApacheSupersetSettingComponent
 
 				return null;
 			}
-
-			$includeLastFilterDate = $data['INCLUDE_LAST_FILTER_DATE'] === 'Y' ? 'Y' : 'N';
 		}
 
 		$period = EmbeddedFilter\DateTime::getDefaultPeriod();
@@ -280,20 +312,11 @@ class ApacheSupersetSettingComponent
 			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_END_OPTION_NAME]);
 		}
 
-		if ($includeLastFilterDate !== null)
-		{
-			Option::set('biconnector', EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME, $includeLastFilterDate);
-		}
-		else
-		{
-			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
-		}
-
 		return [
 			'FILTER_PERIOD' => $period,
 			'DATE_FILTER_START' => $startTime,
 			'DATE_FILTER_END' => $endTime,
-			'INCLUDE_LAST_FILTER_DATE' => $includeLastFilterDate,
+			'INCLUDE_LAST_FILTER_DATE' => 'Y',
 		];
 	}
 

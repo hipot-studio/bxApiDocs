@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\Tasks\Internals\Counter;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Tasks\Integration\Recyclebin\Manager;
 
@@ -34,6 +36,8 @@ class EffectiveTable extends DataManager
 
 	public static function getMap()
 	{
+		$helper = Application::getConnection()->getSqlHelper();
+
 		return [
 			'ID' => [
 				'data_type' => 'integer',
@@ -94,14 +98,14 @@ class EffectiveTable extends DataManager
 				'reference' => ['=this.GROUP_ID' => 'ref.ID'],
 			],
 			'TASK' => [
-				'data_type' => 'Bitrix\Tasks\TaskTable',
+				'data_type' => \Bitrix\Tasks\Integration\Report\Internals\TaskTable::class,
 				'reference' => ['=this.TASK_ID' => 'ref.ID'],
 			],
 			'RECYCLE' => [
 				'data_type' => 'Bitrix\Recyclebin\Internals\Models\RecyclebinTable',
 				'reference' => [
 					'=ref.ENTITY_TYPE' => ['?', Manager::TASKS_RECYCLEBIN_ENTITY],
-					'=this.TASK_ID' => 'ref.ENTITY_ID',
+					'=ref.ENTITY_ID' => new SqlExpression($helper->castToChar('?#'), 'TASK_ID'),
 				],
 			],
 		];

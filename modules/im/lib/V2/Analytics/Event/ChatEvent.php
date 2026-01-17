@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Chat\CopilotChat;
+use Bitrix\Im\V2\Chat\ExternalChat;
 use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Chat\GeneralChannel;
 use Bitrix\Im\V2\Chat\GeneralChat;
@@ -92,7 +93,15 @@ class ChatEvent extends Event
 
 	public function setChatType(): self
 	{
+		if ($this->chat instanceof ExternalChat)
+		{
+			$this->type = $this->chat->getExtendedType();
+
+			return $this;
+		}
+
 		$entityType = $this->chat->getEntityType();
+
 		foreach (self::CHAT_TYPE_CONDITIONS as $typeName => $conditions)
 		{
 			if (array_key_exists('entity', $conditions) && $conditions['entity'] === $entityType)
@@ -128,6 +137,13 @@ class ChatEvent extends Event
 
 	protected function setChatP1(): self
 	{
+		if ($this->chat instanceof ExternalChat)
+		{
+			$this->p1 = 'chatType_' . $this->chat->getExtendedType();
+
+			return $this;
+		}
+
 		$entityType = $this->chat->getEntityType();
 
 		foreach (self::CHAT_P1_CONDITIONS as $typeName => $conditions)

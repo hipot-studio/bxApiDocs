@@ -40,6 +40,11 @@ class PermissionVariablesDictionary
 		];
 	}
 
+	public static function getVariableIds(): array
+	{
+		return array_column(self::getVariables(), 'id');
+	}
+
 	/**
 	 * returns variables for permissions with prepared options
 	 * @return list<array{id: self::VARIABLE_*, title:string|null, requires?: list<self::VARIABLE_*>, conflictsWith?: list<self::VARIABLE_*>}>

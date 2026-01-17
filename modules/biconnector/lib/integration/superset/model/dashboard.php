@@ -185,17 +185,7 @@ final class Dashboard
 
 	public function getNativeFilter(): string
 	{
-		$filters = [
-			new EmbeddedFilter\DateTime($this),
-		];
-
-		$formatted = [];
-		foreach ($filters as $filter)
-		{
-			$formatted[] = $filter->getFormatted();
-		}
-
-		return implode(',', $formatted);
+		return (new EmbeddedFilter\NativeFilterBuilder($this))->getFormattedFilter();
 	}
 
 	public function isSupersetDashboardDataLoaded(): bool

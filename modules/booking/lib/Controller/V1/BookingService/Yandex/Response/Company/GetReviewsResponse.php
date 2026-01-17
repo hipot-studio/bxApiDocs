@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1\BookingService\Yandex\Response\Company;
 
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Collection\ReviewCollection;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\ReviewCollection;
 
 class GetReviewsResponse implements \JsonSerializable
 {

@@ -10,6 +10,7 @@ class AuthorizeUserCommand extends Main\Command\AbstractCommand
 {
 	public function __construct(
 		public readonly int $userId,
+		public readonly ?string $applicationType,
 		public readonly ?int $applicationId,
 		public readonly ?Main\Type\DateTime $timePeriod = null,
 	)
@@ -35,6 +36,7 @@ class AuthorizeUserCommand extends Main\Command\AbstractCommand
 	{
 		return [
 			'userId' => $this->userId,
+			'applicationType' => $this->applicationType,
 			'applicationId' => $this->applicationId,
 		];
 	}

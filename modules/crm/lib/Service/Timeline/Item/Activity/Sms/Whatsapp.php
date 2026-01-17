@@ -5,17 +5,13 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity\Sms;
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderContext;
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderManager;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar;
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Layout\Action;
-use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Body\Logo;
 use Bitrix\Crm\Service\Timeline\Layout\Common;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Main\Localization\Loc;
-
-// IMPORTANT: DO NOT REMOVE THIS FILE - loading this so as not to copy the same phrases
-Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/crm/lib/Service/Timeline/Item/Activity/Sms/Sms.php');
 
 final class Whatsapp extends Sms
 {
@@ -26,7 +22,7 @@ final class Whatsapp extends Sms
 
 	public function getTitle(): ?string
 	{
-		return Loc::getMessage('CRM_TIMELINE_TITLE_ACTIVITY_WHATSAPP_TITLE');
+		return Loc::getMessage('CRM_TIMELINE_TITLE_ACTIVITY_WHATSAPP_TITLE_MSGVER_1');
 	}
 
 	public function getIconCode(): ?string
@@ -39,30 +35,26 @@ final class Whatsapp extends Sms
 		return Common\Logo::getInstance(Common\Logo::CHANNEL_WHATSAPP)->createLogo();
 	}
 
-	protected function getResendingAction(): ?Action
+	protected function isResendingAvailable(): bool
 	{
-		$menuBarItem = new TimelineMenuBar\Item\WhatsApp($this->getMenuBarContext());
-		if (
-			!$menuBarItem->isAvailable()
-			|| $this->isSentByRobot()
-		)
+		if (Feature::enabled(Feature\MessageSenderEditor::class))
 		{
-			return null;
+			return (new TimelineMenuBar\Item\Message($this->getMenuBarContext()))->isAvailable();
 		}
 
-		return (new JsEvent('Activity:Whatsapp:Resend'))
-			->addActionParamArray('params', $this->getResendData())
-		;
+		return (new TimelineMenuBar\Item\WhatsApp($this->getMenuBarContext()))->isAvailable();
 	}
 
-	private function getResendData(): array
+	protected function getResendData(): array
 	{
+		$data = parent::getResendData();
+		unset($data['text']);
+
 		$smsInfo = $this->getAssociatedEntityModel()?->get('SMS_INFO');
 
 		return [
+			...$data,
 			'template' => $this->getUsedTemplate($smsInfo['senderId'], (int)($smsInfo['templateId'])),
-			'from' => $smsInfo['from'] ?? '',
-			'client' => $this->getClient(),
 		];
 	}
 

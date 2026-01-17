@@ -26,16 +26,16 @@ class CSocServVKontakte extends CSocServAuth
 
 		$phrase = ($arParams["FOR_INTRANET"]) ? GetMessage("socserv_vk_note_intranet") : GetMessage("socserv_vk_note");
 		if ($arParams["FOR_INTRANET"])
-			return array("ON_CLICK" => 'onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 660, 425)"');
+			return array("ON_CLICK" => 'onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 680, 800)"');
 
-		return '<a href="javascript:void(0)" onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 660, 425)" class="bx-ss-button vkontakte-button"></a><span class="bx-spacer"></span><span>' . $phrase . '</span>';
+		return '<a href="javascript:void(0)" onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 680, 800)" class="bx-ss-button vkontakte-button"></a><span class="bx-spacer"></span><span>' . $phrase . '</span>';
 	}
 
 	public function GetOnClickJs($arParams)
 	{
 		$url = $this->getUrl($arParams);
 
-		return "BX.util.popup('" . CUtil::JSEscape($url) . "', 660, 425)";
+		return "BX.util.popup('" . CUtil::JSEscape($url) . "', 680, 800)";
 	}
 
 	public function getUrl($arParams)

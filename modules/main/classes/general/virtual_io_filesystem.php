@@ -1,9 +1,9 @@
-<?
+<?php
+
 /**
  * @deprecated Use \Bitrix\Main\IO
  */
-class CBXVirtualIoFileSystem
-	implements IBXVirtualIO, IBXGetErrors
+class CBXVirtualIoFileSystem implements IBXVirtualIO, IBXGetErrors
 {
 	const directionEncode = 1;
 	const directionDecode = 2;
@@ -498,8 +498,7 @@ class CBXVirtualIoFileSystem
 /**
  * @deprecated Use \Bitrix\Main\IO
  */
-class CBXVirtualFileFileSystem
-	extends CBXVirtualFile
+class CBXVirtualFileFileSystem extends CBXVirtualFile
 {
 	protected $pathEncoded = null;
 	private $arErrors = array();

@@ -5,7 +5,7 @@ namespace Bitrix\Rest\V3\Structures\Filtering;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\V3\Attributes\Filterable;
-use Bitrix\Rest\V3\Dto\PropertyHelper;
+use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Exceptions\InvalidFilterException;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exceptions\UnknownFilterOperatorException;
@@ -34,42 +34,42 @@ class FilterValidator
 	 * @throws DtoFieldRequiredAttributeException
 	 * @throws UnknownDtoPropertyException
 	 * @throws \ReflectionException
-	 * @throws InvalidFilterException
+	 * @throws InvalidFilterException|InvalidRequestFieldTypeException
 	 */
-	public static function validateOperands(Condition $condition, \ReflectionClass $dtoReflection): void
+	public static function validateOperands(Condition $condition, Dto $dto): void
 	{
 		if (!$condition->getLeftOperand() instanceof Expression)
 		{
-			if (!PropertyHelper::isValidProperty($dtoReflection, $condition->getLeftOperand()))
+			if (!isset($dto->getFields()[$condition->getLeftOperand()]))
 			{
-				throw new UnknownDtoPropertyException($dtoReflection->getName(), $condition->getLeftOperand());
+				throw new UnknownDtoPropertyException($dto->getShortName(), $condition->getLeftOperand());
 			}
-			if (!PropertyHelper::hasAttribute($dtoReflection, $condition->getLeftOperand(), Filterable::class))
+			if (!$dto->getFields()[$condition->getLeftOperand()]->isFilterable())
 			{
-				throw new DtoFieldRequiredAttributeException($dtoReflection->getName(), $condition->getLeftOperand(), Filterable::class);
+				throw new DtoFieldRequiredAttributeException($dto->getShortName(), $condition->getLeftOperand(), Filterable::class);
 			}
 			if (!$condition->getRightOperand() instanceof Expression)
 			{
-				self::validateSimpleCondition($condition, $dtoReflection);
+				self::validateSimpleCondition($condition, $dto);
 			}
 
-			$property = PropertyHelper::getProperty($dtoReflection, $condition->getLeftOperand());
+			$field = $dto->getFields()[$condition->getLeftOperand()];
 
 			if (is_array($condition->getRightOperand()))
 			{
 				foreach ($condition->getRightOperand() as $rightOperand)
 				{
-					if (!FieldsValidator::validateReflectionPropertyAndValue($property, $rightOperand))
+					if (!FieldsValidator::validateTypeAndValue($field->getPropertyType(), $rightOperand))
 					{
-						throw new InvalidRequestFieldTypeException($property->getName(), $property->getType() ? $property->getType()->getName() : 'unknown');
+						throw new InvalidRequestFieldTypeException($field->getPropertyName(), $field->getPropertyType());
 					}
 				}
 			}
 			else
 			{
-				if (!FieldsValidator::validateReflectionPropertyAndValue($property, $condition->getRightOperand()))
+				if (!FieldsValidator::validateTypeAndValue($field->getPropertyType(), $condition->getRightOperand()))
 				{
-					throw new InvalidRequestFieldTypeException($property->getName(), $property->getType() ? $property->getType()->getName() : 'unknown');
+					throw new InvalidRequestFieldTypeException($field->getPropertyName(), $field->getPropertyType());
 				}
 			}
 		}
@@ -78,13 +78,13 @@ class FilterValidator
 		{
 			if ($operand instanceof Expression)
 			{
-				if (!PropertyHelper::isValidProperty($dtoReflection, $operand->getProperty()))
+				if (!isset($dto->getFields()[$operand->getProperty()]))
 				{
-					throw new UnknownDtoPropertyException($dtoReflection->getName(), $operand->getProperty());
+					throw new UnknownDtoPropertyException($dto->getShortName(), $operand->getProperty());
 				}
-				if (!PropertyHelper::hasAttribute($dtoReflection, $operand->getProperty(), Filterable::class))
+				if (!$dto->getFields()[$operand->getProperty()]->isFilterable())
 				{
-					throw new DtoFieldRequiredAttributeException($dtoReflection->getName(), $operand->getProperty(), Filterable::class);
+					throw new DtoFieldRequiredAttributeException($dto->getShortName(), $operand->getProperty(), Filterable::class);
 				}
 			}
 		}
@@ -93,15 +93,16 @@ class FilterValidator
 	/**
 	 * @throws InvalidFilterException
 	 */
-	private static function validateSimpleCondition(Condition $condition, \ReflectionClass $dtoReflection): void
+	private static function validateSimpleCondition(Condition $condition, Dto $dto): void
 	{
 		switch ($condition->getOperator())
 		{
 			case Operator::In:
 				self::validateInCondition($condition->getOperator(), $condition->getRightOperand());
+
 				break;
 			case Operator::Between:
-				self::validateBetweenCondition($condition, $dtoReflection);
+				self::validateBetweenCondition($condition, $dto);
 				break;
 			case Operator::Equal:
 			case Operator::NotEqual:
@@ -114,6 +115,7 @@ class FilterValidator
 					$operatorValue = $condition->getOperator()->value;
 					throw new InvalidFilterException("Operator \"$operatorValue\" cannot be used with array values.");
 				}
+
 				break;
 		}
 	}
@@ -136,7 +138,7 @@ class FilterValidator
 	/**
 	 * @throws InvalidFilterException
 	 */
-	private static function validateBetweenCondition(Condition $condition, \ReflectionClass $dtoReflection): void
+	private static function validateBetweenCondition(Condition $condition, Dto $dto): void
 	{
 		$operator = $condition->getOperator();
 		$value = $condition->getRightOperand();
@@ -146,7 +148,7 @@ class FilterValidator
 			throw new InvalidFilterException("Operator \"$operator->value\" requires an array only with 2 items.");
 		}
 
-		$operandType = PropertyHelper::getProperty($dtoReflection, $condition->getLeftOperand())->getType()->getName();
+		$operandType = $dto->getFields()[$condition->getLeftOperand()]->getPropertyType();
 		$field = $condition->getLeftOperand();
 
 		if (!in_array($operandType, [DateTime::class, Date::class, 'int', 'float'], true))

@@ -22,8 +22,8 @@ class RestException extends \Exception implements RestExceptionInterface
 
 	public function __construct($message, $code = "", $status = 0, \Exception $previous = null)
 	{
-		$this->status = $status;
-		$this->error_code = $code;
+		$this->status = (string)$status;
+		$this->error_code = (string)$code;
 		$message = strval($message);
 
 		parent::__construct($message, intval($code), $previous);

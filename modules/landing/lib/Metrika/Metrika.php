@@ -16,15 +16,18 @@ class Metrika
 
 	public function __construct(Categories $category, Events $event, ?Tools $tool = null)
 	{
-		$toolValue = isset($tool) ? $tool->value : Tools::landing->value;
+		$toolValue = isset($tool) ? $tool->value : Tools::Site->value;
+		$categoryValue = $category->value;
+		$statusValue = Statuses::Success->value;
+		$eventValue = $event->value;
 
-		$this->event = new AnalyticsEvent($event->value, $toolValue, $category->value);
-		$this->event->setStatus(Statuses::Success->value);
+		$this->event = new AnalyticsEvent($eventValue, $toolValue, $categoryValue);
+		$this->event->setStatus($statusValue);
 
 		$this->data['tool'] = $toolValue;
-		$this->data['status'] = Statuses::Success->value;
-		$this->data['category'] = $category->value;
-		$this->data['event'] = $event->value;
+		$this->data['category'] = $categoryValue;
+		$this->data['event'] = $eventValue;
+		$this->data['status'] = $statusValue;
 	}
 
 	public function setType(?Types $type): self

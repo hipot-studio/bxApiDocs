@@ -8,23 +8,10 @@ use Bitrix\Main\EventResult;
 
 class UserUpdateEventListener extends AbstractEventListener
 {
-	public function onAfterUserFired(array $data): EventResult
+	public function onAfterUserFired(int $userId): EventResult
 	{
-		$eventResult = new EventResult(EventResult::SUCCESS);
+		$this->queueService->deleteByUserIds($userId);
 
-		$userId = (int)($data['ID'] ?? 0);
-		if ($userId <= 0)
-		{
-			return $eventResult;
-		}
-
-		$isFired = ($data['ACTIVE'] ?? '') === 'N';
-
-		if ($isFired)
-		{
-			$this->queueService->deleteByUserIds($userId);
-		}
-
-		return $eventResult;
+		return new EventResult(EventResult::SUCCESS);
 	}
 }

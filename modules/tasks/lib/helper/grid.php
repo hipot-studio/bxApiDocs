@@ -22,7 +22,7 @@ class Grid extends Common
 		return $columns;
 	}
 
-	public function getOptions(): ?MainGrid\Options
+	public function getOptions(): MainGrid\Options
 	{
 		static $instance = null;
 
@@ -75,6 +75,10 @@ class Grid extends Common
 
 			'PARENT_ID',
 			'PARENT_TITLE',
+
+			'LINK_TYPE',
+			'START_DATE_PLAN',
+			'END_DATE_PLAN',
 		];
 
 		if (FlowFeature::isOn())

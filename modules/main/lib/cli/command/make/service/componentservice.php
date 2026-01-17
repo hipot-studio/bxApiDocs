@@ -4,8 +4,8 @@ namespace Bitrix\Main\Cli\Command\Make\Service;
 
 use Bitrix\Main\Cli\Command\Make\Service\Component\GenerateDto;
 use Bitrix\Main\Cli\Command\Make\Templates\Component\ClassTemplate;
-use Bitrix\Main\Cli\Command\Make\Templates\Component\LangTemplate;
 use Bitrix\Main\Cli\Command\Make\Templates\Component\TemplateTemplate;
+use Bitrix\Main\Cli\Command\Make\Templates\LangTemplate;
 use Bitrix\Main\Cli\Helper\Renderer;
 use Bitrix\Main\Engine\Response\Converter;
 
@@ -101,10 +101,9 @@ final class ComponentService
 
 	protected function createLangTemplate(GenerateDto $dto): LangTemplate
 	{
-		return new LangTemplate(
-			componentTitlePhrase: $this->generateTitlePhrase($dto->name),
-			componentTitle: $this->generateTitle($dto->name),
-		);
+		return new LangTemplate([
+			$this->generateTitlePhrase($dto->name) => $this->generateTitle($dto->name),
+		]);
 	}
 
 	protected function generateTitlePhrase(string $name): string

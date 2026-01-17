@@ -2,6 +2,8 @@
 
 namespace Bitrix\Main;
 
+use Bitrix\Main\Type\DateTime;
+
 class ModuleManager
 {
 	protected static $installedModules = [];
@@ -120,6 +122,41 @@ class ModuleManager
 		}
 
 		return $version;
+	}
+
+	public static function getModificationDateTime(string $moduleName): ?DateTime
+	{
+		if (!static::isValidModule($moduleName))
+		{
+			return null;
+		}
+
+		if ($moduleName == 'main')
+		{
+			$versionFile = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/classes/general/version.php";
+		}
+		else
+		{
+			$modulePath = getLocalPath("modules/" . $moduleName . "/install/version.php");
+			if ($modulePath === false)
+			{
+				return null;
+			}
+			$versionFile = $_SERVER["DOCUMENT_ROOT"] . $modulePath;
+		}
+
+		if (!file_exists($versionFile))
+		{
+			return null;
+		}
+
+		$modificationTime = filemtime($versionFile);
+		if ($modificationTime === false)
+		{
+			return null;
+		}
+
+		return DateTime::createFromTimestamp($modificationTime);
 	}
 
 	public static function isModuleInstalled($moduleName)

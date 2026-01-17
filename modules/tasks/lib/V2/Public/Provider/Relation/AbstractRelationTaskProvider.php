@@ -9,7 +9,6 @@ use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
-use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\RelationTaskMapper;
@@ -30,19 +29,16 @@ abstract class AbstractRelationTaskProvider
 
 	abstract protected function getFilter(RelationTaskParams $relationTaskParams): array;
 
-	abstract protected function getRelationRights(array $taskIds, int $taskId, int $userId): array;
+	abstract protected function getRelationRights(array $taskIds, int $rootId, int $userId): array;
 
 	public function getTasks(RelationTaskParams $relationTaskParams): TaskCollection
 	{
-		if ($relationTaskParams->taskId <= 0)
+		if (!$this->checkRoot($relationTaskParams))
 		{
 			return new TaskCollection();
 		}
 
-		if (
-			$relationTaskParams->checkRootAccess
-			&& !$this->taskRightService->canView($relationTaskParams->userId, $relationTaskParams->taskId)
-		)
+		if (!$this->checkRootAccess($relationTaskParams))
 		{
 			return new TaskCollection();
 		}
@@ -110,15 +106,12 @@ abstract class AbstractRelationTaskProvider
 
 	public function getTaskIds(RelationTaskParams $relationTaskParams): array
 	{
-		if ($relationTaskParams->taskId <= 0)
+		if (!$this->checkRoot($relationTaskParams))
 		{
 			return [];
 		}
 
-		if (
-			$relationTaskParams->checkRootAccess
-			&& !$this->taskRightService->canView($relationTaskParams->userId, $relationTaskParams->taskId)
-		)
+		if (!$this->checkRootAccess($relationTaskParams))
 		{
 			return [];
 		}
@@ -146,6 +139,7 @@ abstract class AbstractRelationTaskProvider
 			'title',
 			'responsible',
 			'deadline',
+			'status',
 		];
 	}
 
@@ -156,6 +150,7 @@ abstract class AbstractRelationTaskProvider
 			'title' => 'TITLE',
 			'responsible' => 'RESPONSIBLE_ID',
 			'deadline' => 'DEADLINE',
+			'status' => 'STATUS',
 		];
 
 		$result = [];
@@ -194,7 +189,7 @@ abstract class AbstractRelationTaskProvider
 			(new TaskQuery($userId))
 				->setSelect($select)
 				->setWhere($filter)
-				->setOrder(['ID' => Order::Desc->value])
+				->setOrder(['TITLE' => Order::Asc->value])
 		;
 
 		if ($offset !== null)
@@ -227,5 +222,20 @@ abstract class AbstractRelationTaskProvider
 	protected function getIdsFilter(array $ids): array
 	{
 		return ['@ID' => $ids];
+	}
+
+	protected function checkRootAccess(RelationTaskParams $relationTaskParams): bool
+	{
+		if (!$relationTaskParams->checkRootAccess)
+		{
+			return true;
+		}
+
+		return $this->taskRightService->canView($relationTaskParams->userId, $relationTaskParams->taskId);
+	}
+
+	protected function checkRoot(RelationTaskParams $relationTaskParams): bool
+	{
+		return $relationTaskParams->taskId > 0;
 	}
 }

@@ -9,6 +9,7 @@ use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
+use Exception;
 
 class DetachFilesCommand extends AbstractCommand
 {
@@ -18,6 +19,7 @@ class DetachFilesCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $userId,
 		public readonly array $fileIds,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -26,9 +28,7 @@ class DetachFilesCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$attachmentService = Container::getInstance()->getAttachmentService();
-
-		$handler = new DetachFilesHandler($attachmentService);
+		$handler = Container::getInstance()->get(DetachFilesHandler::class);
 
 		try
 		{
@@ -36,7 +36,7 @@ class DetachFilesCommand extends AbstractCommand
 
 			return $result;
 		}
-		catch (\Exception $e)
+		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}

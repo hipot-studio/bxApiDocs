@@ -19,11 +19,13 @@ class Read implements AttributeAccessInterface
 
 	public function check(Entity\EntityInterface $entity, Context $context, array $parameters = []): bool
 	{
-		$accessController = $this->getAccessController(Type::Task, $context);
-		$adapter = $this->getAdapter($entity);
+		if (!$entity instanceof Entity\Result)
+		{
+			return false;
+		}
 
-		$model = $adapter->transform();
-
-		return $accessController->checkByItemId(ActionDictionary::ACTION_TASK_READ, $model?->getTaskId());
+		return
+			$this->getAccessController(Type::Result, $context)
+				->checkByItemId(ActionDictionary::ACTION_RESULT_READ, $entity->getId());
 	}
 }

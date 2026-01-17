@@ -27,7 +27,6 @@ final class Sender
 	private ItemIdentifier $owner;
 	private MessageDto $message;
 	private ?ItemIdentifier $toEntity = null;
-	private int $responsibleId;
 	private ?string $source = null;
 	private ?int $paymentId = null;
 	private ?int $shipmentId = null;
@@ -42,11 +41,12 @@ final class Sender
 	{
 		$this->owner = $owner;
 		$this->message = $message;
-		$this->responsibleId = Container::getInstance()->getContext()->getUserId();
 		$this->senderExtra = $senderExtra ?? new SenderExtra();
 	}
 
-	public function send(bool $checkUserPermissions = true): Result
+	public function send(
+		bool $checkUserPermissions = true
+	): Result
 	{
 		$ownerTypeId = $this->owner->getEntityTypeId();
 		$ownerId = $this->owner->getEntityId();
@@ -94,16 +94,6 @@ final class Sender
 		if (!$toCorrespondent)
 		{
 			$result->addError(new Error(Loc::getMessage('CRM_ACTIVITY_PROVIDER_SMS_WRONG_TO')));
-
-			return $result;
-		}
-
-		if (
-			$channel->getSender()::getSenderCode() === NotificationsManager::getSenderCode()
-			&& !$this->validateBitrix24Message($message)
-		)
-		{
-			$result->addError(new Error('Invalid message'));
 
 			return $result;
 		}
@@ -243,14 +233,10 @@ final class Sender
 		$bindings = $this->getBindings();
 
 		$additionalFields = [
-			'ACTIVITY_PROVIDER_TYPE_ID' => $this->getActivityProviderTypeId($message->senderId),
 			'ENTITY_TYPE' => \CCrmOwnerType::ResolveName($comEntityTypeId),
 			'ENTITY_TYPE_ID' => $comEntityTypeId,
 			'ENTITY_ID' => $comEntityId,
 			'BINDINGS' => $bindings,
-			'ACTIVITY_AUTHOR_ID' => $this->responsibleId,
-			'ACTIVITY_DESCRIPTION' => $message->body,
-			'MESSAGE_TO' => $message->to,
 			'ORIGINAL_TEMPLATE_ID' => $message->templateOriginalId,
 		];
 
@@ -270,7 +256,7 @@ final class Sender
 		if (
 			$this->paymentId
 			&& $this->source === mb_strtolower(\CCrmOwnerType::OrderName)
-			&& preg_match('/(?:https?):\/\//', $this->message->body)
+			&& preg_match('/https?:\/\//', $this->message->body)
 			&& Loader::includeModule('sale')
 		)
 		{
@@ -308,13 +294,6 @@ final class Sender
 		$additionalFields['ENTITIES'] = [
 			'DEAL' => $deal,
 		];
-	}
-
-	private function getActivityProviderTypeId(string $senderId): string
-	{
-		return SmsManager::isEdnaWhatsAppSendingEnabled($senderId)
-			? \Bitrix\Crm\Activity\Provider\WhatsApp::PROVIDER_TYPE_WHATSAPP
-			: \Bitrix\Crm\Activity\Provider\Sms::PROVIDER_TYPE_SMS;
 	}
 
 	public function setEntityIdentifier(ItemIdentifier $entity): self
@@ -355,40 +334,5 @@ final class Sender
 	private function getComEntityItemIdentifier(): ItemIdentifier
 	{
 		return ($this->toEntity ?: $this->owner);
-	}
-
-	private function validateBitrix24Message(MessageDto $message): bool
-	{
-		static $templateWhitelist = [
-			'CRM_DOCUMENT_SHARING',
-		];
-
-		if (!in_array(mb_strtoupper($message->template), $templateWhitelist, true))
-		{
-			return false;
-		}
-
-
-		/** @var TemplatePlaceholderDto $placeholder */
-		foreach ($message->placeholders as $placeholder)
-		{
-			if (mb_strtoupper($placeholder->name) !== 'DOCUMENT_URL')
-			{
-				return false;
-			}
-
-			$validator = new UrlValidator();
-			if (!$validator->validate($placeholder->value)->isSuccess())
-			{
-				return false;
-			}
-
-			$uri = new Uri($placeholder->value);
-			$hostUri = new Uri(UrlManager::getInstance()->getHostUrl());
-
-			return $uri->getHost() === $hostUri->getHost();
-		}
-
-		return true;
 	}
 }

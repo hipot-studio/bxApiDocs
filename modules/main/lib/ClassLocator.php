@@ -84,8 +84,6 @@ final class ClassLocator
 			}
 		}
 
-		$directories = array_unique($directories);
-
 		return array_unique($directories);
 	}
 

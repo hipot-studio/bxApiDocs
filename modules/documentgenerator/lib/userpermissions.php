@@ -1,8 +1,10 @@
-<?
+<?php
 
 namespace Bitrix\DocumentGenerator;
 
+use Bitrix\DocumentGenerator\Infrastructure\Agent\Access\DepartmentAccessCodesMigrateAgent;
 use Bitrix\DocumentGenerator\Integration\Bitrix24Manager;
+use Bitrix\DocumentGenerator\Integration\HumanResources;
 use Bitrix\DocumentGenerator\Model\RolePermissionTable;
 use Bitrix\DocumentGenerator\Model\TemplateTable;
 use Bitrix\DocumentGenerator\Model\TemplateUserTable;
@@ -13,6 +15,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
+use CIntranetUtils;
 
 class UserPermissions
 {
@@ -342,6 +345,11 @@ class UserPermissions
 		return $titles;
 	}
 
+	public static function getPermissionTitle(mixed $permission, ?string $entity = null): ?string
+	{
+		return self::getPermissionTitles($entity)[$permission] ?? null;
+	}
+
 	/**
 	 * @internal
 	 * @return array
@@ -423,22 +431,50 @@ class UserPermissions
 		);
 	}
 
-	/**
-	 * @return array
-	 */
 	protected function getUserColleagues(): array
 	{
-		if(!Loader::includeModule('intranet'))
+		if (DepartmentAccessCodesMigrateAgent::isDone())
+		{
+			$userNodes = HumanResources::getInstance()->getNodeService()->findAllByUserId($this->userId);
+			if ($userNodes === null)
+			{
+				return [];
+			}
+
+			$colleagues = [];
+
+			foreach ($userNodes as $userNode)
+			{
+				$employees = HumanResources::getInstance()
+					->getNodeMemberService()
+					->getAllEmployees($userNode->id, true);
+
+				if ($employees === null)
+				{
+					continue;
+				}
+
+				foreach ($employees as $employee)
+				{
+					$colleagues[] = $employee->entityId;
+				}
+			}
+
+			return array_unique($colleagues);
+		}
+
+		if (!Loader::includeModule('intranet'))
 		{
 			return [];
 		}
 
 		$result = [];
-		$colleagueList = \CIntranetUtils::getDepartmentColleagues($this->userId, true);
+		$colleagueList = CIntranetUtils::getDepartmentColleagues($this->userId, true);
 		while($colleague = $colleagueList->Fetch())
 		{
-			$result[] = $colleague['ID'];
+			$result[] = (int)$colleague['ID'];
 		}
-		return $result;
+
+		return array_unique($result);
 	}
 }

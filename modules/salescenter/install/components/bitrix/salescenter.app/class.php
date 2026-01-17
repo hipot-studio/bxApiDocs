@@ -14,6 +14,8 @@ use Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade;
 use Bitrix\Catalog\v2\IoC\ServiceContainer;
 use Bitrix\Catalog\VatTable;
 use Bitrix\Crm;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\MessageSenderEditor;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Currency\CurrencyManager;
 use Bitrix\Main;
@@ -446,7 +448,12 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$this->arResult['catalogIblockId'] = (int)Crm\Product\Catalog::getDefaultId();
 		$this->arResult['basePriceId'] = Catalog\GroupTable::getBasePriceTypeId();
 		$notificationCenterEnabled = $this->arResult['currentSenderCode'] === \Bitrix\Crm\Integration\NotificationsManager::getSenderCode();
-		$this->arResult['showCompilationModeSwitcher'] = !$notificationCenterEnabled && !$this->arResult['compilation'] ? 'Y' : 'N';
+		$this->arResult['showCompilationModeSwitcher'] =
+			Feature::enabled(MessageSenderEditor::class)
+			|| (!$notificationCenterEnabled && !$this->arResult['compilation'])
+				? 'Y'
+				: 'N'
+		;
 		$this->arResult['showProductDiscounts'] = \CUserOptions::GetOption('catalog.product-form', 'showDiscountBlock', 'Y');
 		$this->arResult['showProductTaxes'] = \CUserOptions::GetOption('catalog.product-form', 'showTaxBlock', 'Y');
 		$collapseOptions = $this->getCollapseOptions();
@@ -569,6 +576,12 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				$this->payment
 			);
 		}
+
+		$this->arResult['messageSenderData'] =
+			Feature::enabled(MessageSenderEditor::class)
+				? $this->getMessageSenderData()
+				: null
+		;
 
 		$this->arResult['isAutomationAvailable'] = Crm\Automation\Factory::isAutomationAvailable($ownerTypeId);
 		$this->arResult['entityStageList'] = $this->getEntityStageList($ownerId, $ownerTypeId);
@@ -2393,6 +2406,79 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		)
 			? $userOptions['pushed_to_use_bitrix24_notifications']
 			: 'N';
+	}
+
+	private function getMessageSenderData(): ?\Bitrix\Crm\MessageSender\UI\Editor
+	{
+		if (
+			$this->arResult['context'] !== SalesCenter\Component\ContextDictionary::DEAL
+			&& $this->arResult['context'] !== SalesCenter\Component\ContextDictionary::SMART_INVOICE
+			&& $this->arResult['context'] !== SalesCenter\Component\ContextDictionary::SMS
+		)
+		{
+			return null;
+		}
+
+		$isSmsContext = $this->arResult['context'] === SalesCenter\Component\ContextDictionary::SMS;
+		$context = new \Bitrix\Crm\MessageSender\UI\Editor\Context(
+			(int)($this->arParams['ownerTypeId'] ?? 0),
+			(int)($this->arParams['ownerId'] ?? 0),
+		);
+		$editor =
+			$isSmsContext
+				? new \Bitrix\Crm\MessageSender\UI\Editor(
+					new \Bitrix\Crm\MessageSender\UI\Editor\Scene\NullScene(),
+					$context
+				)
+				: \Bitrix\Crm\MessageSender\UI\Factory::getInstance()->createEditor(
+					new \Bitrix\Crm\MessageSender\UI\Editor\Scene\PaymentDetails(),
+					$context
+				)
+		;
+
+		$editor
+			->setRenderTo('#message-sender-container-' . $this->randString())
+			->setDynamicLoad(false)
+			->setMessageText($this->arResult['sendingMethodDesc']['text_modes']['payment'])
+			->setAnalytics(['c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_SALESCENTER_SLIDER])
+		;
+
+		if (!$isSmsContext)
+		{
+			$editor->setNotificationTemplate(
+				(new \Bitrix\Crm\MessageSender\UI\Editor\NotificationTemplate('ORDER_LINK'))
+					->setPlaceholder(
+						(new \Bitrix\Crm\MessageSender\UI\Editor\NotificationTemplate\Placeholder('URL'))
+							->setCaption(Loc::getMessage('SALESCENTER_APP_NOTIFICATION_CAPTION_URL'))
+					)
+					->setPlaceholder(
+						(new \Bitrix\Crm\MessageSender\UI\Editor\NotificationTemplate\Placeholder('NAME'))
+							->setCaption(Loc::getMessage('SALESCENTER_APP_NOTIFICATION_CAPTION_NAME'))
+					)
+			);
+		}
+
+		$editorLayout = $editor->getLayout();
+		$editorLayout
+			->setSendButtonShown(false)
+			->setCancelButtonShown(false)
+			->setMessagePreviewShown(false)
+		;
+		if ($isSmsContext)
+		{
+			$editorLayout
+				->setHeaderShown(false)
+				->setFooterShown(false)
+				->setContentProvidersShown(false)
+			;
+		}
+
+		if (!Container::getInstance()->getUserPermissions()->isCrmAdmin())
+		{
+			$editorLayout->setMessageTextReadOnly(true);
+		}
+
+		return $editor;
 	}
 
 	private function getFacebookSettingsPath(): ?string

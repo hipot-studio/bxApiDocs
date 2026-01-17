@@ -36,6 +36,7 @@ use Bitrix\Tasks\Internals\Task\Template\ReplicateParamsCorrector;
 use Bitrix\Tasks\Item;
 use Bitrix\Tasks\Util;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\V2\FormV2Feature;
 use Exception;
 
 final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
@@ -157,9 +158,13 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 		}
 
 		$manager = new \Bitrix\Tasks\Control\Template($this->userId);
-		$manager->withCheckFileRights();
 
 		$saveResult = new Item\Result();
+
+		if (FormV2Feature::isOn('template', (int)($data['GROUP_ID'] ?? 0)))
+		{
+			$data['PERMISSIONS'] = $templatePermissions;
+		}
 
 		try
 		{
@@ -203,7 +208,7 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 		}
 		// todo: also DATA and CAN keys here...
 
-		if ($templatePermissions !== null)
+		if ($templatePermissions !== null && !FormV2Feature::isOn('template', $template->getGroupId()))
 		{
 			$res = $this->saveTemplatePermissions($template, $templatePermissions);
 			if (!$res->isSuccess())
@@ -269,6 +274,11 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 				unset($data['SE_TEMPLATE_ACCESS']);
 			}
 
+			if (FormV2Feature::isOn('template', (int)($data['GROUP_ID'] ?? 0)))
+			{
+				$data['PERMISSIONS'] = $templatePermissions;
+			}
+
 			$manager = new \Bitrix\Tasks\Control\Template($this->userId);
 			$saveResult = new Item\Result();
 
@@ -310,6 +320,7 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 			if (
 				$saveResult->isSuccess()
 				&& $templatePermissions !== null
+				&& !FormV2Feature::isOn('template', $template->getGroupId())
 			)
 			{
 				$res = $this->saveTemplatePermissions($template, $templatePermissions);

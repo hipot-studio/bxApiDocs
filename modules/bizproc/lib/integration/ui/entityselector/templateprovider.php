@@ -78,22 +78,6 @@ class TemplateProvider extends BaseProvider
 
 	protected function addTemplatesTab(Dialog $dialog): void
 	{
-		$icon =
-			'data:image/svg+xml,%3Csvg width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22'
-			. ' xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cpath'
-			. ' d=%22M5.89991 7.87642C5.89991 6.8374 6.7422 5.99512 7.78121 5.99512H16.2483C17.2873 5.99512 18.1296'
-			. ' 6.8374 18.1296 7.87642V9.7578H19.6965C19.8641 9.7578 19.948 9.96044 19.8295 10.079L17.1106'
-			. ' 12.7978C17.0372 12.8713 16.9181 12.8713 16.8446 12.7978L14.1257 10.079C14.0072 9.96044 14.0912 9.7578'
-			. ' 14.2588 9.7578H15.8878V8.63549C15.8878 8.39305 15.6913 8.19651 15.4489 8.19651H8.58066C8.33822 8.19651'
-			. ' 8.14169 8.39305 8.14169 8.63549V9.51372L5.89991 9.26298V7.87642Z%22'
-			. ' fill=%22%23525C69%22/%3E%3Cpath d=%22M5.89991 14.2046V16.1233C5.89991 17.1623 6.7422 18.0046 7.78121'
-			. ' 18.0046H16.2483C17.2873 18.0046 18.1296 17.1623 18.1296 16.1233V14.6184L15.8878'
-			. ' 14.3677V15.3642C15.8878 15.6067 15.6913 15.8032 15.4489 15.8032H8.58066C8.33822 15.8032 8.14169 15.6067'
-			. ' 8.14169 15.3642V14.2046H9.7412C9.9088 14.2046 9.99274 14.002 9.87423 13.8835L7.15538 11.1646C7.08191'
-			. ' 11.0911 6.96279 11.0911 6.88932 11.1646L4.17047 13.8835C4.05195 14.002 4.13589 14.2046 4.3035'
-			. ' 14.2046H5.89991Z%22 fill=%22%23525C69%22/%3E%3C/svg%3E%0A'
-		;
-
 		$dialog->addTab(new Tab([
 			'id' => static::TAB_ID,
 			'title' => Loc::getMessage('BIZPROC_ENTITY_SELECTOR_TEMPLATES_TAB_TEMPLATES_TITLE'),
@@ -103,9 +87,9 @@ class TemplateProvider extends BaseProvider
 				'title' => Loc::getMessage('BIZPROC_ENTITY_SELECTOR_TEMPLATES_TAB_STUB_TITLE'),
 			],
 			'icon' => [
-				'default' => $icon, // /bitrix/js/ui/icon-set/actions/images/refresh-1.svg
-				'selected' => str_replace('525C69', 'fff', $icon),
-			], // todo
+				'default' => 'o-refresh',
+				'selected' => 'o-refresh',
+			],
 		]));
 	}
 

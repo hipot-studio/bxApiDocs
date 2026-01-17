@@ -505,6 +505,8 @@ class ProductSelector extends JsonController
 			return null;
 		}
 
+		unset($fields['PREVIEW_PICTURE'], $fields['DETAIL_PICTURE']);
+
 		$skuRepository = ServiceContainer::getSkuRepository($iblockId);
 		$type = $skuRepository ? ProductTable::TYPE_SKU : ProductTable::TYPE_PRODUCT;
 
@@ -656,6 +658,8 @@ class ProductSelector extends JsonController
 		{
 			return null;
 		}
+
+		unset($updateFields['PREVIEW_PICTURE'], $updateFields['DETAIL_PICTURE']);
 
 		$repositoryFacade = ServiceContainer::getRepositoryFacade();
 		if (!$repositoryFacade)

@@ -20,6 +20,7 @@ class DeleteRelatedTaskCommand extends AbstractCommand
 		public readonly int $relatedTaskId,
 		#[PositiveNumber]
 		public readonly int $userId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -28,10 +29,7 @@ class DeleteRelatedTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$service = Container::getInstance()->getRelatedTaskService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new DeleteRelatedTaskHandler($service, $consistencyResolver);
+		$handler = Container::getInstance()->get(DeleteRelatedTaskHandler::class);
 
 		try
 		{

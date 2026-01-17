@@ -21,6 +21,7 @@ use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Activity\Provider\Visit;
 use Bitrix\Crm\Activity\Provider\WhatsApp;
 use Bitrix\Crm\Activity\Provider\Zoom;
+use Bitrix\Crm\Activity\Provider\Telegram;
 use Bitrix\Crm\Activity\ProviderId;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item;
@@ -125,6 +126,11 @@ class ConfigurableActivity
 				return new Item\Activity\Sms\Sms($context, $model);
 			}
 
+			if ($providerId === Telegram::getId())
+			{
+				return new Item\Activity\Sms\Telegram($context, $model);
+			}
+
 			if ($providerId === WhatsApp::getId())
 			{
 				return new Item\Activity\Sms\Whatsapp($context, $model);
@@ -200,7 +206,7 @@ class ConfigurableActivity
 			{
 				return new Item\Activity\Bizproc\Task($context, $model);
 			}
-			
+
 			if ($providerId === RepeatSale::getId())
 			{
 				return new Item\Activity\RepeatSale($context, $model);

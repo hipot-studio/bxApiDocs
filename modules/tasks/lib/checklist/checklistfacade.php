@@ -80,6 +80,7 @@ abstract class CheckListFacade
 		'USER_TITLE',
 		'USER_LOGIN',
 		'USER_PERSONAL_PHOTO',
+		'USER_PERSONAL_GENDER',
 	];
 
 	public static $oldItemsToMerge = [];
@@ -1375,17 +1376,19 @@ abstract class CheckListFacade
 					'ID' => $userId,
 					'TYPE' => $processedItem['USER_TYPE'],
 					'NAME' => User::formatName($userFields),
+					'PERSONAL_PHOTO' => $processedItem['USER_PERSONAL_PHOTO'],
+					'PERSONAL_GENDER' => $processedItem['USER_PERSONAL_GENDER'],
 					'IMAGE' => Avatar::getSrc($processedItem['USER_PERSONAL_PHOTO']),
 					'IS_COLLABER' => $userId && \Bitrix\Tasks\Integration\Extranet\User::isCollaber($userId),
 				];
 
 				if (isset($items[$id]))
 				{
-					$items[$id]['MEMBERS'][$userId] = $member;
+					$items[$id]['MEMBERS'][] = $member;
 					return $items[$id];
 				}
 
-				$processedItem['MEMBERS'][$userId] = $member;
+				$processedItem['MEMBERS'][] = $member;
 			}
 
 			foreach (static::$memberFields as $field)

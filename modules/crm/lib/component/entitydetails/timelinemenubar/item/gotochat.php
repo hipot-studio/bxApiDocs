@@ -44,6 +44,21 @@ class GoToChat extends Item
 	{
 		return [
 			'region' => Application::getInstance()->getLicense()->getRegion() ?? $this->context->getRegion(),
+			'isBox' => \Bitrix\Crm\Settings\Crm::isBox(),
+			'tours' => $this->getTours(),
+		];
+	}
+
+	private function getTours(): array
+	{
+		// no tours during creation
+		if ($this->getEntityId() <= 0)
+		{
+			return [];
+		}
+
+		return [
+			\Bitrix\Crm\Tour\EntityDetailsMenubar\GoToChat\Whatsapp::getInstance()->build(),
 		];
 	}
 }

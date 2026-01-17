@@ -24,12 +24,12 @@ class DeleteTaskStageRelationCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$taskStageService = Container::getInstance()->getTaskStageService();
+		$result = new Result();
 
-		$handler = new DeleteTaskStageRelationHandler($taskStageService);
+		$handler = Container::getInstance()->get(DeleteTaskStageRelationHandler::class);
 
 		$handler($this);
 
-		return new Result();
+		return $result;
 	}
 }

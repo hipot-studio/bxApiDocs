@@ -66,11 +66,6 @@ class CrmDealDataLoader implements DataLoaderInterface
 			$externalDataItem->setData([
 				'currencyId' => $currencyId,
 				'opportunity' => $opportunity,
-				'formattedOpportunity' =>
-					(is_null($currencyId) || is_null($opportunity))
-						? null :
-						\CCrmCurrency::MoneyToString($opportunity, $currencyId)
-				,
 				'createdTimestamp' => $deal->getCreatedTime()?->getTimestamp(),
 			]);
 		}

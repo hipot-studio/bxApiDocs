@@ -65,30 +65,37 @@ class PushSender
 
 			foreach ($groupIds as $groupId)
 			{
+				$groupId = (int)($groupId ?? 0);
+
 				$pushData[$groupId][Role::ALL][CounterDictionary::COUNTER_TOTAL] = $counter->get(CounterDictionary::COUNTER_MEMBER_TOTAL, $groupId);
 				$pushData[$groupId][Role::ALL][CounterDictionary::COUNTER_EXPIRED] = $counter->get(CounterDictionary::COUNTER_EXPIRED, $groupId);
 				$pushData[$groupId][Role::ALL][CounterDictionary::COUNTER_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_NEW_COMMENTS, $groupId);
 				$pushData[$groupId][Role::ALL][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_MUTED_NEW_COMMENTS, $groupId);
+				$pushData[$groupId][Role::ALL][CounterDictionary::COUNTER_MENTIONED] = $counter->get(CounterDictionary::COUNTER_MENTIONED, $groupId);
 
 				$pushData[$groupId][Role::RESPONSIBLE][CounterDictionary::COUNTER_TOTAL] = $counter->get(CounterDictionary::COUNTER_MY, $groupId);
 				$pushData[$groupId][Role::RESPONSIBLE][CounterDictionary::COUNTER_EXPIRED] = $counter->get(CounterDictionary::COUNTER_MY_EXPIRED, $groupId);
 				$pushData[$groupId][Role::RESPONSIBLE][CounterDictionary::COUNTER_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_MY_NEW_COMMENTS, $groupId);
 				$pushData[$groupId][Role::RESPONSIBLE][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_MY_MUTED_NEW_COMMENTS, $groupId);
+				$pushData[$groupId][Role::RESPONSIBLE][CounterDictionary::COUNTER_MENTIONED] = $counter->get(CounterDictionary::COUNTER_MENTIONED, $groupId);
 
 				$pushData[$groupId][Role::ORIGINATOR][CounterDictionary::COUNTER_TOTAL] = $counter->get(CounterDictionary::COUNTER_ORIGINATOR, $groupId);
 				$pushData[$groupId][Role::ORIGINATOR][CounterDictionary::COUNTER_EXPIRED] = $counter->get(CounterDictionary::COUNTER_ORIGINATOR_EXPIRED, $groupId);
 				$pushData[$groupId][Role::ORIGINATOR][CounterDictionary::COUNTER_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS, $groupId);
 				$pushData[$groupId][Role::ORIGINATOR][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_ORIGINATOR_MUTED_NEW_COMMENTS, $groupId);
+				$pushData[$groupId][Role::ORIGINATOR][CounterDictionary::COUNTER_MENTIONED] = $counter->get(CounterDictionary::COUNTER_MENTIONED, $groupId);
 
 				$pushData[$groupId][Role::ACCOMPLICE][CounterDictionary::COUNTER_TOTAL] = $counter->get(CounterDictionary::COUNTER_ACCOMPLICES, $groupId);
 				$pushData[$groupId][Role::ACCOMPLICE][CounterDictionary::COUNTER_EXPIRED] = $counter->get(CounterDictionary::COUNTER_ACCOMPLICES_EXPIRED, $groupId);
 				$pushData[$groupId][Role::ACCOMPLICE][CounterDictionary::COUNTER_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_ACCOMPLICES_NEW_COMMENTS, $groupId);
 				$pushData[$groupId][Role::ACCOMPLICE][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_ACCOMPLICES_MUTED_NEW_COMMENTS, $groupId);
+				$pushData[$groupId][Role::ACCOMPLICE][CounterDictionary::COUNTER_MENTIONED] = $counter->get(CounterDictionary::COUNTER_MENTIONED, $groupId);
 
 				$pushData[$groupId][Role::AUDITOR][CounterDictionary::COUNTER_TOTAL] = $counter->get(CounterDictionary::COUNTER_AUDITOR, $groupId);
 				$pushData[$groupId][Role::AUDITOR][CounterDictionary::COUNTER_EXPIRED] = $counter->get(CounterDictionary::COUNTER_AUDITOR_EXPIRED, $groupId);
 				$pushData[$groupId][Role::AUDITOR][CounterDictionary::COUNTER_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_AUDITOR_NEW_COMMENTS, $groupId);
 				$pushData[$groupId][Role::AUDITOR][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS] = $counter->get(CounterDictionary::COUNTER_AUDITOR_MUTED_NEW_COMMENTS, $groupId);
+				$pushData[$groupId][Role::AUDITOR][CounterDictionary::COUNTER_MENTIONED] = $counter->get(CounterDictionary::COUNTER_MENTIONED, $groupId);
 			}
 
 			$this->createPush([$userId], self::COMMAND_USER, $pushData);

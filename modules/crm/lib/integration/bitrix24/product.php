@@ -36,7 +36,7 @@ class Product
 	 */
 	public static function isRegionRussian(bool $onlyRu = false): bool
 	{
-		$regions = $onlyRu ? ['ru'] : ['ru', 'kz', 'by'];
+		$regions = $onlyRu ? ['ru'] : ['ru', 'kz', 'by', 'uz'];
 		$region = Main\Application::getInstance()->getLicense()->getRegion() ?: 'ru';
 		$region = self::$region ?: $region;
 

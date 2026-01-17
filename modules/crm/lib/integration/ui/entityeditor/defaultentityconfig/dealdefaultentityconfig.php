@@ -39,7 +39,7 @@ final class DealDefaultEntityConfig extends AbstractDefaultEntityConfig
 					['name' => 'SOURCE_ID'],
 					['name' => 'SOURCE_DESCRIPTION'],
 					['name' => 'BEGINDATE'],
-					//['name' => 'LOCATION_ID'],
+					['name' => 'LOCATION_ID'],
 					['name' => 'OPENED'],
 					['name' => 'ASSIGNED_BY_ID'],
 					['name' => 'OBSERVER'],

@@ -9,4 +9,6 @@ enum Scenario: string
 	case Default = 'default';
 	case Crm = 'crm';
 	case Mobile = 'mobile';
+	case Voice = 'voice';
+	case Video = 'video';
 }

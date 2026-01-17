@@ -8,6 +8,10 @@ use Bitrix\Crm\Service\Router;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\UI\Buttons\AirButtonStyle;
+use Bitrix\UI\Buttons\Button;
+use Bitrix\UI\Buttons\Color;
+use Bitrix\UI\Buttons\Size;
 
 final class TypesFieldAssembler extends FieldAssembler
 {
@@ -37,14 +41,16 @@ final class TypesFieldAssembler extends FieldAssembler
 		sort($typeIds);
 
 		$typesToRenderAsLinks = $typeIds;
-		$remainingTypesCount = 0;
-		if (count($typesToRenderAsLinks) > self::MAX_TYPES_IN_ROW)
+		$totalTypes = count($typesToRenderAsLinks);
+
+		if ($totalTypes > self::MAX_TYPES_IN_ROW)
 		{
 			$typesToRenderAsLinks = array_slice($typesToRenderAsLinks, 0, self::MAX_TYPES_IN_ROW);
-			$remainingTypesCount = count($typeIds) - count($typesToRenderAsLinks);
 		}
 
 		$links = [];
+		$customSectionId = null;
+
 		foreach ($typesToRenderAsLinks as $typeId)
 		{
 			$type = $this->getType($typeId);
@@ -53,18 +59,51 @@ final class TypesFieldAssembler extends FieldAssembler
 				continue;
 			}
 
+			$customSectionId ??= $type->getCustomSectionId();
+
 			$url = $this->router->getItemListUrlInCurrentView($type->getEntityTypeId());
 
-			$links[] = '<a href="'.htmlspecialcharsbx($url).'">'.htmlspecialcharsbx($type->getTitle()).'</a>';
+			$button = new Button([
+				'text' => $type->getTitle(),
+				'size' => Size::SMALL,
+				'color' => Color::SECONDARY,
+				'style' => AirButtonStyle::TINTED,
+				'air' => true,
+				'link' => $url?->getUri(),
+			]);
+
+			$links[] = $button->render();
 		}
 
-		$content = implode(', ', $links);
-		if ($remainingTypesCount > 0)
+		$content = implode(' ', $links);
+		if (!empty($links))
 		{
-			$content .= Loc::getMessage(
-				'CRM_GRID_ROW_ASSEMBLER_AUTOMATED_SOLUTION_TYPES_MORE',
-				['#MORE_COUNT#' => $remainingTypesCount],
+			$content = '<div class="crm-automated-solution-grid-types-container">' . $content . '</div>';
+		}
+
+		if (!empty($links))
+		{
+			$text = Loc::getMessage(
+				'CRM_GRID_ROW_ASSEMBLER_AUTOMATED_SOLUTION_TYPES_SHOW_LIST',
+				['#TOTAL_COUNT#' => $totalTypes],
 			);
+
+			$url = $this->router->getExternalTypeListUrl()->addParams([
+				'AUTOMATED_SOLUTION' => $customSectionId,
+				'apply_filter' => 'Y',
+			]);
+
+			$button = new Button([
+				'text' => $text,
+				'size' => Size::SMALL,
+				'color' => Color::LINK,
+				'style' => AirButtonStyle::PLAIN,
+				'air' => true,
+				'link' => $url->getUri(),
+				'classList' => ['crm-automated-solution-grid-types-show-list-button'],
+			]);
+
+			$content .= '<div>' . $button->render() . '</div>';
 		}
 
 		return $content;

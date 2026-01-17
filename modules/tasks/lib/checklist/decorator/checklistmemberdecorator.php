@@ -48,8 +48,12 @@ class CheckListMemberDecorator extends CheckListDecorator
 			throw new CheckListException('No such task.');
 		}
 
-		$members['AUDITORS'] = array_unique(array_merge($members['AUDITORS'], $task->getAuditorMembersIds()));
-		$members['ACCOMPLICES'] = array_unique(array_merge($members['ACCOMPLICES'], $task->getAccompliceMembersIds()));
+		$members['AUDITORS'] = array_values(
+			array_unique(array_merge($members['AUDITORS'], $task->getAuditorMembersIds()))
+		);
+		$members['ACCOMPLICES'] = array_values(
+			array_unique(array_merge($members['ACCOMPLICES'], $task->getAccompliceMembersIds()))
+		);
 
 		$this->handler->update($entityId, $members);
 

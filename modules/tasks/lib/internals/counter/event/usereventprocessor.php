@@ -75,6 +75,7 @@ class UserEventProcessor
 			{
 				$toUpdate[CounterDictionary::COUNTER_EXPIRED][] = $taskId;
 				$toUpdate[CounterDictionary::COUNTER_NEW_COMMENTS][] = $taskId;
+				$toUpdate[CounterDictionary::COUNTER_MENTIONED][] = $taskId;
 				$efficiencyUpdated[$taskId] = $taskId;
 			}
 
@@ -87,16 +88,19 @@ class UserEventProcessor
 				if (isset($counts[$taskId]) && $counts[$taskId] > 0)
 				{
 					$toUpdate[CounterDictionary::COUNTER_NEW_COMMENTS][] = $taskId;
+					$toUpdate[CounterDictionary::COUNTER_MENTIONED][] = $taskId;
 				}
 			}
 
 			if (in_array($eventType, [
 				EventDictionary::EVENT_AFTER_COMMENT_ADD,
 				EventDictionary::EVENT_AFTER_COMMENT_DELETE,
-				EventDictionary::EVENT_AFTER_TASK_MUTE
+				EventDictionary::EVENT_AFTER_TASK_MUTE,
+				EventDictionary::EVENT_AFTER_COMMENTS_READ,
 			]))
 			{
 				$toUpdate[CounterDictionary::COUNTER_NEW_COMMENTS][] = $taskId;
+				$toUpdate[CounterDictionary::COUNTER_MENTIONED][] = $taskId;
 			}
 
 			/**
@@ -261,6 +265,10 @@ class UserEventProcessor
 			if (array_intersect($taskIds, $toUpdate[CounterDictionary::COUNTER_EXPIRED]))
 			{
 				$counterController->recount(CounterDictionary::COUNTER_EXPIRED, $taskIds);
+			}
+			if (array_intersect($taskIds, $toUpdate[CounterDictionary::COUNTER_MENTIONED]))
+			{
+				$counterController->recount(CounterDictionary::COUNTER_MENTIONED, $taskIds);
 			}
 		}
 

@@ -1,9 +1,8 @@
 <?php
 namespace Bitrix\ImOpenLines;
 
-use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\V2\Chat\ChatFactory;
-use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\Im\V2\Pull\Event\ChatHide;
 use Bitrix\ImOpenLines\Model\RecentTable;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\Main\Loader;
@@ -100,21 +99,11 @@ class Relation
 
 	private function sendPullChatHide(): bool
 	{
-		$pushMessage = [
-			'module_id' => 'im',
-			'command' => 'chatHide',
-			'expiry' => 3600,
-			'params' => [
-				'dialogId' => 'chat' . $this->chatId,
-				'chatId' => $this->chatId,
-				'lines' => true,
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		];
-
 		$userIds = array_unique(array_merge($this->userIds, [$this->userId]));
-		Event::add($userIds, $pushMessage);
-		return \CPullWatch::AddToStack('IM_PUBLIC_' . $this->chatId, $pushMessage);
+		$chat = \Bitrix\Im\V2\Chat::getInstance($this->chatId);
+		$result = (new ChatHide($chat, $userIds))->send();
+
+		return $result->isSuccess();
 	}
 
 	private function getLine(): ?array

@@ -1,4 +1,4 @@
-<?
+<?php
 
 use Bitrix\Main\Composite\Engine;
 use Bitrix\Main\Composite\Helper;

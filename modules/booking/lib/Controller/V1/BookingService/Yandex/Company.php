@@ -12,7 +12,7 @@ use Bitrix\Booking\Controller\V1\BookingService\Yandex\Response\Company\GetServi
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Yandex\AvailableDatesProvider;
 use Bitrix\Booking\Internals\Service\Yandex\AvailableTimeSlotsProvider;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Collection\ReviewCollection;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\ReviewCollection;
 use Bitrix\Booking\Internals\Service\Yandex\ResourceProvider;
 use Bitrix\Booking\Internals\Service\Yandex\ServiceProvider;
 use Bitrix\Main\Request;

@@ -54,6 +54,14 @@ class IntranetInvitationFacade extends InvitationFacade
 		);
 
 		EventManager::getInstance()->addEventHandlerCompatible(
+			'intranet',
+			'OnTransferEMailUser',
+			[$this, 'onAfterUserAdd'],
+			false,
+			10,
+		);
+
+		EventManager::getInstance()->addEventHandlerCompatible(
 			'main',
 			'OnAfterUserAdd',
 			[$this, 'onAfterUserAdd'],

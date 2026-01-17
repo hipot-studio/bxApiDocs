@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Tasks\V2\Internal\Entity\User\Gender;
+use Bitrix\Tasks\V2\Internal\Entity\User\Type;
 
 class User extends AbstractEntity
 {
@@ -17,6 +18,7 @@ class User extends AbstractEntity
 		public readonly ?int $id = null,
 		public readonly ?string $name = null,
 		public readonly ?string $role = null, // role depends on context
+		public readonly ?Type $type = null,
 		public readonly ?File $image = null,
 		public readonly ?Gender $gender = null,
 		public readonly ?string $email = null,
@@ -43,6 +45,7 @@ class User extends AbstractEntity
 			id: static::mapInteger($props, 'id'),
 			name: static::mapString($props, 'name'),
 			role: static::mapString($props, 'role'),
+			type: static::mapBackedEnum($props, 'type', Type::class),
 			image: static::mapEntity($props, 'image', File::class),
 			gender: static::mapBackedEnum($props, 'gender', Gender::class),
 			email: static::mapString($props, 'email'),
@@ -57,6 +60,7 @@ class User extends AbstractEntity
 			'id' => $this->id,
 			'name' => $this->name,
 			'role' => $this->role,
+			'type' => $this->type,
 			'image' => $this->image?->toArray(),
 			'gender' => $this->gender?->value,
 			'email' => $this->email,

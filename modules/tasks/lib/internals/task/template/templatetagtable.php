@@ -2,8 +2,14 @@
 
 namespace Bitrix\Tasks\Internals\Task\Template;
 
-use Bitrix\Main\Entity\Validator\Length;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Tasks\Internals\TaskDataManager;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Main\UserTable;
@@ -26,58 +32,39 @@ use Bitrix\Main\UserTable;
  */
 class TemplateTagTable extends TaskDataManager
 {
+	use DeleteByFilterTrait;
+	use AddInsertIgnoreTrait;
 
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_tasks_template_tag';
 	}
 
-	public static function getClass()
+	public static function getClass(): string
 	{
-		return get_called_class();
+		return static::class;
 	}
 
-	public static function getMap()
+	public static function getMap(): array
 	{
-		return array(
-			'ID' => [
-				'data_type' => 'integer',
-				'primary' => true,
-			],
-			'TEMPLATE_ID' => array(
-				'data_type' => 'integer',
-				'primary' => false,
-			),
-			'USER_ID' => array(
-				'data_type' => 'integer',
-				'primary' => false,
-			),
-			'NAME' => array(
-				'data_type' => 'string',
-				'primary' => false,
-				'validation' => array(__CLASS__, 'validateName'),
-			),
+		return [
+			(new IntegerField('ID'))
+				->configurePrimary(),
+			(new IntegerField('TEMPLATE_ID')),
 
-			// references
-			'TEMPLATE' => array(
-				'data_type' => TemplateTable::class,
-				'reference' => array('=this.TEMPLATE_ID' => 'ref.ID')
-			),
-			'USER' => array(
-				'data_type' => UserTable::class,
-				'reference' => array('=this.USER_ID' => 'ref.ID')
-			),
+			(new IntegerField('USER_ID')),
+
+			(new StringField('NAME'))
+				->addValidator(new LengthValidator(null, 255)),
+
+			(new Reference('TEMPLATE', TemplateTable::getEntity(), Join::on('this.TEMPLATE_ID', 'ref.ID'))),
+
+			(new Reference('USER', UserTable::getEntity(), Join::on('this.USER_ID', 'ref.ID'))),
+
 			(new ExpressionField(
 				'MAX_ID',
 				'MAX(%s)', ['ID']
 			)),
-		);
-	}
-
-	public static function validateName()
-	{
-		return array(
-			new Length(null, 255),
-		);
+		];
 	}
 }

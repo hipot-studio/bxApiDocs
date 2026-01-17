@@ -175,11 +175,13 @@ class AutomatedSolution
 			return $result->addErrors($intranetSectionResult->getErrors());
 		}
 
+		$appId = $params['APP_ID'] ?? 0;
 		$intranetSectionId = $intranetSection->getId();
 		$automatedSolution = AutomatedSolutionTable::createObject([
 			'TITLE' => $intranetSection->getTitle(),
 			'CODE' => $intranetSection->getCode(),
 			'INTRANET_CUSTOM_SECTION_ID' => $intranetSectionId,
+			'SOURCE_ID' => $appId > 0 ? AutomatedSolutionTable::SOURCE_MARKETPLACE : AutomatedSolutionTable::SOURCE_IMPORT,
 		]);
 		$automatedSolutionResult = $automatedSolution->save();
 		if (!$automatedSolutionResult->isSuccess())

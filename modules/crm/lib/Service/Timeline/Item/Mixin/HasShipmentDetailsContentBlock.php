@@ -68,10 +68,17 @@ trait HasShipmentDetailsContentBlock
 
 		$priceDelivery = $this->getAssociatedEntityModel()->get('PRICE_DELIVERY');
 		$currency = $this->getAssociatedEntityModel()->get('CURRENCY');
-		$amountBlock = (new ContentBlock\Money())
-			->setOpportunity((float)$priceDelivery)
-			->setCurrencyId((string)$currency)
-		;
+		if ($priceDelivery && $currency)
+		{
+			$amountBlock = (new ContentBlock\Money())
+				->setOpportunity((float)$priceDelivery)
+				->setCurrencyId((string)$currency)
+			;
+		}
+		else
+		{
+			$amountBlock = new ContentBlock\Text();
+		}
 
 		return ContentBlockFactory::createLineOfTextFromTemplate(
 			$title,

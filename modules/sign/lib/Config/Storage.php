@@ -394,6 +394,11 @@ class Storage
 		Main\Config\Option::set('sign', '~sign_b2e_lists_special_rejected', $listId);
 	}
 
+	public function getMaxB2bDocumentsSignedWithoutRestriction(): int
+	{
+		return (int)\Bitrix\Main\Config\Option::get('sign', '~sign_b2b_max_documents_without_restriction', 2);
+	}
+	
 	public function getOnboardingTemplateSha256(): string
 	{
 		return Main\Config\Option::get('sign', 'sign_b2e_onboarding_template_sha256', self::ONBOARDING_TEMPLATE_SHA256);

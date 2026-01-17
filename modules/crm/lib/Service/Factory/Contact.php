@@ -342,10 +342,6 @@ class Contact extends Service\Factory
 				'TYPE' => Field::TYPE_STRING,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 			],
-			Item::FIELD_NAME_FACE_ID => [
-				'TYPE' => Field::TYPE_INTEGER,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Hidden],
-			],
 			Item::FIELD_NAME_CATEGORY_ID => [
 				'TYPE' => Field::TYPE_CRM_CATEGORY,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::HasDefaultValue],

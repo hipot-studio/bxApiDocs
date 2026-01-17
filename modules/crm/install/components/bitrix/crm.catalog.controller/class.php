@@ -1,4 +1,5 @@
 <?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -23,6 +24,8 @@ class CrmCatalogControllerComponent extends CBitrixComponent implements Main\Err
 	private const PAGE_ERROR = 'error';
 
 	private const MODE_SLIDER_VIEW_NAME = 'sliderList';
+	private const MODE_SHOW_TOOLBAR_NAME = 'showToolbar';
+	private const MODE_TOOLBAR_CREATE_BTN_ITEMS = 'createBtnItems';
 
 	/** @var  Main\ErrorCollection */
 	protected $errorCollection;
@@ -32,7 +35,9 @@ class CrmCatalogControllerComponent extends CBitrixComponent implements Main\Err
 	/** @var bool */
 	protected $iblockListMixed;
 	/** @var bool */
-	private $sliderMode;
+	private bool $sliderMode; // set true, if you need show grid in slider
+	private bool $showToolbar; // this parameter use only in slider mode (enable ui toolbar)
+	private array $createBtnItems; // this parameter use only in slider mode (list of allowed buttons)
 
 	/** @var string */
 	protected $pageId;
@@ -249,6 +254,8 @@ class CrmCatalogControllerComponent extends CBitrixComponent implements Main\Err
 		$this->iblockId = $iblockId;
 		$this->request = Main\Application::getInstance()->getContext()->getRequest();
 		$this->sliderMode = $this->request->get(self::MODE_SLIDER_VIEW_NAME) === 'Y';
+		$this->showToolbar = $this->request->get(self::MODE_SHOW_TOOLBAR_NAME) === 'Y';
+		$this->createBtnItems = $this->request->get(self::MODE_TOOLBAR_CREATE_BTN_ITEMS) ?? [];
 
 		$this->arResult['IBLOCK_ID'] = $iblockId;
 	}
@@ -296,6 +303,8 @@ class CrmCatalogControllerComponent extends CBitrixComponent implements Main\Err
 			[
 				'VARIABLES' => $variables,
 				'ALIASES' => $variableAliases,
+				'SHOW_TOOLBAR' => $this->showToolbar,
+				'CREATE_BTN_ITEMS' => $this->createBtnItems,
 			],
 			$this->arResult
 		);

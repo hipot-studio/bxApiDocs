@@ -20,6 +20,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
+use \Bitrix\UI\AccessRights\V2\Config;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -39,6 +40,7 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 	private ?string $sectionCode = null;
 	private bool $isAutomation = false;
 	private ?RoleSelectionManager $manager = null;
+	private Config $config;
 
 	public function getDataAction(array $controllerData): ?array
 	{
@@ -71,6 +73,8 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 			'accessRightsData' => $accessRightsDto,
 			'maxVisibleUserGroups' => $this->getMaxVisibleUserGroups($accessRightsDto),
 			'additionalSaveParams' => $this->getControllerData(),
+			'userSortConfigName' => $this->getConfig()->getContext(),
+			'userSortConfig' => $this->getConfig()->getUserGroupsSortConfig(),
 		];
 	}
 
@@ -119,12 +123,15 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		}
 
 		$accessRightsDto = (new QueryRoles($this->manager))->execute();
+		$this->config = $this->getConfig();
 
 		$this->arResult['accessRightsData'] = $accessRightsDto;
 		$this->arResult['maxVisibleUserGroups'] = $this->getMaxVisibleUserGroups($accessRightsDto);
 		$this->arResult['controllerData'] = $this->getControllerData();
 		$this->arResult['isSharedCrmPermissionsSlider'] = $this->criterion === AllSelection::CRITERION;
 		$this->arResult['analytics'] = $this->getAnalytics();
+		$this->arResult['userSortConfigName'] = $this->config->getContext();
+		$this->arResult['userSortConfig'] = $this->config->getUserGroupsSortConfig();
 
 		$shouldDisplayLeftMenu = false;
 		$this->arResult['menuId'] = $this->manager->getMenuId();
@@ -302,5 +309,26 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		];
 
 		$menuItems[] = $buttonMenu;
+	}
+
+	private function getComponentName(): string
+	{
+		return str_replace('bitrix:', '', $this->getName());
+	}
+
+	private function getConfig(): Config
+	{
+		return Config::getInstanceByContext($this->getConfigContext());
+	}
+
+	private function getConfigContext(): string
+	{
+		$additionalSaveParams = $this->getControllerData();
+		ksort($additionalSaveParams);
+
+		return Json::encode([
+			'component' => $this->getComponentName(),
+			$additionalSaveParams,
+		]);
 	}
 }

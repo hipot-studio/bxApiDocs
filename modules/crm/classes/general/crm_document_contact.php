@@ -297,14 +297,6 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				"Editable" => false,
 				"Required" => false,
 			],
-			'WEBFORM_ID' => [
-				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
-				'Type' => 'select',
-				'Options' => static::getWebFormSelectOptions(),
-				'Filterable' => false,
-				'Editable' => false,
-				'Required' => false,
-			],
 			'TRACKING_SOURCE_ID' => [
 				'Name' => GetMessage('CRM_DOCUMENT_FIELD_TRACKING_SOURCE_ID'),
 				'Type' => 'select',
@@ -322,6 +314,36 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Default' => [],
 			],
 		);
+
+		if (!class_exists(\Bitrix\Bizproc\BaseType\EntitySelector::class))
+		{
+			$arResult['WEBFORM_ID'] = [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'select',
+				'Options' => static::getWebFormSelectOptions(),
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+
+			];
+		}
+		else
+		{
+			$arResult['WEBFORM_ID'] = [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'entityselector',
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+				'Settings' => [
+					'entity' => [
+						'id' => 'web_form',
+						'dynamicLoad' => true,
+						'dynamicSearch' => true,
+					],
+				],
+			];
+		}
 
 		$arResult += static::getCommunicationFields();
 

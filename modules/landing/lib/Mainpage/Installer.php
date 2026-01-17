@@ -61,6 +61,7 @@ class Installer
 		$metrika = new Metrika\Metrika(
 			Metrika\Categories::Vibe,
 			Metrika\Events::createTemplateApi,
+			Metrika\Tools::Vibe,
 		);
 		$metrika->setParam(1, 'templateCode', $code->value);
 

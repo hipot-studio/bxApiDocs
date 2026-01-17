@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Operation;
 use Bitrix\Main;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Sign\Contract;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Repository\DocumentRepository;
@@ -19,9 +20,14 @@ use Bitrix\Sign\Service\Integration\Im\ImService;
 use Bitrix\Sign\Service\UserService;
 use Bitrix\Sign\Service\Sign\LegalLogService;
 use Bitrix\Sign\Service\Sign\MemberService;
+use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkService;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Item\Integration\Im\Messages\GroupChat\B2b\SigningStartedMessage;
 use Bitrix\Sign\Item\Integration\Im\Messages\GroupChat\B2b\SigningCompletedMessage;
+use Bitrix\Sign\Type\DocumentStatus;
+use Bitrix\Sign\Type\Integration\Rest\EventType;
+use Bitrix\Sign\Type\Integration\Rest\RestDocumentStatus;
+use Throwable;
 
 final class ChangeDocumentStatus implements Contract\Operation
 {
@@ -36,6 +42,7 @@ final class ChangeDocumentStatus implements Contract\Operation
 	private readonly ImService $imService;
 	private readonly UserService $userService;
 	private readonly AnalyticService $analyticService;
+	private readonly HcmLinkService $hcmLinkService;
 
 	public function __construct(
 		private Item\Document $document,
@@ -56,6 +63,12 @@ final class ChangeDocumentStatus implements Contract\Operation
 		$this->imService = $container->getImService();
 		$this->userService = $container->getUserService();
 		$this->analyticService = $container->getAnalyticService();
+		$this->hcmLinkService = $container->getHcmLinkService();
+	}
+
+	public function getDocument(): Item\Document
+	{
+		return $this->document;
 	}
 
 	public function launch(): Main\Result
@@ -66,9 +79,9 @@ final class ChangeDocumentStatus implements Contract\Operation
 			return $result->addError(new Main\Error('Empty document ID.'));
 		}
 
-		if ($this->document->isTemplated())
+		if ($this->document->isTemplated() && $this->status === Type\DocumentStatus::STOPPED)
 		{
-			return $result->addError(new Main\Error('Can not change status of templated document.'));
+			return $result->addError(new Main\Error('Can not stop templated document.'));
 		}
 
 		// status may be changed asynchronously
@@ -91,6 +104,7 @@ final class ChangeDocumentStatus implements Contract\Operation
 			$this->document->dateStatusChanged = new DateTime();
 		}
 
+		$oldStatus = $this->document->status;
 		$this->document->status = $this->status;
 
 		$updateResult = $this->documentRepository->update($this->document);
@@ -98,6 +112,13 @@ final class ChangeDocumentStatus implements Contract\Operation
 		{
 			return $result->addErrors($updateResult->getErrors());
 		}
+		if (!isset($updateResult->getData()['document']))
+		{
+			return $result->addError(new Main\Error('Document result is missing after update.'));
+		}
+		$this->document = $updateResult->getData()['document'];
+
+		$this->processDocumentStatusChange($this->document, $oldStatus);
 
 		if (Type\DocumentScenario::isB2EScenario($this->document->scenario ?? ''))
 		{
@@ -273,10 +294,18 @@ final class ChangeDocumentStatus implements Contract\Operation
 
 		$this->document->stoppedById = $initiatorUserId;
 		$updateResult = $this->documentRepository->update($this->document);
+
 		if (!$updateResult->isSuccess())
 		{
 			return $updateResult;
 		}
+
+		if (!isset($updateResult->getData()['document']))
+		{
+			return $result->addError(new Main\Error('Document result is missing after update.'));
+		}
+
+		$this->document = $updateResult->getData()['document'] ?? null;
 
 		return $result;
 	}
@@ -300,6 +329,49 @@ final class ChangeDocumentStatus implements Contract\Operation
 				$analyticsEvent,
 				$member,
 			);
+		}
+	}
+
+	private function processDocumentStatusChange(Item\Document $document, ?string $oldStatus): void
+	{
+		$statusList = [
+			DocumentStatus::SIGNING,
+			DocumentStatus::DONE,
+			DocumentStatus::STOPPED,
+		];
+
+		if ($document->status !== $oldStatus && in_array($document->status, $statusList))
+		{
+			$company = null;
+			if ($document->hcmLinkCompanyId)
+			{
+				$company = $this->hcmLinkService->getCompanyById($document->hcmLinkCompanyId);
+			}
+
+			try {
+				$event = new Main\Event(
+					'sign',
+					EventType::DOCUMENT_STATUS_CHANGED->value,
+					[
+						'documentUid' => $document->uid,
+						'companyUid' => $company?->code,
+						'statusCode' => RestDocumentStatus::getDocumentStatusCode($document->status),
+						'statusName' => RestDocumentStatus::getDocumentStatusName($document->status, 'en'),
+					],
+				);
+				$event->send();
+			}
+			catch (Throwable $e)
+			{
+				Logger::getInstance()->error(
+					"Failed to send event {event} for document {documentUid}: {errorsText}",
+					[
+						'event' => EventType::DOCUMENT_STATUS_CHANGED->value,
+						'documentUid' => $document->uid,
+						'errorsText' => $e->getMessage(),
+					],
+				);
+			}
 		}
 	}
 }

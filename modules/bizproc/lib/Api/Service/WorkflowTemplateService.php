@@ -2,15 +2,18 @@
 
 namespace Bitrix\Bizproc\Api\Service;
 
+use Bitrix\Bizproc\Api\Data\WorkflowTemplateService\WorkflowTemplate;
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateService as WorkflowTemplateRequest;
+use Bitrix\Bizproc\Api\Response\Error;
+use Bitrix\Bizproc\Api\Response\WorkflowTemplateService as WorkflowTemplateResponse;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
+use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Bizproc\Api\Response\Error;
-use Bitrix\Bizproc\Api\Enum\ErrorMessage;
-use Bitrix\Bizproc\Api\Data\WorkflowTemplateService\WorkflowTemplate;
-use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
-use Bitrix\Bizproc\Api\Request\WorkflowTemplateService as WorkflowTemplateRequest;
-use Bitrix\Bizproc\Api\Response\WorkflowTemplateService as WorkflowTemplateResponse;
+use Bitrix\Main\ORM\Query\Query;
 
 class WorkflowTemplateService
 {
@@ -21,6 +24,64 @@ class WorkflowTemplateService
 	public function __construct(?WorkflowAccessService $accessService = null)
 	{
 		$this->accessService = $accessService ?? new WorkflowAccessService();
+	}
+
+	public function getList(
+		WorkflowTemplateRequest\GridTemplateRequest $request
+	): WorkflowTemplateResponse\GridTemplateResponse
+	{
+		$query = WorkflowTemplateTable::query()
+			->setSelect([
+				'ID',
+				'NAME',
+				'DESCRIPTION',
+				'UPDATED_BY',
+				'CREATED_BY',
+				'MODIFIED',
+				'AUTO_EXECUTE',
+				'UPDATED_USER',
+				'CREATED_USER',
+				'USER',
+			])
+			->where('TYPE', WorkflowTemplateType::Nodes->value)
+			->whereNull('SYSTEM_CODE')
+			->where(
+				Query::filter()
+					->logic('or')
+					->where(Query::filter()->where('USER_ID', $request->getFilterUserId()))
+					->where(Query::filter()->where('UPDATED_BY', $request->getFilterUserId()))
+					->where(Query::filter()->where('CREATED_BY', $request->getFilterUserId()))
+			)
+			->setOrder($request->getOrder())
+			->setLimit($request->getLimit())
+			->countTotal(true)
+		;
+
+		if ($request->hasOffset())
+		{
+			$query->setOffset($request->getOffset());
+		}
+
+		if (!empty($filters = $request->getOrmFilter()))
+		{
+			$query->setFilter($filters);
+		}
+		elseif (!empty($searchQuery = $request->getFilterSearchQuery()))
+		{
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->whereLike('NAME', "%$searchQuery%")
+					->whereLike('DESCRIPTION', "%$searchQuery%")
+			);
+		}
+
+		$queryResult = $query->exec();
+		$response = new WorkflowTemplateResponse\GridTemplateResponse();
+		$response->setTotalCount($queryResult->getCount());
+		$response->setCollection($queryResult->fetchCollection());
+
+		return $response;
 	}
 
 	public function prepareParameters(
@@ -53,6 +114,10 @@ class WorkflowTemplateService
 						$parameters[$key] = [];
 						\CFile::ConvertFilesToPost($value, $parameters[$key]);
 					}
+				}
+				elseif ($this->isCorrectSignedFileIds($value))
+				{
+					$parameters[$key] = $value;
 				}
 
 				continue;
@@ -238,25 +303,28 @@ class WorkflowTemplateService
 	{
 		$response = new WorkflowTemplateResponse\SaveTemplateResponse();
 
-		$documentType = $this->getDocumentType($request->parameters);
-		if (is_null($documentType))
+		if ($request->checkAccess)
 		{
-			$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
-				'#PARAM#' => 'DOCUMENT_TYPE',
-				'#VALUE#' => $documentType
-			]);
-			$response->addError($errorMsg);
+			$documentType = $this->getDocumentType($request->parameters);
+			if (is_null($documentType))
+			{
+				$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
+					'#PARAM#' => 'DOCUMENT_TYPE',
+					'#VALUE#' => $documentType
+				]);
+				$response->addError($errorMsg);
 
-			return $response;
-		}
+				return $response;
+			}
 
-		if ($request->checkAccess && !$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
-		{
-			$response->addError(
-				ErrorMessage::ACCESS_DENIED->getError()
-			);
+			if (!$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
+			{
+				$response->addError(
+					ErrorMessage::ACCESS_DENIED->getError()
+				);
 
-			return $response;
+				return $response;
+			}
 		}
 
 		try {
@@ -433,35 +501,45 @@ class WorkflowTemplateService
 	}
 
 	public function saveTemplateDraft(
-		WorkflowTemplateRequest\SaveTemplateRequest $request
+		WorkflowTemplateRequest\SaveTemplateDraftRequest $request
 	): WorkflowTemplateResponse\SaveTemplateDraftResponse
 	{
 		$response = new WorkflowTemplateResponse\SaveTemplateDraftResponse();
 
-		$documentType = $this->getDocumentType($request->parameters);
-		if (is_null($documentType))
+		if ($request->checkAccess)
 		{
-			$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
-				'#PARAM#' => 'DOCUMENT_TYPE',
-				'#VALUE#' => $documentType
-			]);
-			$response->addError($errorMsg);
+			$documentType = $this->getDocumentType($request->parameters);
+			if (is_null($documentType))
+			{
+				$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
+					'#PARAM#' => 'DOCUMENT_TYPE',
+					'#VALUE#' => $documentType
+				]);
+				$response->addError($errorMsg);
 
-			return $response;
-		}
+				return $response;
+			}
 
-		if ($request->checkAccess && !$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
-		{
-			$response->addError(
-				ErrorMessage::ACCESS_DENIED->getError()
-			);
+			if ($this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
+			{
+				$response->addError(
+					ErrorMessage::ACCESS_DENIED->getError()
+				);
 
-			return $response;
+				return $response;
+			}
 		}
 
 		try
 		{
-			$template = WorkflowTemplate::createFromRequest($request);
+			$saveRequest = new \Bitrix\Bizproc\Api\Request\WorkflowTemplateService\SaveTemplateRequest(
+				$request->templateId,
+				$request->parameters,
+				$request->fields,
+				$request->user,
+				$request->checkAccess
+			);
+			$template = WorkflowTemplate::createFromRequest($saveRequest);
 			$templateId = $template->getTemplateId() > 0 ? $template->getTemplateId() : null;
 			$fields = $template->getFields();
 
@@ -489,15 +567,35 @@ class WorkflowTemplateService
 			$tpl->setEntity($entity);
 			$tpl->setDocumentType($documentType);
 
-			$result = WorkflowTemplateDraftTable::add([
-				'MODULE_ID' => $tpl->getModuleId(),
-				'ENTITY' => $tpl->getEntity(),
-				'DOCUMENT_TYPE' => $tpl->getDocumentType(),
-				'TEMPLATE_ID' => $templateId,
-				'TEMPLATE_DATA' => $tpl->collectValues(),
-				'USER_ID' => $request->user->getId(),
-				'CREATED' => new \Bitrix\Main\Type\DateTime()
-			]);
+
+			if ($request->draftId)
+			{
+				$result = WorkflowTemplateDraftTable::update(
+					$request->draftId,
+					[
+						'MODULE_ID' => $tpl->getModuleId(),
+						'ENTITY' => $tpl->getEntity(),
+						'DOCUMENT_TYPE' => $tpl->getDocumentType(),
+						'TEMPLATE_ID' => $templateId,
+						'TEMPLATE_DATA' => $tpl->collectValues(),
+						'USER_ID' => $request->user->getId(),
+						'CREATED' => new \Bitrix\Main\Type\DateTime()
+					],
+				);
+			}
+			else
+			{
+				$result = WorkflowTemplateDraftTable::add([
+					'MODULE_ID' => $tpl->getModuleId(),
+					'ENTITY' => $tpl->getEntity(),
+					'DOCUMENT_TYPE' => $tpl->getDocumentType(),
+					'TEMPLATE_ID' => $templateId,
+					'TEMPLATE_DATA' => $tpl->collectValues(),
+					'USER_ID' => $request->user->getId(),
+					'CREATED' => new \Bitrix\Main\Type\DateTime()
+				]);
+			}
+
 
 			if (!$result->isSuccess())
 			{
@@ -545,5 +643,31 @@ class WorkflowTemplateService
 		}
 
 		return $response;
+	}
+
+	private function isCorrectSignedFileIds(mixed $value): bool
+	{
+		if (empty($value))
+		{
+			return false;
+		}
+
+		$ids = is_array($value) ? $value : [$value];
+		foreach ($ids as $id)
+		{
+			if (!is_string($id))
+			{
+				return false;
+			}
+
+			$unsigned = \CBPDocument::unSignParameters($id);
+			$fileId = $unsigned[0] ?? null;
+			if (!is_numeric($fileId) || $fileId <= 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

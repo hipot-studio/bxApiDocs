@@ -12,7 +12,7 @@ namespace Bitrix\Tasks\Internals\RunTime;
 use Bitrix\Main\Entity;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Tasks\Internals\Task\MemberTable;
-use Bitrix\Tasks\Internals\TaskTable;
+use Bitrix\Tasks\Integration\Report\Internals\TaskTable;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Integration\Intranet;
@@ -62,7 +62,7 @@ final class Task extends \Bitrix\Tasks\Internals\Runtime
 
 		$selectSql = \CTasks::getSelectSqlByFilter($parameters['FILTER'], '', $parameters['FILTER_PARAMETERS']);
 
-		$query = new \Bitrix\Main\Entity\Query('Bitrix\\Tasks\\Task');
+		$query = new \Bitrix\Main\Entity\Query(TaskTable::class);
 		$query->setFilter(
 			array(
 				'@ID' => new SqlExpression($selectSql)
@@ -244,15 +244,13 @@ final class Task extends \Bitrix\Tasks\Internals\Runtime
 			$conditions = "(case when (".implode(' OR ', $conditions).") then '1' else '0' end)";
 			array_unshift($expression, $conditions);
 
-			$query = new \Bitrix\Main\Entity\Query('Bitrix\\Tasks\\Task');
+			$query = new \Bitrix\Main\Entity\Query(TaskTable::class);
 			$query->registerRuntimeField('F', array(
 				'data_type' => 'string',
 				'expression' => $expression
 			));
 			$query->setFilter(array('=F' => '1'));
 			$query->setSelect(array('TASK_ID' => 'ID'));
-
-			//print_r($query->getQuery());
 
 			$rf = $parameters['REF_FIELD'];
 			$result[] = new Entity\ReferenceField(
@@ -299,7 +297,7 @@ final class Task extends \Bitrix\Tasks\Internals\Runtime
 					}
 					else
 					{
-						$key = \CAllSQLWhere::getOperationByCode($info['OPERATION']).'ref.'.$info['FIELD'];
+						$key = \CSQLWhere::getOperationByCode($info['OPERATION']).'ref.'.$info['FIELD'];
 						$value = array('?', $info['VALUE']);
 					}
 

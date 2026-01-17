@@ -22,6 +22,7 @@ use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\Onboarding\Notification\Message\TaskNotViewedOneDay;
 use Bitrix\Tasks\Onboarding\Notification\Message\TaskNotViewedTwoDays;
 use Bitrix\Tasks\Onboarding\Notification\Message\TooManyTasks;
+use Bitrix\Tasks\V2\FormV2Feature;
 
 class Provider implements ProviderInterface
 {
@@ -48,6 +49,11 @@ class Provider implements ProviderInterface
 			}
 
 			if ($this->isUserOnMute($message))
+			{
+				continue;
+			}
+
+			if (FormV2Feature::isOn('', (int)$message->getMetaData()->getTask()->getGroupId()))
 			{
 				continue;
 			}

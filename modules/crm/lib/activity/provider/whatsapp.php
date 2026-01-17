@@ -42,6 +42,11 @@ class WhatsApp extends BaseMessage
 		return Sms::fetchEventParams($event);
 	}
 
+	protected static function getHandledInEventProviderTypeIds(): ?array
+	{
+		return [self::PROVIDER_TYPE_WHATSAPP];
+	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -123,17 +128,5 @@ class WhatsApp extends BaseMessage
 	public static function getMessageStatusCode(int $statusId, Event $event): ?int
 	{
 		return Sms::getMessageStatusCode($statusId, $event);
-	}
-
-	public static function onMessageSent(Event $event): void
-	{
-		$additionalFields = $event->getParameter('ADDITIONAL_FIELDS') ?? [];
-		$providerTypeId = $additionalFields['ACTIVITY_PROVIDER_TYPE_ID'] ?? static::getDefaultTypeId();
-		if ($providerTypeId !== static::PROVIDER_TYPE_WHATSAPP)
-		{
-			return;
-		}
-
-		parent::onMessageSent($event);
 	}
 }

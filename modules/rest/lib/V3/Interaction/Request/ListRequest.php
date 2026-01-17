@@ -2,10 +2,10 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
-use Bitrix\Rest\V3\Structures\Filtering\FilterStructure;
-use Bitrix\Rest\V3\Structures\Ordering\OrderStructure;
-use Bitrix\Rest\V3\Structures\SelectStructure;
-use Bitrix\Rest\V3\Structures\PaginationStructure;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Ordering\OrderStructure;
+use Bitrix\Rest\V3\Structure\SelectStructure;
+use Bitrix\Rest\V3\Structure\PaginationStructure;
 
 class ListRequest extends Request
 {

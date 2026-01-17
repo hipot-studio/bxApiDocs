@@ -29,6 +29,8 @@ use Bitrix\Main\Type\Date;
  */
 class DealStageHistoryWithSupposedTable extends DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+
 	public static function getTableName()
 	{
 		return 'b_crm_deal_stage_history_with_supposed';

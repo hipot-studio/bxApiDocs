@@ -4,33 +4,44 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-class NotifyChecklistItemsDeleted
+#[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
+class NotifyChecklistItemsDeleted extends AbstractNotify
 {
 	public function __construct(
-		Task $task,
+		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
-		?User $triggeredBy = null,
-		int $itemCount = 1,
-		string $checklistName = '',
+		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly int $itemCount = 1,
+		private readonly string $checklistName = '',
+		private readonly ?int $checkListId = null,
 	)
 	{
-		$code = 'TASKS_IM_CHECKLIST_ITEMS_DELETED_' . $triggeredBy?->getGender()->value;
+		$sender->sendMessage(task: $task, notification: $this);
+	}
 
-		$message = Loc::getMessagePlural(
-			$code,
-			$itemCount,
-			[
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-				'#ITEM_COUNT#' => $itemCount,
-				'#CHECKLIST_NAME#' => $checklistName,
-			]
-		);
+	public function toString(): string
+	{
+		return $this->toPluralString($this->itemCount);
+	}
 
-		$sender->sendMessage(task: $task, text: $message);
+	public function getMessageCode(): string
+	{
+		return match ($this->triggeredBy?->getGender()) {
+			Entity\User\Gender::Male   => 'TASKS_IM_CHECKLIST_ITEMS_DELETED_M',
+			Entity\User\Gender::Female => 'TASKS_IM_CHECKLIST_ITEMS_DELETED_F',
+			default                    => 'TASKS_IM_CHECKLIST_ITEMS_DELETED_M',
+		};
+	}
+
+	public function getMessageData(): array
+	{
+		return [
+			'#USER#' => $this->formatUser($this->triggeredBy),
+			'#ITEM_COUNT#' => $this->itemCount,
+			'#CHECKLIST_NAME#' => $this->checklistName,
+		];
 	}
 }

@@ -2,6 +2,8 @@
 
 namespace Bitrix\Mobile\Controller;
 
+use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Error;
 use Bitrix\Mobile\AppTabs\Menu;
 use Bitrix\Mobile\AppTabs\MenuNew;
@@ -15,7 +17,7 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 	{
 		$manager = new Manager();
 
-		return $manager->setCustomConfig($config);
+		return $manager->setCustomConfig($config, true);
 	}
 
 	public function getDataAction()
@@ -81,10 +83,49 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 		return $result;
 	}
 
-	public function setPresetAction($name)
+	/**
+	 * @throws ArgumentNullException
+	 * @throws ArgumentOutOfRangeException
+	 */
+	public function getCurrentPresetNameAction(): ?string
+	{
+		return (new Manager())->getPresetName();
+	}
+
+
+	/**
+	 * @throws ArgumentNullException
+	 * @throws ArgumentOutOfRangeException
+	 */
+	public function getCurrentPresetItemsAction(): array
 	{
 		$manager = new Manager();
-		$result = $manager->setPresetName($name);
+		$activeTabs = $manager->getActiveTabs();
+
+		if (!$activeTabs || !is_array($activeTabs))
+		{
+			return [];
+		}
+
+		asort($activeTabs);
+
+		$result = [];
+		foreach ($activeTabs as $tabId => $sort)
+		{
+			$tabInstance = $manager->getTabInstance($tabId);
+			$result[$tabId] = [
+				'sort' => $sort,
+				'badgeCode' => $tabInstance?->getData()['badgeCode'] ?? null,
+			];
+		}
+
+		return $result;
+	}
+
+	public function setPresetAction($name): ?array
+	{
+		$manager = new Manager();
+		$result = $manager->setPresetName($name, true);
 
 		if ($result == null)
 		{

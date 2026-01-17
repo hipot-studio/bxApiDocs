@@ -14,7 +14,25 @@ class DiskArchiveLinkService
 {
 	private const DOWNLOAD_ACTION = 'downloadArchiveByEntity';
 
-	public function get(int $taskId): ?string
+	public function getByTaskId(int $taskId): ?string
+	{
+		return $this->get(
+			entityId: $taskId,
+			entityType: UserField::TASK,
+			fieldName: UserField::TASK_ATTACHMENTS,
+		);
+	}
+
+	public function getByTemplateId(int $templateId): ?string
+	{
+		return $this->get(
+			entityId: $templateId,
+			entityType: UserField::TEMPLATE,
+			fieldName: UserField::TASK_ATTACHMENTS,
+		);
+	}
+
+	protected function get(int $entityId, string $entityType, string $fieldName): ?string
 	{
 		if (!Loader::includeModule('disk'))
 		{
@@ -29,13 +47,13 @@ class DiskArchiveLinkService
 		$urlManager = Driver::getInstance()->getUrlManager();
 
 		return $urlManager::getUrlUfController(self::DOWNLOAD_ACTION, [
-			'entityId' => $taskId,
-			'entity' => UserField::TASK,
-			'fieldName' => UserField::TASK_ATTACHMENTS,
+			'entityId' => $entityId,
+			'entity' => $entityType,
+			'fieldName' => $fieldName,
 			'signature' => ParameterSigner::getEntityArchiveSignature(
-				entity: UserField::TASK,
-				entityId: $taskId,
-				fieldName: UserField::TASK_ATTACHMENTS,
+				entity: $entityType,
+				entityId: $entityId,
+				fieldName: $fieldName,
 			),
 		]);
 	}

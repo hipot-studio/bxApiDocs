@@ -23,15 +23,15 @@ class UserModel extends \Bitrix\Main\Access\User\UserModel
 
 	public function isAdmin(): bool
 	{
-		return $this->getUserEntity()->isAdmin();
+		return $this->getUserEntity()?->isAdmin() ?? false;
 	}
 
 	public function isIntegrator(): bool
 	{
-		return $this->getUserEntity()->isIntegrator();
+		return $this->getUserEntity()?->isIntegrator() ?? false;
 	}
 
-	public function getUserEntity(): User
+	public function getUserEntity(): ?User
 	{
 		if ($this->user)
 		{

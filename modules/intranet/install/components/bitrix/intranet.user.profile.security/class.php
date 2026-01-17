@@ -76,12 +76,12 @@ class CIntranetUserProfileSecurityComponent extends \CBitrixComponent
 
 		if ($isAdminRights || $isOwnProfile)
 		{
-			$menuItems["auth"] = array(
-				"NAME" => Loc::getMessage("INTRANET_USER_PROFILE_AUTH_TITLE_2"),
+			$menuItems["otpConnected"] = array(
+				"NAME" => Loc::getMessage("INTRANET_USER_PROFILE_SECURITY_OTP_TITLE"),
 				"ATTRIBUTES" => Array(
-					"data-action" => "auth",
+					"data-action" => "otpConnected",
 				),
-				"ACTIVE" => isset($_GET["page"]) && $_GET["page"] === "auth" ? true : false
+				"ACTIVE" => isset($_GET["page"]) && $_GET["page"] === "otpConnected"
 			);
 		}
 
@@ -101,17 +101,6 @@ class CIntranetUserProfileSecurityComponent extends \CBitrixComponent
 					"data-action" => "appPasswords",
 				),
 				"ACTIVE" => isset($_GET["page"]) && $_GET["page"] === "appPasswords" ? true : false
-			);
-		}
-
-		if ($this->arResult["OTP"]["IS_ENABLED"] == "Y")
-		{
-			$menuItems["otpConnected"] = array(
-				"NAME"       => Loc::getMessage("INTRANET_USER_PROFILE_SECURITY_OTP_TITLE"),
-				"ATTRIBUTES" => Array(
-					"data-action" => "otpConnected",
-				),
-				"ACTIVE"     => isset($_GET["page"]) && $_GET["page"] === "otpConnected" ? true : false
 			);
 		}
 
@@ -228,9 +217,14 @@ class CIntranetUserProfileSecurityComponent extends \CBitrixComponent
 
 		$this->arResult["MENU_ITEMS"] = $this->getMenuItems();
 
+		if (empty($this->arResult["MENU_ITEMS"]))
+		{
+			return;
+		}
+
 		if (
 			isset($_GET["page"])
-			&& in_array($_GET["page"], array("auth", "history", "synchronize", "appPasswords", "otpConnected", "socnetEmail",
+			&& in_array($_GET["page"], array("history", "synchronize", "appPasswords", "otpConnected", "socnetEmail",
 				"otp", "recoveryCodes", "socserv", "mailingAgreement", "sso")
 			)
 		)
@@ -239,7 +233,7 @@ class CIntranetUserProfileSecurityComponent extends \CBitrixComponent
 		}
 		else
 		{
-			$this->arResult["CURRENT_PAGE"] = "auth";
+			$this->arResult["CURRENT_PAGE"] = "otpConnected";
 		}
 
 		$this->includeComponentTemplate();

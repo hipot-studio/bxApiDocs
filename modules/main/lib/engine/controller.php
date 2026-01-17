@@ -163,8 +163,13 @@ class Controller implements Errorable, Controllerable
 		return getModuleId($this->getFilePath());
 	}
 
-	private function getCurrentAction(): Action
+	final public function getCurrentAction(): Action
 	{
+		if (!isset($this->currentAction))
+		{
+			throw new SystemException('Could not get current action for ' . static::class);
+		}
+
 		return $this->currentAction;
 	}
 
@@ -1130,16 +1135,55 @@ class Controller implements Errorable, Controllerable
 	 * @param string $template
 	 * @param array $params
 	 * @param bool $withSiteTemplate
+	 * @param string|null $siteTemplateId
 	 *
 	 * @return Component
 	 */
-	final protected function renderComponent(string $name, string $template = '', array $params = [], bool $withSiteTemplate = true): Component
+	final protected function renderComponent(
+		string $name,
+		string $template = '',
+		array $params = [],
+		bool $withSiteTemplate = true,
+		?string $siteTemplateId = null,
+	): Component
 	{
 		return new Component(
 			$name,
 			$template,
 			$params,
 			$withSiteTemplate,
+			$siteTemplateId,
+		);
+	}
+
+	/**
+	 * Returns response with component content for AJAX rendering.
+	 *
+	 * @see \Bitrix\Main\Engine\Response\Component
+	 * @see self::renderComponent for classic rendering.
+	 *
+	 * @param  string                                 $name
+	 * @param  string                                 $template
+	 * @param  array                                  $params
+	 * @param  array                                  $additionalResponseParams
+	 * @param  array                                  $dataKeys
+	 *
+	 * @return \Bitrix\Main\Engine\Response\Component
+	 */
+	final protected function renderComponentAjax(
+		string $name,
+		string $template = '',
+		array $params = [],
+		array $additionalResponseParams = [],
+		array $dataKeys = [],
+	): \Bitrix\Main\Engine\Response\Component
+	{
+		return new \Bitrix\Main\Engine\Response\Component(
+			$name,
+			$template,
+			$params,
+			$additionalResponseParams,
+			$dataKeys,
 		);
 	}
 

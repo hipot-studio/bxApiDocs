@@ -32,10 +32,11 @@ class DateTime extends UrlFilter
 	private bool $hasDefaultPeriod = false;
 	private ?Date $from;
 	private ?Date $to;
-	private bool $needIncludeLastFilterDate = false;
 
-	public function __construct(private readonly Dashboard $dashboard)
+	public function __construct(Dashboard $dashboard, ?string $filterId = null)
 	{
+		parent::__construct($dashboard, $filterId);
+
 		$this->period = $dashboard->getOrmObject()->getFilterPeriod();
 		if (empty($this->period))
 		{
@@ -55,16 +56,6 @@ class DateTime extends UrlFilter
 			if ($this->to === null)
 			{
 				$this->to = self::getDefaultDateEnd();
-			}
-
-			$includeLastFilterDate = $dashboard->getOrmObject()->getIncludeLastFilterDate();
-			if ($includeLastFilterDate)
-			{
-				$this->needIncludeLastFilterDate = $includeLastFilterDate === 'Y';
-			}
-			else
-			{
-				$this->needIncludeLastFilterDate = self::needIncludeDefaultLastFilterDate();
 			}
 		}
 		elseif ($this->isCurrentRange())
@@ -137,6 +128,11 @@ class DateTime extends UrlFilter
 		}
 	}
 
+	public static function getFilterType(): string
+	{
+		return 'filter_time';
+	}
+
 	public function hasDefaultFilter(): bool
 	{
 		return $this->hasDefaultPeriod;
@@ -161,15 +157,6 @@ class DateTime extends UrlFilter
 		return $this->period === self::PERIOD_NONE;
 	}
 
-	public function getCode(): string
-	{
-		$config = $this->dashboard->getNativeFiltersConfig();
-		$timeFilter = array_filter($config, static fn($item) => $item['filterType'] === 'filter_time');
-		$timeFilter = array_pop($timeFilter);
-
-		return (string)$timeFilter['id'];
-	}
-
 	public function getFormatted(): string
 	{
 		if ($this->isNone())
@@ -181,13 +168,14 @@ class DateTime extends UrlFilter
 		$from = $from->format('Y-m-d');
 
 		$to = clone($this->to);
-		if ($this->isRange() && $this->needIncludeLastFilterDate())
+		// add one day to include the end date for range filter
+		if ($this->isRange())
 		{
 			$to->add('+1 day');
 		}
 		$to = $to->format('Y-m-d');
 
-		$urlTemplateFilter = '(
+		$urlTemplateFilter = '
 			#FILTER_ID#:(
 				extraFormData:(
 					time_range:\'#DATE_FROM#+:+#DATE_TO#\'
@@ -197,8 +185,7 @@ class DateTime extends UrlFilter
 				),
 				id:#FILTER_ID#,
 				ownState:()
-			)
-		)';
+			)';
 
 		return strtr(
 			$urlTemplateFilter,
@@ -232,9 +219,12 @@ class DateTime extends UrlFilter
 		return $this->from;
 	}
 
+	/**
+	 * @deprecated last date is always included in the date filter
+	 */
 	public function needIncludeLastFilterDate(): bool
 	{
-		return $this->needIncludeLastFilterDate;
+		return true;
 	}
 
 	public static function getDefaultPeriod(): string
@@ -279,9 +269,12 @@ class DateTime extends UrlFilter
 		return $value;
 	}
 
+	/**
+	 * @deprecated last date is always included in the date filter
+	 */
 	public static function needIncludeDefaultLastFilterDate(): bool
 	{
-		return Option::get('biconnector', self::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME, 'N') === 'Y';
+		return true;
 	}
 
 	public static function isAvailablePeriod(string $period): bool

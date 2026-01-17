@@ -14,9 +14,9 @@ use Bitrix\Main\UserAccessTable;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_MailboxAccess_Query query()
- * @method static EO_MailboxAccess_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_MailboxAccess_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_MailboxAccess_Result getById($id)
- * @method static EO_MailboxAccess_Result getList(array $parameters = array())
+ * @method static EO_MailboxAccess_Result getList(array $parameters = [])
  * @method static EO_MailboxAccess_Entity getEntity()
  * @method static \Bitrix\Mail\Internals\EO_MailboxAccess createObject($setDefaultValues = true)
  * @method static \Bitrix\Mail\Internals\EO_MailboxAccess_Collection createCollection()

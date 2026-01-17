@@ -3,16 +3,17 @@
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Helper\MessageLoader;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\MessageView\AvatarManager;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Mail\Address;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Context;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Mail\Helper\LicenseManager;
+use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -38,6 +39,7 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 	protected $mailboxHelper;
 	/** @var Main\ErrorCollection */
 	private $errorCollection;
+	private $directoryTreeForContextMenu;
 
 	public function syncMailCountersAction($mailboxId): void
 	{
@@ -281,12 +283,6 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		];
 		$filter1 = $filter2 = [];
 
-		$uidSubquery = new ORM\Query\Query(Mail\MailMessageUidTable::getEntity());
-		$uidSubquery->addFilter('=MAILBOX_ID', new Main\DB\SqlExpression('%s'));
-		$uidSubquery->addFilter('=MESSAGE_ID', new Main\DB\SqlExpression('%s'));
-		$uidSubquery->addFilter('==DELETE_TIME', 0);
-		$uidSubquery->addFilter('!@IS_OLD', ['M', 'R']);
-
 		$accessSubquery = new ORM\Query\Query(MessageAccessTable::getEntity());
 		$accessSubquery->addFilter('=MAILBOX_ID', new Main\DB\SqlExpression('%s'));
 		$accessSubquery->addFilter('=MESSAGE_ID', new Main\DB\SqlExpression('%s'));
@@ -330,13 +326,11 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			{
 				if ($filterData['IS_SEEN'] == 'Y')
 				{
-					$uidSubquery->addFilter('@IS_SEEN', ['Y', 'S']);
 					$filter2['@MESSAGE_UID.IS_SEEN'] = ['Y', 'S'];
 					$filter1['@MESSAGE_UID.IS_SEEN'] = ['Y', 'S'];
 				}
 				elseif ($filterData['IS_SEEN'] == 'N')
 				{
-					$uidSubquery->addFilter('!@IS_SEEN', ['Y', 'S']);
 					$filter2['!@MESSAGE_UID.IS_SEEN'] = ['Y', 'S'];
 					$filter1['!@MESSAGE_UID.IS_SEEN'] = ['Y', 'S'];
 				}
@@ -346,7 +340,6 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			{
 				if ($filterData['DIR'] != '')
 				{
-					$uidSubquery->addFilter('=DIR_MD5', md5($filterData['DIR']));
 					$filter2['=MESSAGE_UID.DIR_MD5'] = md5($filterData['DIR']);
 					$filter1['=MESSAGE_UID.DIR_MD5'] = md5($filterData['DIR']);
 				}
@@ -528,6 +521,9 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		$mailboxIsSyncAvailability = LicenseManager::checkTheMailboxForSyncAvailability((int)$this->mailbox['ID'], (int)$this->mailbox['USER_ID']);
 		$this->arResult['MAILBOX_IS_SYNC_AVAILABILITY'] = $mailboxIsSyncAvailability;
 
+		$this->arResult['ANALYTICS'] = $this->arParams['ANALYTICS'];
+		$this->arResult['ANALYTICS']['SOURCE_DIR'] = $filterData['DIR'];
+
 		if ($mailboxIsSyncAvailability)
 		{
 			$this->arResult['ROWS'] = $this->getRows($items, $pageNavigation);
@@ -585,32 +581,21 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		$this->saveDateOpening($this->mailbox['ID']);
 
 		$this->arResult['HAS_ACCESS_TO_MAILBOX_GRID'] = $this->hasAccessToMailboxGrid();
+		$this->arResult['MAILBOX_GRID_TARIFF_RESTRICTED'] = !LicenseManager::isMailboxManagementEnabled();
 		$this->arResult['NEED_SHOW_MAILBOX_GRID_HINT'] = $this->needShowMailboxGridHint();
+		$this->arParams['MAILBOX_GRID_GUIDE_NAME'] = Mail\Helper\Config\Guide::getMailboxGridGuideOptionName();
+
+		$this->arResult['HAS_ACCESS_TO_ACCESS_RIGHTS'] = $this->hasAccessToAccessRights();
+		$this->arResult['ACCESS_RIGHTS_TARIFF_RESTRICTED'] = !LicenseManager::isAccessRightsEnabled();
 
 		$this->includeComponentTemplate();
-	}
-
-	private static function getContactList($fieldValue): array
-	{
-		$addressList = Message::parseAddressList($fieldValue);
-		$processedAddressesList = [];
-
-		foreach ($addressList as $address)
-		{
-			$processedAddress = new Address($address);
-			if ($processedAddress->validate())
-			{
-				$processedAddressesList[] = $processedAddress;
-			}
-		}
-
-		return $processedAddressesList;
 	}
 
 	/**
 	 * @param $items
 	 * @param \Bitrix\Main\UI\PageNavigation $navigation
 	 *
+	 * @return array
 	 * @throws Main\ArgumentException
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
@@ -623,13 +608,36 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 		$dateLastOpening = makeTimeStamp($this->getDateLastOpening($this->mailbox['ID']));
 
+		$availableSourceDirs = Message::getAvailableDirsForAnalytics();
 		foreach ($items as $item)
 		{
-			$onclickOpenMessageViewMethod = 'top.BX.SidePanel.Instance.open("'
-			 . \CComponentEngine::makePathFromTemplate(
-				 $this->arParams['PATH_TO_MAIL_MSG_VIEW'],
-				 ['id' => $item['MID']],
-			 ) . '",{printable: true})';
+			$url = \CComponentEngine::makePathFromTemplate(
+				$this->arParams['PATH_TO_MAIL_MSG_VIEW'],
+				['id' => $item['MID']],
+			);
+			$url = Message::addAnalyticsToMessage($url, ['source' => Message::SOURCE_TYPE_MAIL]);
+
+			$sliderData = ['printable' => true];
+			if (
+				in_array(
+					mb_strtolower($this->arResult['ANALYTICS']['SOURCE_DIR'] ?? null),
+					$availableSourceDirs,
+					true,
+				)
+			)
+			{
+				$sliderData['data'] = [
+					'analytics' => [
+						'source_dir' => $this->arResult['ANALYTICS']['SOURCE_DIR'],
+					],
+				];
+			}
+
+			$onclickOpenMessageViewMethod = sprintf(
+				'top.BX.SidePanel.Instance.open("%s", %s)',
+				$url,
+				Json::encode($sliderData),
+			);
 
 			$messagePath =  \CComponentEngine::makePathFromTemplate(
 				$this->arParams['PATH_TO_MAIL_MSG_VIEW'],
@@ -678,17 +686,17 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 				$item['SUBJECT'] ?: Loc::getMessage('MAIL_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER'),
 			);
 
-			$from = static::getContactList($item['FIELD_FROM']);
+			$from = MessageLoader::buildContactList($item['FIELD_FROM']);
 			$avatarKey = AvatarManager::getAvatarKeyByString($item['FIELD_FROM']);
 
 			if (count($from))
 			{
 				//Outcome message
-				if ($from[0]->getEmail() == $this->mailbox['EMAIL'] && !empty($item['FIELD_TO']))
+				if ($from[0]->email == $this->mailbox['EMAIL'] && !empty($item['FIELD_TO']))
 				{
 					$columns['FROM'] = htmlspecialcharsbx($item['FIELD_TO']);
 					$avatarKey = AvatarManager::getAvatarKeyByString($item['FIELD_TO']);
-					$from = static::getContactList($item['FIELD_TO']);
+					$from = MessageLoader::buildContactList($item['FIELD_TO']);
 				}
 			}
 
@@ -701,8 +709,8 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			{
 				foreach ($from as $contact)
 				{
-					$name = !empty($contact->getName()) ? Mail\Message::stripQuotes($contact->getName()) : null;
-					$email = !empty($contact->getEmail()) ? Mail\Message::stripQuotes($contact->getEmail()) : null;
+					$name = !empty($contact->name) ? Mail\Message::stripQuotes($contact->name) : null;
+					$email = !empty($contact->email) ? Mail\Message::stripQuotes($contact->email) : null;
 					$fromValues[] = "<a onclick='" . $onclickEventOpenMessageMethod . $onclickOpenMessageViewMethod . "' class='mail-msg-from-title' title='" . htmlspecialcharsbx($name ? $name . ' / ' : '') . $email . "'>" . htmlspecialcharsbx($name ?: $email) . "</a>";
 				}
 			}
@@ -753,6 +761,9 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 					)
 				,
 				'UF_MAIL_MESSAGE' => (int)$item['MID'],
+				'MAIL_SUBJECT' => $item['SUBJECT'],
+				'MAIL_FROM' => $item['FIELD_FROM'],
+				'MAIL_DATE' => $fieldDateInTimeStamp,
 			]);
 
 			$taskHref = $taskUri->getUri();
@@ -1471,8 +1482,20 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 				}
 			}
 		}
+
+		foreach ($filterOptions->getDefaultPresets() as $key => $defaultPreset)
+		{
+			if (
+				!array_key_exists($key, $userPresets)
+				&& in_array($key, $defaultPresetKeys, true)
+			)
+			{
+				$userPresets[$key] = $defaultPreset;
+			}
+		}
+
 		$curPresets = $filterOptions->getPresets();
-		if ($this->arrayDiffRecursive($curPresets, $userPresets))
+		if (!$this->areArraysEqual($curPresets, $userPresets))
 		{
 			$filterOptions->setPresets($userPresets);
 			$filterOptions->save();
@@ -1578,51 +1601,41 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			}
 		}
 
-		usort(
-			$list,
-			static function (array $a, array $b): int {
-				$aSort = $a['order'];
-				$bSort = $b['order'];
-
-				return $aSort <=> $bSort;
-			},
-		);
-
+		Bitrix\Main\Type\Collection::sortByColumn($list, 'order');
 		$directoryTreeForContextMenu = $list;
 
 		return $list;
 	}
 
-	/**
-	 * @return mixed[]
-	 */
-	private function arrayDiffRecursive($arr1, $arr2): array
+	private function areArraysEqual(array $arr1, array $arr2): bool
 	{
-		$modified = [];
+		if (count($arr1) !== count($arr2))
+		{
+			return false;
+		}
+
 		foreach ($arr1 as $key => $value)
 		{
-			if (array_key_exists($key, $arr2))
+			if (!array_key_exists($key, $arr2))
 			{
-				if (is_array($value) && is_array($arr2[$key]))
+				return false;
+			}
+
+			$compareValue = $arr2[$key];
+			if (is_array($value) && is_array($compareValue))
+			{
+				if (!$this->areArraysEqual($value, $compareValue))
 				{
-					$arDiff = $this->arrayDiffRecursive($value, $arr2[$key]);
-					if (!empty($arDiff))
-					{
-						$modified[$key] = $arDiff;
-					}
-				}
-				elseif ($value != $arr2[$key])
-				{
-					$modified[$key] = $value;
+					return false;
 				}
 			}
-			else
+			elseif ($value !== $compareValue)
 			{
-				$modified[$key] = $value;
+				return false;
 			}
 		}
 
-		return $modified;
+		return true;
 	}
 
 	private function rememberCurrentMailboxId($mailboxId): void
@@ -1656,13 +1669,16 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 	private function hasAccessToMailboxGrid(): bool
 	{
-		global $USER;
+		return Mail\Helper\MailboxAccess::hasCurrentUserAccessToMailboxGrid();
+	}
 
-		return $USER->isAdmin();
+	private function hasAccessToAccessRights(): bool
+	{
+		return Mail\Helper\MailboxAccess::hasCurrentUserAccessToPermission();
 	}
 
 	private function needShowMailboxGridHint(): bool
 	{
-		return \CUserOptions::GetOption('mail.tour', 'mailbox_grid_hint_shown', null) === null;
+		return !Mail\Helper\Config\Guide::wasMailboxGridGuideShown();
 	}
 }

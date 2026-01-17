@@ -16,6 +16,7 @@ use Bitrix\Mobile\Profile\Provider\ProfileProvider;
 use Bitrix\Mobile\Profile\Provider\TagProvider;
 use Bitrix\Mobile\Provider\CommonUserDto;
 use Bitrix\Mobile\Provider\UserRepository;
+use Bitrix\Mobile\Provider\ThemeProvider;
 use Bitrix\IntranetMobile\Provider\DepartmentProvider;
 use Bitrix\Tasks\Internals\Effective;
 use Bitrix\Tasks\Util\User as TasksUser;
@@ -94,10 +95,11 @@ class CommonTab extends BaseProfileTab
 			'departments' => $this->getDepartmentData(),
 			'efficiency' => $this->getEfficiencyData(),
 			'commonFields' => $this->getCommonFields(),
+			'currentTheme' => (new ThemeProvider($this->ownerId))->getCurrentTheme(),
 		];
 	}
 
-	private function getCommonFields(): array
+	public function getCommonFields(): array
 	{
 		$sectionArray = [];
 		$sectionCollection = UserProfileProvider::createByDefault()
@@ -180,12 +182,17 @@ class CommonTab extends BaseProfileTab
 	}
 
 	/**
-	 * @param \DateTimeZone $timezone
+	 * @param \DateTimeZone|null $timezone
 	 * @return string
 	 * @throws \DateMalformedStringException
 	 */
-	private function getGMTString(\DateTimeZone $timezone): string
+	private function getGMTString(?\DateTimeZone $timezone): string
 	{
+		if ($timezone === null)
+		{
+			return '';
+		}
+
 		$dateTime = new \DateTime('now', $timezone);
 		$offsetInSeconds = $timezone->getOffset($dateTime);
 		$hours = intdiv($offsetInSeconds, 3600);

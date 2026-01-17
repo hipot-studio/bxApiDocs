@@ -4,6 +4,8 @@ declare(strict_types = 1);
 
 namespace Bitrix\CrmMobile\Controller;
 
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Mobile\Trait\PublicErrorsTrait;
 use Bitrix\Catalog;
@@ -620,8 +622,26 @@ class EntityDetails extends Controller
 	public function loadProductsAction(Item $entity, ?string $currencyId = null): array
 	{
 		$this->prepareConversionItemProducts($entity);
+		$this->prepareCopyItemProducts($entity);
 
 		return (new ProductGridQuery($entity, $currencyId))->execute();
+	}
+
+	private function prepareCopyItemProducts(Item $entity): void
+	{
+		if (
+			!$this->isCopyMode()
+			|| !Loader::includeModule('catalog')
+			|| AccessController::getCurrent()->checkByValue(
+				ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+				(string)$entity->getEntityTypeId(),
+			)
+		)
+		{
+			return;
+		}
+
+		Container::getInstance()->getProductRowChecker()->updateCatalogPricesForItem($entity);
 	}
 
 	private function prepareConversionItemProducts(Item $entity): void
@@ -871,7 +891,7 @@ class EntityDetails extends Controller
 
 		if ($factory->isLinkWithProductsEnabled())
 		{
-			$this->prepareCopyProductRows($data, $sourceFields);
+			$this->prepareCopyProductRows($data, $sourceFields, $entity);
 		}
 
 		$this->prepareCopyFileFields($factory->getFieldsCollection(), $data, $sourceFields);
@@ -904,11 +924,28 @@ class EntityDetails extends Controller
 		return $sourceEntity->getCompatibleData();
 	}
 
-	private function prepareCopyProductRows(array &$data, array $sourceFields): void
+	private function prepareCopyProductRows(array &$data, array $sourceFields, Item $entity): void
 	{
 		if (!isset($data[Item::FIELD_NAME_PRODUCTS]) && isset($sourceFields[Item::FIELD_NAME_PRODUCTS]))
 		{
 			$data[Item::FIELD_NAME_PRODUCTS] = $sourceFields[Item::FIELD_NAME_PRODUCTS];
+			if (
+				!empty($data[Item::FIELD_NAME_PRODUCTS])
+				&& is_array($data[Item::FIELD_NAME_PRODUCTS])
+				&& Loader::includeModule('catalog')
+				&& !AccessController::getCurrent()->checkByValue(
+					ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+					(string)$entity->getEntityTypeId(),
+				)
+			)
+			{
+				$data[Item::FIELD_NAME_PRODUCTS] =
+					Container::getInstance()->getProductRowChecker()->updateCatalogPrices(
+						$data[Item::FIELD_NAME_PRODUCTS],
+						$data['CURRENCY_ID'] ?? null,
+					)
+				;
+			}
 		}
 
 		if (!empty($data[Item::FIELD_NAME_PRODUCTS]) && is_array($data[Item::FIELD_NAME_PRODUCTS]))

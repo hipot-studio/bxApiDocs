@@ -14,4 +14,5 @@ class CounterStyle
 	public const STYLE_RED = 'danger';
 	public const STYLE_GREEN = 'success';
 	public const STYLE_GRAY = 'gray';
+	public const STYLE_MENTION = 'mention';
 }

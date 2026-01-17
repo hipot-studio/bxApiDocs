@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\AI\ContextCollector;
 
+use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Integration\AI\ContextCollector\EntityCollector\StageSettings;
 use Bitrix\Crm\Integration\AI\ContextCollector\EntityCollector\UserFieldsSettings;
 use Bitrix\Crm\Integration\AI\Contract\ContextCollector;
@@ -10,7 +11,7 @@ use Bitrix\Crm\Service\UserPermissions;
 
 final class CategoriesCollector implements ContextCollector
 {
-	private readonly UserPermissions\EntityPermissions\Category $permissions;
+	private readonly UserPermissions $permissions;
 	private StageSettings $stageSettings;
 	private UserFieldsSettings $userFieldsSettings;
 
@@ -23,8 +24,7 @@ final class CategoriesCollector implements ContextCollector
 		$this->userFieldsSettings = new UserFieldsSettings();
 
 		$this->permissions = Container::getInstance()
-			->getUserPermissions($this->context->userId())
-			->category();
+			->getUserPermissions($this->context->userId());
 	}
 
 	public function setStageSettings(StageSettings $settings): self
@@ -52,7 +52,7 @@ final class CategoriesCollector implements ContextCollector
 		$result = [];
 		foreach ($factory->getCategories() as $category)
 		{
-			if (!$this->permissions->canReadItems($category))
+			if (!$this->canReadCategory($category))
 			{
 				continue;
 			}
@@ -71,7 +71,7 @@ final class CategoriesCollector implements ContextCollector
 
 			if ($this->userFieldsSettings->isCollect())
 			{
-				$info['user_fields'] = (new UserFieldsCollector($this->entityTypeId, $this->context))
+				$info['user_fields'] = (new UserFieldsCollector($this->entityTypeId, $this->context, $category->getId()))
 					->setSettings($this->userFieldsSettings)
 					->setUserFieldsReceiveStrategy(
 						new UserFieldsReceiveStrategy\ViaCardView(
@@ -87,5 +87,12 @@ final class CategoriesCollector implements ContextCollector
 		}
 
 		return $result;
+	}
+
+	private function canReadCategory(Category $category): bool
+	{
+		return $this->permissions->isAdminForEntity($this->entityTypeId, $category->getId())
+			|| $this->permissions->category()->canReadItems($category)
+		;
 	}
 }

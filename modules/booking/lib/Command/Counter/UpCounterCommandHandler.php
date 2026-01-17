@@ -9,18 +9,15 @@ use Bitrix\Booking\Internals\Integration\Pull\PushService;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\PushPull\PushPullCommandType;
-use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\CounterRepositoryInterface;
 
 class UpCounterCommandHandler
 {
 	private CounterRepositoryInterface $counterRepository;
-	private BookingRepositoryInterface $bookingRepository;
 
 	public function __construct()
 	{
 		$this->counterRepository = Container::getCounterRepository();
-		$this->bookingRepository = Container::getBookingRepository();
 	}
 
 	public function __invoke(UpCounterCommand $command): void
@@ -28,30 +25,30 @@ class UpCounterCommandHandler
 		match ($command->type)
 		{
 			CounterDictionary::BookingUnConfirmed,
-			CounterDictionary::BookingDelayed => $this->handle($command),
+			CounterDictionary::BookingDelayed,
+			CounterDictionary::BookingNewYandexMaps => $this->handle($command),
 			default => '',
 		};
 	}
 
 	private function handle(UpCounterCommand $command): void
 	{
-		$booking = $this->bookingRepository->getById($command->entityId);
-
-		if (!$booking)
+		$userId = $command->userId;
+		if (!$userId)
 		{
 			return;
 		}
 
 		$this->counterRepository->up(
-			entityId: $booking->getId(),
+			entityId: $command->entityId,
 			type: $command->type,
-			userId: $booking->getCreatedBy()
+			userId: $userId,
 		);
 
 		\CUserCounter::Set(
-			$booking->getCreatedBy(),
+			$userId,
 			CounterDictionary::LeftMenu->value,
-			$this->counterRepository->get($booking->getCreatedBy(), CounterDictionary::Total),
+			$this->counterRepository->get($userId, CounterDictionary::Total),
 			'**',
 		);
 

@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImBot\Sender;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Result;
 
 class Onboardingbot extends Base
@@ -17,6 +18,7 @@ class Onboardingbot extends Base
 			'botcontroller.Onboardingbot.sendKeyboardCommand',
 			[
 				'messageFields' => \Bitrix\Main\Web\Json::encode($messageFields),
+				'region' => Application::getInstance()->getLicense()->getRegion() ?: 'ru',
 			]
 		);
 	}
@@ -26,7 +28,8 @@ class Onboardingbot extends Base
 		return $this->performRequest(
 			'botcontroller.Onboardingbot.sendMessage',
 			[
-				'messageFields' => \Bitrix\Main\Web\Json::encode($messageFields)
+				'messageFields' => \Bitrix\Main\Web\Json::encode($messageFields),
+				'region' => Application::getInstance()->getLicense()->getRegion() ?: 'ru',
 			]
 		);
 	}

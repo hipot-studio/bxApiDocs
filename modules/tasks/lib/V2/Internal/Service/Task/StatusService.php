@@ -31,8 +31,9 @@ class StatusService
 
 	public function complete(int $taskId, UpdateConfig $config): Task
 	{
+		// todo: move result logic form rule to this
 		$status = $this->statusResolver->resolveForComplete($taskId, $config->getUserId());
-		
+
 		return $this->updateTaskStatus($taskId, $status, $config);
 	}
 

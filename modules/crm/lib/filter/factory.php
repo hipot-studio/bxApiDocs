@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Filter;
 
 use Bitrix\Crm;
 use Bitrix\Crm\Component\EntityList\GridId;
+use Bitrix\Crm\Filter\FieldsTransform\UserBasedField;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tracking;
 use Bitrix\Main;
@@ -267,6 +268,28 @@ class Factory
 				unset($parameters['IS_RECURRING']);
 			}
 		}
+
+		if (\CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId))
+		{
+			$factory = Crm\Service\Container::getInstance()->getFactory($entityTypeId);
+			if ($factory?->isRecurringSupported())
+			{
+				if (!isset($parameters['flags']))
+				{
+					$parameters['flags'] = Main\Filter\EntitySettings::FLAG_NONE;
+				}
+				if (isset($parameters['IS_RECURRING']))
+				{
+					if ($parameters['IS_RECURRING'] === 'Y')
+					{
+						$parameters['flags'] |= ItemSettings::FLAG_RECURRING;
+					}
+					unset($parameters['IS_RECURRING']);
+				}
+			}
+		}
+
+
 		if (isset($parameters['CATEGORY_ID']))
 		{
 			$parameters['categoryID'] = $parameters['CATEGORY_ID'];
@@ -298,6 +321,15 @@ class Factory
 		if ($entityTypeId === \CCrmOwnerType::Deal && str_starts_with($gridId, 'CRM_DEAL_RECUR'))
 		{
 			$parameters['IS_RECURRING'] = 'Y';
+		}
+
+		if (\CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId))
+		{
+			$factory = Crm\Service\Container::getInstance()->getFactory($entityTypeId);
+			if ($factory?->isRecurringSupported() && str_ends_with($gridId, '_recurring'))
+			{
+				$parameters['IS_RECURRING'] = 'Y';
+			}
 		}
 
 		if (
@@ -334,7 +366,7 @@ class Factory
 	/**
 	 * Returns ORM-compatible filter value for specified user
 	 */
-	public function getFilterValue(Filter $filter, ?int $userId = null): array
+	public function getFilterValue(int $entityTypeId, Filter $filter, ?int $userId = null): array
 	{
 		$settings = $filter->getEntityDataProvider()?->getSettings();
 		if (!($settings instanceof EntitySettings))
@@ -352,9 +384,26 @@ class Factory
 
 		$options = new UiFilterOptions($filter->getID(), $preset->getDefaultPresets());
 
-		return $filter->getValue(
+		$values = $filter->getValue(
 			$options->getFilter() + $options->getFilterLogic($filter->getFieldArrays())
 		);
+
+		$values = UserBasedField::breakDepartmentsToUsers($values, $filter->getFields());
+		\Bitrix\Crm\Filter\FieldsTransform\UserBasedField::applyTransformWrapper($values);
+
+		if (\CCrmOwnerType::IsDefined($entityTypeId) && $filter->getEntityDataProvider() instanceof EntityDataProvider)
+		{
+			$extras = [];
+
+			\CCrmEntityHelper::applyFilterDataProviderSubQueryFilter(
+				$values,
+				$filter->getEntityDataProvider(),
+				$entityTypeId,
+				$extras
+			);
+		}
+
+		return $values;
 	}
 
 	private function getPresetBySettings(EntitySettings $settings, ?int $userId = null): ?Crm\Filter\Preset\Base

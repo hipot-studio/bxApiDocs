@@ -52,7 +52,7 @@ class Deal extends Base
 	 */
 	public function getPath()
 	{
-		return '/crm/deal/list/';
+		return SITE_DIR . 'crm/deal/list/';
 	}
 
 	/**

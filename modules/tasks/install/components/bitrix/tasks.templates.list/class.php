@@ -541,6 +541,13 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 
 		$request = \Bitrix\Main\Context::getCurrent()?->getRequest();
 
+		$relationToId = (int)$this->request->get('relationToId');
+		$this->arParams['relationToId'] = $relationToId;
+		if ($relationToId)
+		{
+			$filter['BASE_TEMPLATE_ID'] = $relationToId;
+		}
+
 		if (\Bitrix\Main\Grid\Context::isInternalRequest() && check_bitrix_sessid())
 		{
 			if (

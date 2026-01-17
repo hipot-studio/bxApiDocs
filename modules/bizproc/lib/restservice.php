@@ -532,22 +532,18 @@ class RestService extends \IRestService
 		[$workflowId, $activityName, $eventId] = self::extractEventToken($params['EVENT_TOKEN']);
 
 		$errors = [];
-		\CBPDocument::sendExternalEvent(
-			$workflowId,
-			$activityName,
-			[
-				'EVENT_ID' => $eventId,
-				'RETURN_VALUES' => $params['RETURN_VALUES'] ?? [],
-				'LOG_MESSAGE' => $params['LOG_MESSAGE'] ?? '',
-			],
-			$errors,
+		\Bitrix\Main\Application::getInstance()->addBackgroundJob(
+			static fn() => \CBPDocument::sendExternalEvent(
+				$workflowId,
+				$activityName,
+				[
+					'EVENT_ID' => $eventId,
+					'RETURN_VALUES' => $params['RETURN_VALUES'] ?? [],
+					'LOG_MESSAGE' => $params['LOG_MESSAGE'] ?? '',
+				],
+				$errors,
+			),
 		);
-
-		if ($errors)
-		{
-			$error = current($errors);
-			throw new RestException($error['message'], $error['code']);
-		}
 
 		return true;
 	}
@@ -1732,6 +1728,11 @@ class RestService extends \IRestService
 
 		if (isset($data['PROPERTIES']))
 			static::validateActivityProperties($data['PROPERTIES']);
+
+		if (isset($data['DOCUMENT_TYPE']))
+		{
+			static::validateActivityDocumentType($data['DOCUMENT_TYPE']);
+		}
 
 		if (isset($data['RETURN_PROPERTIES']))
 			static::validateActivityProperties($data['RETURN_PROPERTIES']);

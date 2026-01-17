@@ -4,7 +4,7 @@ namespace Bitrix\Tasks\Internals\Task;
 
 use Bitrix\Main\Localization\Loc;
 
-Loc::getMessage(__FILE__);
+Loc::loadMessages(__FILE__);
 
 abstract class Mark extends Base
 {

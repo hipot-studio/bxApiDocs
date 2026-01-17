@@ -8,7 +8,10 @@
 namespace Bitrix\Intranet\Internals;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type;
+use Bitrix\Rest\AppTable;
 
 /**
  * Class InvitationTable
@@ -19,9 +22,9 @@ use Bitrix\Main\Type;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Invitation_Query query()
- * @method static EO_Invitation_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Invitation_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Invitation_Result getById($id)
- * @method static EO_Invitation_Result getList(array $parameters = array())
+ * @method static EO_Invitation_Result getList(array $parameters = [])
  * @method static EO_Invitation_Entity getEntity()
  * @method static \Bitrix\Intranet\Internals\EO_Invitation createObject($setDefaultValues = true)
  * @method static \Bitrix\Intranet\Internals\EO_Invitation_Collection createCollection()
@@ -103,7 +106,6 @@ class InvitationTable extends Entity\DataManager
 				'data_type' => 'Bitrix\Main\User',
 				'reference' => array('=this.ORIGINATOR_ID' => 'ref.ID')
 			),
-
 		];
 	}
 }

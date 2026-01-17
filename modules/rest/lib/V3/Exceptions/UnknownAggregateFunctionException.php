@@ -12,7 +12,7 @@ class UnknownAggregateFunctionException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_UNKNOWN_AGGREGATE_FUNCTION_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_UNKNOWNAGGREGATEFUNCTIONEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

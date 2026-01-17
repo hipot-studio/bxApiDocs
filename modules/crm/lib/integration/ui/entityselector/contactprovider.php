@@ -27,6 +27,7 @@ class ContactProvider extends EntityProvider
 
 		$this->categoryId = (int)($options['categoryId'] ?? 0);
 		$this->options['categoryId'] = $this->categoryId;
+		$this->options['allowAllCategories'] = (bool)($options['allowAllCategories'] ?? false);
 
 		$this->showPhones = (bool)($options['showPhones'] ?? $this->showPhones);
 		$this->showMails = (bool)($options['showMails'] ?? $this->showMails);
@@ -46,7 +47,10 @@ class ContactProvider extends EntityProvider
 
 	protected function fetchEntryIds(array $filter): array
 	{
-		$filter['=CATEGORY_ID'] = $this->categoryId;
+		if (!($this->options['allowAllCategories'] ?? false))
+		{
+			$filter['=CATEGORY_ID'] = $this->categoryId;
+		}
 
 		$collection = static::$dataClass::getList([
 			'select' => ['ID'],
@@ -58,9 +62,11 @@ class ContactProvider extends EntityProvider
 
 	protected function getAdditionalFilter(): array
 	{
-		$filter = [
-			'=CATEGORY_ID' =>  $this->categoryId,
-		];
+		$filter = [];
+		if (!($this->options['allowAllCategories'] ?? false))
+		{
+			$filter['=CATEGORY_ID'] = $this->categoryId;
+		}
 
 		$filter = array_merge($filter, $this->getFilterIds(), $this->getEmailFilters());
 

@@ -13,7 +13,7 @@ use Bitrix\Tasks\Integration\SocialNetwork\LogDestination;
 
 Loc::loadMessages(__FILE__);
 
-abstract class SocialNetwork extends \Bitrix\Tasks\Integration
+abstract class SocialNetwork extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'socialnetwork';
 

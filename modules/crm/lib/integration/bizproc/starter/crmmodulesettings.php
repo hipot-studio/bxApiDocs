@@ -104,4 +104,13 @@ final class CrmModuleSettings extends ModuleSettings
 
 		return $documents;
 	}
+
+	public function onBeforeRunAutomationOnUpdate(mixed $documentId): void
+	{
+		parent::onBeforeRunAutomationOnUpdate($documentId);
+
+		[, $entityId] = \CCrmBizProcHelper::resolveEntityIdByDocumentId($documentId);
+
+		Factory::doAutocompleteActivities($this->entityTypeId, $entityId);
+	}
 }

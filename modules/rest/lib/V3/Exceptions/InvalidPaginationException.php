@@ -12,7 +12,7 @@ class InvalidPaginationException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_INVALID_PAGINATION_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_INVALIDPAGINATIONEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

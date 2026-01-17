@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\Deadline\Internals\Model;
 
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Main\Entity\BooleanField;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\MergeTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
@@ -71,7 +71,7 @@ class DeadlineUserOptionTable extends DataManager
 			,
 			(new BooleanField(name: 'CAN_CHANGE_DEADLINE' ))
 				->configureValues(falseValue: 0, trueValue: 1)
-				->configureDefaultValue(value: 0)
+				->configureDefaultValue(value: 1)
 			,
 			(new DatetimeField(name: 'MAX_DEADLINE_CHANGE_DATE'))
 				->configureNullable()

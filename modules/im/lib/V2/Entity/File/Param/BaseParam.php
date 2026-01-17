@@ -7,12 +7,12 @@ namespace Bitrix\Im\V2\Entity\File\Param;
 abstract class BaseParam implements Param
 {
 	protected int $fileId;
-	protected ParamName $name;
 	protected string $value;
 
-	public function __construct(int $fileId, ParamName $paramName, string $value)
+	abstract protected static function getParamName(): ParamName;
+
+	protected function __construct(int $fileId, string $value)
 	{
-		$this->name = $paramName;
 		$this->fileId = $fileId;
 		$this->value = $value;
 	}
@@ -26,7 +26,9 @@ abstract class BaseParam implements Param
 	{
 		return match ($paramName)
 		{
-			ParamName::IsTranscribable => (new Transcribable($fileId, $paramName, $value)),
+			ParamName::IsTranscribable => (new Transcribable($fileId, $value)),
+			ParamName::IsVideoNote => (new VideoNote($fileId, $value)),
+			ParamName::IsVoiceNote => (new VoiceNote($fileId, $value)),
 		};
 	}
 }

@@ -3,7 +3,6 @@
 namespace Bitrix\Crm\Rest;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\Provider;
-use Bitrix\Faceid\AgreementTable;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -160,7 +159,7 @@ class CCrmExternalChannelImport
 								$result = $this->licenceIsRestricted()? false:true;
 								break;
 							case 'accepted':
-								$result = $this->agreementIsAccepted();
+								$result = false;
 								break;
 						}
 
@@ -183,19 +182,5 @@ class CCrmExternalChannelImport
 			$r = in_array(\CBitrix24::getLicenseType(), array('project', 'tf'));
 		}
 		return $r;
-	}
-
-	protected function agreementIsAccepted()
-	{
-		global $USER;
-
-		$result = false;
-		if(\Bitrix\Main\Loader::includeModule('faceid') &&
-			\Bitrix\Faceid\AgreementTable::checkUser($USER->getId()))
-		{
-			$result = true;
-		}
-
-		return $result;
 	}
 }

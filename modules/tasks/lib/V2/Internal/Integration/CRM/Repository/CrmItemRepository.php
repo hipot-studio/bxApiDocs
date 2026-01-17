@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Integration\CRM\Repository;
 
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
@@ -34,6 +35,28 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 			TaskTable::query()
 				->setSelect(['ID', UserField::TASK_CRM])
 				->where('ID', $taskId)
+				->fetch()
+		;
+
+		if (!is_array($row[UserField::TASK_CRM] ?? null))
+		{
+			return [];
+		}
+
+		return $row[UserField::TASK_CRM];
+	}
+
+	public function getIdsByTemplateId(int $templateId): array
+	{
+		if (!Loader::includeModule('crm'))
+		{
+			return [];
+		}
+
+		$row =
+			TemplateTable::query()
+				->setSelect(['ID', UserField::TASK_CRM])
+				->where('ID', $templateId)
 				->fetch()
 		;
 
@@ -107,6 +130,11 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 		}
 
 		return $this->crmItemMapper->mapToCollection($items);
+	}
+
+	public function invalidate(int $taskId): void
+	{
+
 	}
 
 	private function getTypeName(int $typeId): ?string

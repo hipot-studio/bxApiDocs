@@ -2,9 +2,11 @@
 
 namespace Bitrix\Im\V2\Link\File;
 
+use Bitrix\Im\V2\Entity;
 use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Entity\File\FilePopupItem;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
+use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Fields;
@@ -126,6 +128,16 @@ class FileCollection extends BaseLinkCollection
 		}
 
 		return parent::save($isGroupSave);
+	}
+
+	public static function linkEntityToMessage(Entity\EntityCollection $entities, Message $message): self
+	{
+		if ($entities instanceof Entity\File\FileCollection)
+		{
+			$entities->loadParams();
+		}
+
+		return parent::linkEntityToMessage($entities, $message);
 	}
 
 	protected static function processFilters(Query $query, array $filter, array $order): void

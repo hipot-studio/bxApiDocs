@@ -166,6 +166,10 @@ class Counter
 						'counter' => $this->get(CounterDictionary::COUNTER_NEW_COMMENTS, $groupId),
 						'code' => Counter\Type::TYPE_NEW_COMMENTS,
 					],
+					'mentioned' => [
+						'counter' => $this->get(CounterDictionary::COUNTER_MENTIONED, $groupId),
+						'code' => Counter\Type::TYPE_MENTIONED,
+					],
 				];
 				break;
 
@@ -182,6 +186,10 @@ class Counter
 					'new_comments' => [
 						'counter' => $this->get(CounterDictionary::COUNTER_MY_NEW_COMMENTS, $groupId),
 						'code' => Counter\Type::TYPE_NEW_COMMENTS,
+					],
+					'mentioned' => [
+						'counter' => $this->get(CounterDictionary::COUNTER_MENTIONED, $groupId),
+						'code' => Counter\Type::TYPE_MENTIONED,
 					],
 				];
 				break;
@@ -200,6 +208,10 @@ class Counter
 						'counter' => $this->get(CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS, $groupId),
 						'code' => Counter\Type::TYPE_NEW_COMMENTS,
 					],
+					'mentioned' => [
+						'counter' => $this->get(CounterDictionary::COUNTER_MENTIONED, $groupId),
+						'code' => Counter\Type::TYPE_MENTIONED,
+					],
 				];
 				break;
 
@@ -217,6 +229,10 @@ class Counter
 						'counter' => $this->get(CounterDictionary::COUNTER_ACCOMPLICES_NEW_COMMENTS, $groupId),
 						'code' => Counter\Type::TYPE_NEW_COMMENTS,
 					],
+					'mentioned' => [
+						'counter' => $this->get(CounterDictionary::COUNTER_MENTIONED, $groupId),
+						'code' => Counter\Type::TYPE_MENTIONED,
+					],
 				];
 				break;
 
@@ -233,6 +249,10 @@ class Counter
 					'new_comments' => [
 						'counter' => $this->get(CounterDictionary::COUNTER_AUDITOR_NEW_COMMENTS, $groupId),
 						'code' => Counter\Type::TYPE_NEW_COMMENTS,
+					],
+					'mentioned' => [
+						'counter' => $this->get(CounterDictionary::COUNTER_MENTIONED, $groupId),
+						'code' => Counter\Type::TYPE_MENTIONED,
 					],
 				];
 				break;
@@ -449,6 +469,7 @@ class Counter
 					CounterDictionary::COUNTER_MY_MUTED_NEW_COMMENTS => 0,
 					CounterDictionary::COUNTER_GROUP_EXPIRED => 0,
 					CounterDictionary::COUNTER_GROUP_COMMENTS => 0,
+					CounterDictionary::COUNTER_MENTIONED => 0,
 				];
 			}
 
@@ -474,7 +495,8 @@ class Counter
 
 			if (in_array($type, [
 				CounterDictionary::COUNTER_GROUP_COMMENTS,
-				CounterDictionary::COUNTER_GROUP_EXPIRED
+				CounterDictionary::COUNTER_GROUP_EXPIRED,
+				CounterDictionary::COUNTER_MENTIONED,
 			]))
 			{
 				$counters[$id][$type] = $value;

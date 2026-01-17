@@ -2,6 +2,7 @@
 
 namespace Bitrix\Rest\V3\Structures\Filtering;
 
+use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Exceptions\InvalidFilterException;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exceptions\UnknownFilterOperatorException;
@@ -30,9 +31,10 @@ final class FilterStructure extends Structure
 	{
 		$value = (array)$value;
 
-		$reflection = new \ReflectionClass($dtoClass);
+		/** @var Dto $dto */
+		$dto = self::getDto($dtoClass);
 
-		return self::fillStructure($value, $reflection);
+		return self::fillStructure($value, $dto);
 	}
 
 	/**
@@ -43,7 +45,7 @@ final class FilterStructure extends Structure
 	 *
 	 * @return $this|Logic
 	 */
-	public function logic(Logic $logic = null): static|Logic
+	public function logic(?Logic $logic = null): static|Logic
 	{
 		if ($logic === null)
 		{
@@ -330,7 +332,7 @@ final class FilterStructure extends Structure
 	 * @throws UnknownFilterOperatorException
 	 * @throws \ReflectionException
 	 */
-	protected static function fillStructure(array $filterItem, \ReflectionClass $dtoReflection, ?self $structure = null): self
+	protected static function fillStructure(array $filterItem, Dto $dto, ?self $structure = null): self
 	{
 		$structure ??= new self();
 		$structure->rawData = $filterItem;
@@ -349,7 +351,7 @@ final class FilterStructure extends Structure
 
 		if (!isset($filterItem['type']) && !isset($filterItem['logic']) && !isset($filterItem['conditions']) && !isset($filterItem['negative']))
 		{
-			return self::handleSimpleCondition($filterItem, $dtoReflection, $structure);
+			return self::handleSimpleCondition($filterItem, $dto, $structure);
 		}
 
 		if (isset($filterItem['negative']))
@@ -370,7 +372,7 @@ final class FilterStructure extends Structure
 		{
 			if (!isset($conditionItem['type']) && !isset($conditionItem['logic']) && !isset($conditionItem['conditions']) && !isset($conditionItem['negative']))
 			{
-				$newItem = static::fillStructure($conditionItem, $dtoReflection);
+				$newItem = static::fillStructure($conditionItem, $dto);
 				$structure->addCondition($newItem);
 
 				continue;
@@ -383,8 +385,8 @@ final class FilterStructure extends Structure
 
 			$newItem = match ($conditionItem['type'])
 			{
-				'filter' => static::fillStructure($conditionItem, $dtoReflection),
-				'condition' => self::createStaticCondition($conditionItem, $dtoReflection),
+				'filter' => static::fillStructure($conditionItem, $dto),
+				'condition' => self::createStaticCondition($conditionItem, $dto),
 				default => throw new InvalidFilterException($conditionItem),
 			};
 
@@ -401,21 +403,21 @@ final class FilterStructure extends Structure
 	 * @throws InvalidFilterException
 	 * @throws \ReflectionException
 	 */
-	private static function handleSimpleCondition(array $filterItem, \ReflectionClass $dtoReflection, self $structure): static
+	private static function handleSimpleCondition(array $filterItem, Dto $dto, self $structure): static
 	{
 		if (is_array($filterItem[0]) && !isset($filterItem[0]['expression']))
 		{
-			return self::handleArrayCondition($filterItem, $dtoReflection, $structure);
+			return self::handleArrayCondition($filterItem, $dto, $structure);
 		}
 
 		$condition = match (count($filterItem))
 		{
-			2 => self::createConditionWithOperatorAndValue($dtoReflection, $filterItem[0], is_array($filterItem[1]) ? Operator::In : Operator::Equal, $filterItem[1]),
-			3 => self::createConditionWithOperatorAndValue($dtoReflection, $filterItem[0], $filterItem[1], $filterItem[2]),
+			2 => self::createConditionWithOperatorAndValue($dto, $filterItem[0], is_array($filterItem[1]) ? Operator::In : Operator::Equal, $filterItem[1]),
+			3 => self::createConditionWithOperatorAndValue($dto, $filterItem[0], $filterItem[1], $filterItem[2]),
 			default => throw new InvalidFilterException('Unknown filter condition'),
 		};
 
-		FilterValidator::validateOperands($condition, $dtoReflection);
+		FilterValidator::validateOperands($condition, $dto);
 		$structure->addCondition($condition);
 
 		return $structure;
@@ -428,11 +430,11 @@ final class FilterStructure extends Structure
 	 * @throws UnknownFilterOperatorException
 	 * @throws \ReflectionException
 	 */
-	private static function handleArrayCondition(array $filterItem, \ReflectionClass $dtoReflection, self $structure): static
+	private static function handleArrayCondition(array $filterItem, Dto $dto, self $structure): static
 	{
 		foreach ($filterItem as $item)
 		{
-			$newItem = static::fillStructure($item, $dtoReflection);
+			$newItem = static::fillStructure($item, $dto);
 			$structure->addCondition($newItem);
 		}
 
@@ -443,11 +445,11 @@ final class FilterStructure extends Structure
 	 * @throws InvalidFilterException
 	 * @throws UnknownFilterOperatorException
 	 */
-	private static function createConditionWithOperatorAndValue(\ReflectionClass $dtoReflection, mixed $field, Operator|string $operator, mixed $value): Condition
+	private static function createConditionWithOperatorAndValue(Dto $dto, mixed $fieldName, Operator|string $operator, mixed $value): Condition
 	{
 		$operator = $operator instanceof Operator ? $operator : FilterValidator::validateOperator($operator);
 
-		$fieldType = is_scalar($field) && $dtoReflection->hasProperty($field) ? $dtoReflection->getProperty($field)->getType()->getName() : null;
+		$fieldType = is_scalar($fieldName) && isset($dto->getFields()[$fieldName]) ? $dto->getFields()[$fieldName]->getPropertyType() : null;
 
 		if (is_array($value))
 		{
@@ -461,7 +463,7 @@ final class FilterStructure extends Structure
 			$value = FieldsConverter::convertValueByType($fieldType, $value);
 		}
 
-		return new Condition($field, $operator, $value);
+		return new Condition($fieldName, $operator, $value);
 	}
 
 	/**
@@ -471,11 +473,11 @@ final class FilterStructure extends Structure
 	 * @throws \ReflectionException
 	 * @throws InvalidFilterException
 	 */
-	private static function createStaticCondition(array $conditionItem, \ReflectionClass $dtoReflection): Condition
+	private static function createStaticCondition(array $conditionItem, Dto $dto): Condition
 	{
 		FilterValidator::validateOperator($conditionItem['operator']);
 		$newItem = new Condition($conditionItem['leftOperand'], $conditionItem['operator'], $conditionItem['rightOperand']);
-		FilterValidator::validateOperands($newItem, $dtoReflection);
+		FilterValidator::validateOperands($newItem, $dto);
 
 		return $newItem;
 	}

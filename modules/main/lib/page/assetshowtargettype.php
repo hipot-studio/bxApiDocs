@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Main\Page;
 
 class AssetShowTargetType
@@ -8,5 +9,3 @@ class AssetShowTargetType
 	const TEMPLATE_PAGE = 2;
 	const BODY = 3;
 }
-
-?>

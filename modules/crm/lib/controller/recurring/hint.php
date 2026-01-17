@@ -6,10 +6,10 @@ use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\DealRecurTable;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Model\Dynamic\RecurringTable;
-use Bitrix\Crm\Recurring\Manager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Localization\Loc;
+use CCrmOwnerType;
 
 class Hint extends \Bitrix\Crm\Controller\Base
 {
@@ -18,14 +18,14 @@ class Hint extends \Bitrix\Crm\Controller\Base
 		$entityTypeId = $itemIdentifier->getEntityTypeId();
 		$entityId = $itemIdentifier->getEntityId();
 
-		if (Container::getInstance()->getUserPermissions()->item()->canRead($entityTypeId, $entityId))
+		if (!Container::getInstance()->getUserPermissions()->item()->canRead($entityTypeId, $entityId))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
 			return [];
 		}
 
-		if (!Manager::isAvailableEntityTypeId($entityTypeId))
+		if (!Container::getInstance()->getFactory($entityTypeId)?->isRecurringEnabled())
 		{
 			$this->addError(ErrorCode::getEntityTypeNotSupportedError());
 
@@ -33,7 +33,7 @@ class Hint extends \Bitrix\Crm\Controller\Base
 		}
 
 		$entityId = $itemIdentifier->getEntityId();
-		if ($entityTypeId === \CCrmOwnerType::Deal)
+		if ($entityTypeId === CCrmOwnerType::Deal)
 		{
 			$hint = $this->getDealHint($entityId);
 		}
@@ -86,7 +86,7 @@ class Hint extends \Bitrix\Crm\Controller\Base
 		{
 			if (count($dealIdList) === 1)
 			{
-				$hint = GetMessage('NEXT_BASED_ON_DEAL_ONCE', ['#ID#' => $dealIdList[0]]);
+				$hint = Loc::getMessage('CRM_RECURRING_HINT_NEXT_BASED_ON_DEAL_ONCE', ['#ID#' => $dealIdList[0]]);
 			}
 			else
 			{
@@ -105,7 +105,7 @@ class Hint extends \Bitrix\Crm\Controller\Base
 			$hint = Loc::getMessage('CRM_RECURRING_HINT_NEXT_DEAL_EMPTY');
 		}
 
-		return $hint;
+		return $hint ?? '';
 	}
 
 	private function getDynamicHint(int $entityTypeId, int $entityId): string
@@ -143,9 +143,12 @@ class Hint extends \Bitrix\Crm\Controller\Base
 
 		if (!empty($itemIdList))
 		{
+			$isSmartInvoices = $entityTypeId === CCrmOwnerType::SmartInvoice;
+
 			if (count($itemIdList) === 1)
 			{
-				$hint = Loc::getMessage('CRM_RECURRING_HINT_NEXT_BASED_ON_ITEM_ONCE', ['#ID#' => $itemIdList[0]]);
+				$code = $isSmartInvoices ? 'CRM_RECURRING_HINT_NEXT_BASED_ON_ITEM_ONCE_INVOICE' : 'CRM_RECURRING_HINT_NEXT_BASED_ON_ITEM_ONCE';
+				$hint = Loc::getMessage($code, ['#ID#' => $itemIdList[0]]);
 			}
 			else
 			{
@@ -155,7 +158,9 @@ class Hint extends \Bitrix\Crm\Controller\Base
 					$idLine .= Loc::getMessage('CRM_RECURRING_HINT_SIGN_NUM_WITH_ITEM_ID', ['#ITEM_ID#' => $id]) . ', ';
 				}
 				$idLine = mb_substr($idLine, 0, -2);
-				$hint = Loc::getMessage('CRM_RECURRING_HINT_NEXT_BASED_ON_ITEM_MULTI', ['#ID_LINE#' => $idLine]);
+
+				$code = $isSmartInvoices ? 'CRM_RECURRING_HINT_NEXT_BASED_ON_ITEM_MULTI_INVOICE' : 'CRM_RECURRING_HINT_NEXT_BASED_ON_ITEM_MULTI';
+				$hint = Loc::getMessage($code, ['#ID_LINE#' => $idLine]);
 			}
 		}
 

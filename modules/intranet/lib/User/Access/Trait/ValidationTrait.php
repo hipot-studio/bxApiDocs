@@ -11,6 +11,8 @@ trait ValidationTrait
 {
 	public function checkModel(AccessibleItem $item): bool
 	{
-		return $item instanceof TargetUserModel;
+		return $item instanceof TargetUserModel
+			&& $item->getUserEntity()
+			&& $this->user?->getUserEntity();
 	}
 }

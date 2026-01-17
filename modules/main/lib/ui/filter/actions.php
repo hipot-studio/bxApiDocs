@@ -1,7 +1,6 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\Filter;
-
 
 /**
  * Class Actions. Available actions for works with user options.

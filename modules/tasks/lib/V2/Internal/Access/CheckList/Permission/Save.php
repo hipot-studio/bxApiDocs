@@ -10,17 +10,16 @@ use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\CheckList\Node\Nodes;
 use Bitrix\Tasks\V2\Internal\DI\Container;
-use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;;
+use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
-use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
 class Save implements AttributeAccessInterface
 {
 	public function check(Entity\EntityInterface $entity, Context $context, array $parameters = []): bool
 	{
-		$checkListMapper = new CheckListMapper();
+		$checkListMapper = Container::getInstance()->getCheckListMapper();
 		$taskRepository = Container::getInstance()->getTaskRepository();
 
 		if (!$entity->getId())
@@ -39,7 +38,7 @@ class Save implements AttributeAccessInterface
 			userId: $context->getUserId(),
 			action: ActionDictionary::ACTION_CHECKLIST_SAVE,
 			itemId: $entity->getId(),
-			params: $nodes->toArray(),
+			params: array_values($nodes->toArray()),
 		))
 		{
 			return false;

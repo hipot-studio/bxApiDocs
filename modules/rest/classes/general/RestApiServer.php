@@ -14,14 +14,17 @@ use Bitrix\Rest\Event\Session;
 use Bitrix\Rest\RestExceptionInterface;
 use Bitrix\Rest\Tools\Diagnostics\RestServerProcessLogger;
 use Bitrix\Rest\UsageStatTable;
-use Bitrix\Rest\V3\Controllers\RestController;
-use Bitrix\Rest\V3\Exceptions\AccessDeniedException;
-use Bitrix\Rest\V3\Exceptions\Internal\InternalException;
-use Bitrix\Rest\V3\Exceptions\InvalidSelectException;
-use Bitrix\Rest\V3\Exceptions\LicenseException;
-use Bitrix\Rest\V3\Exceptions\MethodNotFoundException;
-use Bitrix\Rest\V3\Exceptions\RateLimitException;
-use Bitrix\Rest\V3\Exceptions\RestException;
+use Bitrix\Rest\V3\Attribute\ResolvedBy;
+use Bitrix\Rest\V3\Controller\RestController;
+use Bitrix\Rest\V3\DefaultLanguage;
+use Bitrix\Rest\V3\Exception\AccessDeniedException;
+use Bitrix\Rest\V3\Exception\Internal\InternalException;
+use Bitrix\Rest\V3\Exception\InvalidSelectException;
+use Bitrix\Rest\V3\Exception\LicenseException;
+use Bitrix\Rest\V3\Exception\MethodNotFoundException;
+use Bitrix\Rest\V3\Exception\RateLimitException;
+use Bitrix\Rest\V3\Exception\RelationMethodNotFoundException;
+use Bitrix\Rest\V3\Exception\RestException;
 use Bitrix\Rest\V3\Interaction\Request\BatchRequest;
 use Bitrix\Rest\V3\Interaction\Request\ServerRequest;
 use Bitrix\Rest\V3\Interaction\Response\BatchResponse;
@@ -30,19 +33,20 @@ use Bitrix\Rest\V3\Interaction\Response\Response;
 use Bitrix\Rest\V3\Interaction\Response\ResponseWithRelations;
 use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\SchemaManager;
+use Bitrix\Rest\V3\Schema\Scope;
 
 class CRestApiServer extends CRestServer
 {
-	protected ?string $localErrorLanguage = null;
+	protected string $responseLanguage;
 	/**
 	 * @var MethodDescription[]
 	 */
 	protected ?array $methodDescriptions = null;
 
 	/**
-	 * @var string[]
+	 * @var Scope[]
 	 */
-	private array $availableScopes = [CRestUtil::GLOBAL_SCOPE];
+	private array $availableScopes;
 	private ?array $requestAccess = null;
 
 	protected SchemaManager $schemaManager;
@@ -53,10 +57,10 @@ class CRestApiServer extends CRestServer
 	 */
 	public function __construct($params)
 	{
+		$this->availableScopes = [CRestUtil::GLOBAL_SCOPE => new Scope(CRestUtil::GLOBAL_SCOPE)];
 		$this->transport = self::TRANSPORT_JSON;
-		$this->localErrorLanguage = $params['LOCAL_ERROR_LANGUAGE'] ?? null;
+		$this->responseLanguage = $params['RESPONSE_LANGUAGE'] ?? DefaultLanguage::get();
 		$this->schemaManager = ServiceLocator::getInstance()->get(SchemaManager::class);
-
 		if (!$this->checkSite())
 		{
 			throw new AccessDeniedException(status: self::STATUS_WRONG_REQUEST);
@@ -109,10 +113,26 @@ class CRestApiServer extends CRestServer
 		$this->initServerExecution($request);
 
 		$methodDescription = $this->getMethodDescription($request->getMethod());
-		if ($methodDescription === null || !Loader::includeModule($methodDescription->getModule()))
+		if ($methodDescription === null || !Loader::includeModule($methodDescription->module))
 		{
 			throw new MethodNotFoundException($request->getMethod());
 		}
+
+		if (!$methodDescription->isEnabled)
+		{
+			throw new AccessDeniedException(status: self::STATUS_FORBIDDEN);
+		}
+
+		if ($methodDescription->controller)
+		{
+			$controllerData = $this->schemaManager->getControllerDataByName($methodDescription->controller);
+			if (!$controllerData || !$controllerData->isEnabled())
+			{
+				throw new AccessDeniedException(status: self::STATUS_FORBIDDEN);
+			}
+		}
+
+		$request = $this->getRequestByMethodDescription($request, $methodDescription);
 
 		$this->initRequestScope($request);
 
@@ -136,7 +156,6 @@ class CRestApiServer extends CRestServer
 		$this->authType = $res['auth_type'];
 		$this->clientId = $res['client_id'] ?? null;
 		$this->passwordId = $res['password_id'] ?? null;
-		$this->authData = $res;
 
 		if (isset($this->authData['auth_connector']) && !$this->canUseConnectors())
 		{
@@ -170,12 +189,12 @@ class CRestApiServer extends CRestServer
 		if ($request->getToken() !== null)
 		{
 			[$scope] = explode(CRestUtil::TOKEN_DELIMITER, $request->getToken(), 2);
-			$request->setScope($scope ?: CRestUtil::GLOBAL_SCOPE);
+			$request->setScopes([$scope ?: CRestUtil::GLOBAL_SCOPE]);
 		}
 		else
 		{
 			$methodDescription = $this->getMethodDescription($request->getMethod());
-			$request->setScope($methodDescription?->getScope());
+			$request->setScopes($methodDescription->scopes);
 		}
 	}
 
@@ -273,18 +292,21 @@ class CRestApiServer extends CRestServer
 	 * @throws MethodNotFoundException
 	 * @throws ObjectException
 	 * @throws SystemException
+	 * @throws LoaderException
 	 */
 	protected function processBatchServerExecution(ServerRequest $request, CurrentUser $currentUser): Response
 	{
 		$jsonData = $request->getHttpRequest()->getJsonList()->toArray();
 		$batchRequest = new BatchRequest($jsonData);
 		$batchResponse = new BatchResponse();
+		$methods = $this->getBatchMethodDescriptions($batchRequest);
 		foreach ($batchRequest->getItems() as $index => $item)
 		{
 			$context = $batchResponse->getContext();
 			$httpJsonData = $this->prepareJsonData($context, $item->getQuery());
 			$itemHttpRequest = new \Bitrix\Main\HttpRequest(\Bitrix\Main\Context::getCurrent()->getServer(), [], [], [], [], $httpJsonData);
 			$itemServerRequest = new ServerRequest($item->getMethod(), $request->getQuery(), $itemHttpRequest);
+			$itemServerRequest = $this->getRequestByMethodDescription($itemServerRequest, $methods[$index]);
 
 			$response = $this->processServerRequestExecution($itemServerRequest, $currentUser);
 			if ($response instanceof ErrorResponse)
@@ -395,17 +417,22 @@ class CRestApiServer extends CRestServer
 			throw new MethodNotFoundException($request->getMethod());
 		}
 
-		if (!$request->getScope())
+		if (!$request->getScopes())
 		{
-			$request->setScope($methodDescription->getScope() ?? null);
+			$request->setScopes($methodDescription->scopes ?? null);
 		}
 
-		if (!$this->isRequestScopeAvailable($request->getScope()))
+		$availableScope = $this->getAvailableScopeFromRequest($request->getScopes());
+		if ($availableScope === null)
 		{
 			throw new AccessDeniedException(status: self::STATUS_FORBIDDEN);
 		}
 
-		$controller = ControllerBuilder::build($methodDescription->getController(), ['scope' => \Bitrix\Main\Engine\Controller::SCOPE_REST, 'currentUser' => $currentUser, 'request' => $request->getHttpRequest()]);
+		$controller = ControllerBuilder::build($methodDescription->controller, [
+			'scope' => \Bitrix\Main\Engine\Controller::SCOPE_REST,
+			'currentUser' => $currentUser,
+			'request' => $request->getHttpRequest(),
+		]);
 
 		if (!$controller instanceof RestController)
 		{
@@ -413,14 +440,17 @@ class CRestApiServer extends CRestServer
 			throw new InternalException($exception);
 		}
 
-		$controller->setLocalErrorLanguage($this->localErrorLanguage);
+		$controller->setDtoClass($methodDescription->dtoClass);
+		$controller->setProcessedScope($availableScope);
+		$controller->setResponseLanguage($this->responseLanguage);
 
 		$manager = new RestManager();
 		$autoWirings = $manager->getAutoWirings();
 
 		$manager->registerAutoWirings($autoWirings);
-		$response = $controller->run($methodDescription->getMethod(), [$request->getQuery(), ['__restServer' => $this]]);
+		$response = $controller->run($methodDescription->method, [$request->getQuery(), ['__restServer' => $this]]);
 		$manager->unRegisterAutoWirings($autoWirings);
+
 		if ($controller->hasErrors())
 		{
 			return new ErrorResponse($controller->getErrors());
@@ -436,6 +466,13 @@ class CRestApiServer extends CRestServer
 		{
 			foreach ($response->getRelations() as $relation)
 			{
+				/** @var ResolvedBy|null $resolvedBy */
+				$resolvedBy = $relation->getDto()->getAttributeByName(ResolvedBy::class);
+				if (!$resolvedBy)
+				{
+					return $response;
+				}
+
 				if (!$relation->getRequest()->filter)
 				{
 					continue;
@@ -452,8 +489,20 @@ class CRestApiServer extends CRestServer
 
 				$httpRequest = new \Bitrix\Main\HttpRequest(\Bitrix\Main\Context::getCurrent()->getServer(), [], [], [], [], $httpRequestBody);
 
-				$subRequest = new ServerRequest($relation->getMethod(), $request->getQuery(), $httpRequest);
+				$schemaManager = ServiceLocator::getInstance()->get(SchemaManager::class);
+				$controllerData = $schemaManager->getControllerDataByName($resolvedBy->controller);
+
+				if ($controllerData === null)
+				{
+					throw new RelationMethodNotFoundException($resolvedBy);
+				}
+
+				$subRequest = new ServerRequest($controllerData->getMethodUri('list'), $request->getQuery(), $httpRequest);
 				$subResponse = $this->processRequest($subRequest, $currentUser);
+				if ($subResponse instanceof ErrorResponse)
+				{
+					return $subResponse;
+				}
 				$relation->setResponse($subResponse);
 			}
 		}
@@ -465,7 +514,15 @@ class CRestApiServer extends CRestServer
 	{
 		global $APPLICATION;
 
-		$this->error = $e;
+		if ($e instanceof RestExceptionInterface)
+		{
+			$this->error = $e;
+		}
+		else
+		{
+			// Wrap non-rest exceptions into InternalException to satisfy property type.
+			$this->error = new InternalException($e instanceof Exception ? $e : new Exception((string)$e, $e->getCode(), $e->getPrevious()));
+		}
 
 		$ex = $APPLICATION->GetException();
 		if ($ex instanceof CApplicationException)
@@ -515,19 +572,42 @@ class CRestApiServer extends CRestServer
 			{
 				throw new AccessDeniedException(status: $res['error'] === 'insufficient_scope' ? self::STATUS_FORBIDDEN : self::STATUS_UNAUTHORIZED);
 			}
+
 			$this->requestAccess = $res;
-			if ($res['scope'])
+
+			$this->authData = $res;
+
+			$this->authScope = $this->getAuthScope();
+			usort($this->authScope, fn($a, $b) =>
+				substr_count($a, '.') > substr_count($b, '.')
+			);
+
+			foreach ($this->authScope as $authScope)
 			{
-				$this->availableScopes = array_merge($this->availableScopes, explode(',', $res['scope']));
+				$scopePath = $authScope;
+				$fields = [];
+				if (preg_match('/^([^[]+)\[([^]]*)\]$/', $authScope, $matches))
+				{
+					$scopePath = $matches[1];
+					$fields = $matches[2] ? explode(':', $matches[2]) : [];
+				}
+				$this->availableScopes[$scopePath] = new Scope($scopePath, $fields);
 			}
 		}
 
 		return $this->requestAccess;
 	}
 
-	private function isRequestScopeAvailable(?string $scope): bool
+	private function getAvailableScopeFromRequest(array $requiredScopes): null|Scope
 	{
-		return in_array($scope, $this->availableScopes, true);
+		foreach ($requiredScopes as $requiredScope)
+		{
+			if (array_key_exists($requiredScope, $this->availableScopes))
+			{
+				return $this->availableScopes[$requiredScope];
+			}
+		}
+		return null;
 	}
 
 	protected function outputError(): array
@@ -536,6 +616,49 @@ class CRestApiServer extends CRestServer
 		{
 			$this->error = new InternalException($this->error);
 		}
-		return ['error' => $this->error->output($this->localErrorLanguage)];
+		return ['error' => $this->error->output($this->responseLanguage)];
+	}
+
+	private function getRequestByMethodDescription(ServerRequest $request, MethodDescription $methodDescription): ServerRequest
+	{
+		if ($methodDescription->queryParams === null)
+		{
+			return $request;
+		}
+
+		$httpRequestBody = $request->getHttpRequest()->getJsonList()->toArray();
+		$httpRequestBody = array_merge($methodDescription->queryParams, $httpRequestBody);
+
+		$httpRequest = new \Bitrix\Main\HttpRequest(
+			\Bitrix\Main\Context::getCurrent()->getServer(),
+			$request->getHttpRequest()->getQueryList()->toArray(),
+			$request->getHttpRequest()->getPostList()->toArray(),
+			$request->getHttpRequest()->getFileList()->toArray(),
+			$request->getHttpRequest()->getCookieList()->toArray(),
+			$httpRequestBody,
+		);
+
+		return new ServerRequest($request->getMethod(), $request->getQuery(), $httpRequest);
+	}
+
+	/**
+	 * @param BatchRequest $batchRequest
+	 * @return MethodDescription[]
+	 * @throws LoaderException
+	 * @throws MethodNotFoundException
+	 */
+	private function getBatchMethodDescriptions(BatchRequest $batchRequest): array
+	{
+		$methods = [];
+		foreach ($batchRequest->getItems() as $index => $item)
+		{
+			$methodDescription = $this->getMethodDescription($item->getMethod());
+			if ($methodDescription === null || !Loader::includeModule($methodDescription->module))
+			{
+				throw new MethodNotFoundException($item->getMethod());
+			}
+			$methods[$index] = $methodDescription;
+		}
+		return $methods;
 	}
 }

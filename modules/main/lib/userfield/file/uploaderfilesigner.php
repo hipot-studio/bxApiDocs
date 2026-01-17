@@ -5,40 +5,29 @@ namespace Bitrix\Main\UserField\File;
 
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\Security\Sign\BadSignatureException;
+use Bitrix\Main\Web\Json;
 
 class UploaderFileSigner
 {
-	private const SALT_PREFIX = 'UploaderFileSigner_';
-	public function __construct(
-		private readonly string $entityId,
-		private readonly string $fieldName
-	)
+	private const SALT = 'UploaderFileSigner';
+	public function sign(array $controllerOptions): string
 	{
+		$value = Json::encode($controllerOptions);
+
+		return (new Signer())->sign($value, self::SALT);
 	}
 
-	public function sign(int $fileId): string
-	{
-		return (new Signer())->sign((string)$fileId, $this->getSalt());
-	}
-
-	public function verify(string $signedString, int $fileId): bool
+	public function unsign(string $signed): array
 	{
 		try
 		{
-			$unsignedFileId = (int)(new Signer())->unsign($signedString, $this->getSalt());
+			$unsignedValue = (new Signer())->unsign($signed, self::SALT);
 
-			return ($fileId === $unsignedFileId);
+			return Json::decode($unsignedValue);
 		}
 		catch (BadSignatureException $e)
 		{
-			return false;
+			return [];
 		}
-
-		return false;
-	}
-
-	private function getSalt(): string
-	{
-		return substr(preg_replace('/[^a-zA-Z0-9_.-]+/i', '',self::SALT_PREFIX . '_' . $this->entityId .'_' . $this->fieldName), 0, 50);
 	}
 }

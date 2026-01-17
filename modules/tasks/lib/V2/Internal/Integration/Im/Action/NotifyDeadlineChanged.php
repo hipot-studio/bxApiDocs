@@ -4,45 +4,80 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Util\Type\DateTime;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\UserModel;
+use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\Deadline\DeadlineFormatter;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-class NotifyDeadlineChanged
+#[Recipients(creator: true, responsible: true, accomplices: true, auditors: false)]
+class NotifyDeadlineChanged extends AbstractNotify
 {
+	private readonly DeadlineFormatter $deadlineFormatter;
+
 	public function __construct(
-		Task $task,
+		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
-		?User $triggeredBy = null,
-		?int $newDeadlineTs = null,
-		?int $oldDeadlineTs = null,
+		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly ?int $newDeadlineTs = null,
+		private readonly ?int $oldDeadlineTs = null,
 	)
 	{
-		$code = 'TASKS_IM_TASK_DEADLINE_ADDED_' . $triggeredBy?->getGender()->value;
+		$this->deadlineFormatter = ServiceLocator::getInstance()->get(DeadlineFormatter::class);
 
-		$message = Loc::getMessage($code, [
-			'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-			'#NEW_DEADLINE#' => DateTime::createFromTimestamp($newDeadlineTs)->format('Y-m-d H:i'),
-		]);
-
-		if ($oldDeadlineTs !== null && $newDeadlineTs !== null) {
-			$code = 'TASKS_IM_TASK_DEADLINE_CHANGED_' . $triggeredBy?->getGender()->value;
-
-			$message = Loc::getMessage($code, [
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-				'#OLD_DEADLINE#' => DateTime::createFromTimestamp($oldDeadlineTs)->format('Y-m-d H:i'),
-				'#NEW_DEADLINE#' => DateTime::createFromTimestamp($newDeadlineTs)->format('Y-m-d H:i'),
-			]);
-		} elseif ($oldDeadlineTs !== null && $newDeadlineTs === null) {
-			$code = 'TASKS_IM_TASK_DEADLINE_REMOVED_' . $triggeredBy?->getGender()->value;
-
-			$message = Loc::getMessage($code, [
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-			]);
+		if ($oldDeadlineTs !== null && $newDeadlineTs !== null)
+		{
+			$sender->sendMessage(task: $this->task, notification: $this);
 		}
+		elseif ($oldDeadlineTs !== null && $newDeadlineTs === null)
+		{
+			$notification = new NotifyDeadlineRemoved($this->task, $this->triggeredBy);
+			$sender->sendMessage(task: $this->task, notification: $notification);
+		}
+		elseif ($newDeadlineTs !== null)
+		{
+			$notification = new NotifyDeadlineAdded($this->deadlineFormatter, $this->task, $this->triggeredBy, $this->newDeadlineTs);
+			$sender->sendMessage(task: $this->task, notification: $notification);
+		}
+	}
 
-		$sender->sendMessage(task: $task, text: $message);
+	public function getMessageCode(): string
+	{
+		$messageKey = $this->isReasonRequired() ? '_REASON' : '';
+
+		return match ($this->triggeredBy?->getGender())
+		{
+			Entity\User\Gender::Female => 'TASKS_IM_TASK_DEADLINE_CHANGED' . $messageKey . '_F_MSGVER_1',
+			default => 'TASKS_IM_TASK_DEADLINE_CHANGED' . $messageKey . '_M_MSGVER_1',
+		};
+	}
+
+	public function getMessageData(): array
+	{
+		$newDeadline = $this->deadlineFormatter->format($this->newDeadlineTs);
+
+		$reason = $this->isReasonRequired() ? $this->task->deadlineChangeReason : '';
+
+		return [
+			'#USER#' => $this->formatUser($this->triggeredBy),
+			'#NEW_DEADLINE#' => $newDeadline,
+			'#REASON#' => $reason,
+		];
+	}
+
+	private function isReasonRequired(): bool
+	{
+		$userId = (int)$this->triggeredBy?->id;
+
+		$isCreator = $this->task->creator?->getId() === $userId;
+
+		$user = UserModel::createFromId($userId);
+		$canEdit = TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_EDIT, $this->task->getId());
+
+		$canChangeDeadline = ($isCreator || $user->isAdmin() || $canEdit);
+
+		return !$canChangeDeadline && $this->task->requireDeadlineChangeReason;
 	}
 }

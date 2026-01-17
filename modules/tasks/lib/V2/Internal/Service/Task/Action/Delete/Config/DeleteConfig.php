@@ -11,6 +11,7 @@ class DeleteConfig
 	private bool $skipExchangeSync;
 	private ?string $eventGuid;
 	private bool $skipBP;
+	private bool $useConsistency;
 	private RuntimeData $runtime;
 
 	public function __construct(
@@ -19,6 +20,7 @@ class DeleteConfig
 		bool $skipExchangeSync = false,
 		?string $eventGuid = null,
 		bool $skipBP = false,
+		bool $useConsistency = false,
 		RuntimeData $runtime = new RuntimeData()
 	)
 	{
@@ -27,6 +29,7 @@ class DeleteConfig
 		$this->skipExchangeSync = $skipExchangeSync;
 		$this->eventGuid = $eventGuid;
 		$this->skipBP = $skipBP;
+		$this->useConsistency = $useConsistency;
 		$this->runtime = $runtime;
 	}
 
@@ -58,5 +61,10 @@ class DeleteConfig
 	public function isSkipBP(): bool
 	{
 		return $this->skipBP;
+	}
+
+	public function isUseConsistency(): bool
+	{
+		return $this->useConsistency;
 	}
 }

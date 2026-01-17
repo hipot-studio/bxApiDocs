@@ -424,7 +424,7 @@ class CIntranetContactCenterListComponent extends \CBitrixComponent implements C
 		{
 			if (Loader::includeModule('market'))
 			{
-				$itemsList["ccplacement"]["ONCLICK"] = "BX.SidePanel.Instance.open('/market/', {allowChangeHistory: false});";
+				$itemsList["ccplacement"]["ONCLICK"] = "BX.SidePanel.Instance.open('/market/?placement=CONTACT_CENTER', {allowChangeHistory: false});";
 				$itemsList["chatbot"]["ONCLICK"] = "BX.SidePanel.Instance.open('/market/collection/openline_bot/', {allowChangeHistory: false});";
 				if (in_array(\Bitrix\Main\Application::getInstance()->getLicense()->getRegion(), ['ru', 'by', 'kz'], true))
 				{

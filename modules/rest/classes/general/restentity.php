@@ -1498,7 +1498,16 @@ class CBitrixRestEntity extends IRestService
 			throw new AccessException("Application context required");
 		}
 
-		return self::ENTITY_IBLOCK_CODE_PREFIX."_".$server->getClientId()."_".$entity;
+		$code = self::ENTITY_IBLOCK_CODE_PREFIX . '_' . $server->getClientId() . '_' . $entity;
+
+		if (strlen($code) > 50)
+		{
+			$requiredLength = 50 - strlen(self::ENTITY_IBLOCK_CODE_PREFIX . '_' . $server->getClientId() . '_');
+
+			throw new ArgumentException("Entity code is too long. Max length is $requiredLength characters.");
+		}
+
+		return $code;
 	}
 
 	protected static function getIBlockType()

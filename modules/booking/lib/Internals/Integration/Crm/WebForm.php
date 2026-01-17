@@ -7,26 +7,15 @@ namespace Bitrix\Booking\Internals\Integration\Crm;
 use Bitrix\Crm\Service\WebForm\Scenario\BaseScenario;
 use Bitrix\Crm\WebForm\Internals\FormTable;
 use Bitrix\Crm\WebForm\Preset;
-use Bitrix\Crm\WebForm\Script;
 use Bitrix\Main\Loader;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\WebForm\Manager;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 
 class WebForm
 {
 	public static function isAvailable(): bool
 	{
 		return Loader::includeModule('crm');
-	}
-
-	public static function canRead(): bool
-	{
-		if (!self::isAvailable())
-		{
-			return false;
-		}
-
-		return Container::getInstance()->getUserPermissions()->webForm()->canRead();
 	}
 
 	public static function canEdit(): bool
@@ -39,20 +28,34 @@ class WebForm
 		return Container::getInstance()->getUserPermissions()->webForm()->canEdit();
 	}
 
-	public static function getCreateFormLink(): string
+	public static function getPresets(): array
 	{
+		$result = [];
+
 		if (!self::isAvailable())
 		{
-			return '';
+			return $result;
 		}
 
-		$preset = Preset::getById(BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION);
-		if (!$preset)
+		$presets = Preset::getByIds([
+			BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION,
+			BaseScenario::SCENARIO_BOOKING_ANY_RESOURCE,
+			BaseScenario::SCENARIO_BOOKING_MANUAL_SETTINGS,
+		]);
+
+		foreach ($presets as $preset)
 		{
-			return '';
+			$scenario = new BaseScenario($preset['XML_ID']);
+
+			$result[] = [
+				'id' => $preset['XML_ID'],
+				'link' => '/crm/webform/edit/0/?SCENARIO_ID=' . $preset['XML_ID'],
+				'title' => $scenario->getTitle(),
+				'description' => $scenario->getDescription(),
+			];
 		}
 
-		return '/crm/webform/edit/0/?SCENARIO_ID=' . $preset['XML_ID'];
+		return $result;
 	}
 
 	public static function getFormsListLink(): string
@@ -65,45 +68,21 @@ class WebForm
 		return '/crm/webform/?IS_BOOKING_FORM=Y&apply_filter=Y';
 	}
 
-	public static function getFormsList(): array
+	public static function getFormsCount(): int
 	{
-		if (
-			!self::isAvailable()
-			|| !self::canRead()
-		)
+		if (!self::isAvailable())
 		{
-			return [];
+			return 0;
 		}
 
-		$result = [];
-
-		$formsList = FormTable::getDefaultTypeList([
+		return (int)FormTable::getDefaultTypeList([
 			'select' => [
-				'ID',
-				'CODE',
-				'SECURITY_CODE',
-				'NAME',
+				new ExpressionField('CNT', 'COUNT(1)'),
 			],
 			'filter' => [
 				'=IS_BOOKING_FORM' => 1,
 				'=ACTIVE' => 1,
 			],
-			'order' => [
-				'ID' => 'DESC',
-			],
-			'limit' => 10,
-		]);
-
-		while ($form = $formsList->fetch())
-		{
-			$result[] = [
-				'id' => $form['ID'],
-				'name' => $form['NAME'],
-				'editUrl' => Manager::getEditUrl($form['ID']),
-				'publicUrl' => Script::getUrlContext($form),
-			];
-		}
-
-		return $result;
+		])->fetch()['CNT'];
 	}
 }

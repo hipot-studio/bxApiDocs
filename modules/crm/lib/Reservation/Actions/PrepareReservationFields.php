@@ -4,13 +4,21 @@ namespace Bitrix\Crm\Reservation\Actions;
 
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ProductRowCollection;
+use Bitrix\Crm\Reservation\ProductRowReservation;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Main\Error;
-use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 
-class PrepareReservationFields extends Base
+abstract class PrepareReservationFields extends Base
 {
+	protected ReservationService $service;
+
+	public function __construct()
+	{
+		parent::__construct();
+
+		$this->service = ReservationService::getInstance();
+	}
 	public function process(Item $item): Result
 	{
 		$result = new Result();
@@ -36,8 +44,6 @@ class PrepareReservationFields extends Base
 
 	protected function prepareReservationFields(ProductRowCollection $productRows): void
 	{
-		$defaultDateReserveEnd = ReservationService::getInstance()->getDefaultDateReserveEnd();
-
 		foreach ($productRows as $row)
 		{
 			$productReservation = $row->getProductRowReservation();
@@ -46,28 +52,9 @@ class PrepareReservationFields extends Base
 				continue;
 			}
 
-			$oldValues = $productReservation->collectValues(Values::ACTUAL);
-			$newValues = $productReservation->collectValues(Values::CURRENT);
-
-			$oldDateReserveEnd = $oldValues['DATE_RESERVE_END'] ?? null;
-			if (empty($newValues))
-			{
-				if (!$oldDateReserveEnd)
-				{
-					$productReservation->setDateReserveEnd($defaultDateReserveEnd);
-				}
-			}
-			else
-			{
-				if (array_key_exists('DATE_RESERVE_END', $newValues))
-				{
-					$newDateReserveEnd = (string)$newValues['DATE_RESERVE_END'];
-					if ($newDateReserveEnd === '')
-					{
-						$productReservation->setDateReserveEnd($defaultDateReserveEnd);
-					}
-				}
-			}
+			$this->prepareReservationRow($productReservation);
 		}
 	}
+
+	abstract protected function prepareReservationRow(ProductRowReservation $productReservation): void;
 }

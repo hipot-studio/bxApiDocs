@@ -12,7 +12,8 @@ class MultipleField implements Field
 	public function __construct(
 		public readonly SingleField $field,
 	)
-	{}
+	{
+	}
 
 	public function getId(): string
 	{
@@ -34,6 +35,11 @@ class MultipleField implements Field
 		return $this->field->isShowAlways();
 	}
 
+	public function isVisible(): bool
+	{
+		return $this->field->isVisible();
+	}
+
 	public function getValue(): array
 	{
 		if (!is_array($this->field->value))
@@ -47,16 +53,14 @@ class MultipleField implements Field
 		));
 	}
 
-	public function isValid(mixed $value = null): bool
+	public function isValid(mixed $value): bool
 	{
-		$values = $value ?? $this->field->value;
-
-		if (!is_array($values))
+		if (!is_array($value))
 		{
 			return false;
 		}
 
-		foreach ($values as $fieldValue)
+		foreach ($value as $fieldValue)
 		{
 			if (!$this->field->isValid($fieldValue))
 			{
@@ -72,12 +76,12 @@ class MultipleField implements Field
 		return true;
 	}
 
-	public function getType() : string
+	public function getType(): string
 	{
 		return $this->field->getType();
 	}
 
-	public function toArray()
+	public function toArray(): array
 	{
 		$result = $this->field->toArray();
 		$result['isMultiple'] = true;

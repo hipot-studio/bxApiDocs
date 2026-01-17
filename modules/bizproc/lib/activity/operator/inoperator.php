@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Activity\Operator;
 
+use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Localization\Loc;
 
@@ -9,7 +10,7 @@ class InOperator extends BaseOperator
 {
 	public static function getCode(): string
 	{
-		return 'in';
+		return Operator::In->value;
 	}
 
 	public static function getTitle(): string

@@ -30,6 +30,14 @@ class CCrmActivity extends CAllCrmActivity
 			return false;
 		}
 
+		$desiredBindingsCount = count($arBindings);
+		$maxBindingsCount = (int)\Bitrix\Main\Config\Option::get('crm', 'max_bindings_count', 100);
+		if ($desiredBindingsCount > $maxBindingsCount)
+		{
+			self::trimBindingsArray($arBindings, $maxBindingsCount);
+			self::logBindingsTrimming($ID, $desiredBindingsCount, $maxBindingsCount);
+		}
+
 		$added = array();
 		$removed = array();
 		self::PrepareBindingChanges($existedBindings, $arBindings, $added, $removed);
@@ -497,6 +505,28 @@ class CCrmActivity extends CAllCrmActivity
 		$tableName = self::COMMUNICATION_TABLE_NAME;
 		$DB->Query(
 			"UPDATE {$tableName} SET ENTITY_SETTINGS = '{$settings}' WHERE ENTITY_SETTINGS IS NULL AND ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_ID = {$entityID}"
+		);
+	}
+
+	private static function trimBindingsArray(array &$bindings, int $newLimit): void
+	{
+		Bitrix\Main\Type\Collection::sortByColumn(
+			$bindings,
+			['OWNER_ID' => SORT_DESC],
+		);
+		$bindings = array_slice($bindings, 0, $newLimit);
+	}
+
+	private static function logBindingsTrimming(
+		string $id,
+		int $desiredBindingsCount,
+		int $actualBindingsCount,
+	): void
+	{
+		$logger = \Bitrix\Crm\Service\Container::getInstance()->getLogger('ScenarioInvestigation');
+		$logger->notice(
+			"Activity ID - {$id} was trying to save {$desiredBindingsCount} bindings "
+			. "but got trimmed to {$actualBindingsCount} bindings instead\n"
 		);
 	}
 

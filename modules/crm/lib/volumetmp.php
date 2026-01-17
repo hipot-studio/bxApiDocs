@@ -108,7 +108,7 @@ class VolumeTmpTable extends Crm\VolumeTable
 			}
 			else
 			{
-				$connection->queryExecute("CREATE TEMPORARY TABLE IF NOT EXISTS {$tmpName} LIKE {$sourceName}");
+				$connection->queryExecute("CREATE TEMPORARY TABLE IF NOT EXISTS {$tmpName} SELECT * FROM {$sourceName} LIMIT 0");
 			}
 		}
 	}

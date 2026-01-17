@@ -117,6 +117,7 @@ class QuoteDataProvider extends EntityDataProvider implements FactoryOptionable
 				'CREATED_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -124,6 +125,7 @@ class QuoteDataProvider extends EntityDataProvider implements FactoryOptionable
 				'MODIFY_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -418,15 +420,14 @@ class QuoteDataProvider extends EntityDataProvider implements FactoryOptionable
 			$isEnableAllUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 			$isEnableOtherUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 
-			return $this->getUserEntitySelectorParams(
+			return $this->getDepartmentSelectorParams(
 				EntitySelector::CONTEXT,
 				[
 					'fieldName' => $fieldID,
 					'referenceClass' => $referenceClass,
 					'isEnableAllUsers' => $isEnableAllUsers,
 					'isEnableOtherUsers' => $isEnableOtherUsers,
-					'isEnableStructureNode' => true,
-				]
+				],
 			);
 		}
 		elseif($fieldID === 'LEAD_ID')

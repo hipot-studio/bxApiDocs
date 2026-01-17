@@ -30,6 +30,7 @@ class BookingSelect implements SelectInterface
 			$result[] = 'RESOURCES.RESOURCE.SETTINGS';
 			$result[] = 'RESOURCES.RESOURCE.NOTIFICATION_SETTINGS';
 			$result[] = 'RESOURCES.RESOURCE.ENTITIES';
+			$result[] = 'RESOURCES.RESOURCE.SKUS';
 		}
 
 		if (in_array('CLIENTS', $this->select, true))
@@ -37,6 +38,11 @@ class BookingSelect implements SelectInterface
 			$result[] = 'CLIENTS';
 			$result[] = 'CLIENTS.IS_RETURNING';
 			$result[] = 'CLIENTS.CLIENT_TYPE';
+		}
+
+		if (in_array('SKUS', $this->select, true))
+		{
+			$result[] = 'SKUS';
 		}
 
 		if (in_array('EXTERNAL_DATA', $this->select, true))
@@ -47,6 +53,11 @@ class BookingSelect implements SelectInterface
 		if (in_array('NOTE', $this->select, true))
 		{
 			$result[] = 'NOTE';
+		}
+
+		if (in_array('CLIENT_NOTE', $this->select, true))
+		{
+			$result[] = 'CLIENT_NOTE';
 		}
 
 		return $result;

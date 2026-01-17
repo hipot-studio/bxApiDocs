@@ -3,31 +3,43 @@
 namespace Bitrix\Rest\V3\Schema;
 
 use Bitrix\Main\Config\Configuration;
-use Bitrix\Main\ModuleManager as MainModuleManager;
-use Bitrix\Rest\V3\CacheManager;
 
 final class ModuleManager
 {
-	private const CONFIGS_CACHE_KEY = 'rest.v3.ModuleManager.module.configs.cache.key';
 	private const CONFIGURATION_KEY = 'rest';
 
+	private static ?array $configs = null;
+
+	/**
+	 * @return ModuleConfig[]
+	 */
 	public function getConfigs(): array
 	{
-		$configs = CacheManager::get(self::CONFIGS_CACHE_KEY);
-		if ($configs === null)
+		if (self::$configs !== null)
 		{
-			foreach (MainModuleManager::getInstalledModules() as $moduleId => $moduleData)
-			{
-				$config = Configuration::getInstance($moduleId)->get(self::CONFIGURATION_KEY);
-				if ($config !== null)
-				{
-					$configs[$moduleId] = $config;
-				}
-			}
-
-			CacheManager::set(self::CONFIGS_CACHE_KEY, $configs);
+			return self::$configs;
 		}
 
-		return $configs;
+		$configs = [];
+		foreach (\Bitrix\Main\ModuleManager::getInstalledModules() as $moduleId => $moduleData)
+		{
+			$config = Configuration::getInstance($moduleId)->get(self::CONFIGURATION_KEY);
+			if ($config !== null && !empty($config['defaultNamespace']))
+			{
+				$configs[$moduleId] = new ModuleConfig(
+					$moduleId,
+					\Bitrix\Main\ModuleManager::getVersion($moduleId),
+					$config['defaultNamespace'],
+					$config['namespaces'] ?? [],
+					$config['routes'] ?? [],
+					$config['controllerProvider'] ?? null,
+					$config['documentation'] ?? [],
+					\Bitrix\Main\ModuleManager::getModificationDateTime($moduleId),
+				);
+			}
+		}
+		self::$configs = $configs;
+
+		return self::$configs;
 	}
 }

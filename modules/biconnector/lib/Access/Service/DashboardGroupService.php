@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -410,5 +411,52 @@ class DashboardGroupService
 		}
 
 		return $additionalScopeCodes;
+	}
+
+	/**
+	 * Saves bindings to of dashboard given by id.
+	 *
+	 * @param int $dashboardId Dashboard id.
+	 * @param string[] $groupIds Array of group ids.
+	 *
+	 * @return Result
+	 */
+	public static function saveDashboardGroupBindings(int $dashboardId, array $groupIds): Result
+	{
+		$result = new Result();
+		$db = Application::getConnection();
+		try
+		{
+			$db->startTransaction();
+
+			SupersetDashboardGroupBindingTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+
+			$bindings = [];
+			foreach ($groupIds as $groupId)
+			{
+				$groupId = (int)$groupId;
+				if ($groupId > 0)
+				{
+					$bindings[$groupId] = [
+						'GROUP_ID' => $groupId,
+						'DASHBOARD_ID' => $dashboardId,
+					];
+				}
+			}
+
+			if (!empty($bindings))
+			{
+				SupersetDashboardGroupBindingTable::addMulti(array_values($bindings));
+			}
+
+			$db->commitTransaction();
+		}
+		catch (\Exception $e)
+		{
+			$db->rollbackTransaction();
+			$result->addError(new Error($e->getMessage()));
+		}
+
+		return $result;
 	}
 }

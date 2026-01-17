@@ -128,6 +128,10 @@ class CategoryService
 				'code' => Category::CRM_COMMENT_FIELD->value,
 			],
 			[
+				'name' => Loc::getMessage('AI_SERVICE_CATEGORY_CRM_MESSAGE_EDITOR'),
+				'code' => Category::CRM_MESSAGE_EDITOR->value,
+			],
+			[
 				'name' => Loc::getMessage('AI_SERVICE_CATEGORY_PRODUCT_DESCRIPTION'),
 				'code' => Category::PRODUCT_DESCRIPTION->value,
 			],

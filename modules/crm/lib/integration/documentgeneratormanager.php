@@ -626,6 +626,30 @@ class DocumentGeneratorManager
 		return $result;
 	}
 
+	public function getTemplatesByEntityTypeId(int $entityTypeId, int $userId = null): array
+	{
+		$result = [];
+
+		$provider = $this->getCrmOwnerTypeProvider($entityTypeId);
+
+		if (!$provider)
+		{
+			return $result;
+		}
+
+		$templates = TemplateTable::getListByClassName(mb_strtolower($provider), $userId);
+		foreach ($templates as $template)
+		{
+			$result[] = (new Template())
+				->setId($template['ID'])
+				->setTitle($template['NAME'])
+				->setIsWithStamps($template['WITH_STAMPS'] === 'Y')
+			;
+		}
+
+		return $result;
+	}
+
 	/**
 	 * @param ItemIdentifier $item
 	 * @return Template[]

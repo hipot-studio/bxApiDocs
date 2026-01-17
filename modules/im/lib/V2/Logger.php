@@ -12,7 +12,7 @@ class Logger
 
 	private string $uniqueString;
 
-	public function __construct(string $uniqueString)
+	public function __construct(string $uniqueString = '')
 	{
 		$this->uniqueString = $uniqueString;
 	}

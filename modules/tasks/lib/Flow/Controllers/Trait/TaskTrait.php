@@ -14,10 +14,9 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Flow\Controllers\Task\Cache\TaskCountCache;
-use Bitrix\Tasks\Flow\Grid\Preload\AccessPreloader;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Closure;
 

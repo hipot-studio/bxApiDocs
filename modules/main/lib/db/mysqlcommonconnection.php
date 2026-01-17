@@ -210,6 +210,7 @@ abstract class MysqlCommonConnection extends Connection
 	public function renameTable($currentName, $newName)
 	{
 		$this->query('RENAME TABLE ' . $this->getSqlHelper()->quote($currentName) . ' TO ' . $this->getSqlHelper()->quote($newName));
+		$this->clearCaches($currentName);
 	}
 
 	/**
@@ -218,6 +219,7 @@ abstract class MysqlCommonConnection extends Connection
 	public function dropTable($tableName)
 	{
 		$this->query('DROP TABLE ' . $this->getSqlHelper()->quote($tableName));
+		$this->clearCaches($tableName);
 	}
 
 	/*********************************************************

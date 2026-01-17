@@ -18,6 +18,9 @@ use Bitrix\Tasks\V2\Public\Provider\ReminderProvider;
 
 class Reminder extends BaseController
 {
+	/**
+	 * @ajaxAction tasks.V2.Task.Reminder.list
+	 */
 	public function listAction(
 		#[Task\Permission\Read]
 		Entity\Task $task,
@@ -37,7 +40,7 @@ class Reminder extends BaseController
 	 */
 	public function addAction(
 		#[Permission\Add]
-		Entity\Task\Reminder $reminder
+		Entity\Task\Reminder $reminder,
 	): ?Entity\Task\Reminder
 	{
 		$result = (new AddReminderCommand(
@@ -51,7 +54,7 @@ class Reminder extends BaseController
 			return null;
 		}
 
-		return $reminder;
+		return $result->getObject();
 	}
 
 	/**
@@ -59,13 +62,14 @@ class Reminder extends BaseController
 	 */
 	public function setAction(
 		#[Permission\Set]
-		Entity\Task $task
+		Entity\Task $task,
 	): ?Entity\Task
 	{
 		$result = (new SetRemindersCommand(
 			userId: $this->userId,
 			taskId: $task->getId(),
 			reminders: $task->reminders ?? new Entity\Task\ReminderCollection(),
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -83,7 +87,7 @@ class Reminder extends BaseController
 	 */
 	public function updateAction(
 		#[Permission\Read]
-		Entity\Task\Reminder $reminder
+		Entity\Task\Reminder $reminder,
 	): ?Entity\Task\Reminder
 	{
 		$result = (new UpdateReminderCommand(
@@ -97,7 +101,7 @@ class Reminder extends BaseController
 			return null;
 		}
 
-		return $reminder;
+		return $result->getObject();
 	}
 
 	/**
@@ -105,8 +109,8 @@ class Reminder extends BaseController
 	 */
 	public function deleteAction(
 		#[Permission\Read]
-		Entity\Task\Reminder $reminder
-	): ?Entity\Task\Reminder
+		Entity\Task\Reminder $reminder,
+	): ?bool
 	{
 		$result = (new DeleteReminderCommand(
 			id: $reminder->getId(),
@@ -119,6 +123,6 @@ class Reminder extends BaseController
 			return null;
 		}
 
-		return $reminder;
+		return true;
 	}
 }

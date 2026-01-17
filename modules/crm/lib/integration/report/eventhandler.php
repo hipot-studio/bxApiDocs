@@ -169,17 +169,20 @@ class EventHandler
 
 		$batchList[] = $crossCutting;
 
-		$myReports = new AnalyticBoardBatch();
-		$myReports->setKey(self::BATCH_MY_REPORTS);;
-		$myReports->setTitle(Loc::getMessage("CRM_REPORT_MY_REPORTS_BATCH_TITLE"));
-		$myReports->setOrder(150);
-
-		if (method_exists($myReports, 'setGroup'))
+		if (!DisablingHelper::areMyReportsInDemoMode())
 		{
-			$myReports->setGroup(self::BATCH_GROUP_CRM_GENERAL);
-		}
+			$myReports = new AnalyticBoardBatch();
+			$myReports->setKey(self::BATCH_MY_REPORTS);;
+			$myReports->setTitle(Loc::getMessage("CRM_REPORT_MY_REPORTS_BATCH_TITLE"));
+			$myReports->setOrder(150);
 
-		$batchList[] = $myReports;
+			if (method_exists($myReports, 'setGroup'))
+			{
+				$myReports->setGroup(self::BATCH_GROUP_CRM_GENERAL);
+			}
+
+			$batchList[] = $myReports;
+		}
 
 		$restAppsCategories = array_keys(AppPlacementManager::getHandlerInfos(AppPlacement::ANALYTICS_MENU));
 		if (!in_array(AppPlacementManager::getDefaultGroupName(), $restAppsCategories))
@@ -264,11 +267,14 @@ class EventHandler
 
 		self::appendCustomersPageList($analyticPageList, $isAvailable, $availabilitySliderCode);
 		self::appendCrossCuttingPageList($analyticPageList);
-		self::appendMyReportsPageList($analyticPageList, $isAvailable, $availabilitySliderCode);
 		self::appendSaleOrdersPageList($analyticPageList);
 		self::appendRestAppsPageList($analyticPageList);
 		self::appendTelephonyPageList($analyticPageList);
 		self::appendOpenLinesPageList($analyticPageList);
+		if (!DisablingHelper::areMyReportsInDemoMode())
+		{
+			self::appendMyReportsPageList($analyticPageList, $isAvailable, $availabilitySliderCode);
+		}
 
 		return $analyticPageList;
 	}

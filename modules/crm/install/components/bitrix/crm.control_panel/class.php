@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Catalog;
 use Bitrix\Crm\Component\ControlPanel\ControlPanelMenuMapper;
 use Bitrix\Crm\Counter\EntityCounterFactory;
@@ -150,6 +151,7 @@ class CrmControlPanel extends CBitrixComponent
 				'TEXT' => Loc::getMessage('CRM_CTRL_PANEL_ITEM_ANALYTICS'),
 				'URL' => '',
 				'SUB_ITEMS' => [
+					... $this->getBiconnectorMenuSubItems(),
 					[
 						'ID' => ControlPanelMenuMapper::MENU_ID_CRM_OPERATIONAL_ANALYTICS,
 						'TEXT' => Loc::getMessage('CRM_CTRL_PANEL_ITEM_OPERATIONAL_ANALYTICS'),
@@ -164,7 +166,6 @@ class CrmControlPanel extends CBitrixComponent
 							['ID' => 'ANALYTICS_BI'],
 						],
 					],
-					['ID' => 'BIC_DASHBOARDS'],
 				],
 			],
 			['ID' => 'DYNAMIC_ITEMS'],
@@ -175,9 +176,12 @@ class CrmControlPanel extends CBitrixComponent
 				'SUB_ITEMS' => [
 					['ID' => 'SETTINGS'],
 					['ID' => 'MY_COMPANY'],
+					['IS_DELIMITER' => true],
 					['ID' => 'CRM_PERMISSIONS'],
 					['ID' => 'CATALOG_PERMISSIONS'],
+					['ID' => 'DOCUMENT_PERMISSIONS'],
 					['ID' => 'FEATURES_LIST', 'SLIDER_MODE' => false],
+					['IS_DELIMITER' => true],
 					[
 						'ID' => ControlPanelMenuMapper::MENU_ID_CRM_INTEGRATIONS,
 						'TEXT' => Loc::getMessage('CRM_CTRL_PANEL_ITEM_INTEGRATIONS'),
@@ -641,5 +645,18 @@ class CrmControlPanel extends CBitrixComponent
 		}
 
 		return $result;
+	}
+
+	private function getBiconnectorMenuSubItems(): array
+	{
+		$menuItem = [];
+
+		if (Loader::includeModule('biconnector'))
+		{
+			/** @see \Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorCrm::getMenuItemData */
+			$menuItem = ScopeService::getInstance()->prepareScopeMenuItem(ScopeService::BIC_SCOPE_CRM);
+		}
+
+		return $menuItem['SUB_ITEMS'] ?? [];
 	}
 }

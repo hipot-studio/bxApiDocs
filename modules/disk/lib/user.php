@@ -2,13 +2,13 @@
 
 namespace Bitrix\Disk;
 
-use Bitrix\Bxtest\Codeception\Randomizer\PhoneFactory;
 use Bitrix\Disk\Document\Models\GuestUser;
 use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\UserTable;
 use CUser;
 
 class User extends Internals\Model
@@ -317,8 +317,31 @@ class User extends Internals\Model
 			return false;
 		}
 
-		$queryUser = CUser::GetByID($this->id);
-		if ($user = $queryUser->Fetch())
+		if ($this->isCurrentUser()) // getting from cache
+		{
+			$user = CUser::GetByID($this->id)->Fetch();
+		}
+		else // getting only necessary fields from db
+		{
+			$select = [
+				'ID',
+				'EXTERNAL_AUTH_ID',
+			];
+
+			if (ModuleManager::isModuleInstalled('crm'))
+			{
+				$select[] = 'UF_USER_CRM_ENTITY';
+			}
+
+			$user = UserTable::getList([
+				'filter' => [
+					'ID' => $this->id,
+				],
+				'select' => $select,
+			])->fetch();
+		}
+
+		if ($user !== false)
 		{
 			$this->setIsIntranetUser($user);
 
@@ -336,6 +359,11 @@ class User extends Internals\Model
 		}
 
 		return $this->isIntranetUser;
+	}
+
+	private function isCurrentUser(): bool
+	{
+		return (int)$this->id === (int)CurrentUser::get()->getId();
 	}
 
 	public function isCollaber(): bool

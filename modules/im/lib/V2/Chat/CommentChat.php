@@ -30,6 +30,9 @@ class CommentChat extends GroupChat
 	protected ?Chat $parentChat;
 	protected ?Message $parentMessage;
 
+	/**
+	 * @return Result<CommentChat|null>
+	 */
 	public static function get(Message $message, bool $createIfNotExists = true): Result
 	{
 		$result = new Result();
@@ -58,7 +61,6 @@ class CommentChat extends GroupChat
 	}
 
 	/**
-	 * @param MessageCollection $messages
 	 * @return Result<Chat[]>
 	 */
 	public static function getChatsByMessages(MessageCollection $messages): Result
@@ -91,6 +93,9 @@ class CommentChat extends GroupChat
 		return new Message\Send\Mention\CommentMentionService($config);
 	}
 
+	/**
+	 * @return Result<CommentChat|null>
+	 */
 	public static function create(Message $message): Result
 	{
 		$result = new Result();
@@ -132,11 +137,11 @@ class CommentChat extends GroupChat
 		return parent::canUserAutoJoin($userId) && $this->getParentChat()->getSelfRelation() !== null;
 	}
 
-	public function join(bool $withMessage = true): Chat
+	public function join(bool $withMessage = true, bool $byAutoJoin = false): Chat
 	{
-		$this->getParentChat()->join();
+		$this->getParentChat()->join(byAutoJoin: $byAutoJoin);
 
-		return parent::join(false);
+		return parent::join(withMessage: false, byAutoJoin: $byAutoJoin);
 	}
 
 	public function getRole(): string
@@ -216,14 +221,19 @@ class CommentChat extends GroupChat
 		return $this->getParentChat()->getRelations()->getUserIds();
 	}
 
-	public function getRelationsForSendMessage(): RelationCollection
+	public function getPullRecipients(): RelationCollection
 	{
-		return parent::getRelationsForSendMessage()->filterNotifySubscribed();
+		return parent::getPullRecipients()->filterNotifySubscribed();
+	}
+
+	public function getUsersToNotify(): RelationCollection
+	{
+		return parent::getUsersToNotify()->filterNotifySubscribed();
 	}
 
 	protected function getParentRelationsForRaiseChat(): RelationCollection
 	{
-		$userIds = $this->getRelationsForSendMessage()->getUserIds();
+		$userIds = $this->getUsersToNotify()->getUserIds();
 
 		return $this->getParentChat()->getRelationsByUserIds($userIds);
 	}
@@ -358,7 +368,9 @@ class CommentChat extends GroupChat
 
 	public function getParentChat(): Chat
 	{
-		$this->parentChat ??= Chat::getInstance($this->getParentChatId());
+		$this->parentChat ??= Chat::getInstance($this->getParentChatId())
+			->setContext($this->getContext())
+		;
 
 		return $this->parentChat;
 	}

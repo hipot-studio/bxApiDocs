@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
+use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Entity\User\NullUser;
 use Bitrix\Im\V2\Permission;
@@ -22,13 +23,10 @@ use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message\Param;
-use Bitrix\Im\V2\Message\MessagePopupItem;
 use Bitrix\Im\V2\Message\ReadService;
-use Bitrix\Im\V2\Message\Send\PushService;
+use Bitrix\Im\V2\Pull\Event\RecentUpdate;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
-use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
-use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Settings\UserConfiguration;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Imbot\Bot\CopilotChatBot;
@@ -414,11 +412,7 @@ class Recent
 
 			if ($row['ITEM_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT)
 			{
-				$copilotChatRole = (new RoleManager())->getMainRole((int)$item['CHAT_ID']);
-				if (isset($copilotChatRole))
-				{
-					$copilotData['chats'][$item['ID']] = $copilotChatRole;
-				}
+				$copilotData['chats'][$item['ID']] = (int)$item['CHAT_ID'];
 			}
 
 			if (!$shortInfo)
@@ -433,7 +427,7 @@ class Recent
 				&& (int)$item['MESSAGE']['AUTHOR_ID'] === CopilotChatBot::getBotId()
 			)
 			{
-				$messageIdsWithCopilotRole[] = (int)$item['MESSAGE']['ID'];
+				$copilotData['messages'][(int)$item['MESSAGE']['ID']] = true;
 			}
 
 			if ($shortInfo && $options['JSON'])
@@ -443,21 +437,6 @@ class Recent
 			else
 			{
 				$result[$id] = $item;
-			}
-		}
-
-		if (!$shortInfo && !empty($messageIdsWithCopilotRole))
-		{
-			$copilotMessageRoles = self::fillCopilotMessageRoles($messageIdsWithCopilotRole);
-
-			foreach ($result as $item)
-			{
-				if (in_array((int)$item['MESSAGE']['ID'], $messageIdsWithCopilotRole, true))
-				{
-					$copilotData['messages'][(int)$item['MESSAGE']['ID']] =
-						$copilotMessageRoles[(int)$item['MESSAGE']['ID']] ?? RoleManager::getDefaultRoleCode()
-					;
-				}
 			}
 		}
 
@@ -541,13 +520,34 @@ class Recent
 
 	private static function prepareCopilotData(array $copilotData, int $userId, bool $shortInfo): array
 	{
+		if (!empty($copilotData['chats']))
+		{
+			$copilotData['chats'] = self::prepareCopilotChats($copilotData['chats']);
+		}
+
+		if (!$shortInfo && !empty($copilotData['messages']))
+		{
+			$copilotData['messages'] = self::prepareCopilotMessages($copilotData['messages']);
+		}
+
 		$roleManager = (new RoleManager())->setContextUser($userId);
 		$recentCopilotRoles = !$shortInfo ? $roleManager->getRecentKeyRoles() : [];
-		$copilotRoles = array_values(array_merge(
-			$copilotData['chats'] ?? [],
-			$copilotData['messages'] ?? [],
-			$recentCopilotRoles
-		));
+
+		$chatRoles = [];
+		if (!empty($copilotData['chats']))
+		{
+			$originalKeys = array_keys($copilotData['chats']);
+			$chatRoles = array_column($copilotData['chats'], 'role');
+			$chatRoles = array_combine($originalKeys, $chatRoles);
+		}
+
+		$copilotRoles = array_values(
+			array_merge(
+				$chatRoles,
+				$copilotData['messages'] ?? [],
+				$recentCopilotRoles
+			)
+		);
 
 		$chats = CopilotPopupItem::convertArrayDataForChats($copilotData['chats'] ?? []);
 		$messages = CopilotPopupItem::convertArrayDataForMessages($copilotData['messages'] ?? []);
@@ -562,6 +562,52 @@ class Recent
 			'roles' => !empty($roles) ? $roles : null,
 			'recommendedRoles' => !empty($recentCopilotRoles) ? $recentCopilotRoles : null,
 		];
+	}
+
+	private static function prepareCopilotChats(?array $copilotChats): array
+	{
+		if (empty($copilotChats))
+		{
+			return [];
+		}
+
+		$roleManager = new RoleManager();
+		$chats = [];
+
+		foreach ($copilotChats as $itemId => $chatId)
+		{
+			$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+			$copilotChatRole = $roleManager->getMainRole($chatId);
+
+			if (isset($copilotChatRole))
+			{
+				$chats[$itemId] = [
+					'role' => $copilotChatRole,
+					'engine' => $chat instanceof CopilotChat ? $chat->getEngineCode() : null,
+				];
+			}
+		}
+
+		return $chats;
+	}
+
+	private static function prepareCopilotMessages(array $copilotMessages): array
+	{
+		if (empty($copilotMessages))
+		{
+			return [];
+		}
+
+		$messageIds = array_keys($copilotMessages);
+		$messageRoles = self::fillCopilotMessageRoles($messageIds);
+
+		$messages = [];
+		foreach ($copilotMessages as $messageId => $value)
+		{
+			$messages[$messageId] = $messageRoles[$messageId] ?? RoleManager::getDefaultRoleCode();
+		}
+
+		return $messages;
 	}
 
 	public static function getElement($itemType, $itemId, $userId = null, $options = [])
@@ -719,6 +765,11 @@ class Recent
 				'HAS_UNREAD_MESSAGE',
 				"EXISTS(SELECT 1 FROM {$unreadTable} WHERE CHAT_ID = %s AND USER_ID = %s)",
 				['ITEM_CID', 'USER_ID']
+			),
+			new ExpressionField(
+				'HAS_UNREAD_COMMENTS',
+				"EXISTS(SELECT 1 FROM {$unreadTable} WHERE PARENT_ID = %s AND USER_ID = %s AND PARENT_ID > 0)",
+				['ITEM_CID', 'USER_ID']
 			)
 		];
 
@@ -782,6 +833,7 @@ class Recent
 			$filter[] = [
 				'LOGIC' => 'OR',
 				['==HAS_UNREAD_MESSAGE' => true],
+				['==HAS_UNREAD_COMMENTS' => true],
 				['=UNREAD' => true],
 			];
 		}
@@ -927,6 +979,8 @@ class Recent
 				'FILE' => false,
 				'AUTHOR_ID' =>  0,
 				'ATTACH' => false,
+				'COMPONENT_ID' => null,
+				'STICKER' => false,
 				'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 				'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
 			];
@@ -989,6 +1043,8 @@ class Recent
 			'FILE' => $row['MESSAGE_FILE'],
 			'AUTHOR_ID' =>  (int)$row['MESSAGE_AUTHOR_ID'],
 			'ATTACH' => $attach,
+			'COMPONENT_ID' => $row['MESSAGE_COMPONENT_ID'],
+			'STICKER' => $row['MESSAGE_STICKER'] ?? false,
 			'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 			'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
 			'UUID' => $row['MESSAGE_UUID_VALUE'],
@@ -1412,7 +1468,7 @@ class Recent
 		$pullInclude = \Bitrix\Main\Loader::includeModule("pull");
 		if ($pullInclude)
 		{
-			\Bitrix\Pull\Event::add(
+			Event::add(
 				$userId,
 				[
 					'module_id' => 'im',
@@ -1627,34 +1683,7 @@ class Recent
 			$chat
 		);
 
-		static::sendPullRecentUpdate($chat, $userIds, $dateCreate);
-	}
-
-	public static function sendPullRecentUpdate(\Bitrix\Im\V2\Chat $chat, array $userIds, ?DateTime $lastCommentDate): void
-	{
-		$messages = new MessagePopupItem([$chat->getLastMessageId()], true);
-		$restAdapter = new RestAdapter($messages);
-		$pull = $restAdapter->toRestFormat([
-			'WITHOUT_OWN_REACTIONS' => true,
-			'MESSAGE_ONLY_COMMON_FIELDS' => true,
-		]);
-		$pull['chat'] = $chat->toPullFormat();
-		$pull['lastActivityDate'] = $lastCommentDate;
-		$pull['counterType'] = $chat->getCounterType()->value;
-		$pull['recentConfig'] = $chat->getRecentConfig()->toPullFormat();
-
-		$event = [
-			'module_id' => 'im',
-			'command' => 'recentUpdate',
-			'params' => $pull,
-			'extra' => Common::getPullExtra()
-		];
-		$events = PushService::getEventGroups($event, $userIds, $chat->getId());
-
-		foreach ($events as $event)
-		{
-			Event::add($event['users'], $event['event']);
-		}
+		(new RecentUpdate($chat, $userIds, $dateCreate))->send();
 	}
 
 	public static function merge(array $fields, array $update): void
@@ -1664,10 +1693,7 @@ class Recent
 
 	public static function getUsersOutOfRecent(\Bitrix\Im\V2\Chat $chat): array
 	{
-		$relations = $chat
-			->getRelationsForSendMessage()
-			->filter(fn (Relation $relation): bool => !$relation->isHidden())
-		;
+		$relations = $chat->getUsersToNotify();
 		$users = $relations->getUserIds();
 		$usersAlreadyInRecentRows = RecentTable::query()
 			->setSelect(['USER_ID'])
@@ -1747,7 +1773,7 @@ class Recent
 			$readService = new ReadService($userId);
 			$counter = $readService->getCounterService()->getByChatWithOverflow($chatId);
 
-			\Bitrix\Pull\Event::add(
+			Event::add(
 				$userId,
 				[
 					'module_id' => 'im',
@@ -1817,11 +1843,44 @@ class Recent
 
 	public static function readAll(int $userId): void
 	{
+		self::readByFilter($userId);
+	}
+
+	public static function readByType(int $userId, Type $type): void
+	{
+		if ($type->entityType)
+		{
+			$chatIds = \Bitrix\Im\Model\RecentTable::query()
+				->setSelect(['ITEM_CID'])
+				->where('USER_ID', $userId)
+				->where('UNREAD', 'Y')
+				->where('ITEM_TYPE', $type->literal)
+				->where('CHAT.ENTITY_TYPE', $type->entityType)
+				->fetchAll();
+
+			$chatIds = array_map('intval', array_column($chatIds, 'ITEM_CID'));
+
+			if (empty($chatIds))
+			{
+				return;
+			}
+
+			$filter = ['=ITEM_CID' => $chatIds];
+		}
+		else
+		{
+			$filter = ['=ITEM_TYPE' => $type->literal];
+		}
+
+		self::readByFilter($userId, $filter);
+	}
+
+	private static function readByFilter(int $userId, array $filter = []): void
+	{
+		$filter['=UNREAD'] = 'Y';
+		$filter['=USER_ID'] = $userId;
 		\Bitrix\Im\Model\RecentTable::updateByFilter(
-			[
-				'=UNREAD' => 'Y',
-				'=USER_ID' => $userId,
-			],
+			$filter,
 			[
 				'UNREAD' => 'N',
 				'MARKED_ID' => 0,
@@ -2060,7 +2119,7 @@ class Recent
 					]
 				);
 			}
-			\Bitrix\Pull\Event::add($userId, [
+			Event::add($userId, [
 				'module_id' => 'im',
 				'command' => 'chatShow',
 				'params' => $data,
@@ -2127,6 +2186,16 @@ class Recent
 		{
 			$messageId = (int)$item['MESSAGE_ID'];
 			$paramName = $item['PARAM_NAME'];
+
+			if ($paramName === 'COMPONENT_ID')
+			{
+				$result[$messageId]['COMPONENT_ID'] = $item['PARAM_VALUE'];
+			}
+
+			if ($paramName === 'STICKER_PARAMS')
+			{
+				$result[$messageId]['STICKER'] = true;
+			}
 
 			if ($paramName === 'CODE')
 			{
@@ -2205,6 +2274,8 @@ class Recent
 			$rows[$key]['MESSAGE_ATTACH_JSON'] = $params[$messageId]['ATTACH']['JSON'] ?? null;
 			$rows[$key]['MESSAGE_FILE'] = $params[$messageId]['MESSAGE_FILE'] ?? false;
 			$rows[$key]['RELATION_USER_ID'] = $row['RELATION_ID'] ? $userId : null;
+			$rows[$key]['MESSAGE_COMPONENT_ID'] = $params[$messageId]['COMPONENT_ID'] ?? null;
+			$rows[$key]['MESSAGE_STICKER'] = $params[$messageId]['STICKER'] ?? null;
 		}
 
 		return $rows;

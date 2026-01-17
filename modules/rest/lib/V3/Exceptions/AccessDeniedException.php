@@ -8,6 +8,6 @@ class AccessDeniedException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_ACCESS_DENIED';
+		return 'REST_V3_EXCEPTIONS_ACCESSDENIEDEXCEPTION';
 	}
 }

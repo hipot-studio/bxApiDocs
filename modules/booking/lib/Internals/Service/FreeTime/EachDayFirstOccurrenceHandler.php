@@ -67,6 +67,16 @@ class EachDayFirstOccurrenceHandler
 
 				while ($slotRangeDatePeriod->contains($currentDatePeriod))
 				{
+					if (
+						$request->ignorePastTime
+						&& $currentDatePeriod->getDateFrom()->getTimestamp() < time()
+					)
+					{
+						$currentDatePeriod = $currentDatePeriod->addMinutes(self::STEP_SIZE);
+
+						continue;
+					}
+
 					if ($slotRangeEvents->isEmpty())
 					{
 						$response->foundDates->add($searchDate);

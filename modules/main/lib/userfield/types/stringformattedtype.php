@@ -31,10 +31,10 @@ class StringFormattedType extends StringType
 	 */
 	public static function prepareSettings(array $userField): array
 	{
-		$size = (int)$userField['SETTINGS']['SIZE'];
-		$rows = (int)$userField['SETTINGS']['ROWS'];
-		$min = (int)$userField['SETTINGS']['MIN_LENGTH'];
-		$max = (int)$userField['SETTINGS']['MAX_LENGTH'];
+		$size = (int)($userField['SETTINGS']['SIZE'] ?? 0);
+		$rows = (int)($userField['SETTINGS']['ROWS'] ?? 0);
+		$min = (int)($userField['SETTINGS']['MIN_LENGTH'] ?? 0);
+		$max = (int)($userField['SETTINGS']['MAX_LENGTH'] ?? 0);
 
 		return [
 			'SIZE' => ($size <= 1 ? 20 : ($size > 255 ? 225 : $size)),

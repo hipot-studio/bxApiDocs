@@ -610,7 +610,7 @@ class AppTable extends Main\Entity\DataManager
 	{
 		$appList = OAuthService::getEngine()->getClient()->getApplicationList();
 
-		if(is_array($appList) && is_array($appList['result']))
+		if (!empty($appList['result']) && is_array($appList['result']))
 		{
 			$dbApps = static::getList(array(
 				'filter' => array(

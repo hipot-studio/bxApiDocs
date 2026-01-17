@@ -41,12 +41,12 @@ class ResourceLinkedEntity implements EntityInterface
 		return $this;
 	}
 
-	public function getEntityType(): ?ResourceLinkedEntityType
+	public function getEntityType(): ResourceLinkedEntityType|null
 	{
 		return $this->entityType;
 	}
 
-	public function setEntityType(?ResourceLinkedEntityType $entityType): self
+	public function setEntityType(ResourceLinkedEntityType|null $entityType): self
 	{
 		$this->entityType = $entityType;
 
@@ -65,12 +65,12 @@ class ResourceLinkedEntity implements EntityInterface
 		return $this;
 	}
 
-	public function getData(): ?ResourceLinkedEntityDataInterface
+	public function getData(): ResourceLinkedEntityDataInterface|null
 	{
 		return $this->data;
 	}
 
-	public function setData(?ResourceLinkedEntityDataInterface $data): self
+	public function setData(ResourceLinkedEntityDataInterface|null $data): self
 	{
 		$this->data = $data;
 

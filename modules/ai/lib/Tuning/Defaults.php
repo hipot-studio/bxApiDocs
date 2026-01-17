@@ -208,7 +208,7 @@ class Defaults
 		$engines = Engine::getListAvailable($category, $quality);
 		$options = [];
 		$recommended = [];
-		$default = null;
+		$default = static::getDefaultEngine($engines);
 		foreach ($engines as $engine)
 		{
 			$default = $default ?: $engine->getCode();
@@ -219,7 +219,7 @@ class Defaults
 			}
 		}
 
-		return 	[
+		return [
 			'type' => Type::LIST,
 			'options' => $options,
 			'default' => $default,
@@ -228,6 +228,24 @@ class Defaults
 				'isProviderSelector' => true,
 			],
 		];
+	}
+
+	private static function getDefaultEngine(array $engines): ?string
+	{
+		if (empty($engines))
+		{
+			return null;
+		}
+
+		foreach ($engines as $engine)
+		{
+			if ($engine->isPreferredForQuality())
+			{
+				return $engine->getCode();
+			}
+		}
+
+		return $engines[0]->getCode();
 	}
 
 	/**

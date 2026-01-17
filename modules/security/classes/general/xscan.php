@@ -40,11 +40,9 @@ class CBitrixXscan
         'a85abce54b4deb8cb157438dddca5a7c', 'de4f7ee97d421cf14d3951c0b4e5c2dd', '379918e8f6486ce9a7bb2ed5a69dbee6', '7ac4a2afcee04e683b092eb9402ee7ed',
         '1d5eb769111fc9c7be2021300ee5740e', 'f2357a1fe8e984052b6ee69933d467dc', 'a9158139e1a619ca8cc320cf4469c250'];
 
-
 	static $default_config = ['request' => true, 'from_request' => true, 'crypted' => true, 'files' => true,
 		'assigned' => false, 'params' => false, 'concat' => true, 'hardcoded' => false, 'value' => true, 'recursive' => false];
 	public static $database = false;
-	public $db_log = null;
 	public $db_file = null;
 	public $doc_root = null;
 	public $start_time = null;
@@ -96,8 +94,12 @@ class CBitrixXscan
 	];
 	private $results = [];
 	private $tags = [];
-	private $result_collection = null;
+	private $result_collection;
 	private $score = 1;
+	private $parser;
+	private $nodeFinder;
+	private $errorHandler;
+	private $pprinter;
 
 	function __construct($progress = 0, $total = 0, $start_path='')
 	{
@@ -364,7 +366,7 @@ class CBitrixXscan
     {
         static $doc_root;
 
-        if (!$doc_root || strpos($file_path, $doc_root . '/') !== 0)
+        if (!$doc_root || !str_starts_with($file_path, $doc_root . '/'))
 		{
             $path = explode('/', ltrim($file_path, '/'));
             $doc_root = '';
@@ -413,13 +415,7 @@ class CBitrixXscan
 
     static function getHashes($module, $version)
     {
-        global $DB;
-
-        static $static_cache;
-
-        if (!is_array($static_cache)){
-            $static_cache = [];
-        }
+        static $static_cache = [];
 
         $key = $module . '_' . $version;
 
@@ -428,39 +424,19 @@ class CBitrixXscan
             return $static_cache[$key];
         }
 
-        $cache = \Bitrix\Main\Data\Cache::createInstance();
+		$result = (new \Bitrix\Main\UpdateSystem\Checksum())->getHashes($module, $version);
 
-        if ($cache && $cache->initCache(12 * 3600, 'xscan_' . $key, 'xscan'))
-        {
-            $result = $cache->getVars();
-            $static_cache[$key] = $result;
-            return $static_cache[$key];
-        }
-        else
-        {
-            $sHost = \Bitrix\Main\Application::getInstance()->getLicense()->getDomainStoreLicense();
-            $dbtype = mb_strtolower($DB->type);
-            $http = new \Bitrix\Main\Web\HttpClient();
+		$result = array_filter(
+			$result,
+			function ($value) {
+				return preg_match('/\.(php|js)$/', $value);
+			},
+			ARRAY_FILTER_USE_KEY
+		);
 
-            $data = $http->get($sHost . "/bitrix/updates/checksum.php?check_sum=Y&module_id={$module}&ver={$version}&dbtype={$dbtype}&mode=2");
-            $result = @unserialize(gzinflate($data), ['allowed_classes' => false]);
+		$static_cache[$key] = $result;
 
-            $static_cache[$key] = [];
-
-            if (is_array($result)) {
-                $result = array_filter($result, function ($value) {
-                    return preg_match('/\.(php|js)$/', $value);
-                }, ARRAY_FILTER_USE_KEY);
-
-                $cache->startDataCache();
-                $cache->endDataCache($result);
-
-                $static_cache[$key] = $result;
-            }
-            return $static_cache[$key];
-        }
-
-        return false;
+		return $static_cache[$key];
     }
 
     static function checkByHash($file_path)
@@ -480,7 +456,6 @@ class CBitrixXscan
 		}
 
         $module = '';
-        $file = '';
 
         if (preg_match("~bitrix/modules/(.+?)/(.+)~", $file_path, $matches))
         {
@@ -532,7 +507,7 @@ class CBitrixXscan
 				}
 			}
 
-			if (isset($map[$doc_root]) && isset($map[$doc_root][$key]))
+			if (isset($map[$doc_root][$key]))
 			{
 				$module = $map[$doc_root][$key];
 			}
@@ -683,7 +658,7 @@ class CBitrixXscan
 			$file_path = substr($file_path, strlen($doc_root));
 		}
 
-		if (strpos($file_path, '/') !== 0)
+		if (!str_starts_with($file_path, '/'))
 		{
 			$file_path = '/' . $file_path;
 		}
@@ -775,7 +750,7 @@ class CBitrixXscan
 
 	private function CheckCodeInternal(&$src, $file_path = false)
 	{
-		$file_path = $file_path ? $file_path : '';
+		$file_path = $file_path ?: '';
 
 		$this->load_db();
 
@@ -785,7 +760,6 @@ class CBitrixXscan
 
 		# OBFUSCATORS
 
-		$cmt = '';
 		if (
 			($cmt = '$$') && substr_count($code, '${${') > 0 ||
 			($cmt = 'vars') && preg_match_all('/(?:\$|function\s+)(?:[o0]{4,}|[il]{4,})/i', $code) > 3 ||
@@ -861,7 +835,7 @@ class CBitrixXscan
 			}
 		}
 
-		if (strpos($file_path, '/bitrix/modules/main/') !== false)
+		if (str_contains($file_path, '/bitrix/modules/main/'))
 		{
 			$this->tags[] = 'core';
 		}
@@ -897,15 +871,15 @@ class CBitrixXscan
 			$this->tags[] = 'hidden';
 		}
 
-		if (strpos($file_path, '/bitrix/modules/') === false &&
-			strpos($file_path, '/upload/') === false &&
-			strpos($file_path, '/bitrix/php_interface/') === false &&
-			strpos($src, 'B_PROLOG_INCLUDED') === false &&
-			strpos($src, '/bitrix/header.php') === false &&
-			strpos($src, '/bitrix/modules/main/start.php') === false &&
-			strpos($src, '/bitrix/modules/main/include/prolog') === false &&
-			strpos($src, '/bitrix/modules/main/include/mainpage.php') === false &&
-			strpos($src, '/bitrix/main/include/routing_index.php') === false
+		if (!str_contains($file_path, '/bitrix/modules/') &&
+			!str_contains($file_path, '/upload/') &&
+			!str_contains($file_path, '/bitrix/php_interface/') &&
+			!str_contains($src, 'B_PROLOG_INCLUDED') &&
+			!str_contains($src, '/bitrix/header.php') &&
+			!str_contains($src, '/bitrix/modules/main/start.php') &&
+			!str_contains($src, '/bitrix/modules/main/include/prolog') &&
+			!str_contains($src, '/bitrix/modules/main/include/mainpage.php') &&
+			!str_contains($src, '/bitrix/main/include/routing_index.php')
 		)
 		{
 			$this->tags[] = 'no_prolog';
@@ -923,7 +897,6 @@ class CBitrixXscan
 
 		$parser = $this->parser;
 		$errorHandler = $this->errorHandler;
-		$pprinter = $this->pprinter;
 
 		$errorHandler->clearErrors();
 
@@ -1037,7 +1010,7 @@ class CBitrixXscan
 		# CODE 500
 		if (preg_match_all('#[\'"](php://filter|phar://)#i', $content, $regs))
 		{
-			foreach ($regs[0] as $i => $value)
+			foreach ($regs[0] as $value)
 			{
 				$code = $value;
 				$subj = '[500] php wrapper';
@@ -1067,7 +1040,7 @@ class CBitrixXscan
 		# CODE 640
 		if (preg_match_all('#exif_read_data\(#i', $src, $regs))
 		{
-			foreach ($regs[0] as $i => $value)
+			foreach ($regs[0] as $value)
 			{
 				$code = $value;
 				$subj = '[640] strange exif';
@@ -1154,7 +1127,7 @@ class CBitrixXscan
 		return !empty($this->results);
 	}
 
-	function CheckStmts($stmts, &$params, $file_path, $in_closure = false)
+	function CheckStmts($stmts, $params, $file_path, $in_closure = false)
 	{
 		$nodeFinder = $this->nodeFinder;
 		$pprinter = $this->pprinter;
@@ -1173,7 +1146,6 @@ class CBitrixXscan
 			elseif ($node instanceof Node\Expr\ArrowFunction)
 			{
 				$this->CheckStmts($node->expr, $node->params, $file_path, true);
-				$node->stmts = [];
 			}
 		});
 
@@ -1430,7 +1402,7 @@ class CBitrixXscan
 			'mysqli_connect' => [0, 1, 2, 3],
 			'mysqli_query' => [1],
 			'mysqli_real_query' => [1],
-			# i know its removed at php7
+			# I know it was removed in php7
 			'mysql_connect' => [0, 1, 2],
 			'mysql_query' => [1],
 			'mysql_db_query' => [0, 1],
@@ -1641,7 +1613,7 @@ class CBitrixXscan
 			{
 				if (stripos($class_method, $mtd) !== false)
 				{
-					$arg = isset($node->args[0]) ? $node->args[0] : false;
+					$arg = $node->args[0] ?? false;
 
 					[$flag, $comment] = $this->CheckArg($arg->value, $vars, $config);
 					if ($flag)
@@ -1663,13 +1635,11 @@ class CBitrixXscan
 		$res = [];
 		foreach ($nodes['auth'] as $node)
 		{
-			$arg = isset($node->args[0]) ? $node->args[0] : false;
+			$arg = $node->args[0] ?? false;
             if ($arg === false)
 			{
                 continue;
             }
-			$flag = false;
-			$comment = '';
 
 			[$flag, $comment] = $this->CheckArg($arg->value, $vars, $config);
 			if ($flag)
@@ -1692,9 +1662,6 @@ class CBitrixXscan
 
 		foreach ($nodes['includes'] as $node)
 		{
-			$flag = false;
-			$comment = '';
-
 			$inc = $pprinter->prettyPrintExpr($node->expr);
 
 			if (preg_match('/\.(gif|png|jpg|jpeg|var|pdf|exe)/i', $inc))
@@ -1775,8 +1742,6 @@ class CBitrixXscan
 
 		foreach ($nodes['calls'] as $node)
 		{
-			$flag = false;
-			$comment = '';
 			if ($node->name instanceof Node\Expr\Variable)
 			{
 				$var = is_string($node->name) ? '$' . $node->name : $this->pprinter->prettyPrintExpr($node->name);
@@ -1805,7 +1770,6 @@ class CBitrixXscan
 							[$flag, $comment] = $this->CheckArg($arg->value, $vars, $config);
 							if ($flag)
 							{
-								$comment = $comment;
 								break;
 							}
 						}
@@ -1921,7 +1885,7 @@ class CBitrixXscan
 				continue;
 			}
 
-			if (strpos($str, '<?') !== false && preg_match('#(' . self::$request . '|' . self::$functions . '|' . self::$evals_reg . '|' . self::$black_reg . ')#i', $str))
+			if (str_contains($str, '<?') && preg_match('#(' . self::$request . '|' . self::$functions . '|' . self::$evals_reg . '|' . self::$black_reg . ')#i', $str))
 			{
 				$subscan = new CBitrixXscan();
 				$subscan->collect_exceptions = false;
@@ -1957,7 +1921,7 @@ class CBitrixXscan
 		return $config;
 	}
 
-	public function checkFuncCalls(&$all_calls, &$funcs_map, &$nodeFinder, &$vars, &$config)
+	public function checkFuncCalls($all_calls, $funcs_map, $nodeFinder, &$vars, &$config)
 	{
 		$funcs = array_keys($funcs_map);
 
@@ -2049,7 +2013,7 @@ class CBitrixXscan
 			}
 			elseif (!is_string($name))
 			{
-				$ret = $name = $this->parseValue($name, $vars);
+				$ret = $this->parseValue($name, $vars);
 			}
 		}
 		elseif ($node instanceof Node\Expr\BinaryOp)
@@ -2345,7 +2309,6 @@ class CBitrixXscan
 
 	public static function isVarStrange($var)
 	{
-		$ret = 0;
 		$ret = preg_match('/^\$_?([0o]+|[1li]+)$/i', $var); // obfusacator
 		$ret = $ret || preg_match('/^\$__/i', $var) || $var == '$_';
 		$ret = $ret || preg_match('/__/', $var);
@@ -2390,14 +2353,14 @@ class CBitrixXscan
 		}
 		else
 		{
-			$num = isset($nums[$com]) ? $nums[$com] : 0;
-			$arg = isset(self::$scoring[$subj][$num]) ? self::$scoring[$subj][$num] : 1;
+			$num = $nums[$com] ?? 0;
+			$arg = self::$scoring[$subj][$num] ?? 1;
 		}
 
 		return round($self * $arg, 2);
 	}
 
-	public function CheckResults(&$res, $subj, $file_path)
+	public function CheckResults($res, $subj, $file_path)
 	{
 		foreach ($res as $r)
 		{
@@ -2416,7 +2379,7 @@ class CBitrixXscan
 		}
 	}
 
-	public static function ParseNode(&$node)
+	public static function ParseNode($node)
 	{
 		if (isset($arr[0]))
 		{
@@ -2424,7 +2387,6 @@ class CBitrixXscan
 			{
 				self::ParseNode($v);
 			}
-			return;
 		}
 	}
 
@@ -2514,7 +2476,7 @@ class CBitrixXscan
 
 		if (php_sapi_name() != "cli")
 		{
-			header('xscan-bp: ' . $path, true);
+			header('xscan-bp: ' . $path);
 		}
 
 		if ($this->start_time && time() - $this->start_time > $this->time_limit)
@@ -2532,7 +2494,7 @@ class CBitrixXscan
 
 		if ($mode == 'search' && $this->skip_path && !$this->found)
 		{
-			if (strpos($this->skip_path, dirname($path)) !== 0)
+			if (!str_starts_with($this->skip_path, dirname($path)))
 			{
 				return;
 			}
@@ -2549,13 +2511,13 @@ class CBitrixXscan
 
 			if (is_link($path))
 			{
-				if ($this->base_dir && strpos($p . '/', $this->base_dir . '/') !== false)
+				if ($this->base_dir && str_contains($p . '/', $this->base_dir . '/'))
 				{
 					return true;
 				}
 
 				$d = dirname($path);
-				if (strpos($p, $d) !== false || strpos($d, $p) !== false)
+				if (str_contains($p, $d) || str_contains($d, $p))
 				{
 					return true;
 				}

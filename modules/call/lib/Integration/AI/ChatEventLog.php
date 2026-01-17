@@ -147,11 +147,8 @@ class ChatEventLog
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage(
-					"Error: ".(
-						$error instanceof CallAIError && $error->getDescription()
-							? $error->getDescription()
-							: $error->getMessage()
-						)
+					"Error: ".$error->getMessage()
+					. ($error instanceof CallAIError && $error->getDescription() ? "[br]Error desc: ".$error->getDescription() : '')
 					. "[br]Error code: ".$error->getCode()
 					. "[br]File name: {$track->getFileName()}"
 					. "[br]Type: {$track->getType()}"
@@ -190,6 +187,7 @@ class ChatEventLog
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage("Outcome type: {$outcome->getType()}");
+				$attach->AddMessage("Language: ".$outcome->getLanguageId());
 				if ($outcome->hasContent())
 				{
 					$attach->AddDelimiter();
@@ -238,11 +236,8 @@ class ChatEventLog
 				$attach->AddMessage(
 					"AI task hash: ".$task->getHash()
 					. "[br]Error code: ".$error->getCode()
-					. "[br]Error: ". (
-						$error instanceof CallAIError && $error->getDescription()
-							? $error->getDescription()
-							: $error->getMessage()
-					)
+					. "[br]Error: ".$error->getMessage()
+					. ($error instanceof CallAIError && $error->getDescription() ? "[br]Error desc: ".$error->getDescription() : '')
 				);
 				$message->setAttach($attach);
 
@@ -258,7 +253,7 @@ class ChatEventLog
 	{
 		$task = $event->getParameters()['task'] ?? null;
 		$payload = $event->getParameters()['payload'] ?? null;
-		//$context = $event->getParameters()['context'] ?? null;
+		$context = $event->getParameters()['context'] ?? null;
 		$engine = $event->getParameters()['engine'] ?? null;
 
 		if (
@@ -287,6 +282,7 @@ class ChatEventLog
 					'Task type: ' . $task->getType()
 					. " [br]Task id: ".$task->getId()
 					. ' [br]AI engine: ' . $engine->getCode()
+					. ' [br]Language: '. ($context?->getLanguage()?->getCode() ?? '')
 					. ($payload instanceof \Bitrix\AI\Payload\Prompt ? ' [br]Prompt code: ' . $payload->getPromptCode() : '')
 				);
 				$attach->AddDelimiter();

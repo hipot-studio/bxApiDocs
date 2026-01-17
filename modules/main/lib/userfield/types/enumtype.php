@@ -400,11 +400,13 @@ class EnumType extends BaseType
 	public static function getFieldValue(array $userField, array $additionalParameters = [])
 	{
 		$bVarsFromForm = ($additionalParameters['bVarsFromForm'] ?? false);
+		$forceUseValueInsteadOfDefault = ($additionalParameters['FORCE_USE_VALUE'] ?? 'N') === 'Y';
 		if (!$bVarsFromForm && !isset($additionalParameters['VALUE']))
 		{
 			if (
 				isset($userField['ENTITY_VALUE_ID'], $userField['ENUM'])
 				&& $userField['ENTITY_VALUE_ID'] <= 0
+				&& !$forceUseValueInsteadOfDefault
 			)
 			{
 				$value = ($userField['MULTIPLE'] === 'Y' ? [] : null);

@@ -11,9 +11,12 @@ use Bitrix\Tasks\Deadline\Configuration;
 use Bitrix\Tasks\Deadline\SkipNotificationPeriod;
 use Bitrix\Tasks\Integration\Calendar\Calendar;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
+use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class DeadlineUserOption extends AbstractEntity
 {
+	use MapTypeTrait;
+
 	private const SECONDS_IN_DAY = 60 * 60 * 24;
 	private const SECONDS_IN_WEEK = self::SECONDS_IN_DAY * 7;
 	private const SECONDS_IN_MONTH = self::SECONDS_IN_DAY * 31;
@@ -25,14 +28,15 @@ class DeadlineUserOption extends AbstractEntity
 		public int $userId,
 		#[Min(0)]
 		#[Max(Configuration::MAX_DEFAULT_DEADLINE_IN_SECONDS)]
-		public int $defaultDeadlineInSeconds = 0,
+		public int $defaultDeadlineInSeconds = self::SECONDS_IN_DAY * 5,
 		public bool $isExactDeadlineTime = false,
 		public SkipNotificationPeriod $skipNotificationPeriod = SkipNotificationPeriod::DEFAULT,
 		public ?DateTime $skipNotificationStartDate = null,
-		public bool $canChangeDeadline = true,
+		public bool $canChangeDeadline = false,
 		public ?DateTime $maxDeadlineChangeDate = null,
 		public ?int $maxDeadlineChanges = null,
 		public bool $requireDeadlineChangeReason = false,
+		public bool $matchWorkTime = true,
 	)
 	{
 	}
@@ -53,7 +57,7 @@ class DeadlineUserOption extends AbstractEntity
 		$date = $dateTime->toUserTime();
 
 		$closestDate = $calendar->getClosestDate(
-			date: $date,
+			userDateTime: $date,
 			offsetInSeconds: $this->defaultDeadlineInSeconds,
 			matchSchedule: $this->isExactDeadlineTime && $matchWorkTime,
 			matchWorkTime: $matchWorkTime,
@@ -84,6 +88,10 @@ class DeadlineUserOption extends AbstractEntity
 		}
 
 		$startDate = $this->skipNotificationStartDate;
+		if ($startDate === null)
+		{
+			return false;
+		}
 
 		$dateTime = new DateTime();
 
@@ -109,8 +117,6 @@ class DeadlineUserOption extends AbstractEntity
 
 	public function toArray(): array
 	{
-		$matchWorkTime = true; // by default true, todo: will be replaced by the special option
-
 		return [
 			'id' => $this->id,
 			'userId' => $this->userId,
@@ -118,7 +124,7 @@ class DeadlineUserOption extends AbstractEntity
 			'isExactDeadlineTime' => $this->isExactDeadlineTime,
 			'skipNotificationPeriod' => $this->skipNotificationPeriod->value,
 			'skipNotificationStartDate' => $this->skipNotificationStartDate,
-			'defaultDeadlineDate' => $this->getDefaultDeadlineDate($matchWorkTime)
+			'defaultDeadlineDate' => $this->getDefaultDeadlineDate($this->matchWorkTime)
 				?->format('Y-m-d H:i'),
 			'canChangeDeadline' => $this->canChangeDeadline,
 			'maxDeadlineChangeDate' => $this->maxDeadlineChangeDate?->format(DateTime::getFormat()),
@@ -129,14 +135,32 @@ class DeadlineUserOption extends AbstractEntity
 
 	public static function mapFromArray(array $props): static
 	{
+		if (isset($props['skipNotificationStartDate']) && is_string($props['skipNotificationStartDate']))
+		{
+			try
+			{
+				$props['skipNotificationStartDate'] = new DateTime($props['skipNotificationStartDate']);
+			}
+			catch (\Exception) {}
+		}
+
+		if (isset($props['maxDeadlineChangeDate']) && is_string($props['maxDeadlineChangeDate']))
+		{
+			try
+			{
+				$props['maxDeadlineChangeDate'] = new DateTime($props['maxDeadlineChangeDate']);
+			}
+			catch (\Exception) {}
+		}
+
 		$deadlineUserOption = new self(
 			(int)($props['userId'] ?? 0),
-			(int)($props['defaultDeadlineInSeconds'] ?? 0),
+			(int)($props['defaultDeadlineInSeconds'] ?? self::SECONDS_IN_DAY * 5),
 			(bool)($props['isExactDeadlineTime'] ?? false),
 			SkipNotificationPeriod::tryFrom($props['skipNotificationPeriod'] ?? ''),
-			$props['skipNotificationStartDate'] ?? null,
+			static::mapDateTime($props, 'skipNotificationStartDate'),
 			(bool)($props['canChangeDeadline'] ?? false),
-			$props['maxDeadlineChangeDate'] ?? null,
+			static::mapDateTime($props, 'maxDeadlineChangeDate'),
 			isset($props['maxDeadlineChanges']) ? (int)$props['maxDeadlineChanges'] : null,
 			(bool)($props['requireDeadlineChangeReason'] ?? false),
 		);

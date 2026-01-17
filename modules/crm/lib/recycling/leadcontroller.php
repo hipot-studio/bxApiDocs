@@ -229,6 +229,7 @@ class LeadController extends BaseController
 
 		$recyclingEntity = Crm\Integration\Recyclebin\Lead::createRecycleBinEntity($entityID);
 		$recyclingEntity->setTitle($entityData['TITLE']);
+		$recyclingEntity->setUserFieldEntityId(\CCrmLead::GetUserFieldEntityID());
 
 		$slots = isset($entityData['SLOTS']) && is_array($entityData['SLOTS']) ? $entityData['SLOTS'] : array();
 		$relations = LeadRelationManager::getInstance()->buildCollection($entityID, $slots);
@@ -246,13 +247,7 @@ class LeadController extends BaseController
 
 		$recyclingEntityID = $recyclingEntity->getId();
 
-		//region Convert User Fields to Suspended Type
-		$suspendedUserFields = $this->prepareSuspendedUserFields($entityID);
-		if(!empty($suspendedUserFields))
-		{
-			$this->saveSuspendedUserFields($recyclingEntityID, $suspendedUserFields);
-		}
-		//endregion
+		$this->moveUserFieldsToRecycleBin($entityID, $recyclingEntityID);
 
 		$this->suspendActivities($entityData, $entityID, $recyclingEntityID);
 		$this->suspendMultiFields($entityID, $recyclingEntityID);
@@ -266,7 +261,6 @@ class LeadController extends BaseController
 		$this->suspendWaitings($entityID, $recyclingEntityID);
 		$this->suspendChats($entityID, $recyclingEntityID);
 		$this->suspendProductRows($entityID, $recyclingEntityID);
-		$this->suspendScoringHistory($entityID, $recyclingEntityID);
 		$this->suspendCustomRelations((int)$entityID, (int)$recyclingEntityID);
 		$this->suspendBadges((int)$entityID, (int)$recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemMoveToBin(
@@ -325,8 +319,8 @@ class LeadController extends BaseController
 		}
 		*/
 
-		//region Convert User Fields from Suspended Type
-		$userFields = $this->prepareRestoredUserFields($recyclingEntityID);
+		$userFields = $this->restoreUserFieldsFromRecycleBin($params['UF'] ?? [], $recyclingEntityID);
+
 		if(!empty($userFields))
 		{
 			$fields = array_merge($fields, $userFields);
@@ -355,7 +349,10 @@ class LeadController extends BaseController
 		Relation::updateEntityID(\CCrmOwnerType::Lead, $entityID, $newEntityID, $recyclingEntityID);
 		//endregion
 
+		if (!UserFieldsRecycleBinStorageChecker::getInstance()->isReady(\CCrmOwnerType::Lead))
+		{
 		$this->eraseSuspendedUserFields($recyclingEntityID);
+		}
 
 		$this->recoverMultiFields($recyclingEntityID, $newEntityID);
 		$this->recoverAddresses($recyclingEntityID, $newEntityID);
@@ -368,7 +365,6 @@ class LeadController extends BaseController
 		$this->recoverWaitings($recyclingEntityID, $newEntityID);
 		$this->recoverChats($recyclingEntityID, $newEntityID);
 		$this->recoverProductRows($recyclingEntityID, $newEntityID);
-		$this->recoverScoringHistory($recyclingEntityID, $newEntityID);
 		$this->recoverCustomRelations((int)$recyclingEntityID, (int)$newEntityID);
 		$this->recoverBadges((int)$recyclingEntityID, (int)$newEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemRestoreFromRecycleBin(
@@ -448,8 +444,7 @@ class LeadController extends BaseController
 		$this->eraseSuspendedObservers($recyclingEntityID);
 		$this->eraseSuspendedWaitings($recyclingEntityID);
 		$this->eraseSuspendedChats($recyclingEntityID);
-		$this->eraseSuspendedUserFields($recyclingEntityID);
-		$this->eraseSuspendedScoringHistory($recyclingEntityID);
+		$this->eraseUserFieldsOnDeleteFromRecycleBin($entityID, $recyclingEntityID);
 		$this->eraseSuspendedCustomRelations($recyclingEntityID);
 		$this->eraseSuspendedBadges($recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemDelete(

@@ -6,6 +6,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Kanban;
 use Bitrix\Crm\Kanban\Desktop;
@@ -308,12 +311,18 @@ class CrmKanbanComponent extends CBitrixComponent
 		$this->arResult['MORE_EDIT_FIELDS'] = $this->componentParams['MORE_EDIT_FIELDS'];
 		$this->arResult['CATEGORIES'] = $this->componentParams['CATEGORIES'];
 		$this->arResult['FIELDS_SECTIONS'] = $this->componentParams['FIELDS_SECTIONS'] ?? null;
-		//$this->arResult['STUB'] = $this->getStub(); TODO: исправить, когда появятся актуальные тексты
 		$this->arResult['SHOW_ERROR_COUNTER_BY_ACTIVITY_RESPONSIBLE'] = $this->showErrorCounterByActivityResponsible();
 		$this->arResult['SKIP_COLUMN_COUNT_CHECK'] = $this->isSkipColumnCountCheck();
 		$this->arResult['USE_ITEM_PLANNER'] = ($this->arParams['USE_ITEM_PLANNER'] ?? 'N') === 'Y';
 		$this->arResult['USE_PUSH_CRM'] = ($this->arParams['USE_PUSH_CRM'] ?? 'Y') === 'Y';
 		$this->arResult['PERFORMANCE'] = $this->arParams['PERFORMANCE'] ?? [];
+		$this->arResult['STAGE_ANALYTICS'] = $this->getStageAnalyticsLabels();
+
+		$stub = $this->getStub();
+		if (!empty($stub))
+		{
+			$this->arResult['STUB'] = $stub;
+		}
 
 		$context = Application::getInstance()->getContext();
 		$request = $context->getRequest();
@@ -339,6 +348,8 @@ class CrmKanbanComponent extends CBitrixComponent
 		if ($this->arParams['EMPTY_RESULT'] !== 'Y')
 		{
 			$userPermissions = $this->getKanban()->getCurrentUserPermissions();
+
+			$this->arResult['IS_LOCKED_ENTITY'] = ($this->arParams['IS_LOCKED_ENTITY'] ?? 'N') === 'Y';
 			$this->arResult['ACCESS_CONFIG_PERMS'] = $this->getKanban()->isCrmAdmin();
 			$this->arResult = array_merge($this->arResult, $entity->getPermissionParameters($userPermissions));
 
@@ -1371,51 +1382,44 @@ class CrmKanbanComponent extends CBitrixComponent
 		}
 	}
 
-	/*private function getStub(): array
+	private function getStub(): array
 	{
-		$type = $this->getEntity()->getTypeName();
+		$entityTypeId = $this->getEntityTypeId();
+		if (!CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
+		{
+			return [];
+		}
 
-		// TODO: исправить, когда появятся актуальные тексты
-		if ($type === CCrmOwnerType::LeadName)
+		if (IntranetManager::isEntityTypeInCustomSection($entityTypeId))
 		{
 			return [
-				'title' => Loc::getMessage('CRM_KANBAN_TITLE_LEAD'),
-				'description' => Loc::getMessage('CRM_KANBAN_NO_DATA_TEXT')
+				'title' => Loc::getMessage('CRM_KANBAN_AUTOMATED_SOLUTION_STUB_TITLE'),
+				'description' => Loc::getMessage('CRM_KANBAN_AUTOMATED_SOLUTION_STUB_DESCRIPTION'),
 			];
 		}
 
-		if ($type === CCrmOwnerType::DealName)
-		{
-			return [
-				'title' => Loc::getMessage('CRM_KANBAN_TITLE_DEAL'),
-				'description' => Loc::getMessage('CRM_KANBAN_NO_DATA_TEXT')
-			];
-		}
-
-		if ($type === CCrmOwnerType::InvoiceName)
-		{
-			return [
-				'title' => Loc::getMessage('CRM_KANBAN_TITLE_INVOICE'),
-				'description' => Loc::getMessage('CRM_KANBAN_NO_DATA_TEXT')
-			];
-		}
-
-		if ($type === CCrmOwnerType::QuoteName)
-		{
-			return [
-				'title' => Loc::getMessage('CRM_KANBAN_TITLE_QUOTE_MSGVER_1'),
-				'description' => Loc::getMessage('CRM_KANBAN_NO_DATA_TEXT')
-			];
-		}
-
-		return [
-			'title' => '',
-			'description' => Loc::getMessage('CRM_KANBAN_NO_DATA_TEXT')
-		];
-	}*/
+		return [];
+	}
 
 	private function showErrorCounterByActivityResponsible(): bool
 	{
 		return CounterSettings::getInstance()->useActivityResponsible();
+	}
+
+	private function getStageAnalyticsLabels(): array
+	{
+		$subSectionKanban = Dictionary::SUB_SECTION_KANBAN;
+
+		$createStage = (new FunnelAnalytics\Stage\CreateEvent(subSection: $subSectionKanban))->buildData();
+		$renameStage = (new FunnelAnalytics\Stage\RenameEvent(subSection: $subSectionKanban))->buildData();
+		$deleteStage = (new FunnelAnalytics\Stage\DeleteEvent(subSection: $subSectionKanban))->buildData();
+		$updateStage = (new FunnelAnalytics\Stage\UpdateEvent(subSection: $subSectionKanban))->buildData();
+
+		return [
+			'createStageLabel' => $createStage,
+			'renameStageLabel' => $renameStage,
+			'deleteStageLabel' => $deleteStage,
+			'updateStageLabel' => $updateStage,
+		];
 	}
 }

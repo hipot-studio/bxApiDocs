@@ -17,7 +17,7 @@ final class MenuFeature extends FeatureFlag
 
 	public function isNewMenuEnabled()
 	{
-		return Option::get('mobile', 'new_menu_enabled', 'N') === 'Y';
+		return Option::get('mobile', 'new_menu_enabled', 'Y') === 'Y';
 	}
 
 	public function enable(): void

@@ -149,6 +149,7 @@ class Olx extends Base
 			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
 			'NOTIFY_MODULE' => 'imconnector',
 			'NOTIFY_EVENT' => 'admin_notification',
+			'NOTIFY_TITLE' => Loc::getMessage('CONNECTORS_OLX_NOTIFY_TITLE'),
 			'NOTIFY_MESSAGE' => Loc::getMessage('CONNECTORS_OLX_RECONNECT_REMINDER_NOTIFICATION', [
 				'#LINK_START#' => '[URL='.$url.']',
 				'#LINK_END#' => '[/URL]'

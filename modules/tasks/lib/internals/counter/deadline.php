@@ -66,7 +66,7 @@ class Deadline
 			return false;
 		}
 
-		return $deadline->checkLT(self::getExpiredTime());
+		return $deadline->checkLT(self::getExpiredTime(), false);
 	}
 
 	/**
@@ -80,6 +80,6 @@ class Deadline
 			return false;
 		}
 
-		return $deadline->checkGT(self::getExpiredTime()) && $deadline->checkLT(self::getExpiredSoonTime());
+		return $deadline->checkGT(self::getExpiredTime()) && $deadline->checkLT(self::getExpiredSoonTime(), false);
 	}
 }

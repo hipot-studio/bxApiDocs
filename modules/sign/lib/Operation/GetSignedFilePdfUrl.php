@@ -40,7 +40,7 @@ class GetSignedFilePdfUrl implements Contract\Operation
 			return $result->addError(new Main\Error('Document not found'));
 		}
 
-		if ($document->version === 1)
+		if ($document->version === Type\Document\Version::V1)
 		{
 			return $this->getLinkUsingOldApi($document);
 		}

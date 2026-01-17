@@ -14,10 +14,12 @@ class BaseProviderOptions
 	public readonly ?NodeAccessFilter $accessFilter;
 	public readonly bool $isProviderActive;
 	public readonly bool $restricted;
+	public readonly ?array $allowedPermissionLevels;
 
 	public function __construct(array $rawOptions = [])
 	{
 		$this->initIncludedNodeEntityTypes($rawOptions);
+		$this->initAllowedPermissionLevels($rawOptions);
 		$this->initStructureActionAndAccessFilter($rawOptions);
 		$this->initRestricted($rawOptions);
 		$this->initProviderActive();
@@ -28,7 +30,7 @@ class BaseProviderOptions
 		$this->structureAction = StructureAction::tryFrom($options['restricted']);
 
 		$this->accessFilter = $this->structureAction
-			? new NodeAccessFilter($this->structureAction)
+			? new NodeAccessFilter($this->structureAction, allowedLevels: $this->allowedPermissionLevels)
 			: null
 		;
 	}
@@ -68,6 +70,18 @@ class BaseProviderOptions
 		}
 
 		$this->includedNodeEntityTypes = $values;
+	}
+
+	private function initAllowedPermissionLevels(array $options): void
+	{
+		if (isset($options['allowedPermissionLevels']) && is_array($options['allowedPermissionLevels']))
+		{
+			$this->allowedPermissionLevels = array_map('intval', $options['allowedPermissionLevels']);
+		}
+		else
+		{
+			$this->allowedPermissionLevels = null;
+		}
 	}
 
 	private function initProviderActive(): void

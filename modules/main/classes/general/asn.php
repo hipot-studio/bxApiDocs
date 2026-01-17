@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CASNReader
 {
 	protected $value;
@@ -68,4 +69,3 @@ class CASNReader
 		return $arResult;
 	}
 }
-?>

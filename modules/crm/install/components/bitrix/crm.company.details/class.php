@@ -1239,7 +1239,9 @@ class CCrmCompanyDetailsComponent
 				'FIELD' => $fieldName,
 				'MULTIPLE' => $userField['MULTIPLE'],
 				'MANDATORY' => $userField['MANDATORY'],
-				'SETTINGS' => isset($userField['SETTINGS']) ? $userField['SETTINGS'] : null
+				'ADDITIONAL' => $userField['ADDITIONAL'] ?? [],
+				'HELP_MESSAGE' => $userField['HELP_MESSAGE'] ?? '',
+				'SETTINGS' => $userField['SETTINGS'] ?? null,
 				//'CONTEXT' => $this->guid
 			);
 
@@ -1249,14 +1251,12 @@ class CCrmCompanyDetailsComponent
 			}
 			elseif($userField['USER_TYPE_ID'] === 'file')
 			{
-				$fieldInfo['ADDITIONAL'] = array(
-					'URL_TEMPLATE' => \CComponentEngine::MakePathFromTemplate(
-						$this->getFileUrlTemplate(),
-						array(
-							'owner_id' => $this->entityID,
-							'field_name' => $fieldName
-						)
-					)
+				$fieldInfo['ADDITIONAL']['URL_TEMPLATE'] = CComponentEngine::MakePathFromTemplate(
+					$this->getFileUrlTemplate(),
+					[
+						'owner_id' => $this->entityID,
+						'field_name' => $fieldName
+					],
 				);
 			}
 

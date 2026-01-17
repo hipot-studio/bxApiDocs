@@ -128,7 +128,19 @@ class TasksTagList extends CBitrixComponent implements Controllerable, Errorable
 			return [];
 		}
 
+		$currentNames = [TagRegistry::getInstance()->get($tagId)['NAME']];
+
 		$this->tagService->delete([$tagId]);
+
+		PushService::addEvent([$this->userId], [
+			'module_id' => 'tasks',
+			'command' => PushCommand::TAGS_DELETED,
+			'params' => [
+				'tagNames' => $currentNames,
+				'groupId' => $groupId,
+				'userId' => $this->userId,
+			],
+		]);
 
 		$members = $this->getGroupMembers($groupId);
 		$members[] = $this->userId;
@@ -371,6 +383,16 @@ class TasksTagList extends CBitrixComponent implements Controllerable, Errorable
 		if ($isSuccessfully)
 		{
 			$this->tagService->delete($tags);
+
+			PushService::addEvent([$this->userId], [
+				'module_id' => 'tasks',
+				'command' => PushCommand::TAGS_DELETED,
+				'params' => [
+					'tagNames' => $names,
+					'groupId' => $groupId,
+					'userId' => $this->userId,
+				],
+			]);
 
 			$members = $this->getGroupMembers($groupId);
 			$members[] = $this->userId;

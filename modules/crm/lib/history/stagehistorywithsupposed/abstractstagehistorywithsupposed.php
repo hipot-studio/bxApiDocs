@@ -4,13 +4,14 @@ namespace Bitrix\Crm\History\StageHistoryWithSupposed;
 
 use Bitrix\Crm\Comparer\Difference;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Result;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Objectify\Collection;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
-use Bitrix\Crm\Result;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 
@@ -109,11 +110,31 @@ abstract class AbstractStageHistoryWithSupposed
 		}
 		elseif ($diff->isChanged(Item::FIELD_NAME_STAGE_ID))
 		{
-			[$transitions, $directive] = $this->calculator->calculateOnStageChange(
-				$categoryId,
-				$start,
-				$finish,
-			);
+			try
+			{
+				[$transitions, $directive] = $this->calculator->calculateOnStageChange(
+					$categoryId,
+					$start,
+					$finish,
+				);
+			}
+			catch (InvalidOperationException $exception)
+			{
+				Container::getInstance()->getLogger('Default')->critical(
+					'{method}: invalid operation on stage change calculation: {exceptionMessage}, categoryId: {categoryId}, start: {start}, finish: {finish}, diff: {diff}',
+					[
+						'method' => __METHOD__,
+						'exceptionMessage' => $exception->getMessage(),
+						'diff' => var_export($diff, true),
+						'categoryId' => $categoryId,
+						'start' => $start,
+						'finish' => $finish,
+					],
+				);
+
+				$transitions = [];
+				$directive = CloseDateDirective::DoNothing;
+			}
 		}
 		else
 		{

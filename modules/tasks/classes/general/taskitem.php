@@ -46,6 +46,9 @@ Loc::loadMessages(__FILE__);
 
 interface CTaskItemInterface
 {
+	/**
+	 * @throws TasksException
+	 */
 	public function getData($returnEscapedData = true);
 	public function getTags();
 	public function getFiles();
@@ -428,7 +431,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		try
 		{
 			$newTaskItem = new CTaskItem( (int) $rc, $executiveUserId);
-			static::sendTaskCreateAnalytics($arNewTaskData, (int)$executiveUserId, true, $newTaskItem->getId());
+			// Analytics was sent in tasks/lib/control/task.php (line 422 above).
 		}
 		catch (TasksException | CTaskAssertException $e)
 		{
@@ -2522,7 +2525,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 
 		if ($arGivenFieldsNames === array_intersect($arGivenFieldsNames, $actionChangeDeadlineFields))
 		{
-			if (!$this->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE))
+			if (!$this->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE, $arFields))
 			{
 				throw new TasksException(
 					GetMessage('TASKS_ACCESS_DENIED_TO_DEADLINE_UPDATE'),

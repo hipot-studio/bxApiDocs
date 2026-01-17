@@ -2,13 +2,12 @@
 
 namespace Bitrix\Call\Controller;
 
-use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
-use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter\Scope;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
@@ -16,10 +15,12 @@ use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Registry;
 use Bitrix\Call\Error;
 use Bitrix\Call\NotifyService;
+use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Call\Integration\AI\CallAIService;
 use Bitrix\Call\Integration\AI\ChatEventLog;
 use Bitrix\Call\Integration\AI\ChatMessage;
-use Bitrix\Call\Integration\AI\MentionService;
+use Bitrix\Call\Integration\AI\Outcome\Transcription;
+use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Model\CallAITaskTable;
 use Bitrix\Call\Model\CallOutcomePropertyTable;
@@ -276,15 +277,53 @@ class FollowUp extends Engine\Controller
 			return null;
 		}
 
-		$outcomes = [];
+		/** @var Transcription $transcription */
+		$transcription = null;
+		$outcomes = ['version' => 1];
 		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId) ?? [];
 		foreach ($outcomeCollection as $outcome)
 		{
 			$content = $outcome->getSenseContent();
 			if ($content)
 			{
-				$outcomes[$outcome->getType()] = $content->toRestFormat();
+				if ($content instanceof Transcription)
+				{
+					$transcription = $content;
+				}
+				$outcomes[$outcome->getType()] = $content->toRestFormat(mentionFormat: 'bb');
+				$outcomes['version'] = max($outcomes['version'], $content->getVersion());
 			}
+		}
+
+		if (
+			$outcomes['insights']['speakerEvaluationAvailable']
+			&& !empty($outcomes['insights']['speakerAnalysis'])
+		)
+		{
+			$speakerList = $transcription->prepareSpeakersList();
+			$speakerAnalysis = [];
+			/** @var array{userId: int, efficiencyValue: float} $speaker */
+			foreach ($outcomes['insights']['speakerAnalysis'] as $speaker)
+			{
+				if (!isset($speakerList[$speaker['userId']]))
+				{
+					continue;
+				}
+				$speaker['talkPercentage'] = $speakerList[$speaker['userId']]['talkPercentage'];
+				$speaker['duration'] = (int)$speakerList[$speaker['userId']]['duration'];
+				$speaker['durationFormat'] = $this->formatLength((int)$speakerList[$speaker['userId']]['duration']);
+				$speakerAnalysis[] = $speaker;
+			}
+
+			// sort users by efficiencyValue and talkPercentage
+			\Bitrix\Main\Type\Collection::sortByColumn(
+				array: $speakerAnalysis,
+				columns: [
+					'talkPercentage' => \SORT_DESC,
+					'efficiencyValue' => \SORT_DESC,
+				]
+			);
+			$outcomes['insights']['speakerAnalysis'] = $speakerAnalysis;
 		}
 
 		$result = [
@@ -445,5 +484,52 @@ class FollowUp extends Engine\Controller
 		}
 
 		return $tracks;
+	}
+
+	private function formatLength(int $duration): string
+	{
+		$hours = $minutes = $seconds = 0;
+		if ($duration < 60)
+		{
+			$seconds = $duration;
+		}
+		else
+		{
+			$hours = floor($duration / 3600);
+			if ($hours > 0)
+			{
+				$duration -= $hours * 3600;
+			}
+			$minutes = floor($duration / 60);
+		}
+
+		return $this->formatInterval($hours, $minutes, $seconds);
+	}
+
+	private function formatInterval(int $hours = 0, int $minutes = 0, int $seconds = 0): string
+	{
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/im/lib/call/integration/chat.php');
+
+		$result = [];
+		if ($hours > 0)
+		{
+			$result[] = Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_DURATION_HOURS', [
+				'#HOURS#' => $hours
+			]);
+		}
+		if ($minutes > 0)
+		{
+			$result[] = Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_DURATION_MINUTES', [
+				'#MINUTES#' => $minutes
+			]);
+		}
+		if ($seconds > 0 && !($hours > 0))
+		{
+			$result[] = Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_DURATION_SECONDS', [
+				'#SECONDS#' => $seconds
+			]);
+		}
+
+		return implode(' ', $result);
 	}
 }

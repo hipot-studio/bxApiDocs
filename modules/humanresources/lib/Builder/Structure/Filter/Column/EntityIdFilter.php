@@ -35,18 +35,20 @@ final class EntityIdFilter extends BaseColumnFilter
 	 *
 	 * @return self
 	 */
-	public static function fromEntityIds(array $entityId): self
+	public static function fromEntityIds(array $entityIds): self
 	{
-		if (empty($entityId))
+		if (empty($entityIds))
 		{
 			return new self();
 		}
 
-		if (count($entityId) === 1)
+		if (count($entityIds) === 1)
 		{
-			return self::fromEntityId((int)$entityId[0]);
+			return self::fromEntityId((int)$entityIds[0]);
 		}
 
-		return new self(...$entityId);
+		return new self(
+			new IntegerCollection(...$entityIds)
+		);
 	}
 }

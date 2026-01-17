@@ -8,9 +8,11 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\V2\Public\Command\Task\DeleteTaskCommand;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskDeletedEvent;
+use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
+use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\AddCrmEvent;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\CleanCache;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Config\DeleteConfig;
@@ -43,8 +45,8 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\UnlinkTags;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\UpdateParents;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\UpdateTemplates;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\CounterService;
 use Bitrix\Tasks\V2\Internal\Repository\TaskStageRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 
 class DeleteService
@@ -53,10 +55,11 @@ class DeleteService
 		private readonly TaskRepositoryInterface $repository,
 		private readonly EgressInterface $egressController,
 		private readonly TaskStageRepositoryInterface $taskStageRepository,
-		private readonly CounterService $counterService,
+		private readonly Counter\Service $counterService,
+		private readonly EventDispatcher $eventDispatcher,
+		private readonly UserRepositoryInterface $userRepository,
 	)
 	{
-		
 	}
 
 	/**
@@ -71,7 +74,8 @@ class DeleteService
 			throw new WrongTaskIdException();
 		}
 
-		if (!$this->repository->getById($taskId))
+		$entity = $this->repository->getById($taskId);
+		if ($entity === null)
 		{
 			throw new TaskNotExistsException();
 		}
@@ -90,13 +94,22 @@ class DeleteService
 
 		$taskBefore = $compatibilityRepository->getTaskObject($taskId);
 
+		// notify external services about a deleted task
+		$this->egressController->process(
+			new DeleteTaskCommand(
+				taskId: $taskId,
+				config: $config,
+				taskBefore: $entity,
+			)
+		);
+
 		(new MoveToRecyclebin($config))($fullTaskData);
 
 		$this->counterService->collect($taskId);
 
 		(new AddCrmEvent($config))($fullTaskData);
 
-		(new StopTimer())($fullTaskData);
+		(new StopTimer($config))($fullTaskData);
 
 		(new SoftDeleteRelations($config))($fullTaskData);
 
@@ -141,19 +154,18 @@ class DeleteService
 
 		(new SendNotification($config))($taskBefore);
 
-		$this->counterService->addEvent(EventDictionary::EVENT_AFTER_TASK_DELETE, $fullTaskData);
+		$this->counterService->send(new Counter\Command\AfterTaskDelete(data: $fullTaskData));
 
 		(new RunIntegration($config))($fullTaskData);
 
-		// notify external services about a deleted task
-		$this->egressController->process(
-			new DeleteTaskCommand(
-				taskId: $taskId,
-				config: $config,
+		$this->eventDispatcher->dispatch(
+			new OnTaskDeletedEvent(
+				task: $entity,
+				triggeredBy: $this->userRepository->getByIds([$config->getUserId()])->getFirstEntity(),
 			)
 		);
 	}
-	
+
 	private function loadMessages(): void
 	{
 		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/control/task.php');

@@ -3,7 +3,7 @@
 namespace Bitrix\Rest\V3\Structures;
 
 use Bitrix\Main\DB\Order;
-use Bitrix\Rest\V3\Dto\PropertyHelper;
+use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Exceptions\InvalidOrderException;
 use Bitrix\Rest\V3\Exceptions\InvalidPaginationException;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
@@ -19,11 +19,9 @@ final class CursorStructure extends Structure
 
 	protected int $limit = 50;
 
-	public static function create(mixed $value, string $dtoClass = null, Request $request = null): self
+	public static function create(mixed $value, ?string $dtoClass = null, ?Request $request = null): self
 	{
 		$structure = new self();
-
-		$reflection = new \ReflectionClass($dtoClass);
 
 		if (isset($value['limit']))
 		{
@@ -37,9 +35,13 @@ final class CursorStructure extends Structure
 
 		if (!empty($value['field']))
 		{
-			if (!PropertyHelper::isValidProperty($reflection, $value['field']))
+			/** @var Dto $dto */
+			$dto = self::getDto($dtoClass);
+
+			$fields = $dto->getFields();
+			if (!isset($fields[$value['field']]))
 			{
-				throw new UnknownDtoPropertyException($dtoClass, $value['field']);
+				throw new UnknownDtoPropertyException($dto->getShortName(), $value['field']);
 			}
 			$structure->field = $value['field'];
 		}
@@ -48,14 +50,14 @@ final class CursorStructure extends Structure
 			throw new RequiredFieldInRequestException('cursor.field');
 		}
 
-		if (!empty($value['value']))
+		if ($value['value'] !== null)
 		{
-			$property = PropertyHelper::getProperty($reflection, $structure->field);
-			$itemValue = FieldsConverter::convertValueByType($property->getType()?->getName(), $value['value']);
+			$field = $dto->getFields()[$structure->field];
+			$itemValue = FieldsConverter::convertValueByType($field->getPropertyType(), $value['value']);
 
-			if (!FieldsValidator::validateReflectionPropertyAndValue($property, $itemValue))
+			if (!FieldsValidator::validateTypeAndValue($field->getPropertyType(), $itemValue))
 			{
-				throw new InvalidRequestFieldTypeException($property->getName(), $property->getType() ? $property->getType()->getName() : 'unknown');
+				throw new InvalidRequestFieldTypeException($field->getPropertyName(), $field->getPropertyType());
 			}
 
 			$structure->value = $itemValue;

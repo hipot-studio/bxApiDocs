@@ -257,7 +257,9 @@ class QueueService implements QueueServiceInterface
 		);
 
 		$userTimeOffset = CTimeZone::GetOffset($commandModel->userId);
-		$closestDate->add("-{$userTimeOffset} seconds");
+
+		$toServerTimeOffset = -$userTimeOffset;
+		$closestDate->add("{$toServerTimeOffset} seconds");
 
 		return $closestDate;
 	}

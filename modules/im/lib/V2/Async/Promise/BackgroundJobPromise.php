@@ -52,7 +52,7 @@ class BackgroundJobPromise extends Promise
 		return $this->getResult();
 	}
 
-	public static function deferJob(callable $deferredJob, bool $runImmediatelyIfInBackground = true): static
+	public static function deferJob(callable $deferredJob, bool $runImmediatelyIfInBackground = false): static
 	{
 		return new static(static function () {}, $deferredJob, $runImmediatelyIfInBackground);
 	}

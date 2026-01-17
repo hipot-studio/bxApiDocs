@@ -22,10 +22,10 @@ class TimerMapper
 	public function mapToEntity(array $timer): Entity\Task\Timer
 	{
 		return new Entity\Task\Timer(
-			userId: $timer['USER_ID'] ? (int)$timer['USER_ID'] : null,
-			taskId: $timer['TASK_ID'] ? (int)$timer['TASK_ID'] : null,
-			startedAtTs: $timer['TIMER_STARTED_AT'] ? (int)$timer['TIMER_STARTED_AT'] : null,
-			seconds: $timer['TIMER_ACCUMULATOR'] ? (int)$timer['TIMER_ACCUMULATOR'] : null,
+			userId: Entity\Task\Timer::mapInteger($timer, 'USER_ID'),
+			taskId: Entity\Task\Timer::mapInteger($timer, 'TASK_ID'),
+			startedAtTs: Entity\Task\Timer::mapInteger($timer, 'TIMER_STARTED_AT'),
+			seconds: Entity\Task\Timer::mapInteger($timer, 'TIMER_ACCUMULATOR'),
 		);
 	}
 

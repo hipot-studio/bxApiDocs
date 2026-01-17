@@ -130,7 +130,7 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 		$this->arResult['IS_SHOW_GUIDE'] = $this->isShowGuide();
 		$this->arResult['IS_SHOW_PRODUCT_BATCH_METHOD_POPUP'] = $this->isShowProductBatchMethodPopup();
 
-		$this->arResult['PATH_TO'] = $this->arParams['PATH_TO'];
+		$this->arResult['PATH_TO'] = $this->normalizePaths($this->arParams['PATH_TO']);
 
 		$this->arResult['INVENTORY_MANAGEMENT_SOURCE'] =
 			InventoryManagementSourceBuilder::getInstance()->getInventoryManagementSource()
@@ -139,6 +139,15 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 		$this->initInventoryManagementSlider();
 
 		$this->includeComponentTemplate();
+	}
+
+	private function normalizePaths(array $paths): array
+	{
+		return array_map(static fn($path) => str_starts_with($path = trim((string)$path), SITE_DIR)
+			? $path
+			: SITE_DIR . ltrim($path, '/'),
+			$paths,
+		);
 	}
 
 	private function checkIfInventoryManagementIsDisabled(): void

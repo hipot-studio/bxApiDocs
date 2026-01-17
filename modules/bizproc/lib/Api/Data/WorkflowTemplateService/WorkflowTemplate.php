@@ -18,7 +18,7 @@ final class WorkflowTemplate
 	 */
 	public static function createFromRequest(SaveTemplateRequest $request): self
 	{
-		$fields = self::normalizeFields($request->fields);
+		$fields = self::normalizeFields($request->fields, $request->templateId === 0);
 
 		$template = new self();
 		$template->templateId = $request->templateId;
@@ -41,12 +41,15 @@ final class WorkflowTemplate
 	 * normalize and validate fields
 	 * @throws ArgumentException
 	 */
-	private static function normalizeFields(array $fields): array
+	private static function normalizeFields(array $fields, bool $checkRequired = true): array
 	{
 		$fields['VARIABLES'] = is_array($fields['VARIABLES'] ?? null) ? $fields['VARIABLES'] : [];
 		$fields['CONSTANTS'] = is_array($fields['CONSTANTS'] ?? null) ? $fields['CONSTANTS'] : [];
 
-		self::checkRequiredFields($fields);
+		if ($checkRequired)
+		{
+			self::checkRequiredFields($fields);
+		}
 		self::validateFieldSize($fields, 'PARAMETERS', \CBPWorkflowTemplateLoader::MAX_PARAMETERS_LENGTH);
 		self::validateFieldSize($fields, 'VARIABLES', \CBPWorkflowTemplateLoader::MAX_VARIABLES_LENGTH);
 		self::validateFieldSize($fields, 'CONSTANTS', \CBPWorkflowTemplateLoader::MAX_CONSTANTS_LENGTH);

@@ -1,6 +1,6 @@
 <?php
 
-IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/classes/general/rating_rule.php");
+IncludeModuleLangFile(__FILE__);
 
 class CRatingRule
 {

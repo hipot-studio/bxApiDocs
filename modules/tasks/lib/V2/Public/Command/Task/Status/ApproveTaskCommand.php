@@ -27,9 +27,7 @@ class ApproveTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new ApproveTaskHandler($statusService);
+		$handler = Container::getInstance()->get(ApproveTaskHandler::class);
 
 		try
 		{

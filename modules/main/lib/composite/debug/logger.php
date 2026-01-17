@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Main\Composite\Debug;
 
 use Bitrix\Main\Composite\Helper;

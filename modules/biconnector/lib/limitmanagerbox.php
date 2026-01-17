@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\BIConnector;
 
+use Bitrix\Main\Type\Date;
+
 class LimitManagerBox extends LimitManager
 {
 	public const SUPERSET_LIMIT = 10000000;
@@ -31,7 +33,7 @@ class LimitManagerBox extends LimitManager
 	 *
 	 * @return int
 	 */
-	public function getLimit()
+	public function getLimit(): int
 	{
 		if ($this->isSuperset())
 		{
@@ -44,7 +46,7 @@ class LimitManagerBox extends LimitManager
 	public function isLimitByLicence(): bool
 	{
 		$expireDate = $this->getLimitDate();
-		$daysLeft = $expireDate->getDiff(new \Bitrix\Main\Type\Date())->days;
+		$daysLeft = $expireDate->getDiff(new Date())->days;
 
 		return $daysLeft < self::GRACE_PERIOD_DAYS;
 	}
@@ -52,9 +54,9 @@ class LimitManagerBox extends LimitManager
 	/**
 	 * Returns a date when data export will be disabled.
 	 *
-	 * @return \Bitrix\Main\Type\Date
+	 * @return Date
 	 */
-	public function getLimitDate()
+	public function getLimitDate(): Date
 	{
 		if ($this->license->isTimeBound())
 		{
@@ -65,7 +67,7 @@ class LimitManagerBox extends LimitManager
 			}
 		}
 
-		$date = new \Bitrix\Main\Type\Date();
+		$date = new Date();
 		$date->add(static::GRACE_PERIOD_DAYS . ' days');
 
 		return $date;
@@ -76,7 +78,7 @@ class LimitManagerBox extends LimitManager
 	 *
 	 * @return bool
 	 */
-	public function checkLimitWarning()
+	public function checkLimitWarning(): bool
 	{
 		if ($this->isSuperset() && !$this->isLimitByLicence())
 		{
@@ -84,9 +86,9 @@ class LimitManagerBox extends LimitManager
 		}
 
 		$expireDate = $this->getLimitDate();
-		$daysLeft = $expireDate->getDiff(new \Bitrix\Main\Type\Date())->days;
+		$daysLeft = $expireDate->getDiff(new Date())->days;
 
-		return ($daysLeft >= static::GRACE_PERIOD_DAYS);
+		return $daysLeft >= static::GRACE_PERIOD_DAYS;
 	}
 
 	/**
@@ -94,7 +96,7 @@ class LimitManagerBox extends LimitManager
 	 *
 	 * @return bool
 	 */
-	public function checkLimit()
+	public function checkLimit(): bool
 	{
 		if ($this->isSuperset() && !$this->isLimitByLicence())
 		{
@@ -102,9 +104,9 @@ class LimitManagerBox extends LimitManager
 		}
 
 		$expireDate = $this->getLimitDate();
-		$daysLeft = $expireDate->getDiff(new \Bitrix\Main\Type\Date())->d;
+		$daysLeft = $expireDate->getDiff(new Date())->d;
 
-		return ($daysLeft >= 0);
+		return $daysLeft >= 0;
 	}
 
 	/**
@@ -114,7 +116,7 @@ class LimitManagerBox extends LimitManager
 	 *
 	 * @return void
 	 */
-	public function licenseChange(\Bitrix\Main\Event $event)
+	public function licenseChange(\Bitrix\Main\Event $event): void
 	{
 	}
 }

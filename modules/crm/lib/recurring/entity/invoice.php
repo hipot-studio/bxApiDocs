@@ -1,14 +1,14 @@
 <?php
 namespace Bitrix\Crm\Recurring\Entity;
 
-use Bitrix\Main,
-	Bitrix\Main\Type\Date,
-	Bitrix\Main\Result,
-	Bitrix\Crm\Requisite\EntityLink,
-	Bitrix\Crm\InvoiceRecurTable,
-	Bitrix\Crm\InvoiceTable,
-	Bitrix\Crm\Restriction\RestrictionManager,
-	Bitrix\Crm\Recurring\Mail;
+use Bitrix\Crm\InvoiceRecurTable;
+use Bitrix\Crm\InvoiceTable;
+use Bitrix\Crm\Recurring\Mail;
+use Bitrix\Crm\Requisite\EntityLink;
+use Bitrix\Crm\Restriction\RestrictionManager;
+use Bitrix\Main;
+use Bitrix\Main\Result;
+use Bitrix\Main\Type\Date;
 
 class Invoice extends Base
 {
@@ -157,7 +157,7 @@ class Invoice extends Base
 			{
 				$linkEntityList[$link['ENTITY_ID']] = $link;
 			}
-			
+
 			$idListChunks = array_chunk($idInvoicesList, 100);
 
 			foreach ($idListChunks as $idList)
@@ -319,11 +319,11 @@ class Invoice extends Base
 			$emails[$email['ID']] = $email;
 		}
 
-		if (!empty($emails)) 
+		if (!empty($emails))
 		{
 			$idListChunks = array_chunk(array_keys($emailData), 999);
 			$mail = new Mail();
-			foreach ($idListChunks as $idList) 
+			foreach ($idListChunks as $idList)
 			{
 				$newInvoiceData = \CCrmInvoice::GetList(
 					array(),
@@ -337,24 +337,24 @@ class Invoice extends Base
 				{
 					$emailId = $emailData[$invoice['ID']]['EMAIL_ID'];
 					$templateId = $emailData[$invoice['ID']]['TEMPLATE_ID'];
-					$r = $mail->setData($invoice, $emails[$emailId], $templateId);
+					$r = $mail->setData($invoice, [$emails[$emailId]], $templateId);
 
-					if ($r->isSuccess()) 
+					if ($r->isSuccess())
 					{
 						$mailResult = $mail->sendInvoice();
-						if (!($mailResult->isSuccess())) 
+						if (!($mailResult->isSuccess()))
 						{
 							$result->addErrors($mailResult->getErrors());
 						}
-					} 
-					else 
-						{
+					}
+					else
+					{
 						$result->addErrors($r->getErrors());
 					}
 				}
 			}
 		}
-		
+
 		return $result;
 	}
 

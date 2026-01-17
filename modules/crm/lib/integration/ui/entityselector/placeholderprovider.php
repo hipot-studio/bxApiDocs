@@ -82,7 +82,13 @@ class PlaceholderProvider extends BaseProvider
 
 	public function isAvailable(): bool
 	{
-		return Container::getInstance()
+		if (!DocumentGeneratorManager::getInstance()->isEnabled())
+		{
+			return false;
+		}
+
+		return
+			Container::getInstance()
 			->getUserPermissions()
 			->entityType()
 			->canReadItems($this->entityTypeId)
@@ -106,6 +112,11 @@ class PlaceholderProvider extends BaseProvider
 
 	protected function makeItems(): array
 	{
+		if (!DocumentGeneratorManager::getInstance()->isEnabled())
+		{
+			return [];
+		}
+
 		$providerClassName = DocumentGeneratorManager::getInstance()
 			->getCrmOwnerTypeProvider($this->entityTypeId, false)
 		;

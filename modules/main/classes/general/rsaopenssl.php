@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CRsaOpensslProvider extends CRsaProvider
 {
 	//$_PRIV - secret key in PEM format
@@ -127,4 +128,3 @@ class CRsaOpensslProvider extends CRsaProvider
 		return false;
 	}
 }
-?>

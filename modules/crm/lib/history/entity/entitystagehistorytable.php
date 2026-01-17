@@ -27,6 +27,8 @@ use Bitrix\Main\ORM\Fields\StringField;
  */
 final class EntityStageHistoryTable extends DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_crm_entity_stage_history';

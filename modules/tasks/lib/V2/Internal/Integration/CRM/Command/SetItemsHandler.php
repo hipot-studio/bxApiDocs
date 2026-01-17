@@ -21,6 +21,7 @@ class SetItemsHandler
 			taskId: $command->taskId,
 			userId: $command->userId,
 			crmItemIds: $command->crmItemIds,
+			useConsistency: $command->useConsistency,
 		);
 	}
 }

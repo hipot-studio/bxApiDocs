@@ -7,10 +7,12 @@ namespace Bitrix\Intranet\User;
 use Bitrix\Intranet;
 use Bitrix\Intranet\User\Widget\BaseContent;
 use Bitrix\Intranet\User\Widget\Content\Main;
+use Bitrix\Intranet\User\Widget\Content\Tool;
+use Bitrix\Intranet\User\Widget\Content\Tool\PerformanUserProfile;
 use Bitrix\Intranet\User\Widget\Content\ToolsContentAssembler;
 use Bitrix\Intranet\User\Widget\Content\Tool\AccountChanger;
 use Bitrix\Intranet\User\Widget\Content\Tool\Administration;
-use Bitrix\Intranet\User\Widget\Content\Tool\PerformanceReview;
+use Bitrix\Intranet\User\Widget\Content\Tool\Theme;
 use Bitrix\Intranet\User\Widget\ContentCollection;
 use Bitrix\Main\ArgumentException;
 
@@ -54,33 +56,64 @@ class Widget
 	public function getSkeletonConfiguration(): array
 	{
 		$items = [];
+		$visibilityService = new Intranet\Internal\Service\AnnualSummary\Visibility($this->user->getId());
+		if ($visibilityService->canShow())
+		{
+			$items[] = ['type' => 'item', 'height' => self::SKELETON_ITEM_HEIGHT];
+		}
 
 		$items[] = ['type' => 'splitColumn', 'height' => 72, 'count' => 2];
 
-		$countSecondaryTools = 0;
+		$toolsCount = 0;
+
+		if ($this->user->isIntranet())
+		{
+			/** @var Tool\BaseTool[] $tools */
+			$tools = [
+				Tool\MyDocuments::class,
+				Tool\Security::class,
+				Tool\SalaryVacation::class,
+				Tool\Extension::class,
+			];
+
+			foreach ($tools as $tool)
+			{
+				if ($tool::isAvailable($this->user))
+				{
+					$toolsCount++;
+				}
+			}
+		}
+
+		$secondaryToolsCount = 0;
+
+		if (Theme::isAvailable($this->user))
+		{
+			$secondaryToolsCount++;
+		}
 
 		if (AccountChanger::isAvailable($this->user))
 		{
-			$countSecondaryTools++;
-		}
-
-		if (PerformanceReview::isAvailable($this->user))
-		{
-			$countSecondaryTools++;
+			$secondaryToolsCount++;
 		}
 
 		if (Administration::isAvailable($this->user))
 		{
-			$countSecondaryTools++;
+			$secondaryToolsCount++;
 		}
 
-		if ($countSecondaryTools === 1)
+		if (PerformanUserProfile::isAvailable($this->user))
+		{
+			$secondaryToolsCount++;
+		}
+
+		if ($secondaryToolsCount === 1)
 		{
 			$items[] = ['type' => 'item', 'height' => self::SKELETON_ITEM_HEIGHT];
 		}
-		else
+		elseif ($secondaryToolsCount > 1)
 		{
-			$items[] = ['type' => 'splitColumn', 'height' => self::SKELETON_ITEM_HEIGHT * $countSecondaryTools, 'count' => $countSecondaryTools];
+			$items[] = ['type' => 'splitColumn', 'height' => self::SKELETON_ITEM_HEIGHT * $secondaryToolsCount, 'count' => $secondaryToolsCount];
 		}
 
 		if (!$this->user->isIntranet() && $this->user->isExtranet())
@@ -92,7 +125,7 @@ class Widget
 
 		return [
 			'header' => false,
-			'avatarWidgetHeader' => ['hasTimeman' => $hasTimeman, 'hasTools' => $this->user->isIntranet(), 'isAdmin' => $this->user->isAdmin()],
+			'avatarWidgetHeader' => ['hasTimeman' => $hasTimeman, 'toolsCount' => $toolsCount, 'isAdmin' => $this->user->isAdmin()],
 			'footer' => ['height' => 10],
 			'items' => $items,
 		];

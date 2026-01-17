@@ -4,6 +4,9 @@ namespace Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Main;
 use Bitrix\Tasks\Internals\Task\UserOptionTable;
 use Bitrix\Tasks\Internals\UserOption;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskMutedUserSyncEvent;
+use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
 use Throwable;
 
 /**
@@ -73,6 +76,13 @@ class Task
 			{
 				UserOption::add($taskId, $userId, Option::MUTED);
 			}
+		}
+
+		$taskRepository = Container::getInstance()->getTaskReadRepository();
+		$task = $taskRepository->getById($taskId);
+		if ($task !== null)
+		{
+			Container::getInstance()->get(EventDispatcher::class)->dispatch(new OnTaskMutedUserSyncEvent($task));
 		}
 	}
 
@@ -170,6 +180,17 @@ class Task
 			if (in_array($userId, $newUsersExceptAuditors))
 			{
 				UserOption::deleteOnUserRoleChanged($taskId, $userId);
+			}
+		}
+
+		// sync muted users with chat if any users were added with muted state
+		if (!empty($addedParticipants))
+		{
+			$taskRepository = Container::getInstance()->getTaskReadRepository();
+			$task = $taskRepository->getById($taskId);
+			if ($task !== null)
+			{
+				Container::getInstance()->get(EventDispatcher::class)->dispatch(new OnTaskMutedUserSyncEvent($task));
 			}
 		}
 	}

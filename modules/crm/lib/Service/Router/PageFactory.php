@@ -42,6 +42,7 @@ final class PageFactory implements Router\Contract\PageFactory
 			Page\Type\MergeResolverPage::class,
 			Page\PermissionsPage::class,
 			Page\SalesTunnelsPage::class,
+			Page\MessageSender\ConnectionsPage::class,
 		];
 	}
 

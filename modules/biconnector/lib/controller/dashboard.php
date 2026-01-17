@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Controller;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
+use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
@@ -213,15 +214,9 @@ class Dashboard extends Controller
 				$dashboard->getOrmObject()->fillGroups();
 			}
 
-			foreach ($dashboard->getOrmObject()->getGroups() as $group)
-			{
-				Model\SupersetDashboardGroupBindingTable::add([
-					'GROUP_ID' => $group->getId(),
-					'DASHBOARD_ID' => $newDashboard->getId(),
-				]);
-
-				$newDashboard->getOrmObject()->unsetGroups();
-			}
+			$groupIds = $dashboard->getOrmObject()->getGroups()?->getIdList() ?? [];
+			DashboardGroupService::saveDashboardGroupBindings($newDashboard->getId(), $groupIds);
+			$newDashboard->getOrmObject()->unsetGroups();
 
 			$gridRow = DashboardGrid::prepareDashboardRowData($newDashboard, ['IS_ACCESS_ALLOWED' => true]);
 			$data['id'] = $copiedDashboardId;
@@ -408,9 +403,14 @@ class Dashboard extends Controller
 
 	public function restartImportAction(Model\Dashboard $dashboard): ?array
 	{
+		$availableDashboardStatusesToImport = [
+			SupersetDashboardTable::DASHBOARD_STATUS_FAILED,
+			SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED,
+		];
+
 		if (
-			$dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_FAILED
-			|| !SupersetInitializer::isSupersetReady()
+			!SupersetInitializer::isSupersetReady()
+			|| !in_array($dashboard->getStatus(), $availableDashboardStatusesToImport, true)
 		)
 		{
 			return null;

@@ -33,6 +33,7 @@ class RedisSessionHandler extends AbstractSessionHandler
 			'className' => RedisConnection::class,
 			'host' => $host,
 			'port' => $port,
+			'password' => $options['password'] ?? null,
 			'servers' => $options['servers'] ?? [],
 			'serializer' => $options['serializer'] ?? null,
 			'failover' => $options['failover'] ?? null,

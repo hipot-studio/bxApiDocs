@@ -73,7 +73,7 @@ class SignRecentDocumentProvider extends EntitySelector\BaseProvider
 					'id' => 'sign-document',
 					'title' => Loc::getMessage('SIGN_INTEGRATION_UI_ENTITYSELECTOR_SIGNRECENTDOCUMENTPROVIDER_TAB'),
 					'icon' => [
-						'default' => $this->getTabIconDefault(),
+						'default' => 'o-file-with-clock',
 					],
 				],
 			),

@@ -310,7 +310,12 @@ class DeleteService
 		if ($this->chat->canDo(Action::DeleteOthersMessage))
 		{
 			$deletionModeOtherMessage = $this->chat instanceof Chat\CommentChat ? DeletionMode::Soft : DeletionMode::Complete;
-			$this->setDeletionMode(MessageType::OtherMessage, $deletionModeOtherMessage);
+			$this->setDeletionMode(MessageType::OtherMessage, $deletionModeOtherMessage)
+				->setDeletionMode(MessageType::OwnMessageUnread, $deletionModeOtherMessage)
+				->setDeletionMode(MessageType::OwnMessageRead, $deletionModeOtherMessage)
+			;
+
+			return;
 		}
 
 		// case of deletion own messages(read/unread) in ChannelChat and GeneralChat
@@ -326,8 +331,8 @@ class DeleteService
 			return;
 		}
 
-		// if viewed by others -> "complete"(CommentChat - "soft")
-		// if not viewed by others -> "soft"
+		// if viewed by others -> "soft"
+		// if not viewed by others -> "complete"(CommentChat - "soft")
 		$deletionModeSelfMessage = $this->chat instanceof Chat\CommentChat ? DeletionMode::Soft : DeletionMode::Complete;
 		$this->setDeletionMode(MessageType::OwnMessageRead, DeletionMode::Soft)
 			->setDeletionMode(MessageType::OwnMessageUnread, $deletionModeSelfMessage)

@@ -52,6 +52,11 @@ abstract class BaseMessage extends Base
 	abstract protected static function fetchEventParams(Event $event): array;
 
 	/**
+	 * @return array|null - null if dont check provider type
+	 */
+	abstract protected static function getHandledInEventProviderTypeIds(): ?array;
+
+	/**
 	 * @param int $id
 	 *
 	 * @return array
@@ -317,6 +322,25 @@ abstract class BaseMessage extends Base
 		)
 		{
 			return;
+		}
+
+		//explicitly set activity type
+		if (isset($additionalFields['ACTIVITY_PROVIDER_ID']))
+		{
+			if ($additionalFields['ACTIVITY_PROVIDER_ID'] !== static::getId())
+			{
+				return;
+			}
+		}
+		else
+		{
+			// infer activity type from subtype
+			$providerTypeId = $additionalFields['ACTIVITY_PROVIDER_TYPE_ID'];
+			$handledTypes = static::getHandledInEventProviderTypeIds();
+			if (is_array($handledTypes) && !in_array($providerTypeId, $handledTypes, true))
+			{
+				return;
+			}
 		}
 
 		$settings = [

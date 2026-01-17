@@ -3,10 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Model;
 
-use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields;
-use Bitrix\Main\ORM\Query;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\ORM\Data\DataManager;
 
  /**
  * Class StepsTable
@@ -24,7 +22,7 @@ use Bitrix\Main\Type\DateTime;
  * @method static \Bitrix\Landing\Copilot\Model\EO_Steps wakeUpObject($row)
  * @method static \Bitrix\Landing\Copilot\Model\EO_Steps_Collection wakeUpCollection($rows)
  */
-class StepsTable extends Entity\DataManager
+class StepsTable extends DataManager
 {
 	/**
 	 * @inheritdoc

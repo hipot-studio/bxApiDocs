@@ -19,14 +19,25 @@ class StartTimerHandler
 	}
 	public function __invoke(StartTimerCommand $command): Timer
 	{
-		return $this->consistencyResolver->resolve('task.time.start')->wrap(
-			fn (): Timer => $this->timeManagementService->startTimer(
-				userId: $command->userId,
-				taskId: $command->taskId,
-				syncPlan: $command->syncPlan,
-				canStart: $command->canStart,
-				canRenew: $command->canRenew,
-			)
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.time.start')->wrap(
+				fn (): Timer => $this->timeManagementService->startTimer(
+					userId: $command->userId,
+					taskId: $command->taskId,
+					syncPlan: $command->syncPlan,
+					canStart: $command->canStart,
+					canRenew: $command->canRenew,
+				)
+			);
+		}
+
+		return $this->timeManagementService->startTimer(
+			userId: $command->userId,
+			taskId: $command->taskId,
+			syncPlan: $command->syncPlan,
+			canStart: $command->canStart,
+			canRenew: $command->canRenew,
 		);
 	}
 }

@@ -251,6 +251,16 @@ class Action
 					'text' => GetMessageJS('TASKS_GRID_TASK_ROW_ACTION_UNLINK'),
 					'onclick' => "BX.Tasks.GridActions.action('unlinkRelatedTask', $taskId, { relatedToTaskId: $relationToId })",
 				],
+				'relatedTemplateTasks' => [
+					'id' => 'unlinkRelatedTemplateTask',
+					'text' => GetMessageJS('TASKS_GRID_TASK_ROW_ACTION_UNLINK'),
+					'onclick' => "BX.Tasks.GridActions.action('unlinkRelatedTemplateTask', $taskId, { relatedToTaskId: $relationToId })",
+				],
+				'gantt' => [
+					'id' => 'unlinkGantt',
+					'text' => GetMessageJS('TASKS_GRID_TASK_ROW_ACTION_UNLINK'),
+					'onclick' => "BX.Tasks.GridActions.action('unlinkGantt', $taskId, { ganttParentId: $relationToId })",
+				],
 			};
 		}
 		if ($actions['REMOVE'])
@@ -265,15 +275,6 @@ class Action
 		foreach (GetModuleEvents('tasks', 'onTasksBuildContextMenu', true) as $event)
 		{
 			ExecuteModuleEventEx($event, ['TASK_LIST_CONTEXT_MENU', ['ID' => $taskId], &$taskRowActions]);
-		}
-
-		if (!empty($this->parameters['relationToId']))
-		{
-			$allowedActions = ['view', 'complete', 'renew', 'approve', 'start', 'pause', 'defer', 'copy', 'unlinkSubTask', 'unlinkRelatedTask', 'remove'];
-			$taskRowActions = array_values(array_filter(
-				$taskRowActions,
-				fn ($action) => in_array($action['id'] ?? null, $allowedActions, true),
-			));
 		}
 
 		return $taskRowActions;

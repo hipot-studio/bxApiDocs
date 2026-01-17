@@ -6,9 +6,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Im\Call\Call;
 use Bitrix\Call\Track\TrackCollection;
-use Bitrix\Call\Integration\AI;
-use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\MentionService;
+use Bitrix\Call\Integration\AI\Outcome\Transcription;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 
 class CallAiComponent extends \CBitrixComponent
@@ -34,7 +33,14 @@ class CallAiComponent extends \CBitrixComponent
 			$APPLICATION->SetTitle(Loc::getMessage('CALL_COMPONENT_COPILOT_DETAIL_V2', [
 				'#DATE#' => $this->arResult['CALL_DATE']
 			]));
-			$this->includeComponentTemplate('template.v2');
+			if ($this->arResult['OVERVIEW_VERSION'] <= 1)
+			{
+				$this->includeComponentTemplate('template.v2');
+			}
+			else
+			{
+				$this->includeComponentTemplate('template.v3');
+			}
 		}
 	}
 
@@ -79,160 +85,16 @@ class CallAiComponent extends \CBitrixComponent
 				continue;// take only one
 			}
 
-			/** @var AI\Outcome\Transcription|AI\Outcome\Summary|AI\Outcome\Overview|AI\Outcome\Insights $content */
 			$content = $outcome->getSenseContent();
-			switch ($outcome->getType())
+			if ($content)
 			{
-				case SenseType::TRANSCRIBE->value:
-					/** @var AI\Outcome\Transcription $content */
-					foreach ($content->transcriptions as $i => &$row)
-					{
-						if (!empty($row->text))
-						{
-							$row->text = $mentionService->replaceBbMentions($row->text);
-							$isEmpty = false;
-						}
-					}
-					break;
-
-				case SenseType::SUMMARY->value:
-					/** @var AI\Outcome\Summary $content */
-					foreach ($content->summary as $i => &$row)
-					{
-						if (!empty($row->title) || !empty($row->summary))
-						{
-							$row->title = $mentionService->replaceBbMentions($row->title);
-							$row->summary = $mentionService->replaceBbMentions($row->summary);
-							$isEmpty = false;
-						}
-					}
-					break;
-
-				case SenseType::OVERVIEW->value:
-					/** @var AI\Outcome\Overview $content */
-					if ($content?->detailedTakeaways)
-					{
-						$content->detailedTakeaways = $mentionService->replaceBBMentions($content->detailedTakeaways);
-						$isEmpty = false;
-					}
-					if ($content?->topic)
-					{
-						$content->topic = $mentionService->replaceBBMentions($content->topic);
-						$isEmpty = false;
-					}
-					if ($content?->agenda)
-					{
-						if ($content->agenda?->explanation)
-						{
-							$content->agenda->explanation = $mentionService->replaceBbMentions($content->agenda->explanation);
-							$isEmpty = false;
-						}
-						if ($content->agenda?->quote)
-						{
-							$content->agenda->quote = $mentionService->replaceBbMentions($content->agenda->quote);
-							$isEmpty = false;
-						}
-					}
-					if ($content?->agreements)
-					{
-						foreach ($content->agreements as &$row)
-						{
-							if ($row?->agreement)
-							{
-								$row->agreement = $mentionService->replaceBbMentions($row->agreement);
-								$isEmpty = false;
-								if ($row?->quote)
-								{
-									$row->quote = $mentionService->replaceBbMentions($row->quote);
-								}
-							}
-						}
-					}
-					if ($content?->meetings)
-					{
-						foreach ($content->meetings as &$row)
-						{
-							if ($row?->meeting)
-							{
-								$meeting = $row->meeting;
-								$row->meeting = $mentionService->replaceBbMentions($meeting);
-								$row->meetingMentionLess = $mentionService->removeBbMentions($meeting);
-								$isEmpty = false;
-								if ($row?->quote)
-								{
-									$row->quote = $mentionService->replaceBbMentions($row->quote);
-								}
-							}
-						}
-					}
-					if ($content?->actionItems)
-					{
-						foreach ($content->actionItems as &$row)
-						{
-							if ($row?->actionItem)
-							{
-								$actionItem = $row->actionItem;
-								$row->actionItem = $mentionService->replaceBbMentions($actionItem);
-								$row->actionItemMentionLess = $mentionService->removeBbMentions($actionItem);
-								$isEmpty = false;
-								if ($row?->quote)
-								{
-									$row->quote = $mentionService->replaceBbMentions($row->quote);
-								}
-							}
-						}
-					}
-					if ($content?->tasks)
-					{
-						foreach ($content->tasks as &$row)
-						{
-							if ($row?->task)
-							{
-								$task = $row->task;
-								$row->task = $mentionService->replaceBbMentions($task);
-								$row->taskMentionLess = $mentionService->removeBbMentions($task);
-								$isEmpty = false;
-								if ($row?->quote)
-								{
-									$row->quote = $mentionService->replaceBbMentions($row->quote);
-								}
-							}
-						}
-					}
-					break;
-
-				case SenseType::INSIGHTS->value:
-					$fields = [
-						'insights' => 'detailedInsight',
-						'meetingStrengths' => 'strength_explanation',
-						'meetingWeaknesses' => 'weakness_explanation',
-					];
-					foreach ($fields as $field => $subField)
-					{
-						if ($content?->{$field})
-						{
-							foreach ($content->{$field} as &$row)
-							{
-								if ($row?->{$subField})
-								{
-									$row->{$subField} = $mentionService->replaceBbMentions($row->{$subField});
-									$isEmpty = false;
-								}
-							}
-						}
-					}
-					foreach (['speechStyleInfluence', 'engagementLevel', 'areasOfResponsibility', 'finalRecommendations'] as $field)
-					{
-						if ($content?->{$field})
-						{
-							$content->{$field} = $mentionService->replaceBbMentions($content->{$field});
-						}
-					}
-					break;
-			}
-			if ($isEmpty === false)
-			{
-				$this->arResult[$type] = $content;
+				/** @var Transcription $transcription */
+				if ($content instanceof Transcription)
+				{
+					$transcription = $content;
+				}
+				$this->arResult[$type] = $content->toRestFormat(mentionFormat: 'html');
+				$this->arResult["{$type}_VERSION"] = $content->getVersion();
 			}
 		}
 
@@ -250,6 +112,14 @@ class CallAiComponent extends \CBitrixComponent
 			&& empty($this->arResult['SUMMARY'])
 			&& empty($this->arResult['TRANSCRIBE'])
 			&& empty($this->arResult['RECORD'])
+		)
+		{
+			$this->showError(Loc::getMessage('CALL_COMPONENT_ERROR_TITLE'), Loc::getMessage('CALL_COMPONENT_ERROR_DESCRIPTION'));
+			return false;
+		}
+		if (
+			($this->arResult['OVERVIEW_VERSION'] > 1)
+			&& empty($this->arResult['EVALUATION'])
 		)
 		{
 			$this->showError(Loc::getMessage('CALL_COMPONENT_ERROR_TITLE'), Loc::getMessage('CALL_COMPONENT_ERROR_DESCRIPTION'));
@@ -280,24 +150,62 @@ class CallAiComponent extends \CBitrixComponent
 			$this->arResult['CALL_DURATION'] = $this->formatDuration($startTime, $endTime);
 		}
 
-		$this->arResult['USER_COUNT'] = $this->getUserCount();
+		$this->arResult['CALL_USERS'] = $this->getCallUsers();
+		$this->arResult['USER_COUNT'] = count($this->arResult['CALL_USERS']);
+
+		if (
+			$this->arResult['INSIGHTS']['speakerEvaluationAvailable']
+			&& !empty($this->arResult['INSIGHTS']['speakerAnalysis'])
+		)
+		{
+			$speakerAnalysis = [];
+			$speakerList = $transcription->prepareSpeakersList();
+			/** @var array{userId: int, efficiencyValue: float} $speaker */
+			foreach ($this->arResult['INSIGHTS']['speakerAnalysis'] as $speaker)
+			{
+				if (!isset($speakerList[$speaker['userId']]))
+				{
+					continue;
+				}
+				$speaker['talkPercentage'] = $speakerList[$speaker['userId']]['talkPercentage'];
+				$speaker['duration'] = (int)$speakerList[$speaker['userId']]['duration'];
+				$speaker['durationFormat'] = $this->formatLength((int)$speakerList[$speaker['userId']]['duration']);
+				$speakerAnalysis[] = $speaker;
+			}
+
+			// sort users by efficiencyValue and talkPercentage
+			\Bitrix\Main\Type\Collection::sortByColumn(
+				array: $speakerAnalysis,
+				columns: [
+					'talkPercentage' => \SORT_DESC,
+					'efficiencyValue' => \SORT_DESC,
+				]
+			);
+			$this->arResult['INSIGHTS']['speakerAnalysis'] = $speakerAnalysis;
+		}
 
 		return true;
 	}
 
-	protected function getUserCount(): int
+	protected function getCallUsers(): array
 	{
 		$callUsers = $this->call->getCallUsers();
-		$cnt = 0;
-		foreach ($callUsers as $callUser)
+		$userData = $this->call->getUserData();
+		$users = [];
+		foreach ($callUsers as $userId => $callUser)
 		{
 			if ($callUser->getFirstJoined())
 			{
-				$cnt ++;
+				$users[$userId] = $userData[$userId];
 			}
 		}
+		if (!isset($users[$this->call->getInitiatorId()]))
+		{
+			$userId = $this->call->getInitiatorId();
+			$users[$userId] = $userData[$userId];
+		}
 
-		return $cnt;
+		return $users;
 	}
 
 	protected function formatDate(DateTime $dateTime): string
@@ -322,35 +230,57 @@ class CallAiComponent extends \CBitrixComponent
 
 	protected function formatDuration(DateTime $startTime, DateTime $endTime): string
 	{
-		Loc::loadMessages($_SERVER["DOCUMENT_ROOT"].'/bitrix/modules/im/lib/call/integration/chat.php');
-
 		$interval = $startTime->getDiff($endTime);
-
 		[$hours, $minutes, $seconds] = explode(' ', $interval->format('%H %I %S'));
+
+		return $this->formatInterval((int)$hours, (int)$minutes, (int)$seconds);
+	}
+
+	protected function formatLength(int $duration): string
+	{
+		$hours = $minutes = $seconds = 0;
+		if ($duration < 60)
+		{
+			$seconds = $duration;
+		}
+		else
+		{
+			$hours = floor($duration / 3600);
+			if ($hours > 0)
+			{
+				$duration -= $hours * 3600;
+			}
+			$minutes = floor($duration / 60);
+		}
+
+		return $this->formatInterval($hours, $minutes, $seconds);
+	}
+
+	protected function formatInterval(int $hours = 0, int $minutes = 0, int $seconds = 0): string
+	{
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/im/lib/call/integration/chat.php');
+
 		$result = [];
-
-		if ((int)$hours > 0)
+		if ($hours > 0)
 		{
-			$result[] = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_DURATION_HOURS", [
-				"#HOURS#" => (int)$hours
+			$result[] = Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_DURATION_HOURS', [
+				'#HOURS#' => $hours
+			]);
+		}
+		if ($minutes > 0)
+		{
+			$result[] = Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_DURATION_MINUTES', [
+				'#MINUTES#' => $minutes
+			]);
+		}
+		if ($seconds > 0 && !($hours > 0))
+		{
+			$result[] = Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_DURATION_SECONDS', [
+				'#SECONDS#' => $seconds
 			]);
 		}
 
-		if ((int)$minutes > 0)
-		{
-			$result[] = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_DURATION_MINUTES", [
-				"#MINUTES#" => (int)$minutes
-			]);
-		}
-
-		if ((int)$seconds > 0 && !((int)$hours > 0))
-		{
-			$result[] = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_DURATION_SECONDS", [
-				"#SECONDS#" => (int)$seconds
-			]);
-		}
-
-		return implode(" ", $result);
+		return implode(' ', $result);
 	}
 
 	protected function checkAccess(): bool

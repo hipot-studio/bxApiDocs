@@ -3,7 +3,9 @@
 namespace Bitrix\IntranetMobile\Provider;
 
 use Bitrix\Intranet\User\UserManager;
+use Bitrix\Intranet\UserTable;
 use Bitrix\IntranetMobile\Dto\SortingDto;
+use Bitrix\IntranetMobile\Dto\UserDto;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\IntranetMobile\Dto\FilterDto;
 
@@ -48,7 +50,30 @@ final class UserProvider
 		];
 	}
 
-	public function getPresets(): array
+	public function getUserListTabs(): array
+	{
+		$tabs = (new UserProvider())->getPresets();
+
+		$intranetUser = new \Bitrix\Intranet\User();
+		$result = [];
+
+		foreach ($tabs as $tab)
+		{
+			if ($tab['id'] === 'invited')
+			{
+				$tab['value'] = $intranetUser->getInvitationCounterValue();
+			}
+			if ($tab['id'] === 'wait_confirmation')
+			{
+				$tab['value'] = $intranetUser->getWaitConfirmationCounterValue();
+			}
+			$result[] = $tab;
+		}
+
+		return $result;
+	}
+
+	private function getPresets(): array
 	{
 		$presets = $this->userManager?->getDefaultFilterPresets();
 		$result = [];
@@ -61,7 +86,7 @@ final class UserProvider
 		return $result;
 	}
 
-	public function getDefaultPreset()
+	private function getDefaultPreset()
 	{
 		foreach ($this->getPresets() as $preset)
 		{
@@ -72,11 +97,11 @@ final class UserProvider
 		}
 	}
 
-	public function isDefaultFilter(FilterDto $filter): bool
+	private function isDefaultFilter(FilterDto $filter): bool
 	{
 		return (
 			$filter->searchString === ''
-			&& $filter->presetId === self::getDefaultPreset()['id']
+			&& $filter->presetId === $this->getDefaultPreset()['id']
 			&& $filter->department === FilterDto::ALL_DEPARTMENTS
 		);
 	}
@@ -147,66 +172,58 @@ final class UserProvider
 		return count($users) > 1;
 	}
 
-	public static function getActiveUsersByLimit(int $limit): array
+	public function getUsersCountByInvitationStatus(array $types = []): int
 	{
-		$query = \Bitrix\Main\UserTable::query();
-		$query->setSelect([
-			'ID',
-			'NAME',
-			'LAST_NAME',
-			'SECOND_NAME',
-			'LOGIN',
-			'PERSONAL_PHOTO',
-			'WORK_POSITION',
-			'UF_DEPARTMENT',
-			'EMAIL',
-			'WORK_PHONE',
-			'ACTIVE',
-			'CONFIRM_CODE',
-			'DATE_REGISTER',
-			'PERSONAL_MOBILE',
-			'PERSONAL_PHONE',
+		$filteredTypes = array_intersect($types, [
+			UserDto::ACTIVE,
+			UserDto::FIRED,
+			UserDto::INVITED,
+			UserDto::INVITE_AWAITING_APPROVE,
 		]);
-		$query->setFilter([
-			'=ACTIVE' => 'Y',
-			'=IS_REAL_USER' => 'Y',
-			'!UF_DEPARTMENT' => false,
-		]);
-		$query->setOrder(['ID' => 'ASC']);
-		$query->setLimit($limit);
 
-		$users = [];
-		foreach ($query->exec() as $user)
+		if (count($filteredTypes) == 0)
 		{
-			$users[] = \Bitrix\Mobile\Provider\UserRepository::createUserDto($user);
+			return 0;
+		}
+		else if (count($filteredTypes) == 3)
+		{
+			return $this->getUsersCountFromTable([$filteredTypes[0]])
+				+ $this->getUsersCountFromTable([$filteredTypes[1], $filteredTypes[2]]);
 		}
 
-		return $users;
+		return $this->getUsersCountFromTable($filteredTypes);
 	}
 
-	public static function getUsersCountWithLimit(int $limit): int
+	private function getUsersCountFromTable(array $types = []): int
 	{
-		$query = new \Bitrix\Main\ORM\Query\Query(\Bitrix\Main\UserTable::getEntity());
-		$query->setFilter([
-			'=ACTIVE' => 'Y',
+		$filter = [
 			'=IS_REAL_USER' => 'Y',
-			'!UF_DEPARTMENT' => false,
-		]);
-		$query->setSelect(['ID']);
-		$query->setLimit($limit + 1);
-		$result = $query->exec();
+		];
 
-		$count = 0;
-		while ($result->fetch())
+		$hasActiveTypes = in_array(UserDto::ACTIVE, $types) || in_array(UserDto::INVITED, $types);
+		$hasInactiveTypes = in_array(UserDto::FIRED, $types) || in_array(UserDto::INVITE_AWAITING_APPROVE, $types);
+		$hasTypesWithCode = in_array(UserDto::INVITED, $types) || in_array(UserDto::INVITE_AWAITING_APPROVE, $types);
+		$hasTypesWithNoCode = in_array(UserDto::ACTIVE, $types) || in_array(UserDto::FIRED, $types);
+
+		if ($hasActiveTypes && !$hasInactiveTypes)
 		{
-			$count++;
-			if ($count > $limit)
-			{
-				break;
-			}
+			$filter['=ACTIVE'] = 'Y';
+		}
+		else if (!$hasActiveTypes && $hasInactiveTypes)
+		{
+			$filter['=ACTIVE'] = 'N';
 		}
 
-		return min($count, $limit);
+		if ($hasTypesWithCode && !$hasTypesWithNoCode)
+		{
+			$filter['!CONFIRM_CODE'] = false;
+		}
+		else if (!$hasTypesWithCode && $hasTypesWithNoCode)
+		{
+			$filter['=CONFIRM_CODE'] = false;
+		}
+
+		return UserTable::getCount($filter);
 	}
 
 	private function getSelect(): array

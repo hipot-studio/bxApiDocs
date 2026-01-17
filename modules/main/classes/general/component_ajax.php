@@ -215,7 +215,7 @@ class CComponentAjax
 		{
 			if ($current_session = CAjax::GetSession())
 			{
-				if ($this->componentID == $current_session)
+				if ($this->componentID === $current_session)
 				{
 					$this->bAjaxSession = true;
 					return true;

@@ -141,17 +141,22 @@ class UserFieldLabelSynchronizer extends UserFieldCustomSynchronizer
 		if(is_array($fields) && isset($fields['ENTITY_ID']) && isset($fields['FIELD_NAME']))
 		{
 			$fieldData = array();
-			if(isset($changedFields['EDIT_FORM_LABEL']))
+			if (isset($changedFields['EDIT_FORM_LABEL']))
 			{
 				$fieldData['EDIT_FORM_LABEL'] = $changedFields['EDIT_FORM_LABEL'];
 			}
-			if(isset($changedFields['LIST_COLUMN_LABEL']))
+			if (isset($changedFields['LIST_COLUMN_LABEL']))
 			{
 				$fieldData['LIST_COLUMN_LABEL'] = $changedFields['LIST_COLUMN_LABEL'];
 			}
-			if(isset($changedFields['LIST_FILTER_LABEL']))
+			if (isset($changedFields['LIST_FILTER_LABEL']))
 			{
 				$fieldData['LIST_FILTER_LABEL'] = $changedFields['LIST_FILTER_LABEL'];
+			}
+
+			if (isset($changedFields['HELP_MESSAGE']))
+			{
+				$fieldData['HELP_MESSAGE'] = $changedFields['HELP_MESSAGE'];
 			}
 
 			self::synchronize($fields['ENTITY_ID'], $fields['FIELD_NAME'], array('FIELD_DATA' => $fieldData));

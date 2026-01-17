@@ -5,6 +5,7 @@ namespace Bitrix\Seo\BusinessSuite;
 
 use Bitrix\Seo\Retargeting;
 use Bitrix\Seo\BusinessSuite\AuthAdapter\Facebook\BusinessAuthAdapter;
+use Bitrix\Seo\Retargeting\AuthAdapter;
 
 class Service implements Retargeting\IService, IInternalService
 {
@@ -104,10 +105,10 @@ class Service implements Retargeting\IService, IInternalService
 	/**
 	 * @param string $type
 	 *
-	 * @return BusinessAuthAdapter
-	 * @throws \Bitrix\Main\SystemException
+	 * @return AuthAdapter
+	 * @throws \Bitrix\Main\SystemException|\Bitrix\Main\LoaderException
 	 */
-	public static function getAuthAdapter($type) : BusinessAuthAdapter
+	public static function getAuthAdapter($type): AuthAdapter
 	{
 		if (!array_key_exists($type,static::$authAdapterPool))
 		{

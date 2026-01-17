@@ -32,6 +32,7 @@ use Bitrix\Tasks\FileUploader\TaskController;
 use Bitrix\Tasks\Helper\Filter;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk;
+use Bitrix\Tasks\Integration\Mail;
 use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Integration\TasksMobile\TextFragmentParser;
 use Bitrix\Tasks\Internals\Counter\Deadline;
@@ -42,7 +43,6 @@ use Bitrix\Tasks\Internals\Task\LabelTable;
 use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\Internals\Task\Result\ResultManager;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
-use Bitrix\Tasks\Internals\Task\ScenarioTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\Task\ViewedTable;
 use Bitrix\Tasks\Internals\TaskObject;
@@ -56,8 +56,15 @@ use Bitrix\Tasks\Scrum\Service\TaskService;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
+use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
+use Bitrix\Tasks\V2\Public\Command\Task\Attachment\AttachFilesCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Attachment\DetachFilesCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
+use Bitrix\Tasks\V2\Public\Provider\DeadlineProvider;
 use Bitrix\TasksMobile\Dto\DiskFileDto;
 use Bitrix\TasksMobile\Dto\TaskDto;
 use Bitrix\TasksMobile\Dto\TaskRequestFilter;
@@ -69,9 +76,10 @@ use CTaskDependence;
 use TasksException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Task;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Tasks\V2\Internal\Repository\InMemoryTaskParameterRepository;
 
 final class TaskProvider
 {
@@ -265,6 +273,7 @@ final class TaskProvider
 			'COMMENTS_COUNT',
 			'SERVICE_COMMENTS_COUNT',
 			'MARK',
+			'CHAT_ID',
 
 			'TIME_SPENT_IN_LOGS',
 			'TIME_ESTIMATE',
@@ -802,6 +811,7 @@ final class TaskProvider
 		$tasks = $this->fillUserFieldsData($tasks);
 		$tasks = $this->fillActionData($tasks);
 		$tasks = $this->fillShouldShowStage($tasks);
+		$tasks = $this->fillDeadlineData($tasks);
 
 		if ($shouldFillDodData)
 		{
@@ -1312,6 +1322,24 @@ final class TaskProvider
 		return $tasks;
 	}
 
+	private function fillDeadlineData(array $tasks): array
+	{
+		$parameterRepository = new InMemoryTaskParameterRepository();
+		$deadlineProvider = new DeadlineProvider(new DeadlineChangeLogRepository());
+		foreach ($tasks as $key => $task)
+		{
+			$taskId = (int)$task['ID'];
+
+			// $task['ALLOWS_CHANGE_DATE_PLAN'] = $parameterRepository->allowsChangeDatePlan($taskId);
+			$tasks[$key]['MAX_DEADLINE_CHANGE_DATE'] = $parameterRepository->maxDeadlineChangeDate($taskId);
+			$tasks[$key]['MAX_DEADLINE_CHANGES'] = $parameterRepository->maxDeadlineChanges($taskId);
+			$tasks[$key]['DEADLINE_CHANGES_COUNT'] = $deadlineProvider->getDeadlineChangeCount($this->userId, $taskId);
+			$tasks[$key]['REQUIRE_DEADLINE_CHANGE_REASON'] = $parameterRepository->requireDeadlineChangeReason($taskId);
+		}
+
+		return $tasks;
+	}
+
 	private function isDodNecessary(int $taskId, int $groupId): bool
 	{
 		$userId = User::getId();
@@ -1511,11 +1539,6 @@ final class TaskProvider
 		];
 	}
 
-	/**
-	 * @param \Bitrix\Tasks\Provider\TaskQuery $query
-	 * @param int|null $projectId
-	 * @return array
-	 */
 	private function getTasksByQuery(TaskQuery $query): array
 	{
 		try
@@ -1645,8 +1668,10 @@ final class TaskProvider
 	private function prepareItems(array $tasks): array
 	{
 		$prepared = array_map(
-			static fn(array $task) => (
-				TaskDto::make([
+			static function(array $task) {
+				$maxDeadlineChangeTimestamp = $task['MAX_DEADLINE_CHANGE_DATE']?->getTimestamp();
+
+				return TaskDto::make([
 					'id' => $task['ID'],
 					'name' => $task['TITLE'],
 					'description' => htmlspecialchars_decode($task['DESCRIPTION'], ENT_QUOTES),
@@ -1666,6 +1691,7 @@ final class TaskProvider
 					'subStatus' => $task['SUB_STATUS'],
 					'priority' => $task['PRIORITY'],
 					'mark' => $task['MARK'] ?? null,
+					'chatId' => $task['CHAT_ID'] ?? 0,
 
 					'creator' => $task['CREATED_BY'],
 					'responsible' => $task['RESPONSIBLE_ID'],
@@ -1692,6 +1718,11 @@ final class TaskProvider
 					'isOpenResultExists' => ($task['TASK_HAS_OPEN_RESULT'] === 'Y'),
 					'isMatchWorkTime' => ($task['MATCH_WORK_TIME'] === 'Y'),
 					'allowChangeDeadline' => ($task['ALLOW_CHANGE_DEADLINE'] === 'Y'),
+					'maxDeadlineChangeDate' => $maxDeadlineChangeTimestamp ? $maxDeadlineChangeTimestamp * 1000 : null,
+					'deadlineChangesLeft' => is_numeric($task['MAX_DEADLINE_CHANGES']) && is_numeric($task['DEADLINE_CHANGES_COUNT'])
+						? max(0, (int)$task['MAX_DEADLINE_CHANGES'] - (int)$task['DEADLINE_CHANGES_COUNT'])
+						: null,
+					'requireDeadlineChangeReason' => ($task['REQUIRE_DEADLINE_CHANGE_REASON'] ?? false),
 					'allowTimeTracking' => ($task['ALLOW_TIME_TRACKING'] === 'Y'),
 					'allowTaskControl' => ($task['TASK_CONTROL'] === 'Y'),
 					'isTimerRunningForCurrentUser' => ($task['TIMER_IS_RUNNING_FOR_CURRENT_USER'] === 'Y'),
@@ -1718,8 +1749,8 @@ final class TaskProvider
 					'userFields' => $task['USER_FIELDS'] ?? [],
 					'userFieldNames' => $task['USER_FIELD_NAMES'] ?? [],
 					'shouldShowKanbanStages' => $task['SHOULD_SHOW_KANBAN_STAGES'] ?? false,
-				])
-			),
+				]);
+			},
 			$tasks,
 		);
 
@@ -1811,7 +1842,6 @@ final class TaskProvider
 				'RESPONSIBLE_ID',
 				'ACCOMPLICES',
 				'AUDITORS',
-				Disk\UserField::getMainSysUFCode(),
 				'UPLOADED_FILES',
 				'STAGE_ID',
 				'CRM',
@@ -1829,6 +1859,8 @@ final class TaskProvider
 				'IM_CHAT_ID',
 				'IM_MESSAGE_ID',
 				'USER_FIELDS',
+				Disk\UserField::getMainSysUFCode(),
+				Mail\UserField::getMainSysUFCode(),
 			]),
 		);
 	}
@@ -1842,14 +1874,8 @@ final class TaskProvider
 			return $fields;
 		}
 
-		$prevFileIds = TaskObject::wakeUpObject(['ID' => $taskId])->fillUtsData()?->getUfTaskWebdavFiles() ?? [];
-		if (!is_array($prevFileIds))
-		{
-			$prevFileIds = [];
-		}
-
+		$prevFileIds = $this->getTaskFileIds($taskId);
 		$prevFilesCount = count($prevFileIds);
-
 		$nextFileIds = $fields[$filesUfCode];
 		$nextFilesCount = count($nextFileIds);
 
@@ -1895,20 +1921,16 @@ final class TaskProvider
 			$fields[$filesUfCode] = [];
 		}
 
-		$controller = new TaskController(['taskId' => $taskId]);
-		$uploader = new Uploader($controller);
-		$pendingFiles = $uploader->getPendingFiles($fields['UPLOADED_FILES']);
-
-		foreach ($pendingFiles->getFileIds() as $fileId)
+		$uploadedFileIds = $this->uploadFiles($taskId, $fields['UPLOADED_FILES']);
+		if (empty($uploadedFileIds))
 		{
-			$addingResult = Disk::addFile($fileId);
-			if ($addingResult->isSuccess())
-			{
-				$fields[$filesUfCode][] = $addingResult->getData()['ATTACHMENT_ID'];
-			}
+			return $fields;
 		}
 
-		$pendingFiles->makePersistent();
+		foreach ($uploadedFileIds as $attachmentId)
+		{
+			$fields[$filesUfCode][] = $attachmentId;
+		}
 
 		return $fields;
 	}
@@ -1954,6 +1976,35 @@ final class TaskProvider
 				$fields[$crmUfCode][] = "{$entityTypeAbbr}_{$entityId}";
 			}
 		}
+
+		return $fields;
+	}
+
+	private function normalizeDescriptionUploadedFiles(array $fields): array
+	{
+		if (!isset($fields['DESCRIPTION']) || !is_string($fields['DESCRIPTION'])) {
+			return $fields;
+		}
+
+		$uploadedFiles = $fields['UPLOADED_FILES'] ?? [];
+		$webdavFiles = $fields['UF_TASK_WEBDAV_FILES'] ?? [];
+
+		if (empty($uploadedFiles) || empty($webdavFiles) || count($uploadedFiles) !== count($webdavFiles)) {
+			return $fields;
+		}
+
+		$replacementMap = [];
+		foreach ($uploadedFiles as $index => $uploadedFile) {
+			if (isset($webdavFiles[$index])) {
+				$replacementMap[$uploadedFile] = $webdavFiles[$index];
+			}
+		}
+
+		$fields['DESCRIPTION'] = str_replace(
+			array_keys($replacementMap),
+			array_values($replacementMap),
+			$fields['DESCRIPTION']
+		);
 
 		return $fields;
 	}
@@ -2184,6 +2235,11 @@ final class TaskProvider
 		}
 	}
 
+	private function getTaskFileIds(int $taskId): array
+	{
+		return TaskObject::wakeUpObject(['ID' => $taskId])->fillUtsData()?->getUfTaskWebdavFiles() ?? [];
+	}
+
 	/**
 	 * @param int $taskId
 	 * @param array $fields
@@ -2199,6 +2255,7 @@ final class TaskProvider
 		$fields = $this->processFiles($fields, $taskId);
 		$fields = $this->processCrmElements($fields);
 		$fields = $this->processUserFields($fields);
+		$fields = $this->normalizeDescriptionUploadedFiles($fields);
 
 		if (!empty($fields))
 		{
@@ -2218,29 +2275,15 @@ final class TaskProvider
 	 */
 	public function attachUploadedFiles(int $taskId, string $fileId): ?DiskFileDto
 	{
-		$prevFileIds = TaskObject::wakeUpObject(['ID' => $taskId])->fillUtsData()?->getUfTaskWebdavFiles() ?? [];
-		$fields = [
-			'UF_TASK_WEBDAV_FILES' => $prevFileIds,
-			'UPLOADED_FILES' => [$fileId],
-		];
-
-		$fields = $this->processUploadedFiles($fields, $taskId);
-		$handler = new Task($this->userId);
-		try
-		{
-			$result = $handler->update($taskId, $fields);
-		}
-		catch (TaskUpdateException $e)
+		$prevFileIds = $this->getTaskFileIds($taskId);
+		$uploadedFileIds = $this->uploadFiles($taskId, [$fileId]);
+		$result = $this->attachFiles($taskId, $uploadedFileIds);
+		if (!$result?->isSuccess())
 		{
 			return null;
 		}
 
-		if ($result === false)
-		{
-			return null;
-		}
-
-		$nextFileIds = TaskObject::wakeUpObject(['ID' => $taskId])->fillUtsData()?->getUfTaskWebdavFiles() ?? [];
+		$nextFileIds = $this->getTaskFileIds($taskId);
 		$diffFiles = array_diff($nextFileIds, $prevFileIds);
 		$newFileId = reset($diffFiles);
 
@@ -2256,6 +2299,72 @@ final class TaskProvider
 		}
 
 		return null;
+	}
+
+	public function attachFiles(int $taskId, array $fileIds): ?Result
+	{
+		if (empty($fileIds) || !$taskId)
+		{
+			return null;
+		}
+
+
+		if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_ATTACH_FILE, $taskId))
+		{
+			return null;
+		}
+
+		return (new AttachFilesCommand(
+			taskId: $taskId,
+			userId: $this->userId,
+			fileIds: $fileIds,
+		))->run();
+	}
+
+	public function detachFiles(int $taskId, array $fileIds): ?Result
+	{
+		if (empty($fileIds) || !$taskId)
+		{
+			return null;
+		}
+
+		$attachments = Container::getInstance()->getDiskFileRepository()->getByIds($fileIds);
+		if (!TaskAccessController::can(
+			$this->userId,
+			ActionDictionary::ACTION_TASK_DETACH_FILE,
+			$taskId,
+			['attachments' => $attachments->toArray()])
+		)
+		{
+			return null;
+		}
+
+		return (new DetachFilesCommand(
+			taskId: $taskId,
+			userId: $this->userId,
+			fileIds: $fileIds,
+		))->run();
+	}
+
+	public function uploadFiles(int $taskId, array $files): array
+	{
+		$controller = new TaskController(['taskId' => $taskId]);
+		$uploader = new Uploader($controller);
+		$pendingFiles = $uploader->getPendingFiles($files);
+		$uploadedFileIds = [];
+
+		foreach ($pendingFiles->getFileIds() as $fileId)
+		{
+			$addingResult = Disk::addFile($fileId);
+			if ($addingResult->isSuccess())
+			{
+				$uploadedFileIds[$fileId] = $addingResult->getData()['ATTACHMENT_ID'];
+			}
+		}
+
+		$pendingFiles->makePersistent();
+
+		return $uploadedFileIds;
 	}
 
 	/**
@@ -2474,8 +2583,7 @@ final class TaskProvider
 	/**
 	 * @param int $taskId
 	 * @return bool
-	 * @throws CTaskAssertException
-	 * @throws TasksException
+	 * @throws \Exception
 	 */
 	public function ping(int $taskId): bool
 	{
@@ -2484,9 +2592,7 @@ final class TaskProvider
 
 		if ($taskData)
 		{
-			$commentPoster = CommentPoster::getInstance($taskId, $this->userId);
-			$commentPoster && $commentPoster->postCommentsOnTaskStatusPinged($taskData);
-
+			Container::getInstance()->get(PingActionInterface::class)->execute($taskId, $this->userId, $taskData);
 			\CTaskNotifications::sendPingStatusMessage($taskData, $this->userId);
 
 			return true;

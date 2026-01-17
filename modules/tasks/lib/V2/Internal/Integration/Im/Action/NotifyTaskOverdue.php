@@ -4,22 +4,37 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\Deadline\DeadlineFormatter;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-class NotifyTaskOverdue
+#[Recipients(creator: true, responsible: true, accomplices: true, auditors: false)]
+class NotifyTaskOverdue extends AbstractNotify
 {
+	private readonly DeadlineFormatter $deadlineFormatter;
+
 	public function __construct(
-		Task $task,
+		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
 	)
 	{
-		$message = Loc::getMessage('TASKS_IM_TASK_OVERDUE', [
-			'#TITLE#' => $task->title,
-		]);
+		parent::__construct();
+		$this->deadlineFormatter = ServiceLocator::getInstance()->get(DeadlineFormatter::class);
 
-		$sender->sendMessage(task: $task, text: $message);
+		$sender->sendMessage(task: $task, notification: $this);
+	}
+
+	public function getMessageCode(): string
+	{
+		return 'TASKS_IM_TASK_OVERDUE_MSGVER_1';
+	}
+
+	public function getMessageData(): array
+	{
+		return [
+			'#RESPONSIBLE#' => $this->formatUser($this->task->responsible),
+			'#DEADLINE#' => $this->deadlineFormatter->format($this->task->deadlineTs),
+		];
 	}
 }

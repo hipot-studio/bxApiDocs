@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Entity\Collection;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Type\Contract\Arrayable;
 use Closure;
 use Countable;
 use IteratorAggregate;
@@ -14,7 +15,7 @@ use Traversable;
  * @template T of object
  * @implements IteratorAggregate<int, T>
  */
-abstract class BaseCollection implements Countable, IteratorAggregate
+abstract class BaseCollection implements Countable, IteratorAggregate, Arrayable
 {
 	/**
 	 * @var list<T>
@@ -73,6 +74,11 @@ abstract class BaseCollection implements Countable, IteratorAggregate
 	 * @return list<T>
 	 */
 	public function all(): array
+	{
+		return $this->items;
+	}
+
+	public function toArray()
 	{
 		return $this->items;
 	}

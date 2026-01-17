@@ -38,6 +38,18 @@ class TimerRepository implements TimerRepositoryInterface
 		return $this->timerMapper->mapToEntity($timer);
 	}
 
+	public function getRunningTimersByTaskId(int $taskId): Entity\Task\TimerCollection
+	{
+		$query = TimerTable::query()
+			->setSelect(['*'])
+			->where('TASK_ID', $taskId)
+			->whereNot('TIMER_STARTED_AT', 0);
+
+		$timers = $query->fetchAll();
+
+		return $this->timerMapper->mapToCollection($timers);
+	}
+
 	public function getByUserIds(array $userIds, int $taskId): Entity\Task\TimerCollection
 	{
 		if (empty($userIds))

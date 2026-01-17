@@ -8,6 +8,7 @@ use Bitrix\Booking\Entity\Favorites\Favorites;
 use Bitrix\Booking\Entity\Favorites\FavoritesType;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Model\FavoritesTable;
 use Bitrix\Booking\Internals\Model\ResourceTable;
 use Bitrix\Booking\Internals\Repository\FavoritesRepositoryInterface;
@@ -49,6 +50,7 @@ class FavoritesRepository implements FavoritesRepositoryInterface
 				'SETTINGS',
 				'NOTIFICATION_SETTINGS',
 				'ENTITIES',
+				'SKUS',
 			])
 			->where(Query::filter()
 				->logic('OR')
@@ -142,7 +144,7 @@ class FavoritesRepository implements FavoritesRepositoryInterface
 			'@RESOURCE_ID' => $resourceIds,
 		]);
 
-		FavoritesTable::addMulti(
+		$result = FavoritesTable::addMulti(
 			array_map(
 				static fn(int $resourceId) => [
 					'MANAGER_ID' => $managerId,
@@ -153,6 +155,10 @@ class FavoritesRepository implements FavoritesRepositoryInterface
 			),
 			true
 		);
+		if (!$result->isSuccess())
+		{
+			throw new Exception($result->getErrors()[0]->getMessage());
+		}
 	}
 
 	public function filterSecondary(array $resourceIds, array $primaryResourceIds): array

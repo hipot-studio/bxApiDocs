@@ -1,12 +1,13 @@
 <?php
+
 namespace Bitrix\AI\Engine\Trait;
 
 use Bitrix\AI\Context;
-use Bitrix\AI\Engine\Cloud\CloudEngine;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Result;
+use Bitrix\AI\Tokenizer\YandexGPT;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Text\Encoding;
 
 trait YandexGPTCommonTrait
@@ -64,7 +65,7 @@ trait YandexGPTCommonTrait
 	 */
 	protected function getMessageLength(Context\Message $message): int
 	{
-		return mb_strlen($message->getContent());
+		return $this->getTokenizer()->count($message->getContent());
 	}
 
 	/**
@@ -178,6 +179,11 @@ trait YandexGPTCommonTrait
 			'messages' => $postParams['messages'] ?? $this->getPreparedMessages(),
 			'completionOptions' => $completionOptions,
 		];
+	}
+
+	protected function getTokenizer(): YandexGPT
+	{
+		return ServiceLocator::getInstance()->get(YandexGPT::class);
 	}
 
 	abstract private function addPostParamsCredential(array &$postParams): void;

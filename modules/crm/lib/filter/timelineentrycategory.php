@@ -24,6 +24,7 @@ class TimelineEntryCategory
 		DOCUMENT = 'document',
 		SMS = 'sms',
 		WHATSAPP = 'whatsapp',
+		TELEGRAM = 'telegram',
 		NOTIFICATION = 'notification',
 		BIZ_PROCESS = 'biz-process',
 		WEB_FORM = 'web-form',
@@ -52,6 +53,15 @@ class TimelineEntryCategory
 			self::DOCUMENT => Loc::getMessage('CRM_TIMELINE_CATEGORY_DOCUMENT'),
 			self::SMS => Loc::getMessage('CRM_TIMELINE_CATEGORY_SMS'),
 			self::WHATSAPP => Loc::getMessage('CRM_TIMELINE_CATEGORY_WHATSAPP'),
+		];
+
+		if (Crm\Feature::enabled(Crm\Feature\TelegramActivity::class))
+		{
+			$result[self::TELEGRAM] = Loc::getMessage('CRM_TIMELINE_CATEGORY_TELEGRAM');
+		}
+
+		$result = [
+			...$result,
 			self::NOTIFICATION => Loc::getMessage('CRM_TIMELINE_CATEGORY_NOTIFICATION_2'),
 			self::ACTIVITY_ZOOM => Loc::getMessage('CRM_TIMELINE_CATEGORY_ZOOM'),
 			self::BIZ_PROCESS => Loc::getMessage('CRM_TIMELINE_CATEGORY_BIZ_PROCESS'),
@@ -85,14 +95,14 @@ class TimelineEntryCategory
 	}
 
 	/**
-	 * @param Main\Entity\Query $query
+	 * @param Main\ORM\Query\Query $query
 	 * @param array $filter
 	 */
 	public static function prepareQuery($query, $filter)
 	{
 		if(isset($filter['ENTRY_CATEGORY_ID']) && is_array($filter['ENTRY_CATEGORY_ID']))
 		{
-			$categoryFilter = Main\Entity\Query::filter();
+			$categoryFilter = Main\ORM\Query\Query::filter();
 			$categoryFilter->logic('or');
 
 			foreach($filter['ENTRY_CATEGORY_ID'] as $entryCategoryID)
@@ -100,33 +110,33 @@ class TimelineEntryCategory
 				if($entryCategoryID === self::COMMENT)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::COMMENT)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::COMMENT)
 					);
 				}
 				elseif($entryCategoryID === self::DOCUMENT)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::DOCUMENT)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::DOCUMENT)
 					);
 				}
 				elseif($entryCategoryID === self::BIZ_PROCESS)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('TYPE_ID', Crm\Timeline\TimelineType::BIZPROC)
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_REQUEST)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Request::getId())
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_TASK)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->logic(Main\ORM\Query\Filter\ConditionTree::LOGIC_OR)
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Task::getId())
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Tasks\Task::getId())
@@ -135,120 +145,127 @@ class TimelineEntryCategory
 				elseif($entryCategoryID === self::ACTIVITY_CALL)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Call::getId())
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_VISIT)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Visit::getId())
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_ZOOM)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Zoom::getId())
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_CALL_TRACKER)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\CallTracker::getId())
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_MEETING)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Meeting::getId())
 					);
 				}
 				elseif($entryCategoryID === self::ACTIVITY_EMAIL)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Email::getId())
 					);
 				}
 				elseif($entryCategoryID === self::CREATION)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::CREATION)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::CREATION)
 					);
 				}
 				elseif($entryCategoryID === self::MODIFICATION)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::MODIFICATION)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::MODIFICATION)
 					);
 				}
 				elseif($entryCategoryID === self::CONVERSION)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::CONVERSION)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::CONVERSION)
 					);
 				}
 				elseif($entryCategoryID === self::LINK)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::LINK)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::LINK)
 					);
 				}
 				elseif($entryCategoryID === self::UNLINK)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::UNLINK)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::UNLINK)
 					);
 				}
 				elseif($entryCategoryID === self::WAITING)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::WAIT)
+						Main\ORM\Query\Query::filter()->where('TYPE_ID', Crm\Timeline\TimelineType::WAIT)
 					);
 				}
 				elseif($entryCategoryID === self::SMS)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Sms::getId())
 					);
 				}
 				elseif($entryCategoryID === self::WHATSAPP)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\WhatsApp::getId())
+					);
+				}
+				elseif($entryCategoryID === self::TELEGRAM)
+				{
+					$categoryFilter->where(
+						Main\ORM\Query\Query::filter()
+							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Telegram::getId())
 					);
 				}
 				elseif($entryCategoryID === self::NOTIFICATION)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\Notification::getId())
 					);
 				}
 				elseif($entryCategoryID === self::WEB_FORM)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\WebForm::getId())
 					);
 				}
 				elseif($entryCategoryID === self::CHAT)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\OpenLine::getId())
 					);
 				}
 				elseif($entryCategoryID === self::APPLICATION)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->whereIn('ASSOCIATED_ENTITY_CLASS_NAME', [
 								Crm\Activity\Provider\RestApp::getId(),
 								Crm\Activity\Provider\ConfigurableRestApp::getId(),
@@ -258,28 +275,28 @@ class TimelineEntryCategory
 				elseif($entryCategoryID === self::ORDER)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('TYPE_ID', Crm\Timeline\TimelineType::ORDER)
 					);
 				}
 				elseif($entryCategoryID === self::ORDER_CHECK)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('TYPE_ID', Crm\Timeline\TimelineType::ORDER_CHECK)
 					);
 				}
 				elseif($entryCategoryID === self::LOG_MESSAGE)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('TYPE_ID', Crm\Timeline\TimelineType::LOG_MESSAGE)
 					);
 				}
 				elseif($entryCategoryID === self::REPEAT_SALE)
 				{
 					$categoryFilter->where(
-						Main\Entity\Query::filter()
+						Main\ORM\Query\Query::filter()
 							->where('ASSOCIATED_ENTITY_CLASS_NAME', Crm\Activity\Provider\RepeatSale::getId())
 					);
 				}

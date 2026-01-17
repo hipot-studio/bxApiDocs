@@ -27,7 +27,7 @@ class ActionDictionary
 		'changeAccomplices' => Access\ActionDictionary::ACTION_TASK_CHANGE_ACCOMPLICES,
 		'pause' => Access\ActionDictionary::ACTION_TASK_PAUSE,
 		'timeTracking' => Access\ActionDictionary::ACTION_TASK_TIME_TRACKING,
-		'rate' => Access\ActionDictionary::ACTION_TASK_RATE,
+		'mark' => Access\ActionDictionary::ACTION_TASK_RATE,
 		'changeStatus' => Access\ActionDictionary::ACTION_TASK_CHANGE_STATUS,
 		'reminder' => Access\ActionDictionary::ACTION_TASK_REMINDER,
 		'addAuditors' => Access\ActionDictionary::ACTION_TASK_ADD_AUDITORS,
@@ -38,9 +38,10 @@ class ActionDictionary
 		'checklistSave' => Access\ActionDictionary::ACTION_CHECKLIST_SAVE,
 		'checklistToggle' => Access\ActionDictionary::ACTION_CHECKLIST_TOGGLE,
 		'automate' => Access\ActionDictionary::ACTION_TASK_ROBOT_EDIT,
-		'resultEdit' => Access\ActionDictionary::ACTION_TASK_RESULT_EDIT,
+		'resultEdit' => Access\ActionDictionary::ACTION_RESULT_EDIT,
 		'completeResult' => Access\ActionDictionary::ACTION_TASK_COMPLETE_RESULT,
-		'removeResult' => Access\ActionDictionary::ACTION_TASK_REMOVE_RESULT,
+		'removeResult' => Access\ActionDictionary::ACTION_RESULT_REMOVE,
+		'resultRead' => Access\ActionDictionary::ACTION_RESULT_READ,
 		'admin' => Access\ActionDictionary::ACTION_TASK_ADMIN,
 		'watch' => Access\ActionDictionary::ACTION_TASK_READ,
 		'mute' => Access\ActionDictionary::ACTION_TASK_READ,
@@ -51,6 +52,8 @@ class ActionDictionary
 		'detachFile' => Access\ActionDictionary::ACTION_TASK_DETACH_FILE,
 		'detachParent' => Access\ActionDictionary::ACTION_TASK_DETACH_PARENT,
 		'createGanttDependence' => Access\ActionDictionary::ACTION_TASK_CREATE_GANTT_DEPENDENCE,
+		'createResult' => Access\ActionDictionary::ACTION_TASK_READ,
+		'sort' => Access\ActionDictionary::ACTION_TASK_SORT,
 	];
 
 	public const SUBTASK_ACTIONS = [
@@ -69,14 +72,48 @@ class ActionDictionary
 		'changeDependence' => Access\ActionDictionary::ACTION_TASK_CHANGE_GANTT_DEPENDENCE,
 	];
 
+	public const RESULT_ACTIONS = [
+		'edit' => Access\ActionDictionary::ACTION_RESULT_EDIT,
+		'remove' => Access\ActionDictionary::ACTION_RESULT_REMOVE,
+	];
+
+	public const ELAPSED_TIME_ACTIONS = [
+		'edit' => Access\ActionDictionary::ACTION_ELAPSED_TIME_UPDATE,
+		'remove' => Access\ActionDictionary::ACTION_ELAPSED_TIME_DELETE,
+	];
+
+	public const FLOW_ACTIONS = [
+		'read' => 'flow_read', /** @see FlowAction */
+	];
+
 	public const USER_ACTIONS = [
 		'tasks' => [
 			'create' => Access\ActionDictionary::ACTION_TASK_CREATE,
 			'createFromTemplate' => Access\ActionDictionary::ACTION_TASK_CREATE,
 			'robot' => Access\ActionDictionary::ACTION_TASK_ROBOT_EDIT,
+			'admin' => Access\ActionDictionary::ACTION_TASK_ADMIN,
+		],
+		'template' => [
+			'create' => Access\ActionDictionary::ACTION_TEMPLATE_CREATE,
 		],
 		'flow' => [
 			'create' => FlowAction::CREATE,
 		],
+	];
+
+	public const TEMPLATE_ACTIONS = [
+		'read' => Access\ActionDictionary::ACTION_TEMPLATE_READ,
+		'edit' => Access\ActionDictionary::ACTION_TEMPLATE_EDIT,
+		'remove' => Access\ActionDictionary::ACTION_TEMPLATE_REMOVE,
+		'create' => Access\ActionDictionary::ACTION_TEMPLATE_CREATE,
+		'detachParent' => Access\ActionDictionary::ACTION_TEMPLATE_DETACH_PARENT,
+	];
+
+	public const SUBTEMPLATE_ACTIONS = [
+		'detachParent' => Access\ActionDictionary::ACTION_TEMPLATE_DETACH_PARENT,
+	];
+
+	public const RELATED_TASK_TEMPLATE_ACTIONS = [
+		'detachRelated' => Access\ActionDictionary::ACTION_TEMPLATE_DETACH_RELATED_TASK,
 	];
 }

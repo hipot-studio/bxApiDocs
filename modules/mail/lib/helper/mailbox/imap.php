@@ -749,7 +749,7 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		$syncReport = [
-			'syncCount'=>0,
+			'syncCount' => 0,
 			'reSyncCount' => 0,
 			'reSyncStatus' => false,
 		];

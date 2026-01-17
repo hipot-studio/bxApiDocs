@@ -27,9 +27,7 @@ class RenewTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new RenewTaskHandler($statusService);
+		$handler = Container::getInstance()->get(RenewTaskHandler::class);
 
 		try
 		{

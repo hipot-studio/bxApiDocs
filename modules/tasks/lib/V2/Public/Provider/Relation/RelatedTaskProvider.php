@@ -14,14 +14,14 @@ class RelatedTaskProvider extends AbstractRelationTaskProvider
 		return ['=DEPENDS_ON' => $relationTaskParams->taskId];
 	}
 
-	protected function getRelationRights(array $taskIds, int $taskId, int $userId): array
+	protected function getRelationRights(array $taskIds, int $rootId, int $userId): array
 	{
 		if (empty($taskIds))
 		{
 			return [];
 		}
 
-		$params['detachRelated'] = ['relatedId' => $taskId];
+		$params['detachRelated'] = ['relatedId' => $rootId];
 
 		return $this->taskRightService->getTaskRightsBatch(
 			userId: $userId,

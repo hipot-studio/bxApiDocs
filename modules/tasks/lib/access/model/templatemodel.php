@@ -18,6 +18,7 @@ use Bitrix\Tasks\Access\AccessibleTask;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
+use Bitrix\Tasks\V2\Internal\Access\Registry\TemplateRegistry;
 
 class TemplateModel
 	implements AccessibleTask
@@ -28,13 +29,14 @@ class TemplateModel
 
 	private ?string $description = null;
 	private $id = 0;
-	private $members;
+	private ?array $members = null;
 	private $groupId;
 	private $replicate;
 
 	private $permissions;
+	private ?int $parentId = null;
 
-	private $template;
+	private ?array $template = null;
 
 
 	/**
@@ -74,7 +76,7 @@ class TemplateModel
 	 * @param array $fields
 	 * @return AccessibleItem
 	 */
-	public static function createFromArray(array $fields): AccessibleItem
+	public static function createFromArray(array $fields): static
 	{
 		$model = new self();
 
@@ -140,6 +142,11 @@ class TemplateModel
 
 		$regular = array_key_exists('REPLICATE', $fields) && $fields['REPLICATE'] === 'Y';
 		$model->setRegular($regular);
+
+		if (isset($fields['BASE_TEMPLATE_ID']))
+		{
+			$model->parentId = (int)$fields['BASE_TEMPLATE_ID'];
+		}
 
 		return $model;
 	}
@@ -215,13 +222,10 @@ class TemplateModel
 		return [];
 	}
 
-	/**
-	 * @param array $members
-	 * @return $this
-	 */
-	public function setMembers(array $members): self
+	public function setMembers(?array $members): self
 	{
 		$this->members = $members;
+
 		return $this;
 	}
 
@@ -387,6 +391,13 @@ class TemplateModel
 		return !empty(array_intersect($userDepartments, $this->getDepartments($roles)));
 	}
 
+	public function getParentId(): ?int
+	{
+		$this->parentId ??= TemplateRegistry::getInstance()->get($this->id)?->getParent()?->getParentTemplateId();
+
+		return $this->parentId;
+	}
+
 	/**
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentException
@@ -442,35 +453,24 @@ class TemplateModel
 		return $this->permissions;
 	}
 
-	/**
-	 * @return array|null
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 */
 	private function loadTemplate(): ?array
 	{
 		if (!$this->id)
 		{
 			return null;
 		}
-		if ($this->template === null)
-		{
-			$res = TemplateTable::query()
-				->addSelect('ID')
-				->addSelect('DESCRIPTION')
-				->addSelect('ZOMBIE')
-				->addSelect('GROUP_ID')
-				->addSelect('REPLICATE')
-				->where('ID', $this->id)
-				->exec()
-				->fetch();
 
-			if ($res)
-			{
-				$this->template = $res;
-			}
+		if ($this->template !== null)
+		{
+			return $this->template;
 		}
+
+		$object = TemplateRegistry::getInstance()->get($this->id);
+		if ($object !== null)
+		{
+			$this->template = $object->collectValues();
+		}
+
 		return $this->template;
 	}
 
@@ -512,7 +512,7 @@ class TemplateModel
 						'filter' => [
 							'@ID' => new SqlExpression($userIds),
 						],
-						'select' => ['ID', 'UF_DEPARTMENT']
+						'select' => ['ID', 'UF_DEPARTMENT'],
 					]
 				);
 

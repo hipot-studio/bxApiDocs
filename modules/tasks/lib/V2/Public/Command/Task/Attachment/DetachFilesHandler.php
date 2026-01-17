@@ -18,6 +18,7 @@ class DetachFilesHandler
 			taskId: $command->taskId,
 			userId: $command->userId,
 			fileIds: $command->fileIds,
+			useConsistency: $command->useConsistency,
 		);
 	}
 }

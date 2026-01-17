@@ -10,10 +10,14 @@ class UserOptionRepository implements UserOptionRepositoryInterface
 {
 	public function isSet(OptionDictionary $optionDictionary, int $userId): bool
 	{
-		return (bool)\CUserOptions::GetOption(
+		return (bool)$this->get($optionDictionary, $userId);
+	}
+
+	public function get(OptionDictionary $optionDictionary, int $userId): mixed
+	{
+		return \CUserOptions::GetOption(
 			category: 'tasks.v2',
 			name: $optionDictionary->value,
-			default_value: false,
 			user_id: $userId
 		);
 	}

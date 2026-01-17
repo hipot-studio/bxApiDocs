@@ -15,6 +15,7 @@ class MessageAnalytics extends ChatAnalytics
 	protected const ADD_REACTION = 'add_reaction';
 	protected const SHARE_MESSAGE = 'share_message';
 	protected const DELETE_MESSAGE = 'delete_message';
+	protected const MENTION_ALL = 'mention_all';
 
 	protected Message $message;
 
@@ -88,6 +89,24 @@ class MessageAnalytics extends ChatAnalytics
 		});
 	}
 
+	public function addMentionAll(): void
+	{
+		$this->async(function () {
+			if ($this->message->getMessageId() === null)
+			{
+				return;
+			}
+
+			$this
+				->createMessageEvent(self::MENTION_ALL)
+				?->setType((new MessageContent($this->message))->getComponentName())
+				->setP4(null)
+				->setP5(null)
+				->send()
+			;
+		});
+	}
+
 	protected function createMessageEvent(
 		string $eventName,
 	): ?MessageEvent
@@ -97,6 +116,6 @@ class MessageAnalytics extends ChatAnalytics
 			return null;
 		}
 
-		return (new MessageEvent($eventName, $this->chat, $this->userId));
+		return (new MessageEvent($eventName, $this->chat, $this->getContext()->getUserId()));
 	}
 }

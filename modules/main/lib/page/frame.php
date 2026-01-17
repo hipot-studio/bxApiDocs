@@ -1,4 +1,4 @@
-<?
+<?php
 //This file still exists because of SiteUpdate features.
 //When you reinstall updates (main 17.1.0 with previous ones),
 //SiteUpdate includes old version of 'include.php' which invokes Frame::shouldBeEnabled().

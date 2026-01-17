@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Helper;
 
 use Bitrix\Mail;
+use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
 use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailMessageUidTable;
@@ -10,6 +11,7 @@ use Bitrix\Mail\MailServicesTable;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Mail\Helper;
@@ -142,15 +144,19 @@ abstract class Mailbox
 			->setSelect([
 				'ID',
 				'DIR_MD5',
+				'MESSAGE_COUNT',
 			])
 			->where('MAILBOX_ID', $mailboxId)
 			->exec();
-		while ($item = $res->fetch()) {
+		while ($item = $res->fetch())
+		{
 			$id = $item['ID'];
 			$dirMd5 = $item['DIR_MD5'];
 			$directoriesWithCounter[$dirMd5] = [
+				'MESSAGE_COUNT' => $item['MESSAGE_COUNT'],
 				'UNSEEN' => $countersById[$id] ?? 0,
 				'DIR_MD5' => $dirMd5,
+				'ID' => $item['ID'],
 			];
 		}
 
@@ -272,7 +278,7 @@ abstract class Mailbox
 
 		if (empty($mailbox))
 		{
-			throw new Main\ObjectException('no mailbox');
+			return false;
 		}
 
 		if (empty($mailbox['SERVER_TYPE']) || !array_key_exists($mailbox['SERVER_TYPE'], $types))
@@ -560,6 +566,156 @@ abstract class Mailbox
 		{
 			$this->updateGlobalCounter($userId);
 		}
+	}
+
+	/**
+	 * @param $id
+	 * @param $dir
+	 * @param $onlySyncCurrent
+	 * @return Main\Result
+	 * @throws Main\LoaderException
+	 */
+	public static function quickSync($id, $dir = null, $onlySyncCurrent = false): Main\Result
+	{
+		$finalResult = new \Bitrix\Main\Result();
+
+		$sessionId = md5(uniqid(''));
+
+		$response = array(
+			'complete' => false,
+			'status' => 0,
+			'sessid' => $sessionId,
+			'timestamp' => microtime(true),
+			'final' => true,
+			'is_fatal_error' => true,
+		);
+
+		$finalResult->setData($response);
+
+		if(!Loader::includeModule('mail'))
+		{
+			$finalResult->addError(new \Bitrix\Main\Error(Loc::getMessage('MAIL_MODULE_NOT_INSTALLED_1')));
+
+			//Stop attempts to resynchronize the mailbox
+			$response['is_fatal_error'] = true;
+			$response['complete'] = true;
+
+			$finalResult->setData($response);
+
+			return $finalResult;
+		}
+
+		if (!LicenseManager::isSyncAvailable())
+		{
+			$response['complete'] = true;
+			$response['is_fatal_error'] = true;
+
+			$finalResult->addError(new \Bitrix\Main\Error(Loc::getMessage('MAIL_SYNC_NOT_AVAILABLE_1')));
+			$finalResult->setData($response);
+
+			return $finalResult;
+		}
+
+		$mailbox = null;
+
+		if (MailboxAccess::hasCurrentUserAccessOrCanEditMailbox($id))
+		{
+			$mailbox = MailboxTable::getById($id)->fetch();
+		}
+
+		$mailboxHelper = Helper\Mailbox::createInstance($id);
+
+		if ($mailbox && !empty($mailboxHelper))
+		{
+			session_write_close();
+
+			if (is_null($dir))
+			{
+				$dir = $mailboxHelper->getDirsHelper()->getDefaultDirPath(true);
+			}
+
+			$mailboxHelper->setSyncParams(array(
+				'full' => true,
+				'currentDir' => $dir,
+				'sessid' => $sessionId,
+			));
+
+			$mailboxSyncManager = new MailboxSyncManager($mailbox['USER_ID']);
+			$mailboxSyncManager->setSyncStartedData($id);
+
+			$result = $mailboxHelper->syncDir($dir);
+
+			$response['timestamp'] = microtime(true);
+
+			if ($result === false)
+			{
+				$mailboxSyncManager->setSyncStatus($id, false, time());
+
+				$response['complete'] = true;
+				$response['is_fatal_error'] = true;
+
+				$finalResult->addErrors($mailboxHelper->getWarnings()->toArray());
+			}
+			else
+			{
+				/*
+					If the directory is not locked for synchronization,
+					then we will resynchronize the old messages
+					(delete the missing messages, synchronize the readability statuses).
+				*/
+				if ($result !== null)
+				{
+					$response['new'] = $result;
+
+					$lastSyncResult = $mailboxHelper->getLastSyncResult();
+
+					$response['updated'] = -$lastSyncResult['updatedMessages'];
+					$response['deleted'] = -$lastSyncResult['deletedMessages'];
+
+					$mailboxHelper->resyncDir($dir);
+
+					$lastSyncResult = $mailboxHelper->getLastSyncResult();
+
+					$response['updated'] += $lastSyncResult['updatedMessages'];
+					$response['deleted'] += $lastSyncResult['deletedMessages'];
+
+					$response['timestamp'] = microtime(true);
+				}
+
+				$onlySyncCurrent = filter_var($onlySyncCurrent, FILTER_VALIDATE_BOOLEAN);
+
+				if (!$onlySyncCurrent && count($mailboxHelper->getDirsHelper()->getSyncDirs()) > 1)
+				{
+					//If resynchronization of the entire mailbox is started
+					if($mailboxHelper->sync(false))
+					{
+						$response['complete'] = true;
+					}
+				}
+				else
+				{
+					$mailboxSyncManager->setSyncStatus($id, true, time());
+					$mailboxHelper->notifyNewMessages();
+					$response['complete'] = true;
+				}
+			}
+		}
+		else
+		{
+			$response['complete'] = true;
+			$response['is_fatal_error'] = true;
+			$finalResult->addError(new \Bitrix\Main\Error(Loc::getMessage('MAIL_THE_MAILBOX_HAS_BEEN_DELETED_1')));
+		}
+
+		if($mailbox && $response['new'] > 0 || $response['deleted'] > 0 || $response['updated'] > 0)
+		{
+			$mailboxHelper->syncCounters();
+			$mailboxHelper->sendCountersEvent();
+		}
+
+		$finalResult->setData($response);
+
+		return $finalResult;
 	}
 
 	public function sync($syncCounters = true)
@@ -2085,7 +2241,7 @@ abstract class Mailbox
 
 			Mail\Integration\Im\Notification::add(
 				$this->mailbox['USER_ID'],
-				'new_message',
+				Mail\Integration\Im\Notification::notifierSchemeTypeMail,
 				array(
 					'mailboxOwnerId' => $this->mailbox['USER_ID'],
 					'mailboxId' => $this->mailbox['ID'],
@@ -2169,7 +2325,7 @@ abstract class Mailbox
 		return null;
 	}
 
-	final public static function findBy($id, $email): ?Mailbox
+	final public static function findBy($id, ?string $email = null): ?Mailbox
 	{
 		$instance = null;
 
@@ -2192,5 +2348,26 @@ abstract class Mailbox
 		}
 
 		return null;
+	}
+
+	public static function getIdByMessageId(int $messageId): int
+	{
+		if (!$messageId)
+		{
+			return 0;
+		}
+
+		$res = MailMessageTable::query()
+			->setSelect(['MAILBOX_ID'])
+			->where('ID', $messageId)
+			->exec()
+		;
+
+		if ($row = $res->fetch())
+		{
+			return (int)$row['MAILBOX_ID'];
+		}
+
+		return 0;
 	}
 }

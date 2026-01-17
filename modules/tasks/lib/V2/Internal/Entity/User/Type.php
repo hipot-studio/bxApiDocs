@@ -4,7 +4,7 @@ namespace Bitrix\Tasks\V2\Internal\Entity\User;
 
 enum Type: string
 {
-	case Intranet = 'intranet';
+	case Employee = 'employee';
 	case Extranet = 'extranet';
 	case Collaber = 'collaber';
 }

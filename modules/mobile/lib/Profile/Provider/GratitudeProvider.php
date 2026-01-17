@@ -67,11 +67,39 @@ class GratitudeProvider
 
 		$service = $this->getGratitudeService($ownerId, $pageSize);
 		$result = $service->getGratitudePostListAction(['pageNum' => $pageNum]);
+		$stub = $service->getStub();
+		$badges = $this->formatBadges($result['BADGES'] ?? [], $stub['BADGES'] ?? []);
 
 		return [
 			'POSTS' => $result['POSTS'] ?? [],
-			'BADGES' => $result['BADGES'] ?? [],
+			'BADGES' => $badges ?? [],
 		];
+	}
+
+	private function formatBadges(array $badges, array $stubBadges): ?array
+	{
+		$nameToCode = [];
+		foreach ($stubBadges as $stub)
+		{
+			if (!is_array($stub))
+			{
+				continue;
+			}
+			$name = $stub['NAME'] ?? '';
+			if ($name === '')
+			{
+				continue;
+			}
+			$nameToCode[$name] = $stub['CODE'] ?? '';
+		}
+
+		foreach ($badges as $key => $badge)
+		{
+			$name = is_array($badge) ? ($badge['NAME'] ?? '') : '';
+			$badges[$key]['CODE'] = $nameToCode[$name] ?? '';
+		}
+
+		return $badges;
 	}
 
 	private function getGratitudeService(int $ownerId, ?int $pageSize = self::DEFAULT_PAGE_SIZE): Grats
@@ -102,14 +130,19 @@ class GratitudeProvider
 
 	private function collectGratitudeItems(array $posts, array $badges, int $ownerId): array
 	{
-		$badgeNames = $this->createBadgeNameMap($badges);
+		$maps = $this->createBadgeMaps($badges);
+		$nameMap = $maps['name'];
+		$codeMap = $maps['code'];
 		$result = [];
 
 		foreach ($posts as $post)
 		{
+			$badgeId = (string)($post['UF_GRATITUDE'] ?? '');
+
 			$result[] = [
-				'id' => (int)$post['UF_GRATITUDE'],
-				'name' => (string)$badgeNames[$post['UF_GRATITUDE'] ?? ''],
+				'id' => (int)$badgeId,
+				'name' => (string)($nameMap[$badgeId] ?? ''),
+				'feedId' => (string)($codeMap[$badgeId] ?? ''),
 				'title' => (string)$post['TITLE'],
 				'authorId' => (int)$post['AUTHOR_ID'],
 				'createdAt' => (int)$post['DATE_PUBLISH_TS'],
@@ -126,18 +159,33 @@ class GratitudeProvider
 		return $result;
 	}
 
-	private function createBadgeNameMap(array $badges): array
+	private function createBadgeMaps(array $badges): array
 	{
-		$map = [];
+		$nameMap = [];
+		$codeMap = [];
+
 		foreach ($badges as $badge)
 		{
+			if (!is_array($badge))
+			{
+				continue;
+			}
+
+			$name = $badge['NAME'] ?? '';
+			$code = $badge['CODE'] ?? '';
+
 			foreach ($badge['ID'] ?? [] as $id)
 			{
-				$map[$id] = $badge['NAME'] ?? '';
+				$key = (string)$id;
+				$nameMap[$key] = $name;
+				$codeMap[$key] = $code;
 			}
 		}
 
-		return $map;
+		return [
+			'name' => $nameMap,
+			'code' => $codeMap,
+		];
 	}
 
 	private function extractAuthorIds(array $posts): array

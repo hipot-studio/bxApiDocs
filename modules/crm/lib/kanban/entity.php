@@ -96,6 +96,8 @@ abstract class Entity
 	protected $companyDataProvider;
 
 	protected UserPermissions $userPermissions;
+	protected bool $isRecurring = false;
+	protected bool $isFilterOnlyItems = false;
 
 	public function __construct()
 	{
@@ -3097,5 +3099,29 @@ abstract class Entity
 		}
 
 		return $result;
+	}
+
+	public function setIsRecurring(bool $isRecurring = true): self
+	{
+		$this->isRecurring = $isRecurring;
+
+		return $this;
+	}
+
+	public function isRecurring(): bool
+	{
+		return $this->isRecurring;
+	}
+
+	public function isFilterOnlyItems(): bool
+	{
+		return $this->isFilterOnlyItems;
+	}
+
+	public function setIsFilterOnlyItems(bool $isFilterOnlyItems): self
+	{
+		$this->isFilterOnlyItems = $isFilterOnlyItems;
+
+		return $this;
 	}
 }

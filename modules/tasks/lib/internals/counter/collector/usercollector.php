@@ -17,7 +17,7 @@ use Bitrix\Tasks\Internals\Counter\Deadline;
 
 class UserCollector
 {
-	private $userId;
+	protected $userId;
 
 	private $mutedTasks = [];
 
@@ -27,7 +27,7 @@ class UserCollector
 	{
 		if (!array_key_exists($userId, self::$instances))
 		{
-			self::$instances[$userId] = new self($userId);
+			self::$instances[$userId] = new static($userId);
 		}
 
 		return self::$instances[$userId];
@@ -89,7 +89,7 @@ class UserCollector
 	 * @return array
 	 * @throws \Bitrix\Main\Db\SqlQueryException
 	 */
-	private function recountExpired(string $taskFilter, array $mutedTasks): array
+	protected function recountExpired(string|array $taskFilter, array $mutedTasks): array
 	{
 		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
@@ -116,7 +116,7 @@ class UserCollector
 			{$sqlFlowJoin}
 			WHERE
 				{$taskFilter}
-				AND T.DEADLINE < '{$expiredTime}'
+				AND T.DEADLINE <= '{$expiredTime}'
 				AND T.STATUS IN ({$statuses})
 		";
 
@@ -175,7 +175,7 @@ class UserCollector
 				LEFT JOIN b_uts_forum_message BUF ON BUF.VALUE_ID = FM.ID
 				$sqlFlowJoin
 			",
-			Counter::getJoinForRecountCommentsByType(Enum::USER_NAME, ['userId' => $this->userId])
+			''
 		];
 	}
 
@@ -213,12 +213,12 @@ class UserCollector
 	}
 
 	/**
-	 * @param string $taskFilter
+	 * @param string|array|null $taskFilter
 	 * @param array $mutedTasks
 	 * @return array
 	 * @throws \Bitrix\Main\Db\SqlQueryException
 	 */
-	private function recountComments(string $taskFilter, array $mutedTasks): array
+	protected function recountComments(string|array|null $taskFilter, array $mutedTasks): array
 	{
 		$statement = [
 			'join' => $this->getJoinForRecountComments(),
@@ -350,9 +350,9 @@ class UserCollector
 
 	/**
 	 * @param array $tasksIds
-	 * @return string
+	 * @return string|array|null
 	 */
-	private function getTasksFilter(array $tasksIds): ?string
+	protected function getTasksFilter(array $tasksIds): string|array|null
 	{
 		$ids = array_map(function($item) {
 			return (int) $item;

@@ -3,7 +3,6 @@
 namespace Bitrix\Sign\Controllers\V1\Integration\Crm;
 
 use Bitrix\Main\Context;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -11,16 +10,14 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute\Access\LogicOr;
 use Bitrix\Sign\Attribute\ActionAccess;
-use Bitrix\Sign\Connector;
 use Bitrix\Sign\Engine\Controller;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\CompanyCollection;
 use Bitrix\Sign\Item\CompanyProvider;
 use Bitrix\Sign\Item\Integration\Crm\MyCompanyCollection;
-use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Operation\GetRegisteredCompanies;
 use Bitrix\Sign\Item\Company;
 use Bitrix\Sign\Type\Document\InitiatedByType;
-use Bitrix\Sign\Type\ProviderCode;
 
 class B2eCompany extends Controller
 {
@@ -74,7 +71,6 @@ class B2eCompany extends Controller
 			->getLastCompanyProvidersByUser(
 				(int)CurrentUser::get()->getId(),
 				$activeCompanyUids,
-				(new DateTime())->add('-30 days'),
 			)
 		;
 
@@ -113,11 +109,9 @@ class B2eCompany extends Controller
 	#[ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
 	public function deleteAction(string $id): array
 	{
-		$result = Container::instance()->getApiService()
-			->post('v1/b2e.company.delete', ['id' => $id])
-		;
+		$response = $this->container->getCompanyService()->delete($id);
 
-		$this->addErrorsFromResult($result);
+		$this->addErrors($response->getErrors());
 
 		return [];
 	}
@@ -136,7 +130,19 @@ class B2eCompany extends Controller
 	): CompanyCollection
 	{
 		$providerVisibilityService = $this->container->getProviderVisibilityService();
-		$registeredCompanies = $this->getRegistered($myCompanies, $forDocumentInitiatedByType);
+
+		$registeredCompaniesOperation = new GetRegisteredCompanies(
+			myCompanies: $myCompanies,
+			forDocumentInitiatedByType: $forDocumentInitiatedByType,
+		);
+		$registeredCompaniesOperationResult = $registeredCompaniesOperation->launch();
+		if (!$registeredCompaniesOperationResult->isSuccess())
+		{
+			$this->addErrors($registeredCompaniesOperationResult->getErrors());
+
+			return new CompanyCollection();
+		}
+		$registeredCompanies = $registeredCompaniesOperation->getResultData();
 
 		$companies = new CompanyCollection();
 
@@ -204,47 +210,6 @@ class B2eCompany extends Controller
 		return $companies;
 	}
 
-	private function getRegistered(
-		MyCompanyCollection $myCompanies,
-		InitiatedByType $forDocumentInitiatedByType,
-	): array
-	{
-		$taxIds = $myCompanies->listTaxIds();
-		if (empty($taxIds))
-		{
-			return [];
-		}
-
-		$result = Container::instance()->getApiService()
-			->post(
-				'v1/b2e.company.get',
-				[
-					'taxIds' => $taxIds,
-					'useProvidersWhereSignerSignFirst' => $forDocumentInitiatedByType === InitiatedByType::EMPLOYEE,
-					'supportedProviders' => ProviderCode::getAllFormattedCodes(),
-				],
-			)
-		;
-		if ($result->isSuccess())
-		{
-			$data = $result->getData();
-			$companies = (array)($data['companies'] ?? []);
-
-			$map = [];
-			foreach ($companies as $company)
-			{
-				$taxId = $company['taxId'] ?? null;
-				$map[$taxId] = $company;
-			}
-
-			return $map;
-		}
-
-		$this->addErrors($result->getErrors());
-
-		return [];
-	}
-
 	#[ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
 	public function registerAction(
 		string $taxId,
@@ -253,21 +218,26 @@ class B2eCompany extends Controller
 		string $externalProviderId = '',
 	): array
 	{
-		$providerData = [
-			'providerUid' => $externalProviderId,
-			'companyName' => Connector\Crm\MyCompany::getById($companyId)?->name,
+		$companyName = $this->container->getCrmMyCompanyService()->getCompanyName($companyId);
+
+		if ($companyName === null)
+		{
+			$this->addError(new Error('Company not found'));
+
+			return [];
+		}
+
+		$response = $this->container->getCompanyService()->register(
+			taxId: $taxId,
+			providerCode: $providerCode,
+			companyName: $companyName,
+			externalProviderId: $externalProviderId,
+		);
+
+		$this->addErrors($response->getErrors());
+
+		return [
+			'id' => $response->id,
 		];
-
-		$result = Container::instance()->getApiService()
-			->post('v1/b2e.company.registerByClient', [
-				'taxId' => $taxId,
-				'providerCode' => $providerCode,
-				'providerData' => $providerData,
-			])
-		;
-
-		$this->addErrorsFromResult($result);
-
-		return $result->getData();
 	}
 }

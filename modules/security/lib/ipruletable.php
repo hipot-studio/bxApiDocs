@@ -3,6 +3,8 @@
 namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
 
 /**
  * Class IPRuleTable
@@ -20,7 +22,7 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\IPRule wakeUpObject($row)
  * @method static \Bitrix\Security\IPRules wakeUpCollection($rows)
  */
-class IPRuleTable extends \Bitrix\Main\Entity\DataManager
+class IPRuleTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -30,32 +32,32 @@ class IPRuleTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			(new \Bitrix\Main\Entity\IntegerField('ID'))
+			(new Fields\IntegerField('ID'))
 				->configurePrimary()
 				->configureAutocomplete(),
-			(new \Bitrix\Main\Entity\StringField('RULE_TYPE'))
+			(new Fields\StringField('RULE_TYPE'))
 				->configureSize(1)
 				->configureDefaultValue('M'),
-			(new \Bitrix\Main\Entity\EnumField('ACTIVE'))
+			(new Fields\EnumField('ACTIVE'))
 				->configureValues(['Y', 'N'])
 				->configureDefaultValue('Y'),
-			(new \Bitrix\Main\Entity\EnumField('ADMIN_SECTION'))
+			(new Fields\EnumField('ADMIN_SECTION'))
 				->configureValues(['Y', 'N'])
 				->configureDefaultValue('Y'),
-			(new \Bitrix\Main\Entity\StringField('SITE_ID'))
+			(new Fields\StringField('SITE_ID'))
 				->configureSize(2)
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\IntegerField('SORT'))
+			(new Fields\IntegerField('SORT'))
 				->configureDefaultValue(500),
-			(new \Bitrix\Main\Entity\DatetimeField('ACTIVE_FROM'))
+			(new Fields\DatetimeField('ACTIVE_FROM'))
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\IntegerField('ACTIVE_FROM_TIMESTAMP'))
+			(new Fields\IntegerField('ACTIVE_FROM_TIMESTAMP'))
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\DatetimeField('ACTIVE_TO'))
+			(new Fields\DatetimeField('ACTIVE_TO'))
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\IntegerField('ACTIVE_TO_TIMESTAMP'))
+			(new Fields\IntegerField('ACTIVE_TO_TIMESTAMP'))
 				->configureNullable(),
-			(new \Bitrix\Main\Entity\StringField('NAME'))
+			(new Fields\StringField('NAME'))
 				->configureSize(250)
 				->configureNullable()
 		];

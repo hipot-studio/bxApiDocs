@@ -394,10 +394,6 @@ final class Lead extends Service\Factory
 				'TYPE' => Field::TYPE_STRING,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 			],
-			Item::FIELD_NAME_FACE_ID => [
-				'TYPE' => Field::TYPE_INTEGER,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Hidden],
-			],
 			Item::FIELD_NAME_WEBFORM_ID => [
 				'TYPE' => Field::TYPE_INTEGER,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
@@ -562,10 +558,6 @@ final class Lead extends Service\Factory
 			->addAction(
 				Operation::ACTION_AFTER_SAVE,
 				new Operation\Action\Compatible\SocialNetwork\ProcessSendNotification\WhenUpdatingEntity(),
-			)
-			->addAction(
-				Operation::ACTION_AFTER_SAVE,
-				new Operation\Action\UpdateMlScoring(),
 			)
 			->addAction(
 				Operation::ACTION_AFTER_SAVE,

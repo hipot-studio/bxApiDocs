@@ -25,7 +25,7 @@ use Bitrix\Tasks\Internals\TaskTable as Task;
 use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Tasks\Provider\Exception\InvalidGroupByException;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use CTaskMembers;

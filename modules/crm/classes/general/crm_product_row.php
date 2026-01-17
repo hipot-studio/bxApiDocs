@@ -154,7 +154,7 @@ class CAllCrmProductRow
 			// Update list of taxes
 			self::UpdateTotalInfo($ownerType, $ownerID);
 
-			self::SynchronizeOwner($ownerType, $ownerID);
+			self::SynchronizeOwner($ownerType, $ownerID, $checkPerms);
 
 			if($regEvent)
 			{

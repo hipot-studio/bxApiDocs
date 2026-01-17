@@ -38,8 +38,6 @@ final class DbBroker implements BrokerInterface
 	{
 		$this->storage = new DbStorage($tableEntity);
 		$this->retryStrategy = $retryStrategy;
-
-		$this->storage->unlockStaleMessages();
 	}
 
 	/**

@@ -8,4 +8,5 @@ enum Type: string
 	case RecordingVoice = 'recordingVoice';
 	case SendingPhoto = 'sendingPhoto';
 	case SendingFile = 'sendingFile';
+	case RecordingVideo = 'recordingVideo';
 }

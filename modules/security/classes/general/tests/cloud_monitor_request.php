@@ -187,8 +187,19 @@ class CSecurityCloudMonitorRequest
 		$targetHost = $license->getDomainStoreLicense() . self::BITRIX_CHECKER_URL_PATH;
 
 		$httpClient = new \Bitrix\Main\Web\HttpClient(array(
-			'streamTimeout' => static::TIMEOUT
+			'streamTimeout' => static::TIMEOUT,
 		));
+
+		$proxyAddr = \COption::GetOptionString("main", "update_site_proxy_addr", "");
+		if($proxyAddr !== '')
+		{
+			$proxyPort = \COption::GetOptionString("main", "update_site_proxy_port", "");
+			$proxyUserName = \COption::GetOptionString("main", "update_site_proxy_user", "");
+			$proxyPassword = \COption::GetOptionString("main", "update_site_proxy_pass", "");
+
+			$httpClient->setProxy($proxyAddr, $proxyPort, $proxyUserName, $proxyPassword);
+			$httpClient->disableSslVerification();
+		}
 
 		$response = $httpClient->post($targetHost, $payload);
 		if ($response && $httpClient->getStatus() == 200)

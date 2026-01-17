@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
+use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -99,9 +100,20 @@ class Agent
 			return '';
 		}
 
+		$connection = \Bitrix\Main\Application::getInstance()->getConnection();
+		$connection->startTransaction();
+
 		AccessInstaller::install();
 		Option::set('biconnector', Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
+		MarketDashboardLogger::logInfo('createDefaultRoles: start actualizeSystemDashboards', [
+			'group_option_status' => Feature::isCheckPermissionsByGroup() ? 'Y' : 'N',
+			'count_system_groups' => SupersetDashboardGroupTable::getCount([
+				'=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM,
+			]),
+		]);
 		SystemDashboardManager::actualizeSystemDashboards();
+
+		$connection->commitTransaction();
 
 		return '';
 	}

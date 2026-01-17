@@ -18,6 +18,8 @@ interface DeadlineChangeLogRepositoryInterface
 		?string $reason,
 	): void;
 
+	public function clean(int $taskId): bool;
+
 	/**
 	 * Returns total number of rows by userId and taskId.
 	 */

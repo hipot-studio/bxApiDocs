@@ -14,7 +14,7 @@ use Bitrix\Tasks\Internals\Task\SearchIndexTable;
 use Bitrix\Tasks\Provider\Exception\InvalidGroupByException;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Slider\Path\PathMaker;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\FilterLimit;

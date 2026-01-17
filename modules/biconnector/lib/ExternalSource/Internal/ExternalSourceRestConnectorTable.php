@@ -3,11 +3,13 @@ namespace Bitrix\BIConnector\ExternalSource\Internal;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\BIConnector\ExternalSource;
 
 /**
  * Class ExternalSourceRestConnectorTable
@@ -177,6 +179,27 @@ class ExternalSourceRestConnectorTable extends DataManager
 					'title' => Loc::getMessage('EXTERNAL_SOURCE_ENTITY_REST_URL_TABLE_DESCRIPTION_FIELD'),
 				]
 			),
+			new BooleanField(
+				'SUPPORT_MAPPING',
+				[
+					'values' => ['N', 'Y'],
+					'default' => 'N',
+					'title' => Loc::getMessage('EXTERNAL_SOURCE_ENTITY_SUPPORT_MAPPING_FIELD'),
+				]
+			),
 		];
+	}
+
+	public static function getIdFromCode(string $code): int
+	{
+		$type = ExternalSource\Type::Rest->value;
+		$parts = explode('_', $code);
+
+		if ($parts[0] !== $type)
+		{
+			return 0;
+		}
+
+		return (int)$parts[1];
 	}
 }

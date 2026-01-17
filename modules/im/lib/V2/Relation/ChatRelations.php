@@ -20,10 +20,6 @@ class ChatRelations
 	 * @var Relation[]
 	 */
 	private array $relationByUserId = [];
-	/**
-	 * @var RelationCollection[]
-	 */
-	private array $relationsByUserIds = [];
 	private RelationCollection $fullRelations;
 	private RelationCollection $rawFullRelations;
 
@@ -80,13 +76,28 @@ class ChatRelations
 	public function getRawFullRelations(): RelationCollection
 	{
 		$this->rawFullRelations ??= RelationCollection::find(['CHAT_ID' => $this->chatId]);
+		$this->mergeWithExistingRelations($this->rawFullRelations);
 
 		return $this->rawFullRelations;
 	}
 
 	protected function loadFullRelations(): RelationCollection
 	{
-		return $this->filterRelationsByAccess($this->getRawFullRelations());
+		$fullRelations = $this->filterRelationsByAccess($this->getRawFullRelations());
+		$this->mergeWithExistingRelations($fullRelations);
+
+		return $fullRelations;
+	}
+
+	protected function mergeWithExistingRelations(RelationCollection $relations): void
+	{
+		foreach ($this->relationByUserId as $userId => $relation)
+		{
+			if ($relation && $relations->getByUserId($userId, $this->chatId))
+			{
+				$relations->add($relation);
+			}
+		}
 	}
 
 	public function getManagerOnly(): RelationCollection
@@ -106,6 +117,11 @@ class ChatRelations
 
 	public function getByUserId(int $userId): ?Relation
 	{
+		if ($userId <= 0)
+		{
+			return null;
+		}
+
 		if (isset($this->relationByUserId[$userId]))
 		{
 			return $this->relationByUserId[$userId] ?: null;
@@ -134,23 +150,12 @@ class ChatRelations
 			return new RelationCollection();
 		}
 
-		sort($userIds);
-
-		$userIdsString = implode('|', $userIds);
-
-		if (isset($this->relationsByUserIds[$userIdsString]))
-		{
-			return $this->relationsByUserIds[$userIdsString];
-		}
-
 		if (isset($this->fullRelations))
 		{
 			return $this->fullRelations->filter(fn (Relation $relation) => in_array($relation->getUserId(), $userIds, true));
 		}
 
-		$this->relationsByUserIds[$userIdsString] = $this->loadByUserIds($userIds);
-
-		return $this->relationsByUserIds[$userIdsString];
+		return $this->loadByUserIds($userIds);
 	}
 
 	protected function loadByUserIds(array $userIds): RelationCollection
@@ -160,7 +165,38 @@ class ChatRelations
 			return new RelationCollection();
 		}
 
-		return $this->filterRelationsByAccess(RelationCollection::find(['CHAT_ID' => $this->chatId, 'USER_ID' => $userIds]));
+		$resultCollection = new RelationCollection();
+		$userIdsToLoad = [];
+		foreach ($userIds as $userId)
+		{
+			$relation = $this->relationByUserId[$userId] ?? null;
+			if ($relation === null)
+			{
+				$userIdsToLoad[$userId] = $userId;
+			}
+			elseif ($relation instanceof Relation)
+			{
+				$resultCollection->add($relation);
+			}
+		}
+
+		if (!empty($userIdsToLoad))
+		{
+			$rawRelations = RelationCollection::find(['CHAT_ID' => $this->chatId, 'USER_ID' => $userIdsToLoad]);
+			$loadedRelations = $this->filterRelationsByAccess($rawRelations);
+			$this->fillRelationByUserId($loadedRelations);
+			$resultCollection->mergeRegistry($loadedRelations);
+		}
+
+		return $resultCollection;
+	}
+
+	protected function fillRelationByUserId(RelationCollection $relations): void
+	{
+		foreach ($relations as $relation)
+		{
+			$this->relationByUserId[$relation->getUserId()] = $relation;
+		}
 	}
 
 	public function getByReason(Reason $reason): RelationCollection
@@ -182,7 +218,6 @@ class ChatRelations
 	{
 		unset($this->fullRelations, $this->rawFullRelations);
 		$this->relationByUserId = [];
-		$this->relationsByUserIds = [];
 	}
 
 	public function onAfterRelationAdd(array $usersToAdd): void
@@ -195,8 +230,19 @@ class ChatRelations
 	{
 		$this->fullRelations->onAfterRelationDelete($this->chatId, $deletedUserId);
 		$this->rawFullRelations->onAfterRelationDelete($this->chatId, $deletedUserId);
-		unset($this->relationsByUserIds[$deletedUserId]);
-		$this->relationsByUserIds = [];
+		unset($this->relationByUserId[$deletedUserId]);
+	}
+
+	public function onAfterMembersChange(): void
+	{
+		if (isset($this->fullRelations))
+		{
+			$this->fullRelations->clearActiveMemberCache();
+		}
+		if (isset($this->rawFullRelations))
+		{
+			$this->rawFullRelations->clearActiveMemberCache();
+		}
 	}
 
 	public function getUserCount(): int

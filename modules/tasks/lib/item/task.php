@@ -38,6 +38,8 @@ use Bitrix\Tasks\Item\Converter\Task\ToTask as TaskToTask;
 use \Bitrix\Tasks\Integration\Bizproc;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
+use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
 
 Loc::loadMessages(__FILE__);
 
@@ -324,6 +326,16 @@ final class Task extends \Bitrix\Tasks\Item
 			if ($taskId)
 			{
 				StagesTable::pinInStage($taskId);
+			}
+
+			if (\Bitrix\Tasks\V2\FormV2Feature::isOn('create'))
+			{
+				Container::getInstance()
+					->getEgressController()
+					->processAddTaskCommand(new AddTaskCommand(
+						task: new \Bitrix\Tasks\V2\Internal\Entity\Task(id: $taskId),
+						config: new AddConfig(userId: $userId),
+				));
 			}
 
 			$groupId = $data['GROUP_ID'];

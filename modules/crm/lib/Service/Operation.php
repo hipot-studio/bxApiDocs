@@ -5,7 +5,6 @@ namespace Bitrix\Crm\Service;
 use Bitrix\Crm\Agent\Security\DynamicTypes\AttrConvertOptions;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Automation\Helper;
-use Bitrix\Crm\Automation\Starter;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Field\Collection;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
@@ -29,6 +28,7 @@ use Bitrix\Main\EventManager;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 abstract class Operation
 {
@@ -224,7 +224,20 @@ abstract class Operation
 			$this->sendPullEvent();
 		}
 
-		if ($result->isSuccess() && $this->isBizProcEnabled())
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$factory = Container::getInstance()->getFactory($this->getItem()->getEntityTypeId());
+		$isRecurringItem = $factory?->isRecurringSupported() && $this->getItem()->getIsRecurring();
+
+		if ($isRecurringItem)
+		{
+			return $result;
+		}
+
+		if ($this->isBizProcEnabled())
 		{
 			$bizProcResult = $this->runBizProc();
 			// if (!$bizProcResult->isSuccess())
@@ -233,13 +246,13 @@ abstract class Operation
 			// }
 		}
 
-		if ($result->isSuccess() && $this->isAutomationEnabled())
+		if ($this->isAutomationEnabled())
 		{
 			$eventType = $this->item->getEntityEventName('OnAfterUpdate');
 			$eventId = EventManager::getInstance()->addEventHandler(
 				'crm',
 				$eventType,
-				[$this, 'updateItemFromUpdateEvent']
+				[$this, 'updateItemFromUpdateEvent'],
 			);
 			$automationResult = $this->runAutomation();
 			// if (!$automationResult->isSuccess())
@@ -502,6 +515,23 @@ abstract class Operation
 			{
 				$result->addError($field::getRequiredEmptyError($fieldName, $field->getTitle()));
 			}
+			elseif ($field && $field->getType() === Field::TYPE_FILE && $field->isUserField())
+			{
+				// deleted files in required fields must be interpreted as empty value
+				$deletedFileIds = (new UiFileUploaderResultValidator($field->getUserField()))->getDeletedFileIdsFromRequest();
+				$currentValue = $this->item->get($fieldName);
+				if (is_array($currentValue))
+				{
+					if ($field->isValueEmpty(array_diff($currentValue, $deletedFileIds)))
+					{
+						$result->addError($field::getRequiredEmptyError($fieldName, $field->getTitle()));
+					}
+				}
+				elseif (in_array($currentValue, $deletedFileIds, false))
+				{
+					$result->addError($field::getRequiredEmptyError($fieldName, $field->getTitle()));
+				}
+			}
 			elseif (isset($dependantFieldNames[$fieldName]))
 			{
 				$emptyValuesCount = 0;
@@ -581,7 +611,7 @@ abstract class Operation
 						$this->itemBeforeSave->getCompatibleData(Values::ACTUAL)
 					),
 					userId: (
-						in_array($this->getContext()->getScope(), [Context::SCOPE_AUTOMATION, Context::SCOPE_REST], true)
+						$this->getContext()->getScope() === Context::SCOPE_AUTOMATION
 							? 0
 							: $this->getContext()->getUserId()
 					),

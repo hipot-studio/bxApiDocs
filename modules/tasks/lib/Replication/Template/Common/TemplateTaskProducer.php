@@ -289,7 +289,7 @@ class TemplateTaskProducer implements ProducerInterface
 
 		try
 		{
-			$this->task = (new Task($this->userId))->fromAgent()->add($this->fields);
+			$this->task = (new Task($this->userId))->skipDeadlineTimeZone()->fromAgent()->add($this->fields);
 		}
 		catch (Exception $exception)
 		{

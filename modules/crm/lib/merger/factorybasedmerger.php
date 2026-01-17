@@ -5,17 +5,16 @@ namespace Bitrix\Crm\Merger;
 use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\Merger\ConflictResolver;
 use Bitrix\Crm\Recovery;
 use Bitrix\Crm\Relation\EntityRelationTable;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Timeline;
 use Bitrix\Crm\Tracking;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Crm\Timeline;
-use Bitrix\Crm\Service\Container;
 use CCrmActivity;
 use CCrmEvent;
 use CCrmProductRow;
@@ -358,7 +357,7 @@ class FactoryBasedMerger extends EntityMerger
 		Timeline\MarkEntry::rebind($this->entityTypeID, $seedId, $targetId);
 		Timeline\CommentEntry::rebind($this->entityTypeID, $seedId, $targetId);
 		Timeline\LogMessageEntry::rebind($this->entityTypeID, $seedId, $targetId);
-		Timeline\AI\Call\Entry::rebind($this->entityTypeID, $seedId, $targetId);
+		Timeline\AI\Entry::rebind($this->entityTypeID, $seedId, $targetId);
 	}
 
 	protected function rebindEntityRelations(int $seedId, int $targetId): void

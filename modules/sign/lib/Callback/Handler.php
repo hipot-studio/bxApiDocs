@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Callback;
 
 use Bitrix\Main;
 use Bitrix\Pull\Event;
+use Bitrix\Sign\Agent\Member\DownloadResultFileAgent;
 use Bitrix\Sign\Callback\Messages\Member\InviteToSign;
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
 use Bitrix\Sign\Controllers;
@@ -145,6 +146,13 @@ class Handler
 
 				break;
 			}
+			case Messages\Member\MemberResultFileReady::Type:
+			{
+				/** @var Messages\Member\MemberResultFileReady $message */
+				$this->startDownloadResultFile($message, $result);
+
+				break;
+			}
 			case Messages\Member\MemberResultFile::Type:
 			{
 				/** @var Messages\Member\MemberResultFile $message */
@@ -245,6 +253,37 @@ class Handler
 		{
 			$result->addErrors($saveResultFileResult->getErrors());
 		}
+	}
+
+	private function startDownloadResultFile(
+		Messages\Member\MemberResultFileReady $message,
+		Main\Result $result,
+	): void
+	{
+		$document = Container::instance()->getDocumentRepository()->getByUid($message->getDocumentUid());
+		if (!$document)
+		{
+			$result->addError(new Main\Error('Invalid callback token.'));
+
+			return;
+		}
+
+		$member = $this->memberRepository->getByUid($message->getMemberUid());
+		if (!$member)
+		{
+			$result->addError(new Main\Error('Member not found'));
+
+			return;
+		}
+
+		if ($member->documentId !== $document->id)
+		{
+			$result->addError(new Main\Error('Document id mismatch'));
+
+			return;
+		}
+
+		DownloadResultFileAgent::start($document->id, $member->id);
 	}
 
 	private function processSaveResultFileForMember(

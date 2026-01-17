@@ -3,18 +3,21 @@
 namespace Bitrix\Call\Integration\AI;
 
 use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Application;
+use Bitrix\Main\Result;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Bitrix24\License\Market;
 use Bitrix\Call\Settings;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Type;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\AI\Tuning\Defaults;
-use Bitrix\AI\Integration\Baas\BaasTokenService;
 
 
 class CallAISettings
@@ -31,7 +34,7 @@ class CallAISettings
 	;
 
 	public const
-		CALL_COPILOT_BAAS_SLIDER_CODE = 'limit_boost_copilot',
+		CALL_COPILOT_MARKET_SLIDER_CODE = 'limit_copilot_follow_up',
 		CALL_COPILOT_HELP_SLIDER_CODE = 'limit_copilot_follow_up',
 		CALL_COPILOT_DISCLAIMER_ARTICLE = [
 			'CIS' => '20412666',
@@ -45,34 +48,43 @@ class CallAISettings
 	;
 
 	private const
-		AI_TASK_WEIGHT = 10,
-		CALL_RECORD_MIN_USERS = ['B24' => 4, 'BOX' => 0],
+		CALL_RECORD_MIN_USERS = ['B24' => ['ru' => 3, 'def' => 4], 'BOX' => 0],
 		CALL_RECORD_MIN_LENGTH = 59
 	;
 
-	private static ?BaasTokenService $baasService = null;
 
 	public static function isCallAIEnable(): bool
 	{
-		return
-			Settings::isAIServiceEnabled()
-			&& self::isTariffAvailable()
-			&& self::isEnableBySettings()
-		;
+		static $enabled;
+		if ($enabled === null)
+		{
+			$enabled =
+				Settings::isAIServiceEnabled()
+				&& self::isTariffAvailable()
+				&& self::isEnableBySettings()
+			;
+		}
+
+		return $enabled;
 	}
 
 	public static function isEnableBySettings(): bool
 	{
-		if (Loader::includeModule('ai'))
+		static $enabled;
+		if ($enabled === null)
 		{
-			$settingItem = (new Manager)->getItem(self::CALL_COPILOT_ENABLE);
-			if (isset($settingItem) && $settingItem->getValue() === true)
+			$enabled = false;
+			if (Loader::includeModule('ai'))
 			{
-				return true;
+				$settingItem = (new Manager)->getItem(self::CALL_COPILOT_ENABLE);
+				if (isset($settingItem) && $settingItem->getValue() === true)
+				{
+					$enabled = true;
+				}
 			}
 		}
 
-		return false;
+		return $enabled;
 	}
 
 	/**
@@ -101,36 +113,175 @@ class CallAISettings
 
 	public static function isTariffAvailable(): bool
 	{
-		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		static $enabled;
+		if ($enabled === null)
 		{
-			// box
-			return Loader::includeModule('ai');
+			$enabled = false;
+			if (!ModuleManager::isModuleInstalled('bitrix24'))
+			{
+				// box
+				$enabled = Loader::includeModule('ai');
+			}
+
+			// b24
+			elseif (Loader::includeModule('bitrix24'))
+			{
+				$enabled = Feature::isFeatureEnabled(self::CALL_COPILOT_FEATURE_NAME);
+				if ($enabled && self::checkMarketSubscription())
+				{
+					$enabled = false;
+					if (self::isPaidTariff())
+					{
+						if (self::isMarketSubscriptionEnabled())
+						{
+							$enabled = true;
+						}
+						else
+						{
+							$enabled = CallAIBaasService::checkQueryLimit();
+						}
+					}
+				}
+			}
 		}
 
-		// b24
-		if (Loader::includeModule('bitrix24'))
-		{
-			return Feature::isFeatureEnabled(self::CALL_COPILOT_FEATURE_NAME);
-		}
-
-		return false;
+		return $enabled;
 	}
 
+	//region Autostart recoding
+
+	/**
+	 * Enable checking market subscription for autostart recoding feature only for ru region.
+	 * @todo Remove option check in future
+	 * @return bool
+	 */
+	public static function checkMarketSubscription(): bool
+	{
+		static $enabled;
+		if ($enabled === null)
+		{
+			$enabled =
+				Application::getInstance()->getLicense()->getRegion() === 'ru'
+				&& (bool)Option::get('call', 'market_subscription', false)
+			;
+		}
+
+		return $enabled;
+	}
+
+	/**
+	 * Checks market subscription.
+	 * @return bool
+	 */
+	public static function isMarketSubscriptionEnabled(): bool
+	{
+		static $enabled;
+		if ($enabled === null)
+		{
+			$enabled =
+				Loader::includeModule('bitrix24')
+				&& (Market::isPaidVersion() || Market::isTrialVersion()); // market
+		}
+
+		return $enabled;
+	}
+
+	/**
+	 * Checks paid tariff.
+	 * @return bool
+	 */
+	private static function isPaidTariff(): bool
+	{
+		static $value;
+		if ($value === null)
+		{
+			$value = false;
+			if (Loader::includeModule('bitrix24'))
+			{
+				$value =
+					\CBitrix24::IsLicensePaid()
+					|| \CBitrix24::IsNfrLicense()
+					|| \CBitrix24::IsDemoLicense()
+				;
+			}
+		}
+		return $value;
+	}
+
+	/**
+	 * Checks paid tariff.
+	 * @return bool
+	 */
+	private static function isFreeTariff(): bool
+	{
+		static $value;
+		if ($value === null)
+		{
+			$value = false;
+			if (Loader::includeModule('bitrix24'))
+			{
+				$value = \CBitrix24::isFreeLicense();
+			}
+		}
+		return $value;
+	}
+
+	/**
+	 * Method allows to autostart recoding.
+	 * @return bool
+	 */
 	public static function isAutoStartRecordingEnable(): bool
 	{
-		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		static $enabled;
+		if ($enabled === null)
 		{
-			// box
-			return (self::getRecordMinUsers() > 0);
+			if (!ModuleManager::isModuleInstalled('bitrix24'))
+			{
+				// box
+				$enabled = (self::getRecordMinUsers() > 0);
+			}
+			else
+			{
+				// b24
+				$enabled = self::isCopilotAutostartFeatureEnable();
+			}
 		}
 
-		// b24
-		if (Loader::includeModule('bitrix24'))
+		return $enabled;
+	}
+
+	/**
+	 * Returns slider code for market subscription promotion.
+	 * @return string
+	 */
+	public static function getMarketSliderCode(): string
+	{
+		return self::CALL_COPILOT_MARKET_SLIDER_CODE;
+	}
+
+	/**
+	 * Checks autostart recoding feature.
+	 * @return bool
+	 */
+	public static function isCopilotAutostartFeatureEnable(): bool
+	{
+		static $enabled;
+		if ($enabled === null)
 		{
-			return Feature::isFeatureEnabled(self::CALL_COPILOT_AUTOSTART_FEATURE_NAME);
+			$enabled = false;
+
+			// b24
+			if (Loader::includeModule('bitrix24'))
+			{
+				$enabled = Feature::isFeatureEnabled(self::CALL_COPILOT_AUTOSTART_FEATURE_NAME);
+				if ($enabled && self::checkMarketSubscription())
+				{
+					$enabled = self::isMarketSubscriptionEnabled(); // market
+				}
+			}
 		}
 
-		return false;
+		return $enabled;
 	}
 
 	/**
@@ -139,9 +290,25 @@ class CallAISettings
 	 */
 	public static function getRecordMinUsers(): int
 	{
-		if (\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		if (ModuleManager::isModuleInstalled('bitrix24'))
 		{
-			$defaultValue = self::CALL_RECORD_MIN_USERS['B24'];
+			if (self::checkMarketSubscription())
+			{
+				$region = Application::getInstance()->getLicense()->getRegion() ?? '';
+				$defaultValue = match ($region)
+				{
+					'ru' => self::CALL_RECORD_MIN_USERS['B24']['ru'],
+					default => self::CALL_RECORD_MIN_USERS['B24']['def'],
+				};
+				if (self::isMarketSubscriptionEnabled() || self::isPaidTariff())//todo Temporally ignoring option from db. Remove it in a while.
+				{
+					return $defaultValue;
+				}
+			}
+			else
+			{
+				$defaultValue = self::CALL_RECORD_MIN_USERS['B24']['def'];
+			}
 		}
 		else
 		{
@@ -149,56 +316,6 @@ class CallAISettings
 		}
 
 		return (int)Option::get('call', 'call_record_min_users', $defaultValue);
-	}
-
-	public static function isBaasServiceAvailable(): bool
-	{
-		if (
-			Loader::includeModule('ai')
-			&& Loader::includeModule('baas')
-		)
-		{
-			if (!self::$baasService)
-			{
-				self::$baasService = new BaasTokenService();
-			}
-
-			return self::$baasService->isAvailable();
-		}
-
-		return false;
-	}
-
-	/**
-	 * Check if baas service has active packages.
-	 * @return bool
-	 */
-	public static function isBaasServiceHasPackage(): bool
-	{
-		return true;//todo: Review Baas
-
-		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			return true;//todo: Review Baas in a box
-		}
-
-		if (
-			Loader::includeModule('ai')
-			&& Loader::includeModule('baas')
-		)
-		{
-			if (!self::$baasService)
-			{
-				self::$baasService = new BaasTokenService();
-			}
-
-			return
-				self::$baasService->hasPackage()
-				&& self::$baasService->canConsume()//self::AI_TASK_WEIGHT
-			;
-		}
-
-		return false;
 	}
 
 	/**
@@ -215,11 +332,6 @@ class CallAISettings
 		return Option::get('call', 'call_ai_feedback_link', '');
 	}
 
-	public static function getBaasSliderCode(): string
-	{
-		return Option::get('call', 'call_ai_baas_code', self::CALL_COPILOT_BAAS_SLIDER_CODE);
-	}
-
 	public static function getHelpSliderCode(): string
 	{
 		return Option::get('call', 'call_ai_help_code', self::CALL_COPILOT_HELP_SLIDER_CODE);
@@ -233,21 +345,15 @@ class CallAISettings
 		return $url->getLocator();
 	}
 
-
 	public static function getAgreementUrl(): string
 	{
 		return '/online/?AI_UX_TRIGGER=box_agreement';
 	}
 
-	public static function getBaasUrl(): string
-	{
-		return '/online/?FEATURE_PROMOTER='.self::CALL_COPILOT_BAAS_SLIDER_CODE;
-	}
-
 	public static function getDisclaimerArticleCode(): string
 	{
 		$isCis =
-			\Bitrix\Main\Application::getInstance()->getLicense()->isCis()
+			Application::getInstance()->getLicense()->isCis()
 			|| Loc::getCurrentLang() === 'ru'
 		;
 
@@ -354,7 +460,7 @@ class CallAISettings
 		{
 			return true;
 		}
-		if (\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		if (ModuleManager::isModuleInstalled('bitrix24'))
 		{
 			return true;
 		}
@@ -362,7 +468,7 @@ class CallAISettings
 		return false;
 	}
 
-	public static function isAIAvailableInCall(): ?CallAIError
+	public static function checkAIAvailabilityInCall(): Result
 	{
 		$error = null;
 		if (!Settings::isAIServiceEnabled())
@@ -385,14 +491,57 @@ class CallAISettings
 		{
 			$error = new CallAIError(CallAIError::AI_AGREEMENT_ERROR, 'AI service agreement must be accepted');
 		}
-		elseif (!self::isAutoStartRecordingEnable())
+		elseif (self::checkMarketSubscription())
 		{
-			if (!self::isBaasServiceHasPackage())
+			if (self::isFreeTariff())
 			{
-				$error = new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR, 'It is not enough baas packages');
+				//$error = new CallAIError(CallAIError::AI_MARKET_SUBSCRIPTION, 'AI service is unavailable on current subscription plan');
+				$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'AI service is unavailable on current subscription plan');
+			}
+			elseif (self::isPaidTariff() && !self::isMarketSubscriptionEnabled() && !CallAIBaasService::checkQueryLimit())
+			{
+				//$error = new CallAIError(CallAIError::AI_MARKET_SUBSCRIPTION, 'AI service is unavailable on current subscription plan');
+				$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'AI service is unavailable on current subscription plan');
 			}
 		}
 
-		return $error;
+		$result = new Result();
+		if ($error !== null)
+		{
+			$result->addError($error);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function baasAvailable(): bool
+	{
+		if (!self::checkMarketSubscription())
+		{
+			return true;
+		}
+		if (self::isMarketSubscriptionEnabled())
+		{
+			return true;
+		}
+		static $enabled;
+		if ($enabled === null)
+		{
+			$enabled = CallAIBaasService::checkQueryLimit();
+		}
+		return $enabled;
+	}
+
+	/**
+	 * todo Remove  method check in future
+	 * @deprecated
+	 * @return bool
+	 */
+	public static function isBaasServiceHasPackage(): bool
+	{
+		return self::baasAvailable();
 	}
 }

@@ -25,7 +25,6 @@ use Bitrix\Sign\Item\Api\Property\Request\Signing\Configure\Owner;
 use Bitrix\Sign\Item\B2e\RequiredField;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Repository\RequiredFieldRepository;
-use Bitrix\Sign\Result\Result;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\BlockCode;
@@ -177,12 +176,15 @@ class ConfigureDocument implements Contract\Operation
 				);
 			}
 
+			$userId = (int)$this->memberService->getUserIdForMember($member, $document);
+
 			$requestMember = new Member(
 				party: $member->party,
 				channel: new Member\Channel(
 					type: $channelType, value: $memberChannelValue,
 				),
 				uid: $member->uid,
+				userId: $userId,
 				name: $this->getMemberNameToSend($member),
 				role: $member->role ?? Role::createByParty($member->party),
 			);
@@ -320,7 +322,11 @@ class ConfigureDocument implements Contract\Operation
 			return (new Main\Result())->addErrors($result->getErrors());
 		}
 
-		$document->status = DocumentStatus::READY;
+		$changeStatusResult = (new ChangeDocumentStatus($document, Type\DocumentStatus::READY))->launch();
+		if (!$changeStatusResult->isSuccess())
+		{
+			return $changeStatusResult;
+		}
 		//also saving $document->configuredDateFormat
 		Service\Container::instance()->getDocumentRepository()->update($document);
 		$this->sendStatusChangedEvent($document);

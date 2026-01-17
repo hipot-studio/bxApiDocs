@@ -29,6 +29,7 @@ class FileMapper
 			height: $file['HEIGHT'] ? (int)$file['HEIGHT'] : null,
 			subDir: $file['SUBDIR'] ?? null,
 			contentType: $file['CONTENT_TYPE'] ?? null,
+			file: $file,
 		);
 	}
 }

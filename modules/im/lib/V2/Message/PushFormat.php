@@ -101,9 +101,9 @@ class PushFormat
 
 		if ($this->message->getChat() instanceof PrivateChat)
 		{
-			$toUser = $this->message->getChat()->getCompanion($contextUserId);
+			$users = (array)$this->message->getChat()->getRelations()->getUsers();
 
-			return $this->getUsersLegacyFormat([$contextUser, $toUser]);
+			return $this->getUsersLegacyFormat([$contextUser, ...$users]);
 		}
 
 		return $this->getUsersLegacyFormat([$contextUser]);
@@ -179,9 +179,9 @@ class PushFormat
 		}
 
 		$replyIds = [];
-		if ($message->getParams()->isSet(Message\Params::REPLY_ID))
+		if ($message->hasReply())
 		{
-			$replyIds[] = (int)$message->getParams()->get(Message\Params::REPLY_ID)->getValue();
+			$replyIds[] = $message->getReplyId();
 		}
 		$messages = new MessageCollection($replyIds);
 		$messages->fillAllForRest();

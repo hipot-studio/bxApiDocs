@@ -158,7 +158,7 @@ class TasksReportEffectiveInprogressComponent extends TasksReportEffectiveDetail
 		$nav->allowAllRecords(true)->setPageSize($this->getPageSize())->initFromUri();
 		$nav->setRecordCount($count);
 
-		$sql .= "LIMIT {$nav->getOffset()},{$nav->getLimit()}";
+		$sql .= "LIMIT {$nav->getLimit()} OFFSET {$nav->getOffset()}";
 		$select = [
 			'T.ID',
 			'T.TITLE',

@@ -3,7 +3,7 @@
 namespace Bitrix\Tasks\Replication\Template\Repetition;
 
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Replication\CheckerInterface;
 use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
 use Bitrix\Tasks\Replication\RepositoryInterface;

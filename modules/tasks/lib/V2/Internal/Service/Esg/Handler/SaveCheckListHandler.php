@@ -48,7 +48,7 @@ class SaveCheckListHandler
 
 			foreach ($groupedOperations as $checklistName => $operationGroup)
 			{
-				$this->processOperationGroup($operationGroup, $checklistName, $command);
+				$this->processOperationGroup($operationGroup, (string)$checklistName, $command);
 			}
 			
 		}
@@ -171,6 +171,21 @@ class SaveCheckListHandler
 			if ($operation->getItemName() !== null)
 			{
 				$args['itemName'] = $operation->getItemName();
+			}
+
+			if ($operation->getItemId() !== null)
+			{
+				$args['itemId'] = $operation->getItemId();
+			}
+
+			if ($operation->getItemIds() !== null)
+			{
+				$args['itemIds'] = $operation->getItemIds();
+			}
+
+			if (!empty($operation->getAdditionalData()))
+			{
+				$args['additionalData'] = $operation->getAdditionalData();
 			}
 			
 			// Send notification

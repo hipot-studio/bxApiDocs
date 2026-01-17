@@ -11,10 +11,11 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
-class CAllAgent
+class CAgent
 {
 	protected const LOCK_TIME = 600;
-	
+
+		
 	/**
 	 * <p>Метод регистрирует новую функцию-агент. Статический метод.</p><p> </p>
 	 * <p>
@@ -604,4 +605,3 @@ class CAllAgent
 		return null;
 	}
 }
-

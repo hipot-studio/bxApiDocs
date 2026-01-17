@@ -2,13 +2,18 @@
 
 namespace Bitrix\BIConnector\Superset;
 
+use Bitrix\BIConnector\Access\Role\RoleTable;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\Marketplace\Transport;
@@ -25,6 +30,8 @@ final class SystemDashboardManager
 	public const SYSTEM_DASHBOARD_APP_ID_SALES_STRUCT = 'sales_struct';
 	/** @deprecated Will be removed in future updates. */
 	public const SYSTEM_DASHBOARD_APP_ID_TELEPHONY = 'telephony';
+
+	private const SYSTEM_DASHBOARDS_MARKET_LIST_CACHE_KEY = 'biconnector_superset_dashboard_list_market_json_endpoint';
 
 	public const SYSTEM_VENDOR_MAIN = 'bitrix';
 
@@ -120,18 +127,35 @@ final class SystemDashboardManager
 
 	public static function getSystemApps(): array
 	{
-		//TODO remove this and uncomment when all dashboards will be at alaio and new endpoint is ready
-		$apps = self::getHardcodeApps();
-//		$apps = Transport::instance()->getDictionary(
-//			Transport::DICTIONARY_BI_BUILDER_SYSTEM_DASHBOARDS,
-//		);
+		if (
+			!Loader::includeModule('rest')
+			|| !class_exists('Bitrix\Rest\Marketplace\Transport')
+		)
+		{
+			return [];
+		}
+
+		$managedCache = Application::getInstance()->getManagedCache();
+		$cacheId = self::SYSTEM_DASHBOARDS_MARKET_LIST_CACHE_KEY;
+
+		if ($managedCache->read(86400, $cacheId))
+		{
+			return $managedCache->get($cacheId);
+		}
+
+		$apps = Transport::instance()->getDictionary(
+			Transport::DICTIONARY_BI_BUILDER_SYSTEM_DASHBOARDS,
+		);
 
 		if (!is_array($apps))
 		{
 			return [];
 		}
 
-		return self::filterSystemApps($apps);
+		$result = self::filterSystemApps($apps);
+		$managedCache->set($cacheId, $result);
+
+		return $result;
 	}
 
 	private static function filterSystemApps(array $marketApps): array
@@ -158,8 +182,19 @@ final class SystemDashboardManager
 	public static function actualizeSystemDashboards(): void
 	{
 		// Existing groups are required for correct saving dashboards.
-		if (!SupersetDashboardGroupTable::getRow([]))
+		if (
+			!Feature::isCheckPermissionsByGroup()
+			|| !RoleTable::getRow([])
+			|| !SupersetDashboardGroupTable::getRow([])
+		)
 		{
+			MarketDashboardLogger::logInfo('actualizeSystemDashboards: no groups, break', [
+				'group_option_status' => Feature::isCheckPermissionsByGroup() ? 'Y' : 'N',
+				'count_system_groups' => SupersetDashboardGroupTable::getCount([
+					'=TYPE' => SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM,
+				]),
+			]);
+
 			return;
 		}
 
@@ -195,7 +230,7 @@ final class SystemDashboardManager
 			$dashboard = SupersetDashboardTable::createObject();
 			$dashboard
 				->setAppId($notFoundApp['code'])
-				->setTitle($notFoundApp['name'])
+				->setTitle(self::getDashboardNameFromMarket($notFoundApp['name']))
 				->setType(SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)
 				->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 				->save()
@@ -219,10 +254,17 @@ final class SystemDashboardManager
 				if ($appData)
 				{
 					$dashboardRow->setAppId($appData['code']);
-					if ($appData['name'] !== $dashboardRow->getTitle())
+					$name = self::getDashboardNameFromMarket($appData['name']);
+					if ($name !== $dashboardRow->getTitle())
 					{
-						$dashboardRow->setTitle($appData['name']);
+						$dashboardRow->setTitle($name);
 					}
+					$scopes = $appData['scope'] ?? [];
+					$groupCode = $appData['groupCode'] ?? MarketDashboardManager::getDefaultDashboardGroupScope();
+					MarketDashboardManager::getInstance()->applyDashboardSettings($dashboardRow, [
+						'scope' => $scopes,
+						'groupCode' => $groupCode,
+					]);
 
 					$dashboardRow->save();
 				}
@@ -331,524 +373,23 @@ final class SystemDashboardManager
 		return Option::get('biconnector', 'allow_delete_system_dashboard', 'N') === 'Y';
 	}
 
-	// region toRemove
-	private static function getHardcodeApps(): array
+	private static function getDashboardNameFromMarket(array $name): string
 	{
-		$licence = new \Bitrix\Main\License();
-		$isNeedBitrixVendor = $licence->isCis();
-		$region = $licence->getRegion();
+		static $portalRegion = null;
+		static $portalRegionIsCis = null;
 
-		return $isNeedBitrixVendor
-			? self::getHardcodeBitrixVendor($region)
-			: self::getHardcodeAlaioVendor($region)
-		;
+		if (is_null($portalRegion) && is_null($portalRegionIsCis))
+		{
+			$licence = Application::getInstance()->getLicense();
+			$portalRegion = $licence->getRegion();
+			$portalRegionIsCis = $licence->isCis();
+		}
+
+		if (isset($name[$portalRegion]))
+		{
+			return $name[$portalRegion];
+		}
+
+		return $portalRegionIsCis ? $name['ru'] : $name['en'];
 	}
-
-	private static function getHardcodeBitrixVendor(string $region): array
-	{
-		return [
-			"bitrix.bic_deals_ru" => [
-				"code" => "bitrix.bic_deals_ru",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_DEALS_TITLE", language: $region) ?? "Аналитика сделок",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_sum_eff" => [
-				"code" => "bitrix.bic_sum_eff",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SUM_EFF_EMP_NO_CRM", language: $region) ?? "Суммарная эффективность сотрудника без CRM",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-			"bitrix.bic_seasonsales" => [
-				"code" => "bitrix.bic_seasonsales",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SEASONSALES_TRENDS", language: $region) ?? "Сезонные тренды продаж",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_emp_season" => [
-				"code" => "bitrix.bic_emp_season",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_EMP_SEASON_PATTERNS", language: $region) ?? "Сезонность в эффективности сотрудников",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_throughput_flow" => [
-				"code" => "bitrix.bic_throughput_flow",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_THROUGHPUT_FLOW_CAPACITY", language: $region) ?? "Пропускная способность потока",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-					"tasks_flows_flow",
-				],
-			],
-			"bitrix.bic_flow_param" => [
-				"code" => "bitrix.bic_flow_param",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_FLOW_EFFICIENCY_DASHBOARD_PARAM", language: $region) ?? "Потоки: анализ загрузки и эффективности конкретного потока",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-					"tasks_flows_flow",
-				],
-			],
-			"bitrix.bic_sourceperf" => [
-				"code" => "bitrix.bic_sourceperf",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SOURCEPERF_EFFICIENCY", language: $region) ?? "Эффективность рекламных источников",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_flow" => [
-				"code" => "bitrix.bic_flow",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_FLOW_EFFICIENCY_DASHBOARD", language: $region) ?? "Потоки: анализ загрузки и эффективности",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_combination" => [
-				"code" => "bitrix.bic_combination",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_COMBINATION_ANALYTICS", language: $region) ?? "Аналитика товарных пар",
-				"groupCode" => "shop",
-				"scope" => [
-					"crm",
-					"shop",
-				],
-			],
-			"bitrix.bic_bizproc_param" => [
-				"code" => "bitrix.bic_bizproc_param",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_BIZPROC_PARAM_PROC_DYNAMIC", language: $region) ?? "Динамика выполнения бизнес-процесса",
-				"groupCode" => "bizproc",
-				"scope" => [
-					"bizproc",
-					"workflow_template",
-				],
-			],
-			"bitrix.bic_taskeff_param" => [
-				"code" => "bitrix.bic_taskeff_param",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKEFF_MGMT_LOAD_EFF2", language: $region) ?? "Моя нагрузка и эффективность",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-			"bitrix.bic_perkpi" => [
-				"code" => "bitrix.bic_perkpi",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_PERKPI_MY_PERF_METRICS", language: $region) ?? "Мои персональные показатели",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-			"bitrix.bic_taskeff" => [
-				"code" => "bitrix.bic_taskeff",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKEFF_MGMT_LOAD_EFF", language: $region) ?? "Управление нагрузкой и эффективностью",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_actual_time" => [
-				"code" => "bitrix.bic_actual_time",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_ACTUAL_EXECUTION_TIME_TASKS", language: $region) ?? "Задачи: фактическое время выполнения",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_taskdeadline" => [
-				"code" => "bitrix.bic_taskdeadline",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKDEADLINE_SPEED", language: $region) ?? "Задачи: скорость завершения",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_taskload" => [
-				"code" => "bitrix.bic_taskload",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKLOAD_TASKS_LOAD", language: $region) ?? "Задачи: загрузка исполнителей и отделов",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_bizproceff" => [
-				"code" => "bitrix.bic_bizproceff",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_BIZPROCEFF_ORG_PROC_EFF", language: $region) ?? "Эффективность организационных процессов",
-				"groupCode" => "bizproc",
-				"scope" => [
-					"bizproc",
-				],
-			],
-			"bitrix.bic_smartproc" => [
-				"code" => "bitrix.bic_smartproc",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SMARTPROC_TITLE", language: $region) ?? "Аналитика смарт-процессов",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_compsales" => [
-				"code" => "bitrix.bic_compsales",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_COMPSALES_COMP_ANALYTICS", language: $region) ?? "Сравнительная аналитика продаж товаров",
-				"groupCode" => "shop",
-				"scope" => [
-					"crm",
-					"shop",
-				],
-			],
-			"bitrix.bic_catdeal" => [
-				"code" => "bitrix.bic_catdeal",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_CATDEAL_TITLE", language: $region) ?? "Товарная аналитика сделок",
-				"groupCode" => "shop",
-				"scope" => [
-					"crm",
-					"shop",
-				],
-			],
-			"bitrix.bic_bizproc" => [
-				"code" => "bitrix.bic_bizproc",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_BIZPROC_ANALYTICS", language: $region) ?? "Аналитика бизнес-процессов",
-				"groupCode" => "bizproc",
-				"scope" => [
-					"bizproc",
-				],
-			],
-			"bitrix.bic_cohort" => [
-				"code" => "bitrix.bic_cohort",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_COHORT_TITLE", language: $region) ?? "Когортный анализ клиентов",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_abcsku" => [
-				"code" => "bitrix.bic_abcsku",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_ABCSKU_ABC_ANALYSIS", language: $region) ?? "ABC-анализ товаров",
-				"groupCode" => "shop",
-				"scope" => [
-					"shop",
-					"crm",
-				],
-			],
-			"bitrix.bic_telephony" => [
-				"code" => "bitrix.bic_telephony",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TELEPHONY_CALL_ANALYTICS", language: $region) ?? "Аналитика звонков",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_retention" => [
-				"code" => "bitrix.bic_retention",
-				"name" => Loc::getMessage("BX_DASHBOARD_RETENTION_TITLE", language: $region) ?? "Удержание и отток клиентов",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_abcanalysis" => [
-				"code" => "bitrix.bic_abcanalysis",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_ABCANALYSIS_TITLE", language: $region) ?? "ABC-анализ клиентов",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_general_stat" => [
-				"code" => "bitrix.bic_general_stat",
-				"name" => Loc::getMessage("BX_DASHBOARD_GENERAL_STAT_TITLE", language: $region) ?? "Основные показатели бизнеса",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_lead_generation" => [
-				"code" => "bitrix.bic_lead_generation",
-				"name" => Loc::getMessage("BX_DASHBOARD_LEAD_GENERATION_TITLE", language: $region) ?? "Аналитика лидогенерации",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_deals_complex" => [
-				"code" => "bitrix.bic_deals_complex",
-				"name" => Loc::getMessage("BX_DASHBOARD_DEALS_COMPLEX_TITLE", language: $region) ?? "Комплексная аналитика сделок",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_sum_eff_crm" => [
-				"code" => "bitrix.bic_sum_eff_crm",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SUM_EFF_CRM_EMP_EFF_CRM", language: $region) ?? "Суммарная эффективность сотрудника в CRM",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-		];
-	}
-
-	private static function getHardcodeAlaioVendor(string $region): array
-	{
-		return [
-			"alaio.bic_sum_eff" => [
-				"code" => "alaio.bic_sum_eff",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SUM_EFF_EMP_NO_CRM", language: $region) ?? "Employee performance outside CRM",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-			"alaio.bic_seasonsales" => [
-				"code" => "alaio.bic_seasonsales",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SEASONSALES_TRENDS", language: $region) ?? "Sales trend",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"alaio.bic_emp_season" => [
-				"code" => "alaio.bic_emp_season",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_EMP_SEASON_PATTERNS", language: $region) ?? "Employee performance",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"alaio.bic_throughput_flow" => [
-				"code" => "alaio.bic_throughput_flow",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_THROUGHPUT_FLOW_CAPACITY", language: $region) ?? "Flow performance",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-					"tasks_flows_flow",
-				],
-			],
-			"alaio.bic_flow_param" => [
-				"code" => "alaio.bic_flow_param",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_FLOW_EFFICIENCY_DASHBOARD_PARAM", language: $region) ?? "Flow workload and efficiency",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-					"tasks_flows_flow",
-				],
-			],
-			"alaio.bic_sourceperf" => [
-				"code" => "alaio.bic_sourceperf",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SOURCEPERF_EFFICIENCY", language: $region) ?? "Ad source efficiency and ROAS",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"alaio.bic_flow" => [
-				"code" => "alaio.bic_flow",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_FLOW_EFFICIENCY_DASHBOARD", language: $region) ?? "Flow tasks and efficiency",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"alaio.bic_combination" => [
-				"code" => "alaio.bic_combination",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_COMBINATION_ANALYTICS", language: $region) ?? "Product pairs",
-				"groupCode" => "shop",
-				"scope" => [
-					"crm",
-					"shop",
-				],
-			],
-			"alaio.bic_bizproc_param" => [
-				"code" => "alaio.bic_bizproc_param",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_BIZPROC_PARAM_PROC_DYNAMIC", language: $region) ?? "Workflow statistics",
-				"groupCode" => "bizproc",
-				"scope" => [
-					"bizproc",
-					"workflow_template",
-				],
-			],
-			"alaio.bic_taskeff_param" => [
-				"code" => "alaio.bic_taskeff_param",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKEFF_MGMT_LOAD_EFF2", language: $region) ?? "My workload and efficiency",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-			"alaio.bic_perkpi" => [
-				"code" => "alaio.bic_perkpi",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_PERKPI_MY_PERF_METRICS", language: $region) ?? "My performance",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-			"alaio.bic_taskeff" => [
-				"code" => "alaio.bic_taskeff",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKEFF_MGMT_LOAD_EFF", language: $region) ?? "Workload and efficiency",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_actual_time" => [
-				"code" => "bitrix.bic_actual_time",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_ACTUAL_EXECUTION_TIME_TASKS", language: $region) ?? "Tasks: actual completion time",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_taskdeadline" => [
-				"code" => "bitrix.bic_taskdeadline",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKDEADLINE_SPEED", language: $region) ?? "Tasks: completion time",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_taskload" => [
-				"code" => "bitrix.bic_taskload",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TASKLOAD_TASKS_LOAD", language: $region) ?? "Tasks: assignee and department involvement",
-				"groupCode" => "tasks",
-				"scope" => [
-					"tasks",
-				],
-			],
-			"bitrix.bic_bizproceff" => [
-				"code" => "bitrix.bic_bizproceff",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_BIZPROCEFF_ORG_PROC_EFF", language: $region) ?? "Workflow performance",
-				"groupCode" => "bizproc",
-				"scope" => [
-					"bizproc",
-				],
-			],
-			"bitrix.bic_smartproc" => [
-				"code" => "bitrix.bic_smartproc",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SMARTPROC_TITLE", language: $region) ?? "SPA Summary",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_compsales" => [
-				"code" => "bitrix.bic_compsales",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_COMPSALES_COMP_ANALYTICS", language: $region) ?? "Comparative sales analysis",
-				"groupCode" => "shop",
-				"scope" => [
-					"crm",
-					"shop",
-				],
-			],
-			"bitrix.bic_catdeal" => [
-				"code" => "bitrix.bic_catdeal",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_CATDEAL_TITLE", language: $region) ?? "Deals and products",
-				"groupCode" => "shop",
-				"scope" => [
-					"crm",
-					"shop",
-				],
-			],
-			"bitrix.bic_bizproc" => [
-				"code" => "bitrix.bic_bizproc",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_BIZPROC_ANALYTICS", language: $region) ?? "Workflow analytics",
-				"groupCode" => "bizproc",
-				"scope" => [
-					"bizproc",
-				],
-			],
-			"bitrix.bic_cohort" => [
-				"code" => "bitrix.bic_cohort",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_COHORT_TITLE", language: $region) ?? "Cohort analysis",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_abcsku" => [
-				"code" => "bitrix.bic_abcsku",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_ABCSKU_ABC_ANALYSIS", language: $region) ?? "ABC Analysis (Products)",
-				"groupCode" => "shop",
-				"scope" => [
-					"shop",
-					"crm",
-				],
-			],
-			"bitrix.bic_telephony" => [
-				"code" => "bitrix.bic_telephony",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_TELEPHONY_CALL_ANALYTICS", language: $region) ?? "Call analytics",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_retention" => [
-				"code" => "bitrix.bic_retention",
-				"name" => Loc::getMessage("BX_DASHBOARD_RETENTION_TITLE", language: $region) ?? "Customer churn and retention",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_abcanalysis" => [
-				"code" => "bitrix.bic_abcanalysis",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_ABCANALYSIS_TITLE", language: $region) ?? "ABC Analysis",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_general_stat" => [
-				"code" => "bitrix.bic_general_stat",
-				"name" => Loc::getMessage("BX_DASHBOARD_GENERAL_STAT_TITLE", language: $region) ?? "Key performance indicators",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_lead_generation" => [
-				"code" => "bitrix.bic_lead_generation",
-				"name" => Loc::getMessage("BX_DASHBOARD_LEAD_GENERATION_TITLE", language: $region) ?? "Lead generation",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_deals_complex" => [
-				"code" => "bitrix.bic_deals_complex",
-				"name" => Loc::getMessage("BX_DASHBOARD_DEALS_COMPLEX_TITLE", language: $region) ?? "Deal analytics",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"bitrix.bic_deals_en" => [
-				"code" => "bitrix.bic_deals_en",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_DEALS_TITLE", language: $region) ?? "Deal analytics summary",
-				"groupCode" => "crm",
-				"scope" => [
-					"crm",
-				],
-			],
-			"alaio.bic_sum_eff_crm" => [
-				"code" => "alaio.bic_sum_eff_crm",
-				"name" => Loc::getMessage("BX_DASHBOARD_BIC_SUM_EFF_CRM_EMP_EFF_CRM", language: $region) ?? "Employee performance inside CRM",
-				"groupCode" => "profile",
-				"scope" => [
-					"profile",
-				],
-			],
-		];
-	}
-
-	// endregion
 }

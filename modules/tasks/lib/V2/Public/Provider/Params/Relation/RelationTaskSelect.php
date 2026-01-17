@@ -13,7 +13,7 @@ class RelationTaskSelect implements SelectInterface
 		'title',
 		'responsible',
 		'deadline',
-		'parentId',
+		'status',
 	];
 
 	public function __construct(

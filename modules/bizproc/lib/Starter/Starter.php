@@ -1,7 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter;
 
+use Bitrix\Bizproc\Public\Service\Document\InspectorService;
+use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\MetaDataDto;
@@ -20,7 +24,7 @@ final class Starter
 
 	public static function isEnabled(): bool
 	{
-		return Option::get('bizproc', 'enable_starter', 'N') === 'Y';
+		return Option::get('bizproc', 'enable_starter', 'Y') === 'Y';
 	}
 
 	public static function getByScenario(Scenario $scenario): Starter
@@ -68,11 +72,7 @@ final class Starter
 		}
 
 		$complexType = null;
-		if (
-			$dto->complexDocumentType
-			&& $documentId[0] === (string)$dto->complexDocumentType[0]
-			&& $documentId[1] === (string)$dto->complexDocumentType[1]
-		)
+		if ($dto->complexDocumentType && \CBPHelper::isEqualDocumentEntity($documentId, $dto->complexDocumentType))
 		{
 			$complexType = \CBPHelper::normalizeComplexDocumentId($dto->complexDocumentType);
 		}
@@ -188,50 +188,100 @@ final class Starter
 		return $this;
 	}
 
-	/** @var DocumentDto[] $documents */
-	public function addEvent(string $code, array $documents, array $parameters = []): self
+	/**
+	 * @param string $code
+	 * @param DocumentDto[] $documents
+	 * @param array $parameters
+	 * @param int $eventType
+	 * @param int $userId
+	 *
+	 * @return Starter
+	 */
+	public function addEvent(
+		string $code,
+		array $documents = [],
+		array $parameters = [],
+		int $eventType = \CBPDocumentEventType::Trigger,
+		int $userId = 0,
+	): self
 	{
-		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+		if (empty($documents))
+		{
+			$this->addProcessEvent($code, $parameters, $eventType, $userId);
+
+			return $this;
+		}
 
 		foreach ($documents as $document)
 		{
-			$documentType = $document->complexDocumentType;
-			if (
-				!$documentType
-				|| !(
-					$documentType[0] === $document->complexDocumentId[0]
-					&& $documentType[1] === $document->complexDocumentId[1]
-				)
-			)
-			{
-				try
-				{
-					$documentType = $document->complexDocumentType ?: $documentService->getDocumentType($document->complexDocumentId);
-				}
-				catch (\Exception $exception)
-				{
-					// document not found
-				}
-			}
+			$documentType =
+				(new InspectorService())
+					->getValidComplexType($document->complexDocumentId, $document->complexDocumentType)
+			;
 			if (!$documentType)
 			{
 				continue;
 			}
 
-			$trigger = $documentService->getTriggerByCode($code, $documentType);
+			$eventDocument = new Document($document->complexDocumentId, $documentType);
+			$this->addAutomationEvent($code, $parameters, $eventType, $userId, $eventDocument);
+			$this->addProcessEvent($code, $parameters, $eventType, $userId, $eventDocument);
+		}
+
+		return $this;
+	}
+
+	private function addAutomationEvent(
+		string $code,
+		array $parameters,
+		int $eventType,
+		int $userId,
+		Document $document
+	): void
+	{
+		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+
+		if ($this->automationStarter)
+		{
+			$trigger = $documentService->getTriggerByCode($code, $document->complexType);
 			if ($trigger)
 			{
 				$event =
 					(new Event($trigger, $parameters))
-						->setDocument(new Document($document->complexDocumentId, $documentType))
+						->setDocument($document)
 				;
-
-				$this->processStarter?->addEvent($event);
-				$this->automationStarter?->addEvent($event);
+				$event->setEventType($eventType);
+				$event->setUserId($userId);
+				$this->automationStarter->addEvent($event);
 			}
 		}
+	}
 
-		return $this;
+	private function addProcessEvent(
+		string $code,
+		array $parameters,
+		int $eventType,
+		int $userId,
+		?Document $document = null,
+	): void
+	{
+		if ($this->processStarter)
+		{
+			$searcher = new Searcher();
+			if ($searcher->isActivityExists($code))
+			{
+				$event = (new Event($code, $parameters));
+				if ($document)
+				{
+					$event->setDocument($document);
+				}
+
+				$event->setEventType($eventType);
+				$event->setUserId($userId);
+
+				$this->processStarter->addEvent($event);
+			}
+		}
 	}
 
 	public function start(): StartResult
@@ -243,8 +293,14 @@ final class Starter
 			return $result;
 		}
 
-		// todo: separate errors?
+		$this->startProcessStarter($result);
+		$this->startAutomationStarter($result);
 
+		return $result;
+	}
+
+	private function startProcessStarter(StartResult $result): void
+	{
 		if ($this->processStarter)
 		{
 			$processResult = $this->processStarter->run();
@@ -253,9 +309,12 @@ final class Starter
 				$result->addErrors($processResult->getErrors());
 			}
 			$result->addWorkflowIds($processResult->getWorkflowIds());
-			$result->setProcessTriggerApplied($result->isTriggerApplied());
+			$result->setProcessTriggerApplied($processResult->isTriggerApplied());
 		}
+	}
 
+	private function startAutomationStarter(StartResult $result): void
+	{
 		if ($this->automationStarter)
 		{
 			$automationResult = $this->automationStarter->run();
@@ -264,9 +323,7 @@ final class Starter
 				$result->addErrors($automationResult->getErrors());
 			}
 			$result->addWorkflowIds($automationResult->getWorkflowIds());
-			$result->setAutomationTriggerApplied($result->isTriggerApplied());
+			$result->setAutomationTriggerApplied($automationResult->isTriggerApplied());
 		}
-
-		return $result;
 	}
 }

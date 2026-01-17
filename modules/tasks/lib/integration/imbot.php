@@ -8,7 +8,7 @@
 
 namespace Bitrix\Tasks\Integration;
 
-abstract class IMBot extends \Bitrix\Tasks\Integration
+abstract class IMBot extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'imbot';
 }

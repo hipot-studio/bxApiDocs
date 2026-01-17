@@ -12,6 +12,7 @@ use Bitrix\Tasks\Internals\Task\ProjectLastActivityTable;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Async\Message;
 use CSocNetGroup;
+use Throwable;
 
 class AddLastActivity extends AbstractReceiver
 {
@@ -29,9 +30,23 @@ class AddLastActivity extends AbstractReceiver
 			return;
 		}
 
+		try
+		{
+			$activityDate = DateTime::createFromUserTime($message->fields['ACTIVITY_DATE']);
+		}
+		catch (Throwable $t)
+		{
+			$logger = Container::getInstance()->getLogger();
+
+			$logger->logWarning($message->fields, 'ADD_LAST_ACT');
+			$logger->logError($t);
+
+			return;
+		}
+
 		ProjectLastActivityTable::update(
 			$message->fields['GROUP_ID'],
-			['ACTIVITY_DATE' => DateTime::createFromUserTime($message->fields['ACTIVITY_DATE'])],
+			['ACTIVITY_DATE' => $activityDate],
 		);
 
 		if (Loader::includeModule('socialnetwork'))

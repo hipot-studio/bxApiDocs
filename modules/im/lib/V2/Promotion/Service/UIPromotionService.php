@@ -160,6 +160,12 @@ class UIPromotionService implements PromotionServiceInterface
 			"END_DATE" => (new DateTime('30.04.2026', 'd.m.Y'))->getTimestamp(),
 		];
 
+		$result[] = [
+			"ID" => 'call:cloud-record-info-popup:09092025:all',
+			"USER_TYPE" =>  UserType::ALL->value,
+			"DEVICE_TYPE" => DeviceType::ALL->value,
+		];
+
 		if (Locator::getMessenger()->getApplication()->isAirDesignEnabled())
 		{
 			$result[] = [
@@ -214,6 +220,16 @@ class UIPromotionService implements PromotionServiceInterface
 				"DEVICE_TYPE" => DeviceType::ALL->value,
 				"LIFETIME" => self::ENDLESS_LIFETIME,
 				"END_DATE" => (new DateTime('01.11.2025', 'd.m.Y'))->getTimestamp()
+			];
+		}
+
+		if (Features::get()->videoNoteAvailable)
+		{
+			$result[] = [
+				"ID" => 'immobile:video-note:24102025:mobile',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::MOBILE->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
 			];
 		}
 

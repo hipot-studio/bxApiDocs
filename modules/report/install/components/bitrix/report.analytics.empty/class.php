@@ -8,6 +8,11 @@ class ReportAnalyticsEmpty extends CBitrixComponent
 {
 	public function executeComponent()
 	{
+		if (\Bitrix\Report\VisualConstructor\Helper\Db::isPgSqlDb())
+		{
+			return;
+		}
+
 		$this->includeComponentTemplate();
 	}
 }

@@ -573,7 +573,7 @@ abstract class UserField // todo: extends Dictionary, to iterate over user field
 	{
 		if(array_key_exists('EDIT_FORM_LABEL', $fields))
 		{
-			$uf = \CAllUserTypeEntity::GetByID($id);
+			$uf = \CUserTypeEntity::GetByID($id);
 			if($uf)
 			{
 				$origLabel = is_array($uf['EDIT_FORM_LABEL']) ? $uf['EDIT_FORM_LABEL'] : array();

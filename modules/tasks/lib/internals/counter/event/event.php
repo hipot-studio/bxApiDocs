@@ -99,6 +99,7 @@ class Event
 			case EventDictionary::EVENT_PROJECT_USER_DELETE:
 			case EventDictionary::EVENT_AFTER_TASK_MUTE:
 			case EventDictionary::EVENT_GARBAGE_COLLECT:
+			case EventDictionary::EVENT_AFTER_USER_MENTIONED:
 				$userId = (int) $this->data['USER_ID'];
 				break;
 		}
@@ -120,6 +121,7 @@ class Event
 			case EventDictionary::EVENT_AFTER_COMMENT_DELETE:
 			case EventDictionary::EVENT_AFTER_TASK_MUTE:
 			case EventDictionary::EVENT_AFTER_TASK_UPDATE:
+			case EventDictionary::EVENT_AFTER_COMMENTS_READ:
 				$taskId = (int) $this->data['TASK_ID'];
 				break;
 

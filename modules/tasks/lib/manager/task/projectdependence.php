@@ -16,7 +16,7 @@ use \Bitrix\Main\Loader;
 
 use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use \Bitrix\Tasks\Util\Error\Collection;
-use \Bitrix\Tasks\TaskTable;
+use Bitrix\Tasks\Integration\Report\Internals\TaskTable;
 
 final class ProjectDependence extends \Bitrix\Tasks\Manager
 {

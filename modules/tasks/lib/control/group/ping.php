@@ -2,9 +2,10 @@
 
 namespace Bitrix\Tasks\Control\Group;
 
-use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Notification\Controller;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
 
 class Ping
 {
@@ -23,13 +24,8 @@ class Ping
 			}
 
 			$taskData = $task->toArray(true);
-			$commentPoster = CommentPoster::getInstance($id, $userId);
-			if (!$commentPoster)
-			{
-				continue;
-			}
 
-			$commentPoster->postCommentsOnTaskStatusPinged($taskData);
+			Container::getInstance()->get(PingActionInterface::class)->execute($id, $userId, $taskData);
 
 			$controller = new Controller();
 			$controller->onTaskPingSend($task, $userId);

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\BaseType;
 
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingType;
 use Bitrix\Main;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Localization\Loc;
@@ -498,4 +499,20 @@ HTML;
 		return parent::internalizeValue($fieldType, $context, $value);
 	}
 
+	public static function getAiSettingType(): SettingType
+	{
+		return new SettingType(
+			name: static::getType(),
+			description: 'The value is numeric reference to ID of file in Bitrix24 database',
+		);
+	}
+
+	public static function clearValueSingle(FieldType $fieldType, $value)
+	{
+		$file = \CFile::getByID($value)->fetch();
+		if ($file && $file['MODULE_ID'] === 'bizproc')
+		{
+			\CFile::Delete($file['ID']);
+		}
+	}
 }

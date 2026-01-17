@@ -11,11 +11,11 @@ use Bitrix\Booking\Internals\Exception\Yandex\InternalErrorException;
 use Bitrix\Booking\Internals\Exception\Yandex\ResourceNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\ServiceNotFoundException;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
-use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
+use Bitrix\Booking\Internals\Integration\Catalog\SkuProviderConfig;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Collection\AvailableDateCollection;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Item\AvailableDate;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\AvailableDateCollection;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Item\AvailableDate;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
@@ -64,7 +64,10 @@ class AvailableDatesProvider
 
 		if (!empty($serviceIds))
 		{
-			$skus = $this->serviceSkuProvider->get($serviceIds);
+			$skus = $this->serviceSkuProvider->get(
+				$serviceIds,
+				new SkuProviderConfig(onlyActiveAndAvailable: true),
+			);
 			if (count($skus) !== count($serviceIds))
 			{
 				throw new ServiceNotFoundException();
@@ -79,11 +82,13 @@ class AvailableDatesProvider
 
 		$timezone = $company->getTimezone();
 
+		$todayFrom = new DateTimeImmutable('today midnight', new DateTimeZone($timezone));
 		$from = DateTimeImmutable::createFromFormat(
 			'Y-m-d H:i:s',
 			$dateFrom . ' 00:00:00',
 			new DateTimeZone($timezone)
 		);
+		$from = max($todayFrom, $from);
 
 		$to = DateTimeImmutable::createFromFormat(
 			'Y-m-d H:i:s',
@@ -101,11 +106,8 @@ class AvailableDatesProvider
 	private function getResources(array $serviceIds, int|null $resourceId): ResourceCollection
 	{
 		$resourceFilter = [
-			'IS_MAIN' => true,
-			'LINKED_ENTITY' => [
-				'TYPE' => ResourceLinkedEntityType::Sku,
-				'ID' => $serviceIds,
-			],
+			'WITH_SKUS_YANDEX' => true,
+			'HAS_SKUS_YANDEX' => $serviceIds,
 		];
 
 		if ($resourceId !== null)
@@ -115,7 +117,7 @@ class AvailableDatesProvider
 
 		return $this->resourceRepository->getList(
 			filter: new ResourceFilter($resourceFilter),
-			select: new ResourceSelect(['SETTINGS']),
+			select: (new ResourceSelect(['SETTINGS']))->prepareSelect(),
 		);
 	}
 

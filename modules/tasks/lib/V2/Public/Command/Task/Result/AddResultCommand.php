@@ -19,6 +19,8 @@ class AddResultCommand extends AbstractCommand
 		public readonly Entity\Result $result,
 		#[PositiveNumber]
 		public readonly int $userId,
+		public readonly bool $useConsistency = false,
+		public readonly bool $skipNotification = false,
 	)
 	{
 	}
@@ -27,11 +29,10 @@ class AddResultCommand extends AbstractCommand
 	{
 		$response = new Result();
 
+		$handler = Container::getInstance()->get(AddResultHandler::class);
+
 		try
 		{
-			$resultService = Container::getInstance()->getResultService();
-			$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-			$handler = new AddResultHandler($resultService, $consistencyResolver);
 			$object = $handler($this);
 
 			return $response->setObject($object);
@@ -44,6 +45,12 @@ class AddResultCommand extends AbstractCommand
 
 	protected function validateInternal(): ValidationResult
 	{
+		$validationResult = parent::validateInternal();
+		if (!$validationResult->isSuccess())
+		{
+			return $validationResult;
+		}
+
 		$validationResult = new ValidationResult();
 		if ((int)$this->result->taskId <= 0)
 		{

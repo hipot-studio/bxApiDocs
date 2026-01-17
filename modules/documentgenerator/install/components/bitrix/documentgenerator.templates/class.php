@@ -186,6 +186,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 				if($uri)
 				{
 					$this->arResult['params']['settingsMenu'][] = [
+						'id' => 'documentgenerator_permissions',
 						'uri' => $uri->getLocator(),
 						'text' => Loc::getMessage('DOCGEN_TEMPLATE_LIST_PERMS'),
 					];
@@ -713,14 +714,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 	 */
 	protected function getPermsUri()
 	{
-		$componentPath = \CComponentEngine::makeComponentPath('bitrix:documentgenerator.settings.perms');
-		$componentPath = getLocalPath('components'.$componentPath.'/slider.php');
-		if($componentPath)
-		{
-			return new \Bitrix\Main\Web\Uri($componentPath);
-		}
-
-		return false;
+		return \Bitrix\DocumentGenerator\Driver::getPermissionsUri() ?? false;
 	}
 
 	/**

@@ -21,6 +21,7 @@ class StartTimerCommand extends AbstractCommand
 		public readonly bool $syncPlan = false,
 		public readonly bool $canStart = false,
 		public readonly bool $canRenew = false,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -30,10 +31,7 @@ class StartTimerCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$timeManagementService = Container::getInstance()->getTimeManagementService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new StartTimerHandler($timeManagementService, $consistencyResolver);
+		$handler = Container::getInstance()->get(StartTimerHandler::class);
 
 		try
 		{

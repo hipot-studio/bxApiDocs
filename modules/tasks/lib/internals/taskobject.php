@@ -173,7 +173,7 @@ class TaskObject extends EO_Task implements Arrayable
 			return false;
 		}
 
-		return (DateTime::createFrom($this->getDeadline()))->checkLT(new DateTime());
+		return $this->getDeadline()->getTimestamp() <= time();
 	}
 
 	public function isCrm(): bool

@@ -2,10 +2,14 @@
 
 namespace Bitrix\HumanResources\Compatibility\Event;
 
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
+use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Compatibility\Adapter\StructureBackwardAdapter;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Compatibility\Utils\OldStructureUtils;
-use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Item\Node;
@@ -264,23 +268,45 @@ class NewToOldEventHandler
 		{
 			\Bitrix\Main\Application::getInstance()->addBackgroundJob(function (NodeMember $member) {
 				NodeTable::cleanCache();
-				$nodes = Container::getNodeRepository()
-					->findAllByUserId($member->entityId);
 
-				$departments = [];
-
-				foreach ($nodes as $node)
-				{
-					$accessCode = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
-					if ($accessCode !== null)
-					{
-						$departments[] = $accessCode;
-					}
-				}
-
-				if ($member->node?->type !== NodeEntityType::DEPARTMENT)
+				$nodeType = $member->node?->type;
+				if ($nodeType && $nodeType !== NodeEntityType::DEPARTMENT)
 				{
 					return;
+				}
+
+				$nodeDataBuilder = new NodeMemberDataBuilder();
+				$nodeFilter = new NodeFilter(
+					entityTypeFilter: NodeTypeFilter::createForDepartment(),
+				);
+
+				$filter =
+					new NodeMemberFilter(
+						entityIdFilter: EntityIdFilter::fromEntityId($member->entityId),
+						nodeFilter: $nodeFilter,
+						findRelatedMembers: false,
+					)
+				;
+
+				$userDepartmentMembers = $nodeDataBuilder
+					->setFilter($filter)
+					->getAll()
+				;
+
+				$departments = [];
+				foreach ($userDepartmentMembers as $nodeMember)
+				{
+					$node = $nodeMember->node;
+					if ($node?->type !== NodeEntityType::DEPARTMENT)
+					{
+						continue;
+					}
+
+					$iblockId = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
+					if ($iblockId !== null)
+					{
+						$departments[] = $iblockId;
+					}
 				}
 
 				$user = new \CUser();

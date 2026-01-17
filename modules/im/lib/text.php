@@ -560,6 +560,11 @@ class Text
 
 	public static function filterUserBbCodes(string $text, int $currentUserId): string
 	{
+		if (\Bitrix\Im\V2\Entity\User\User::getInstance($currentUserId)->isBot())
+		{
+			return $text;
+		}
+
 		$pattern = "/\[USER=(\d+)(?: REPLACE)?](.*?)\[\/USER]/is";
 
 		do

@@ -10,7 +10,7 @@ use Bitrix\Crm\Service\UserPermissions;
 
 final class UserFieldsCollector implements ContextCollector
 {
-	private UserPermissions\EntityPermissions\Type $permissions;
+	private UserPermissions $permissions;
 	private ?Factory $factory;
 	private UserFieldsSettings $settings;
 	private UserFieldsReceiveStrategy $userFieldsReceiveStrategy;
@@ -18,10 +18,11 @@ final class UserFieldsCollector implements ContextCollector
 	public function __construct(
 		private readonly int $entityTypeId,
 		private readonly Context $context,
+		private readonly ?int $categoryId = null,
 	)
 	{
 		$this->factory = Container::getInstance()->getFactory($this->entityTypeId);
-		$this->permissions = Container::getInstance()->getUserPermissions($this->context->userId())->entityType();
+		$this->permissions = Container::getInstance()->getUserPermissions($this->context->userId());
 
 		$this->settings = new UserFieldsSettings();
 		$this->userFieldsReceiveStrategy = new UserFieldsReceiveStrategy\ViaFactory($this->factory);
@@ -43,7 +44,12 @@ final class UserFieldsCollector implements ContextCollector
 
 	public function collect(): array
 	{
-		if ($this->factory === null || !$this->permissions->canReadItems($this->entityTypeId))
+		if ($this->factory === null)
+		{
+			return [];
+		}
+
+		if (!$this->canReadUserFields())
 		{
 			return [];
 		}
@@ -65,5 +71,12 @@ final class UserFieldsCollector implements ContextCollector
 		}
 
 		return $result;
+	}
+
+	private function canReadUserFields(): bool
+	{
+		return
+			$this->permissions->isAdminForEntity($this->entityTypeId, $this->categoryId)
+			|| $this->permissions->entityType()->canReadItemsInCategory($this->entityTypeId, $this->categoryId ?? 0);
 	}
 }

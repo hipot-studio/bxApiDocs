@@ -7,8 +7,6 @@
  */
 namespace Bitrix\Vote;
 use \Bitrix\Main\Entity;
-use \Bitrix\Main\Localization\Loc;
-Loc::loadMessages(__FILE__);
 
 /**
  * Class VoteTable
@@ -65,33 +63,26 @@ class QuestionTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('V_TABLE_FIELD_ID'),
 			),
 			'ACTIVE' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'Y',
-				'title' => Loc::getMessage('V_TABLE_FIELD_ACTIVE')
 			),
 			'TIMESTAMP_X' => array(
 				'data_type' => 'datetime',
-				'title' => Loc::getMessage('V_TABLE_FIELD_TIMESTAMP_X'),
 			),
 			'VOTE_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_VOTE_ID'),
 			),
 			'C_SORT' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_C_SORT'),
 			),
 			'COUNTER' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_COUNTER'),
 			),
 			'QUESTION' => array(
 				'data_type' => 'text',
-				'title' => Loc::getMessage('V_TABLE_FIELD_QUESTION'),
 				'save_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getSaveModificator'),
 				'fetch_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getFetchModificator'),
 			),
@@ -99,11 +90,9 @@ class QuestionTable extends Entity\DataManager
 				'data_type' => 'enum',
 				'values' => array("text", "html"),
 				'default_value' => "text",
-				'title' => Loc::getMessage('V_TABLE_FIELD_QUESTION_TYPE'),
 			),
 			'IMAGE_ID' =>  array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_IMAGE_ID'),
 			),
 			'IMAGE' =>  array(
 				'data_type' => '\Bitrix\Main\FileTable',
@@ -111,31 +100,26 @@ class QuestionTable extends Entity\DataManager
 					'=this.IMAGE_ID' => 'ref.ID',
 				),
 				'join_type' => 'LEFT',
-				'title' => Loc::getMessage('V_TABLE_FIELD_IMAGE'),
 			),
 			'DIAGRAM' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'Y',
-				'title' => Loc::getMessage('V_TABLE_FIELD_DIAGRAM')
 			),
 			'DIAGRAM_TYPE' => array(
 				'data_type' => 'enum',
 				'values' => array("histogram", "circle"),
 				'default_value' => "histogram",
-				'title' => Loc::getMessage('V_TABLE_FIELD_DIAGRAM_TYPE'),
 			),
 			'REQUIRED' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'N',
-				'title' => Loc::getMessage('V_TABLE_FIELD_REQUIRED')
 			),
 			'FIELD_TYPE' => array(
 				'data_type' => 'enum',
 				'values' => \Bitrix\Vote\QuestionTypes::getValues(),
 				'default_value' => '0',
-				'title' => Loc::getMessage('V_TABLE_FIELD_FIELD_TYPE')
 			),
 			'VOTE' => array(
 				'data_type' => '\Bitrix\Vote\VoteTable',

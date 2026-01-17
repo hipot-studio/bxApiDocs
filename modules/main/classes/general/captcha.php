@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Security\Random;
+
 //Some marketplace modules define the same class
 if (!class_exists("CCaptcha")):
 
@@ -914,7 +916,7 @@ class CCaptcha
 	function Generate32RandomString()
 	{
 		$prefix = (defined("BX_CLUSTER_GROUP") ? BX_CLUSTER_GROUP : "0");
-		return mb_substr($prefix . md5(uniqid()), 0, 32);
+		return substr($prefix . Random::getString(32), 0, 32);
 	}
 
 	function InitCaptchaCode($sid)

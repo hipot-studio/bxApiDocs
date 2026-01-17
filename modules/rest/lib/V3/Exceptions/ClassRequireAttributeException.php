@@ -13,7 +13,7 @@ class ClassRequireAttributeException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_CLASS_REQUIRE_ATTRIBUTE_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_CLASSREQUIREATTIBUTEEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

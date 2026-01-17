@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use ArrayIterator;
+use BackedEnum;
 use Bitrix\Main\ArgumentException;
 use IteratorAggregate;
 use Traversable;
@@ -68,10 +69,17 @@ abstract class AbstractEntity implements EntityInterface, IteratorAggregate
 				continue;
 			}
 
+			if ($value instanceof BackedEnumCollectionInterface)
+			{
+				$value = $value->toArray();
+				$valueToCompare = $valueToCompare?->toArray();
+			}
+
 			if (is_array($value))
 			{
 				$diff = array_diff($value, $valueToCompare ?? []);
-				if (!empty($diff))
+				$reverseDiff = array_diff($valueToCompare ?? [], $value);
+				if (!empty($diff) || !empty($reverseDiff))
 				{
 					$result[$key] = $value;
 				}
@@ -79,7 +87,7 @@ abstract class AbstractEntity implements EntityInterface, IteratorAggregate
 				continue;
 			}
 
-			if ($value instanceof \BackedEnum)
+			if ($value instanceof BackedEnum)
 			{
 				if ($value !== $valueToCompare)
 				{
@@ -101,5 +109,15 @@ abstract class AbstractEntity implements EntityInterface, IteratorAggregate
 	public function getIterator(): Traversable
 	{
 		return new ArrayIterator($this);
+	}
+
+	public function isEquals(AbstractEntity $entity): bool
+	{
+		return $this->getId() === $entity->getId();
+	}
+
+	public function isNotEquals(AbstractEntity $entity): bool
+	{
+		return !$this->isEquals($entity);
 	}
 }

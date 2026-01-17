@@ -29,6 +29,7 @@ final class TaskDto extends Dto
 	public int $priority;
 	public int $parentId = 0;
 	public ?string $mark;
+	public int $chatId;
 
 	public int $creator;
 	public int $responsible;
@@ -63,6 +64,9 @@ final class TaskDto extends Dto
 	public bool $isTimerRunningForCurrentUser;
 
 	public ?int $deadline = null;
+	public ?int $maxDeadlineChangeDate = null;
+	public ?int $deadlineChangesLeft = null;
+	public bool $requireDeadlineChangeReason = false;
 	public ?int $activityDate = null;
 	public ?int $updateDate = null;
 	public ?int $startDatePlan = null;

@@ -11,6 +11,8 @@ use Bitrix\Booking\Internals\Service\Logger\LogLevelEnum;
 
 class CompanyFeedSenderAgent
 {
+	private const MODULE_ID = 'booking';
+
 	public static function execute(): string|null
 	{
 		$account = Container::getYandexAccount();
@@ -21,14 +23,15 @@ class CompanyFeedSenderAgent
 
 		$companyCollection = Container::getYandexCompanyFeedProvider()->getCompanies();
 		$companyFeedSender = Container::getYandexCompanyFeedSender();
+		$companyFeedHashService = Container::getYandexCompanyFeedHashService();
 
 		// feed has not changed since the last time
-		if ($companyFeedSender->getLastFeedHash() === $companyFeedSender->getFeedHash($companyCollection))
+		if ($companyFeedHashService->getCurrent() === $companyFeedHashService->calculate($companyCollection))
 		{
 			return self::getName();
 		}
 
-		$result = Container::getYandexCompanyFeedSender()->sendFeed($companyCollection);
+		$result = $companyFeedSender->sendFeed($companyCollection);
 		if (!$result->isSuccess())
 		{
 			(new EventLogger())->log(
@@ -41,8 +44,48 @@ class CompanyFeedSenderAgent
 		return self::getName();
 	}
 
-	public static function getName(): string
+	public static function install(): void
 	{
-		return sprintf('\\' . static::class . '::execute();');
+		\CAgent::AddAgent(
+			name: self::getName(),
+			module: self::MODULE_ID,
+			interval: 60 * 60 * 12, // 12 hours,
+			next_exec: ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+			existError: false
+		);
+	}
+
+	public static function uninstall(): void
+	{
+		\CAgent::RemoveAgent(name: self::getName(), module: self::MODULE_ID);
+	}
+
+	public static function rescheduleForNow(): void
+	{
+		$agent = \CAgent::GetList(
+			[],
+			[
+				'MODULE_ID' => self::MODULE_ID,
+				'=NAME' => self::getName(),
+			]
+		)->fetch();
+
+		$agentId = isset($agent['ID']) ? (int)$agent['ID'] : null;
+		if (!$agentId)
+		{
+			return;
+		}
+
+		\CAgent::Update(
+			$agentId,
+			[
+				'NEXT_EXEC' =>  \ConvertTimeStamp(time() + \CTimeZone::GetOffset(), 'FULL'),
+			]
+		);
+	}
+
+	private static function getName(): string
+	{
+		return '\\' . static::class . '::execute();';
 	}
 }

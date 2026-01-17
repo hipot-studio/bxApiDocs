@@ -9,90 +9,75 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Control\Exception\TemplateNotFoundException;
 use Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable;
+use Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
 use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
 
 class TemplateDependence
 {
-	use BaseTemplateControlTrait;
-
-	private const FIELD_DEPEND = 'DEPENDS_ON';
-
-	/* @var TemplateObject $template */
-	private $template;
-
-	public function __construct(private int $userId, private int $templateId)
+	public function __construct(
+		private readonly int $templateId
+	)
 	{
 	}
 
-	/**
-	 * @throws TemplateNotFoundException
-	 * @throws ArgumentException
-	 * @throws SqlQueryException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	public function set(array $data): void
+	public function add(array $data): void
 	{
 		if (
-			!array_key_exists(self::FIELD_DEPEND, $data)
-			|| !is_array($data[self::FIELD_DEPEND])
+			!array_key_exists('DEPENDS_ON', $data)
+			|| !is_array($data['DEPENDS_ON'])
 		)
 		{
 			return;
 		}
 
-		$this->loadByTemplate();
-		$this->deleteByTemplate();
+		$this->saveDependencies($data);
+	}
 
-		if (empty($data[self::FIELD_DEPEND]))
+	public function set(array $data): void
+	{
+		if (
+			!array_key_exists('DEPENDS_ON', $data)
+			|| !is_array($data['DEPENDS_ON'])
+		)
 		{
 			return;
 		}
 
-		$depends = array_values($data[self::FIELD_DEPEND]);
+		$this->deleteByTemplateId();
+
+		$this->saveDependencies($data);
+	}
+
+	private function saveDependencies(array $data): void
+	{
+		if (empty($data['DEPENDS_ON']))
+		{
+			return;
+		}
+
+		$depends = array_values($data['DEPENDS_ON']);
 
 		if (empty($depends))
 		{
 			return;
 		}
 
-		$insertRows = [];
-		foreach ($depends as $depend)
+		$templateDependencies = [];
+		foreach ($depends as $dependId)
 		{
-			$depend = (int) $depend;
-
-			if ($depend < 1)
-			{
-				continue;
-			}
-			$insertRows[] = '('.$this->templateId.', '. $depend .')';
+			$templateDependencies[] = [
+				'TEMPLATE_ID' => $this->templateId,
+				'DEPENDS_ON_ID' => $dependId,
+			];
 		}
 
-		if (empty($insertRows))
-		{
-			return;
-		}
-
-		$sql = $this->getInsertIgnore(
-			'(TEMPLATE_ID, DEPENDS_ON_ID)',
-			"VALUES " . implode(", ", $insertRows)
-		);
-
-		Application::getConnection()->query($sql);
+		TemplateDependenceTable::addInsertIgnoreMulti($templateDependencies, true);
 	}
 
-	/**
-	 * @throws TemplateNotFoundException
-	 * @throws SystemException
-	 */
-	private function loadByTemplate(): void
+	private function deleteByTemplateId(): void
 	{
-		$this->loadTemplate();
-		$this->template->fillDependencies();
-	}
-
-	public function getTableClass(): string
-	{
-		return TemplateDependenceTable::class;
+		TemplateDependenceTable::deleteList([
+			'TEMPLATE_ID' => $this->templateId,
+		]);
 	}
 }

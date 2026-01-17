@@ -18,6 +18,7 @@ use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
@@ -287,10 +288,11 @@ class CounterService
 		return $firstUnread;
 	}
 
-	public function updateIsMuted(int $chatId, string $isMuted): void
+	public function updateIsMuted(int $chatId, bool $isMuted): void
 	{
+		$isMutedString = $isMuted ? 'Y' : 'N';
 		MessageUnreadTable::updateBatch(
-			['IS_MUTED' => $isMuted],
+			['IS_MUTED' => $isMutedString],
 			['=CHAT_ID' => $chatId, '=USER_ID' => $this->getContext()->getUserId()]
 		);
 		static::clearCache($this->getContext()->getUserId());
@@ -308,6 +310,57 @@ class CounterService
 		(new CounterOverflowService($chatId))->delete($this->getContext()->getUserId());
 	}
 
+	public function deleteNotificationsByIds(int $chatId, array $notificationIds): void
+	{
+		$userId = $this->getContext()->getUserId();
+		if ($userId <= 0 || empty($notificationIds))
+		{
+			return;
+		}
+
+		MessageUnreadTable::deleteByFilter([
+			'=USER_ID' => $userId,
+			'=CHAT_ID' => $chatId,
+			'@MESSAGE_ID' => $notificationIds,
+		]);
+
+		(new CounterOverflowService($chatId))->delete($userId);
+		static::clearCache($userId);
+	}
+
+	public function deleteNotifyByChatId(int $chatId): void
+	{
+		$userId = $this->getContext()->getUserId();
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		$confirmMessageIds = MessageTable::query()
+			->setSelect(['ID'])
+			->where('CHAT_ID', $chatId)
+			->where('NOTIFY_TYPE', \IM_NOTIFY_CONFIRM)
+			->fetchAll()
+		;
+
+		$confirmMessageIds = array_column($confirmMessageIds, 'ID');
+
+		$filter = [
+			'=USER_ID' => $userId,
+			'=CHAT_ID' => $chatId,
+		];
+
+		if (!empty($confirmMessageIds))
+		{
+			$filter['!@MESSAGE_ID'] = $confirmMessageIds;
+		}
+
+		MessageUnreadTable::deleteByFilter($filter);
+
+		(new CounterOverflowService($chatId))->delete($userId);
+		static::clearCache($userId);
+	}
+
 	public static function deleteByChatIdForAll(int $chatId): void
 	{
 		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatId]);
@@ -320,6 +373,12 @@ class CounterService
 		CounterOverflowService::deleteByChatIds($chatIds);
 	}
 
+	public function deleteByChatType(Chat\Type $type): void
+	{
+		$chatIds = $this->getChatWithCounterIdsByType($type);
+		$this->deleteByChatIds($chatIds);
+	}
+
 	public function deleteByChatIds(array $chatIds): void
 	{
 		if (empty($chatIds) || $this->getContext()->getUserId() <= 0)
@@ -327,9 +386,32 @@ class CounterService
 			return;
 		}
 
+		$this->setLastIdForReadByIds($chatIds);
 		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds, '=USER_ID' => $this->getContext()->getUserId()]);
 		static::clearCache($this->getContext()->getUserId());
 		CounterOverflowService::deleteByChatIds($chatIds, $this->getContext()->getUserId());
+	}
+
+	private function setLastIdForReadByIds(array $chatIds): void
+	{
+		if (empty($chatIds))
+		{
+			return;
+		}
+
+		$chatIdsString = implode(',', $chatIds);
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$connection->queryExecute($helper->prepareCorrelatedUpdate(
+			'b_im_relation',
+			'R',
+			[
+				'LAST_ID' => 'C.LAST_MESSAGE_ID',
+			],
+			' b_im_chat C ',
+			" C.ID = R.CHAT_ID AND R.CHAT_ID IN ({$chatIdsString}) AND R.USER_ID = {$this->getContext()->getUserId()}"
+		));
 	}
 
 	/*public function deleteByChatIdForAll(int $chatId): void
@@ -345,10 +427,39 @@ class CounterService
 	 */
 	public function deleteAll(bool $withNotify = false): void
 	{
+		$this->setLastIdForReadAll();
 		Message\CounterService\CounterServiceAgent::deleteAllViaAgent(
 			$this->getContext()->getUserId(),
 			$withNotify,
 		);
+	}
+
+	private function setLastIdForReadAll(): void
+	{
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$connection->queryExecute($helper->prepareCorrelatedUpdate(
+			'b_im_relation',
+			'R',
+			[
+				'LAST_ID' => 'C.LAST_MESSAGE_ID',
+			],
+			' b_im_chat C ',
+			" C.ID = R.CHAT_ID AND R.MESSAGE_TYPE NOT IN ('" . IM_MESSAGE_OPEN_LINE . "', '" . IM_MESSAGE_SYSTEM . "')
+				AND R.USER_ID = {$this->getContext()->getUserId()}"
+		));
+	}
+
+	private function setLastIdForRead(int $lastId, int $chatId): void
+	{
+		$sql = "
+			UPDATE b_im_relation
+			SET LAST_ID=(CASE WHEN LAST_ID > {$lastId} THEN LAST_ID ELSE {$lastId} END)
+			WHERE CHAT_ID={$chatId} AND USER_ID={$this->getContext()->getUserId()}
+		";
+
+		Application::getConnection()->queryExecute($sql);
 	}
 
 	public static function getChildrenWithCounters(Chat $parentChat, ?int $userId = null): array
@@ -498,7 +609,7 @@ class CounterService
 		}
 	}
 
-	public function deleteTo(Message $message): void
+	public function deleteTo(int $messageId, int $chatId, bool $updateRelation = true): void
 	{
 		$userId = $this->getContext()->getUserId();
 		if ($userId <= 0)
@@ -506,12 +617,17 @@ class CounterService
 			return;
 		}
 
+		if ($updateRelation)
+		{
+			$this->setLastIdForRead($messageId, $chatId);
+		}
+
 		MessageUnreadTable::deleteByFilter([
-			'<=MESSAGE_ID' => $message->getMessageId(),
-			'=CHAT_ID' => $message->getChatId(),
+			'<=MESSAGE_ID' => $messageId,
+			'=CHAT_ID' => $chatId,
 			'=USER_ID' => $userId
 		]);
-		(new CounterOverflowService($message->getChatId()))->delete($userId);
+		(new CounterOverflowService($chatId))->delete($userId);
 		static::clearCache($userId);
 	}
 
@@ -667,13 +783,17 @@ class CounterService
 		{
 			$chatId = (int)$counter['CHAT_ID'];
 			$count = (int)$counter['COUNT'];
+			if (!isset($chatsInfo[$chatId]))
+			{
+				continue;
+			}
 			if ($counter['IS_MUTED'] === 'Y')
 			{
 				$this->setFromMutedChat($chatId, $count);
 			}
 			elseif ($counter['CHAT_TYPE'] === Chat::IM_TYPE_EXTERNAL)
 			{
-				$this->setFromExternal($chatId, $chatsInfo[$chatId]['ENTITY_TYPE'], $count);
+				$this->setFromExternal($chatId, $chatsInfo[$chatId]['ENTITY_TYPE'] ?? '', $count);
 			}
 			elseif ($counter['CHAT_TYPE'] === Chat::IM_TYPE_COLLAB)
 			{
@@ -821,7 +941,7 @@ class CounterService
 
 	protected function setFromExternal(int $id, string $entityType, int $count): void
 	{
-		if (!Features::isTasksRecentListAvailable())
+		if (!$entityType || !Features::isTasksRecentListAvailable())
 		{
 			return;
 		}
@@ -911,6 +1031,24 @@ class CounterService
 		}
 
 		return $query->fetchAll();
+	}
+
+	private function getChatWithCounterIdsByType(Chat\Type $type): array
+	{
+		$query = MessageUnreadTable::query()
+			->setSelect(['CHAT_ID'])
+			->setDistinct()
+			->where('USER_ID', $this->getContext()->getUserId())
+			->where('CHAT_TYPE', $type->literal)
+		;
+		if ($type->entityType)
+		{
+			$query->where('CHAT.ENTITY_TYPE', $type->entityType);
+		}
+
+		$rows = $query->fetchAll();
+
+		return array_map('intval', array_column($rows, 'CHAT_ID'));
 	}
 
 	protected function getCountersForEachChat(?array $chatIds = null, bool $forCurrentUser = true): array

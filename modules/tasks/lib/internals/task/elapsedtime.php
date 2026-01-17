@@ -22,9 +22,9 @@ use Bitrix\Tasks\Internals\TaskTable;
  * @method static EO_ElapsedTime_Result getById($id)
  * @method static EO_ElapsedTime_Result getList(array $parameters = [])
  * @method static EO_ElapsedTime_Entity getEntity()
- * @method static \Bitrix\Tasks\Internals\Task\EO_ElapsedTime createObject($setDefaultValues = true)
+ * @method static \Bitrix\Tasks\Internals\Task\ElapsedTimeObject createObject($setDefaultValues = true)
  * @method static \Bitrix\Tasks\Internals\Task\EO_ElapsedTime_Collection createCollection()
- * @method static \Bitrix\Tasks\Internals\Task\EO_ElapsedTime wakeUpObject($row)
+ * @method static \Bitrix\Tasks\Internals\Task\ElapsedTimeObject wakeUpObject($row)
  * @method static \Bitrix\Tasks\Internals\Task\EO_ElapsedTime_Collection wakeUpCollection($rows)
  */
 class ElapsedTimeTable extends DataManager
@@ -37,6 +37,11 @@ class ElapsedTimeTable extends DataManager
 	public static function getClass(): string
 	{
 		return static::class;
+	}
+
+	public static function getObjectClass(): string
+	{
+		return ElapsedTimeObject::class;
 	}
 
 	public static function getMap(): array

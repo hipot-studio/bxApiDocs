@@ -2,16 +2,19 @@
 
 namespace Bitrix\Crm\Recurring\Entity\Item;
 
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\Dynamic\RecurringTable;
 use Bitrix\Crm\Recurring\Calculator;
 use Bitrix\Crm\Recurring\Entity\ParameterMapper\EntityForm;
 use Bitrix\Crm\Recurring\Manager;
 use Bitrix\Crm\Timeline\DynamicRecurringController;
+use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Result;
 use CCrmOwnerType;
+use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 
 final class DynamicNew extends DynamicEntity
 {
@@ -27,6 +30,9 @@ final class DynamicNew extends DynamicEntity
 			'LIMIT_REPEAT',
 			'LIMIT_DATE',
 			'START_DATE',
+			'CATEGORY_ID',
+			'IS_SEND_EMAIL',
+			'EMAIL_IDS',
 			'CATEGORY_ID',
 		];
 	}
@@ -141,17 +147,22 @@ final class DynamicNew extends DynamicEntity
 
 		$result = new Result();
 
-		try
-		{
-			$item = $this->getControllerInstance()->createItem($this->templateFields);
-			$saveResult = $item->save();
-			$this->templateId = $item->getId();
-		}
-		catch (\Exception $exception)
-		{
-			$result->addError(new Error($exception->getMessage(), $exception->getCode()));
+		$factory = $this->getControllerInstance();
+		$item = $factory->createItem($this->templateFields);
+		CopyFilesOnItemClone::getInstance()->execute($item, $factory);
 
-			return $result;
+		if (!empty($this->basedId))
+		{
+			$products = $factory->getItem($this->basedId)?->getProductRows()?->toArray();
+			$item->setProductRowsFromArrays($products);
+		}
+
+		$saveResult = $factory->getAddOperation($item)->launch();
+		if ($saveResult->isSuccess())
+		{
+			$this->templateId = $item->getId();
+
+			$this->cleanTimeline($item);
 		}
 
 		if (!$this->templateId || !$saveResult->isSuccess())
@@ -161,35 +172,14 @@ final class DynamicNew extends DynamicEntity
 			return $result;
 		}
 
-		if (!empty($this->basedId))
-		{
-			$this->copyProducts();
-		}
-
 		$this->setFieldNoDemand('ITEM_ID', $this->templateId);
 
 		return $result;
 	}
 
-	private function copyProducts(): void
+	private function cleanTimeline(Item $item): void
 	{
-		$factory = $this->getControllerInstance();
-		$products = $factory->getItem($this->basedId)?->getProductRows()?->toArray();
-		if (!$products)
-		{
-			return;
-		}
-
-		$item = $factory->getItem($this->templateId);
-		if (!$item)
-		{
-			return;
-		}
-
-		$item?->setProductRowsFromArrays($products);
-
-		// @todo maybe disable bizproc, etc?
-		$factory->getUpdateOperation($item)->disableAllChecks()->launch();
+		TimelineEntry::deleteByOwner($item->getEntityTypeId(), $item->getId());
 	}
 
 	private function onAfterSave(): void

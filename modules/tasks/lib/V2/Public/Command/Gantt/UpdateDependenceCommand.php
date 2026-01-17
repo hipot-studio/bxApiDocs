@@ -20,6 +20,7 @@ class UpdateDependenceCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $dependentId,
 		public readonly LinkType $linkType,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -28,10 +29,7 @@ class UpdateDependenceCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$ganttDependenceService = Container::getInstance()->getGanttDependenceService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new UpdateDependenceHandler($ganttDependenceService, $consistencyResolver);
+		$handler = Container::getInstance()->get(UpdateDependenceHandler::class);
 
 		try
 		{

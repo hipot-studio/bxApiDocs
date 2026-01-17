@@ -37,18 +37,18 @@ class TransferUser
 	 */
 	public function transfer(User $user, $isIntranet = true): ?User
 	{
-		if ($user->getExternalAuthId() === "shop" && Loader::includeModule("crm"))
-		{
-			$groupIds = array_merge($user->getGroupIds(), [BuyerGroup::getSystemGroupId()]);
-			$user->setGroupIds($groupIds);
-		}
-
 		if (empty($user->getGroupIds()))
 		{
 			$user->setGroupIds($isIntranet
 				? \CIntranetInviteDialog::getUserGroups(SITE_ID)
 				: (\CExtranet::GetExtranetUserGroupID() !== false ? [\CExtranet::GetExtranetUserGroupID()] : [])
 			);
+		}
+
+		if ($user->getExternalAuthId() === "shop" && Loader::includeModule("crm"))
+		{
+			$groupIds = array_merge($user->getGroupIds() ?? [], [BuyerGroup::getSystemGroupId()]);
+			$user->setGroupIds($groupIds);
 		}
 
 		$user->setConfirmCode(Random::getString(8));

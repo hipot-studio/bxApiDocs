@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Localization\Loc;
 
 final class ScopeMap
 {
@@ -93,5 +94,55 @@ final class ScopeMap
 		}
 
 		return null;
+	}
+
+	public static function getParamList(): array
+	{
+		return array_merge(
+			ScopeMap::getGlobalParams(),
+			ScopeMap::getScopeParams(),
+		);
+	}
+
+	private static function getGlobalParams(): array
+	{
+		$globalParamsMap = [];
+
+		$globalParams = ScopeMap::getGlobals();
+		$globalScopeKey = 'global';
+		foreach ($globalParams as $globalParam)
+		{
+			$globalParamsMap[$globalParam->code()] = [
+				'code' => $globalParam->code(),
+				'title' => $globalParam->title(),
+				'description' => $globalParam->description(),
+				'scope' => $globalScopeKey,
+				'superTitle' => Loc::getMessage('BI_CONNECTOR_DASHBOARD_SCOPE_MAP_GLOBAL_PARAMETER_TITLE'),
+			];
+		}
+
+		return $globalParamsMap;
+	}
+
+	private static function getScopeParams(): array
+	{
+		$scopeParamList = [];
+
+		$map = ScopeMap::getMap();
+		foreach ($map as $scopeCode => $scopeParams)
+		{
+			foreach ($scopeParams as $scopeParam)
+			{
+				$scopeParamList[$scopeParam->code()] = [
+					'code' => $scopeParam->code(),
+					'title' => $scopeParam->title(),
+					'description' => $scopeParam->description(),
+					'scope' => $scopeCode,
+					'superTitle' => ScopeService::getInstance()->getScopeName($scopeCode),
+				];
+			}
+		}
+
+		return $scopeParamList;
 	}
 }

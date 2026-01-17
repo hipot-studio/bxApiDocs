@@ -4,28 +4,28 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete;
 
-use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Trait\ConfigTrait;
 
 class StopTimer
 {
+	use ConfigTrait;
+
 	public function __invoke(array $fullTaskData)
 	{
 		$taskId = (int)$fullTaskData['ID'];
 
-		$timer = \CTaskTimerManager::getInstance($fullTaskData['CREATED_BY']);
-		$timer->stop($taskId);
+		$userIds = array_unique([
+			$fullTaskData['CREATED_BY'],
+			$fullTaskData['RESPONSIBLE_ID'],
+			...$fullTaskData['ACCOMPLICES'],
+		]);
 
-		$timer = \CTaskTimerManager::getInstance($fullTaskData['RESPONSIBLE_ID']);
-		$timer->stop($taskId);
-
-		$accomplices = $fullTaskData['ACCOMPLICES'];
-		if (isset($accomplices) && !empty($accomplices))
-		{
-			foreach ($accomplices as $accompliceId)
-			{
-				$accompliceTimer = \CTaskTimerManager::getInstance($accompliceId);
-				$accompliceTimer->stop($taskId);
-			}
-		}
+		Container::getInstance()->getTimeManagementService()->stopAllTimers(
+			taskId: $taskId,
+			userIds: $userIds,
+			currentUserId: $this->config->getUserId(),
+			sendNotification: false,
+		);
 	}
 }

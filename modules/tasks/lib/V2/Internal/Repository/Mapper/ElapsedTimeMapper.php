@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Trait\CastTrait;
-use CTaskElapsedItem;
 
 class ElapsedTimeMapper
 {
@@ -57,7 +57,7 @@ class ElapsedTimeMapper
 
 		if (isset($elapsedTime['COMMENT_TEXT']))
 		{
-			$data['text'] = (string)$elapsedTime['COMMENT_TEXT'];
+			$data['text'] = Emoji::decode((string)$elapsedTime['COMMENT_TEXT']);
 		}
 
 		if (isset($elapsedTime['CREATED_DATE']))
@@ -115,7 +115,7 @@ class ElapsedTimeMapper
 
 		if ($elapsedTime->text !== null)
 		{
-			$data['COMMENT_TEXT'] = $elapsedTime->text;
+			$data['COMMENT_TEXT'] = Emoji::encode($elapsedTime->text);
 		}
 
 		if ($elapsedTime->createdAtTs !== null)
@@ -136,5 +136,16 @@ class ElapsedTimeMapper
 		}
 
 		return $data;
+	}
+
+	public function mapToCollection(array $elapsedTimes): Entity\Task\ElapsedTimeCollection
+	{
+		$entities = [];
+		foreach ($elapsedTimes as $elapsedTime)
+		{
+			$entities[] = $this->mapToEntity($elapsedTime);
+		}
+
+		return new Entity\Task\ElapsedTimeCollection(...$entities);
 	}
 }

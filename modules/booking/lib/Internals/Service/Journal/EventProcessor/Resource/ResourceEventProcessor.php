@@ -11,15 +11,14 @@ use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceCalendarDataChanged;
 use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceLinkedEntitiesChangedData;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
-use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
+use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
-use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\ModuleOptions;
 use Bitrix\Main\Event;
 use Bitrix\Main\Update\Stepper;
 
-class ResourceEventProcessor implements EventProcessor
+class ResourceEventProcessor extends AbstractEventProcessor
 {
 	public function __construct(
 		private readonly DelayedTaskService $delayedTaskService,
@@ -27,19 +26,15 @@ class ResourceEventProcessor implements EventProcessor
 	{
 	}
 
-	public function process(JournalEventCollection $eventCollection): void
+	public function processOne(JournalEvent $event): void
 	{
-		/** @var JournalEvent $event */
-		foreach ($eventCollection as $event)
+		match ($event->type)
 		{
-			match ($event->type)
-			{
-				JournalType::ResourceAdded => $this->processResourceAddedEvent($event),
-				JournalType::ResourceUpdated => $this->processResourceUpdatedEvent($event),
-				JournalType::ResourceDeleted => $this->processResourceDeletedEvent($event),
-				default => '',
-			};
-		}
+			JournalType::ResourceAdded => $this->processResourceAddedEvent($event),
+			JournalType::ResourceUpdated => $this->processResourceUpdatedEvent($event),
+			JournalType::ResourceDeleted => $this->processResourceDeletedEvent($event),
+			default => '',
+		};
 	}
 
 	private function processResourceAddedEvent(JournalEvent $event): void

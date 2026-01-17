@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Tasks\V2\Internal\Entity\Result\Status;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
+use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFileCollection;
 
 class Result extends AbstractEntity
 {
@@ -20,6 +21,10 @@ class Result extends AbstractEntity
 		public readonly ?int $updatedAtTs = null,
 		public readonly ?Status $status = null,
 		public readonly ?array $fileIds = null,
+		public readonly ?int $previewId = null,
+		public readonly ?array $rights = [],
+		public readonly ?DiskFileCollection $files = null,
+		public readonly ?int $messageId = null,
 	)
 	{
 
@@ -28,6 +33,11 @@ class Result extends AbstractEntity
 	public function getId(): ?int
 	{
 		return $this->id;
+	}
+
+	public function getText(): ?string
+	{
+		return $this->text;
 	}
 
 	public function isOpen(): bool
@@ -46,6 +56,10 @@ class Result extends AbstractEntity
 			updatedAtTs: static::mapInteger($props, 'updatedAtTs'),
 			status: static::mapBackedEnum($props, 'status', Status::class),
 			fileIds: static::mapArray($props, 'fileIds'),
+			previewId: static::mapInteger($props, 'previewId'),
+			rights: static::mapArray($props, 'rights'),
+			files: static::mapEntityCollection($props, 'files', DiskFileCollection::class),
+			messageId: static::mapInteger($props, 'messageId'),
 		);
 	}
 
@@ -60,6 +74,10 @@ class Result extends AbstractEntity
 			'updatedAtTs' => $this->updatedAtTs,
 			'status' => $this->status?->value,
 			'fileIds' => $this->fileIds,
+			'previewId' => $this->previewId,
+			'rights' => $this->rights,
+			'files' => $this->files?->toArray(),
+			'messageId' => $this->messageId,
 		];
 	}
 }

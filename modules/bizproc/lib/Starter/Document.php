@@ -1,6 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter;
+
+use Bitrix\Bizproc\Public\Service\Document\InspectorService;
 
 final class Document
 {
@@ -12,19 +16,8 @@ final class Document
 	{
 		$this->complexId = $complexDocumentId;
 
-		if (!$complexType)
-		{
-			try
-			{
-				$complexType = \CBPRuntime::getRuntime()->getDocumentService()->getDocumentType($complexDocumentId);
-				$complexType = is_array($complexType) ? $complexType : [];
-			}
-			catch (\Exception $exception)
-			{
-				$complexType = []; // document not found
-			}
-		}
-		$this->complexType = $complexType;
+		$validComplexType = (new InspectorService())->getValidComplexType($complexDocumentId, $complexType);
+		$this->complexType = is_array($validComplexType) ? $validComplexType : [];
 	}
 
 	public function setChangedFieldNames(array $changedFieldNames): self

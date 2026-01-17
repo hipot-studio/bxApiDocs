@@ -812,7 +812,7 @@ class CComponentUtil
 				if ($isMultiple)
 				{
 					$agreements = \Bitrix\Main\UserConsent\Agreement::getActiveList();
-					if (array_key_exists('USER_CONSENT_IDS', $arCurrentValues))
+					if (is_array($arCurrentValues) && array_key_exists('USER_CONSENT_IDS', $arCurrentValues))
 					{
 						$userConsentIds =
 							is_array($arCurrentValues['USER_CONSENT_IDS'])

@@ -2,35 +2,32 @@
 
 namespace Bitrix\Main\Data\Configurator;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\NotSupportedException;
 
-class RedisConnectionConfigurator
+class RedisConnectionConfigurator extends ConnectionConfigurator
 {
-	protected array $config;
-	protected array $servers = [];
-
-	public function __construct($config)
+	public function __construct(array $config)
 	{
 		if (!extension_loaded('redis'))
 		{
 			throw new NotSupportedException('redis extension is not loaded.');
 		}
 
-		$this->config = $config;
-		$this->addServers($this->getConfig());
+		parent::__construct($config);
 	}
 
-	protected function addServers($config)
+	protected function addServers(array $config): void
 	{
 		$servers = $config['servers'] ?? [];
 
 		if (empty($servers) && isset($config['host'], $config['port']))
 		{
-			array_unshift($servers, [
+			$server = [
 				'host' => $config['host'],
 				'port' => $config['port'],
-			]);
+				'password' => $config['password'] ?? null,
+			];
+			array_unshift($servers, $server);
 		}
 
 		foreach ($servers as $server)
@@ -38,45 +35,26 @@ class RedisConnectionConfigurator
 			$this->servers[] = [
 				'host' => $server['host'] ?? 'localhost',
 				'port' => $server['port'] ?? '6379',
+				'password' => $server['password'] ?? null,
 			];
 		}
-
-		return $this;
 	}
 
-	public function getConfig(): array
-	{
-		return $this->config;
-	}
-
-	protected function configureConnection(\RedisCluster|\Redis $connection): void
+	protected function configureConnection(\RedisCluster | \Redis $connection): void
 	{
 		$config = $this->getConfig();
 
-		if ($connection instanceof \Redis)
+		if (isset($config['compression']) || defined('\Redis::COMPRESSION_LZ4'))
 		{
-			if (isset($config['compression']) || defined('\Redis::COMPRESSION_LZ4'))
-			{
-				$connection->setOption(\Redis::OPT_COMPRESSION, $config['compression'] ?? \Redis::COMPRESSION_LZ4);
-				$connection->setOption(\Redis::OPT_COMPRESSION_LEVEL, $config['compression_level'] ?? \Redis::COMPRESSION_ZSTD_MAX);
-			}
-
-			if (isset($config['serializer']) || defined('\Redis::SERIALIZER_IGBINARY'))
-			{
-				$connection->setOption(\Redis::OPT_SERIALIZER, $config['serializer'] ?? \Redis::SERIALIZER_IGBINARY);
-			}
+			$connection->setOption(\Redis::OPT_COMPRESSION, $config['compression'] ?? \Redis::COMPRESSION_LZ4);
+			$connection->setOption(\Redis::OPT_COMPRESSION_LEVEL, $config['compression_level'] ?? \Redis::COMPRESSION_ZSTD_MAX);
 		}
-		else
-		{
-			if (isset($config['serializer']))
-			{
-				$connection->setOption(\RedisCluster::OPT_SERIALIZER, $config['serializer']);
-			}
-			elseif (defined('\RedisCluster::SERIALIZER_IGBINARY'))
-			{
-				$connection->setOption(\RedisCluster::OPT_SERIALIZER, \RedisCluster::SERIALIZER_IGBINARY);
-			}
 
+		$serializer = $config['serializer'] ?? (defined('\Redis::SERIALIZER_IGBINARY') ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP);
+		$connection->setOption(\Redis::OPT_SERIALIZER, $serializer);
+
+		if ($connection instanceof \RedisCluster)
+		{
 			if (count($this->servers) > 1)
 			{
 				$connection->setOption(\RedisCluster::OPT_SLAVE_FAILOVER, $config['failover'] ?? \RedisCluster::FAILOVER_NONE);
@@ -87,6 +65,7 @@ class RedisConnectionConfigurator
 	public function createConnection()
 	{
 		$config = $this->getConfig();
+
 		if (!$this->servers)
 		{
 			throw new NotSupportedException('Empty server list to redis connection.');
@@ -94,16 +73,17 @@ class RedisConnectionConfigurator
 
 		if (count($this->servers) === 1)
 		{
-			['host' => $host, 'port' => $port] = $this->servers[0];
+			$server = $this->servers[0];
+
 			$connection = new \Redis();
 
 			$params = [
-				$host,
-				$port,
+				$server['host'],
+				$server['port'],
 				$config['timeout'] ?? 0,
 				null,
 				0,
-				$config['readTimeout'] ?? 0
+				$config['readTimeout'] ?? 0,
 			];
 
 			if ($config['persistent'])
@@ -113,6 +93,11 @@ class RedisConnectionConfigurator
 			else
 			{
 				$result = $connection->connect(...$params);
+			}
+
+			if (!empty($server['password']))
+			{
+				$result = $connection->auth($server['password']);
 			}
 		}
 		else
@@ -139,16 +124,9 @@ class RedisConnectionConfigurator
 		}
 		else
 		{
-			$error = error_get_last();
-			if (isset($error["type"]) && $error["type"] === E_WARNING)
-			{
-				$exception = new \ErrorException($error['message'], 0, $error['type'], $error['file'], $error['line']);
-				$application = Application::getInstance();
-				$exceptionHandler = $application->getExceptionHandler();
-				$exceptionHandler->writeToLog($exception);
-			}
+			$this->log();
 		}
 
-		return $result? $connection : null;
+		return $result ? $connection : null;
 	}
 }

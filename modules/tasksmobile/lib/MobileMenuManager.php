@@ -18,11 +18,6 @@ class MobileMenuManager extends BaseMobileMenuManager
 			$manager = new Manager();
 			$active = array_keys($manager->getActiveTabs());
 
-			if (in_array('task', $active, true))
-			{
-				return $menu;
-			}
-
 			$items = [];
 			if (\Bitrix\TasksMobile\Settings::getInstance()->isTaskFlowAvailable())
 			{

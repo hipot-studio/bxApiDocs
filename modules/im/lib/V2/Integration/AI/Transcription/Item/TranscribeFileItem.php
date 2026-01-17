@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\AI\Transcription\Item;
 
+use Bitrix\Im\V2\Integration\AI\Transcription\Util\EmotionParser;
+
 class TranscribeFileItem
 {
+	private ?string $plainText = null;
+
 	private function __construct(
 		public readonly int $fileId,
 		public readonly int $diskFileId,
@@ -42,5 +46,17 @@ class TranscribeFileItem
 			'status' => $this->status->value,
 			'transcriptText' => $this->transcriptText,
 		];
+	}
+
+	public function getPlainText(): ?string
+	{
+		if ($this->transcriptText === null)
+		{
+			return null;
+		}
+
+		$this->plainText ??= EmotionParser::stripEmotionBlocks($this->transcriptText);
+
+		return $this->plainText;
 	}
 }

@@ -59,7 +59,7 @@ final class Registrar extends Base
 		{
 			$this->logger->logInfo("Portal got 'register required' response. Clear registrar info");
 			$response->setStatus(IntegratorResponse::STATUS_FROZEN);
-			$this->registrar->clear();
+			$this->registrar->clear(__CLASS__ . '::' . __FUNCTION__);
 		}
 
 		return $response;

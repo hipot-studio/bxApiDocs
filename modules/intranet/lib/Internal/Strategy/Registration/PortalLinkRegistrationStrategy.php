@@ -49,6 +49,13 @@ class PortalLinkRegistrationStrategy implements RegistrationStrategy
 			throw new SystemException($resultMessage['MESSAGE']);
 		}
 
-		return $this->userRepository->getUserById((int)$resultMessage['ID']);
+		$user = $this->userRepository->getUserById((int)$resultMessage['ID']);
+
+		if (!$user)
+		{
+			throw new SystemException('User not found');
+		}
+
+		return $user;
 	}
 }

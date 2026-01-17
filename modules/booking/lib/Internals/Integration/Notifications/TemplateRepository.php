@@ -106,10 +106,8 @@ class TemplateRepository
 			'CONFIRMATION_LINK' => Loc::getMessage('BOOKING_TEMPLATE_REPLACE_CONFIRMATION_LINK'),
 			'DELAYED_CONFIRMATION_LINK' => Loc::getMessage('BOOKING_TEMPLATE_REPLACE_DELAYED_CONFIRMATION_LINK'),
 			'FEEDBACK_LINK' => Loc::getMessage('BOOKING_TEMPLATE_REPLACE_FEEDBACK_LINK'),
+			'SOME_TEXT' => Loc::getMessage('BOOKING_TEMPLATE_REPLACE_SERVICES'),
 		];
-
-		//@todo needs to be removed after we fix issue with edna template
-		$text = str_replace('#SOME_TEXT#', ' ', $text);
 
 		return str_replace(
 			array_map(static fn($item) => '#' . $item . '#', array_keys($map)),

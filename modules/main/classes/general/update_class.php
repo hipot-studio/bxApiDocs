@@ -3616,12 +3616,7 @@ class CUpdateSystem
 	{
 		global $DBType, $DB, $APPLICATION, $USER;
 
-		if (!isset($GLOBALS["UPDATE_STRONG_UPDATE_CHECK"])
-			|| ($GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] != "Y" && $GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] != "N"))
-		{
-			$GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] = COption::GetOptionString("main", "strong_update_check", "Y");
-		}
-		$strongUpdateCheck = $GLOBALS["UPDATE_STRONG_UPDATE_CHECK"];
+		$strongUpdateCheck = COption::GetOptionString("main", "strong_update_check", "Y");
 
 		$DOCUMENT_ROOT = $_SERVER["DOCUMENT_ROOT"];
 
@@ -3652,20 +3647,26 @@ class CUpdateSystem
 		unset($updater);
 	}
 
-
 	/** Получение лицензионного ключа текущего клиента **/
 	public static function GetLicenseKey()
 	{
-		if(defined("LICENSE_KEY"))
+		if (defined("LICENSE_KEY"))
+		{
 			return LICENSE_KEY;
-		if (!isset($GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"])	|| $GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"]=="")
+		}
+
+		static $key = null;
+
+		if ($key === null)
 		{
 			$LICENSE_KEY = "demo";
 			if (file_exists($_SERVER["DOCUMENT_ROOT"]."/bitrix/license_key.php"))
+			{
 				include($_SERVER["DOCUMENT_ROOT"]."/bitrix/license_key.php");
-			$GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"] = $LICENSE_KEY;
+			}
+			$key = $LICENSE_KEY;
 		}
-		return $GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"];
+		return $key;
 	}
 
 	/**

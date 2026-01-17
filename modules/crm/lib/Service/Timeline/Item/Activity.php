@@ -5,6 +5,8 @@ namespace Bitrix\Crm\Service\Timeline\Item;
 use Bitrix\Crm\Activity\Provider\ProviderManager;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Service\Timeline\Config;
+use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
+use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\ButtonFactory;
 use Bitrix\Crm\Service\Timeline\Item\Interfaces\Deadlinable;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
@@ -387,6 +389,7 @@ abstract class Activity extends Configurable implements Deadlinable
 						->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
 						->addActionParamInt('ownerId', $this->getContext()->getEntityId())
 						->addActionParamInt('categoryId', $this->getContext()->getEntityCategoryId())
+						->addActionParamBoolean('canAddItems', $this->getContext()->canAddItems())
 				)
 				->setScopeWeb() // temporary disable action for mobile app
 			;
@@ -542,5 +545,16 @@ abstract class Activity extends Configurable implements Deadlinable
 					)
 			)->setScopeWeb() // temporary disable action for mobile app
 		;
+	}
+
+	final protected function createCopilotButton(): ?BaseButton
+	{
+		$model = $this->getAssociatedEntityModel();
+		if (!$model)
+		{
+			return null;
+		}
+
+		return ButtonFactory::create($model, $this->getContext());
 	}
 }

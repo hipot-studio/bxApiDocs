@@ -350,7 +350,7 @@ class Email extends Activity
 		$sanitizedBody = strip_tags($sanitizedBody);
 
 		$sanitizedBody = htmlspecialchars_decode($sanitizedBody, ENT_QUOTES);
-		$sanitizedBody = trim(str_replace("\r\n", ' ', $sanitizedBody));
+		$sanitizedBody = trim(preg_replace('/(?:\r\n\s*)+/', '\r\n', $sanitizedBody));
 
 		$sanitizedBody = $this->extractImageAboutReading($sanitizedBody);
 
@@ -359,7 +359,7 @@ class Email extends Activity
 			return null;
 		}
 
-		$messageExploded = explode("\r\n", $sanitizedBody);
+		$messageExploded = explode('\r\n', $sanitizedBody);
 		$hasManyLines = count($messageExploded) > 1;
 
 		if (!$hasManyLines)
@@ -370,7 +370,6 @@ class Email extends Activity
 
 		if ($hasManyLines)
 		{
-
 			$height = ContentBlock\EditableDescription::HEIGHT_LONG;
 			$sanitizedBody = '';
 			foreach ($messageExploded as $item)
@@ -389,7 +388,7 @@ class Email extends Activity
 					break;
 				}
 
-				$sanitizedBody .= $this->handlePunctuation($item);
+				$sanitizedBody .= $this->handlePunctuation($item) . PHP_EOL;
 			}
 		}
 		elseif (mb_strlen($sanitizedBody) > self::TIMELINE_SHORT_LIMIT_LENGTH)

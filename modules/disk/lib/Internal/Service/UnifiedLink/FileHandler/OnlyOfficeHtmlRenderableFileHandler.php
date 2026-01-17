@@ -6,8 +6,8 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\Document\DocumentSessionResult;
 use Bitrix\Disk\Document\DocumentSource;
-use Bitrix\Disk\Document\Flipchart\SessionManager;
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Document\OnlyOffice\DocumentSessionManager;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TrackedObjectManager;
@@ -30,7 +30,7 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 	) {
 		$this->trackedObjectManager = Driver::getInstance()->getTrackedObjectManager();
 
-		$this->sessionCommandFactory = new SessionCommandFactory($documentSource, new SessionManager());
+		$this->sessionCommandFactory = new SessionCommandFactory($documentSource, new DocumentSessionManager());
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
 	}
 

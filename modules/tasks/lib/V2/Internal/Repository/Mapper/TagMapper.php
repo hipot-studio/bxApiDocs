@@ -21,12 +21,24 @@ class TagMapper
 
 	public function mapToEntity(array $tag): Entity\Tag
 	{
-		return new Entity\Tag(
-			id: (int)($tag['ID'] ?? null),
-			name: (string)($tag['NAME'] ?? null),
-			owner: new Entity\User(id: (int)($tag['USER_ID'] ?? 0)),
-			group: new Entity\Group(id: (int)($tag['GROUP_ID'] ?? 0)),
-			task: new Entity\Task(id: (int)($tag['TASK_ID'] ?? 0)),
-		);
+		$entityFields = [
+			'id' => (int)($tag['ID'] ?? null),
+			'name' => (string)($tag['NAME'] ?? null),
+			'task' => new Entity\Task(id: (int)($tag['TASK_ID'] ?? 0)),
+		];
+
+		$ownerId = (int)($tag['USER_ID'] ?? 0);
+		$groupId = (int)($tag['GROUP_ID'] ?? 0);
+		if ($ownerId > 0)
+		{
+			$entityFields['owner'] = new Entity\User(id: $ownerId);
+		}
+
+		if ($groupId > 0)
+		{
+			$entityFields['group'] = new Entity\Group(id: $groupId);
+		}
+
+		return Entity\Tag::mapFromArray($entityFields);
 	}
 }

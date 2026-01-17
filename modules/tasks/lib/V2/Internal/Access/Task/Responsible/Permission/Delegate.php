@@ -32,6 +32,11 @@ class Delegate implements AttributeAccessInterface
 
 		$after = $adapter->transform($current);
 
-		return $accessController->check(ActionDictionary::ACTION_TASK_DELEGATE, $before, $after);
+		if ($accessController->check(ActionDictionary::ACTION_TASK_DELEGATE, $before, $after))
+		{
+			return true;
+		}
+
+		return $accessController->check(ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE, $before, $after);
 	}
 }

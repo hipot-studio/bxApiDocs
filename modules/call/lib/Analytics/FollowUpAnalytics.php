@@ -2,10 +2,13 @@
 
 namespace Bitrix\Call\Analytics;
 
+use Bitrix\Main\Error;
 use Bitrix\Call\Analytics\Event\FollowUpEvent;
 use Bitrix\Call\Analytics\Event\FollowUpTaskEvent;
+use Bitrix\Call\ControllerClient;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\Task\AITask;
+
 
 class FollowUpAnalytics extends AbstractAnalytics
 {
@@ -80,6 +83,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 			SenseType::SUMMARY->value => 'meeting_summarization',
 			SenseType::OVERVIEW->value => 'meeting_overview',
 			SenseType::INSIGHTS->value => 'meeting_insights',
+			SenseType::EVALUATION->value => 'meeting_evaluation',
+			default => strtolower(SenseType::EVALUATION->value),
 		};
 		$this->async(function () use ($eventType) {
 			(new FollowUpTaskEvent($eventType, $this->call))
@@ -99,12 +104,76 @@ class FollowUpAnalytics extends AbstractAnalytics
 			SenseType::SUMMARY->value => 'meeting_summarization',
 			SenseType::OVERVIEW->value => 'meeting_overview',
 			SenseType::INSIGHTS->value => 'meeting_insights',
+			SenseType::EVALUATION->value => 'meeting_evaluation',
+			default => strtolower(SenseType::EVALUATION->value),
 		};
 		$this->async(function () use ($eventType, $errorCode) {
 			(new FollowUpTaskEvent($eventType, $this->call))
 				->setSection('error_'. $errorCode)
 				->send()
 			;
+		});
+
+		return $this;
+	}
+
+	/**
+	 * Send telemetry data about AI follow-up or call events to callcontroller
+	 * @param AITask|null $source Task object for AI events or Call object for general call events
+	 * @param string $status 'success' or 'error'
+	 * @param string|null $errorCode
+	 * @param string $event Event type identifier
+	 * @return self
+	 */
+	public function sendTelemetry(
+		AITask|null $source,
+		string $status,
+		?string $errorCode = null,
+		string $event = 'task_status',
+		Error|null $error = null
+	): self
+	{
+		$this->async(function () use ($source, $status, $errorCode, $event, $error)
+		{
+			$telemetry = [
+				'callId' => $this->call->getId(),
+				'roomId' => $this->call->getUuid(),
+				'status' => $status,
+				'userId' => $this->call->getInitiatorId() ?: 0,
+				'event' => $event,
+				'timestamp' => time(),
+			];
+
+			$data = [];
+			if ($source instanceof AITask)
+			{
+				$data['taskId'] = $source->getId();
+				$data['taskType'] = $source->getAISenseType();
+				$data['taskHash'] = $source->getHash();
+				$data['taskLanguage'] = $source->getLanguageId();
+			}
+			if ($errorCode !== null)
+			{
+				$data['errorCode'] = $errorCode;
+			}
+			if ($error instanceof Error)
+			{
+				$data['errorCode'] = $error->getCode();
+				if (
+					$error instanceof \Bitrix\Call\Error
+					&& $error->getDescription()
+				)
+				{
+					$data['error'] = $error->getDescription();
+				}
+				else
+				{
+					$data['error'] = $error->getMessage();
+				}
+			}
+			$telemetry['data'] = $data;
+
+			(new ControllerClient())->sendAIFollowUpTelemetry($telemetry);
 		});
 
 		return $this;

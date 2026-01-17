@@ -2,16 +2,12 @@
 
 namespace Bitrix\Rest\V3\Structures;
 
-use Bitrix\Main\Error;
 use Bitrix\Rest\V3\Attributes\Editable;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\PropertyHelper;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exceptions\Validation\DtoFieldRequiredAttributeException;
-use Bitrix\Rest\V3\Exceptions\Validation\DtoValidationException;
-use Bitrix\Rest\V3\Exceptions\Validation\InvalidFieldTypeTypeException;
 use Bitrix\Rest\V3\Exceptions\Validation\InvalidRequestFieldTypeException;
-use Bitrix\Rest\V3\Exceptions\Validation\RequestInvalidFieldTypeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Interaction\Request\UpdateRequest;
 
@@ -28,15 +24,24 @@ final class FieldsStructure extends Structure
 	{
 		$structure = new self();
 		$structure->dtoClass = $dtoClass;
-		
+
 		$value = (array)$value;
 
 		if (!empty($value))
 		{
-			$reflection = new \ReflectionClass($dtoClass);
+
+			/** @var Dto $dto */
+			$dto = self::getDto($dtoClass);
+
+			$fields = $dto->getFields();
 
 			foreach ($value as $item => $itemValue)
 			{
+				if (!isset($fields[$item]))
+				{
+					throw new UnknownDtoPropertyException($dto->getShortName(), $item);
+				}
+
 				if (str_starts_with($item, 'UF_'))
 				{
 					$structure->userFields[$item] = $itemValue;
@@ -44,24 +49,12 @@ final class FieldsStructure extends Structure
 					continue;
 				}
 
-				// check if dto has property
-				if (!PropertyHelper::isValidProperty($reflection, $item))
+				if ($request instanceof UpdateRequest && !$fields[$item]->isEditable())
 				{
-					throw new UnknownDtoPropertyException($dtoClass, $item);
+					throw new DtoFieldRequiredAttributeException($dto->getShortName(), $item, Editable::class);
 				}
 
-				if ($request instanceof UpdateRequest && !PropertyHelper::hasAttribute($dtoClass, $item, Editable::class))
-				{
-					throw new DtoFieldRequiredAttributeException($dtoClass, $item, Editable::class);
-				}
-
-				$property = PropertyHelper::getProperty($reflection, $item);
-				$itemValue = FieldsConverter::convertValueByType($property->getType()?->getName(), $itemValue);
-
-				if (!FieldsValidator::validateReflectionPropertyAndValue($property, $itemValue))
-				{
-					throw new InvalidRequestFieldTypeException($property->getName(), $property->getType() ? $property->getType()->getName() : 'unknown');
-				}
+				$itemValue = FieldsConverter::convertValueByType($fields[$item]->getPropertyType(), $itemValue);
 
 				$structure->items[$item] = $itemValue;
 			}
@@ -77,17 +70,26 @@ final class FieldsStructure extends Structure
 
 	public function getAsDto(): Dto
 	{
+		/** @var Dto $dtoClass */
 		$dtoClass = $this->dtoClass;
-		$dto = new $dtoClass();
+		$dto = $dtoClass::create();
 
 		foreach ($this->items as $propertyName => $value)
 		{
-			$dto->$propertyName = $value;
+			try
+			{
+				$dto->{$propertyName} = $value;
+			}
+			catch (\TypeError $exception)
+			{
+				$property = PropertyHelper::getProperty($dtoClass, $propertyName);
+				throw new InvalidRequestFieldTypeException($propertyName, $property->getType()?->getName());
+			}
 		}
 
 		foreach ($this->userFields as $propertyName => $value)
 		{
-			$dto->$propertyName = $value;
+			$dto->{$propertyName} = $value;
 		}
 
 		return $dto;

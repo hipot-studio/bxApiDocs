@@ -22,6 +22,7 @@ abstract class PushCommand
 
 	public const TAG_ADDED = 'tag_added';
 	public const TAG_UPDATED = 'tag_changed';
+	public const TAGS_DELETED = 'tags_deleted';
 
 	public const COMMENT_DELETED = 'comment_delete';
 	public const COMMENT_ADDED = 'comment_add';

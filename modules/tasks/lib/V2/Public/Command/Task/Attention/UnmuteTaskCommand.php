@@ -25,21 +25,19 @@ class UnmuteTaskCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$userOptionService = Container::getInstance()->getUserOptionService();
-
-		$handler = new UnmuteTaskHandler($userOptionService);
-
 		$result = new Result();
+
+		$handler = Container::getInstance()->get(UnmuteTaskHandler::class);
 
 		try
 		{
 			$handler($this);
+
+			return $result;
 		}
 		catch (UserOptionException $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

@@ -738,21 +738,25 @@ class Template extends Base
 				}
 			}
 		}
-		if(!empty($users))
+
+		if (!empty($users))
 		{
-			TemplateUserTable::delete($templateId);
+			TemplateUserTable::deleteByTemplateIds([$templateId]);
+
 			foreach($users as $code)
 			{
 				$userResult = TemplateUserTable::add([
 					'TEMPLATE_ID' => $templateId,
 					'ACCESS_CODE' => $code,
 				]);
+
 				if(!$userResult->isSuccess())
 				{
 					$result->addErrors($userResult->getErrors());
 				}
 			}
 		}
+
 		$template = \Bitrix\DocumentGenerator\Template::loadById($templateId);
 		$result->setData($this->getAction($template));
 

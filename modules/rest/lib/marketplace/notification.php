@@ -238,8 +238,8 @@ class Notification
 						$maxCount >= 0
 						&& (
 							$entity[Access::ENTITY_COUNT] > $maxCount
-							|| $entity[Access::ENTITY_TYPE_APP_STATUS][AppTable::STATUS_PAID] > 0
-							|| $entity[Access::ENTITY_TYPE_APP_STATUS][AppTable::STATUS_SUBSCRIPTION] > 0
+							|| !empty($entity[Access::ENTITY_TYPE_APP_STATUS][AppTable::STATUS_PAID])
+							|| !empty($entity[Access::ENTITY_TYPE_APP_STATUS][AppTable::STATUS_SUBSCRIPTION])
 						)
 						&& static::getLastCheckTimestamp() > time()
 					)

@@ -7,6 +7,7 @@ namespace Bitrix\Im\V2\Anchor;
 use Bitrix\Im\Model\AnchorTable;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Anchor\Push\PushService;
+use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
@@ -135,6 +136,57 @@ class ReadService
 
 		$this->pushService->deleteAll($userId);
 
+		$this->anchorProvider->cleanCache($userId);
+
+		return $result;
+	}
+
+	public function readByType(Type $type, ?int $userId = null): Result
+	{
+		$result = new Result();
+
+		$userId ??= $this->getContext()->getUserId();
+
+		if ($userId <= 0)
+		{
+			return $result;
+		}
+
+		try
+		{
+			$query = AnchorTable::query()
+				->setSelect(['ID', 'CHAT_ID'])
+				->where('USER_ID', $userId)
+				->where('CHAT.TYPE', $type->literal);
+
+			if ($type->entityType)
+			{
+				$query->where('CHAT.ENTITY_TYPE', $type->entityType);
+			}
+
+			$queryResult = $query->fetchAll();
+
+			$anchorIds = [];
+			$chatIds = [];
+			foreach ($queryResult as $row)
+			{
+				$anchorIds[(int)$row['ID']] = (int)$row['ID'];
+				$chatIds[(int)$row['CHAT_ID']] = (int)$row['CHAT_ID'];
+			}
+
+			if (!empty($anchorIds))
+			{
+				AnchorTable::deleteByFilter(['ID' => $anchorIds]);
+			}
+		}
+		catch (SystemException $exception)
+		{
+			$this->exceptionHandler->writeToLog($exception);
+
+			return $result->addError(new AnchorError(AnchorError::UNEXPECTED));
+		}
+
+		$this->pushService->deleteByChatIds($userId, $chatIds);
 		$this->anchorProvider->cleanCache($userId);
 
 		return $result;

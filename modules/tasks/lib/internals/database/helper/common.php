@@ -21,7 +21,7 @@ abstract class Common
 	public static function parseFilter(array $filter)
 	{
 		$parsed = array();
-		$parser = new \CAllSQLWhere();
+		$parser = new \CSQLWhere();
 		foreach($filter as $k => $v)
 		{
 			$info = $parser->makeOperation($k);
@@ -56,7 +56,7 @@ abstract class Common
 			}
 			else
 			{
-				$op = \CAllSQLWhere::getOperationByCode($condition['OPERATION']);
+				$op = \CSQLWhere::getOperationByCode($condition['OPERATION']);
 				$result[$op.$condition['FIELD']] = $condition['VALUE'];
 			}
 		}

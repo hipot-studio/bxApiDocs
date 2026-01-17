@@ -2,14 +2,17 @@
 
 namespace Bitrix\Crm\Filter;
 
-use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Model\Dynamic\Type;
+use Bitrix\Crm\Service\Container;
 
 class ItemSettings extends EntitySettings implements ISettingsSupportsCategory
 {
+	public const FLAG_RECURRING = 1;
+
 	/** @var Type */
 	protected $type;
 	protected $categoryId = 0;
+	protected bool $isRecurring = false;
 
 	public function __construct(array $params, Type $type)
 	{
@@ -21,6 +24,8 @@ class ItemSettings extends EntitySettings implements ISettingsSupportsCategory
 			?? $params['CATEGORY_ID']
 			?? $this->categoryId
 		);
+
+		$this->isRecurring = (bool)($params['isRecurring'] ?? false);
 
 		$this->type = $type;
 	}
@@ -54,5 +59,10 @@ class ItemSettings extends EntitySettings implements ISettingsSupportsCategory
 	public function getCategoryId(): ?int
 	{
 		return $this->categoryId;
+	}
+
+	public function isRecurring(): bool
+	{
+		return $this->isRecurring;
 	}
 }

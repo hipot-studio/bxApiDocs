@@ -16,7 +16,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 {
 	const ACTION_VIEW = 'VIEW';
 	const ACTION_EDIT = 'EDIT';
-	const ACTION_SOCIAL = 'SOCIAL';
 	const MAX_IMAGE_SIZE = 2097152;
 
 	public function __construct($component = null)
@@ -37,9 +36,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 					return $this->includeComponentTemplate('error');
 				}
 				return $this->executeEditAction();
-				break;
-			case self::ACTION_SOCIAL:
-				return $this->executeSocialAction();
 				break;
 			default:
 				return $this->executeViewAction();
@@ -99,11 +95,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 			'OWNER_TYPE_ID' => $ownerTypeId,
 			'OWNER_ID' => $ownerId
 		);
-
-		if($fields['HAS_PHOTO'] === 'Y')
-		{
-			self::updateRecognizePicture($ownerTypeId, $ownerId);
-		}
 
 		if($fields['SAVE_PHOTO'] === 'Y' && $ownerTypeId === CCrmOwnerType::Contact && isset($_FILES['IMAGE']))
 		{
@@ -241,107 +232,10 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 		$CCrmFieldMulti->SetFields($entityType, $entityId, $record);
 	}
 
-	public static function saveRecognizeConsent($fields)
-	{
-		global $USER;
-		$userId = $USER->GetID();
-		$result = new Main\Result();
-		if(!Main\Loader::includeModule('faceid'))
-		{
-			$result->addError(new Main\Error('Face detection module is not installed'));
-			return $result;
-		}
-
-		$checkCursor = \Bitrix\Faceid\AgreementTable::getList(array(
-			'filter' => array('=USER_ID' => $userId)
-		));
-		if(!$checkCursor->fetch())
-		{
-			\Bitrix\Faceid\AgreementTable::add(array(
-				'USER_ID' => $userId,
-				'NAME' => $USER->GetFullName(),
-				'EMAIL' => $USER->GetEmail(),
-				'DATE' => new \Bitrix\Main\Type\DateTime,
-				'IP_ADDRESS' => \Bitrix\Main\Context::getCurrent()->getRequest()->getRemoteAddress()
-			));
-		}
-		
-		return $result;
-	}
-	
-	public static function recognizeFace($fields, $userId)
-	{
-		$result = new Main\Result();
-
-		if(!Main\Loader::includeModule('faceid'))
-		{
-			$result->addError(new Main\Error(Loc::getMessage('CRM_ACTIVITY_VISIT_NO_FACEID')));
-			return $result;
-		}
-		
-		if(!isset($_FILES['IMAGE']))
-		{
-			$result->addError(new Main\Error(Loc::getMessage('CRM_ACTIVITY_VISIT_NO_PICTURE')));
-			return $result;
-		}
-
-		$uploadedFileDescriptor = $_FILES['IMAGE'];
-		$imageFile = new Bitrix\Main\IO\File($uploadedFileDescriptor['tmp_name']);
-		$imageFile->open('rb');
-		
-		if($imageFile->getSize() > self::MAX_IMAGE_SIZE)
-		{
-			$result->addError(new Main\Error(Loc::getMessage('CRM_ACTIVITY_VISIT_FILE_TOO_LARGE')));
-			return $result;
-		}
-
-		$rawImage = $imageFile->getContents();
-		$recognizeResponse = \Bitrix\FaceId\FaceId::identify($rawImage, 'vtracker');
-		
-		if($recognizeResponse['success'] !== true)
-		{
-			$result->addError(new Main\Error(Loc::getMessage('CRM_ACTIVITY_VISIT_FACE_SERVER_ERROR')));
-			return $result;
-		}
-
-		if($recognizeResponse['result']['found'] === true)
-		{
-			// simply(c) using most confident result
-			$faceDescriptor = $recognizeResponse['result']['items'][0];
-			$faceId = $faceDescriptor['face_id'];
-			$entity = self::getEntityByFaceId($faceId);
-			$response = array(
-				'FACE_ID' => $faceId,
-			);
-			if($entity != false)
-			{
-				$response['ENTITY_TYPE'] = $entity['ENTITY_TYPE'];
-				$response['ENTITY_ID'] = $entity['ENTITY_ID'];
-			}
-		}
-		else
-		{
-			$response = array(
-				'FACE_ID' => 0
-			);
-		}
-
-		$response['DEBUG'] = $recognizeResponse;
-		$result->setData($response);
-		return $result;
-	}
-
 	protected function executeEditAction()
 	{
 		$this->arResult = $this->prepareDataForEdit();
 		$this->includeComponentTemplate('edit');
-		return $this->arResult;
-	}
-
-	protected function executeSocialAction()
-	{
-		$this->arResult = $this->prepareDataForSocial();
-		$this->includeComponentTemplate('social');
 		return $this->arResult;
 	}
 
@@ -439,56 +333,8 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 			);
 		}
 
-		$result['FACEID_ENABLED'] = Main\Loader::includeModule('faceid') && \Bitrix\FaceId\FaceId::isAvailable() && $this->arParams['HAS_RECOGNIZE_CONSENT'];
-		return $result;
-	}
+		$result['FACEID_ENABLED'] = false;
 
-	/**
-	 * @return array
-	 */
-	protected function prepareDataForSocial()
-	{
-		$result = array();
-		$result['SUCCESS'] = false;
-		if(!Main\Loader::includeModule('faceid'))
-		{
-			$result['ERROR'] = Loc::getMessage('CRM_ACTIVITY_VISIT_NO_FACEID');
-			return $result;
-		}
-
-		if(!isset($_FILES['IMAGE']))
-		{
-			$result['ERROR'] = Loc::getMessage('CRM_ACTIVITY_VISIT_NO_PICTURE');
-			return $result;
-		}
-
-		$uploadedFileDescriptor = $_FILES['IMAGE'];
-		$imageFile = new Bitrix\Main\IO\File($uploadedFileDescriptor['tmp_name']);
-		$imageFile->open('rb');
-
-		if($imageFile->getSize() > self::MAX_IMAGE_SIZE)
-		{
-			$result['ERROR'] = Loc::getMessage('CRM_ACTIVITY_VISIT_FILE_TOO_LARGE');
-			return $result;
-		}
-
-		$rawImage = $imageFile->getContents();
-		$recognizeResponse = \Bitrix\FaceId\FaceId::identifyVk($rawImage);
-		
-		if($recognizeResponse['success'] != true)
-		{
-			$result['ERROR'] = Loc::getMessage('CRM_ACTIVITY_VISIT_FACE_SERVER_ERROR');
-			return $result;
-		}
-		
-		if($recognizeResponse['result']['found'] != true)
-		{
-			$result['ERROR'] = Loc::getMessage('CRM_ACTIVITY_VISIT_FACE_NOTHING_FOUND');
-			return $result;
-		}
-
-		$result['SUCCESS'] = true;
-		$result['VK_PROFILES'] = $recognizeResponse['result']['items'];
 		return $result;
 	}
 
@@ -573,70 +419,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 		return isset($this->arParams['ACTION']) ? $this->arParams['ACTION'] : self::ACTION_VIEW;
 	}
 
-	protected static function updateRecognizePicture($entityTypeId, $entityId)
-	{
-		if(!Main\Loader::includeModule('faceid'))
-			return;
-
-		if(!isset($_FILES['IMAGE']))
-			return;
-
-		switch ($entityTypeId)
-		{
-			case CCrmOwnerType::Lead:
-				$entityFields = CCrmLead::GetByID($entityId);
-				break;
-			case CCrmOwnerType::Contact:
-				$entityFields = CCrmContact::GetByID($entityId);
-				break;
-			default:
-				return;
-				break;
-		}
-
-		if(!is_array($entityFields))
-			return;
-
-		if($entityFields['FACE_ID'] > 0)
-			return;
-
-		$uploadedFileDescriptor = $_FILES['IMAGE'];
-		$imageFile = new Bitrix\Main\IO\File($uploadedFileDescriptor['tmp_name']);
-		$imageFile->open('rb');
-
-		if($imageFile->getSize() > self::MAX_IMAGE_SIZE)
-			return;
-
-		$rawImage = $imageFile->getContents();
-		$recognizeResponse = \Bitrix\FaceId\FaceId::add($rawImage, 'vtracker');
-
-		if($recognizeResponse['success'] !== true)
-			return;
-
-		if($recognizeResponse['result']['added'] !== true)
-			return;
-
-		$faceId = (int)$recognizeResponse['result']['item']['face_id'];
-
-		if($faceId == 0)
-			return;
-
-		$fields = array(
-			'FACE_ID' => $faceId
-		);
-		switch ($entityTypeId)
-		{
-			case CCrmOwnerType::Lead:
-				$lead = new CCrmLead();
-				$lead->Update($entityId, $fields);
-				break;
-			case CCrmOwnerType::Contact:
-				$contact = new CCrmContact();
-				$contact->Update($entityId, $fields);
-				break;
-		}
-	}
-
 	/**
 	 * Creates new lead. Returns id of the lead or false in case of errors.
 	 * @param $params
@@ -656,37 +438,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 		));
 
 		return $leadId;
-	}
-
-	/**
-	 * @param int $faceId
-	 * @return array ['ENTITY_TYPE' => string, 'ENTITY_ID' => string] | false
-	 */
-	public static function getEntityByFaceId($faceId)
-	{
-		$result = false;
-		$cursor = CCrmContact::GetListEx(array(), array('=FACE_ID' => $faceId), false, false, array('ID'));
-
-		if($row = $cursor->Fetch())
-		{
-			$result = array(
-				'ENTITY_TYPE' => CCrmOwnerType::ContactName,
-				'ENTITY_ID' => (int)$row['ID']
-			);
-			return $result;
-		}
-
-		$cursor = CCrmLead::GetListEx(array(), array('=FACE_ID' => $faceId), false, false, array('ID'));
-		if($row = $cursor->Fetch())
-		{
-			$result = array(
-				'ENTITY_TYPE' => CCrmOwnerType::LeadName,
-				'ENTITY_ID' => (int)$row['ID']
-			);
-			return $result;
-		}
-
-		return false;
 	}
 
 	protected function getVkProfile($entityType, $entityId)

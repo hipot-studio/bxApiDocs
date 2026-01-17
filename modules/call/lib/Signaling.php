@@ -2,8 +2,8 @@
 
 namespace Bitrix\Call;
 
-use Bitrix\Call\Settings;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Integration\AI\CallAIBaasService;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Integration\Chat;
 use Bitrix\Main\Loader;
@@ -54,7 +54,7 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 		$chatId = (int)$this->call->getAssociatedEntity()?->getChatId();
 
 		$config = [
-			'callToken' => JwtCall::getCallToken($chatId),
+			'callToken' => $chatId > 0 ? JwtCall::getCallToken($chatId) : '',
 			'call' => $this->getCallInfoForSend(($senderId !== $toUserId ? $toUserId : 0)),
 			'aiSettings' => $this->getCallAiSettings(),
 			'isLegacyMobile' => $isLegacyMobile,
@@ -112,7 +112,7 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 			'params' => [
 				'ACTION' => 'IMINV_'.$this->call->getId()."_".time()."_".($video ? 'Y' : 'N'),
 				'PARAMS' => [
-					'callToken' => JwtCall::getCallToken($chatId),
+					'callToken' => $chatId > 0 ? JwtCall::getCallToken($chatId) : '',
 					'call' => $this->getCallInfoForSend(($senderId === $toUserId ? $toUserId : 0)),
 					'type' => 'internal',
 					'callerName' => htmlspecialcharsback($name),
@@ -197,6 +197,11 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 
 			\Bitrix\Pull\Event::send();
 		}
+	}
+
+	public function sendFinishToInitiator(int $user): bool
+	{
+		return $this->sendFinishInternal([$user]);
 	}
 
 	protected function send(string $command, $users, array $params = [], $push = null, $ttl = 5): bool
@@ -288,7 +293,8 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 			'recordingMinUsers' => CallAISettings::getRecordMinUsers(),
 			'agreementAccepted' => CallAISettings::isAgreementAccepted(),
 			'tariffAvailable' => CallAISettings::isTariffAvailable(),
-			'baasAvailable' => CallAISettings::isBaasServiceHasPackage(),
+			'baasAvailable' => CallAISettings::baasAvailable(),
+			'marketSubscriptionEnabled' => CallAISettings::isMarketSubscriptionEnabled(),
 		];
 	}
 

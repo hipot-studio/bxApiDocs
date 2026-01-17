@@ -7,6 +7,7 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 class EntityConversionWizard
 {
@@ -533,20 +534,34 @@ class EntityConversionWizard
 				{
 					if(!is_array($data))
 					{
-						//Handle new user field file editor mail.file.input (it operates with file ID instead of file info)
-						$controlID = $fileInputUtility->getUserFieldCid($fieldInfo);
-
-						if(!in_array($data, $fileInputUtility->checkFiles($controlID, array($data))))
+						$isValid = false;
+						if ((new UiFileUploaderResultValidator($fieldInfo))->validate((int)$data))
 						{
-							continue;
+							$isValid = true;
+						}
+						else
+						{
+							/**
+							 * @see \CCrmOwnerType::Invoice
+							 * @deprecated, old behavior, used in Old invoices
+							 */
+							//Handle new user field file editor mail.file.input (it operates with file ID instead of file info)
+							$controlID = $fileInputUtility->getUserFieldCid($fieldInfo);
+
+							if(in_array($data, $fileInputUtility->checkFiles($controlID, [$data])))
+							{
+								$isValid = true;
+								if(in_array($data, $fileInputUtility->checkDeletedFiles($controlID)))
+								{
+									$isValid = false;
+								}
+							}
 						}
 
-						if(in_array($data, $fileInputUtility->checkDeletedFiles($controlID)))
+						if($isValid)
 						{
-							continue;
+							$results[] = $data;
 						}
-
-						$results[] = $data;
 					}
 					else
 					{
@@ -580,20 +595,33 @@ class EntityConversionWizard
 
 			if(!is_array($data))
 			{
-				//Handle new user field file editor mail.file.input (it operates with file ID instead of file info array)
-				$controlID = $fileInputUtility->getUserFieldCid($fieldInfo);
-				$checkResult = $fileInputUtility->checkFiles($controlID, array($data));
-				if(!in_array($data, $checkResult))
+				$isValid = false;
+				if ((new UiFileUploaderResultValidator($fieldInfo))->validate((int)$data))
 				{
-					unset($fields[$fieldName]);
+					$isValid = true;
 				}
 				else
 				{
-					$delResult = $fileInputUtility->checkDeletedFiles($controlID);
-					if(in_array($data, $delResult))
+					/**
+					 * @see \CCrmOwnerType::Invoice
+					 * @deprecated, old behavior, used in Old invoices
+					 */
+					//Handle user field file editor mail.file.input (it operates with file ID instead of file info array)
+					$controlID = $fileInputUtility->getUserFieldCid($fieldInfo);
+					$checkResult = $fileInputUtility->checkFiles($controlID, [$data]);
+					if (in_array($data, $checkResult))
 					{
-						unset($fields[$fieldName]);
+						$isValid = true;
+						$delResult = $fileInputUtility->checkDeletedFiles($controlID);
+						if (in_array($data, $delResult))
+						{
+							$isValid = false;
+						}
 					}
+				}
+				if (!$isValid)
+				{
+					unset($fields[$fieldName]);
 				}
 			}
 			else

@@ -11,6 +11,7 @@ use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 
 final class ItSolution extends CloudEngine implements IContext, IQueueOptional
 {
@@ -83,7 +84,7 @@ final class ItSolution extends CloudEngine implements IContext, IQueueOptional
 	 */
 	protected function getMessageLength(Message $message): int
 	{
-		return (new GPT($message->getContent()))->count();
+		return $this->getTokenizer()->count($message->getContent());
 	}
 
 	/**
@@ -134,6 +135,11 @@ final class ItSolution extends CloudEngine implements IContext, IQueueOptional
 			$postParams['response_format'] = ['type' => 'json_object'];
 		}
 
+		if ($this->isReasoningEnabled())
+		{
+			$postParams['reasoning_effort'] = 2;
+		}
+
 		return $postParams;
 	}
 
@@ -174,5 +180,10 @@ final class ItSolution extends CloudEngine implements IContext, IQueueOptional
 		$region = Application::getInstance()->getLicense()->getRegion();
 
 		return $region === 'ru' || $region === 'by';
+	}
+
+	protected function getTokenizer(): GPT
+	{
+		return ServiceLocator::getInstance()->get(GPT::class);
 	}
 }

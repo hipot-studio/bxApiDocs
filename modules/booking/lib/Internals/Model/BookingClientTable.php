@@ -87,19 +87,19 @@ final class BookingClientTable extends DataManager
 		return [
 			(new Reference(
 				'BOOKING',
-				BookingTable::getEntity(),
+				BookingTable::class,
 				Join::on('this.ENTITY_ID', 'ref.ID')
 					->where('this.ENTITY_TYPE', EntityType::Booking->value)
 			)),
 			(new Reference(
 				'WAIT_LIST',
-				BookingTable::getEntity(),
+				BookingTable::class,
 				Join::on('this.ENTITY_ID', 'ref.ID')
 					->where('this.ENTITY_TYPE', EntityType::WaitList->value)
 			)),
 			(new Reference(
 				'CLIENT_TYPE',
-				ClientTypeTable::getEntity(),
+				ClientTypeTable::class,
 				Join::on('this.CLIENT_TYPE_ID', 'ref.ID')
 			))->configureJoinType(Join::TYPE_INNER),
 

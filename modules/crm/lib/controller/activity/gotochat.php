@@ -26,6 +26,8 @@ use Bitrix\Main\Result;
 
 class GoToChat extends Base
 {
+	private const SELECTED_OPENLINE_IDS = 'gotochat-selected-openline-ids';
+
 	public function bindClientAction(Factory $factory, Item $entity, int $clientId, int $clientTypeId): ?array
 	{
 		$clientIdentifier = new ItemIdentifier($clientTypeId, $clientId);
@@ -122,7 +124,7 @@ class GoToChat extends Base
 			'hasClients' => $this->hasClients($entity),
 			'services' => [
 				'telegrambot' => true,
-				'ru-whatsapp' => !$isBox,
+				'ru-whatsapp' => false,
 				'whatsapp' => !$isBox,
 			],
 		];
@@ -247,10 +249,63 @@ class GoToChat extends Base
 				'selected' => $item['SELECTED'],
 				'url' => $item['LINK'] ?? '',
 				'name' => $item['NAME'],
+				'list' => $this->getPreparedOpenLineListItems($itemCode, $item),
 			];
 		}
 
 		return $result;
+	}
+
+	private function getPreparedOpenLineListItems(string $connector, array $item): array
+	{
+		$list = [];
+		if (empty($item['LIST']))
+		{
+			return $list;
+		}
+
+		$hasSelectedOpenLine = false;
+		foreach ($item['LIST'] as $listItem)
+		{
+			if ($listItem['IS_ACTIVE'] !== 'Y' || $listItem['STATUS'] !== 1)
+			{
+				continue;
+			}
+
+			$id = (int)$listItem['ID'];
+			$selected = $this->getSelectedOpenLineId($connector) === $id;
+			if ($selected)
+			{
+				$hasSelectedOpenLine = true;
+			}
+
+			$list[] = [
+				'id' => $id,
+				'name' => $listItem['NAME'],
+				'selected' => $selected,
+			];
+		}
+
+		if (!$hasSelectedOpenLine)
+		{
+			$list[array_key_last($list)]['selected'] = true;
+		}
+
+		return $list;
+	}
+
+	private function getSelectedOpenLineId(string $connector): ?int
+	{
+		static $selectedList = [];
+
+		if (isset($selectedList[$connector]))
+		{
+			return $selectedList[$connector];
+		}
+
+		$selectedList = \CUserOptions::GetOption('crm', self::SELECTED_OPENLINE_IDS, []);
+
+		return $selectedList[$connector] ?? null;
 	}
 
 	private function getAvailableChannels(ItemIdentifier $itemIdentifier): array

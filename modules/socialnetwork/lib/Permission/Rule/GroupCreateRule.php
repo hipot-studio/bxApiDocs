@@ -88,7 +88,7 @@ class GroupCreateRule extends AbstractRule
 	}
 
 	/**
-	 * @see \CAllMain::GetUserRight
+	 * @see \CMain::GetUserRight
 	 */
 	protected function hasPermissions(GroupModel $item): bool
 	{

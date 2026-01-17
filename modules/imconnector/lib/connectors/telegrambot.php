@@ -7,6 +7,7 @@ use Bitrix\ImConnector\Output;
 use Bitrix\ImConnector\Result;
 use Bitrix\ImConnector\Status;
 use Bitrix\ImConnector\Connector;
+use Bitrix\ImConnector\Tools\Text;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\ImOpenLines;
@@ -330,5 +331,12 @@ class TelegramBot extends Base implements MessengerUrl
 		}
 
 		return $result;
+	}
+
+	public function sendMessageProcessing(array $message, $line): array
+	{
+		$message['message']['text'] = Text::parseQuoting($message['message']['text']);
+
+		return parent::sendMessageProcessing($message, $line);
 	}
 }

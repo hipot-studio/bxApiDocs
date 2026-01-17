@@ -243,6 +243,32 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 			'type' => Column\Type::TAGS,
 		];
 
+		$this->headers['LINK_TYPE'] = [
+			'id' => 'LINK_TYPE',
+			'name' => Loc::getMessage('TASKS_GRID_TASK_GRID_HEADER_LINK_TYPE'),
+			'sort' => false,
+			'editable' => false,
+			'default' => false,
+		];
+
+		$this->headers['START_DATE_PLAN'] = [
+			'id' => 'START_DATE_PLAN',
+			'name' => Loc::getMessage('TASKS_GRID_TASK_GRID_HEADER_START_DATE_PLAN'),
+			'sort' => 'START_DATE_PLAN',
+			'first_order' => 'desc',
+			'editable' => false,
+			'default' => false,
+		];
+
+		$this->headers['END_DATE_PLAN'] = [
+			'id' => 'END_DATE_PLAN',
+			'name' => Loc::getMessage('TASKS_GRID_TASK_GRID_HEADER_END_DATE_PLAN'),
+			'sort' => 'END_DATE_PLAN',
+			'first_order' => 'desc',
+			'editable' => false,
+			'default' => false,
+		];
+
 		return $this;
 	}
 

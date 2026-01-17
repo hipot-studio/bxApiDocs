@@ -83,6 +83,13 @@ class CrmAccessService
 		return array_filter($ids, static fn (string $id): bool => in_array($id, $crmItemIds, true));
 	}
 
+	public function filterByTemplate(array $ids, int $templateId): array
+	{
+		$crmItemIds = $this->crmItemRepository->getIdsByTemplateId($templateId);
+
+		return array_filter($ids, static fn (string $id): bool => in_array($id, $crmItemIds, true));
+	}
+
 	private function groupByType(array $ids): array
 	{
 		$items = [];

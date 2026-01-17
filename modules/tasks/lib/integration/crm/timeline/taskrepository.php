@@ -10,7 +10,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Tasks\Integration\CRM\Fields\Mapper;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 
 class TaskRepository implements BackGroundJob
 {

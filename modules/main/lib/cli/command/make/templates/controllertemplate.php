@@ -71,7 +71,7 @@ PHP;
 		$code = implode("\n\t\t\t", $code);
 
 		return <<<PHP
-	public function configureActions(): array 
+	public function configureActions(): array
 	{
 		return [
 			{$code}
@@ -104,7 +104,9 @@ PHP;
 		foreach ($this->actions as $action)
 		{
 			$code[] = <<<PHP
-	/** @ajaxAction {$module}.{$alias}.{$this->name}.{$action} */
+	/**
+	 * @ajaxAction {$module}.{$alias}.{$this->name}.{$action}
+	 */
 	public function {$action}Action(): ?array
 	{
 		return null;

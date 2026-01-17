@@ -11,7 +11,7 @@ use Bitrix\Tasks\Flow\Responsible\Distributor;
 use Bitrix\Tasks\Flow\Task\Trait\TaskFlowTrait;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
-use CTimeZone;
+use Bitrix\Tasks\Util\User;
 
 class FlowFieldHandler
 {
@@ -35,7 +35,7 @@ class FlowFieldHandler
 	 * @throws FlowNotFoundException
 	 * @throws FlowTaskException
 	 */
-	public function modify(array &$fields, array $taskData = []): array
+	public function modify(array &$fields, array &$skipTimeZoneFields, array $taskData = []): array
 	{
 		$flow = $this->provider->getFlow($this->flowId, ['*', 'OPTIONS']);
 
@@ -61,14 +61,20 @@ class FlowFieldHandler
 
 		if (empty($taskData) || $isTaskAddedToFlow)
 		{
-			$deadline = $this->getDeadlineMatchWorkTimeWithTZOffset(
+			$deadline = $this->getDeadlineMatchWorkTime(
 				$flow->getPlannedCompletionTime(),
+				$fields['RESPONSIBLE_ID'],
 				$flow->getMatchSchedule(),
 				$flow->getMatchWorkTime(),
 			);
 
-			$fields['MATCH_WORK_TIME'] = $flow->getMatchWorkTime();
 			$fields['DEADLINE'] = UI::formatDateTime($deadline->convertToLocalTime()->getTimestamp());
+			if (!in_array('DEADLINE', $skipTimeZoneFields, true))
+			{
+				$skipTimeZoneFields[] = 'DEADLINE';
+			}
+
+			$fields['MATCH_WORK_TIME'] = $flow->getMatchWorkTime();
 			$fields['GROUP_ID'] = $flow->getGroupId();
 			$fields['TASK_CONTROL'] = $flow->getTaskControl();
 			$fields['ALLOW_CHANGE_DEADLINE'] = $flow->canResponsibleChangeDeadline();
@@ -84,7 +90,15 @@ class FlowFieldHandler
 			return [];
 		}
 
-		$flow = $this->provider->getFlow($this->flowId, ['DISTRIBUTION_TYPE']);
+		try
+		{
+			$flow = $this->provider->getFlow($this->flowId, ['DISTRIBUTION_TYPE']);
+		}
+		catch (FlowNotFoundException)
+		{
+			return [];
+		}
+
 		$distributionType = $flow->getDistributionType();
 
 		return (new FlowDistributionServicesFactory($distributionType))
@@ -92,8 +106,29 @@ class FlowFieldHandler
 			->getModifiedFields();
 	}
 
-	protected function getDeadlineMatchWorkTimeWithTZOffset(
+	private function getDeadlineMatchWorkTime(
 		int $offsetInSeconds,
+		int $responsibleId,
+		bool $matchSchedule = false,
+		bool $matchWorkTime = false,
+	): DateTime
+	{
+		$deadline = $this->getResponsibleTZDeadline(
+			$offsetInSeconds,
+			$responsibleId,
+			$matchSchedule,
+			$matchWorkTime
+		);
+
+		$responsibleTimeOffset = User::getTimeZoneOffset($responsibleId);
+		$toServerTimeOffset = -$responsibleTimeOffset;
+
+		return $deadline->add("{$toServerTimeOffset} seconds");
+	}
+
+	private function getResponsibleTZDeadline(
+		int $offsetInSeconds,
+		int $responsibleId,
 		bool $matchSchedule = false,
 		bool $matchWorkTime = false,
 	): DateTime
@@ -101,7 +136,7 @@ class FlowFieldHandler
 		$calendar = \Bitrix\Tasks\Integration\Calendar\Calendar::createFromPortalSchedule();
 
 		return $calendar->getClosestDate(
-			(new DateTime())->add(CTimeZone::GetOffset($this->userId) . ' seconds'),
+			DateTime::createFromTimestamp(User::getTime($responsibleId)),
 			$offsetInSeconds,
 			$matchSchedule,
 			$matchWorkTime,

@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Integration\Tasks;
 
 use Bitrix\BIConnector\DataSource\DatasetField;
 use Bitrix\BIConnector\DataSource\Field\IntegerField;
+use Bitrix\BIConnector\DataSource\Field\DateTimeField;
 use Bitrix\BIConnector\DataSource\UserFieldDataset;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -59,10 +60,20 @@ class TaskUserField extends UserFieldDataset
 
 	protected function getFields(): array
 	{
+		$tasksJoin = $this->createJoin(
+			"T",
+			"INNER JOIN b_tasks T ON T.ID = {$this->getAliasFieldName('VALUE_ID')}",
+			"LEFT JOIN b_tasks T ON T.ID = {$this->getAliasFieldName('VALUE_ID')}",
+		);
+
 		$fields = [
 			(new IntegerField('TASK_ID'))
 				->setName($this->getAliasFieldName('VALUE_ID'))
 				->setPrimary()
+			,
+			(new DateTimeField('TASK_CREATED_DATE'))
+				->setName($tasksJoin->getJoinFieldName('CREATED_DATE'))
+				->setJoin($tasksJoin)
 			,
 		];
 

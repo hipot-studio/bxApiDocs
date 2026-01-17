@@ -167,6 +167,24 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 		}
 	}
 
+	public function resetAllToursAction()
+	{
+		if (!$this->checkAccess())
+		{
+			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
+
+			return null;
+		}
+
+		$tours = $this->tourRepository->getAllTours();
+		foreach ($tours as $tour)
+		{
+			CUserOptions::DeleteOptionsByName($tour['optionCategory'], $tour['optionName']);
+		}
+
+		return true;
+	}
+
 	public function configureActions()
 	{
 	}

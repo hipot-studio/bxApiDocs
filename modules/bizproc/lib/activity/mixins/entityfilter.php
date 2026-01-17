@@ -13,7 +13,11 @@ trait EntityFilter
 {
 	abstract public function getDocumentType();
 
-	public function getOrmFilter(ConditionGroup $conditionGroup, ?array $targetDocumentType = null): array
+	public function getOrmFilter(
+		ConditionGroup $conditionGroup,
+		?array $targetDocumentType = null,
+		?array $fieldsMap = null
+	): array
 	{
 		$filter = ['LOGIC' => 'OR'];
 
@@ -23,7 +27,11 @@ trait EntityFilter
 			$targetDocumentType = $this->getDocumentType();
 		}
 
-		$fieldsMap = $documentService->getDocumentFields($targetDocumentType);
+		if (!$fieldsMap)
+		{
+			$fieldsMap = $documentService->getDocumentFields($targetDocumentType);
+		}
+
 		$i = 0;
 		$filter[$i] = [];
 

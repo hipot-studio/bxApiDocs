@@ -10,7 +10,7 @@ class ChecklistOperationGrouper
 	 * Groups operations by checklist name
 	 * 
 	 * @param ChecklistOperation[] $operations
-	 * @return ChecklistOperationGroup[] Indexed by checklist name
+	 * @return array<string, ChecklistOperationGroup> Indexed by checklist name
 	 */
 	public function groupOperations(array $operations): array
 	{

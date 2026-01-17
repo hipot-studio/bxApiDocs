@@ -55,7 +55,7 @@ class ActivityTable extends Entity\DataManager
 	{
 		global $DB;
 
-		$datetimeNull = 'CAST(NULL AS DATETIME)';
+		$datetimeNull = DbHelper::getSqlByDbType('CAST(NULL AS DATETIME)',  'CAST(NULL AS TIMESTAMP)');
 
 		return array(
 			'ID' => array(

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Gantt;
 
+use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Internals\DataBase\Tree\LinkExistsException;
+use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLink;
 use Bitrix\Tasks\V2\Internal\Exception\Task\DescendentException;
+use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Service\Task\ParentService;
 
 class GanttDependenceService
@@ -19,6 +22,31 @@ class GanttDependenceService
 	)
 	{
 
+	}
+
+	public function check(GanttLink $ganttLink): Result
+	{
+		$result = new Result();
+
+		if (
+			$this->parentService->isDescendantOf((int)$ganttLink->taskId, (int)$ganttLink->dependentId)
+			|| $this->parentService->isDescendantOf((int)$ganttLink->dependentId, (int)$ganttLink->taskId)
+		)
+		{
+			$message = Loc::getMessage('TASKS_GANTT_DEPENDENCE_SERVICE_DESCENDENT_ERROR');
+
+			return $result->addError(new Error($message));
+		}
+
+		if (ProjectDependenceTable::checkLinkExists($ganttLink->taskId, $ganttLink->dependentId, ['BIDIRECTIONAL' => true]))
+		{
+			Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/gantt.php');
+			$message = Loc::getMessage('TASKS_GANTT_CIRCULAR_DEPENDENCY_V2');
+
+			return $result->addError(new Error($message));
+		}
+
+		return $result;
 	}
 
 	public function add(GanttLink $ganttLink): void

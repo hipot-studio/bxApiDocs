@@ -1,5 +1,16 @@
 <?php
 
+use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
+use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
+use Bitrix\HumanResources\Enum\DepthLevel;
+use Bitrix\HumanResources\Public\Service\Container;
+use Bitrix\HumanResources\Service;
+use Bitrix\HumanResources\Type\MemberEntityType;
+use Bitrix\HumanResources\Type\StructureRole;
+use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Landing\Connector\Crm;
 use Bitrix\Landing\Mainpage;
 use Bitrix\Main\Loader;
@@ -24,6 +35,7 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 
 	/**
 	 * Base executable method.
+	 *
 	 * @return void
 	 */
 	public function executeComponent(): void
@@ -34,22 +46,33 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 		parent::executeComponent();
 	}
 
+	/**
+	 * Returns the boss ID using static context.
+	 *
+	 * @return int Boss user ID or 0 if not found.
+	 */
+	public static function getBossId(): int
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return 0;
+		}
+
+		$rootDepartment = StructureHelper::getRootStructureDepartment();
+		if (!$rootDepartment)
+		{
+			return 0;
+		}
+
+		$heads = Service\Container::getNodeMemberService()->getDefaultHeadRoleEmployees($rootDepartment->id);
+		$headFirst = $heads->getFirst();
+
+		return $headFirst->entityId ?? 0;
+	}
+
 	protected function initializeParams(): void
 	{
-		$bossIdDefault = 1;
-		if (!isset($this->arParams['BOSS_ID']) && Loader::includeModule('intranet'))
-		{
-			$structure = CIntranetUtils::getStructure();
-			foreach ($structure['DATA'] as $dataItem)
-			{
-				if ($dataItem['UF_HEAD'] !== null)
-				{
-					$bossIdDefault = (int)$dataItem['UF_HEAD'];
-					break;
-				}
-			}
-		}
-		$this->checkParam('BOSS_ID', $bossIdDefault);
+		$this->checkParam('BOSS_ID', self::getBossId());
 		$this->checkParam('COLOR_HEADERS', '#ffffff');
 		$this->checkParam('COLOR_TEXT', '#ffffff');
 		$this->checkParam('COLOR_TEXT_V2', 'hsla(179, 73%, 84%, 0.54)');
@@ -146,24 +169,9 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 		$realData['TITLE'] = $this->arParams['TITLE'];
 		$realData['TEXT'] = $this->arParams['TEXT'];
 
-		$supervisors = [];
-		$employees = [];
-		$departmentsCount = 0;
-
-		if (Loader::includeModule('intranet'))
+		if (!isset($this->arParams['BOSS_ID']))
 		{
-			$structure = CIntranetUtils::getStructure();
-			$departmentsCount = count($structure['DATA'] ?? []);
-			foreach ($structure['DATA'] as $dataItem)
-			{
-				$bossId = (int)$dataItem['UF_HEAD'];
-				if ($bossId > 0)
-				{
-					$this->arParams['BOSS_ID'] = $this->arParams['BOSS_ID'] ?? $bossId;
-					$supervisors[] = $bossId;
-				}
-				$employees = array_merge($employees, array_map('intval', $dataItem['EMPLOYEES']));
-			}
+			$this->arParams['BOSS_ID'] = self::getBossId();
 		}
 
 		$realData['BOSS'] = $this->getBoss();
@@ -171,7 +179,7 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 
 		if ($this->arParams['SHOW_EMPLOYEES'] === 'Y')
 		{
-			$employeesCount = count(array_unique($employees));
+			$employeesCount = $this->getEmployeesCount();
 			$realData['CARDS'][] = [
 				'icon' => 'ui-icon-set --persons-3',
 				'title' => $employeesCount,
@@ -183,7 +191,7 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 
 		if ($this->arParams['SHOW_SUPERVISORS'] === 'Y')
 		{
-			$supervisorsCount = count(array_unique($supervisors));
+			$supervisorsCount = $this->getSupervisorsCount();
 			$realData['CARDS'][] = [
 				'icon' => 'ui-icon-set --customer-card',
 				'title' => $supervisorsCount,
@@ -198,6 +206,7 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 
 		if ($this->arParams['SHOW_DEPARTMENTS'] === 'Y')
 		{
+			$departmentsCount = $this->getDepartmentsCount();
 			$realData['CARDS'][] = [
 				'icon' => 'ui-icon-set --person-flag',
 				'title' => $departmentsCount,
@@ -213,6 +222,11 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 		return $realData;
 	}
 
+	/**
+	 * Returns information about the company boss.
+	 *
+	 * @return array Associative array with boss information (name, last name, photo, position, etc.)
+	 */
 	protected function getBoss(): array
 	{
 		if (!$this->arParams['BOSS_ID'] || $this->arParams['BOSS_ID'] <= 0)
@@ -271,6 +285,11 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 		return $boss;
 	}
 
+	/**
+	 * Returns the company name.
+	 *
+	 * @return string The name of the company.
+	 */
 	private function getCompanyName(): string
 	{
 		$defaultCompanyName = Loc::getMessage('LANDING_WIDGET_CLASS_ABOUT_TITLE');
@@ -283,5 +302,75 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 		$crmContacts = Crm::getContacts(0);
 
 		return isset($crmContacts['COMPANY']) ? (string)$crmContacts['COMPANY'] : $defaultCompanyName;
+	}
+
+	/**
+	 * Returns the total number of employees in the company structure.
+	 *
+	 * @return int Number of employees.
+	 */
+	private function getEmployeesCount(): int
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return 0;
+		}
+
+		return Container::getUserDepartmentService()->getTotalEmployeeCount();
+	}
+
+	/**
+	 * Returns the total number of supervisors in the company structure.
+	 *
+	 * @return int Number of supervisors.
+	 */
+	private function getSupervisorsCount(): int
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return 0;
+		}
+
+		$nodeMembers = (new NodeMemberDataBuilder())
+			->setFilter(new NodeMemberFilter(
+							entityType: MemberEntityType::USER,
+						))
+			->addStructureRole(StructureRole::HEAD)
+			->getAll()
+		;
+
+		$headIds = [];
+		foreach($nodeMembers as $member)
+		{
+			$headIds[] = $member->entityId;
+		}
+
+		return count(array_unique($headIds));
+	}
+
+	/**
+	 * Returns the total number of departments in the company structure.
+	 *
+	 * @return int Number of departments.
+	 */
+	private function getDepartmentsCount(): int
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return 0;
+		}
+
+		$nodes =
+			(new NodeDataBuilder())
+				->addFilter(
+					new NodeFilter(
+						entityTypeFilter: NodeTypeFilter::createForDepartment(),
+						depthLevel: DepthLevel::FULL,
+					),
+				)
+				->getAll()
+		;
+
+		return count($nodes);
 	}
 }

@@ -22,7 +22,9 @@ class CallAIError extends \Bitrix\Call\Error
 		AI_TASK_FAILED = 'AI_TASK_FAILED',
 		AI_TRACKPACK_NOT_RECEIVED = 'AI_TRACKPACK_NOT_FOUND',
 		AI_TRANSCRIBE_TASK_ERROR = 'AI_TRANSCRIBE_TASK_ERROR',
-		AI_OVERVIEW_TASK_ERROR = 'AI_OVERVIEW_TASK_ERROR'
+		AI_OVERVIEW_TASK_ERROR = 'AI_OVERVIEW_TASK_ERROR',
+		AI_RECORDING_DISABLED = 'AI_RECORDING_DISABLED',
+		AI_MARKET_SUBSCRIPTION = 'AI_MARKET_SUBSCRIPTION'
 	;
 
 	protected bool $recoverable = false;
@@ -63,14 +65,7 @@ class CallAIError extends \Bitrix\Call\Error
 			&& ($errorRow = self::detectRowError($error->message, $processingTask))
 		)
 		{
-			if (str_starts_with($errorRow, '[ERROR]'))
-			{
-				$error->description = $errorRow;
-			}
-			else
-			{
-				$error->message = $errorRow;
-			}
+			$error->description = $errorRow;
 		}
 
 		if (
@@ -120,7 +115,7 @@ class CallAIError extends \Bitrix\Call\Error
 						'=CONTEXT_MODULE' => 'call',
 						'=CONTEXT_ID' => $task->getContextId(),
 						'=ENGINE_CODE' => $task->getAIEngineCode(),
-						'=ENGINE_CLASS' => $engine::class,
+						//'=ENGINE_CLASS' => $engine::class,
 						'=PAYLOAD_CLASS' => $payload::class,
 						'>DATE_CREATE' => (new \Bitrix\Main\Type\DateTime())->add('-5sec'),
 					],

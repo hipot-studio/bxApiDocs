@@ -6,7 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\V2\Internal\Integration\TimeMan\Service\UserService;
 use Bitrix\Tasks\V2\Internal\Repository\PlannerRepositoryInterface;
 

@@ -57,19 +57,43 @@ class Engine
 		return Option::get("rest", "service_client_secret", false);
 	}
 
-	public function setAccess(array $accessParams)
+	public function setAccess(array $accessParams): void
 	{
 		$connection = Main\Application::getInstance()->getConnection();
 		$connection->startTransaction();
 		try
 		{
-			Option::set("rest", "service_client_id", $accessParams["client_id"]);
-			Option::set("rest", "service_client_secret", $accessParams["client_secret"]);
+			$historyId = microtime(false);
+			$url = (new Main\Web\Uri('/bitrix/admin/perfmon_table.php'))
+				->addParams(
+					[
+						'lang' => LANGUAGE_ID,
+						'table_name' => 'b_option',
+						'f_MODULE_ID' => 'rest',
+						'f_NAME' => $historyId . '%',
+						'apply_filter' => 'Y',
+					]
+				);
+			\CEventLog::Log(
+				\CEventLog::SEVERITY_CRITICAL,
+				'REST_OAUTH_REGISTER',
+				'rest',
+				'oauth',
+				$url->getUri()
+			);
+
+			Option::set('rest', $historyId . ' service_client_id',  Option::get('rest', 'service_client_id', ''));
+			Option::set('rest', $historyId . ' service_client_secret', Option::get('rest', 'service_client_secret', ''));
+
+			Option::set('rest', 'service_client_id', $accessParams['client_id']);
+			Option::set('rest', 'service_client_secret', $accessParams['client_secret']);
 			$connection->commitTransaction();
 		}
-		catch (Main\ArgumentNullException $e)
+		catch (\Throwable $e)
 		{
 			$connection->rollbackTransaction();
+
+			throw $e;
 		}
 
 		$this->client = null;

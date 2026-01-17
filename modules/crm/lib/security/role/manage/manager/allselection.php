@@ -74,7 +74,7 @@ final class AllSelection implements SectionableRoleSelectionManager
 	{
 		$criterion = self::CRITERION;
 
-		return new Uri("/crm/perms/{$criterion}/");
+		return new Uri(SITE_DIR . "crm/perms/{$criterion}/");
 	}
 
 	public function preSaveChecks(array $userGroups): Result

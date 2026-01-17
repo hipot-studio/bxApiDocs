@@ -37,6 +37,7 @@ class Event
 			UserAbsence::cleanCache();
 
 			self::addAgent($fields['ID']);
+			self::addAbsenceEvent($fields);
 		}
 
 		return true;
@@ -162,5 +163,32 @@ class Event
 	protected static function getNameAgentEnd($elementId)
 	{
 		return '\Bitrix\Intranet\Absence\Agent::end(' . $elementId . ');';
+	}
+
+	protected static function addAbsenceEvent(array $arFields): void
+	{
+		if (!Loader::includeModule('iblock'))
+		{
+			return;
+		}
+
+		$arEnum = \CIBlockPropertyEnum::GetByID($arFields["ABSENCE_TYPE"] ?? null);
+
+		if (empty($arEnum))
+		{
+			return;
+		}
+
+		$event = new \Bitrix\Main\Event(
+			'intranet',
+			'onAddAbsence',
+			[
+				'userId' => $arFields["USER_ID"] ?? null,
+				'absenceType' => $arEnum['XML_ID'] ?? null,
+				'activeFrom' => $arFields['ACTIVE_FROM'] ?? '',
+				'activeTo' => $arFields['ACTIVE_TO'] ?? '',
+			]
+		);
+		$event->send();
 	}
 }

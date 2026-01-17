@@ -1,25 +1,25 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage tasks
- * @copyright 2001-2021 Bitrix
- */
 
 namespace Bitrix\Tasks\Access\Rule;
 
-
+use Bitrix\Main\Access\Rule\AbstractRule;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
 use Bitrix\Main\Access\AccessibleItem;
+use Bitrix\Tasks\Access\TemplateAccessController;
 
-class TemplateRemoveRule extends \Bitrix\Main\Access\Rule\AbstractRule
+/**
+ * @property TemplateAccessController $controller
+ */
+class TemplateRemoveRule extends AbstractRule
 {
-	public function execute(AccessibleItem $template = null, $params = null): bool
+	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
-		if (!$template)
+		if (!$item instanceof TemplateModel)
 		{
 			$this->controller->addError(static::class, 'Incorrect template');
+
 			return false;
 		}
 
@@ -28,17 +28,18 @@ class TemplateRemoveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
-		if (!$this->controller->check(ActionDictionary::ACTION_TEMPLATE_READ, $template, $params))
+		if (!$this->controller->check(ActionDictionary::ACTION_TEMPLATE_READ, $item, $params))
 		{
 			$this->controller->addError(static::class, 'Access to template denied');
+
 			return false;
 		}
 
-		if ($template->getTemplatePermission($this->user, PermissionDictionary::TEMPLATE_FULL))
+		if ($item->getTemplatePermission($this->user, PermissionDictionary::TEMPLATE_FULL))
 		{
 			return true;
 		}
 
-		return (bool) $this->user->getPermission(PermissionDictionary::TEMPLATE_REMOVE);
+		return (bool)$this->user->getPermission(PermissionDictionary::TEMPLATE_REMOVE);
 	}
 }

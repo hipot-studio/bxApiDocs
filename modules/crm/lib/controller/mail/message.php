@@ -1460,6 +1460,10 @@ class Message extends Controller
 		return $communications;
 	}
 
+
+	/**
+	 * @deprecated
+	 */
 	public function canUseMailAction(): bool
 	{
 		return Client::isReadyToUse();
@@ -1699,44 +1703,6 @@ class Message extends Controller
 		return $companies;
 	}
 
-	protected function getHeader(array $activity): array
-	{
-		$headerResult = \Bitrix\Crm\Activity\Mail\Message::getHeader($activity);
-		$this->addErrors($headerResult->getErrors());
-		return $headerResult->getData();
-	}
-
-	public function getHeaderAction(array $activity): array
-	{
-		if(!$this->checkModules())
-		{
-			return [];
-		}
-
-		if (!\CCrmPerms::IsAccessEnabled())
-		{
-			$this->addError(new Error(Loc::getMessage('CRM_MAIL_CONTROLLER_PERMISSION_DENIED')));
-			return [];
-		}
-
-		return $this->getHeader($activity);
-	}
-
-	protected function getTimeFormat(): string
-	{
-		return \Bitrix\Main\Context::getCurrent()->getCulture()->getShortTimeFormat();
-	}
-
-	protected function getDateFormat(): string
-	{
-		return \Bitrix\Main\Context::getCurrent()->getCulture()->getDayShortMonthFormat();
-	}
-
-	protected function getMessageDate(array $activity)
-	{
-		return $activity['START_TIME']->getTimestamp();
-	}
-
 	protected function checkOwnerReadPermission(int $typeId, int $id): bool
 	{
 		if(!Container::getInstance()->getUserPermissions()->item()->canRead($typeId, $id))
@@ -1835,172 +1801,6 @@ class Message extends Controller
 		}
 
 		return $activities;
-	}
-
-	/**
-	 * @throws ObjectPropertyException
-	 * @throws LoaderException
-	 * @throws ArgumentException
-	 * @throws SystemException
-	 */
-	public function getChainAction(int $id): array
-	{
-		/**
-		 * todo: Develop the method:
-		 * Write a function for obtaining a chain in parts (By parent id/ for long chains).
-		 * The chain can be taken both up and down from the original message.
-		 */
-
-		if (!$this->checkModules())
-		{
-			return [];
-		}
-
-		if (!\CCrmPerms::IsAccessEnabled())
-		{
-			$this->addError(new Error(Loc::getMessage('CRM_MAIL_CONTROLLER_PERMISSION_DENIED')));
-			return [];
-		}
-
-		$activities = $this->getActivities(
-			[
-				'ID' => $id,
-			],
-			self::SUPPORTED_ACTIVITY_TYPE,
-			[
-				'THREAD_ID',
-			],
-			limit: 1
-		);
-
-		if (count($activities) === 0 || !$this->checkActivityPermission(self::PERMISSION_READ, $activities))
-		{
-			return [];
-		}
-
-		$activity = $activities[0];
-		$threadId = $activity['THREAD_ID'];
-		$select = [
-			'SETTINGS',
-			'PARENT_ID',
-			'THREAD_ID',
-			'SUBJECT',
-			'START_TIME',
-			'DIRECTION',
-		];
-
-		$order = [
-			'START_TIME' => 'DESC',
-		];
-
-		/*
-			We need to make two selections and sort the messages by date
-			in order to limit the number of messages in long chains(in the future)
-			while preserving the open email in the middle of the chain.
-		 */
-		$messageBeforeCurrent = $this->getActivities(
-			[
-				'=THREAD_ID' => $threadId,
-				'<=PARENT_ID' => $id,
-			],
-			self::SUPPORTED_ACTIVITY_TYPE,
-			$select,
-			$order
-		);
-
-		$messageAfterCurrent = $this->getActivities(
-			[
-				'=THREAD_ID' => $threadId,
-				'>PARENT_ID' => $id,
-			],
-			self::SUPPORTED_ACTIVITY_TYPE,
-			$select,
-			$order
-		);
-
-		$chainActivities = array_merge($messageBeforeCurrent, $messageAfterCurrent);
-
-		/*
-			We need to sort the messages by time again.
-			For example, message number 5 may be a response to the first message, not the fourth.
-		*/
-		usort($chainActivities, function($a, $b) {
-			return $b['START_TIME']->getTimestamp() <=> $a['START_TIME']->getTimestamp();
-		});
-
-		$chain = [];
-
-		$lastIncomingId = null;
-		$lastIncomingKey = null;
-
-		foreach ($chainActivities as $key => $item)
-		{
-			$buildItem = [
-				'ID' => $item['ID'],
-				'OWNER_ID' => $item['OWNER_ID'],
-				'SUBJECT' => $item['SUBJECT'],
-				'DATE' => $this->getMessageDate(
-					$item
-				),
-				'HEADER' => $this->getHeader(
-					$item
-				),
-				'OWNER_TYPE_ID' => $item['OWNER_TYPE_ID'],
-				'OWNER_TYPE' => \CCrmOwnerType::ResolveName($item['OWNER_TYPE_ID']),
-				'DIRECTION' => $item['DIRECTION'],
-			];
-
-			if (is_null($lastIncomingId) && $item['DIRECTION'] === strval(\CCrmActivityDirection::Incoming))
-			{
-				$lastIncomingId = $item['ID'];
-				$lastIncomingKey = $key;
-			}
-
-			if ($item['ID'] == $id)
-			{
-				$buildItem['DESCRIPTION'] = $this->getMessageBody($id);
-				$buildItem['FILES'] = $this->getMessageFilesLinkMessages($id)['FILES'];
-			}
-			$chain[] = $buildItem;
-		}
-
-		/*
-			Upload the content of the last read message to be able to transfer it to the sending component for citation
-		 */
-		if (!is_null($lastIncomingKey))
-		{
-			$chain[$lastIncomingKey]['DESCRIPTION'] = $this->getMessageBody($lastIncomingId);
-			$chain[$lastIncomingKey]['FILES'] = $this->getMessageFilesLinkMessages($lastIncomingId)['FILES'];
-		}
-
-		return [
-			'list' => $chain,
-			'properties' => [
-				'lastIncomingId' => $lastIncomingId,
-			],
-		];
-	}
-
-	/**
-	 * @throws LoaderException
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	public function getMessageFilesLinkMessagesAction(int $id): array
-	{
-		if (!$this->checkModules())
-		{
-			return [];
-		}
-
-		if (!\CCrmPerms::IsAccessEnabled())
-		{
-			$this->addError(new Error(Loc::getMessage('CRM_MAIL_CONTROLLER_PERMISSION_DENIED')));
-			return [];
-		}
-
-		return $this->getMessageFilesLinkMessages($id);
 	}
 
 	public function getNeighborsAction(int $ownerId, int $ownerTypeId, int $elementId, bool $requiredWebUrl = false): ?array
@@ -2202,30 +2002,6 @@ class Message extends Controller
 			$this->addError(new Error('Entity not found'));
 			return [];
 		}
-	}
-
-	/**
-	 * @throws LoaderException
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	public function getMessageBodyAction(int $id): array
-	{
-		if (!$this->checkModules())
-		{
-			return [];
-		}
-
-		if (!\CCrmPerms::IsAccessEnabled())
-		{
-			$this->addError(new Error(Loc::getMessage('CRM_MAIL_CONTROLLER_PERMISSION_DENIED')));
-			return [];
-		}
-
-		return [
-			'HTML' => $this->getMessageBody($id),
-		];
 	}
 
 	/**

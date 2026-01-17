@@ -1050,7 +1050,7 @@ final class Product extends Base
 				{
 					$value = [$value];
 				}
-				if (empty($userType) && isset($value['VALUE']))
+				if ($this->isModifyOperation($info) && isset($value['VALUE']))
 				{
 					$value = [$value];
 				}
@@ -1108,7 +1108,7 @@ final class Product extends Base
 				}
 				//elseif ($propertyType === 'S' && $userType === 'HTML'){}
 
-				$value = $isMultiple? $value: $value[0];
+				$value = $isMultiple || $this->isFilterOperation($info) ? $value: $value[0];
 			}
 		}
 

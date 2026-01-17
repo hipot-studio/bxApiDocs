@@ -19,6 +19,9 @@ class StopTimerCommand extends AbstractCommand
 		public readonly int $userId,
 		#[Min(0)]
 		public readonly int $taskId,
+		public readonly bool $canStop = false,
+		public readonly bool $useConsistency = false,
+		public readonly ?int $seconds = null,
 	)
 	{
 
@@ -28,10 +31,7 @@ class StopTimerCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$timeManagementService = Container::getInstance()->getTimeManagementService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new StopTimerHandler($timeManagementService, $consistencyResolver);
+		$handler = Container::getInstance()->get(StopTimerHandler::class);
 
 		try
 		{

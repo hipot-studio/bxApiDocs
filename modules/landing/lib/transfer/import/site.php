@@ -867,15 +867,17 @@ class Site
 
 			if (
 				!empty($additional)
-				&& array_key_exists('st_category', $additional)
+				&& array_key_exists('st_tool', $additional)
 				&& array_key_exists('st_event', $additional)
-				&& Metrika\Categories::tryFrom($additional['st_category'])
+				&& Metrika\Tools::tryFrom($additional['st_tool'])
 				&& Metrika\Events::tryFrom($additional['st_event'])
 			)
 			{
+				$tool = $additional['st_tool'];
 				$metrika = new Metrika\Metrika(
-					Metrika\Categories::tryFrom($additional['st_category']),
+					Metrika\Categories::tryFrom($tool),
 					Metrika\Events::tryFrom($additional['st_event']),
+					Metrika\Tools::tryFrom($tool),
 				);
 				$metrika->setStatus(Metrika\Statuses::Success);
 				$metrika->setType(Metrika\Types::template);

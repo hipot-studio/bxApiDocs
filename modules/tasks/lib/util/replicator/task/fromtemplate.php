@@ -15,13 +15,14 @@ use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Item;
 use Bitrix\Tasks\Item\Result;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Util\Collection;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Item\Task\Template;
 use Bitrix\Tasks\Item\SystemLog;
+use Bitrix\Tasks\V2\Internal\Service\SystemHistoryLog\ErrorCodeDictionary;
 
 Loc::loadMessages(__FILE__);
 
@@ -162,7 +163,7 @@ final class FromTemplate extends Util\Replicator\Task
 								$wereErrors = true;
 
 								$errors = $creationResult->getErrors();
-								$neededError = $errors->find(array('CODE' => 'ACCESS_DENIED.RESPONSIBLE_AND_ORIGINATOR_NOT_ALLOWED'));
+								$neededError = $errors->find(array('CODE' => ErrorCodeDictionary::ACCESS_DENIED));
 
 								if ($errors->count() == 1 && !$neededError->isEmpty())
 								{

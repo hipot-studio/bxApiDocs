@@ -29,6 +29,7 @@ class CompanyProvider extends EntityProvider
 
 		$this->categoryId = (int)($options['categoryId'] ?? 0);
 		$this->options['categoryId'] = $this->categoryId;
+		$this->options['allowAllCategories'] = (bool)($options['allowAllCategories'] ?? false);
 
 		$this->enableMyCompanyOnly = (bool)($options['enableMyCompanyOnly'] ?? $this->enableMyCompanyOnly);
 		$this->excludeMyCompany = (bool)($options['excludeMyCompany'] ?? $this->excludeMyCompany);
@@ -90,9 +91,12 @@ class CompanyProvider extends EntityProvider
 
 	protected function getAdditionalFilter(): array
 	{
-		$filter = [
-			'=CATEGORY_ID' =>  $this->categoryId,
-		];
+		$filter = [];
+		if (!($this->options['allowAllCategories'] ?? false))
+		{
+			$filter['=CATEGORY_ID'] = $this->categoryId;
+
+		}
 
 		$filter = array_merge($filter, $this->getCompanyFilter(), $this->getEmailFilters());
 

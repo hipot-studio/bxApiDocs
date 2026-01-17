@@ -21,6 +21,7 @@ class SetRemindersCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $taskId,
 		public readonly ReminderCollection $reminders,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -47,25 +48,17 @@ class SetRemindersCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$reminderService = Container::getInstance()->getReminderService();
-		$reminderRepository = Container::getInstance()->getReminderRepository();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new SetRemindersHandler(
-			reminderService: $reminderService,
-			reminderRepository: $reminderRepository,
-			consistencyResolver: $consistencyResolver
-		);
+		$handler = Container::getInstance()->get(SetRemindersHandler::class);
 
 		try
 		{
 			$handler($this);
+
+			return $result;
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

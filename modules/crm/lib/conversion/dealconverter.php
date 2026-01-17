@@ -111,6 +111,12 @@ class DealConverter extends EntityConverter
 	 */
 	public function mapEntityFields($entityTypeID, array $options = null)
 	{
+		if(!is_array($options))
+		{
+			$options = array();
+		}
+		$options['CHECK_CATALOG_PRICES'] = $this->config->isPermissionCheckEnabled();
+
 		return $this->getMapper()->map($this->getMap($entityTypeID), $options);
 	}
 	/**
@@ -274,7 +280,12 @@ class DealConverter extends EntityConverter
 			}
 
 			$map = self::prepareMap($entityTypeID);
-			$fields = $mapper->map($map);
+			$fields = $mapper->map(
+				$map,
+				[
+					'CHECK_CATALOG_PRICES' => $this->config->isPermissionCheckEnabled(),
+				],
+			);
 			if(empty($fields))
 			{
 				throw new EntityConversionException(
@@ -291,7 +302,7 @@ class DealConverter extends EntityConverter
 				$fields[$assignedKey] = $this->contextData['RESPONSIBLE_ID'];
 			}
 
-			if($entityTypeID === \CCrmOwnerType::Invoice)
+			if ($entityTypeID === \CCrmOwnerType::Invoice)
 			{
 				// requisite link 1 of 2
 				$requisiteEntityList = array();

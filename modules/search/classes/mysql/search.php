@@ -430,7 +430,7 @@ class CSearch extends CAllSearch
 		if (
 			($this->flagsUseRatingSort & 0x01)
 			&& COption::GetOptionString('search', 'use_social_rating') == 'Y'
-			&& COption::GetOptionString('search', 'dbnode_id') <= 0
+			&& COption::GetOptionInt('search', 'dbnode_id') <= 0
 		)
 		{
 			$rsMinMax = $DB->Query('select max(TOTAL_VALUE) RATING_MAX, min(TOTAL_VALUE) RATING_MIN from b_rating_voting');
@@ -466,7 +466,12 @@ class CSearch extends CAllSearch
 				}
 
 				$strSelectOuter = 'SELECT sc0.*' . ($arSelectOuter ? ', ' . implode(', ', $arSelectOuter) : '');
-				$strSelectInner = 'SELECT ' . ($bDistinct ? 'DISTINCT' : '') . "\n" . implode("\n,", $arSelect);
+				$strSelect = '';
+				foreach ($arSelect as $selectAlias => $selectField)
+				{
+					$strSelect .= ($strSelect ? ',' : ' ') . $selectField . ' as ' . $selectAlias . "\n";
+				}
+				$strSelectInner = 'SELECT ' . ($bDistinct ? 'DISTINCT' : '') . "\n" . $strSelect;
 
 				return '
 					' . $strSelectOuter . ', sc0.' . $helper->quote('RANK') . ' +

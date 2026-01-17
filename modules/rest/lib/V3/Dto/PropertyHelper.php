@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Dto;
 
-use Bitrix\Rest\V3\Attributes\AbstractAttribute;
+use Bitrix\Rest\V3\Attribute\AbstractAttribute;
 use ReflectionClass;
 
 final class PropertyHelper
@@ -45,25 +45,6 @@ final class PropertyHelper
 		return null;
 	}
 
-	public static function isValidProperty(string|ReflectionClass|Dto $dtoClass, $propertyName): bool
-	{
-		$reflection = self::getReflection($dtoClass);
-
-		$isValid = false;
-
-		if ($reflection->hasProperty($propertyName))
-		{
-			$property = $reflection->getProperty($propertyName);
-
-			if ($property->isPublic() && !$property->isStatic())
-			{
-				$isValid = true;
-			}
-		}
-
-		return $isValid;
-	}
-
 	/**
 	 * @throws \ReflectionException
 	 */
@@ -102,26 +83,6 @@ final class PropertyHelper
 		}
 
 		return $result;
-	}
-
-	public static function getPropertiesWithAttribute(string|ReflectionClass|Dto $dtoClass, string $attributeName): array
-	{
-		$reflection = self::getReflection($dtoClass);
-		$reflectionProperties = $reflection->getProperties();
-		$resultProperties = [];
-		foreach ($reflectionProperties as $reflectionProperty)
-		{
-			$attributes = $reflectionProperty->getAttributes();
-			foreach ($attributes as $attribute)
-			{
-				if ($attribute->getName() === $attributeName)
-				{
-					$resultProperties[] = $reflectionProperty;
-				}
-			}
-		}
-
-		return $resultProperties;
 	}
 
 	public static function getReflection(string|ReflectionClass|Dto $dtoClass): ReflectionClass

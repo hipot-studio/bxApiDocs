@@ -15,4 +15,12 @@ interface GroupRepositoryInterface
 	public function getType(int $id): ?string;
 
 	public function getByIds(array $ids): Entity\GroupCollection;
+
+	/**
+	 * Retrieve list of Group IDs by corresponding task IDs.
+	 *
+	 * @param int[] $taskIds 
+	 * @return array<int, int>
+	 */
+	public function getGroupIdsByTaskIds(array $taskIds): array;
 }

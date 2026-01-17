@@ -11,6 +11,7 @@ use Bitrix\Catalog\v2\PropertyFeature\PropertyFeatureRepositoryContract;
 use Bitrix\Catalog\v2\PropertyFeature\PropertyFeatureCollection;
 use Bitrix\Catalog\v2\PropertyFeature\PropertyFeature;
 use Bitrix\Iblock;
+use Bitrix\Iblock\IblockTable;
 use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\Result;
 
@@ -181,6 +182,11 @@ class Property extends BaseEntity implements HasPropertyValueCollection
 			|| $this->getUserType() === 'FileMan'
 			|| $this->getUserType() === 'DiskFile'
 		);
+	}
+
+	public function isStorageSeparate(): bool
+	{
+		return (int)$this->getSetting('VERSION') === IblockTable::PROPERTY_STORAGE_SEPARATE;
 	}
 
 	public function saveInternal(): Result

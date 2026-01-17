@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceLinkedEntityCollection;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Model\ResourceLinkedEntityTable;
 use Bitrix\Main\Web\Json;
 
@@ -33,7 +34,11 @@ class ResourceLinkedEntityRepository
 
 		if (!empty($data))
 		{
-			ResourceLinkedEntityTable::addMulti($data, true);
+			$result = ResourceLinkedEntityTable::addMulti($data, true);
+			if (!$result->isSuccess())
+			{
+				throw new Exception($result->getErrors()[0]->getMessage());
+			}
 		}
 	}
 

@@ -2,7 +2,6 @@
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Access\Superset\Synchronizer;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Stepper\DashboardOwner;
@@ -123,7 +122,11 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 
 		if (SupersetInitializer::isSupersetReady())
 		{
-			(new Synchronizer(CurrentUser::get()->getId()))->sync();
+			(new BIConnector\Access\Superset\Synchronizer(CurrentUser::get()->getId()))->sync();
+
+			Application::getInstance()
+				->addBackgroundJob(fn() => (new BIConnector\Superset\Synchronizer())->initRequiredDataset())
+			;
 		}
 
 		if (!DashboardOwner::isFinished())

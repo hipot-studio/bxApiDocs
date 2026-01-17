@@ -15,11 +15,11 @@ use Bitrix\Main\ORM\Query;
 trait DeleteByFilterTrait
 {
 	/**
-	 * @param array $filter
+	 * @param array|Query\Filter\ConditionTree $filter
 	 * @return void
 	 * @throws Main\ArgumentException
 	 */
-	public static function deleteByFilter(array $filter)
+	public static function deleteByFilter(array|Query\Filter\ConditionTree $filter)
 	{
 		$entity = static::getEntity();
 		$table = static::getTableName();

@@ -124,7 +124,7 @@ class Deal extends Entity
 
 	protected function getFilter(): Filter\Filter
 	{
-		if(!$this->filter)
+		if (!$this->filter)
 		{
 			$flags = EntitySettings::FLAG_NONE | Filter\DealSettings::FLAG_ENABLE_CLIENT_FIELDS;
 			$userPermissions = Container::getInstance()->getUserPermissions()->getCrmPermissions();
@@ -137,7 +137,8 @@ class Deal extends Entity
 					'categoryAccess' => [
 						'READ' => \CCrmDeal::getPermittedToReadCategoryIDs($userPermissions),
 					],
-				])
+					'isSkipLoadItemsForPartialFields' => $this->isFilterOnlyItems(),
+				]),
 			);
 		}
 

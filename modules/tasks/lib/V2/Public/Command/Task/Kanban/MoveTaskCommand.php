@@ -23,12 +23,12 @@ class MoveTaskCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$stageService = Container::getInstance()->getTaskStageService();
+		$result = new Result();
 
-		$handler = new MoveTaskHandler($stageService);
+		$handler = Container::getInstance()->get(MoveTaskHandler::class);
 
 		$handler($this);
 
-		return new Result();
+		return $result;
 	}
 }

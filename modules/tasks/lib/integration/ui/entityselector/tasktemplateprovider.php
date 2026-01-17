@@ -13,20 +13,25 @@ use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\RecentItem;
 use Bitrix\UI\EntitySelector\SearchQuery;
+use Bitrix\UI\EntitySelector\Tab;
 use CTaskTemplates;
 
 class TaskTemplateProvider extends BaseProvider
 {
-	private const ENTITY_ID = 'task-template';
-	private const LIMIT = 30;
+	protected const ENTITY_ID = 'task-template';
+	protected const LIMIT = 30;
 
-	private int $templateId;
-	private string $context;
+	protected int $templateId;
+	protected bool $withFooter = true;
+	protected bool $withTab = false;
 
 	public function __construct(array $options = [])
 	{
 		parent::__construct();
+
 		$this->templateId = $options['templateId'] ?? 0;
+		$this->withFooter = $options['withFooter'] ?? true;
+		$this->withTab = $options['withTab'] ?? false;
 	}
 
 	public function isAvailable(): bool
@@ -58,34 +63,48 @@ class TaskTemplateProvider extends BaseProvider
 		if ($dialog->getItemCollection()->count() < static::LIMIT)
 		{
 			$templateItems = $this->getTemplateItems(['excludeIds' => $this->getRecentItemsIds($dialog)]);
-			foreach ($templateItems as $item)
-			{
-				/** @var Item $item */
-				$item->addTab('recents');
-				$dialog->addItem($item);
 
-				if ($dialog->getItemCollection()->count() >= static::LIMIT)
-				{
-					break;
-				}
-			}
+			$dialog->addItems($templateItems);
 		}
 
-		$this->context = (string)$dialog->getContext();
-		$dialog->setFooter('BX.Tasks.EntitySelector.Footer', $this->getFooterOptions());
+		if ($this->withFooter)
+		{
+			$dialog->setFooter('BX.Tasks.EntitySelector.Footer', $this->getFooterOptions($dialog->getContext()));
+		}
+
+		$this->addTab($dialog);
 	}
 
-	private function getFooterOptions(): array
+	protected function addTab(Dialog $dialog): void
+	{
+		if (!$this->withTab)
+		{
+			return;
+		}
+
+		$tab = new Tab([
+			'id' => static::ENTITY_ID,
+			'title' => Loc::getMessage('TASKS_UI_ENTITY_SELECTOR_TASK_TEMPLATE_PROVIDER_TEMPLATES'),
+			'stub' => true,
+			'icon' => [
+				'default' => 'template-task',
+			],
+		]);
+
+		$dialog->addTab($tab);
+	}
+
+	private function getFooterOptions(string $context): array
 	{
 		$userId = (int)CurrentUser::get()->getId();
 		$templateAddUrl = (new TemplatePathMaker(0, PathMaker::EDIT_ACTION, $userId))
-			->addQueryParam('context', $this->context)
+			->addQueryParam('context', $context)
 			->makeEntityPath();
 
 		return [
 			'templateAddUrl' => $templateAddUrl,
 			'canCreateTemplate' => TemplateAccessController::can($userId, ActionDictionary::ACTION_TEMPLATE_CREATE),
-			'context' => $this->context,
+			'context' => $context,
 		];
 	}
 
@@ -110,14 +129,7 @@ class TaskTemplateProvider extends BaseProvider
 				continue;
 			}
 
-			$dialog->addItem(
-				new Item([
-					'entityId' => static::ENTITY_ID,
-					'id' => $itemId,
-					'title' => $templates[$itemId],
-					'tabs' => 'recents',
-				])
-			);
+			$dialog->addItem(static::makeItem($itemId, $templates[$itemId]));
 
 			if ($dialog->getItemCollection()->count() >= static::ENTITY_ID)
 			{
@@ -215,18 +227,23 @@ class TaskTemplateProvider extends BaseProvider
 		$result = [];
 		foreach ($templates as $id => $title)
 		{
-			if ($title !== '')
+			if (!empty($title))
 			{
-				$result[] = new Item([
-					'entityId' => static::ENTITY_ID,
-					'id' => $id,
-					'title' => $title,
-					'tabs' => 'recents',
-				]);
+				$result[] = static::makeItem($id, $title);
 			}
 		}
 
 		return $result;
+	}
+
+	protected static function makeItem(int $id, string $title): Item
+	{
+		return new Item([
+			'entityId' => static::ENTITY_ID,
+			'id' => $id,
+			'title' => $title,
+			'tabs' => ['recents', static::ENTITY_ID],
+		]);
 	}
 
 	public static function getTemplateUrl(): string

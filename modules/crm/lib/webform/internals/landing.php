@@ -7,9 +7,12 @@
  */
 namespace Bitrix\Crm\WebForm\Internals;
 
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\UI\Webpack;
+use Bitrix\Main\SystemException;
 
 /**
  * Class LandingTable
@@ -72,7 +75,51 @@ class LandingTable extends ORM\Data\DataManager
 		);
 	}
 
-	public static function getLandingPublicUrl($formId)
+	/**
+	 * @param $formId
+	 * @param bool $multipleLoad
+	 *
+	 * @return string|null
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getLandingPublicUrl($formId, bool $multipleLoad = false): ?string
+	{
+		if (!$formId)
+		{
+			return null;
+		}
+
+		if ($multipleLoad)
+		{
+			return static::getLandingPublicUrlWithMassStaticCache($formId);
+		}
+
+		static $urls = [];
+
+		if (isset($urls[$formId]))
+		{
+			return $urls[$formId];
+		}
+
+		$landingId = static::getLandingIdByFormId((int)$formId);
+		if (!$landingId)
+		{
+			$urls[$formId] = null;
+
+			return null;
+		}
+
+		$result = Integration\Landing\FormLanding::getInstance()->getPublicUrl([$landingId]);
+		$url = $result[$landingId] ?? null;
+
+		$urls[$formId] = $url;
+
+		return $url;
+	}
+
+	private static function getLandingPublicUrlWithMassStaticCache($formId): ?string
 	{
 		static $urls = null;
 		if ($urls === null)
@@ -109,6 +156,47 @@ class LandingTable extends ORM\Data\DataManager
 	{
 		$rows = static::getLandingMap();
 		return $rows[$formId] ?? null;
+	}
+
+	/**
+	 * @param int $formId Form ID.
+	 *
+	 * @return int|null Landing ID or null.
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	protected static function getLandingIdByFormId(int $formId): ?int
+	{
+		static $cache = [];
+
+		if (!$formId)
+		{
+			return null;
+		}
+
+		if (isset($cache[$formId]))
+		{
+			return $cache[$formId];
+		}
+
+		if (!Integration\Landing\FormLanding::getInstance()->canUse())
+		{
+			$cache[$formId] = null;
+			return null;
+		}
+
+		$row = static::getList([
+			'select' => ['LANDING_ID'],
+			'filter' => ['=FORM_ID' => $formId],
+			'limit' => 1,
+		])->fetch();
+
+		$landingId = $row ? (int)$row['LANDING_ID'] : null;
+
+		$cache[$formId] = $landingId;
+
+		return $landingId;
 	}
 
 	protected static function getLandingMap($cache = true)

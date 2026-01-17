@@ -107,6 +107,52 @@ final class CopilotLauncher
 		return $this->fillResult;
 	}
 
+	public function runFillFieldsScenarioWithSkipTranscription(): ?Result
+	{
+		$isAlreadyFilled = $this->fillResult?->isSuccess();
+		if ($isAlreadyFilled)
+		{
+			return AIManager::launchSummarizeData($this->activityId, $this->userId);
+		}
+
+		// first run or fix launch errors
+		if ($this->summarizeResult?->isPending())
+		{
+			return $this->summarizeResult;
+		}
+
+		if (!$this->summarizeResult?->isSuccess())
+		{
+			return AIManager::launchSummarizeData($this->activityId, $this->userId);
+		}
+
+		if (!$this->fillTarget)
+		{
+			return (new Result(FillItemFieldsFromCallTranscription::TYPE_ID))->addError(
+				ErrorCode::getNotFoundError(),
+			);
+		}
+
+		if ($this->fillResult?->isPending())
+		{
+			return $this->fillResult;
+		}
+
+		if (!$this->fillResult?->isSuccess())
+		{
+			$operation = new FillItemFieldsFromCallTranscription(
+				$this->fillTarget,
+				$this->summarizeResult->getPayload()->summary,
+				$this->userId,
+				$this->summarizeResult->getJobId(),
+			);
+
+			return $operation->launch();
+		}
+
+		return $this->fillResult;
+	}
+
 	public function runCallScoringScenario(?int $assessmentSettingsId = null): ?Result
 	{
 		if ($this->transcriptionResult?->isPending())

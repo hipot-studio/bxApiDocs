@@ -18,7 +18,7 @@ class BatchResponse extends Response
 		{
 			$this->context[$alias] = $responseData['item'];
 		}
-		else if ($responseData['items'])
+		elseif ($responseData['items'])
 		{
 			$this->context[$alias] = $responseData['items'];
 		}
@@ -32,6 +32,7 @@ class BatchResponse extends Response
 		{
 			$result[] = $item->toArray();
 		}
+
 		return $result;
 	}
 

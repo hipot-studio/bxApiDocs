@@ -16,7 +16,7 @@ final class TransitionsCalculator
 		private readonly Factory $factory,
 	)
 	{
-		$this->logger = Container::getInstance()->getLogger('History.StageHistoryWithSupposed');
+		$this->logger = Container::getInstance()->getLogger('Default');
 	}
 
 	/**
@@ -28,6 +28,17 @@ final class TransitionsCalculator
 	public function calculateOnItemAdd(?int $categoryId, string $stageId): array
 	{
 		$start = $this->getFirstProcessStage($categoryId);
+		if ($start === null)
+		{
+			// no process stages, direct add to final stage
+
+			$semantics = $this->getStageSemantics($stageId);
+			return [
+				[$this->buildTransition($categoryId, $stageId, $semantics)],
+				$this->calculateDirective($semantics, $semantics),
+			];
+		}
+
 		if ($start === $stageId)
 		{
 			// regular add on first stage
@@ -67,6 +78,8 @@ final class TransitionsCalculator
 	 *     0: TransitionDto[],
 	 *     1: CloseDateDirective,
 	 * }
+	 *
+	 * @throws InvalidOperationException
 	 */
 	public function calculateOnStageChange(
 		?int $categoryId,
@@ -86,6 +99,12 @@ final class TransitionsCalculator
 		elseif (!PhaseSemantics::isFinal($startSemantics) && PhaseSemantics::isSuccess($finishSemantics))
 		{
 			$lastProcessStageId = $this->getLastProcessStage($categoryId);
+			if ($lastProcessStageId === null)
+			{
+				throw new InvalidOperationException(
+					"No process stages found for {$this->factory->getEntityTypeId()} and category {$categoryId}, but it's P -> S"
+				);
+			}
 
 			$transitions = $this->calculateTransitionsBetweenProcessStages(
 				$categoryId,
@@ -200,27 +219,23 @@ final class TransitionsCalculator
 		return $transitions;
 	}
 
-	private function getFirstProcessStage(?int $categoryId): string
+	private function getFirstProcessStage(?int $categoryId): ?string
 	{
 		$allProcesses = $this->getProcessStageIds($categoryId);
 		if (empty($allProcesses))
 		{
-			throw new InvalidOperationException(
-				"No process stages found for {$this->factory->getEntityTypeId()} and category {$categoryId}"
-			);
+			return null;
 		}
 
 		return reset($allProcesses);
 	}
 
-	private function getLastProcessStage(?int $categoryId): string
+	private function getLastProcessStage(?int $categoryId): ?string
 	{
 		$allProcesses = $this->getProcessStageIds($categoryId);
 		if (empty($allProcesses))
 		{
-			throw new InvalidOperationException(
-				"No process stages found for {$this->factory->getEntityTypeId()} and category {$categoryId}",
-			);
+			return null;
 		}
 
 		return end($allProcesses);

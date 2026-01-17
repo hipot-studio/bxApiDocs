@@ -2,6 +2,11 @@
 
 namespace Bitrix\Tasks\Internals\Task\Template;
 
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Tasks\Internals\TaskDataManager;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
 
@@ -23,38 +28,32 @@ use Bitrix\Tasks\Internals\Task\TemplateTable;
  */
 class TemplateDependenceTable extends TaskDataManager
 {
+	use DeleteByFilterTrait;
+	use AddInsertIgnoreTrait;
 
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_tasks_template_dependence';
 	}
 
-	public static function getClass()
+	public static function getClass(): string
 	{
-		return get_called_class();
+		return static::class;
 	}
 
-	public static function getMap()
+	public static function getMap(): array
 	{
-		return array(
-			'ID' => [
-				'data_type' => 'integer',
-				'primary' => true,
-			],
-			'TEMPLATE_ID' => array(
-				'data_type' => 'integer',
-				'primary' => false,
-			),
-			'DEPENDS_ON_ID' => array(
-				'data_type' => 'integer',
-				'primary' => false,
-			),
+		return [
+			(new IntegerField('ID'))
+				->configurePrimary(),
 
-			// references
-			'TEMPLATE' => array(
-				'data_type' => TemplateTable::class,
-				'reference' => array('=this.TEMPLATE_ID' => 'ref.ID')
-			),
-		);
+			(new IntegerField('TEMPLATE_ID')),
+
+			(new IntegerField('DEPENDS_ON_ID')),
+
+			(new Reference('TEMPLATE', TemplateTable::getEntity(), Join::on('this.TEMPLATE_ID', 'ref.ID'))),
+
+			(new Reference('DEPENDS_ON', TemplateTable::getEntity(), Join::on('this.DEPENDS_ON_ID', 'ref.ID'))),
+		];
 	}
 }

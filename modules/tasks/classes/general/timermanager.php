@@ -310,18 +310,6 @@ final class CTaskTimerManager
 	{
 		if (\Bitrix\Tasks\V2\FormV2Feature::isOn('timer'))
 		{
-			if ($taskId > 0)
-			{
-				$accessController = \Bitrix\Tasks\Access\TaskAccessController::getInstance($this->userId);
-				if (
-					!$accessController->checkByItemId(ActionDictionary::ACTION_TASK_READ, $taskId)
-					|| !$accessController->checkByItemId(ActionDictionary::ACTION_TASK_TIME_TRACKING, $taskId)
-				)
-				{
-					return false;
-				}
-			}
-
 			$service = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getTimeManagementService();
 			try
 			{

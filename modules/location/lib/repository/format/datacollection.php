@@ -409,7 +409,66 @@ class DataCollection
 						'description' => ''
 					],
 				]
-			]
+			],
+			'UZ' => [
+				'name' => Loc::getMessage('LOCATION_REPO_FRMT_UZ_NAME', null, $languageId),
+				'description' => Loc::getMessage('LOCATION_REPO_FRMT_UZ_DESCR', null, $languageId),
+				'delimiter' => ', ',
+				'sort' => 800,
+				'templateCollection' => [
+					TemplateType::DEFAULT =>
+						'["#S#",[POSTAL_CODE,COUNTRY,ADM_LEVEL_1,ADM_LEVEL_2,LOCALITY,ADDRESS_LINE_1:N,'
+						. 'ADDRESS_LINE_2]]',
+					TemplateType::AUTOCOMPLETE => '[", ",[LOCALITY,ADDRESS_LINE_1,ADDRESS_LINE_2]]',
+					TemplateType::ADDRESS_LINE_1 => '[", ",[STREET,BUILDING]]',
+				],
+				'code' => 'UZ',
+				'fieldForUnRecognized' => FieldType::ADDRESS_LINE_2,
+				'fieldCollection' => [
+					[
+						'sort' => 600,
+						'type' => FieldType::ADDRESS_LINE_2,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_ADDR_2', null, $languageId),
+						'description' => ''
+					],
+					[
+						'sort' => 500,
+						'type' => FieldType::ADDRESS_LINE_1,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_ADDR_1', null, $languageId),
+						'description' => ''
+					],
+					[
+						'sort' => 400,
+						'type' => FieldType::LOCALITY,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_LOCALITY', null, $languageId),
+						'description' => ''
+					],
+					[
+						'sort' => 350,
+						'type' => FieldType::ADM_LEVEL_2,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_ADM_LEVEL_2', null, $languageId),
+						'description' =>''
+					],
+					[
+						'sort' => 300,
+						'type' => FieldType::ADM_LEVEL_1,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_REGION', null, $languageId),
+						'description' =>''
+					],
+					[
+						'sort' => 200,
+						'type' => FieldType::COUNTRY,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_COUNTRY', null, $languageId),
+						'description' => ''
+					],
+					[
+						'sort' => 100,
+						'type' => FieldType::POSTAL_CODE,
+						'name' => Loc::getMessage('LOCATION_REPO_FRMT_POSTAL_CODE', null, $languageId),
+						'description' => ''
+					]
+				]
+			],
 		];
 	}
 

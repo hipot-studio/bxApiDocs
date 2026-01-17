@@ -13,6 +13,8 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 	private Entity\GroupCollection $cache;
 	private array $membersCache = [];
 	private array $typeCache = [];
+	/** @var array<string, int[]> */
+	private array $groupIdsByTaskIdsCache = [];
 
 	public function __construct(GroupRepository $groupRepository)
 	{
@@ -79,5 +81,25 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 		$this->cache->merge($groups);
 
 		return $groups;
+	}
+
+	public function getGroupIdsByTaskIds(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		$indices = array_unique(array_map('intval', $taskIds));
+		sort($indices);
+
+		$key = implode(',', $indices);
+
+		if (!array_key_exists($key, $this->groupIdsByTaskIdsCache))
+		{
+			$this->groupIdsByTaskIdsCache[$key] = $this->groupRepository->getGroupIdsByTaskIds($taskIds) ?? [];
+		}
+
+		return $this->groupIdsByTaskIdsCache[$key] ?? [];
 	}
 }

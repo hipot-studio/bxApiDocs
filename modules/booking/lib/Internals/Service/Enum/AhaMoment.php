@@ -17,4 +17,5 @@ enum AhaMoment: string
 	case SelectResources = 'select_resources';
 	case CyclePopup = 'cycle_popup';
 	case SearchNavigation = 'search_navigation';
+	case IntegrationMapsYa = 'integration_maps_ya';
 }

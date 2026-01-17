@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Activity\Operator;
 
+use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Localization\Loc;
 
@@ -9,7 +10,7 @@ class NotEqualOperator extends BaseOperator
 {
 	public static function getCode(): string
 	{
-		return '!=';
+		return Operator::NotEqual->value;
 	}
 
 	public static function getTitle(): string
@@ -37,7 +38,7 @@ class NotEqualOperator extends BaseOperator
 			$fieldI = ($fieldCount > $i) ? $toCheck[$i] : $toCheck[$fieldCount - 1];
 			$valueI = ($valueCount > $i) ? $value[$i] : $value[$valueCount - 1];
 
-			[$valueI, $fieldI] = static::normalizeZeroComparing($valueI, $fieldI);
+			[$valueI, $fieldI] = $this->normalizeZeroComparing($valueI, $fieldI);
 
 			if ($this->compare($fieldI, $valueI))
 			{

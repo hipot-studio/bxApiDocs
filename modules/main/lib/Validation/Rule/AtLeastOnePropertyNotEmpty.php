@@ -17,7 +17,7 @@ use ReflectionProperty;
 final class AtLeastOnePropertyNotEmpty extends AbstractClassValidationAttribute
 {
 	public function __construct(
-		private readonly array $fields,
+		private readonly array $propertyNames,
 		private readonly bool $allowZero = false,
 		private readonly bool $allowEmptyString = false,
 		protected string|LocalizableMessageInterface|null $errorMessage = null,
@@ -55,7 +55,7 @@ final class AtLeastOnePropertyNotEmpty extends AbstractClassValidationAttribute
 		return array_filter(
 			$reflection->getProperties(),
 			fn (ReflectionProperty $property): bool =>
-			in_array($property->getName(), $this->fields, true)
+			in_array($property->getName(), $this->propertyNames, true)
 		);
 	}
 

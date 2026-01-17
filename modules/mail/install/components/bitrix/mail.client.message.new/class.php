@@ -158,6 +158,7 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 
 		$this->arResult['EMAILS'] = array();//Mail\Helper\Recipient::loadMailContacts();
 		$this->arResult['COPILOT_PARAMS'] = self::prepareCopilotParams();
+		$this->arResult['ANALYTICS'] = $this->arParams['ANALYTICS'];
 
 		$this->includeComponentTemplate();
 	}

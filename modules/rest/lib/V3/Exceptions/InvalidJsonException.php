@@ -6,7 +6,7 @@ class InvalidJsonException extends RestException
 {
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_INVALID_JSON_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_INVALIDJSONEXCEPTION';
 	}
 
 	protected function getClassWithPhrase(): string

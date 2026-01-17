@@ -229,7 +229,7 @@ class UserRepository implements UserRepositoryContract
 		return $this->makeUserCollectionFromModelArray($userList);
 	}
 
-	public function getUserById(int $id): User
+	public function getUserById(int $id): ?User
 	{
 		$user = UserTable::query()
 			->where('ID', $id)
@@ -250,7 +250,7 @@ class UserRepository implements UserRepositoryContract
 
 		if (!$user)
 		{
-			throw new ObjectNotFoundException('User not found');
+			return null;
 		}
 
 		return User::initByArray($user);
@@ -374,6 +374,40 @@ class UserRepository implements UserRepositoryContract
 			->where('UF_DEPARTMENT', '!=', false)
 			->queryCountTotal()
 		;
+	}
+
+	public function isConfirmedAuthPhone(int $userId, string $phoneNumber): bool
+	{
+		$fields = [
+			'ID',
+			'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
+			'AUTH_PHONE_CONFIRMED' => 'PHONE_AUTH.CONFIRMED',
+		];
+		$user = UserTable::query()
+			->where('ID', $userId)
+			->where('AUTH_PHONE_NUMBER', $phoneNumber)
+			->setSelect($fields)
+			->setLimit(1)
+			->fetch();
+
+		return is_array($user) && $user['AUTH_PHONE_CONFIRMED'] === 'Y';
+	}
+
+	public function getTsSentConfirmationCode(int $userId): ?int
+	{
+		$fields = [
+			'ID',
+			'LAST_SENT_CONFIRMATION_CODE' => 'PHONE_AUTH.DATE_SENT',
+		];
+		$user = UserTable::query()
+			->where('ID', $userId)
+			->setSelect($fields)
+			->setLimit(1)
+			->fetch();
+		/** @var DateTime $dateTime */
+		$dateTime = $user['LAST_SENT_CONFIRMATION_CODE'] ?? null;
+
+		return $dateTime?->getTimestamp();
 	}
 
 	/**

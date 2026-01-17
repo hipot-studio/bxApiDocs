@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Operation;
 
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Sign\Operation\DocumentChat\AddMemberByDocument;
 use Bitrix\Sign\Operation\Kanban\B2e\SendUpdateEntityPullEvent;
@@ -12,6 +13,7 @@ use Bitrix\Sign\Service\Analytic\AnalyticService;
 use Bitrix\Sign\Service\B2e\MyDocumentsGrid;
 use Bitrix\Sign\Service\HrBotMessageService;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkService;
 use Bitrix\Sign\Service\Sign\Document\ProviderCodeService;
 use Bitrix\Sign\Service\Sign\LegalLogService;
 use Bitrix\Sign\Service\Sign\MemberService;
@@ -21,6 +23,9 @@ use Bitrix\Sign\Item;
 use Bitrix\Main;
 use Bitrix\Sign\Service\Integration\Crm\EventHandlerService;
 use Bitrix\Sign\Service\PullService;
+use Bitrix\Sign\Type\Integration\Rest\EventType;
+use Bitrix\Sign\Type\Integration\Rest\RestDocumentStatus;
+use Throwable;
 
 final class ChangeMemberStatus implements Contract\Operation
 {
@@ -35,6 +40,7 @@ final class ChangeMemberStatus implements Contract\Operation
 	private readonly ProviderCodeService $providerCodeService;
 	private readonly MyDocumentsGrid\EventService $myDocumentGridService;
 	private readonly AnalyticService $analyticService;
+	private readonly HcmLinkService $hcmLinkService;
 
 	public function __construct(
 		private readonly Item\Member $member,
@@ -52,6 +58,7 @@ final class ChangeMemberStatus implements Contract\Operation
 		$this->providerCodeService = $providerService ?? Container::instance()->getProviderCodeService();
 		$this->myDocumentGridService = Container::instance()->getMyDocumentGridEventService();
 		$this->analyticService = Container::instance()->getAnalyticService();
+		$this->hcmLinkService = Container::instance()->getHcmLinkService();
 	}
 
 	public function setMessage(MemberStatusChanged $message): self
@@ -97,6 +104,7 @@ final class ChangeMemberStatus implements Contract\Operation
 		{
 			$this->member->dateStatusChanged =  new Main\Type\DateTime();
 		}
+		$oldStatus = $this->member->status;
 		$this->member->status = $this->status;
 		if ($this->member->dateSigned === null && $this->status === Type\MemberStatus::DONE)
 		{
@@ -108,6 +116,8 @@ final class ChangeMemberStatus implements Contract\Operation
 		{
 			return $result->addErrors($updateResult->getErrors());
 		}
+
+		$this->processMemberStatusChange($this->member, $this->document, $oldStatus);
 
 		if ($this->sendReadyEvents() === false)
 		{
@@ -351,5 +361,43 @@ final class ChangeMemberStatus implements Contract\Operation
 		;
 
 		$this->analyticService->sendEventWithSigningContext($event, $this->member);
+	}
+
+	private function processMemberStatusChange(Item\Member $member, Item\Document $document, ?string $oldStatus): void
+	{
+		if ($member->status !== $oldStatus)
+		{
+			try {
+				$company = null;
+				if ($document->hcmLinkCompanyId)
+				{
+					$company = $this->hcmLinkService->getCompanyById($document->hcmLinkCompanyId);
+				}
+
+				$event = new Main\Event(
+					'sign',
+					EventType::MEMBER_STATUS_CHANGED->value,
+					[
+						'memberUid' => $member->uid,
+						'documentUid' => $document->uid,
+						'companyUid' => $company?->code,
+						'statusCode' => RestDocumentStatus::getDocumentMemberStatusCode($member->status),
+						'statusName' => RestDocumentStatus::getDocumentMemberStatusName($member->status, 'en'),
+					],
+				);
+				$event->send();
+			}
+			catch (Throwable $e)
+			{
+				Logger::getInstance()->error(
+					"Failed to send event {event} for member {documentUid}: {errorsText}",
+					[
+						'event' => EventType::MEMBER_STATUS_CHANGED->value,
+						'memberUid' => $member->uid,
+						'errorsText' => $e->getMessage(),
+					],
+				);
+			}
+		}
 	}
 }

@@ -2,6 +2,8 @@
 
 namespace Bitrix\Bizproc\UI;
 
+use Bitrix\Bizproc\Public\Entity\Document\DocumentComplexId;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
 use Bitrix\Bizproc\Workflow\WorkflowState;
 use Bitrix\Bizproc\WorkflowInstanceTable;
@@ -22,6 +24,9 @@ class WorkflowUserView implements \JsonSerializable
 	protected ?WorkflowFacesView $faces = null;
 	protected ?bool $isCompleted = null;
 
+	protected ?string $documentName = null;
+	protected ?string $documentUrl = null;
+
 	public function __construct(WorkflowState $workflow, int $userId)
 	{
 		$this->workflow = $workflow;
@@ -30,6 +35,18 @@ class WorkflowUserView implements \JsonSerializable
 		$this->tasks = \CBPViewHelper::getWorkflowTasks($workflow['ID'], true, true);
 		$this->myRunningTasks = $this->getMyWaitingTasks();
 		$this->myCompletedTasks = $this->getMyCompletedTasks();
+	}
+
+	public static function create(string $workflowId, int $userId): ?static
+	{
+		$workflowState = WorkflowStateTable::query()
+			->setSelect(['ID', 'MODULE_ID', 'ENTITY'])
+			->where('ID', $workflowId)
+			->exec()
+			->fetchObject()
+		;
+
+		return $workflowState !== null ? new static($workflowState, $userId) : null;
 	}
 
 	public function toArray(): array
@@ -78,11 +95,20 @@ class WorkflowUserView implements \JsonSerializable
 			}
 		}
 
-		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+		return html_entity_decode($this->getDocumentName());
+	}
 
-		return html_entity_decode(
-			$documentService->getDocumentName($this->workflow->getComplexDocumentId()) ?? ''
-		);
+	protected function getDocumentName(): string
+	{
+		if ($this->documentName === null)
+		{
+			$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+
+			$documentName = $documentService->getDocumentName($this->workflow->getComplexDocumentId());
+			$this->documentName = \CBPHelper::hasStringRepresentation($documentName) ? (string)$documentName : '';
+		}
+
+		return $this->documentName;
 	}
 
 	public function getDescription(): ?string
@@ -367,17 +393,31 @@ class WorkflowUserView implements \JsonSerializable
 		return $tasks;
 	}
 
+	public function getProcessName(): mixed
+	{
+		$template = $this->workflow->fillTemplate();
+
+		if ($template?->getDocumentStatus() !== 'SCRIPT')
+		{
+			return $template->getName();
+		}
+
+		return $this->getComplexDocumentTypeCaption();
+	}
+
 	public function getTypeName(): mixed
 	{
 		$this->workflow->fillTemplate();
-		if (
-			$this->workflow->getModuleId() !== 'lists'
-			&& !empty($this->workflow->getTemplate()?->getName())
-		)
+		if ($this->workflow->getModuleId() !== 'lists' && !empty($this->workflow->getTemplate()?->getName()))
 		{
 			return $this->workflow->getTemplate()?->getName();
 		}
 
+		return $this->getComplexDocumentTypeCaption();
+	}
+
+	private function getComplexDocumentTypeCaption(): mixed
+	{
 		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
 
 		$complexDocumentType = null;
@@ -386,7 +426,8 @@ class WorkflowUserView implements \JsonSerializable
 			$complexDocumentType = $documentService->getDocumentType($this->workflow->getComplexDocumentId());
 		}
 		catch (SystemException | \Exception $exception)
-		{}
+		{
+		}
 
 		return $complexDocumentType ? $documentService->getDocumentTypeCaption($complexDocumentType) : null;
 	}
@@ -425,9 +466,31 @@ class WorkflowUserView implements \JsonSerializable
 
 	protected function getDocumentUrl(): ?string
 	{
-		$complexDocumentId = $this->workflow->getComplexDocumentId();
+		if ($this->documentUrl === null)
+		{
+			$documentUrl = \CBPDocument::getDocumentAdminPage($this->workflow->getComplexDocumentId());
+			$this->documentUrl = \CBPHelper::hasStringRepresentation($documentUrl) ? (string)$documentUrl : '';
+		}
 
-		return \CBPDocument::getDocumentAdminPage($complexDocumentId);
+		return $this->documentUrl;
+	}
+
+	protected function getDocumentNameAndUrl(): array
+	{
+		if ($this->documentUrl === null && $this->documentName === null)
+		{
+			$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+			$result = $documentService->getDocumentNameAndUrl(
+				new DocumentComplexId(...$this->workflow->getComplexDocumentId())
+			);
+			$this->documentName = $result?->name ?? '';
+			$this->documentUrl = $result?->url ?? '';
+		}
+
+		return [
+			'url' => $this->getDocumentUrl(),
+			'name' => $this->getDocumentName(),
+		];
 	}
 
 	public function getFirstRunningTask(): ?array

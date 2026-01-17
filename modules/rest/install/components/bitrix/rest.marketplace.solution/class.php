@@ -74,6 +74,7 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 		$this->arResult = $result;
 
 		$this->arResult['CURRENT_LANG'] = \Bitrix\Main\Localization\Loc::getCurrentLang();
+		$this->arResult['IS_RENAMED_MARKET'] = \Bitrix\Rest\Integration\Market\Label::isRenamedMarket();
 	}
 
 	public function executeComponent(): void

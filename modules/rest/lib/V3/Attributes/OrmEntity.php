@@ -15,4 +15,9 @@ class OrmEntity extends AbstractAttribute
 			throw new InvalidClassInstanceProvidedException($this->entity, DataManager::class);
 		}
 	}
+
+	public function getUserFieldId(): ?string
+	{
+		return method_exists($this->entity, 'getUfId') ? $this->entity::getUfId() : null;
+	}
 }

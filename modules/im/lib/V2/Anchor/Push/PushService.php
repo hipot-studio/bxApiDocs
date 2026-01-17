@@ -8,6 +8,7 @@ use Bitrix\Im\Common;
 use Bitrix\Im\V2\Anchor\AnchorCollection;
 use Bitrix\Im\V2\Anchor\AnchorItem;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Main\Loader;
 use Bitrix\Pull\Event;
 
@@ -17,13 +18,11 @@ class PushService
 	private const DELETE_ANCHOR_EVENT = 'deleteAnchor';
 	private const DELETE_CHAT_ANCHORS_EVENT = 'deleteChatAnchors';
 	private const DELETE_ALL_ANCHORS_EVENT = 'deleteAllAnchors';
+	private const DELETE_ANCHORS_EVENT = 'deleteAnchors';
 
 	public function addMulti(AnchorCollection $anchorCollection): void
 	{
-		foreach ($anchorCollection as $anchorItem)
-		{
-			$this->send(self::ADD_ANCHOR_EVENT, $anchorItem);
-		}
+		$this->sendMulti(self::ADD_ANCHOR_EVENT, $anchorCollection);
 	}
 
 	public function add(AnchorItem $anchorItem): void
@@ -93,6 +92,25 @@ class PushService
 		Event::add($userId, $pull);
 	}
 
+	public function deleteByChatIds(int $userId, array $chatIds): void
+	{
+		if (empty($chatIds) || !Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		$pull = [
+			'module_id' => 'im',
+			'command' => static::DELETE_ANCHORS_EVENT,
+			'params' => [
+				'chatIds' => array_values($chatIds),
+			],
+			'extra' => Common::getPullExtra(),
+		];
+
+		Event::add($userId, $pull);
+	}
+
 	private function send(string $eventName, AnchorItem $anchorItem): void
 	{
 		if (!Loader::includeModule('pull'))
@@ -106,7 +124,7 @@ class PushService
 
 		if ($chat instanceof Chat\PrivateChat)
 		{
-			$this->sendToPrivateChat($parameters, $eventName, $anchorItem);
+			$this->sendToPrivateChat($anchorItem, $eventName, $chat);
 
 			return;
 		}
@@ -122,14 +140,44 @@ class PushService
 		Event::add([$anchorItem->getUserId()], $pull);
 	}
 
-	private function sendToPrivateChat(array $parameters, string $eventName, AnchorItem $anchorItem): void
+	private function sendMulti(string $eventName, AnchorCollection $anchorCollection): void
 	{
-		/** @var Chat\PrivateChat $chat */
-		$chat = Chat::getInstance($anchorItem->getChatId());
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
 
+		/** @var ?AnchorItem $firstAnchor */
+		$firstAnchor = $anchorCollection->getAny();
+		$chat = Chat::getInstance($firstAnchor->getChatId());
+
+		if ($chat instanceof Chat\PrivateChat)
+		{
+			$this->sendToPrivateChat($firstAnchor, $eventName, $chat);
+			return;
+		}
+
+		$recipientIds = $anchorCollection->getUserIdList();
+
+		$parameters = $firstAnchor->toRestFormat();
+		$parameters['dialogId'] = $chat->getDialogId();
+
+		$pull = [
+			'module_id' => 'im',
+			'command' => $eventName,
+			'params' => $parameters,
+			'extra' => Common::getPullExtra(),
+		];
+
+		Event::add($recipientIds, $pull);
+	}
+
+	private function sendToPrivateChat(AnchorItem $anchorItem, string $eventName, PrivateChat $chat): void
+	{
 		$recipientId = $anchorItem->getUserId();
-
+		$parameters = $anchorItem->toRestFormat();
 		$parameters['dialogId'] = $chat->getCompanion($recipientId)->getId();
+
 		Event::add($recipientId, [
 			'module_id' => 'im',
 			'command' => $eventName,

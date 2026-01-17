@@ -17,7 +17,7 @@ class Theme extends BaseTool
 	public function getConfiguration(): array
 	{
 		return [
-			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_THEME_TITLE'),
+			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_THEME_FULL_TITLE'),
 		];
 	}
 

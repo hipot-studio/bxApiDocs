@@ -10,7 +10,7 @@ abstract class Type
 {
 	public const ID = 'UNDEFINED';
 
-	final public static function getCaption(): string
+	final public function getCaption(): string
 	{
 		$caption = (string)\CCrmFieldMulti::GetEntityTypeCaption(static::ID);
 		if ($caption === static::ID)
@@ -20,5 +20,26 @@ abstract class Type
 		}
 
 		return $caption;
+	}
+
+	final public function getValueTypeCaption(string $valueType): string
+	{
+		$caption = \CCrmFieldMulti::GetEntityNameByComplex(
+			static::ID . '_' . $valueType,
+			false
+		);
+
+		if ($caption === false)
+		{
+			// caption not found
+			return '';
+		}
+
+		return $caption;
+	}
+
+	public function formatValue(string $value): string
+	{
+		return $value;
 	}
 }

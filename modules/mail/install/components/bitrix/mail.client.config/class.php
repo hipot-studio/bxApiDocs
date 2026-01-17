@@ -1,7 +1,10 @@
 <?php
 
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
+use Bitrix\Mail\Helper\MailboxSearchIndexHelper;
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main;
 use Bitrix\Main\Mail\Address;
 use Bitrix\Main\Mail\Sender;
@@ -9,10 +12,15 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Main\Config\Configuration;
-use Bitrix\Mail\MailServicesTable;
 use Bitrix\Main\Mail\Internal\SenderTable;
 use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Web\Json;
+use Bitrix\UI\Buttons\Color;
+use Bitrix\UI\Buttons\Icon;
+use Bitrix\UI\Buttons\JsCode;
+use Bitrix\UI\Buttons\Tag;
+use Bitrix\UI\Toolbar\Facade\Toolbar;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -65,19 +73,31 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 	protected function defaultAction()
 	{
-		global $APPLICATION;
+		global $USER, $APPLICATION;
 
 		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_CONFIG_TITLE'));
 
 		$this->arResult['MAX_ALLOWED_CONNECTED_MAILBOXES'] = LicenseManager::getUserMailboxesLimit();
-		$this->arResult['CAN_CONNECT_NEW_MAILBOX'] = MailboxConnector::canConnectNewMailbox();
+		$this->arResult['CAN_CONNECT_NEW_MAILBOX'] = MailboxConnector::canConnectNewMailbox($USER->getId());
 		$this->arParams['DEFAULT_SEND_LIMIT'] = self::DEFAULT_SEND_LIMIT;
+
+		if (Feature::isMailboxGridAvailable())
+		{
+			$this->prepareToolbarButton();
+		}
 
 		$this->includeComponentTemplate();
 	}
 
 	protected function editAction($new = true)
 	{
+		if ($new && !Mail\Helper\MailboxAccess::hasCurrentUserAccessToAddMailbox())
+		{
+			$this->includeComponentTemplate('access_denied');
+
+			return;
+		}
+
 		global $APPLICATION, $USER;
 
 		$APPLICATION->setTitle(Loc::getMessage($new ? 'MAIL_CLIENT_CONFIG_TITLE' : 'MAIL_CLIENT_CONFIG_EDIT_TITLE'));
@@ -86,9 +106,12 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if ($new)
 		{
-			if (!MailboxConnector::canConnectNewMailbox())
+			$userIdToCheck = $USER->getId();
+
+			if (!MailboxConnector::canConnectNewMailbox($userIdToCheck))
 			{
 				showError(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
 				return;
 			}
 
@@ -110,9 +133,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				return;
 			}
 
-			if ($USER->getId() != $mailbox['USER_ID'] && !$USER->isAdmin() && !$USER->canDoOperation('bitrix24_config'))
+			$canManage = Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailbox['ID']);
+			if (!$canManage)
 			{
 				showError(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
 				return;
 			}
 
@@ -174,6 +199,12 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			$serviceId = $mailbox['SERVICE_ID'];
 		}
+
+		$this->arParams['HAS_NO_ACCESS_TO_SHARE_MAILBOX'] = !$new
+			&& !MailboxAccess::hasCurrentUserAccessToEditMailboxAccess(
+				mailboxData: $mailbox
+			)
+		;
 
 		$this->arParams['IS_CALENDAR_AVAILABLE'] = \Bitrix\Main\Loader::includeModule('calendar');
 		$this->arParams['IS_ICAL_CHECK'] = $mailbox['OPTIONS']['ical_access'] === self::POSITIVE_ANSWER;
@@ -246,12 +277,12 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 
 		$ownerId = $new ? $USER->getId() : $mailbox['USER_ID'];
-		$access = array(
-			'users' => array(
+		$access = [
+			'user' => [
 				sprintf('U%u', $ownerId) => $ownerId,
-			),
-			'department' => array(),
-		);
+			],
+			'department' => [],
+		];
 
 		if (!$new)
 		{
@@ -264,33 +295,40 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			while ($item = $res->fetch())
 			{
-				if (preg_match('/^(U|DR)(\d+)$/', $item['ACCESS_CODE'], $matches))
+				if (preg_match('/^(U|DR|D)(\d+)$/', $item['ACCESS_CODE'], $matches))
 				{
 					if ('U' == $matches[1])
 					{
-						$access['users'][$item['ACCESS_CODE']] = $matches[2];
+						$access['user'][$item['ACCESS_CODE']] = $matches[2];
 					}
 					else if ('DR' == $matches[1])
 					{
-						$access['department'][$item['ACCESS_CODE']] = array(
+						$access['department'][$item['ACCESS_CODE']] = [
 							'id' => $item['ACCESS_CODE'],
 							'entityId' => $matches[2],
-						);
+						];
+					}
+					else
+					{
+						$access['department'][$item['ACCESS_CODE']] = [
+							'id' => $item['ACCESS_CODE'],
+							'entityId' => $matches[2] . ':F',
+						];
 					}
 				}
 			}
 		}
 
-		$res = Main\UserTable::getList(array(
-			'filter' => array(
-				'@ID' => array_values($access['users']),
-			),
-		));
+		$res = Main\UserTable::getList([
+			'filter' => [
+				'@ID' => array_values($access['user']),
+			],
+		]);
 
 		while ($item = $res->fetch())
 		{
 			$id = sprintf('U%u', $item['ID']);
-			$access['users'][$id] = array(
+			$access['user'][$id] = array(
 				'id'       => $id,
 				'entityId' => $item['ID'],
 				'name'     => \CUser::formatName(\CSite::getNameFormat(), $item, true),
@@ -471,13 +509,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		return false;
 	}
 
-	private function setIsSmtpAvailable()
-	{
-		$defaultMailConfiguration = Configuration::getValue("smtp");
-		$this->arParams['IS_SMTP_AVAILABLE'] = Main\ModuleManager::isModuleInstalled('bitrix24')
-			|| $defaultMailConfiguration['enabled'];
-	}
-
 	public function saveAction($fields)
 	{
 		global $USER;
@@ -524,6 +555,16 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		$originalOwnerId = null;
 
+		if (
+			empty($fields['mailbox_id'] ?? 0)
+			&& !Mail\Helper\MailboxAccess::hasCurrentUserAccessToAddMailbox()
+		)
+		{
+			$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+
+			return;
+		}
+
 		if ($fields['mailbox_id'] > 0)
 		{
 			$mailbox = Mail\MailboxTable::getList(array(
@@ -539,9 +580,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				$originalOwnerId = (int)$mailbox['USER_ID'];
 			}
 
-			if ($USER->getId() != $mailbox['USER_ID'] && !$USER->isAdmin() && !$USER->canDoOperation('bitrix24_config'))
+			$canManage = Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailbox['ID']);
+			if (!$canManage)
 			{
 				$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
 				return;
 			}
 
@@ -565,11 +608,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			}
 		}
 
-		if ($newOwnerId > 0)
-		{
-			$mailboxData['USER_ID'] = $newOwnerId;
-		}
-
 		if (empty($mailbox))
 		{
 			if ($service['ACTIVE'] !== 'Y')
@@ -577,9 +615,12 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
 				return;
 			}
-			if (!MailboxConnector::canConnectNewMailbox())
+
+			$userIdToCheck = $USER->getId();
+			if (!MailboxConnector::canConnectNewMailbox($userIdToCheck))
 			{
 				$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
 				return;
 			}
 
@@ -652,6 +693,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if ($newOwnerId > 0)
 		{
+			if (!MailboxConnector::canConnectNewMailbox($newOwnerId))
+			{
+				$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
+				return;
+			}
+
 			$mailboxData['USER_ID'] = $newOwnerId;
 		}
 
@@ -696,7 +744,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$mailbox = Mail\MailboxTable::getList(array(
 				'filter' => array(
 					'=EMAIL' => $mailboxData['EMAIL'],
-					'=USER_ID' => $USER->getId(),
+					'=USER_ID' => $mailboxData['USER_ID'],
 					'=ACTIVE' => 'Y',
 					'=LID' => $currentSite['LID'],
 				),
@@ -1121,7 +1169,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$result = [];
 			if (!empty($senderFields['ID']))
 			{
-				$updateResult = Main\Mail\Sender::updateSender($senderFields['ID'], $senderFields);
+				$updateResult = Main\Mail\Sender::updateSender($senderFields['ID'], $senderFields, checkSenderAccess: false);
 				if ($updateResult->isSuccess())
 				{
 					$result['confirmed'] = true;
@@ -1153,64 +1201,61 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			}
 		}
 
-		Mail\Internals\MailboxAccessTable::deleteByFilter(['=MAILBOX_ID' => $mailboxId,]);
-
 		$finalOwnerId = $mailboxData['USER_ID'];
-
-		$ownerAccessCode = 'U' . $finalOwnerId;
-
-		$access = array($ownerAccessCode);
-
-		if (!empty($fields['access_dest']) && is_array($fields['access_dest']))
+		if (MailboxAccess::hasCurrentUserAccessToEditMailboxAccess(mailboxData: ['ID' => $mailboxId, ...$mailboxData]))
 		{
-			$access = array_merge(
-				$access,
-				array_filter(
-					$fields['access_dest'],
-					function ($item)
-					{
-						return preg_match('/^(DR|U)\d+$/i', trim($item));
-					}
-				)
-			);
-		}
-		elseif (!empty($fields['access']) && is_array($fields['access'])) // old
-		{
-			foreach ($fields['access'] as $code => $list)
+			Mail\Internals\MailboxAccessTable::deleteByFilter(['=MAILBOX_ID' => $mailboxId]);
+
+			$ownerAccessCode = 'U' . $finalOwnerId;
+			$access = array($ownerAccessCode);
+
+			$emptyJsonValue = \Bitrix\Main\Web\Json::encode([]);
+			$shareAccess = (array)\Bitrix\Main\Web\Json::decode((string)$fields['share_access'] ?? $emptyJsonValue);
+			if (!empty($shareAccess))
 			{
-				if (in_array($code, array('U', 'DR')) && is_array($list))
+				$access = array_merge(
+					$access,
+					$shareAccess,
+				);
+			}
+			elseif (!empty($fields['access']) && is_array($fields['access'])) // old
+			{
+				foreach ($fields['access'] as $code => $list)
 				{
-					$access = array_merge(
-						$access,
-						array_filter(
-							$list,
-							function ($item) use (&$code)
-							{
-								return preg_match(sprintf('/^%s\d+$/i', preg_quote($code, '/')), trim($item));
-							}
-						)
-					);
+					if (in_array($code, ['U', 'DR', 'D']) && is_array($list))
+					{
+						$access = array_merge(
+							$access,
+							array_filter(
+								$list,
+								function ($item) use (&$code)
+								{
+									return preg_match(sprintf('/^%s\d+$/i', preg_quote($code, '/')), trim($item));
+								}
+							)
+						);
+					}
 				}
 			}
-		}
 
-		$sharedMailboxesLimit = LicenseManager::getSharedMailboxesLimit();
-		if (count(array_unique($access)) > 1 && $sharedMailboxesLimit >= 0)
-		{
-			$alreadySharedMailboxesIds = Mail\Helper\Mailbox\SharedMailboxesManager::getSharedMailboxesIds();
-			if (count($alreadySharedMailboxesIds) >= $sharedMailboxesLimit && !in_array($mailboxId, $alreadySharedMailboxesIds))
+			$sharedMailboxesLimit = LicenseManager::getSharedMailboxesLimit();
+			if (count(array_unique($access)) > 1 && $sharedMailboxesLimit >= 0)
 			{
-				$access = array($ownerAccessCode);
+				$alreadySharedMailboxesIds = Mail\Helper\Mailbox\SharedMailboxesManager::getSharedMailboxesIds();
+				if (count($alreadySharedMailboxesIds) >= $sharedMailboxesLimit && !in_array($mailboxId, $alreadySharedMailboxesIds))
+				{
+					$access = array($ownerAccessCode);
+				}
 			}
-		}
 
-		foreach (array_unique($access) as $item)
-		{
-			Mail\Internals\MailboxAccessTable::add(array(
-				'MAILBOX_ID' => $mailboxId,
-				'TASK_ID' => 0,
-				'ACCESS_CODE' => $item,
-			));
+			foreach (array_unique($access) as $item)
+			{
+				Mail\Internals\MailboxAccessTable::add([
+					'MAILBOX_ID' => $mailboxId,
+					'TASK_ID' => 0,
+					'ACCESS_CODE' => $item,
+				]);
+			}
 		}
 
 		$mailboxHelper = Mailbox::createInstance($mailboxId);
@@ -1257,12 +1302,22 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			);
 		}
 
+		if (!empty($mailbox) && Feature::isMailboxGridAvailable())
+		{
+			Mail\Integration\Im\Notification::sendEditMailboxNotifications($mailbox, $originalOwnerId, $finalOwnerId);
+		}
+
+		MailboxSearchIndexHelper::saveSearchIndexForMailbox($mailboxId);
+
 		return [
 			'id' => $mailboxId,
 			'senderName' => $senderName ?? null,
 		];
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\Mail\Controller\MailboxConnecting::deleteMailboxAction
+	 */
 	public function deleteAction($id)
 	{
 		global $USER;
@@ -1281,9 +1336,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			return;
 		}
 
-		if ($USER->getId() != $mailbox['USER_ID'] && !$USER->isAdmin() && !$USER->canDoOperation('bitrix24_config'))
+		$canManage = Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailbox['ID']);
+		if (!$canManage)
 		{
 			$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
 			return;
 		}
 
@@ -1378,6 +1435,14 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	final public function getErrorByCode($code): Main\Error
 	{
 		return $this->errorCollection->getErrorByCode($code);
+	}
+
+
+	private function setIsSmtpAvailable()
+	{
+		$defaultMailConfiguration = Configuration::getValue("smtp");
+		$this->arParams['IS_SMTP_AVAILABLE'] = Main\ModuleManager::isModuleInstalled('bitrix24')
+			|| $defaultMailConfiguration['enabled'];
 	}
 
 	/**
@@ -1544,4 +1609,87 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		return false;
 	}
 
+	private function prepareToolbarButton(): void
+	{
+		$id = 'mail-provider-showcase-mailbox-grid-button';
+		$sliderData = ['data' => ['source' => 'connect_page']];
+
+		if ($this->isAnyMailboxConnected())
+		{
+			$link = '/mail/mailbox-list';
+			$text = Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_MAILBOXES_LIST');
+			$icon = Icon::LIST;
+			$testId = 'mailbox-grid-button';
+			$canSee = Mail\Helper\MailboxAccess::hasCurrentUserAccessToMailboxGrid();
+			$tariffRestricted = !LicenseManager::isMailboxManagementEnabled();
+			$featureTariffCode = "limit_v2_mail_mailboxes_management_grid";
+		}
+		else
+		{
+			$link = '/mail/massconnect';
+			$text = Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_MAILBOXES_MASS_CONNECT');
+			$icon = Icon::ADD;
+			$testId = 'mailbox-massconnect-button';
+			$canSee = Mail\Helper\MailboxAccess::hasCurrentUserAccessToMassConnect();
+			$sliderData['width'] = 950;
+			$tariffRestricted = !LicenseManager::isMailboxesMassConnectEnabled();
+			$featureTariffCode = "limit_v2_mail_mailbox_massconnect";
+		}
+
+		$this->arParams['IS_SEEN_MAILBOX_GRID_BUTTON'] = true;
+		$this->arParams['NEED_SHOW_MAILBOX_GRID_GUIDE'] = !Mail\Helper\Config\Guide::wasMailboxGridGuideShown();
+		$this->arParams['MAILBOX_GRID_GUIDE_NAME'] = Mail\Helper\Config\Guide::getMailboxGridGuideOptionName();
+
+		if ($canSee)
+		{
+			$sliderData = Json::encode($sliderData);
+
+			if ($tariffRestricted)
+			{
+				$onclickCode = "top.BX.UI.FeaturePromotersRegistry.getPromoter({code: '$featureTariffCode'}).show();";
+			}
+			else
+			{
+				$onclickCode = sprintf("BX.SidePanel.Instance.open('%s', %s)",
+					$link,
+					$sliderData,
+				);
+			}
+
+			$buttonParams = [
+				"color" => Color::LIGHT_BORDER,
+				"tag" => Tag::LINK,
+				"onclick" => new JsCode($onclickCode),
+				"text" => $text,
+				"dataset" => [
+					'toolbar-collapsed-icon' => $icon,
+					'id' => $id,
+					'test-id' => $testId,
+				],
+			];
+
+			if ($tariffRestricted)
+			{
+				$buttonParams['icon'] = Icon::LOCK;
+			}
+
+			$button = new \Bitrix\UI\Buttons\Button($buttonParams);
+
+			Toolbar::addButton($button);
+		}
+	}
+
+	private function isAnyMailboxConnected(): bool
+	{
+		$row = Mail\MailboxTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=ACTIVE' => 'Y',
+				'=SERVER_TYPE' => 'imap',
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return $row !== false;
+	}
 }

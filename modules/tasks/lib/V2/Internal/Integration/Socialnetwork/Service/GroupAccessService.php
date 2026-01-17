@@ -24,6 +24,7 @@ class GroupAccessService
 	{
 
 	}
+
 	public function getWithViewAccess(array $groupIds, int $userId): GroupCollection
 	{
 		if (!Loader::includeModule('socialnetwork'))
@@ -42,6 +43,23 @@ class GroupAccessService
 		return $this->groupRepository->getByIds($groupIds)->filter(
 			fn (Group $group): bool => $this->canViewGroup($userId, $group)
 		);
+	}
+
+	public function canView(int $userId, int $groupId): bool
+	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return false;
+		}
+
+		$type = $this->groupRepository->getType($groupId);
+
+		$group = new Group(
+			id: $groupId,
+			type: $type,
+		);
+
+		return $this->canViewGroup($userId, $group);
 	}
 
 	public function canViewGroup(int $userId, Group $group): bool

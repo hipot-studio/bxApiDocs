@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Infrastructure\Controller\Task;
 
-use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
-use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Public\Command\Task\Status\ApproveTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Status\CompleteTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Status\DeferTaskCommand;
@@ -17,6 +15,8 @@ use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Task\Status\Permission;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
+use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 
 class Status extends BaseController
 {
@@ -26,12 +26,17 @@ class Status extends BaseController
 	public function startAction(
 		#[Permission\Start]
 		Entity\Task $task,
-		TaskRightService $taskRightService,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new StartTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -41,12 +46,7 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -55,12 +55,17 @@ class Status extends BaseController
 	public function disapproveAction(
 		#[Permission\Disapprove]
 		Entity\Task $task,
-		TaskRightService $taskRightService,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new DisapproveTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -70,12 +75,7 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -84,12 +84,17 @@ class Status extends BaseController
 	public function deferAction(
 		#[Permission\Defer]
 		Entity\Task $task,
-		TaskRightService $taskRightService,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new DeferTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -99,12 +104,7 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -113,12 +113,17 @@ class Status extends BaseController
 	public function approveAction(
 		#[Permission\Approve]
 		Entity\Task $task,
-		TaskRightService $taskRightService,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new ApproveTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -128,12 +133,7 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -141,13 +141,18 @@ class Status extends BaseController
 	 */
 	public function pauseAction(
 		#[Permission\Pause]
-		Entity\Task      $task,
-		TaskRightService $taskRightService,
+		Entity\Task $task,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new PauseTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -157,12 +162,7 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -170,13 +170,18 @@ class Status extends BaseController
 	 */
 	public function completeAction(
 		#[Permission\Complete]
-		Entity\Task      $task,
-		TaskRightService $taskRightService,
+		Entity\Task $task,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new CompleteTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -186,12 +191,7 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -199,13 +199,18 @@ class Status extends BaseController
 	 */
 	public function renewAction(
 		#[Permission\Renew]
-		Entity\Task      $task,
-		TaskRightService $taskRightService,
+		Entity\Task $task,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new RenewTaskCommand(
 			taskId: $task->getId(),
-			config: new UpdateConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -215,11 +220,6 @@ class Status extends BaseController
 			return null;
 		}
 
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
-
-		/** @var Entity\Task $savedTask */
-		$savedTask = $result->getObject();
-
-		return $savedTask->cloneWith(['rights' => $rights]);
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 }

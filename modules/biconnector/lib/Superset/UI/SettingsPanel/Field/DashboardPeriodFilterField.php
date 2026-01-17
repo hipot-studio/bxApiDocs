@@ -34,7 +34,6 @@ final class DashboardPeriodFilterField extends PeriodFilterField
 			'DATE_FILTER_START' => $filter->getDateStart(),
 			'DATE_FILTER_END' => $filter->getDateEnd(),
 			'FILTER_PERIOD' => $filterPeriod,
-			'INCLUDE_LAST_FILTER_DATE' => $filter->needIncludeLastFilterDate(),
 		];
 	}
 
@@ -53,14 +52,8 @@ final class DashboardPeriodFilterField extends PeriodFilterField
 			$startDate = new Date($defaultFilterData['DATE_FILTER_START']);
 			$endDate = new Date($defaultFilterData['DATE_FILTER_END']);
 
-			$langCode = 'DASHBOARD_PERIOD_FILTER_FIELD_DEFAULT_PERIOD_RANGE';
-			if ($defaultFilterData['INCLUDE_LAST_FILTER_DATE'])
-			{
-				$langCode = 'DASHBOARD_PERIOD_FILTER_FIELD_DEFAULT_PERIOD_RANGE_INCLUDE_LAST_FILTER_DATE';
-			}
-
 			$defaultFilterName = Loc::getMessage(
-				$langCode,
+				'DASHBOARD_PERIOD_FILTER_FIELD_DEFAULT_PERIOD_RANGE_INCLUDE_LAST_FILTER_DATE',
 				[
 					'#DATE_FROM#' => $startDate->toString(),
 					'#DATE_TO#' => $endDate->toString(),

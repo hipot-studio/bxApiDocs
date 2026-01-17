@@ -6,6 +6,7 @@ use Bitrix\Im\Model\ReactionTable;
 use Bitrix\Im\V2\Analytics\MessageAnalytics;
 use Bitrix\Im\V2\Anchor\AnchorFeature;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Result;
@@ -38,7 +39,10 @@ class ReactionService
 			->setReaction($reaction)
 		;
 
-		$this->deleteAllReactions();
+		if (!Features::isMultipleReactionsAvailable())
+		{
+			$this->deleteAllReactions();
+		}
 
 		try
 		{

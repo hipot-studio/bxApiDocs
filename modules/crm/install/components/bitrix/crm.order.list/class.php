@@ -11,6 +11,7 @@ use Bitrix\Catalog;
 use Bitrix\Crm\Agent\Search\OrderSearchContentRebuildAgent;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
+use Bitrix\Crm\Component\EntityList\UserField\GridHeaders;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Order;
 use Bitrix\Crm\Product\Url;
@@ -1394,6 +1395,8 @@ class CCrmOrderListComponent extends \CBitrixComponent
 		// Fill in default values if empty
 		if (empty($visibleColumns))
 		{
+			GridHeaders::removeExcessUfFromGridParams($this->arResult['HEADERS']);
+
 			foreach ($this->arResult['HEADERS'] as $arHeader)
 			{
 				if ($arHeader['default'])

@@ -1,5 +1,7 @@
-<?
-use \Bitrix\Security\Mfa\Otp;
+<?php
+
+use Bitrix\Security\Mfa\Otp;
+use Bitrix\Security\Mfa\OtpType;
 use Bitrix\Security\Mfa\OtpException;
 
 /**
@@ -90,7 +92,7 @@ class CSecurityUser
 				return false;
 			}
 
-			$secret = mb_substr(trim($arFields['SECRET']), 0, 64);
+			$secret = substr(trim($arFields['SECRET']), 0, 64);
 			if (!$secret)
 			{
 				if ($canAdminOtp)
@@ -109,7 +111,7 @@ class CSecurityUser
 			}
 			if ($arFields['TYPE'])
 			{
-				$otp->setType($arFields['TYPE']);
+				$otp->setType(OtpType::from($arFields['TYPE']));
 			}
 
 			$sync1 = trim($arFields['SYNC1']);

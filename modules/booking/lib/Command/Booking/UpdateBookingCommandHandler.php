@@ -6,53 +6,61 @@ namespace Bitrix\Booking\Command\Booking;
 
 use Bitrix\Booking\Command\Booking\Trait\BookingChangesTrait;
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Exception\Booking\UpdateBookingException;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\ORM\BookingResourceRepository;
 use Bitrix\Booking\Internals\Service\BookingService;
+use Bitrix\Booking\Internals\Service\BookingSkuService;
+use Bitrix\Booking\Internals\Service\ClientService;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
-use Bitrix\Booking\Internals\Repository\BookingClientRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\BookingExternalDataRepository;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\ResourceService;
 use Bitrix\Booking\Provider\BookingProvider;
+use Bitrix\Booking\Service\BookingFeature;
 
 class UpdateBookingCommandHandler
 {
 	use BookingChangesTrait;
 
 	private BookingRepositoryInterface $bookingRepository;
-	private BookingClientRepositoryInterface $bookingClientRepository;
 	private BookingExternalDataRepository $bookingExternalDataRepository;
 	private BookingResourceRepository $bookingResourceRepository;
 	private TransactionHandlerInterface $transactionHandler;
 	private JournalServiceInterface $journalService;
 	private BookingService $bookingService;
+	private BookingSkuService $skuService;
 	private OverbookingService $overbookingService;
 	private BookingProvider $bookingProvider;
+	private ClientService $clientService;
 	private ResourceService $resourceService;
 
 	public function __construct()
 	{
 		$this->bookingRepository = Container::getBookingRepository();
-		$this->bookingClientRepository = Container::getBookingClientRepository();
 		$this->bookingExternalDataRepository = Container::getBookingExternalDataRepository();
 		$this->bookingResourceRepository = Container::getBookingResourceRepository();
 		$this->transactionHandler = Container::getTransactionHandler();
 		$this->journalService = Container::getJournalService();
 		$this->bookingService = Container::getBookingService();
+		$this->skuService = Container::getBookingSkuService();
 		$this->overbookingService = Container::getOverbookingService();
+		$this->clientService = Container::getClientService();
 		$this->resourceService = Container::getResourceService();
 		$this->bookingProvider = new BookingProvider();
 	}
 
 	public function __invoke(UpdateBookingCommand $command): Entity\Booking\Booking
 	{
+		$this->checkFeatures($command);
+
 		$currentBooking = $this->bookingRepository->getById($command->booking->getId());
 
 		if (!$currentBooking)
@@ -76,15 +84,22 @@ class UpdateBookingCommandHandler
 		try
 		{
 			$this->bookingService->checkBookingBeforeUpdating($currentBooking, $command->booking);
-
-			$intersectionResult = $this->bookingService->checkIntersection(
-				booking: $command->booking,
-				allowOverbooking: $command->allowOverbooking,
-			);
 		}
 		catch (\Throwable $exception)
 		{
 			throw new UpdateBookingException($exception->getMessage());
+		}
+
+		$intersectionResult = $this->bookingService->checkIntersection(
+			booking: $command->booking,
+			allowOverbooking: $command->allowOverbooking,
+		);
+		if (!$intersectionResult->isSuccess())
+		{
+			throw new UpdateBookingException(
+				'Some resources are unavailable for the requested time range: '
+				. implode(',', $intersectionResult->getBookingCollection()->getEntityIds())
+			);
 		}
 
 		$booking = $this->transactionHandler->handle(
@@ -92,6 +107,10 @@ class UpdateBookingCommandHandler
 				$this->handleResources($command->booking, $currentBooking);
 				$this->handleClients($command, $currentBooking);
 				$this->handleExternalData($command, $currentBooking);
+				$this->skuService->handleSkuRelations(
+					$command->booking,
+					$currentBooking->getSkuCollection(),
+				);
 
 				$bookingId = $this->bookingRepository->save($command->booking);
 				$booking = $this->bookingRepository->getById($bookingId);
@@ -105,7 +124,8 @@ class UpdateBookingCommandHandler
 					?->getClientProvider()
 					?->loadClientDataForCollection($booking->getClientCollection());
 
-				// load booking external data
+				Container::getDealForBookingService()->onBookingUpdated($currentBooking, $booking);
+
 				$this->bookingProvider->withExternalData(new Entity\Booking\BookingCollection($booking));
 
 				Container::getProviderManager()::getCurrentProvider()
@@ -199,38 +219,24 @@ class UpdateBookingCommandHandler
 
 	private function handleClients(UpdateBookingCommand $command, Entity\Booking\Booking $booking): void
 	{
-		$newClients = $command->booking->getClientCollection();
-		$existingClients = $booking->getClientCollection();
-
-		if ($newClients->isEmpty() && $existingClients->isEmpty())
-		{
-			Container::getProviderManager()::getCurrentProvider()
-				?->getDataProvider()
-				?->setClientsData(
-					$newClients,
-					$command->booking->getExternalDataCollection()
-				);
-		}
-
-		if ($newClients->isEqual($existingClients))
-		{
-			return;
-		}
-
-		/**
-		 * If client's collections has changed we need to unlink every relation
-		 * in order to recalculate IS_PRIMARY field
-		 */
-		$this->bookingClientRepository->unLink($booking->getId(), EntityType::Booking, $existingClients);
-		$this->bookingClientRepository->link($booking->getId(), EntityType::Booking, $newClients);
-
-		$this->journalService->append(
-			new JournalEvent(
-				entityId: $command->booking->getId(),
-				type: JournalType::BookingClientsUpdated,
-				data: [],
-			),
+		$isUpdated = $this->clientService->handleClientRelationsUpdate(
+			newClients: $command->booking->getClientCollection(),
+			existingClients: $booking->getClientCollection(),
+			newExternalData: $command->booking->getExternalDataCollection(),
+			entity: $booking,
+			entityType: EntityType::Booking,
 		);
+
+		if ($isUpdated)
+		{
+			$this->journalService->append(
+				new JournalEvent(
+					entityId: $command->booking->getId(),
+					type: JournalType::BookingClientsUpdated,
+					data: [],
+				),
+			);
+		}
 	}
 
 	private function handleExternalData(UpdateBookingCommand $command, Entity\Booking\Booking $booking): void
@@ -269,5 +275,21 @@ class UpdateBookingCommandHandler
 	protected function getJournalService(): JournalServiceInterface
 	{
 		return $this->journalService;
+	}
+
+	private function checkFeatures(UpdateBookingCommand $command): void
+	{
+		if (!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_BOOKING))
+		{
+			throw new Exception('Feature is not available');
+		}
+
+		if (
+			!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+			&& $command->booking->getResourceCollection()->count() > 1
+		)
+		{
+			throw new Exception('Multi-resource booking feature is not available');
+		}
 	}
 }

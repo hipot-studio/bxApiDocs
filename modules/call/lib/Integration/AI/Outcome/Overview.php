@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call\Integration\AI\Outcome;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Call\Integration;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\Task\TranscriptionOverview;
@@ -9,15 +10,14 @@ use Bitrix\Call\Integration\AI\Task\TranscriptionOverview;
 /*
 {
 	"topic": "string or null",
+	"meeting_type": {
+		"explanation": "string",
+		"type_tag": "string"
+	},
 	"agenda": {
 		"is_mentioned": "bool",
 		"explanation": "string or null",
 		"quote": "string or null"
-	},
-	"meeting_details": {
-		"type": "string or null",
-		"is_exception_meeting": "bool",
-		"explanation": "string or null"
 	},
 	"detailed_takeaways": "long string or null",
 	"agreements": [
@@ -37,67 +37,37 @@ use Bitrix\Call\Integration\AI\Task\TranscriptionOverview;
 			"meeting": "string or null",
 			"quote": "string or null"
 		}
-	],
-	"efficiency":
-	{
-		"agenda_clearly_stated": {
-			"value": "bool",
-			"explanation": "string or null"
-		},
-		"agenda_items_covered": {
-			"value": "bool",
-			"explanation": "string or null"
-		},
-		"conclusions_and_actions_outlined": {
-			"value": "bool",
-			"explanation": "string or null"
-		},
-		"time_exceed_penalty": {
-			"value": "bool",
-			"explanation": "string or null"
-		}
-	}
+	]
 }
 */
 
-class Overview
+class Overview extends AISenseContent
 {
 	public string $topic = '';
+	public ?\stdClass $meetingType = null;
 	public ?\stdClass $agenda = null;
-	public ?\stdClass $efficiency = null;
-	public int $efficiencyValue = -1;
-	public ?\stdClass $calendar = null;/** @see TranscriptionOverview::buildOutcome */
-	public array $tasks = [];
 	public array $actionItems = [];
 	public array $meetings = [];
 	public array $agreements = [];
+	public string $detailedTakeaways = '';
+
+	//region: deprecated fields for version 2
+	public ?\stdClass $calendar = null;
+	//region: deprecated fields for version 1
+	public ?\stdClass $efficiency = null;
+	public int $efficiencyValue = -1;
+	public array $tasks = [];
 	public ?\stdClass $meetingDetails = null;
 	public bool $isExceptionMeeting = false;
-	public string $detailedTakeaways = '';
-	public bool $isEmpty = true;
+	//endregion
 
 
 	public function __construct(?Integration\AI\Outcome $outcome = null)
 	{
 		if ($outcome)
 		{
-			$convertObj = static function ($input) use (&$convertObj)
-			{
-				$output = new \stdClass();
-				foreach ($input as $key => $val)
-				{
-					if (is_array($val) && !empty($val))
-					{
-						$val = $convertObj($val);
-					}
-					if (!is_null($val))
-					{
-						$key = lcfirst(str_replace('_', '', ucwords($key, '_')));
-						$output->{$key} = $val;
-					}
-				}
-				return $output;
-			};
+			$this->callId = $outcome->getCallId();
+			$this->version = (int)($outcome->getProperty('version')?->getContent() ?? 1);
 
 			$fieldsMap = [
 				'topic' => 'topic',
@@ -113,26 +83,36 @@ class Overview
 			}
 
 			$fieldsMap = [
+				'meetingType' => 'meeting_type',
 				'agenda' => 'agenda',
-				'meetingDetails' => 'meeting_details',
 				'efficiency' => 'efficiency',
-				'calendar' => 'calendar',
 			];
+			if ($this->version <= 1)
+			{
+				$fieldsMap['meetingDetails'] = 'meeting_details';
+			}
+			if ($this->version <= 2)
+			{
+				$fieldsMap['calendar'] = 'calendar';
+			}
 			foreach ($fieldsMap as $field => $prop)
 			{
 				$value = $outcome->getProperty($prop)?->getStructure();
 				if (is_array($value))
 				{
-					$this->{$field} = $convertObj($value);
+					$this->{$field} = $this->convertObjectStructure($value);
 				}
 			}
 
 			$fieldsMap = [
-				'tasks' => 'tasks',
 				'actionItems' => 'action_items',
 				'meetings' => 'meetings',
 				'agreements' => 'agreements',
 			];
+			if ($this->version <= 1)
+			{
+				$fieldsMap['tasks'] = 'tasks';
+			}
 			foreach ($fieldsMap as $field => $prop)
 			{
 				$values = $outcome->getProperty($prop)?->getStructure();
@@ -141,7 +121,7 @@ class Overview
 					$this->{$field} = [];
 					foreach ($values as $row)
 					{
-						$obj = $convertObj($row);
+						$obj = $this->convertObjectStructure($row);
 						if (!empty($obj))
 						{
 							$this->{$field}[] = $obj;
@@ -149,69 +129,70 @@ class Overview
 					}
 				}
 			}
-		}
 
-		if ($this->meetingDetails)
-		{
-			$this->isExceptionMeeting = (bool)($this->meetingDetails?->isExceptionMeeting);
-		}
+			if ($this->version <= 1)
+			{
+				if ($this->meetingDetails)
+				{
+					$this->isExceptionMeeting = (bool)($this->meetingDetails?->isExceptionMeeting);
+				}
 
-		$this->calcEfficiency();
+				$this->calcEfficiency();
+			}
+		}
 	}
 
-
-	public function toRestFormat(): array
+	/**
+	 * @return array
+	 */
+	public function toRestFormat(string $mentionFormat = 'bb'): array
 	{
 		$mentionService = MentionService::getInstance();
+		$replaceMentions = function (string $value) use ($mentionService, $mentionFormat)
+		{
+			return match ($mentionFormat)
+			{
+				'html' => $mentionService->replaceBBMentions($value),
+				'none' => $mentionService->removeBBMentions($value),
+				default => $value,//bb
+			};
+		};
 
 		$result = [];
 
 		if ($this?->detailedTakeaways)
 		{
-			$result['detailedTakeaways'] = $mentionService->replaceBBMentions($this->detailedTakeaways);
+			$result['detailedTakeaways'] = $replaceMentions($this->detailedTakeaways);
 		}
 		if ($this?->topic)
 		{
-			$result['topic'] = $mentionService->replaceBBMentions($this->topic);
+			$result['topic'] = $replaceMentions($this->topic);
+		}
+		if ($this?->meetingType)
+		{
+			$result['meetingType'] = [];
+			if ($this->meetingType?->explanation)
+			{
+				$result['meetingType']['explanation'] = $replaceMentions($this->meetingType->explanation);
+			}
+			if ($this->meetingType?->typeTag)
+			{
+				$result['meetingType']['typeTag'] = $this->meetingType->typeTag;
+				$result['meetingType']['title'] = $this->getMeetingTypeTitle($this->meetingType->typeTag);
+			}
 		}
 		if ($this?->agenda)
 		{
 			$result['agenda'] = [];
 			if ($this->agenda?->explanation)
 			{
-				$result['agenda']['explanation'] = $mentionService->replaceBbMentions($this->agenda->explanation);
+				$result['agenda']['explanation'] = $replaceMentions($this->agenda->explanation);
 			}
 			if ($this->agenda?->quote)
 			{
-				$result['agenda']['quote'] = $mentionService->replaceBbMentions($this->agenda->quote);
+				$result['agenda']['quote'] = $replaceMentions($this->agenda->quote);
 			}
 		}
-		if ($this?->meetingDetails)
-		{
-			$result['meetingDetails'] = [
-				'type' => $this->meetingDetails->type,
-			];
-		}
-		if ($this?->efficiency)
-		{
-			$result['efficiency'] = [
-				'type' => $this->meetingDetails->type,
-				'agendaClearlyStated' => (bool)$this->efficiency?->agendaClearlyStated?->value,
-				'agendaItemsCovered' => (bool)$this->efficiency?->agendaItemsCovered?->value,
-				'conclusionsAndActionsOutlined' => (bool)$this->efficiency?->conclusionsAndActionsOutlined?->value,
-			];
-		}
-		if ($this->efficiencyValue)
-		{
-			$result['efficiencyValue'] = $this->efficiencyValue;
-		}
-		if ($this?->calendar)
-		{
-			$result['calendar'] = [
-				'overhead' => $this->calendar->overhead,
-			];
-		}
-
 		if ($this?->agreements)
 		{
 			$result['agreements'] = [];
@@ -220,11 +201,11 @@ class Overview
 				if ($row?->agreement)
 				{
 					$result['agreements'][$i] = [
-						'agreement' => $mentionService->replaceBbMentions($row->agreement)
+						'agreement' => $replaceMentions($row->agreement)
 					];
 					if ($row?->quote)
 					{
-						$result['agreements'][$i]['quote'] = $mentionService->replaceBbMentions($row->quote);
+						$result['agreements'][$i]['quote'] = $replaceMentions($row->quote);
 					}
 				}
 			}
@@ -238,12 +219,12 @@ class Overview
 				{
 					$meeting = $row->meeting;
 					$result['meetings'][$i] = [
-						'meeting' => $mentionService->replaceBbMentions($meeting),
+						'meeting' => $replaceMentions($meeting),
 						'meetingMentionLess' => $mentionService->removeBbMentions($meeting),
 					];
 					if ($row?->quote)
 					{
-						$result['meetings'][$i]['quote'] = $mentionService->replaceBbMentions($row->quote);
+						$result['meetings'][$i]['quote'] = $replaceMentions($row->quote);
 					}
 				}
 			}
@@ -257,42 +238,90 @@ class Overview
 				{
 					$actionItem = $row->actionItem;
 					$result['actionItems'][$i] = [
-						'actionItem' => $mentionService->replaceBbMentions($actionItem),
+						'actionItem' => $replaceMentions($actionItem),
 						'actionItemMentionLess' => $mentionService->removeBbMentions($actionItem)
 					];
 					if ($row?->quote)
 					{
-						$result['actionItems'][$i]['quote'] = $mentionService->replaceBbMentions($row->quote);
-					}
-				}
-			}
-		}
-		if ($this?->tasks)
-		{
-			$result['tasks'] = [];
-			foreach ($this->tasks as  $i => $row)
-			{
-				if ($row?->task)
-				{
-					$task = $row->task;
-					$result['tasks'][$i] = [
-						'task' => $mentionService->replaceBbMentions($task),
-						'taskMentionLess' => $mentionService->removeBbMentions($task),
-					];
-					if ($row?->quote)
-					{
-						$result['tasks'][$i]['quote'] = $mentionService->replaceBbMentions($row->quote);
+						$result['actionItems'][$i]['quote'] = $replaceMentions($row->quote);
 					}
 				}
 			}
 		}
 
-		$result['isExceptionMeeting'] = $this->isExceptionMeeting;
+		//region: deprecated fields for version 1
+		if ($this->version <= 2)
+		{
+			if ($this?->calendar)
+			{
+				$result['calendar'] = [
+					'overhead' => $this->calendar->overhead,
+				];
+			}
+		}
+		if ($this->version <= 1)
+		{
+			if ($this?->meetingDetails)
+			{
+				$result['meetingDetails'] = [
+					'type' => $this->meetingDetails->type,
+				];
+			}
+			if ($this?->efficiency)
+			{
+				$result['efficiency'] = [
+					'type' => $this->meetingDetails->type,
+					'agendaClearlyStated' => (bool)$this->efficiency?->agendaClearlyStated?->value,
+					'agendaItemsCovered' => (bool)$this->efficiency?->agendaItemsCovered?->value,
+					'conclusionsAndActionsOutlined' => (bool)$this->efficiency?->conclusionsAndActionsOutlined?->value,
+				];
+			}
+			if ($this->efficiencyValue)
+			{
+				$result['efficiencyValue'] = $this->efficiencyValue;
+			}
+			if ($this?->tasks)
+			{
+				$result['tasks'] = [];
+				foreach ($this->tasks as  $i => $row)
+				{
+					if ($row?->task)
+					{
+						$task = $row->task;
+						$result['tasks'][$i] = [
+							'task' => $replaceMentions($task),
+							'taskMentionLess' => $mentionService->removeBbMentions($task),
+						];
+						if ($row?->quote)
+						{
+							$result['tasks'][$i]['quote'] = $replaceMentions($row->quote);
+						}
+					}
+				}
+			}
+
+			$result['isExceptionMeeting'] = $this->isExceptionMeeting;
+		}
+		//endregion
 
 		return $result;
 	}
 
-	public function calcEfficiency(): int
+	private function getMeetingTypeTitle(string $meetingType): string
+	{
+		$title = Loc::getMessage("CALL_MEETING_TYPE_".mb_strtoupper($meetingType));
+		if (empty($title))
+		{
+			$title = Loc::getMessage('CALL_MEETING_TYPE_UNDEFINED');
+		}
+		return $title ?: '';
+	}
+
+	/**
+	 * @deprecated compatibility only with version 1
+	 * @return int
+	 */
+	private function calcEfficiency(): int
 	{
 		if (!empty($this->efficiency))
 		{

@@ -12,23 +12,23 @@ use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFile;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 use CUserTypeManager;
 
 class AttachmentService
 {
 	public function __construct(
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateService,
 	)
 	{
 
 	}
 
-	public function add(int $taskId, int $userId, array $fileIds): void
+	public function add(int $taskId, int $userId, array $fileIds, bool $useConsistency = false): ?Task
 	{
 		if (empty($fileIds))
 		{
-			return;
+			return null;
 		}
 
 		$ufManager = $this->getUfManager();
@@ -39,27 +39,28 @@ class AttachmentService
 		$new = array_unique(array_merge($current, $fileIds));
 		$new = array_values($new);
 
+		$changedBy = new User(id: $userId);
+
 		$task = new Task(
 			id: $taskId,
 			fileIds: $new,
 			changedTs: time(),
-			changedBy: new User(id: $userId),
+			changedBy: $changedBy,
 		);
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig(
+			userId: $userId,
+			useConsistency: $useConsistency,
+		);
 
 		// update changelog
-		$this->updateService->update(
+		return $this->updateService->update(
 			task: $task,
 			config: $config,
 		);
-
-		$fields = [UserField::TASK_ATTACHMENTS => $new];
-
-		$ufManager->Update(UserField::TASK, $taskId, $fields, $userId);
 	}
 
-	public function delete(int $taskId, int $userId, array $fileIds): void
+	public function delete(int $taskId, int $userId, array $fileIds, bool $useConsistency = false): void
 	{
 		if (!Loader::includeModule('disk'))
 		{
@@ -109,20 +110,7 @@ class AttachmentService
 		$new = array_diff($current, $fileIdsToRemove);
 		$new = array_values($new);
 
-		$task = new Task(
-			id: $taskId,
-			fileIds: $new,
-			changedTs: time(),
-			changedBy: new User(id: $userId),
-		);
-
-		$config = new UpdateConfig($userId);
-
-		// update changelog
-		$this->updateService->update(
-			task: $task,
-			config: $config,
-		);
+		$changedBy = new User(id: $userId);
 
 		// if no files left, we need to set empty value
 		if (empty($new))
@@ -130,9 +118,23 @@ class AttachmentService
 			$new[] = '';
 		}
 
-		$fields = [UserField::TASK_ATTACHMENTS => $new];
+		$task = new Task(
+			id: $taskId,
+			fileIds: $new,
+			changedTs: time(),
+			changedBy: $changedBy,
+		);
 
-		$ufManager->Update(UserField::TASK, $taskId, $fields, $userId);
+		$config = new UpdateConfig(
+			userId: $userId,
+			useConsistency: $useConsistency,
+		);
+
+		// update changelog
+		$this->updateService->update(
+			task: $task,
+			config: $config,
+		);
 	}
 
 	protected function getUfManager(): CUserTypeManager

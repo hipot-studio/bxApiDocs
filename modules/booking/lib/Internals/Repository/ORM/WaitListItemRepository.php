@@ -8,6 +8,7 @@ use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Exception\WaitListItem\CreateWaitListItemException;
 use Bitrix\Booking\Internals\Exception\WaitListItem\RemoveWaitListItemException;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
+use Bitrix\Booking\Internals\Model\Enum\NoteType;
 use Bitrix\Booking\Internals\Model\WaitListItemTable;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\WaitListItemMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Trait\NoteTrait;
@@ -83,7 +84,13 @@ class WaitListItemRepository implements WaitListItemRepositoryInterface
 			throw new $exceptionClass($result->getErrors()[0]->getMessage());
 		}
 
-		$this->handleNote($ormWaitListItem, $waitListItem->getNote(), $result->getId(), EntityType::WaitList);
+		$this->handleNote(
+			$ormWaitListItem,
+			$waitListItem->getNote(),
+			$result->getId(),
+			EntityType::WaitList,
+			NoteType::Manager,
+		);
 
 		return $result->getId();
 	}

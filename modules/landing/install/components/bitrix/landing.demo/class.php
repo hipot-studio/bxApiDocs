@@ -1031,6 +1031,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 				$metrika = new Metrika\Metrika(
 					Metrika\Categories::getBySiteType($this->arParams['TYPE']),
 					Metrika\Events::createTemplate,
+					Metrika\Tools::getBySiteType($this->arParams['TYPE']),
 				);
 				$metrika
 					->setType(Metrika\Types::template)
@@ -1469,10 +1470,11 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 				$metrika = new Metrika\Metrika(
 					Metrika\Categories::getBySiteType($this->arParams['TYPE']),
 					Metrika\Events::createTemplate,
+					Metrika\Tools::getBySiteType($this->arParams['TYPE']),
 				);
 				$metrika
 					->setType(Metrika\Types::template)
-					->setSection(Metrika\Sections::page)
+					->setSection(Metrika\Sections::site)
 					->setParam(1, 'appCode', $code)
 					->setParam(3, 'siteId', $siteData['ID'])
 					->send()

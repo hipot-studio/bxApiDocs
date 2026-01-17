@@ -131,7 +131,7 @@ class ProductRowReservesSynchronizer
 
 			$fields = [
 				'STORE_ID' => $reserveInfo->getStoreId(),
-				'DATE_RESERVE_END' => $reserveInfo->getDateReserveEndAsDateTime(),
+				'DATE_RESERVE_END' => $reserveInfo->getDateReserveEnd(),
 				'QUANTITY' => $quantity,
 			];
 			if (!$basketReserve->setFields($fields)->isSuccess())

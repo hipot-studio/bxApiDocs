@@ -4,32 +4,32 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im;
 
-use Bitrix\Main\Loader;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\AbstractNotify;
+use Bitrix\Tasks\V2\Internal\Result\Result;
 
 class ChatNotification implements ChatNotificationInterface, MessageSenderInterface
 {
 	/**
 	 * Generic notification method.
 	 * @param NotificationType $type
-	 * @param Task $task
+	 * @param Entity\Task $task
 	 * @param array $args Additional arguments for replacements (e.g., triggeredBy, oldResponsible, etc.)
 	 */
-	public function notify(NotificationType $type, Task $task, array $args = []): void
+	public function notify(NotificationType $type, Entity\Task $task, array $args = []): void
 	{
 		$this->loadMessages();
 
-		match ($type) {
+		$notification = match ($type) {
 			NotificationType::ChatCreatedForExistingTask => new Action\NotifyChatCreatedForExistingTask(
 				task: $task,
 				sender: $this,
-				args: $args,
 			),
 			NotificationType::TaskHasForumComments => new Action\NotifyTaskHasForumComments(
 				task: $task,
 				sender: $this,
-				args: $args
 			),
 			NotificationType::TaskHasLegacyChat => new Action\NotifyTaskHasLegacyChat(
 				task: $task,
@@ -67,14 +67,16 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				oldAuditors: $args['oldAuditors'] ?? null,
-				newAuditors: $args['newAuditors'] ?? null
+				newAuditors: $args['newAuditors'] ?? null,
+				newAddMembers: $args['newAddMembers'] ?? null,
 			),
 			NotificationType::AccomplicesChanged => new Action\NotifyAccomplicesChanged(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				oldAccomplices: $args['oldAccomplices'] ?? null,
-				newAccomplices: $args['newAccomplices'] ?? null
+				newAccomplices: $args['newAccomplices'] ?? null,
+				newAddMembers: $args['newAddMembers'] ?? null,
 			),
 			NotificationType::GroupChanged => new Action\NotifyGroupChanged(
 				task: $task,
@@ -86,13 +88,16 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 			NotificationType::TaskOverdue => new Action\NotifyTaskOverdue(
 				task: $task,
 				sender: $this,
-				args: $args,
+			),
+			NotificationType::TaskOverdueSoon => new Action\NotifyTaskOverdueSoon(
+				task: $task,
+				sender: $this,
 			),
 			NotificationType::TaskStatusChanged => new Action\NotifyTaskStatusChanged(
 				task: $task,
-				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
-				newStatus: $args['newStatus'] ?? null
+				oldStatus: $args['oldStatus'] ?? null,
+				newStatus: $args['newStatus'] ?? null,
 			),
 			NotificationType::TaskTimerStarted => new Action\NotifyTaskTimerStarted(
 				task: $task,
@@ -102,56 +107,76 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 			NotificationType::TaskTimerStopped => new Action\NotifyTaskTimerStopped(
 				task: $task,
 				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null
+				triggeredBy: $args['triggeredBy'] ?? null,
+				seconds: $args['seconds'] ?? null,
+			),
+			NotificationType::TaskTimersStopped => new Action\NotifyTaskTimersStopped(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				seconds: $args['seconds'] ?? null,
 			),
 			NotificationType::ChecklistItemsAdded => new Action\NotifyChecklistItemsAdded(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistItemsDeleted => new Action\NotifyChecklistItemsDeleted(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
 			),
 			NotificationType::ChecklistItemsModified => new Action\NotifyChecklistItemsModified(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistItemsCompleted => new Action\NotifyChecklistItemsCompleted(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistItemsUnchecked => new Action\NotifyChecklistItemsUnchecked(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistSingleItemCompleted => new Action\NotifyChecklistSingleItemCompleted(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				checklistName: $args['checklistName'] ?? '',
-				itemName: $args['itemName'] ?? ''
+				itemName: $args['itemName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistSingleItemUnchecked => new Action\NotifyChecklistSingleItemUnchecked(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				checklistName: $args['checklistName'] ?? '',
-				itemName: $args['itemName'] ?? ''
+				itemName: $args['itemName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistAuditorAssigned => new Action\NotifyChecklistAuditorAssigned(
 				task: $task,
@@ -172,13 +197,16 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				fileCount: $args['fileCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
+				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistCompleted => new Action\NotifyChecklistCompleted(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
-				checklistName: $args['checklistName'] ?? ''
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
 			),
 			NotificationType::ChecklistGroupedOperations => new Action\NotifyChecklistGroupedOperations(
 				task: $task,
@@ -190,8 +218,9 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
-				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? ''
+				itemsCount: $args['itemCount'] ?? 1,
+				checklistName: $args['checklistName'] ?? '',
+				checkListId: $args['itemId'] ?? null,
 			),
 			NotificationType::ChecklistDeleted => new Action\NotifyChecklistDeleted(
 				task: $task,
@@ -199,35 +228,114 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				triggeredBy: $args['triggeredBy'] ?? null,
 				checklistName: $args['checklistName'] ?? ''
 			),
+			NotificationType::TaskStatusPinged => new Action\NotifyTaskStatusPinged(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+			),
+			NotificationType::ResultAdded => new Action\NotifyResultAdded(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				resultText: $args['resultText'] ?? '',
+				dateTs: $args['dateTs'] ?? '',
+				fileIds: $args['fileIds'] ?? [],
+			),
+			NotificationType::ResultModified => new Action\NotifyResultModified(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				dateTs: $args['dateTs'] ?? '',
+
+			),
+			NotificationType::ResultDeleted => new Action\NotifyResultDeleted(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				dateTs: $args['dateTs'] ?? '',
+			),
+			NotificationType::ResultFromMessage => new Action\NotifyResultFromMessage(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				messageId: $args['messageId'] ?? 0,
+				dateTs: $args['dateTs'] ?? 0,
+			),
+			NotificationType::ResultRequested => new Action\NotifyResultRequested(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+			),
+			NotificationType::TaskDescriptionChanged => new Action\NotifyTaskDescriptionChanged(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				oldDescription: $args['oldDescription'] ?? null,
+				newDescription: $args['newDescription'] ?? null
+			),
+			NotificationType::TaskPriorityChanged => new Action\NotifyPriorityChanged(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				priority: $args['priority'] ?? null,
+			),
+			NotificationType::TaskCrmItemsChanged => new Action\NotifyCrmItemsChanged(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+			),
+			NotificationType::TaskAttachmentChanged => new Action\NotifyFilesChanged(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				fileIds: $args['fileIds'] ?? [],
+			),
+			NotificationType::TaskAttachmentAdded => new Action\NotifyFilesAdded(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				fileIds: $args['fileIds'] ?? [],
+			),
+			NotificationType::TaskAttachmentRemoved => new Action\NotifyFilesRemoved(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				fileIds: $args['fileIds'] ?? [],
+			),
+			NotificationType::TaskMovedToBacklog => new Action\NotifyTaskMovedToBacklog(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+			),
+			NotificationType::TaskDeleted => new Action\NotifyTaskDeleted(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+			),
+			NotificationType::OnboardingInvitedResponsibleAccept => new Action\OnboardingInvitedResponsibleAccept(
+				task: $task,
+				sender: $this,
+			),
+			NotificationType::OnboardingInvitedResponsibleNotAcceptOneDay => new Action\OnboardingInvitedResponsibleNotAcceptOneDay(
+				task: $task,
+				sender: $this,
+			),
+			NotificationType::OnboardingInvitedResponsibleNotViewTaskTwoDays => new Action\OnboardingInvitedResponsibleNotViewTaskTwoDays(
+				task: $task,
+				sender: $this,
+			),
+			NotificationType::ElapsedTimeAdded => new Action\NotifyElapsedTimeAdded(
+				task: $task,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				elapsedTime: $args['elapsedTime'] ?? null,
+			),
 			default => null,
 		};
+
+		if (null === $notification)
+		{
+			return;
+		}
+
+		if ($notification instanceof Action\ShouldSend)
+		{
+			$this->sendMessage($task, $notification);
+		}
 	}
 
-	public function sendMessage(Task $task, string|null $text): void
+	public function sendMessage(Entity\Task $task, AbstractNotify $notification): Result
 	{
-		if (!Loader::includeModule('im'))
-		{
-			return;
-		}
-
-		if ($text === null)
-		{
-			return;
-		}
-
-		if ($task->chatId === null)
-		{
-			return;
-		}
-
-		$authorId = 0; // system user
-
-		$chat = \Bitrix\Im\V2\Chat::getInstance($task->chatId);
-		$message = (new \Bitrix\Im\V2\Message())
-			->setMessage($text)
-			->setAuthorId($authorId)
-		;
-		$chat->sendMessage($message);
+		return Container::getInstance()->get(MessageSenderInterface::class)->sendMessage($task, $notification);
 	}
 
 	private function loadMessages(): void

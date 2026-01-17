@@ -184,13 +184,13 @@ final class FieldTemplate implements Template
 					{
 						$this->usedClasses[] = Date::class;
 
-						return "static fn() => Date()";
+						return "fn() => new Date()";
 					}
 					else
 					{
 						$this->usedClasses[] = DateTime::class;
 
-						return "static fn() => DateTime()";
+						return "fn() => new DateTime()";
 					}
 				}
 			}

@@ -40,6 +40,11 @@ class DiskFile extends AbstractEntity
 		return $this->id;
 	}
 
+	public function getDiskObjectId(): int|null
+	{
+		return $this->customData['objectId'] ?? null;
+	}
+
 	public static function mapFromArray(array $props): static
 	{
 		return new static(

@@ -17,7 +17,7 @@ class User extends BaseController
 		$relationFilter = ['ACTIVE' => true, 'CHAT_ID' => $chat->getId()];
 		$relations = RelationCollection::find($relationFilter, $relationOrder, $limit);
 
-		return $this->toRestFormat($relations->getUsers());
+		return $relations->getUsers()->toRestFormat();
 	}
 
 	private function prepareRelationOrder(array $order): array

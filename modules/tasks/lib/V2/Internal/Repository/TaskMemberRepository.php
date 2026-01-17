@@ -74,4 +74,14 @@ class TaskMemberRepository implements TaskMemberRepositoryInterface
 
 		return $this->memberMapper->mapToCollection($members);
 	}
+
+	public function getMembershipForUserId(int $userId): array
+	{
+		$recordset = MemberTable::query()
+			->setSelect(['TASK_ID', 'TYPE'])
+			->where('USER_ID', $userId)
+			->fetchAll();
+
+		return array_column($recordset, 'TYPE', 'TASK_ID');
+	}
 }

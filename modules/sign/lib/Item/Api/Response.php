@@ -38,6 +38,21 @@ abstract class Response implements Contract\Item
 		return $this->errors;
 	}
 
+	/**
+	 * @return string[]
+	 */
+	public function getErrorMessages(): array
+	{
+		$messages = [];
+
+		foreach ($this->getErrors() as $error)
+		{
+			$messages[] = $error->getMessage();
+		}
+
+		return $messages;
+	}
+
 	public function createResult(): Main\Result
 	{
 		return (new Main\Result())->addErrors($this->getErrors());

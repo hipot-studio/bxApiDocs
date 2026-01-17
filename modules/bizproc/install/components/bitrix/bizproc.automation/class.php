@@ -5,11 +5,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Debugger;
+use Bitrix\Bizproc\Internal\Service\LatestRobots\RobotVersionIndexer;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Bizproc\Debugger;
-
-use Bitrix\Bizproc\Internal\Service\LatestRobots\RobotVersionIndexer;
 
 Main\UI\Extension::load('ui.alerts');
 
@@ -231,17 +230,14 @@ class BizprocAutomationComponent extends \Bitrix\Bizproc\Automation\Component\Ba
 			}
 		}
 
-		$tplUser = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
-
-		$canRead = $canEdit = (
-			$tplUser->isAdmin() ||
-			CBPDocument::CanUserOperateDocumentType(
-				CBPCanUserOperateOperation::CreateAutomation,
-				$GLOBALS["USER"]->GetID(),
-				$documentType,
-				['DocumentCategoryId' => $documentCategoryId]
-			)
+		$canRead = CBPDocument::CanUserOperateDocumentType(
+			CBPCanUserOperateOperation::CreateAutomation,
+			$GLOBALS["USER"]->GetID(),
+			$documentType,
+			['DocumentCategoryId' => $documentCategoryId],
 		);
+		$canEdit = $canRead;
+
 		$documentId = $this->getDocumentId();
 
 		if (!$canEdit)
@@ -345,6 +341,7 @@ class BizprocAutomationComponent extends \Bitrix\Bizproc\Automation\Component\Ba
 			$target->prepareTriggersToShow($triggers);
 		}
 
+		$tplUser = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
 		$this->arResult = [
 			'CAN_EDIT' => $canEdit,
 			'CAN_DEBUG' => Debugger\Session\Manager::canUserDebugAutomation($tplUser->getId(), $documentType),

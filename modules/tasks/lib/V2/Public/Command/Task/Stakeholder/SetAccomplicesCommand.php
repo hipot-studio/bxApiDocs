@@ -30,10 +30,7 @@ class SetAccomplicesCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$memberService = Container::getInstance()->getMemberService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new SetAccomplicesHandler($memberService, $consistencyResolver);
+		$handler = Container::getInstance()->get(SetAccomplicesHandler::class);
 
 		try
 		{

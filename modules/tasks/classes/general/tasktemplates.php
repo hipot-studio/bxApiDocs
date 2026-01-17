@@ -14,12 +14,16 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Internals\Task\Priority;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Replication\Template\Option\Options;
-use Bitrix\Tasks\Template;
+use Bitrix\Tasks\Internals\Task\Template\DependenceTable;
 
 Loc::loadMessages(__FILE__);
 
 class CTaskTemplates
 {
+	/**
+	 * @deprecated
+	 * @use \Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary
+	 */
 	const TYPE_FOR_NEW_USER =		0x01;
 
 	const CURRENT_SITE_ID =			'*';
@@ -451,17 +455,6 @@ class CTaskTemplates
 
 		$manager = new Bitrix\Tasks\Control\Template($userId);
 
-		if (
-			isset($arParams['CHECK_RIGHTS_ON_FILES'])
-			&& (
-				($arParams['CHECK_RIGHTS_ON_FILES'] === true)
-				|| ($arParams['CHECK_RIGHTS_ON_FILES'] === 'Y')
-			)
-		)
-		{
-			$manager->withCheckFileRights();
-		}
-
 		try
 		{
 			$template = $manager->add($arFields);
@@ -522,16 +515,6 @@ class CTaskTemplates
 		if (isset($arParams['SKIP_AGENT_PROCESSING']))
 		{
 			$manager->withSkipAgent();
-		}
-		if (
-			isset($arParams['CHECK_RIGHTS_ON_FILES'])
-			&& (
-				($arParams['CHECK_RIGHTS_ON_FILES'] === true)
-				|| ($arParams['CHECK_RIGHTS_ON_FILES'] === 'Y')
-			)
-		)
-		{
-			$manager->withCheckFileRights();
 		}
 
 		try
@@ -731,8 +714,8 @@ class CTaskTemplates
 
 				case "BASE_TEMPLATE_ID":
 
-					$parentColumnName = 	Template\DependencyTable::getPARENTIDColumnName();
-					$columnName = 			Template\DependencyTable::getIDColumnName();
+					$parentColumnName = 	DependenceTable::getPARENTIDColumnName();
+					$columnName = 			DependenceTable::getIDColumnName();
 					$cOperationType = 		'I'; // force to "identical" for this field, in any case
 
 					$val = (string) $val;
@@ -744,12 +727,11 @@ class CTaskTemplates
 
 					if($excludeSubtree)
 					{
-						$arSqlSearch[] = "TT.ID NOT IN (SELECT ".$columnName." FROM ".Template\DependencyTable::getTableName()." WHERE ".$parentColumnName." = '".intval($val)."')";
+						$arSqlSearch[] = "TT.ID NOT IN (SELECT ".$columnName." FROM ".DependenceTable::getTableName()." WHERE ".$parentColumnName." = '".intval($val)."')";
 					}
 					else
 					{
 						$arSqlSearch[] = '('.($val ? "TD.".$parentColumnName." = '".intval($val)."'" : "TD.".$parentColumnName." = '0' OR TD.".$parentColumnName." IS NULL").')';
-						//$arSqlSearch[] = CTasks::FilterCreate("TD.".Template\DependencyTable::getPARENTIDColumnName(), $val, "number", $bFullJoin, $cOperationType);
 					}
 
 					break;

@@ -5,49 +5,68 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Service;
 
 use Bitrix\Bitrix24\Feature;
-
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
 
 final class BookingFeature
 {
-	private const MODULE_ID = 'booking';
-	private const FEATURE_ID = 'booking';
+	public const FEATURE_ID_BOOKING = 'booking';
+	public const FEATURE_ID_CALENDAR_INTEGRATION = 'booking_calendar';
+	public const FEATURE_ID_WAIT_LIST = 'booking_waitlist';
+	public const FEATURE_ID_OVERBOOKING = 'booking_overbooking';
+	public const FEATURE_ID_MULTI_RESOURCE_BOOKING = 'booking_multi';
+	public const FEATURE_ID_CRM_CREATE_BOOKING = 'booking_crm_slider';
+	public const FEATURE_ID_NOTIFICATIONS_SETTINGS = 'booking_notifications_settings';
+
+	private static array $features = [
+		self::FEATURE_ID_BOOKING,
+		self::FEATURE_ID_CALENDAR_INTEGRATION,
+		self::FEATURE_ID_WAIT_LIST,
+		self::FEATURE_ID_OVERBOOKING,
+		self::FEATURE_ID_MULTI_RESOURCE_BOOKING,
+		self::FEATURE_ID_CRM_CREATE_BOOKING,
+		self::FEATURE_ID_NOTIFICATIONS_SETTINGS,
+	];
+
 	private const TRIAL_DAYS = 30;
+	private const MODULE_ID = 'booking';
 
-	/**
-	 * @return bool
-	 *
-	 * @deprecated
-	 *
-	 * Keep the method to avoid dependency on intranet 25.1300.0
-	 */
-	public static function isOn(): bool
+	public static function getFeatures(): array
 	{
+		$result = [];
+
+		foreach (self::$features as $featureId)
+		{
+			$result[] = [
+				'id' => $featureId,
+				'isEnabled' => self::isFeatureEnabled($featureId),
+			];
+		}
+
+		return $result;
+	}
+
+	public static function isFeatureEnabled(string $featureId = self::FEATURE_ID_BOOKING): bool
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return Feature::isFeatureEnabled($featureId);
+	}
+
+	public static function areFeaturesEnabled(array $featureIds = []): bool
+	{
+		foreach ($featureIds as $featureId)
+		{
+			if (!self::isFeatureEnabled($featureId))
+			{
+				return false;
+			}
+		}
+
 		return true;
-	}
-
-	public static function isFeatureEnabled(): bool
-	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return true;
-		}
-
-		return Feature::isFeatureEnabled(self::FEATURE_ID);
-	}
-
-	public static function isFeatureEnabledByTrial(): bool
-	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return true;
-		}
-
-		return (
-			Feature::isFeatureEnabled(self::FEATURE_ID)
-			&& array_key_exists(self::FEATURE_ID, Feature::getTrialFeatureList())
-		);
 	}
 
 	public static function canTurnOnTrial(): bool
@@ -55,7 +74,7 @@ final class BookingFeature
 		return (
 			Loader::includeModule('bitrix24')
 			&& (
-				!self::isFeatureEnabled()
+				!self::isFeatureEnabled(self::FEATURE_ID_BOOKING)
 				&& !self::isTrialFeatureWasEnabled()
 			)
 		);
@@ -78,12 +97,20 @@ final class BookingFeature
 
 	private static function turnOnTrial(): void
 	{
-		Feature::setFeatureTrialable(self::FEATURE_ID, [
-			'days' => self::TRIAL_DAYS,
-		]);
-		Feature::trialFeature(self::FEATURE_ID);
+		foreach (self::$features as $featureId)
+		{
+			self::trialFeature($featureId);
+		}
 
 		self::setTrialOption();
+	}
+
+	private static function trialFeature(string $featureId): void
+	{
+		Feature::setFeatureTrialable($featureId, [
+			'days' => self::TRIAL_DAYS,
+		]);
+		Feature::trialFeature($featureId);
 	}
 
 	private static function setTrialOption(): void

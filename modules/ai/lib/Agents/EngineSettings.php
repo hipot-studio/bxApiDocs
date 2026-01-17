@@ -5,6 +5,7 @@ namespace Bitrix\AI\Agents;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Services\EngineSettingsService;
 use Bitrix\AI\Tuning\Manager;
@@ -113,6 +114,23 @@ final class EngineSettings
 	public static function resetFollowUpTextStepsToBGPTAgent(): string
 	{
 		self::getEngineSettingsService()->resetResumeTranscriptionToBGPT();
+
+		return '';
+	}
+
+	public static function resetFlowsToBGPTAgent(): string
+	{
+		self::getEngineSettingsService()->resetFlowsToBGPT();
+
+		return '';
+	}
+
+	public static function enforceEngineBaselineAgent(): string
+	{
+		if (in_array(Bitrix24::getPortalZone(), ['ru', 'by'], true))
+		{
+			self::getEngineSettingsService()->enforceEngineBaseline();
+		}
 
 		return '';
 	}

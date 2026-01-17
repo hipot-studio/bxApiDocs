@@ -437,9 +437,9 @@ class TaskProvider
 		}
 
 		// First level logic MUST be 'AND', because of backward compatibility
-		if (isset($filter['::LOGIC']) && $filter['::::LOGIC'] !== 'AND')
+		if (isset($filter['::LOGIC']) && $filter['::LOGIC'] !== 'AND')
 		{
-			throw new CTaskAssertException();
+			\CTaskAssert::assert(false);
 		}
 
 		$this->setUserId();

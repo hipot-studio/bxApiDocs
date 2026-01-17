@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Tasks\Integration;
 
-abstract class Timeman extends \Bitrix\Tasks\Integration
+abstract class Timeman extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'timeman';
 

@@ -23,6 +23,7 @@ enum Action: string
 	case CreateTask = 'CREATE_TASK';
 	case CreateMeeting = 'CREATE_MEETING';
 	case DeleteOthersMessage = 'DELETE_OTHERS_MESSAGE';
+	case DeleteCompleteOwnMessage = 'DELETE_COMPLETE_OWN_MESSAGE';
 	case Update = 'UPDATE';
 	case Delete = 'DELETE';
 	case UpdateInviteLink = 'UPDATE_INVITE_LINK';

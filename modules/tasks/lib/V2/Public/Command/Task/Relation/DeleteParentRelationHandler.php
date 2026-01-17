@@ -19,8 +19,15 @@ class DeleteParentRelationHandler
 
 	public function __invoke(DeleteParentRelationCommand $command): Entity\Task
 	{
-		return $this->consistencyResolver->resolve('task.parent.delete')->wrap(
-			fn (): Entity\Task => $this->parentService->deleteParent($command->taskId, $command->userId),
-		);
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.parent.delete')->wrap(
+				fn (): Entity\Task => $this->parentService->deleteParent($command->taskId, $command->userId),
+			);
+		}
+		else
+		{
+			return $this->parentService->deleteParent($command->taskId, $command->userId);
+		}
 	}
 }

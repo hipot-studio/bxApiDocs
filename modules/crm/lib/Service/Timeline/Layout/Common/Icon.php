@@ -29,7 +29,6 @@ class Icon
 	public const VIEW = 'view';
 	public const STAGE_CHANGE = 'stage-change';
 	public const SUM = 'sum';
-	public const OPENLINE_INCOMING_MESSAGE = 'open-line-incoming-message';
 	public const CLOCK = 'clock';
 	public const MAIL_OUTCOME = 'mail-outcome';
 	public const COMPLETE = 'complete';
@@ -37,6 +36,7 @@ class Icon
 	public const COMMENT = 'comment';
 	public const SMS = 'sms';
 	public const WHATSAPP = 'whatsapp';
+	public const TELEGRAM = 'telegram';
 	public const TASK = 'task';
 	public const PIPELINE = 'pipeline';
 	public const WALLET = 'wallet';

@@ -10,6 +10,7 @@ use Bitrix\Main\ArgumentException;
 
 class ToolsContentAssembler
 {
+	public const GROUP_PROMO = 'promo';
 	public const GROUP_MOBILE_AUTH = 'mobileAuth';
 	public const GROUP_APPLICATION = 'application';
 	public const GROUP_SECONDARY = 'secondary';
@@ -20,6 +21,9 @@ class ToolsContentAssembler
 	 * @var array<string, list<class-string<Tool\BaseTool>>>
 	 */
 	protected const GROUP_TOOL_CLASSES = [
+		self::GROUP_PROMO => [
+			Tool\AnnualSummary::class,
+		],
 		self::GROUP_MOBILE_AUTH => [
 			Tool\FastMobileAuthFull::class
 		],
@@ -29,15 +33,15 @@ class ToolsContentAssembler
 			Tool\FastMobileAuth::class,
 		],
 		self::GROUP_SECONDARY => [
+			Tool\Theme::class,
 			Tool\AccountChanger::class,
-			Tool\PerformanceReview::class,
 			Tool\Administration::class,
+			Tool\PerformanUserProfile::class,
 		],
 		self::GROUP_EXTRANET_SECONDARY => [
 			Tool\Security::class,
 		],
 		self::GROUP_FOOTER => [
-			Tool\Theme::class,
 			Tool\Pulse::class,
 			Tool\Logout::class,
 		],

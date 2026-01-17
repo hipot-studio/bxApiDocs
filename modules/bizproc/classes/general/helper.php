@@ -8,6 +8,7 @@ use Bitrix\Main;
 use Bitrix\Bitrix24;
 use Bitrix\Bizproc;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 
 class CBPHelper
 {
@@ -27,7 +28,13 @@ class CBPHelper
 		return self::$cAccess;
 	}
 
-	private static function usersArrayToStringInternal($arUsers, $arWorkflowTemplate, $arAllowableUserGroups, $appendId = true)
+	private static function usersArrayToStringInternal(
+		$arUsers,
+		$arWorkflowTemplate,
+		$arAllowableUserGroups,
+		$appendId = true,
+		?Closure $formatFunction = null,
+	)
 	{
 		if (is_array($arUsers))
 		{
@@ -36,7 +43,13 @@ class CBPHelper
 			$keys = array_keys($arUsers);
 			foreach ($keys as $key)
 			{
-				$r[$key] = self::UsersArrayToStringInternal($arUsers[$key], $arWorkflowTemplate, $arAllowableUserGroups, $appendId);
+				$r[$key] = self::UsersArrayToStringInternal(
+					$arUsers[$key],
+					$arWorkflowTemplate,
+					$arAllowableUserGroups,
+					$appendId,
+					$formatFunction,
+				);
 			}
 
 			if (count($r) == 2)
@@ -90,15 +103,24 @@ class CBPHelper
 							'LAST_NAME',
 							'SECOND_NAME',
 						],
-					]
+					],
 				);
 
-				if ($ar = $db->Fetch())
+				if ($arUser = $db->Fetch())
 				{
-					$str = CUser::FormatName(COption::GetOptionString("bizproc", "name_template", CSite::GetNameFormat(false), SITE_ID), $ar, true, false);
+					if ($formatFunction)
+					{
+						$str = $formatFunction($arUser);
+					}
+					else
+					{
+						$nameTemplate = COption::GetOptionString("bizproc", "name_template", CSite::GetNameFormat(false), SITE_ID);
+						$str = CUser::FormatName($nameTemplate, $arUser, true, false);
+					}
+
 					if ($appendId)
 					{
-						$str = $str." [".$ar["ID"]."]";
+						$str = $str." [".$arUser["ID"]."]";
 					}
 					return str_replace(",", " ", $str);
 				}
@@ -114,7 +136,61 @@ class CBPHelper
 		}
 	}
 
-	public static function usersArrayToString($users, $arWorkflowTemplate, $documentType, $appendId = true)
+	/**
+	 * @param $users
+	 * @param $arWorkflowTemplate
+	 * @param $documentType
+	 * @param $appendId
+	 * @param Closure(array):string|null $formatFunction
+	 */
+	public static function usersArrayToString(
+		$users,
+		$arWorkflowTemplate,
+		$documentType,
+		$appendId = true,
+		?Closure $formatFunction = null,
+	)
+	{
+		if (static::isEmptyValue($users))
+		{
+			return '';
+		}
+
+		$uniqueUsers = is_array($users) ? [] : $users;
+		if (is_array($users))
+		{
+			foreach ($users as $user)
+			{
+				if (is_string($user))
+				{
+					$uniqueUsers[$user] = $user;
+				}
+				else
+				{
+					$uniqueUsers[] = $user;
+				}
+			}
+
+			$uniqueUsers = array_values($uniqueUsers);
+		}
+
+		$arAllowableUserGroups = [];
+		$arAllowableUserGroupsTmp = CBPDocument::GetAllowableUserGroups($documentType);
+		foreach ($arAllowableUserGroupsTmp as $k1 => $v1)
+		{
+			$arAllowableUserGroups[mb_strtolower($k1)] = str_replace(",", " ", $v1);
+		}
+
+		return self::UsersArrayToStringInternal(
+			$uniqueUsers,
+			$arWorkflowTemplate,
+			$arAllowableUserGroups,
+			$appendId,
+			formatFunction: $formatFunction,
+		);
+	}
+
+	public static function usersArrayToBBCodeString($users, $arWorkflowTemplate, $documentType, $appendId = true)
 	{
 		if (static::isEmptyValue($users))
 		{
@@ -188,6 +264,11 @@ class CBPHelper
 			{
 				$bCorrectUser = true;
 				$result[] = $user;
+			}
+			elseif (preg_match('/^(\d+|user_\d+|group_[0-9a-z]+)$/i', $user))
+			{
+				$bCorrectUser = true;
+				$result[] = strtolower($user);
 			}
 			else
 			{
@@ -1104,21 +1185,28 @@ class CBPHelper
 
 	public static function getDocumentFieldTypes()
 	{
-		$arResult = array(
-			"string" => array("Name" => GetMessage("BPCGHLP_PROP_STRING"), "BaseType" => "string"),
-			"text" => array("Name" => GetMessage("BPCGHLP_PROP_TEXT"), "BaseType" => "text"),
-			"int" => array("Name" => GetMessage("BPCGHLP_PROP_INT"), "BaseType" => "int"),
-			"double" => array("Name" => GetMessage("BPCGHLP_PROP_DOUBLE"), "BaseType" => "double"),
-			"select" => array("Name" => GetMessage("BPCGHLP_PROP_SELECT"), "BaseType" => "select"),
-			"internalselect" => array("Name" => GetMessage("BPCGHLP_PROP_INTERNALSELECT_1"), "BaseType" => "internalselect"),
-			"bool" => array("Name" => GetMessage("BPCGHLP_PROP_BOOL"), "BaseType" => "bool"),
-			"date" => array("Name" => GetMessage("BPCGHLP_PROP_DATA"), "BaseType" => "date"),
-			"datetime" => array("Name" => GetMessage("BPCGHLP_PROP_DATETIME"), "BaseType" => "datetime"),
-			"user" => array("Name" => GetMessage("BPCGHLP_PROP_USER"), "BaseType" => "user"),
-			"file" => array("Name" => GetMessage("BPCGHLP_PROP_FILE"), "BaseType" => "file"),
-		);
+		$result = [
+			'string' => ['Name' => Loc::getMessage('BPCGHLP_PROP_STRING'), 'BaseType' => 'string'],
+			'text' => ['Name' => Loc::getMessage('BPCGHLP_PROP_TEXT'), 'BaseType' => 'text'],
+			'int' => ['Name' => Loc::getMessage('BPCGHLP_PROP_INT'), 'BaseType' => 'int'],
+			'double' => ['Name' => Loc::getMessage('BPCGHLP_PROP_DOUBLE'), 'BaseType' => 'double'],
+			'select' => ['Name' => Loc::getMessage('BPCGHLP_PROP_SELECT'), 'BaseType' => 'select'],
+			'internalselect' => [
+				'Name' => Loc::getMessage('BPCGHLP_PROP_INTERNALSELECT_1'),
+				'BaseType' => 'internalselect',
+			],
+			'bool' => ['Name' => Loc::getMessage('BPCGHLP_PROP_BOOL'), 'BaseType' => 'bool'],
+			'date' => ['Name' => Loc::getMessage('BPCGHLP_PROP_DATA'), 'BaseType' => 'date'],
+			'datetime' => ['Name' => Loc::getMessage('BPCGHLP_PROP_DATETIME'), 'BaseType' => 'datetime'],
+			'user' => ['Name' => Loc::getMessage('BPCGHLP_PROP_USER'), 'BaseType' => 'user'],
+			'file' => ['Name' => Loc::getMessage('BPCGHLP_PROP_FILE'), 'BaseType' => 'file'],
+//			'entityselector' => [
+//				'Name' => Loc::getMessage('BPCGHLP_PROP_ENTITYSELECTOR'),
+//				'BaseType' => 'entityselector'
+//			],
+		];
 
-		return $arResult;
+		return $result;
 	}
 
 	/**
@@ -2042,7 +2130,7 @@ class CBPHelper
 		}
 
 		$result = [];
-		array_walk_recursive($array, function($a) use (&$result) { $result[] = $a; });
+		array_walk_recursive($array, static function($a) use (&$result) {$result[] = $a; });
 
 		return $result;
 	}
@@ -2501,8 +2589,7 @@ class CBPHelper
 	public static function isEqualDocument(array $documentA, array $documentB): bool
 	{
 		return (
-			(string)$documentA[0] === (string)$documentB[0]
-			&& (string)$documentA[1] === (string)$documentB[1]
+			static::isEqualDocumentEntity($documentA, $documentB)
 			&& (string)$documentA[2] === (string)$documentB[2]
 		);
 	}
@@ -2536,5 +2623,28 @@ class CBPHelper
 		{
 			return null;
 		}
+	}
+
+	public static function isEqualDocumentEntity(array $documentA, array $documentB): bool
+	{
+		return (
+			(string)$documentA[0] === (string)$documentB[0]
+			&& (string)$documentA[1] === (string)$documentB[1]
+		);
+	}
+
+	public static function getModuleName(string $moduleId): ?string
+	{
+		return match (mb_strtolower($moduleId))
+		{
+			'bizproc' => Loc::getMessage('BPCGWTL_MODULE_BIZPROC'),
+			'crm' => Loc::getMessage('BPCGWTL_MODULE_CRM'),
+			'lists' => Loc::getMessage('BPCGWTL_MODULE_LISTS'),
+			'disk' => Loc::getMessage('BPCGWTL_MODULE_DISK'),
+			'iblock' => Loc::getMessage('BPCGWTL_MODULE_IBLOCK'),
+			'rpa' => Loc::getMessage('BPCGWTL_MODULE_RPA'),
+			'tasks' => Loc::getMessage('BPCGWTL_MODULE_TASKS'),
+			default => null,
+		};
 	}
 }

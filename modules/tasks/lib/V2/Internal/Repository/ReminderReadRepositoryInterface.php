@@ -12,11 +12,13 @@ interface ReminderReadRepositoryInterface
 {
 	public function getById(int $id): ?Reminder;
 
-	public function getByTaskId(int $taskId, int $userId, int $offset, int $limit): ReminderCollection;
+	public function getByTaskId(int $taskId, int $userId, ?int $offset = null, ?int $limit = null): ReminderCollection;
 
 	public function getByDate(DateTime $reminderData, int $limit = 50): ReminderCollection;
 
 	public function getRecalculableDeadlineReminders(int $taskId): ReminderCollection;
 
 	public function getRecurringReminders(int $taskId): ReminderCollection;
+
+	public function getNumberOfReminders(int $taskId, int $userId): int;
 }

@@ -160,6 +160,14 @@ final class ErrorCode
 		);
 	}
 
+	public static function getNotEnoughMessagesError(): Error
+	{
+		return new Error(
+			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_NOT_ENOUGH_MESSAGES'),
+			self::INVALID_ARG_VALUE
+		);
+	}
+
 	private function __construct()
 	{
 	}

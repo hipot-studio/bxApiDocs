@@ -4,8 +4,10 @@ namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\ReadService;
-use Bitrix\Main\Config\Option;
+use Bitrix\Im\V2\Message\Send\SendingService;
+use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -30,6 +32,30 @@ class ChannelChat extends GroupChat
 		Recent::raiseChat($this, $this->getRelationsByUserIds($usersToAdd), new DateTime());
 
 		return $result;
+	}
+
+	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
+	{
+		$commentChat = CommentChat::get($message)->getResult();
+		$commentChat?->subscribeUsers(true, $message->getMentionedUserIds());
+
+		parent::onAfterMessageSend($message, $sendingService);
+	}
+
+	public function onAfterMessageUpdate(Message $message): Result
+	{
+		$parentResult = parent::onAfterMessageUpdate($message);
+		$commentGetResult = CommentChat::get($message);
+		$commentChat = $commentGetResult->getResult();
+
+		if ($commentChat === null)
+		{
+			return $commentGetResult;
+		}
+
+		$result = $commentChat->subscribeUsers(true, $message->getMentionedUserIds());
+
+		return Result::merge($parentResult, $result);
 	}
 
 	protected function sendGreetingMessage(?int $authorId = null)

@@ -4,9 +4,10 @@ namespace Bitrix\Call\Integration\AI;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\Call\Registry;
+use Bitrix\Im\V2\Service\Context;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
-use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 
 
@@ -55,7 +56,8 @@ class EventService
 						->enableSkipCounterIncrements()
 						->enableSkipUrlIndex()
 					;
-					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
+					$context = (new Context())->setUser($call->getInitiatorId());
+					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 				}
 			}
 
@@ -101,7 +103,7 @@ class EventService
 			return;
 		}
 
-		$waitForTasks = [SenseType::OVERVIEW->value, SenseType::INSIGHTS->value, SenseType::SUMMARY->value];
+		$waitForTasks = array_column(SenseType::cases(), 'value');
 		$outcome = $event->getParameters()['outcome'] ?? null;
 		if (
 			$outcome instanceof Outcome
@@ -119,12 +121,20 @@ class EventService
 					if ($messageOutcome)
 					{
 						$sendingConfig = (new SendingConfig())->enableSkipUrlIndex();
-						NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome, $sendingConfig);
+						$context = (new Context())->setUser($call->getInitiatorId());
+						NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome, $sendingConfig, $context);
 
 						CallAIService::getInstance()->removeExpectation($call->getId());
 
-						$callInstance = \Bitrix\Im\Call\Registry::getCallWithId($call->getId());
-						(new FollowUpAnalytics($callInstance))->addFollowUpResultMessage();
+						$callInstance = Registry::getCallWithId($call->getId());
+						(new FollowUpAnalytics($callInstance))
+							->addFollowUpResultMessage()
+							->sendTelemetry(
+								source: null,
+								status: 'success',
+								event: 'follow_up_result'
+							)
+						;
 					}
 				}
 			}

@@ -4,6 +4,8 @@ namespace Bitrix\SalesCenter\Component;
 
 use Bitrix\Crm\Activity\Provider\BaseMessage;
 use Bitrix\Crm\Activity\Provider\Sms;
+use Bitrix\Crm\Activity\Provider\Telegram;
+use Bitrix\Crm\Activity\Provider\WhatsApp;
 use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\MessageSender\SenderRepository;
@@ -72,7 +74,7 @@ class ReceivePaymentHelper
 
 			if ($payment && $mode === 'view')
 			{
-				$lastPaymentSmsParams = self::getLastPaymentSmsParams();
+				$lastPaymentSmsParams = self::getLastPaymentSmsParams($payment);
 				if (is_array($lastPaymentSmsParams))
 				{
 					if (isset($lastPaymentSmsParams['SENDER_ID']))
@@ -132,7 +134,7 @@ class ReceivePaymentHelper
 						'OWNER_TYPE_ID' => \CCrmOwnerType::OrderPayment,
 					]
 				],
-				'PROVIDER_ID' => Sms::getId(),
+				'PROVIDER_ID' => [Sms::getId(), Whatsapp::getId(), Telegram::getId()],
 				'PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_PAYMENT_SENT,
 			]
 		);

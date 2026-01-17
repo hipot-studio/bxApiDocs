@@ -40,8 +40,6 @@ interface IBPRootActivity
 	public function setVariable($name, $value);
 	public function getVariable($name);
 	public function isVariableExists($name);
-
-	public function setCustomStatusMode();
 }
 
 interface IBPWorkflowDocument
@@ -177,4 +175,15 @@ interface IBPWorkflowDocument
 	public static function getAllowableOperations($documentType);
 	public static function getAllowableUserGroups($documentType);
 	public static function getUsersFromUserGroup($group, $documentId);
+}
+
+interface IBPTriggerActivity
+{
+	public function createApplyRules(): array;
+	public function checkApplyRules(array $rules, \Bitrix\Bizproc\Activity\Trigger\TriggerParameters $parameters): \Bitrix\Bizproc\Result;
+}
+
+interface IBPConfigurableActivity
+{
+
 }

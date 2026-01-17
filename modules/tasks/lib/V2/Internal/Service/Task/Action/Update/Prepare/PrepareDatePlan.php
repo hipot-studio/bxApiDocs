@@ -65,6 +65,7 @@ class PrepareDatePlan implements PrepareFieldInterface
 				$fields,
 				[
 					'MODE' => $parentChanged ? 'BEFORE_ATTACH' : '',
+					'INHERIT_FOR' => [$taskId => $followDatesChanged],
 				]
 			);
 

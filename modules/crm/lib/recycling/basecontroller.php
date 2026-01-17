@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Recycling;
 use Bitrix\Crm;
 use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Synchronization\UserFieldSynchronizer;
 use Bitrix\Main;
 
 abstract class BaseController
@@ -259,7 +260,7 @@ abstract class BaseController
 		$synchronizationOptions['IS_RECYCLING'] = true;
 		if (
 			$enableSynchronization
-			&& Crm\Synchronization\UserFieldSynchronizer::needForSynchronization(
+			&& UserFieldSynchronizer::needForSynchronization(
 				$srcEntityTypeID,
 				$dstEntityTypeID,
 				'',
@@ -267,7 +268,7 @@ abstract class BaseController
 			)
 		)
 		{
-			Crm\Synchronization\UserFieldSynchronizer::synchronize(
+			UserFieldSynchronizer::synchronize(
 				$srcEntityTypeID,
 				$dstEntityTypeID,
 				'',
@@ -276,59 +277,66 @@ abstract class BaseController
 			);
 		}
 
-		$intersections = Crm\Synchronization\UserFieldSynchronizer::getIntersection($srcEntityTypeID, $dstEntityTypeID);
+		$intersections = UserFieldSynchronizer::getIntersection($srcEntityTypeID, $dstEntityTypeID);
 		if(empty($intersections))
 		{
 			return;
 		}
 
 		$srcFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields($srcUserFieldEntityID, $srcEntityID);
-		foreach($intersections as $intersection)
+
+		$dstFields = $this->prepareFieldsValue($intersections, $srcFields);
+	}
+
+	private function prepareFieldsValue(array $intersections, array $srcFields): array
+	{
+		$dstFields = [];
+		foreach ($intersections as $intersection)
 		{
 			$srcFieldName = $intersection['SRC_FIELD_NAME'];
 			$dstFieldName = $intersection['DST_FIELD_NAME'];
 
-			$srcFieldData = isset($srcFields[$srcFieldName]) ? $srcFields[$srcFieldName] : null;
-			if(!is_array($srcFieldData))
+			$srcFieldData = $srcFields[$srcFieldName] ?? null;
+			if (!is_array($srcFieldData))
 			{
 				continue;
 			}
 
 			$isMultiple = $srcFieldData['MULTIPLE'] === 'Y';
-			$typeID = $srcFieldData['USER_TYPE_ID'];
+			$typeId = $srcFieldData['USER_TYPE_ID'];
 
-			if($typeID === 'file')
+			$dstFields[$dstFieldName] = $srcFields[$srcFieldName]['VALUE'];
+
+			if ($typeId === 'file')
 			{
-				if(!$isMultiple)
+				if (!$isMultiple)
 				{
 					$file = null;
-					if(\CCrmFileProxy::TryResolveFile($srcFieldData['VALUE'], $file, array('ENABLE_ID' => true)))
+					if (\CCrmFileProxy::TryResolveFile($srcFieldData['VALUE'], $file, ['ENABLE_ID' => true]))
 					{
 						$dstFields[$dstFieldName] = $file;
 					}
 				}
-				elseif(is_array($srcFieldData['VALUE']))
+				elseif (is_array($srcFieldData['VALUE']))
 				{
-					$files = array();
-					foreach($srcFieldData['VALUE'] as $fileID)
+					$files = [];
+					foreach ($srcFieldData['VALUE'] as $fileID)
 					{
-						if(\CCrmFileProxy::TryResolveFile($fileID, $file, array('ENABLE_ID' => true)))
+						if (\CCrmFileProxy::TryResolveFile($fileID, $file, ['ENABLE_ID' => true]))
 						{
 							$files[] = $file;
 						}
 					}
 
-					if(!empty($files))
+					if (!empty($files))
 					{
 						$dstFields[$dstFieldName] = $files;
 					}
 				}
 			}
-			else
-			{
-				$dstFields[$dstFieldName] = $srcFields[$srcFieldName]['VALUE'];
-			}
 		}
+
+		return $dstFields;
 	}
 	//endregion
 
@@ -680,56 +688,6 @@ abstract class BaseController
 	}
 	//endregion
 
-	//region Scoring
-	/**
-	 * Suspend scoring history records.
-	 * @param int $entityID Entity ID.
-	 * @param int $recyclingEntityID Recycle Bin Entity ID.
-	 */
-	protected function suspendScoringHistory($entityID, $recyclingEntityID)
-	{
-		if(Crm\Ml\Scoring::isMlAvailable())
-		{
-			Crm\Ml\Scoring::replaceAssociatedEntity(
-				$this->getEntityTypeID(),
-				$entityID,
-				$this->getSuspendedEntityTypeID(),
-				$recyclingEntityID
-			);
-		}
-	}
-
-	/**
-	 * Recover entity Documents.
-	 * @param int $recyclingEntityID Recycle Bin Entity ID.
-	 * @param int $newEntityID New Entity ID.
-	 */
-	protected function recoverScoringHistory($recyclingEntityID, $newEntityID)
-	{
-		if(Crm\Ml\Scoring::isMlAvailable())
-		{
-			Crm\Ml\Scoring::replaceAssociatedEntity(
-				$this->getSuspendedEntityTypeID(),
-				$recyclingEntityID,
-				$this->getEntityTypeID(),
-				$newEntityID
-			);
-		}
-	}
-
-	/**
-	 * Erase Suspended Entity UTM.
-	 * @param int $recyclingEntityID Recycle Bin Entity ID.
-	 */
-	protected function eraseSuspendedScoringHistory($recyclingEntityID)
-	{
-		if(Crm\Ml\Scoring::isMlAvailable())
-		{
-			Crm\Ml\Scoring::onEntityDelete($this->getSuspendedEntityTypeID(), $recyclingEntityID);
-		}
-	}
-	//endregion
-
 	//region Business Process
 	protected function startRecoveryWorkflows($entityID)
 	{
@@ -920,6 +878,67 @@ abstract class BaseController
 	}
 	//endregion
 
-	//region Content Types
-	//endregion
+	/**
+	 * @deprecated
+	 * will be removed in future
+	 */
+	protected function moveUserFieldsToRecycleBin(int $entityId, int $recyclingEntityId): void
+	{
+		if (!UserFieldsRecycleBinStorageChecker::getInstance()->isReady($this->getEntityTypeID()))
+		{
+			//convert User Fields to Suspended Type
+			$suspendedUserFields = $this->prepareSuspendedUserFields($entityId);
+			if (!empty($suspendedUserFields))
+			{
+				$this->saveSuspendedUserFields($recyclingEntityId, $suspendedUserFields);
+			}
+		}
+	}
+
+	protected function restoreUserFieldsFromRecycleBin(array $userFieldsData, ?int $recyclingEntityId = null): ?array
+	{
+		if (UserFieldsRecycleBinStorageChecker::getInstance()->isReady($this->getEntityTypeID()))
+		{
+			$result = [];
+
+			$userFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields(
+				\CCrmOwnerType::ResolveUserFieldEntityID($this->getEntityTypeID())
+			);
+
+			foreach ($userFields as $field)
+			{
+				$curFieldData = $userFieldsData[$field['FIELD_NAME']] ?? null;
+
+				if (
+					!is_null($curFieldData['VALUE'] ?? null)
+					&& $field['USER_TYPE_ID'] === $curFieldData['USER_TYPE_ID']
+					&& $field['MULTIPLE'] === $curFieldData['MULTIPLE']
+				)
+				{
+					$result[$field['FIELD_NAME']] = $curFieldData['VALUE'];
+				}
+			}
+
+			return $result;
+		}
+		elseif ($recyclingEntityId) // compatibility mode. Will be removed soon
+		{
+			//convert User Fields from Suspended Type
+			$userFieldsData = $this->prepareRestoredUserFields($recyclingEntityId);
+		}
+
+		return $userFieldsData;
+	}
+
+	/**
+	 * @deprecated
+	 * will be removed in future
+	 */
+	protected function eraseUserFieldsOnDeleteFromRecycleBin(int $entityId, int $recyclingEntityId): void
+	{
+		if (!UserFieldsRecycleBinStorageChecker::getInstance()->isReady($this->getEntityTypeID()))
+		{
+			$this->eraseSuspendedUserFields($recyclingEntityId);
+		}
+	}
 }

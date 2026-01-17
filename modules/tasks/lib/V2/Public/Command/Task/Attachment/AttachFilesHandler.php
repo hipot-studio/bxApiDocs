@@ -21,6 +21,7 @@ class AttachFilesHandler
 			taskId: $command->taskId,
 			userId: $command->userId,
 			fileIds: $command->fileIds,
+			useConsistency: $command->useConsistency,
 		);
 	}
 }

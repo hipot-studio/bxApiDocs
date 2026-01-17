@@ -72,7 +72,7 @@ abstract class EntityDataProvider extends DataProvider
 				'options' => [
 					'inviteEmployeeLink' => false,
 					'intranetUsersOnly' => true,
-					'fieldName' => $params['fieldName'],
+					'fieldName' => $params['fieldName'] ?? null,
 					'referenceClass'  => ($params['referenceClass'] ?? null),
 					'referenceFieldName'  => ($params['referenceFieldName'] ?? null),
 					'referenceAdditionalFilter'  => ($params['referenceAdditionalFilter'] ?? null),

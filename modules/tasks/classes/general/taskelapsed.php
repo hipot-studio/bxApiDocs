@@ -137,7 +137,11 @@ class CTaskElapsedTime
 		return false;
 	}
 
-
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use \Bitrix\Tasks\V2\Internal\Service\Task\ElapsedTimeService
+	 */
 	function Update($ID, $arFields, $arParams = array())
 	{
 		global $DB;
@@ -251,7 +255,11 @@ class CTaskElapsedTime
 		return false;
 	}
 
-
+	/**
+	 * @deprecated
+	 * @TasksV2
+	 * @use \Bitrix\Tasks\V2\Internal\Service\Task\ElapsedTimeService
+	 */
 	public static function Delete($ID, $arParams = array())
 	{
 		global $DB;

@@ -29,7 +29,7 @@ trait CastTrait
 
 	protected function castDateTime(mixed $dateTime): ?int
 	{
-		if ($dateTime === 0 || $dateTime === '0' || $dateTime === '')
+		if ($dateTime === 0 || $dateTime === '0' || $dateTime === '' || $dateTime === false)
 		{
 			return 0;
 		}

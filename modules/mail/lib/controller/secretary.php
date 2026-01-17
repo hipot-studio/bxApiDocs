@@ -4,8 +4,6 @@ namespace Bitrix\Mail\Controller;
 
 use Bitrix\Forum\ForumTable;
 use Bitrix\Mail\Helper\Message;
-use Bitrix\Mail\Integration\Calendar\ICal\ICalMailManager;
-use Bitrix\Mail\Internals\MailMessageAttachmentTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Action;
@@ -358,12 +356,16 @@ class Secretary extends Controller
 
 		$message = \Bitrix\Mail\Integration\Intranet\Secretary::getMessage($messageId);
 		$address = new \Bitrix\Main\Mail\Address($message->getFrom());
+
+		$link = \Bitrix\Mail\Integration\Intranet\Secretary::getDirectMessageUrl($message->getId());
+		$link = Message::addAnalyticsToMessage($link, ['source' => Message::SOURCE_TYPE_EVENT]);
+
 		$desc = Loc::getMessage('MAIL_SECRETARY_CALENDAR_EVENT_DESC', [
 			'#SUBJECT#' => htmlspecialcharsbx($message->getSubject()),
 			'#FROM#' => htmlspecialcharsbx($message->getFrom()),
 			'#DATE#' => $message->getDate()->toString(),
 			'#LINK_FROM#' => 'mailto:' . htmlspecialcharsbx($address->getEmail()),
-			'#LINK#' => \Bitrix\Mail\Integration\Intranet\Secretary::getDirectMessageUrl($message->getId()),
+			'#LINK#' => $link,
 		]);
 
 		$isIcal = Message::isIcalMessage($message);

@@ -25,4 +25,53 @@ abstract class AbstractMessage implements MessageInterface
 
 		$bus->send($this, $queueId, $params);
 	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public static function createFromData(array $data): MessageInterface
+	{
+		$class = new \ReflectionClass(
+			get_called_class()
+		);
+
+		$construct = $class->getConstructor();
+		if ($construct)
+		{
+			$args = [];
+			foreach ($construct->getParameters() as $parameter)
+			{
+				$args[$parameter->getName()] = $data[$parameter->getName()] ?? null;
+			}
+
+			return $class->newInstanceArgs($args);
+		}
+
+		$instance = $class->newInstanceWithoutConstructor();
+		foreach ($class->getProperties(\ReflectionProperty::IS_PUBLIC) as $property)
+		{
+			if (array_key_exists($property->getName(), $data))
+			{
+				$property->setValue($instance, $data[$property->getName()]);
+			}
+		}
+
+		return $instance;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function jsonSerialize(): mixed
+	{
+		$result = [];
+
+		$class = new \ReflectionClass($this);
+		foreach ($class->getProperties(\ReflectionProperty::IS_PUBLIC) as $property)
+		{
+			$result[$property->getName()] = $property->getValue($this);
+		}
+
+		return $result;
+	}
 }

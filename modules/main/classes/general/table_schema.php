@@ -1,11 +1,9 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
+
 class CTableSchema
 {
-	public function __construct()
-	{
-	}
-
 	public static function OnGetTableSchema()
 	{
 		return array(
@@ -73,5 +71,3 @@ class CTableSchema
 		);
 	}
 }
-
-?>

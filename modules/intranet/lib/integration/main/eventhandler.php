@@ -39,17 +39,35 @@ class EventHandler
 		{
 			foreach ($userIds as $userId)
 			{
+
+				$notifyTitleCallback = fn (?string $languageId = null) => Loc::getMessage(
+					'MAIN_MAIL_CALLBACK_LIMIT_NOTIFICATION_TITLE',
+					language: $languageId,
+				);
+
+				$notifyMessageCallback = fn (?string $languageId = null) => Loc::getMessage(
+					'MAIN_MAIL_CALLBACK_LIMIT_NOTIFICATION_MSGVER2',
+					[
+						'#EMAIL#' => $email,
+						'#LIMIT#' => SenderSendCounter::DEFAULT_LIMIT,
+						'#HELPDESK_LINK#' => $helpDeskUrl,
+					],
+					$languageId,
+				);
+
 				$messageFields = [
 					"TO_USER_ID" => $userId,
 					"FROM_USER_ID" => 0,
 					"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
 					"NOTIFY_MODULE" => "intranet",
 					"NOTIFY_TAG" => "INTRANET|CALLBACK_LIMIT|$userId",
-					"NOTIFY_MESSAGE" => Loc::getMessage('MAIN_MAIL_CALLBACK_LIMIT_NOTIFICATION_MSGVER2', [
-						'#EMAIL#' => $email,
-						'#LIMIT#' => SenderSendCounter::DEFAULT_LIMIT,
-						'#HELPDESK_LINK#' => $helpDeskUrl,
-					]),
+					"NOTIFY_TITLE" => $notifyTitleCallback,
+					"NOTIFY_MESSAGE" => $notifyMessageCallback,
+					"PARAMS" => [
+						'COMPONENT_PARAMS' => [
+							'SYSTEM_ICON' => 'mail',
+						],
+					],
 				];
 				CIMNotify::Add($messageFields);
 			}

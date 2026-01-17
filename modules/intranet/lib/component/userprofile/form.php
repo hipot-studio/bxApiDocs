@@ -506,6 +506,7 @@ class Form
 			'UF_VI_BACKPHONE',
 			'UF_VI_PHONE',
 			'UF_VI_PHONE_PASSWORD',
+			'UF_SKYPE_LINK'
 		];
 	}
 
@@ -664,6 +665,7 @@ class Form
 				['name' => 'WORK_POSITION'],
 				['name' => 'UF_DEPARTMENT'],
 				['name' => 'DEPARTMENT_HEAD'],
+				['name' => 'TEAM'],
 				['name' => 'SECOND_NAME'],
 				['name' => 'PERSONAL_BIRTHDAY'],
 				['name' => 'PERSONAL_GENDER'],
@@ -701,9 +703,9 @@ class Form
 	}
 
 	// TODO: rename it to getConfig when new profile release
-	public function getNewConfig(): array
+	public function getNewConfig($editableFields = []): array
 	{
-		return [
+		$config = [
 			[
 				'name' => 'info',
 				'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_INFO_MSGVER_1"),
@@ -716,7 +718,7 @@ class Form
 					['name' => 'PERSONAL_BIRTHDAY'],
 					['name' => 'PERSONAL_GENDER'],
 				],
-				'data' => ['isChangeable' => true, 'isRemovable' => false]
+				'data' => ['isChangeable' => true, 'isRemovable' => false],
 			],
 			[
 				'name' => 'contact',
@@ -729,7 +731,7 @@ class Form
 					['name' => 'EMAIL'],
 					['name' => 'PERSONAL_WWW'],
 				],
-				'data' => ['isChangeable' => true, 'isRemovable' => false]
+				'data' => ['isChangeable' => true, 'isRemovable' => false],
 			],
 			[
 				'name' => 'addition',
@@ -744,7 +746,7 @@ class Form
 					['name' => 'TIME_ZONE'],
 					['name' => 'LANGUAGE_ID'],
 				],
-				'data' => ['isChangeable' => true, 'isRemovable' => false, 'isDefault' => true]
+				'data' => ['isChangeable' => true, 'isRemovable' => false, 'isDefault' => true],
 			],
 			[
 				'name' => 'social',
@@ -758,9 +760,77 @@ class Form
 					['name' => 'UF_LINKEDIN'],
 					['name' => 'UF_SKYPE'],
 				],
-				'data' => ['isChangeable' => true, 'isRemovable' => false]
+				'data' => ['isChangeable' => true, 'isRemovable' => false],
 			],
 		];
+
+		if (empty($editableFields))
+		{
+			return $config;
+		}
+
+		$allConfigFields = [];
+
+		foreach ($config as $section)
+		{
+			foreach ($section['elements'] as $element)
+			{
+				$allConfigFields[] = $element['name'];
+			}
+		}
+
+		$additionalEditableFields = array_diff($editableFields, $allConfigFields);
+
+		$result = [];
+		$additionSectionIndex = null;
+
+		foreach ($config as $section)
+		{
+			$filteredElements = array_filter($section['elements'], function ($element) use ($editableFields) {
+				return in_array($element['name'], $editableFields, true);
+			});
+
+			if (!empty($filteredElements))
+			{
+				$section['elements'] = array_values($filteredElements);
+				$result[] = $section;
+
+				if ($section['name'] === 'addition')
+				{
+					$additionSectionIndex = count($result) - 1;
+				}
+			}
+		}
+
+		if (!empty($additionalEditableFields))
+		{
+			$additionalElements = [];
+
+			foreach ($additionalEditableFields as $fieldName)
+			{
+				$additionalElements[] = ['name' => $fieldName];
+			}
+
+			if ($additionSectionIndex !== null)
+			{
+				$result[$additionSectionIndex]['elements'] = array_merge(
+					$result[$additionSectionIndex]['elements'],
+					$additionalElements,
+				);
+			}
+			else
+			{
+				$result[] = [
+					'name' => 'addition',
+					'title' => Loc::getMessage("INTRANET_USER_PROFILE_SECTION_ADDITIONS"),
+					'type' => 'section',
+					'elements' => $additionalElements,
+					'data' => ['isChangeable' => true, 'isRemovable' => false, 'isDefault' => true],
+				];
+			}
+		}
+
+		return $result;
 	}
 
 	public function getData($result)
@@ -859,7 +929,13 @@ class Form
 			}
 		}
 
-		if (!$result["Permissions"]['edit'] && !empty($result['SettingsFieldsView']))
+		if (
+			(
+				!isset($result['Permissions']['edit'])
+				|| !$result["Permissions"]['edit']
+			)
+			&& !empty($result['SettingsFieldsView'])
+		)
 		{
 			$filterFields = array_column($result['SettingsFieldsView'], 'VALUE');
 			foreach ($data as $key => $value)

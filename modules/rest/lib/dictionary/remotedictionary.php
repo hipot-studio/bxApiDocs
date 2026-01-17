@@ -23,7 +23,7 @@ class RemoteDictionary extends Dictionary
 	const ID = 'generic';
 
 	const CACHE_TTL = 86400;
-	const CACHE_PREFIX = 'rest_dictionary_v2';
+	const CACHE_PREFIX = 'rest_dictionary_v3';
 
 	protected $baseUrl = array(
 		'ru' => 'https://www.bitrix24.ru/util/',

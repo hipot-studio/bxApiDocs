@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Entity;
 
+use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Enum\InvitationStatus;
 use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Intranet\Infrastructure\UserNameFormatter;
@@ -375,5 +376,12 @@ class User
 	public function setLastLogin(?Date $lastLogin): void
 	{
 		$this->lastLogin = $lastLogin;
+	}
+
+	public function isCurrent(): bool
+	{
+		$currentUserId = (int)CurrentUser::get()->getId();
+
+		return $currentUserId > 0 && $this->id === $currentUserId;
 	}
 }

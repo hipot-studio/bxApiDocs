@@ -85,25 +85,40 @@ class FileMessageEvent extends ChatEvent
 
 		$type = $diskTypeToAnalyticTypeMap[$diskFileType] ?? null;
 
-		if ($this->isVoice($type, $files))
+		if ($type === 'audio' && $this->isVoice($files))
 		{
 			$type = 'voice';
+		}
+
+		if ($type === 'video' && $this->isVideoCircle($files))
+		{
+			$type = 'videoCircle';
 		}
 
 		return $type;
 	}
 
-	private function isVoice(string $type, FileCollection $files): bool
+	private function isVoice(FileCollection $files): bool
 	{
-		if ($type === 'audio' && count($files) === 1)
+		if (count($files) !== 1)
 		{
-			$file = $files->getIterator()->current();
-			if ($file instanceof FileItem)
-			{
-				return $file->isTranscribable();
-			}
+			return false;
 		}
 
-		return false;
+		$file = $files->getIterator()->current();
+
+		return $file instanceof FileItem && $file->isVoiceNote();
+	}
+
+	private function isVideoCircle(FileCollection $files): bool
+	{
+		if (count($files) !== 1)
+		{
+			return false;
+		}
+
+		$file = $files->getIterator()->current();
+
+		return $file instanceof FileItem && $file->isVideoNote();
 	}
 }

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration;
 
 use Bitrix\Im;
 use Bitrix\Im\Counter;
+use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\ImOpenLines\Chat;
 use Bitrix\ImOpenLines\Config;
@@ -13,6 +14,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Result;
+use CCrmDateTimeHelper;
 
 Loc::loadMessages(__FILE__);
 
@@ -40,13 +42,13 @@ class OpenLineManager
 
 	private static array $supportedConnectors = [
 		'livechat',
-		'fbinstagram',
 		'viber',
 		'wechat',
 		'network',
 		'facebook',
 		'facebookmessenger',
 		'facebookcomments',
+		'fbinstagram',
 		'fbinstagramdirect',
 		'imessage',
 		'olx',
@@ -59,7 +61,6 @@ class OpenLineManager
 		'avito',
 		'telegrambot',
 		'telegram',
-		'imessage',
 	];
 
 	public static function isEnabled()
@@ -71,6 +72,16 @@ class OpenLineManager
 		}
 
 		return self::$isEnabled;
+	}
+
+	public static function getSupportedConnectors(): array
+	{
+		if (!self::isEnabled())
+		{
+			return [];
+		}
+
+		return self::$supportedConnectors;
 	}
 
 	public static function prepareMultiFieldLinkAttributes($typeName, $valueTypeID, $value)
@@ -315,5 +326,41 @@ class OpenLineManager
 		}
 
 		return [];
+	}
+
+	public static function getLastMessage(?string $userCode): ?Message
+	{
+		if (
+			empty($userCode)
+			|| !self::isEnabled()
+			|| !Loader::includeModule('im')
+		)
+		{
+			return null;
+		}
+
+		$chatId = Chat::getChatIdByUserCode($userCode);
+		if ($chatId <= 0)
+		{
+			return null;
+		}
+
+		$lastMessageId = (\Bitrix\Im\V2\Chat::getInstance($chatId))->getLastMessageId();
+
+		return new Message($lastMessageId);
+	}
+
+	public static function getMessageCreatedDate(Message $message): ?string
+	{
+		$date = $message->getDateCreate();
+		if ($date === null)
+		{
+			return null;
+		}
+
+		return FormatDate(
+			CCrmDateTimeHelper::getDefaultDateTimeFormat(),
+			$date->getTimestamp()
+		);
 	}
 }

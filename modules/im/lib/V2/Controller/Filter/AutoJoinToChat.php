@@ -22,7 +22,7 @@ class AutoJoinToChat extends Base
 			return null;
 		}
 
-		$chat->join(false);
+		$chat->join(withMessage: false, byAutoJoin: true);
 	}
 
 	private function getChat(): ?Chat

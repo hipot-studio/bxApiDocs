@@ -143,6 +143,7 @@ class UserFieldConfig extends Controller
 	{
 		$allowedKeys = [
 			'editFormLabel' => true,
+			'helpMessage' => true,
 			'multiple' => true,
 			'userTypeId' => true,
 			'fieldName' => true,
@@ -165,6 +166,16 @@ class UserFieldConfig extends Controller
 		{
 			$fields['showFilter'] = 'E';
 		}
+
+		if (isset($fields['helpMessage']) && !is_array($fields['helpMessage']))
+		{
+			$fields['helpMessage'] = [];
+		}
+
+		$fields['helpMessage'] = array_map(
+			static fn($tooltip) => mb_substr(trim($tooltip), 0, 255),
+			$fields['helpMessage'] ?? [],
+		);
 
 		return $converter->process($fields);
 	}

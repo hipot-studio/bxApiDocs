@@ -12,6 +12,7 @@ use Bitrix\Disk\UI\Viewer\Renderer\Board;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentOutOfRangeException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -308,6 +309,11 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 		];
 
 		$attachedObjectId = 0;
+		if ($fileModel instanceof Disk\AttachedObject)
+		{
+			$encryptedScopeForQuickAccess = $this->getEncryptedScopeForQuickAccess($fileModel);
+		}
+
 		if ($fileModel instanceof Disk\File)
 		{
 			// File Model
@@ -340,6 +346,10 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				'disk.attachedObject.download',
 				['attachedObjectId' => $id]
 			);
+
+			$downloadUrl->addParams([
+				'_esd' => $encryptedScopeForQuickAccess ?? '',
+			]);
 
 			$fileInfo->setDownloadUrl($downloadUrl);
 
@@ -410,6 +420,8 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				}
 				else
 				{
+					$previewOptions['_esd'] = $encryptedScopeForQuickAccess ?? '';
+
 					$previewUrl = \Bitrix\Disk\UrlManager::getUrlToActionShowUfFile($fileModel->getId(), $previewOptions);
 				}
 
@@ -421,6 +433,26 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 		$fileInfo->setViewerAttrs($this->prepareViewerAttrs($fileModel, $downloadUrl, $fileInfo));
 
 		return $fileInfo;
+	}
+
+	private function getEncryptedScopeForQuickAccess(AttachedObject $fileModel): string
+	{
+		$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
+
+		$accessInfo = ['encryptedScope' => ''];
+		$scope = $scopeTokenService->getTokenScopeByAttachedObject($fileModel);
+
+		$result = $scopeTokenService->grantAccessWithScope(
+			$fileModel,
+			$scope,
+		);
+
+		if ($result !== null)
+		{
+			$accessInfo = $result;
+		}
+
+		return $accessInfo['encryptedScope'];
 	}
 
 	private function getFolderAndStorage(string $filename): array

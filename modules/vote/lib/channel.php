@@ -50,49 +50,40 @@ class ChannelTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('V_TABLE_FIELD_ID'),
 			),
 			'SYMBOLIC_NAME' => array(
 				'data_type' => 'string',
 				'size' => 255,
-				'title' => Loc::getMessage('V_TABLE_FIELD_SYMBOLIC_NAME'),
 			),
 			'TITLE' => array(
 				'data_type' => 'string',
 				'size' => 255,
-				'title' => Loc::getMessage('V_TABLE_FIELD_TITLE'),
 			),
 			'C_SORT' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_C_SORT'),
 			),
 			'ACTIVE' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'Y',
-				'title' => Loc::getMessage('V_TABLE_FIELD_ACTIVE')
 			),
 			'HIDDEN' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'N',
-				'title' => Loc::getMessage('V_TABLE_FIELD_HIDDEN')
 			),
 			'TIMESTAMP_X' => array(
 				'data_type' => 'datetime',
-				'title' => Loc::getMessage('V_TABLE_FIELD_TIMESTAMP_X'),
 			),
 			'VOTE_SINGLE' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'Y',
-				'title' => Loc::getMessage('V_TABLE_FIELD_ACTIVE')
 			),
 			'USE_CAPTCHA' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'N',
-				'title' => Loc::getMessage('V_TABLE_FIELD_HIDDEN')
 			),
 			'PERMISSION' => array(
 				'data_type' => '\Bitrix\Vote\ChannelGroupTable',
@@ -146,7 +137,6 @@ class ChannelGroupTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('V_TABLE_FIELD_ID'),
 			),
 			'CHANNEL_ID' => array(
 				'data_type' => 'integer',
@@ -209,13 +199,11 @@ class ChannelSiteTable extends Entity\DataManager
 			'CHANNEL_ID' => array(
 				'data_type' => 'integer',
 				'primary' => true,
-				'title' => Loc::getMessage('V_TABLE_FIELD_CHANNEL_ID'),
 			),
 			'SITE_ID' => array(
 				'data_type' => 'string',
 				'primary' => true,
 				'size' => 2,
-				'title' => Loc::getMessage('V_TABLE_FIELD_SITE_ID'),
 			)
 		);
 	}

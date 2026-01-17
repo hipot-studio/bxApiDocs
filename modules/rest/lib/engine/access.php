@@ -93,9 +93,8 @@ class Access
 				{
 					static::$availableApp[$app] = true;
 				}
-				else
+				else if ($appInfo = AppTable::getByClientId($app))
 				{
-					$appInfo = AppTable::getByClientId($app);
 					if ($appInfo['CODE'] && in_array($appInfo['CODE'], Immune::getList(), true))
 					{
 						static::$availableApp[$app] = true;
@@ -483,12 +482,16 @@ class Access
 			if (
 				!empty($entityData)
 				&& (
-					$entityData['BY_SUBSCRIPTION'] === 'Y'
+					($entityData['BY_SUBSCRIPTION'] ?? 'N') === 'Y'
 					|| ($entityData['ID'] > 0 && $entityData['STATUS'] === AppTable::STATUS_SUBSCRIPTION)
 				)
 			)
 			{
-				if ($isSubscriptionDemoAvailable)
+				if ($isSubscriptionDemoAvailable && !$isSubscriptionFinished)
+				{
+					$code = 'limit_subscription_market_access_buy_marketplus';
+				}
+				elseif ($isSubscriptionDemoAvailable)
 				{
 					// activate demo subscription
 					$code = 'limit_subscription_market_access';
@@ -544,7 +547,7 @@ class Access
 
 					if ($action === static::ACTION_OPEN)
 					{
-						$code = 'installed_plus_buy_license_with_plus';
+						$code = 'limit_subscription_market_bundle';
 					}
 				}
 				else

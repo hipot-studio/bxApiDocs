@@ -2,7 +2,7 @@
 
 namespace Bitrix\Crm\Service\UserPermissions;
 
-use Bitrix\Crm\Feature;
+use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
 use Bitrix\Crm\Security\Role\PermissionsManager;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -14,6 +14,8 @@ use Bitrix\Main\ArgumentOutOfRangeException;
 
 class AutomatedSolution
 {
+	private ?CapabilityAccessChecker $capabilityAccessChecker = null;
+
 	public function __construct(
 		private readonly PermissionsManager $permissionsManager,
 		private readonly Admin $admin
@@ -51,7 +53,7 @@ class AutomatedSolution
 			return true;
 		}
 
-		if ($this->canEdit())
+		if ($this->canEdit($automatedSolutionId))
 		{
 			return true;
 		}
@@ -66,11 +68,16 @@ class AutomatedSolution
 	/**
 	 * Can user create, update or delete automated solutions
 	 *
+	 * @param int|null $automatedSolutionId
 	 * @return bool
-	 * @throws ArgumentOutOfRangeException
 	 */
-	public function canEdit(): bool
+	public function canEdit(?int $automatedSolutionId = null): bool
 	{
+		if ($automatedSolutionId !== null && $this->isLocked($automatedSolutionId))
+		{
+			return false;
+		}
+
 		if ($this->admin->isAdmin())
 		{
 			return true;
@@ -86,5 +93,15 @@ class AutomatedSolution
 			UserPermissions::OPERATION_UPDATE,
 			UserPermissions::PERMISSION_ALL
 		);
+	}
+
+	private function isLocked(int $automatedSolutionId): bool
+	{
+		if ($this->capabilityAccessChecker === null)
+		{
+			$this->capabilityAccessChecker = CapabilityAccessChecker::getInstance();
+		}
+
+		return $this->capabilityAccessChecker->isLockedAutomatedSolution($automatedSolutionId);
 	}
 }

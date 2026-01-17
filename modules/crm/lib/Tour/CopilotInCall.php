@@ -5,24 +5,19 @@ namespace Bitrix\Crm\Tour;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Tour\Mixin\HasEntitySupport;
 use Bitrix\Main\Localization\Loc;
 use CCrmOwnerType;
 
 class CopilotInCall extends Base
 {
+	use HasEntitySupport;
+
 	protected const OPTION_NAME = 'copilot-button-in-call';
 
 	protected int $numberOfViewsLimit = 3;
 
 	private static bool $isWelcomeTourEnabled = false;
-	protected ?int $entityTypeId = null;
-
-	public function setEntityTypeId(?int $entityTypeId): self
-	{
-		$this->entityTypeId = $entityTypeId;
-
-		return $this;
-	}
 
 	public function isWelcomeTourEnabled(): bool
 	{

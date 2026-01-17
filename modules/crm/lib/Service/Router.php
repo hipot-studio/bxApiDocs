@@ -93,7 +93,7 @@ class Router
 
 	public function getUserPersonalUrlTemplate(): ?string
 	{
-		return Option::get('intranet', 'path_user', '/company/personal/user/#USER_ID#/', $this->getSiteId());
+		return Option::get('intranet', 'path_user', SITE_DIR . 'company/personal/user/#USER_ID#/', $this->getSiteId());
 	}
 
 	public function getUserPersonalUrl(int $userId): Uri
@@ -146,7 +146,7 @@ class Router
 
 	public function getAutomationRoot(): string
 	{
-		return '/automation/';
+		return SITE_DIR . 'automation/';
 	}
 
 	protected function getSiteData(): ?array
@@ -444,8 +444,8 @@ class Router
 			&& in_array($componentName, ['bitrix:crm.item.list', 'bitrix:crm.item.kanban'])
 		)
 		{
-			$listUri = ($entityTypeId === \CCrmOwnerType::SmartB2eDocument ? '/sign/b2e/list/' : '/sign/list/');
-			$gridUri = ($entityTypeId === \CCrmOwnerType::SmartB2eDocument ? '/sign/b2e/' : '/sign/');
+			$listUri = ($entityTypeId === \CCrmOwnerType::SmartB2eDocument ? SITE_DIR . 'sign/b2e/list/' : SITE_DIR . 'sign/list/');
+			$gridUri = ($entityTypeId === \CCrmOwnerType::SmartB2eDocument ? SITE_DIR . 'sign/b2e/' : SITE_DIR . 'sign/');
 
 			return new Uri(
 				$componentName === 'bitrix:crm.item.list'
@@ -518,7 +518,7 @@ class Router
 
 	public function getExternalTypeListUrl(): Uri
 	{
-		return new Uri('/automation/type/');
+		return new Uri(SITE_DIR . 'automation/type/');
 	}
 
 	public function getTypeListUrl(): ?Uri
@@ -586,7 +586,7 @@ class Router
 
 		if (\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
 		{
-			return new Uri("/crm/type/{$entityTypeId}/merge/");
+			return new Uri(SITE_DIR . "crm/type/{$entityTypeId}/merge/");
 		}
 
 		return null;
@@ -609,6 +609,37 @@ class Router
 			->createByEntity($entityTypeId, $categoryId)
 			?->getUrl()
 		;
+	}
+
+	public function getCustomSectionPermissionsUrl(string $customSection): ?Uri
+	{
+		return (new RoleManagerSelectionFactory())
+			->setCustomSectionCode($customSection)
+			->create(null)
+			?->getUrl()
+		;
+	}
+
+	public function getFirstItemListUrlInAutomatedSolution(int $automatedSolutionId): ?Uri
+	{
+		$typeIds = Container::getInstance()->getAutomatedSolutionManager()->getBoundTypeIds($automatedSolutionId);
+
+		$type = null;
+		foreach ($typeIds as $typeId)
+		{
+			$type = Container::getInstance()->getType($typeId);
+			if ($type)
+			{
+				break;
+			}
+		}
+
+		if ($type === null)
+		{
+			return null;
+		}
+
+		return $this->getItemListUrlInCurrentView($type->getEntityTypeId());
 	}
 
 	public function getItemListUrlIntoCustomSection(string $customSectionCode, int $entityTypeId, ?int $categoryId = null): ?Uri
@@ -1062,7 +1093,7 @@ class Router
 	{
 		$entityTypeName = mb_strtolower(\CCrmOwnerType::ResolveName($entityTypeId));
 
-		$uri = new Uri("/mobile/crm/{$entityTypeName}/");
+		$uri = new Uri(SITE_DIR . "mobile/crm/{$entityTypeName}/");
 
 		if ($id > 0)
 		{
@@ -1137,7 +1168,7 @@ class Router
 		{
 			$catalogId = \CCrmCatalog::ensureDefaultExists();
 
-			return "/crm/catalog/{$catalogId}/product/#product_id#/";
+			return SITE_DIR . "crm/catalog/{$catalogId}/product/#product_id#/";
 		}
 
 		$pathFromOption = Option::get(static::MODULE_ID, static::OPTION_CATALOG_PRODUCT_SHOW);
@@ -1193,7 +1224,7 @@ class Router
 
 	protected function getQuotePaymentUrl(int $quoteId): Uri
 	{
-		return new Uri("/crm/quote/payment/$quoteId/?ncc=1");
+		return new Uri(SITE_DIR  ."crm/quote/payment/$quoteId/?ncc=1");
 	}
 
 	public function checkAndUpdateCurrentListView(
@@ -1386,7 +1417,7 @@ class Router
 	{
 		if ($entityTypeId === \CCrmOwnerType::Order)
 		{
-			return '/shop/orders/automation/0/';
+			return SITE_DIR . 'shop/orders/automation/0/';
 		}
 		if ($this->isNewRoutingForAutomationEnabled($entityTypeId))
 		{
@@ -1394,7 +1425,7 @@ class Router
 		}
 		$entityName = mb_strtolower(\CCrmOwnerType::ResolveName($entityTypeId));
 
-		return '/crm/' . $entityName . '/automation/#categoryId#/';
+		return SITE_DIR . 'crm/' . $entityName . '/automation/#categoryId#/';
 	}
 
 	public function getAutomationUrl(int $entityTypeId, int $categoryId = null): ?Uri
@@ -1431,14 +1462,14 @@ class Router
 		return $locator;
 	}
 
-	public function getFileUrl(int $entityTypeId, int $id, string $fieldName, int $fileId): Uri
+	public function getFileUrl(int $entityTypeId, int $id, string $fieldName, int $fileId, bool $isAbsolute = true): Uri
 	{
 		return new ContentUri(\Bitrix\Main\Engine\UrlManager::getInstance()->create('crm.controller.item.getFile', [
 			'entityTypeId' => $entityTypeId,
 			'id' => $id,
 			'fieldName' => $fieldName,
 			'fileId' => $fileId,
-		], true));
+		], $isAbsolute));
 	}
 
 	public function setCustomRoots(array $customRoots): self
@@ -1720,6 +1751,11 @@ class Router
 		}
 
 		return new Uri(SITE_DIR . 'services' . $contactCenter);
+	}
+
+	public function getMessageSenderConnectionsUrl(): ?Uri
+	{
+		return new Uri('/crm/messagesender/connections/');
 	}
 
 	/**

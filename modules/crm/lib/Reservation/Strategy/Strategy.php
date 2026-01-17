@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Reservation\Strategy;
 
 use Bitrix\Crm\Reservation\Strategy\Reserve\ReservationResult;
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 
 /**
  * The strategy of reserving products rows.
@@ -31,5 +32,5 @@ interface Strategy
 	 *
 	 * @return ReservationResult
 	 */
-	public function reservationProductRow(int $productRowId, float $quantity, int $storeId, ?Date $dateReserveEnd): ReservationResult;
+	public function reservationProductRow(int $productRowId, float $quantity, int $storeId, DateTime $dateReserveEnd): ReservationResult;
 }

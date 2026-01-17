@@ -1,7 +1,10 @@
 <?php
 namespace Bitrix\Crm\Conversion;
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Fileman\UserField\Types\AddressType;
 use Bitrix\Main;
+use Bitrix\Main\Loader;
 use \Bitrix\Main\Type\Date;
 use Bitrix\Crm\Synchronization\UserFieldSynchronizer;
 use Bitrix\Main\UserField\Types\EnumType;
@@ -478,5 +481,31 @@ abstract class EntityConversionMapper
 			$result = array_map('strval', array_flip($result));
 		}
 		return $result;
+	}
+
+	protected function prepareProductRowsPrices(
+		int $entityTypeId,
+		array $fields,
+		?array $options = null,
+	): array
+	{
+		if (
+			empty($options['CHECK_CATALOG_PRICES'])
+			|| !Loader::includeModule('catalog')
+			|| AccessController::getCurrent()->checkByValue(
+				\Bitrix\Catalog\Access\ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+				$entityTypeId,
+			)
+		)
+		{
+			return $fields;
+		}
+
+		$fields['PRODUCT_ROWS'] = Container::getInstance()->getProductRowChecker()->updateCatalogPrices(
+			$fields['PRODUCT_ROWS'],
+			$fields['CURRENCY_ID'] ?? null,
+		);
+
+		return $fields;
 	}
 }

@@ -642,7 +642,12 @@ class Order extends Base
 				$shipment = $order->getShipmentCollection()->getItemById($shipmentId);
 			}
 
-			$isSent = CrmManager::getInstance()->sendPaymentBySms($payment, $options['sendingMethodDesc'], $shipment);
+			$isSent = CrmManager::getInstance()->sendPaymentBySms(
+				$payment,
+				$options['sendingMethodDesc'],
+				$shipment,
+				$options['messageData'] ?? null,
+			);
 			if ($isSent === false)
 			{
 				if (!LandingManager::getInstance()->isPhoneConfirmed())
@@ -1085,7 +1090,12 @@ class Order extends Base
 			{
 				if ($isPaymentSaved)
 				{
-					$isSent = CrmManager::getInstance()->sendPaymentBySms($payment, $options['sendingMethodDesc'], $shipment);
+					$isSent = CrmManager::getInstance()->sendPaymentBySms(
+						$payment,
+						$options['sendingMethodDesc'],
+						$shipment,
+						$options['messageData'] ?? null,
+					);
 
 					if (!$isSent)
 					{
@@ -1207,7 +1217,19 @@ class Order extends Base
 
 					if ($options['context'] === SalesCenter\Component\ContextDictionary::SMS)
 					{
-						$smsTemplate = CrmManager::getInstance()->getSmsTemplate();
+						$messageDataBody = $options['messageData']['body'] ?? null;
+						if ($messageDataBody)
+						{
+							if (Container::getInstance()->getUserPermissions()->isCrmAdmin())
+							{
+								CrmManager::getInstance()->saveSmsTemplate($messageDataBody);
+							}
+							$smsTemplate = $messageDataBody;
+						}
+						else
+						{
+							$smsTemplate = CrmManager::getInstance()->getSmsTemplate();
+						}
 						$smsTitle = str_replace('#LINK#', $publicUrl['url'], $smsTemplate);
 						$previewData = [
 							'title' => $smsTitle,

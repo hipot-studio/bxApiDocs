@@ -112,12 +112,12 @@ class PrepareMembers implements PrepareFieldInterface
 
 	private function isResponsibleAndGroupChanged(array $fields, array $fullTaskData): bool
 	{
-		if ((int)$fields['GROUP_ID'] === 0)
+		if (!isset($fields['GROUP_ID']))
 		{
 			return false;
 		}
 
-		if (!isset($fields['GROUP_ID']))
+		if ((int)$fields['GROUP_ID'] === 0)
 		{
 			return false;
 		}
@@ -127,6 +127,11 @@ class PrepareMembers implements PrepareFieldInterface
 
 	private function isGroupAdded(array $fields, array $fullTaskData): bool
 	{
+		if (!isset($fields['GROUP_ID']))
+		{
+			return false;
+		}
+
 		if ((int)$fields['GROUP_ID'] === 0)
 		{
 			return false;
@@ -152,11 +157,16 @@ class PrepareMembers implements PrepareFieldInterface
 
 	private function isUserInGroup(int $userId, array $data): bool
 	{
+		if (!isset($data['GROUP_ID']))
+		{
+			return false;
+		}
+
 		$responsibleRoleInGroup = SocialNetwork\User::getUserRole(
 			$userId, [$data['GROUP_ID']]
 		);
 
-		return isset($responsibleRoleInGroup[$fullTaskData['GROUP_ID']]);
+		return isset($responsibleRoleInGroup[$data['GROUP_ID']]);
 	}
 
 	private function isResponsibleChanged(array $fields): bool

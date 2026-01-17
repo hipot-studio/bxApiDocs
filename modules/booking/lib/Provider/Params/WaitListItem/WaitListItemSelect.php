@@ -36,6 +36,11 @@ class WaitListItemSelect implements SelectInterface
 			$result[] = 'NOTE';
 		}
 
+		if (in_array('CLIENT_NOTE', $this->select, true))
+		{
+			$result[] = 'CLIENT_NOTE';
+		}
+
 		return $result;
 	}
 }

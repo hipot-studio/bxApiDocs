@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\AutomatedSolution\Action\Read\Fetch;
 use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
+use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\Analytics\Builder\Automation\AutomatedSolution\CreateEvent;
@@ -16,8 +17,10 @@ use Bitrix\Crm\Service\Converter;
 use Bitrix\Crm\Service\DynamicTypesMap;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Engine\Response\DataType\Page;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
-use Bitrix\Main\Type\ArrayHelper;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\PageNavigation;
 
 final class AutomatedSolution extends Base
@@ -26,6 +29,8 @@ final class AutomatedSolution extends Base
 	private AutomatedSolutionManager $manager;
 	private DynamicTypesMap $dynamicTypesMap;
 	private Converter\AutomatedSolution $converter;
+
+	private ?array $importedAutomatedSolutions = null;
 
 	protected function init(): void
 	{
@@ -37,16 +42,31 @@ final class AutomatedSolution extends Base
 		$this->converter = Container::getInstance()->getAutomatedSolutionConverter();
 	}
 
-	private function checkPermissions(): bool
+	private function checkPermissions(?int $id = null): bool
 	{
-		if (!$this->userPermissions->automatedSolution()->canEdit())
+		if ($this->userPermissions->automatedSolution()->canEdit($id))
 		{
-			$this->addError(ErrorCode::getAccessDeniedError());
-
-			return false;
+			return true;
 		}
 
-		return true;
+		if ($id !== null && CapabilityAccessChecker::getInstance()->isLockedAutomatedSolution($id))
+		{
+			$this->addError(
+				new Error(
+					Loc::getMessage('CRM_CONTROLLER_AUTOMATED_SOLUTION_IMPORTED_LOCKED'),
+					ErrorCode::RESTRICTED_BY_TARIFF,
+					[
+						'sliderCode' => 'limit_v2_crm_automated_solution_marketplace',
+					],
+				),
+			);
+		}
+		else
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+		}
+
+		return false;
 	}
 
 	public function fieldsAction(): ?array
@@ -80,10 +100,21 @@ final class AutomatedSolution extends Base
 				'NORMALIZER' => static function (mixed $value): array {
 					$array = (array)$value;
 
-					ArrayHelper::normalizeArrayValuesByInt($array);
+					Collection::normalizeArrayValuesByInt($array);
 
 					return $array;
 				},
+			],
+
+			'SOURCE_ID' => [
+				'TYPE' => Field::TYPE_INTEGER,
+				'ATTRIBUTES' => [
+					\CCrmFieldInfoAttr::Hidden,
+					\CCrmFieldInfoAttr::Immutable,
+					\CCrmFieldInfoAttr::NotDisplayed,
+					\CCrmFieldInfoAttr::HasDefaultValue,
+				],
+				'NORMALIZER' => intval(...),
 			],
 		];
 	}
@@ -239,7 +270,7 @@ final class AutomatedSolution extends Base
 
 	private function update(int $id, array $fields = []): ?array
 	{
-		if (!$this->checkPermissions())
+		if (!$this->checkPermissions($id))
 		{
 			return null;
 		}
@@ -254,7 +285,13 @@ final class AutomatedSolution extends Base
 		$fieldsToUpdate = $this->prepareFieldsFromRequest(
 			$fields + $currentAutomatedSolutionResponse['automatedSolution'],
 		);
-		if (!$this->checkAccessToTypeIds($fieldsToUpdate['TYPE_IDS'] ?? []))
+
+		$typeIds = array_map('intval', $fieldsToUpdate['TYPE_IDS'] ?? []);
+
+		$currentTypeIds = $currentAutomatedSolutionResponse['automatedSolution']['typeIds'] ?? [];
+		$currentTypeIds = array_map('intval', $currentTypeIds);
+
+		if (!$this->checkAccessToTypeIds($typeIds, $currentTypeIds, $id))
 		{
 			return null;
 		}
@@ -312,7 +349,7 @@ final class AutomatedSolution extends Base
 
 	private function delete(int $id): void
 	{
-		if (!$this->checkPermissions())
+		if (!$this->checkPermissions($id))
 		{
 			return;
 		}
@@ -424,25 +461,43 @@ final class AutomatedSolution extends Base
 		);
 	}
 
-	private function checkAccessToTypeIds(array $typeIds): bool
+	private function checkAccessToTypeIds(array $typeIds, array $currentTypeIds = [], ?int $targetAutomatedSolutionId = null): bool
 	{
 		$this->dynamicTypesMap->load([
 			'isLoadStages' => false,
 			'isLoadCategories' => false,
 		]);
 
-		$types = $this->dynamicTypesMap->getBunchOfTypesByIds($typeIds);
+		$types = $this->dynamicTypesMap->getBunchOfTypesByIds(array_unique([...$typeIds, ...$currentTypeIds]));
+
 		foreach ($types as $type)
 		{
 			$hasPermission = false;
-			if (!$type->getCustomSectionId())
+
+			$automatedSolutionId = $type->getCustomSectionId();
+			if ($automatedSolutionId)
 			{
-				$hasPermission = $this->userPermissions->isCrmAdmin();
+				if ($this->isTypeBoundToImportedAutomatedSolution($type))
+				{
+					if (
+						$targetAutomatedSolutionId === null
+						|| $type->getCustomSectionId() !== $targetAutomatedSolutionId
+						|| (in_array($type->getId(), $currentTypeIds, true) && !in_array($type->getId(), $typeIds, true))
+					)
+					{
+						$this->addError(new Error(Loc::getMessage('CRM_CONTROLLER_AUTOMATED_SOLUTION_DRAFT_LOCKED')));
+
+						return false;
+					}
+				}
+
+				$hasPermission = $this->userPermissions->automatedSolution()->canEdit($automatedSolutionId);
 			}
 			else
 			{
-				$hasPermission = $this->userPermissions->automatedSolution()->canEdit();
+				$hasPermission = $this->userPermissions->isCrmAdmin();
 			}
+
 			if (!$hasPermission)
 			{
 				$this->addError(ErrorCode::getAccessDeniedError());
@@ -452,5 +507,30 @@ final class AutomatedSolution extends Base
 		}
 
 		return true;
+	}
+
+	private function isTypeBoundToImportedAutomatedSolution(\Bitrix\Crm\Model\Dynamic\Type $type): bool
+	{
+		$customSectionId = $type->getCustomSectionId();
+
+		foreach ($this->getImportedAutomatedSolutions() as $automatedSolution)
+		{
+			if ($automatedSolution['ID'] === $customSectionId)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function getImportedAutomatedSolutions(): array
+	{
+		if ($this->importedAutomatedSolutions === null)
+		{
+			$this->importedAutomatedSolutions = Container::getInstance()->getAutomatedSolutionManager()->getExistingAutomatedSolutions(AutomatedSolutionTable::SOURCE_MARKETPLACE);
+		}
+
+		return $this->importedAutomatedSolutions;
 	}
 }

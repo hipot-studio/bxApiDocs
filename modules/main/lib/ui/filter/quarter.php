@@ -1,9 +1,8 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\Filter;
 
 use Bitrix\Main\Type\Date;
-
 
 /**
  * Works with quarters

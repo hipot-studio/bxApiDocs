@@ -4,20 +4,14 @@ namespace Bitrix\Crm\Tour\Permissions;
 
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tour\AbstractPermissions;
+use Bitrix\Crm\Tour\Mixin\HasEntitySupport;
 use Bitrix\Main\Localization\Loc;
 
 final class AutomatedSolution extends AbstractPermissions
 {
+	use HasEntitySupport;
+
 	protected const OPTION_NAME = 'automated-solution-permissions-tour';
-
-	protected ?int $entityTypeId = null;
-
-	public function setEntityTypeId(?int $entityTypeId): self
-	{
-		$this->entityTypeId = $entityTypeId;
-
-		return $this;
-	}
 
 	protected function canShow(): bool
 	{

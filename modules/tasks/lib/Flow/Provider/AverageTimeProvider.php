@@ -9,7 +9,7 @@ use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 
 class AverageTimeProvider
 {

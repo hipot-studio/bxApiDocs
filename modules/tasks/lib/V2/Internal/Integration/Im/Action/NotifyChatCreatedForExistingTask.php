@@ -4,25 +4,33 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-class NotifyChatCreatedForExistingTask
+#[Recipients(creator: false, responsible: false, accomplices: false, auditors: false)]
+class NotifyChatCreatedForExistingTask extends AbstractNotify
 {
 	public function __construct(
-		Task $task,
+		private readonly Task $task,
 		MessageSenderInterface $sender,
-		array $args = [],
 	)
 	{
-		$message = Loc::getMessage('TASKS_IM_TASK_CHAT_CREATED_FOR_EXISTING_TASK', [
-			'#TITLE#' => $task->title,
-		]);
+		parent::__construct();
+		$sender->sendMessage(task: $this->task, notification: $this);
+	}
 
-		$sender->sendMessage(
-			task: $task,
-			text: $message,
-		);
+	public function getMessageCode(): string
+	{
+		return 'TASKS_IM_TASK_CHAT_CREATED_FOR_EXISTING_TASK';
+	}
+
+	public function getMessageData(): array
+	{
+		return ['#TITLE#' => $this->task->title];
+	}
+
+	public function getDisableNotify(): bool
+	{
+		return true;
 	}
 }

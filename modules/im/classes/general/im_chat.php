@@ -3228,15 +3228,11 @@ class CIMChat
 
 	public static function hide($chatId)
 	{
+		$chat = Chat::getInstance((int)$chatId);
 		$pushList = [];
-		$lines = false;
 		$relations = \CIMChat::GetRelationById($chatId, false, true, false);
 		foreach($relations as $userId => $relation)
 		{
-			if ($relation['MESSAGE_TYPE'] === Chat::IM_TYPE_OPEN_LINE)
-			{
-				$lines = true;
-			}
 			\CIMContactList::DeleteRecent($chatId, true, $userId);
 
 			if (!\Bitrix\Im\User::getInstance($userId)->isConnector())
@@ -3245,23 +3241,7 @@ class CIMChat
 			}
 		}
 
-		if (
-			!empty($pushList)
-			&& \Bitrix\Main\Loader::includeModule("pull")
-		)
-		{
-			\Bitrix\Pull\Event::add($pushList, Array(
-				'module_id' => 'im',
-				'command' => 'chatHide',
-				'expiry' => 3600,
-				'params' => Array(
-					'dialogId' => 'chat'.$chatId,
-					'chatId' => $chatId,
-					'lines' => $lines
-				),
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			));
-		}
+		(new IM\V2\Pull\Event\ChatHide($chat, $pushList))->send();
 
 		return true;
 	}

@@ -13,7 +13,7 @@ namespace Bitrix\Tasks\Integration\Search;
 use Bitrix\Main\Loader;
 use \Bitrix\Tasks\Util\User;
 
-final class Task extends \Bitrix\Tasks\Integration
+final class Task extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'search';
 

@@ -17,6 +17,8 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 
 	private array $cache = [];
 	private array $existenceCache = [];
+	/** @var array<int, int> The cache of creator IDs keyed by task IDs. */
+	private array $creatorIdsCache = [];
 
 	public function __construct(TaskRepository $taskRepository)
 	{
@@ -88,7 +90,7 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 
 		if (isset($this->existenceCache[$id]))
 		{
-			return true;
+			return $this->existenceCache[$id];
 		}
 
 		if (isset($this->cache[$id]))
@@ -114,5 +116,33 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 	public function invalidate(int $taskId): void
 	{
 		unset($this->cache[$taskId]);
+	}
+
+	public function updateLastActivityDate(int $taskId, int $activityTs): void
+	{
+		$this->taskRepository->updateLastActivityDate($taskId, $activityTs);
+	}
+
+	public function findCreatorIdsByTaskIds(array $taskIds): array
+	{
+		$nonCachedTaskIds = array_diff($taskIds, array_keys($this->creatorIdsCache));
+		$this->creatorIdsCache = array_map('intval', $this->taskRepository->findCreatorIdsByTaskIds($nonCachedTaskIds))
+			+ $this->creatorIdsCache;
+		return array_intersect_key($this->creatorIdsCache, array_flip($taskIds));
+	}
+
+	public function findRecentTaskIdsWithChatIdsOrderedByActivityDate(int $userId, int $limit): array
+	{
+		return $this->taskRepository->findRecentTaskIdsWithChatIdsOrderedByActivityDate($userId, $limit);
+	}
+
+	public function countRecentTaskIdsWithChatIds(int $userId): int
+	{
+		return $this->taskRepository->countRecentTaskIdsWithChatIds($userId);
+	}
+
+	public function findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(int $userId, ?int $groupId = null): array
+	{
+		return $this->taskRepository->findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId($userId, $groupId);
 	}
 }

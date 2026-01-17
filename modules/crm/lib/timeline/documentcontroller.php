@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Timeline;
 
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Recurring\Mail\DynamicSender;
 use Bitrix\Main\ArgumentException;
 
 final class DocumentController extends EntityController
@@ -116,6 +117,15 @@ final class DocumentController extends EntityController
 					$owner,
 					$entryId,
 				);
+			}
+
+			if ($ownerTypeId === \CCrmOwnerType::SmartInvoice)
+			{
+				DynamicSender::getInstance()
+					->setEntityTypeId($ownerTypeId)
+					->loadRecurringDocumentData($id)
+					?->sendMail()
+				;
 			}
 		}
 	}

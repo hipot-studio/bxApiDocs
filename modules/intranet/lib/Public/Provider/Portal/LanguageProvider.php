@@ -7,6 +7,8 @@ use Bitrix\Main\ModuleManager;
 
 class LanguageProvider
 {
+	private const BETA_LANGUAGE_LIST = ['kz', 'ar'];
+
 	public function getPublicArray(): array
 	{
 		$languagesRes = (new LanguageRepository())->getPortalLanguages();
@@ -16,7 +18,7 @@ class LanguageProvider
 		{
 			$value = [
 				'NAME' => $language['NAME'],
-				'IS_BETA' => in_array($language['ID'], ['kz', 'ar']) ? true : false,
+				'IS_BETA' => in_array($language['ID'], self::BETA_LANGUAGE_LIST),
 			];
 
 			if ($language['ID'] === LANGUAGE_ID)
@@ -36,7 +38,6 @@ class LanguageProvider
 	{
 		return
 			ModuleManager::isModuleInstalled('bitrix24')
-			|| (defined('INTRANET_LANGUAGE_ID_CHANGE_AVAILABLE') && INTRANET_LANGUAGE_ID_CHANGE_AVAILABLE)
-		;
+			|| (defined('INTRANET_LANGUAGE_ID_CHANGE_AVAILABLE') && INTRANET_LANGUAGE_ID_CHANGE_AVAILABLE);
 	}
 }

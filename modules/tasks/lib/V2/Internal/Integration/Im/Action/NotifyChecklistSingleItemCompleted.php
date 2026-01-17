@@ -4,29 +4,40 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-class NotifyChecklistSingleItemCompleted
+#[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
+class NotifyChecklistSingleItemCompleted extends AbstractNotify
 {
 	public function __construct(
-		Task $task,
+		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
-		?User $triggeredBy = null,
-		string $checklistName = '',
-		string $itemName = '',
+		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly string $checklistName = '',
+		private readonly string $itemName = '',
+		private readonly ?int $checkListId = null,
+		private readonly array $itemIds = [],
 	)
 	{
-		$code = 'TASKS_IM_CHECKLIST_SINGLE_ITEM_COMPLETED_' . $triggeredBy?->getGender()->value;
+		$sender->sendMessage(task: $task, notification: $this);
+	}
 
-		$message = Loc::getMessage($code, [
-			'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-			'#ITEM_NAME#' => $itemName,
-			'#CHECKLIST_NAME#' => $checklistName,
-		]);
+	public function getMessageCode(): string
+	{
+		return match ($this->triggeredBy?->getGender()) {
+			Entity\User\Gender::Male   => 'TASKS_IM_CHECKLIST_SINGLE_ITEM_COMPLETED_M',
+			Entity\User\Gender::Female => 'TASKS_IM_CHECKLIST_SINGLE_ITEM_COMPLETED_F',
+			default                    => 'TASKS_IM_CHECKLIST_SINGLE_ITEM_COMPLETED_M',
+		};
+	}
 
-		$sender->sendMessage(task: $task, text: $message);
+	public function getMessageData(): array
+	{
+		return [
+			'#USER#' => $this->formatUser($this->triggeredBy),
+			'#ITEM_NAME#' => $this->itemName,
+			'#CHECKLIST_NAME#' => $this->checklistName,
+		];
 	}
 }

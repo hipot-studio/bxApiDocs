@@ -190,11 +190,11 @@ class ShopBuilder extends AdminPage\CatalogBuilder
 	protected function initUrlTemplates(): void
 	{
 		$this->urlTemplates[self::PAGE_SECTION_LIST] =
-			'/shop/catalog/#IBLOCK_ID#/section/#PARENT_ID#/'
+			SITE_DIR . 'shop/catalog/#IBLOCK_ID#/section/#PARENT_ID#/'
 			. '?#ADDITIONAL_PARAMETERS#'
 		;
 		$this->urlTemplates[self::PAGE_ELEMENT_LIST] =
-			'/shop/catalog/#IBLOCK_ID#/'
+			SITE_DIR . 'shop/catalog/#IBLOCK_ID#/'
 		;
 
 		$this->urlTemplates[self::PAGE_SECTION_DETAIL] =
@@ -234,7 +234,7 @@ class ShopBuilder extends AdminPage\CatalogBuilder
 			;
 			$this->urlTemplates[self::PAGE_ELEMENT_SAVE] = $this->urlTemplates[self::PAGE_ELEMENT_DETAIL];
 			$this->urlTemplates[self::PAGE_OFFER_DETAIL] =
-				'/shop/catalog/'
+				SITE_DIR . 'shop/catalog/'
 				. '#PRODUCT_IBLOCK_ID#/product/#PRODUCT_ID#/'
 				. 'variation/#ENTITY_ID#/'
 			;

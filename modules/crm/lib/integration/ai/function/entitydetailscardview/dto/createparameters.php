@@ -66,6 +66,8 @@ final class CreateParameters extends Dto
 			'forceSetToUsers' => $this->forceSetToUsers,
 			'common' => $this->common,
 			'categoryName' => EntityEditorConfig::CATEGORY_NAME,
+			'availableOnAdd' => 'Y',
+			'availableOnUpdate' => 'Y',
 		];
 	}
 }

@@ -5,6 +5,7 @@ namespace Bitrix\Intranet\Component;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
@@ -20,6 +21,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Error;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
@@ -275,7 +277,18 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			return $this->userData;
 		}
 
-		$user = ProfileRepository::createByDefault()->getUserDataById($this->arParams['ID']);
+		try
+		{
+			$user = ProfileRepository::createByDefault()->getUserDataById($this->arParams['ID']);
+		}
+		catch (ObjectNotFoundException)
+		{
+			return null;
+		}
+
+		$user['DEPARTMENT_HEAD'] = $user['DEPARTMENT_HEAD'] instanceof UserCollection
+			? $user['DEPARTMENT_HEAD']->mapToFullNames(true, false)
+			: [];
 
 		foreach ($user as $field => $value)
 		{

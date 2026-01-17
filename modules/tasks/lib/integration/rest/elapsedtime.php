@@ -13,7 +13,7 @@ namespace Bitrix\Tasks\Integration\Rest;
 
 use Bitrix\Main\Localization\Loc;
 
-use Bitrix\Tasks\TaskTable;
+use Bitrix\Tasks\Integration\Report\Internals\TaskTable;
 use Bitrix\Tasks\Util\Assert;
 use Bitrix\Main\ORM\Query\Result as QueryResult;
 
@@ -30,9 +30,9 @@ Loc::loadMessages(__FILE__);
  * @method static EO_ElapsedTime_Result getById($id)
  * @method static EO_ElapsedTime_Result getList(array $parameters = [])
  * @method static EO_ElapsedTime_Entity getEntity()
- * @method static \Bitrix\Tasks\Integration\Rest\EO_ElapsedTime createObject($setDefaultValues = true)
+ * @method static \Bitrix\Tasks\Internals\Task\ElapsedTimeObject createObject($setDefaultValues = true)
  * @method static \Bitrix\Tasks\Integration\Rest\EO_ElapsedTime_Collection createCollection()
- * @method static \Bitrix\Tasks\Integration\Rest\EO_ElapsedTime wakeUpObject($row)
+ * @method static \Bitrix\Tasks\Internals\Task\ElapsedTimeObject wakeUpObject($row)
  * @method static \Bitrix\Tasks\Integration\Rest\EO_ElapsedTime_Collection wakeUpCollection($rows)
  */
 final class ElapsedTimeTable extends \Bitrix\Tasks\Internals\Task\ElapsedTimeTable

@@ -1,4 +1,8 @@
-<?
+<?php
+
+/**
+ * @deprecated Use CUserCounter
+ */
 class CGlobalCounter
 {
 	const ALL_SITES = '**';
@@ -58,4 +62,3 @@ class CGlobalCounter
 		return CUserCounter::ClearByTag($tag, $code, $site_id, $sendPull);
 	}
 }
-?>

@@ -137,6 +137,7 @@ class WorkflowUserDetailView extends WorkflowUserView
 				'activityName' => $task['~ACTIVITY_NAME'],
 				'activity' => $task['~ACTIVITY'],
 				'saveVariables' => $task['~PARAMETERS']['SaveVariables'] ?? false,
+				'commentRequired' => $task['~PARAMETERS']['CommentRequired'] ?? 'N',
 				'delegationType' => $task['~DELEGATION_TYPE'] ?? null,
 			];
 		}

@@ -20,6 +20,11 @@ class UserCollection extends BaseCollection
 		return $this->map(fn(User $user) => $user->getAccessCode());
 	}
 
+	public function mapToFullNames(bool $useLogin = false, bool $useHtmlSpec = true): array
+	{
+		return $this->map(fn(User $user) => $user->getFormattedName($useLogin, $useHtmlSpec));
+	}
+
 	/**
 	 * @return array<int>
 	 */

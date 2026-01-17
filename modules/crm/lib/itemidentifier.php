@@ -67,7 +67,17 @@ class ItemIdentifier implements \JsonSerializable
 			$entityTypeId = (int)$data['OWNER_TYPE_ID'];
 			$entityId = (int)$data['OWNER_ID'];
 		}
-		$categoryId = isset($data['CATEGORY_ID']) ? (int)$data['CATEGORY_ID'] : null;
+		elseif (isset($data['entityTypeId'], $data['entityId']))
+		{
+			$entityTypeId = (int)$data['entityTypeId'];
+			$entityId = (int)$data['entityId'];
+		}
+
+		$categoryId = $data['CATEGORY_ID'] ?? $data['categoryId'] ?? null;
+		if (!is_null($categoryId))
+		{
+			$categoryId = (int)$categoryId;
+		}
 
 		if (\CCrmOwnerType::isCorrectEntityTypeId($entityTypeId) && $entityId > 0)
 		{

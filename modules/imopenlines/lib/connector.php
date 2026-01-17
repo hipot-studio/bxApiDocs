@@ -540,7 +540,7 @@ class Connector
 								$messageId = ImOpenLines\Im::addMessage($addMessage);
 							}
 
-							if (is_array($params['message']['extraData']))
+							if (isset($params['message']['extraData']) && is_array($params['message']['extraData']))
 							{
 								$chat = new Chat($session->getData('CHAT_ID'));
 								if (
@@ -637,7 +637,19 @@ class Connector
 							//Automatic messages
 							(new AutomaticAction($session))->automaticAddMessage($messageId, $finishSession, $voteSession);
 
-							$limit = ImConnector\Connector::getReplyLimit($params['connector']['connector_id']);
+							$channelType = null;
+							$connectorId = $params['connector']['connector_id'];
+							$lineId = $params['connector']['line_id'];
+							if (in_array($connectorId, array_keys(Library::TIME_LIMIT_CHANNELS_RESTRICTIONS), true))
+							{
+								$connectorStatusData = ImConnector\Status::getInstance($connectorId, $lineId)->getData();
+								if (!empty($connectorStatusData))
+								{
+									$channelType = $connectorStatusData['channelType'];
+								}
+							}
+
+							$limit = ImConnector\Connector::getReplyLimit($params['connector']['connector_id'], $channelType);
 							$chat = $session->getChat();
 							if (
 								!empty($limit['BLOCK_DATE']) &&
@@ -1703,35 +1715,37 @@ class Connector
 						continue;
 					}
 
+					if (
+						$fileModel->getId()
+						&& (Disk\File::getById($fileModel->getId()))
+						&& ($fileUri = \CBXShortUri::GetUri($file['link']))
+					)
+					{
+						$file['downloadLink'] = $fileUri['URI'];
+					}
+
 					$source = $fileModel->getFile();
 
 					$file['mime'] = $source['CONTENT_TYPE'] ?? Disk\TypeFile::getMimeTypeByFilename($file['name']);
 					$file['sizef'] = \CFile::FormatSize($file['size']);
 
+					$additionalData = [
+						'name' => $file['name'],
+						'type' => $file['type'],
+						'mime' => $file['mime'],
+						'link' => $file['link'],
+						'downloadLink' => $file['downloadLink'] ?? '',
+						'size' => $file['size'],
+						'sizef' => $file['sizef'],
+					];
+
 					if (Disk\TypeFile::isImage($fileModel))
 					{
-						$files[] = [
-							'name' => $file['name'],
-							'type' => $file['type'],
-							'mime' => $file['mime'],
-							'link' => $file['link'],
-							'width' => $source["WIDTH"],
-							'height' => $source["HEIGHT"],
-							'size' => $file['size'],
-							'sizef' => $file['sizef'],
-						];
+						$additionalData['width'] = $source['WIDTH'];
+						$additionalData['height'] = $source['HEIGHT'];
 					}
-					else
-					{
-						$files[] = [
-							'name' => $file['name'],
-							'type' => $file['type'],
-							'mime' => $file['mime'],
-							'link' => $file['link'],
-							'size' => $file['size'],
-							'sizef' => $file['sizef'],
-						];
-					}
+
+					$files[] = $additionalData;
 				}
 			}
 

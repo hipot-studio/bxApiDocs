@@ -71,7 +71,7 @@ class CSecurityAuthOtpMandatory
 		$otp = Otp::getByUser($deferredParams['USER_ID']);
 		$otp->regenerate();
 		$result['SECRET'] = $otp->getHexSecret();
-		$result['TYPE'] = $otp->getType();
+		$result['TYPE'] = $otp->getType()->value;
 		$result['APP_SECRET'] = $otp->getAppSecret();
 		$result['APP_SECRET_SPACED'] = chunk_split($result['APP_SECRET'], 4, ' ');
 		$result['PROVISION_URI'] = $otp->getProvisioningUri();

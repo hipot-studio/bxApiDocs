@@ -33,7 +33,12 @@ class TaskService
 	protected const UPDATE_TASK_EVENT = 'taskUpdate';
 	protected const DELETE_TASK_EVENT = 'taskDelete';
 
-	public function registerTask(Chat $chat, int $messageId, \Bitrix\Im\V2\Entity\Task\TaskItem $taskItem): Result
+	public function registerTask(
+		Chat $chat,
+		int $messageId,
+		\Bitrix\Im\V2\Entity\Task\TaskItem $taskItem,
+		TaskType $taskType = TaskType::Task,
+	): Result
 	{
 		$result = new Result();
 
@@ -49,7 +54,7 @@ class TaskService
 
 		if ($chat->needToSendTaskCreationMessage())
 		{
-			$sendMessageResult = $this->sendMessageAboutTask($taskLink, $chat);
+			$sendMessageResult = $this->sendMessageAboutTask($taskLink, $chat, $taskType);
 
 			if (!$sendMessageResult->isSuccess())
 			{
@@ -265,10 +270,38 @@ class TaskService
 		return $result->setResult($data);
 	}
 
-	protected function sendMessageAboutTask(TaskItem $taskLink, Chat $chat): SendResult
+	public function getAuditors(Chat $chat): array
+	{
+		if ($chat instanceof ChannelChat)
+		{
+			return [];
+		}
+
+		return RelationCollection::find(
+			[
+				'ACTIVE' => true,
+				'ONLY_INTERNAL_TYPE' => true,
+				'CHAT_ID' => $chat->getId(),
+				'IS_HIDDEN' => false,
+				'ONLY_INTRANET' => true,
+				'!USER_ID' => $this->getContext()->getUserId(),
+			],
+			limit: 50,
+			select: ['ID', 'USER_ID', 'CHAT_ID'],
+		)->getUserIds();
+	}
+
+	public function getFileIdsByMessage(Message $message): array
+	{
+		$files = $this->getFilesDataForTaskFromMessage($message);
+
+		return $this->getFilesIds($files);
+	}
+
+	protected function sendMessageAboutTask(TaskItem $taskLink, Chat $chat, TaskType $taskType): SendResult
 	{
 		$authorId = $this->getContext()->getUserId();
-		$messageText = $this->getTaskMessageText($taskLink);
+		$messageText = $this->getTaskMessageText($taskLink, $taskType);
 
 		$message =
 			(new Message())
@@ -281,7 +314,7 @@ class TaskService
 
 		$sendingConfig =
 			(new SendingConfig())
-				->disableGenerateUrlPreview()
+				->enableGenerateUrlPreview()
 				->enableSkipConnectorSend()
 				->enableSkipCommandExecution()
 				->enableKeepConnectorSilence()
@@ -304,7 +337,12 @@ class TaskService
 	 */
 	protected function getFilesDataForTaskFromMessage(Message $message): array
 	{
-		$copies = $message->getFiles()->copyToOwnUploadedFiles()->getResult();
+		$copies = $message->getFiles()
+			->withContextUser($this->getContext()->getUser())
+			->copyToOwnUploadedFiles()
+			->getResult()
+		;
+
 		if (!isset($copies))
 		{
 			return [];
@@ -345,27 +383,6 @@ class TaskService
 		return $fileIds;
 	}
 
-	protected function getAuditors(Chat $chat): array
-	{
-		if ($chat instanceof ChannelChat)
-		{
-			return [];
-		}
-
-		return RelationCollection::find(
-			[
-				'ACTIVE' => true,
-				'ONLY_INTERNAL_TYPE' => true,
-				'CHAT_ID' => $chat->getId(),
-				'IS_HIDDEN' => false,
-				'ONLY_INTRANET' => true,
-				'!USER_ID' => $this->getContext()->getUserId()
-			],
-			limit: 50,
-			select: ['ID', 'USER_ID', 'CHAT_ID']
-		)->getUserIds();
-	}
-
 	protected function getFilesForPrepareText(Message $message): array
 	{
 		$files = $message->getFiles();
@@ -379,31 +396,73 @@ class TaskService
 		return $filesForPrepare;
 	}
 
-	protected function getTaskMessageText(TaskItem $task): string
+	protected function getTaskMessageText(TaskItem $task, TaskType $type): ?string
+	{
+		if ($task->getMessageId() !== null)
+		{
+			return match (true)
+			{
+				$type === TaskType::Task => $this->getMessageByMessageTask($task),
+				$type === TaskType::VoiceNoteAutoTask => $this->getMessageByVoiceNoteAutoTask($task),
+				$type === TaskType::VideoNoteAutoTask => $this->getMessageByVideoNoteAutoTask($task),
+			};
+		}
+
+		return $this->getMessageByChatTask($task);
+	}
+
+	protected function getMessageByMessageTask(TaskItem $task): ?string
 	{
 		$genderModifier = ($this->getContext()->getUser()->getGender() === 'F') ? '_F' : '';
 
-		if ($task->getMessageId() !== null)
-		{
-			$text = (new Message($task->getMessageId()))->getQuotedMessage() . "\n";
-			$text .= Loc::getMessage(
-				'IM_CHAT_TASK_REGISTER_FROM_MESSAGE_NOTIFICATION' . $genderModifier . '_MSGVER_1',
-				[
-					'#LINK#' => $task->getEntity()->getUrl(),
-					'#USER_ID#' => $this->getContext()->getUserId(),
-					'#MESSAGE_ID#' => $task->getMessageId(),
-					'#DIALOG_ID#' => Chat::getInstance($task->getChatId())->getDialogContextId(),
-				]
-			);
+		$text = (new Message($task->getMessageId()))->getQuotedMessage() . "\n";
+		$text .= Loc::getMessage(
+			'IM_CHAT_TASK_REGISTER_FROM_MESSAGE_NOTIFICATION' . $genderModifier . '_MSGVER_1',
+			[
+				'#LINK#' => $task->getEntity()->getUrl(),
+				'#USER_ID#' => $this->getContext()->getUserId(),
+				'#MESSAGE_ID#' => $task->getMessageId(),
+				'#DIALOG_ID#' => Chat::getInstance($task->getChatId())->getDialogContextId(),
+			]
+		);
 
-			return $text;
-		}
+		return $text;
+	}
+
+	protected function getMessageByChatTask(TaskItem $task): ?string
+	{
+		$genderModifier = ($this->getContext()->getUser()->getGender() === 'F') ? '_F' : '';
+
 		return Loc::getMessage(
 			'IM_CHAT_TASK_REGISTER_FROM_CHAT_NOTIFICATION' . $genderModifier . '_MSGVER_1',
 			[
 				'#LINK#' => $task->getEntity()->getUrl(),
 				'#USER_ID#' => $this->getContext()->getUserId(),
 				'#TASK_TITLE#' => $task->getEntity()->getTitle(),
+			]
+		);
+	}
+
+	protected function getMessageByVoiceNoteAutoTask(TaskItem $task): ?string
+	{
+		return Loc::getMessage(
+			'IM_CHAT_TASK_REGISTER_FROM_VOICE_NOTE_MESSAGE_NOTIFICATION_MSGVER_1',
+			[
+				'#LINK#' => $task->getEntity()->getUrl(),
+				'#MESSAGE_ID#' => $task->getMessageId(),
+				'#DIALOG_ID#' => Chat::getInstance($task->getChatId())->getDialogContextId(),
+			]
+		);
+	}
+
+	protected function getMessageByVideoNoteAutoTask(TaskItem $task): ?string
+	{
+		return Loc::getMessage(
+			'IM_CHAT_TASK_REGISTER_FROM_VIDEO_NOTE_MESSAGE_NOTIFICATION_MSGVER_1',
+			[
+				'#LINK#' => $task->getEntity()->getUrl(),
+				'#MESSAGE_ID#' => $task->getMessageId(),
+				'#DIALOG_ID#' => Chat::getInstance($task->getChatId())->getDialogContextId(),
 			]
 		);
 	}

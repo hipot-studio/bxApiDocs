@@ -25,6 +25,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query\Filter\Helper;
+use Bitrix\Im\V2\Integration\AI\EngineManager;
 
 class Manager
 {
@@ -242,8 +243,8 @@ class Manager
 		return [
 			$this->openLines,
 			$this->messenger,
-			$this->copilot,
 			$this->task,
+			$this->copilot,
 			$this->channel,
 			$this->collab,
 		];
@@ -254,8 +255,8 @@ class Manager
 		return [
 			$this->messenger,
 			$this->openLines,
-			$this->copilot,
 			$this->task,
+			$this->copilot,
 			$this->channel,
 			$this->collab,
 		];
@@ -265,8 +266,8 @@ class Manager
 	{
 		return [
 			$this->messenger,
-			$this->copilot,
 			$this->task,
+			$this->copilot,
 			$this->channel,
 			$this->collab,
 			$this->openLines,
@@ -379,6 +380,12 @@ class Manager
 			}
 		}
 
+		$copilot = null;
+		if ($this->copilot->isAvailable())
+		{
+			$copilot = $this->getCopilotData();
+		}
+
 		return [
 			'USER_ID' => $this->context->userId,
 			'SITE_ID' => $this->context->siteId,
@@ -402,8 +409,11 @@ class Manager
 			'HAS_ACTIVE_CLOUD_STORAGE_BUCKET' => $hasActiveBucket,
 			'IS_BETA_AVAILABLE' => Settings::isBetaAvailable(),
 			'IS_MESSENGER_V2_ENABLED' => Settings::isMessengerV2Enabled(),
+			'IS_MULTIPLE_REACTIONS_ENABLED' => Settings::isMultipleReactionsEnabled(),
+			'IS_COPILOT_SELECT_MODEL_ENABLED' => Settings::isCopilotSelectModelEnabled(),
 			'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
 			'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
+			'IS_AI_ASSISTANT_MCP_SELECTOR_AVAILABLE' => Settings::isAiAssistantMcpSelectorAvailable(),
 			'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),
 			'CAN_USE_TELEPHONY' => Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
 			'FIRST_TAB_ID' => $firstTabId,
@@ -423,6 +433,8 @@ class Manager
 				'MAX_TRANSCRIBABLE_FILE_SIZE' => $this->getMaxTranscribableFileSize(),
 			],
 			'CAN_USE_AUDIO_PANEL' => $this->canUseAudioPanel(),
+			'COPILOT_DATA' => $copilot,
+			'COPILOT_AVAILABLE_ENGINES' => $this->getAvailableEngines(),
 		];
 	}
 
@@ -538,5 +550,28 @@ class Manager
 		}
 
 		return StatusMessageProvider::get(Platform::MOBILE);
+	}
+
+	private function getCopilotData(): ?array
+	{
+		$copilotId = \Bitrix\Im\V2\Integration\AI\AIHelper::getCopilotBotId();
+		if (!$copilotId)
+		{
+			return null;
+		}
+
+		return \Bitrix\Im\V2\Entity\User\User::getInstance($copilotId)->toRestFormat();
+	}
+
+	private function getAvailableEngines(): array
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return [];
+		}
+
+		$engineManager = new EngineManager();
+
+		return $engineManager->getAvailableEnginesForRest();
 	}
 }

@@ -4,55 +4,53 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\Entity\Group;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-class NotifyGroupChanged
+#[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
+class NotifyGroupChanged extends AbstractNotify
 {
 	public function __construct(
-		Task $task,
+		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
-		?User $triggeredBy = null,
-		?Group $newGroup = null,
-		?Group $oldGroup = null,
+		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly ?Entity\Group $newGroup = null,
+		private readonly ?Entity\Group $oldGroup = null,
 	)
 	{
-		$secretCode = !$newGroup?->isVisible ? 'SECRET_' : '';
-
-		$code = 'TASKS_IM_TASK_GROUP_ADDED_' . $secretCode . $triggeredBy?->getGender()->value;
-
-		$message = Loc::getMessage($code, [
-			'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-			'#NEW_GROUP#' => $newGroup?->name,
-		]);
-
 		if ($oldGroup !== null && $newGroup !== null)
 		{
-			$secretCode = !$oldGroup->isVisible || !$newGroup->isVisible ? 'SECRET_' : '';
-
-			$code = 'TASKS_IM_TASK_GROUP_CHANGED_' . $secretCode . $triggeredBy?->getGender()->value;
-
-			$message = Loc::getMessage($code, [
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-				'#OLD_GROUP#' => $oldGroup->name,
-				'#NEW_GROUP#' => $newGroup->name,
-			]);
+			$sender->sendMessage(task: $task, notification: $this);
 		}
 		elseif ($oldGroup !== null && $newGroup === null)
 		{
-			$secretCode = !$oldGroup->isVisible ? 'SECRET_' : '';
-
-			$code = 'TASKS_IM_TASK_GROUP_REMOVED_' . $secretCode . $triggeredBy?->getGender()->value;
-
-			$message = Loc::getMessage($code, [
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-				'#GROUP#' => $oldGroup->name,
-			]);
+			$notification = new NotifyGroupRemoved($this->triggeredBy, $this->oldGroup);
+			$sender->sendMessage(task: $task, notification: $notification);
 		}
+		elseif ($newGroup !== null)
+		{
+			$notification = new NotifyGroupAdded($this->triggeredBy, $this->newGroup);
+			$sender->sendMessage(task: $task, notification: $notification);
+		}
+	}
 
-		$sender->sendMessage(task: $task, text: $message);
+	public function getMessageCode(): string
+	{
+		$secretCode = $this->oldGroup->isVisible && $this->newGroup->isVisible ? '' : 'SECRET_';
+
+		return match($this->triggeredBy?->getGender()) {
+			Entity\User\Gender::Male => "TASKS_IM_TASK_GROUP_CHANGED_{$secretCode}M",
+			Entity\User\Gender::Female => "TASKS_IM_TASK_GROUP_CHANGED_{$secretCode}F",
+			default => "TASKS_IM_TASK_GROUP_CHANGED_{$secretCode}M",
+		};
+	}
+
+	public function getMessageData(): array
+	{
+		return [
+			'#USER#' => $this->formatUser($this->triggeredBy),
+			'#OLD_GROUP#' => $this->oldGroup->name,
+			'#NEW_GROUP#' => $this->newGroup->name,
+		];
 	}
 }

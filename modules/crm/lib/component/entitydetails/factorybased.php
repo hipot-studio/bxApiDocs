@@ -46,12 +46,12 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserField\Dispatcher;
 use Bitrix\Main\UserField\Types\DateTimeType;
 use Bitrix\Main\UserField\Types\DoubleType;
-use Bitrix\Main\UserField\Types\FileType;
 use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use CCrmComponentHelper;
 use CLists;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 abstract class FactoryBased extends BaseComponent implements Controllerable, SupportsEditorProvider
 {
@@ -74,6 +74,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	protected $factory;
 	/** @var Item */
 	protected $item;
+	protected ?Item $copiedItemFrom = null;
 	protected $operation;
 	/** @var Category */
 	protected $category;
@@ -355,11 +356,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	//@codingStandardsIgnoreStart
 	protected function executeBaseLogic(): void
 	{
-		if ($this->isCopyMode())
-		{
-			CopyFilesOnItemClone::getInstance()->execute($this->item, $this->factory);
-		}
-
 		$this->getApplication()->SetTitle(htmlspecialcharsbx($this->getTitle()));
 
 		$this->initializeEditorAdapter();
@@ -918,6 +914,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				'PRODUCTS' => $this->getProductsData(),
 				'PRODUCT_DATA_FIELD_NAME' => $this->getProductDataFieldName(),
 				'BUILDER_CONTEXT' => ProductBuilder::TYPE_ID,
+				'IS_COPY_MODE' => $this->isCopyMode(),
 				/*
 				'HIDE_MODE_BUTTON' => !$this->isEditMode ? 'Y' : 'N',
 				'TOTAL_SUM' => isset($this->entityData['OPPORTUNITY']) ? $this->entityData['OPPORTUNITY'] : null,
@@ -1159,6 +1156,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	{
 		$userFieldEntityId = $this->getUserFieldEntityId();
 		$isUserFieldCreationEnabled = Container::getInstance()->getUserPermissions($this->userID)->isAdminForEntity($this->entityTypeId, $this->categoryId);
+
 		$editorGuid = $this->getEditorGuid();
 
 		/** @var \Bitrix\Crm\Integration\Analytics\Builder\BuilderContract $analyticsBuilder */
@@ -1262,6 +1260,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			foreach ($section['elements'] as $index => $element)
 			{
 				if ($element['name'] === EditorAdapter::FIELD_PRODUCT_ROW_SUMMARY)
+				{
+					unset($section['elements'][$index]);
+				}
+
+				if ($element['name'] === RecurringFieldEditorAdapter::FIELD_RECURRING)
 				{
 					unset($section['elements'][$index]);
 				}
@@ -1492,6 +1495,12 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			{
 				$recurringItemId = $result->getData()['ITEM_ID'] ?? null;
 			}
+			else
+			{
+				$this->errorCollection->add($result->getErrors());
+
+				return null;
+			}
 		}
 
 		if(
@@ -1592,16 +1601,63 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			if ($field->isUserField())
 			{
 				$userType = $field->getUserField()['USER_TYPE']['USER_TYPE_ID'];
-				$deletedFieldName = $name . '_del';
-				if (isset($data[$deletedFieldName]) && $field->isFileUserField())
+				if ($field->isFileUserField())
 				{
-					if (is_array($data[$name]) && is_array($data[$deletedFieldName]))
+					$deletedFieldName = $name . '_del';
+					if (isset($data[$deletedFieldName]))
 					{
-						$value = array_diff($data[$name], $data[$deletedFieldName]);
+						if (is_array($data[$name]) && is_array($data[$deletedFieldName]))
+						{
+							$value = array_diff($data[$name], $data[$deletedFieldName]);
+						}
+						elseif (is_numeric($data[$name]) && (int)$data[$name] === (int)$data[$deletedFieldName])
+						{
+							$value = null;
+						}
 					}
-					elseif (is_numeric($data[$name]) && (int) $data[$name] === (int) $data[$deletedFieldName])
+					if ($this->isCopyMode())
 					{
-						$value = null;
+						$newUploadedItems = [];
+						// clone values used in copied item
+						$previousValue = $this->getCopiedItemFrom()?->get($field->getName());
+						if (is_array($previousValue) && is_array($value) && $field->isMultiple())
+						{
+							$clonedValue = [];
+							foreach ($value as $singleValue)
+							{
+								if (in_array($singleValue, $previousValue, false))
+								{
+									$clonedPreviousValue = CopyFilesOnItemClone::getInstance()->cloneValue($field, $singleValue);
+									if ($clonedPreviousValue)
+									{
+										$clonedValue[] = $clonedPreviousValue;
+									}
+								}
+								else
+								{
+									$clonedValue[] = $singleValue;
+									$newUploadedItems[] = $singleValue;
+								}
+							}
+							$value = $clonedValue;
+						}
+						if (!$field->isMultiple())
+						{
+							if ((int)$previousValue === (int)$value)
+							{
+								$value = CopyFilesOnItemClone::getInstance()->cloneValue($field, $previousValue);
+							}
+							elseif ($value)
+							{
+								$newUploadedItems[] = $value;
+							}
+						}
+
+						if (!empty($newUploadedItems))
+						{
+							// when copy of element is creating, user field assume they bound to old element, so need to clear this binding
+							(new UiFileUploaderResultValidator($field->getUserField()))->updateEntityValueId($newUploadedItems);
+						}
 					}
 				}
 				elseif ($userType === DoubleType::USER_TYPE_ID)
@@ -1636,21 +1692,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 						{
 							$value = DateTime::createFromUserTime($value);
 						}
-					}
-				}
-
-				if ($userType === FileType::USER_TYPE_ID && $this->isCopyMode())
-				{
-					if (is_array($value) && $field->isMultiple())
-					{
-						foreach ($value as $singleValue)
-						{
-							CopyFilesOnItemClone::removeFileFromNotUsedCleanQueue($singleValue);
-						}
-					}
-					elseif(is_numeric($value))
-					{
-						CopyFilesOnItemClone::removeFileFromNotUsedCleanQueue($value);
 					}
 				}
 			}
@@ -1864,6 +1905,12 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		$context = [
 			'MODE' => $this->mode,
 		];
+		if ($this->isCopyMode())
+		{
+			$context['COPY_MODE'] = [
+				'SOURCE_ENTITY_ID' => $this->getEntityID(),
+			];
+		}
 
 		if ($this->isConversionMode() && $this->getConversionWizard())
 		{
@@ -2110,5 +2157,33 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		}
 
 		return false;
+	}
+
+	/**
+	 * In copy mode returns original item being copied
+	 */
+	private function getCopiedItemFrom(): ?Item
+	{
+		if ($this->copiedItemFrom)
+		{
+			return $this->copiedItemFrom;
+		}
+
+		if (
+			$this->isCopyMode()
+			&& is_array($this->request->get('data')['COPY_MODE'])
+		)
+		{
+			$sourceEntityId = (int)($this->request->get('data')['COPY_MODE']['SOURCE_ENTITY_ID'] ?? 0);
+			if ($sourceEntityId > 0)
+			{
+				if ($this->userPermissionsService->item()->canRead($this->getEntityTypeID(), $sourceEntityId))
+				{
+					$this->copiedItemFrom = $this->factory->getItem($sourceEntityId);
+				}
+			}
+		}
+
+		return $this->copiedItemFrom;
 	}
 }

@@ -882,6 +882,12 @@ In addition to the Google Terms of Service (http://www.google.com/accounts/TOS),
 				->setCopyright('Copyright (c) 2016 Tim Shelburne')
 				->setProductUrl('https://github.com/tshelburne/redux-batched-actions')
 				->setLicence(Copyright::LICENCE_MIT),
+
+			(new static("glMatrix"))
+				->setCopyright("Copyright (c) 2015-2021, Brandon Jones, Colin MacKenzie IV.")
+				->setProductUrl('https://github.com/toji/gl-matrix')
+				->setLicence(static::LICENCE_MIT)
+				->setLicenceUrl('https://github.com/toji/gl-matrix/blob/master/LICENSE.md'),
 		];
 	}
 }

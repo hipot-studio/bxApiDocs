@@ -30,10 +30,6 @@ class Url
 		$url = new Uri(Marketplace::getMainDirectory() . self::MAIN_PAGE_MARKET_CATEGORY_PATH);
 		$url->addParams([
 			'create_uri' => $createUri->getUri(),
-			'st[tool]' => 'landing',
-			'st[category]' => 'vibe',
-			'st[event]' => 'open_market',
-			'st[status]' => 'success',
 		]);
 
 		return $url;

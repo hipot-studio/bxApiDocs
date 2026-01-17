@@ -8,10 +8,11 @@ use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Chat\GeneralChannel;
 use Bitrix\Im\V2\Chat\GeneralChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
-use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -44,6 +45,8 @@ class Chat
 
 	public static function getType($chatData, bool $camelCase = true)
 	{
+		$registry = ServiceLocator::getInstance()->get(TypeRegistry::class);
+
 		$messageType = $chatData["TYPE"] ?? $chatData["CHAT_TYPE"] ?? '';
 		$entityType = $chatData["ENTITY_TYPE"] ?? $chatData["CHAT_ENTITY_TYPE"] ?? '';
 		$chatId = $chatData['ID'] ?? $chatData['CHAT_ID'] ?? null;
@@ -51,43 +54,14 @@ class Chat
 		$messageType = trim($messageType);
 		$entityType = trim($entityType);
 
-		$type = ExtendedType::tryFromTypeLiteral($messageType);
-
-		$result = match (true)
+		$type = match ($chatId)
 		{
-			self::isGeneralChannel($chatId, $messageType, $entityType) => ExtendedType::GeneralChannel->value,
-			self::isGeneralChat($chatId, $messageType, $entityType) => ExtendedType::General->value,
-			!in_array($type, [ExtendedType::Chat, ExtendedType::OpenChat], true) => $type->value,
-			!empty($entityType) => $entityType,
-			default => $type->value,
+			(int)GeneralChannel::getGeneralChannelId() => $registry->getByExtendedType(ExtendedType::GeneralChannel->value),
+			(int)GeneralChat::getGeneralChatId() => $registry->getByExtendedType(ExtendedType::General->value),
+			default => $registry->getByLiteralAndEntity($messageType, $entityType),
 		};
 
-		if ($camelCase)
-		{
-			$result = Converter::toJson()->process($result);
-		}
-
-		return htmlspecialcharsbx($result);
-	}
-
-	protected static function isGeneralChat(?int $chatId, string $typeLiteral, string $entityType): bool
-	{
-		return (
-				ExtendedType::tryFromTypeLiteral($typeLiteral) === ExtendedType::OpenChat
-				&& ExtendedType::tryFromEntityType($entityType) === ExtendedType::General
-			)
-			|| $chatId === (int)GeneralChat::getGeneralChatId()
-		;
-	}
-
-	protected static function isGeneralChannel(?int $chatId, string $typeLiteral, string $entityType): bool
-	{
-		return (
-				ExtendedType::tryFromTypeLiteral($typeLiteral) === ExtendedType::OpenChannel
-				&& ExtendedType::tryFromEntityType($entityType) === ExtendedType::GeneralChannel
-			)
-			|| $chatId === (int)GeneralChannel::getGeneralChannelId()
-		;
+		return htmlspecialcharsbx($type->getExtendedType($camelCase));
 	}
 
 	public static function getRelation($chatId, $params = [])
@@ -289,72 +263,10 @@ class Chat
 			return false;
 		}
 
-		$action = $action === true? 'Y': 'N';
-
-		(new CounterService())->withContextUser($userId)->updateIsMuted($chatId, $action);
-
-		$relation = self::getRelation($chatId, Array(
-			'SELECT' => Array('ID', 'MESSAGE_TYPE', 'NOTIFY_BLOCK', 'COUNTER'),
-			'FILTER' => Array(
-				'USER_ID' => $userId
-			),
-		));
-		if (!$relation)
+		$result = \Bitrix\Im\V2\Chat::getInstance($chatId)->mute($action, $userId);
+		if (!$result->isSuccess())
 		{
 			return false;
-		}
-
-		if ($relation[$userId]['NOTIFY_BLOCK'] == $action)
-		{
-			return true;
-		}
-
-		\Bitrix\Im\Model\RelationTable::update($relation[$userId]['ID'], array('NOTIFY_BLOCK' => $action));
-
-		Recent::clearCache($userId);
-		$chat = \Bitrix\Im\Chat::getById($chatId);
-		//Counter::clearCache($userId);
-
-		if (\Bitrix\Main\Loader::includeModule('pull'))
-		{
-			$element = \Bitrix\Im\Model\RecentTable::getList([
-				'select' => ['USER_ID', 'ITEM_TYPE', 'ITEM_ID', 'UNREAD'],
-				'filter' => [
-					'=USER_ID' => $userId,
-					'=ITEM_TYPE' => $relation[$userId]['MESSAGE_TYPE'],
-					'=ITEM_ID' => $chatId
-				]
-			])->fetch();
-
-			$counter = $relation[$userId]['COUNTER'];
-			$chatObject = \Bitrix\Im\V2\Chat::getInstance($chatId);
-
-			\Bitrix\Pull\Event::add($userId, Array(
-				'module_id' => 'im',
-				'command' => 'chatMuteNotify',
-				'params' => Array(
-					'chatId' => $chatId,
-					'dialogId' => $chatObject->getDialogId($userId),
-					'muted' => $action == 'Y',
-					'mute' => $action == 'Y', // TODO remove this later
-					'counter' => $counter,
-					'lines' => $element['ITEM_TYPE'] === self::TYPE_OPEN_LINE,
-					'unread' => ($element['UNREAD'] ?? 'N') === 'Y',
-					'counterType' => $chatObject->getCounterType()->value,
-					'recentConfig' => $chatObject->getRecentConfig()->toPullFormat(),
-				),
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			));
-		}
-
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "OnAfterChatMuteNotify") as $event)
-		{
-			ExecuteModuleEventEx($event, [[
-				'CHAT_ID' => $chatId,
-				'USER_ID' => $userId,
-				'MUTE' => $action == 'Y',
-				'CHAT' => $chat,
-			]]);
 		}
 
 		return true;

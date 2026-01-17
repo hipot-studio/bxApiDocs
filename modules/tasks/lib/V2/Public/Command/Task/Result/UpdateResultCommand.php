@@ -19,6 +19,7 @@ class UpdateResultCommand extends AbstractCommand
 		public readonly Entity\Result $result,
 		#[PositiveNumber]
 		public readonly int $userId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -27,9 +28,7 @@ class UpdateResultCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$resultService = Container::getInstance()->getResultService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-		$handler = new UpdateResultHandler($resultService, $consistencyResolver);
+		$handler = Container::getInstance()->get(UpdateResultHandler::class);
 
 		try
 		{

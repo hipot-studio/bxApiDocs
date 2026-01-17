@@ -273,7 +273,7 @@ class UserFactory
 		$cacheSubDir = $id % 100;
 		$cacheSubSubDir = ($id % 10000) / 100;
 
-		return "/bx/imc/userdata_v8/{$cacheSubDir}/{$cacheSubSubDir}/{$id}";
+		return "/bx/imc/userdata_v9/{$cacheSubDir}/{$cacheSubSubDir}/{$id}";
 	}
 
 	public function clearCache(int $id): void

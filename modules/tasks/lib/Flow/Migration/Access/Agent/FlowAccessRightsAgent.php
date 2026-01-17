@@ -13,6 +13,8 @@ use Exception;
 
 final class FlowAccessRightsAgent extends Stepper
 {
+	protected static $moduleId = 'tasks';
+
 	protected const LIMIT = 100;
 
 	public function execute(array &$option): bool

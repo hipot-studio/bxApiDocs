@@ -217,6 +217,7 @@ class CopilotPopupItem implements PopupDataItem
 			$result[] = [
 				'code' => $engine->getCode(),
 				'name' => $engine->getName(),
+				'supportsReasoning' => $engine->supportsReasoning(),
 			];
 		}
 
@@ -266,7 +267,11 @@ class CopilotPopupItem implements PopupDataItem
 
 		foreach ($data as $id => $item)
 		{
-			$result[] = ['dialogId' => $id, 'role' => $item];
+			$result[] = [
+				'dialogId' => $id,
+				'role' => $item['role'],
+				'engine' => $item['engine'] ?? null
+			];
 		}
 
 		return $result;

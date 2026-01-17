@@ -85,6 +85,15 @@ class SmsManager
 				self::$senders[] = $sender;
 			}
 
+			if (Main\Loader::includeModule('imconnector'))
+			{
+				$sender = new Sms\Wazzup();
+				if (Sms\Wazzup::isSupported() || $sender->isRegistered())
+				{
+					self::$senders[] = $sender;
+				}
+			}
+
 			self::fireSendersEvent();
 		}
 		return self::$senders;

@@ -25,21 +25,19 @@ class MuteTaskCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$userOptionService = Container::getInstance()->getUserOptionService();
-
-		$handler = new MuteTaskHandler($userOptionService);
-
 		$result = new Result();
+
+		$handler = Container::getInstance()->get(MuteTaskHandler::class);
 
 		try
 		{
 			$handler($this);
+
+			return $result;
 		}
 		catch (UserOptionException $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

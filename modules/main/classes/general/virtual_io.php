@@ -1,5 +1,4 @@
-<?
-include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/virtual_file.php");
+<?php
 
 /**
  * @deprecated Use \Bitrix\Main\IO

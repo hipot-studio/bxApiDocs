@@ -16,12 +16,9 @@ use Bitrix\Tasks\Flow\Access\FlowAction;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
 use Bitrix\Tasks\Util\Error;
 use Bitrix\Tasks\Util\Error\Collection;
-
 use Bitrix\Tasks\Helper\Filter;
-
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
-
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Control\Group\Mute;
 use Bitrix\Tasks\Control\Group\UnMute;
 use Bitrix\Tasks\Control\Group\Ping;
@@ -168,7 +165,12 @@ class Group extends Controller
 			return $this->preformProcessAnswer();
 		}
 
-		$accessedTaskIds = $this->tasksAccessCheck($taskIds, Task\GroupAction::ACTION_SET_DEADLINE);
+		$accessedTaskIds = $this->tasksAccessCheck(
+			$taskIds,
+			Task\GroupAction::ACTION_SET_DEADLINE,
+			null,
+			['DEADLINE' => $deadline],
+		);
 
 		$setDeadline = new SetDeadline();
 		$setDeadline->runBatch($this->userId, $accessedTaskIds, $deadline);
@@ -494,7 +496,12 @@ class Group extends Controller
 		return $this->userId;
 	}
 
-	private function tasksAccessCheck(array $ids, string $action, int $differentUserId = null): array
+	private function tasksAccessCheck(
+		array $ids,
+		string $action,
+		int $differentUserId = null,
+		$params = null,
+	): array
 	{
 		(new AccessCacheLoader())->preload($this->userId, $ids);
 		$result = [];
@@ -606,13 +613,21 @@ class Group extends Controller
 			}
 		}
 
-		if ($action === Task\GroupAction::ACTION_SET_DEADLINE
+		if (
+			$action === Task\GroupAction::ACTION_SET_DEADLINE
 			|| $action === Task\GroupAction::ACTION_ADJUST_DEADLINE
-			)
+		)
 		{
 			foreach ($ids as $id)
 			{
-				if (TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_DEADLINE, (int)$id))
+				if (
+					TaskAccessController::can(
+						$this->userId,
+						ActionDictionary::ACTION_TASK_DEADLINE,
+						(int)$id,
+						$params,
+					)
+				)
 				{
 					$result[] = $id;
 				}

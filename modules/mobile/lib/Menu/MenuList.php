@@ -20,6 +20,7 @@ class MenuList
 	public const SECTION_MARKETPLACE = 'marketplace';
 	public const SECTION_TOOLS = 'tools';
 	public const SECTION_DEVELOPMENT = 'development';
+	public const SECTION_CALL_LIST = 'call_list';
 
 	private Context $context;
 	private MenuListCacheInterface $cache;
@@ -60,6 +61,7 @@ class MenuList
 			$this->createSection(self::SECTION_TOOLS, Loc::getMessage('MENU_TOOLS_SECTION_TITLE'), 1900),
 			$this->createSection(self::SECTION_BITRIX24, Loc::getMessage('MENU_BITRIX24_SECTION_TITLE'), 100),
 			$this->createSection(self::SECTION_TEAMWORK, Loc::getMessage('MENU_TEAMWORK_SECTION_TITLE'), 200),
+			$this->createSection(self::SECTION_CALL_LIST, Loc::getMessage('MENU_CALLS_SECTION_TITLE'), 210),
 			$this->createSection(self::SECTION_TASKS, Loc::getMessage('MENU_TASKS_SECTION_TITLE'), 300),
 			$this->createSection(self::SECTION_CRM, Loc::getMessage('MENU_CRM_SECTION_TITLE'), 400),
 			$this->createSection(self::SECTION_BIZPROC, Loc::getMessage('MENU_BIZPROC_SECTION_TITLE'), 500),

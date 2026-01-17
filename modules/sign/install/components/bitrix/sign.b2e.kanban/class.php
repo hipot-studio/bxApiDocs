@@ -91,11 +91,6 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 			(int)CurrentUser::get()->getId(),
 			$this->arResult['PORTAL_REGION'],
 		);
-		// TODO: move to test signing wizard
-		$this->arResult['COMPANY'] = \Bitrix\Sign\Service\Container::instance()
-			->getCrmMyCompanyService()
-			->getFirstCompanyWithTaxId(checkRequisitePermissions: false)
-		;
 
 		if (!Storage::instance()->isToursDisabled())
 		{

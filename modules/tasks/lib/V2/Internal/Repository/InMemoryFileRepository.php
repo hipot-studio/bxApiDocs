@@ -20,7 +20,8 @@ class InMemoryFileRepository implements FileRepositoryInterface
 
 	public function getById(int $id): ?Entity\File
 	{
-		if (!$this->cache->findOneById($id))
+		$file = $this->cache->findOneById($id);
+		if (!$file)
 		{
 			$file = $this->fileRepository->getById($id);
 			if ($file !== null)
@@ -29,7 +30,7 @@ class InMemoryFileRepository implements FileRepositoryInterface
 			}
 		}
 
-		return $this->cache->findOneById($id);
+		return $file;
 	}
 
 	public function getByIds(array $ids): Entity\FileCollection

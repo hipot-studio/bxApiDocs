@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter;
 
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
@@ -121,6 +123,8 @@ final class AutomationStarter extends BaseTypeStarter
 		$statusFieldName = $this->moduleSettings?->getDocumentStatusFieldName();
 		if ($statusFieldName && $this->document?->isFieldChanged($statusFieldName))
 		{
+			$this->moduleSettings?->onBeforeRunAutomationOnUpdate($this->document->getId());
+
 			$workflowId = $target->getRuntime()->onDocumentStatusChanged();
 			if ($workflowId)
 			{
@@ -164,9 +168,14 @@ final class AutomationStarter extends BaseTypeStarter
 					continue;
 				}
 
-				/** @var BaseTrigger $trigger  */
+				if (!$event->isAutomationTrigger())
+				{
+					continue;
+				}
+
+				/** @var BaseTrigger $trigger */
 				$trigger =
-					(new ($event->getTrigger()))
+					(new ($event->getTriggerName()))
 						->setTarget($target)
 						->setInputData($event->getParameters())
 				;

@@ -10,6 +10,7 @@ class UpdateConfig
 	private bool $needCorrectDatePlan;
 	private bool $checkFileRights;
 	private bool $correctDatePlanDependent;
+	private array $skipTimeZoneFields;
 	private bool $needAutoclose;
 	private bool $skipNotifications;
 	private bool $skipRecount;
@@ -17,6 +18,7 @@ class UpdateConfig
 	private bool $skipComments;
 	private bool $skipPush;
 	private bool $skipBP;
+	private bool $useConsistency;
 	private ?string $eventGuid;
 	private RuntimeData $runtime;
 
@@ -25,6 +27,7 @@ class UpdateConfig
 		bool        $needCorrectDatePlan = true,
 		bool        $checkFileRights = false,
 		bool        $correctDatePlanDependent = true,
+		array		$skipTimeZoneFields = [],
 		bool        $needAutoclose = true,
 		bool        $skipNotifications = false,
 		bool        $skipRecount = false,
@@ -32,6 +35,7 @@ class UpdateConfig
 		bool        $skipComments = false,
 		bool        $skipPush = false,
 		bool        $skipBP = false,
+		bool        $useConsistency = false,
 		?string     $eventGuid = null,
 		RuntimeData $runtime = new RuntimeData()
 	)
@@ -40,6 +44,7 @@ class UpdateConfig
 		$this->needCorrectDatePlan = $needCorrectDatePlan;
 		$this->checkFileRights = $checkFileRights;
 		$this->correctDatePlanDependent = $correctDatePlanDependent;
+		$this->skipTimeZoneFields = $skipTimeZoneFields;
 		$this->needAutoclose = $needAutoclose;
 		$this->skipNotifications = $skipNotifications;
 		$this->skipRecount = $skipRecount;
@@ -47,6 +52,7 @@ class UpdateConfig
 		$this->skipComments = $skipComments;
 		$this->skipPush = $skipPush;
 		$this->skipBP = $skipBP;
+		$this->useConsistency = $useConsistency;
 		$this->eventGuid = $eventGuid;
 		$this->runtime = $runtime;
 	}
@@ -133,6 +139,11 @@ class UpdateConfig
 		return $this->skipBP;
 	}
 
+	public function isUseConsistency(): bool
+	{
+		return $this->useConsistency;
+	}
+
 	public function isNeedCorrectDatePlan(): bool
 	{
 		return $this->needCorrectDatePlan;
@@ -146,6 +157,11 @@ class UpdateConfig
 	public function isCorrectDatePlanDependent(): bool
 	{
 		return $this->correctDatePlanDependent;
+	}
+
+	public function getSkipTimeZoneFields(): array
+	{
+		return $this->skipTimeZoneFields;
 	}
 
 	public function isNeedAutoclose(): bool
@@ -210,6 +226,13 @@ class UpdateConfig
 	public function setCorrectDatePlanDependent(bool $correctDatePlanDependent): static
 	{
 		$this->correctDatePlanDependent = $correctDatePlanDependent;
+
+		return $this;
+	}
+
+	public function setSkipTimeZoneFields(array $skipTimeZoneFields): static
+	{
+		$this->skipTimeZoneFields = $skipTimeZoneFields;
 
 		return $this;
 	}

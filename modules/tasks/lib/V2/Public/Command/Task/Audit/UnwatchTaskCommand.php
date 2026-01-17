@@ -20,6 +20,7 @@ class UnwatchTaskCommand extends AbstractCommand
 		public readonly int $userId,
 		#[PositiveNumber]
 		public readonly int $auditorId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -29,23 +30,17 @@ class UnwatchTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$memberRepository = Container::getInstance()->getTaskMemberRepository();
-		$updateTaskService = Container::getInstance()->getUpdateTaskService();
-
-		$handler = new UnwatchTaskHandler(
-			$memberRepository,
-			$updateTaskService,
-		);
+		$handler = Container::getInstance()->get(UnwatchTaskHandler::class);
 
 		try
 		{
-			$handler($this);
+			$task = $handler($this);
+
+			return $result->setObject($task);
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

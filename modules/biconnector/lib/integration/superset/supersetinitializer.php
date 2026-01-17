@@ -394,7 +394,7 @@ final class SupersetInitializer
 		$response = Integrator::getInstance()->deleteSuperset();
 		if (!$response->hasErrors())
 		{
-			Registrar::getRegistrar()->clear();
+			Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
 			self::fixDeleteTimestamp();
 		}
 		else
@@ -434,7 +434,7 @@ final class SupersetInitializer
 		foreach ($dashboards as $dashboard)
 		{
 			$app = $dashboard->getApp();
-			if ($app)
+			if ($app && $dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 			{
 				AppTable::uninstall($app->getCode());
 				AppTable::update($app->getId(), ['ACTIVE' => 'N', 'INSTALLED' => 'N']);
@@ -492,6 +492,8 @@ final class SupersetInitializer
 		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
 		Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
+		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_done_v_1']);
+		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_last_attempt']);
 
 		\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
 		\CUserOptions::DeleteOptionsByName('main.ui.filter.presets', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
@@ -499,7 +501,7 @@ final class SupersetInitializer
 		\CUserOptions::DeleteOptionsByName('biconnector', 'top_menu_dashboards');
 		\CUserOptions::DeleteOptionsByName('biconnector', 'grid_pinned_dashboards');
 
-		Registrar::getRegistrar()->clear();
+		Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
 
 		SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);
 

@@ -20,7 +20,7 @@ final class MenuItemCreatorAutomatedSolution extends BaseMenuItemCreator
 		foreach ($dashboards as $dashboard)
 		{
 			$items[] = [
-				'ID' => 'DASHBOARD_' . $dashboard->getId(),
+				'ID' => "DASHBOARD_" . $dashboard->getId(),
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
 			];

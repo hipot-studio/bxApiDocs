@@ -10,7 +10,7 @@ use Bitrix\Tasks\Member\Service\TaskMemberService;
 use Bitrix\Tasks\Provider\Tag\TagList;
 use Bitrix\Tasks\Provider\Tag\TagQuery;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Exception;
 
 class TaskRepository implements RepositoryInterface

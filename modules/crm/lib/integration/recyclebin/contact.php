@@ -53,6 +53,7 @@ class Contact extends RecyclableEntity
 				'SLOTS' => self::prepareDataSlots($entity),
 				'SLOT_MAP' => self::prepareDataSlotMap($entity),
 				'FILES' => $entity->getFiles(),
+				'UF' => $entity->getUserFieldsValues(),
 				'DATETIME' => method_exists($entity, 'getDateTime') ? $entity->getDateTime() : null,
 			],
 		);

@@ -18,7 +18,8 @@ class B2eSignedFile extends \Bitrix\Sign\Engine\Controller
 	{
 		$actionsConfiguration = parent::configureActions();
 		$actionsConfiguration['download']['-prefilters'] = [
-			Main\Engine\ActionFilter\ContentType::class
+			Main\Engine\ActionFilter\ContentType::class,
+			Main\Engine\ActionFilter\Csrf::class,
 		];
 
 		return $actionsConfiguration;

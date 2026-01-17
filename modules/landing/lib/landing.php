@@ -2187,12 +2187,22 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		$result = false;
 
 		$specialType = $this->getSpecialType();
-		$category =
-			$specialType === Type::PSEUDO_SCOPE_CODE_FORMS
-				? Metrika\Categories::CrmForms
-				: Metrika\Categories::getBySiteType(self::$siteType)
-		;
-		$metrika = new Metrika\Metrika($category, Metrika\Events::publishSite);
+		if ($specialType === Type::PSEUDO_SCOPE_CODE_FORMS)
+		{
+			$tools = Metrika\Tools::CrmForms;
+			$category = Metrika\Categories::CrmForms;
+		}
+		else
+		{
+			$tools = Metrika\Tools::getBySiteType(self::$siteType);
+			$category = Metrika\Categories::getBySiteType(self::$siteType);
+		}
+
+		$metrika = new Metrika\Metrika(
+			$category,
+			Metrika\Events::publishSite,
+			$tools,
+		);
 
 		if ($this->canPublication())
 		{
@@ -2353,8 +2363,9 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	protected function createMetrika(Metrika\Events $event): Metrika\Metrika
 	{
 		return new Metrika\Metrika(
-			Metrika\Categories::getBySiteType(self::$siteType),
+			Metrika\Categories::WidgetList,
 			$event,
+			Metrika\Tools::getBySiteType(self::$siteType),
 		);
 	}
 
@@ -2372,8 +2383,6 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 
 		$metrika->setSubSection($data['CATEGORY'] ?? '');
 		$this->parametrizeMetrikaByBlock($metrika, $block)->send();
-
-		$metrika->send();
 	}
 
 	/**
@@ -2438,6 +2447,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		$metrika = $this->createMetrika(Metrika\Events::deleteWidget);
+		$metrika = $this->parametrizeMetrikaByBlock($metrika, $this->blocks[$id]);
 
 		if (
 			isset($this->blocks[$id]) &&
@@ -2456,10 +2466,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				}
 				if ($this->blocks[$id]->save())
 				{
-					$this
-						->parametrizeMetrikaByBlock($metrika, $this->blocks[$id])
-						->send()
-					;
+					$metrika->send();
 
 					if ($mark)
 					{

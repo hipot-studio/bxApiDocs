@@ -29,6 +29,24 @@ class GroupCodeGenerator
 		return $automatedSolutionId > 0 ? self::AUTOMATED_SOLUTION_GROUP_CODE_PREFIX . $automatedSolutionId : null;
 	}
 
+	public static function getAutomatedSolutionIdFromGroupCode(string $groupCode): ?int
+	{
+		if (!self::isAutomatedSolutionGroupCode($groupCode))
+		{
+			return null;
+		}
+
+		preg_match(
+			'/^' . self::AUTOMATED_SOLUTION_GROUP_CODE_PREFIX . '(\d+)$/',
+			$groupCode,
+			$matches,
+		);
+
+		$id = $matches[1] ?? null;
+
+		return $id > 0 ? (int)$id : null;
+	}
+
 	public static function isAutomatedSolutionGroupCode(string $groupCode): bool
 	{
 		return str_starts_with($groupCode, self::AUTOMATED_SOLUTION_GROUP_CODE_PREFIX)

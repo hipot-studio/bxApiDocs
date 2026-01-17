@@ -1,28 +1,24 @@
 <?php
-/**
- * Class TemplateTable
- *
- * @package Bitrix\Tasks
- **/
 
 namespace Bitrix\Tasks\Internals\Task;
 
-use Bitrix\Main;
-use Bitrix\Main\Localization\Loc;
-
-use Bitrix\Main\Entity\EnumField;
-
-Loc::loadMessages(__FILE__);
-
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\UserTable;
 use Bitrix\Tasks\Internals\Task\Template\TemplateCollection;
 use Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable;
 use Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
 use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
 use Bitrix\Tasks\Internals\Task\Template\TemplateTagTable;
-use Bitrix\Tasks\Util\UserField;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\TextField;
+use Bitrix\Main\ORM\Fields\BooleanField;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 
 /**
  * Class TemplateTable
@@ -40,7 +36,7 @@ use Bitrix\Tasks\Util\UserField;
  * @method static \Bitrix\Tasks\Internals\Task\Template\TemplateObject wakeUpObject($row)
  * @method static \Bitrix\Tasks\Internals\Task\Template\TemplateCollection wakeUpCollection($rows)
  */
-class TemplateTable extends Main\Entity\DataManager
+class TemplateTable extends DataManager
 {
 	public static function getObjectClass(): string
 	{
@@ -52,63 +48,43 @@ class TemplateTable extends Main\Entity\DataManager
 		return TemplateCollection::class;
 	}
 
-	/**
-	 * Returns userfield entity code, to make userfields work with orm
-	 *
-	 * @return string
-	 */
-	public static function getUfId()
+	public static function getUfId(): string
 	{
-		return UserField\Task\Template::getEntityCode();
+		return UserField::TEMPLATE;
 	}
 
-	/**
-	 * Returns DB table name for entity.
-	 *
-	 * @return string
-	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_tasks_template';
 	}
 
-	/**
-	 * @return static
-	 */
-	public static function getClass()
+	public static function getClass(): string
 	{
-		return get_called_class();
+		return static::class;
 	}
 
 	/**
-	 * Returns entity map definition.
+	 * Returns entity map definition in object-style (fields + relations combined).
 	 *
 	 * @return array
 	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
-		return array(
+		return [
+			(new IntegerField('ID'))
+				->configurePrimary()
+				->configureAutocomplete(),
 
-			// common with TaskTable
-			'ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-				'autocomplete' => true,
-			),
-			'TITLE' => array(
-				'data_type' => 'string',
-				'required' => true,
-				'validation' => array(__CLASS__, 'validateTitle'),
-				'title' => Loc::getMessage('TASKS_TASK_TEMPLATE_ENTITY_TITLE_FIELD'),
-			),
-			'DESCRIPTION' => array(
-				'data_type' => 'text',
-			),
-			'DESCRIPTION_IN_BBCODE' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'Y',
-			),
+			(new StringField('TITLE'))
+				->configureRequired()
+				->addValidator(new LengthValidator(null, 255)),
+
+			(new TextField('DESCRIPTION')),
+
+			(new BooleanField('DESCRIPTION_IN_BBCODE'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('Y'),
+
 			new EnumField('PRIORITY', [
 				'values' => array_merge(
 					array_values(Priority::getAll()),
@@ -117,208 +93,138 @@ class TemplateTable extends Main\Entity\DataManager
 				'default_value' => (string)Priority::AVERAGE,
 			]),
 
-			// wtf? status in template?
-			'STATUS' => array(
-				'data_type' => 'string',
-				'default_value' => '1',
-				'validation' => array(__CLASS__, 'validateStatus'),
-			),
-			'RESPONSIBLE_ID' => array(
-				'data_type' => 'integer',
-				'required' => true,
-				'title' => Loc::getMessage('TASKS_TASK_TEMPLATE_ENTITY_ASSIGNEE_ID_FIELD'),
-			),
-			'TIME_ESTIMATE' => array( // in seconds
-				'data_type' => 'integer',
-				'default_value' => '0',
-			),
-			'REPLICATE' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'CREATED_BY' => array(
-				'data_type' => 'integer',
-				'required' => true,
-				'title' => Loc::getMessage('TASKS_TASK_TEMPLATE_ENTITY_CREATED_BY_FIELD'),
-			),
-			'XML_ID' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateXmlId'),
-			),
-			'ALLOW_CHANGE_DEADLINE' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'ALLOW_TIME_TRACKING' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'TASK_CONTROL' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'ADD_IN_REPORT' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'MATCH_WORK_TIME' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'GROUP_ID' => array(
-				'data_type' => 'integer',
-			),
-			'PARENT_ID' => array(
-				'data_type' => 'integer',
-			),
-			'MULTITASK' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y'),
-				'default_value' => 'N',
-			),
-			'SITE_ID' => array(
-				'data_type' => 'string',
-				'required' => true,
-				'validation' => array(__CLASS__, 'validateSiteId'),
-				'title' => Loc::getMessage('TASKS_TASK_TEMPLATE_ENTITY_SITE_ID_FIELD'),
-			),
+			(new StringField('STATUS'))
+				->configureDefaultValue('1')
+				->addValidator(new LengthValidator(null, 1)),
 
-			// template-specific
-			'REPLICATE_PARAMS' => array(
-				'data_type' => 'text',
-			),
-			'TAGS' => array(
-				'data_type' => 'text',
-			),
-			'ACCOMPLICES' => array(
-				'data_type' => 'text',
-			),
-			'AUDITORS' => array(
-				'data_type' => 'text',
-			),
-			'RESPONSIBLES' => array(
-				'data_type' => 'text',
-			),
-			'DEPENDS_ON' => array(
-				'data_type' => 'text',
-			),
-			'DEADLINE_AFTER' => array(
-				'data_type' => 'integer',
-			),
-			'START_DATE_PLAN_AFTER' => array(
-				'data_type' => 'integer',
-			),
-			'END_DATE_PLAN_AFTER' => array(
-				'data_type' => 'integer',
-			),
-			'TASK_ID' => array(
-				'data_type' => 'integer',
-			),
+			(new IntegerField('RESPONSIBLE_ID'))
+				->configureRequired(),
 
-			// template parameters
-			'TPARAM_TYPE' => array(
-				'data_type' => 'integer',
-				//'validation' => array(__CLASS__, 'validateType'),
-			),
-			'TPARAM_REPLICATION_COUNT' => array(
-				'data_type' => 'integer',
-				'default_value' => 0,
-			),
-			'ZOMBIE' => array(
-				'data_type' => 'text',
-				'default_value' => 'N'
-			),
+			(new IntegerField('TIME_ESTIMATE'))
+				->configureDefaultValue('0'),
 
-			// deprecated
-			'FILES' => array(
-				'data_type' => 'string',
-			),
+			(new BooleanField('REPLICATE'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
 
-			// references
-			'CREATOR' => [
-				'data_type' => 'Bitrix\Main\User',
-				'reference' => ['=this.CREATED_BY' => 'ref.ID']
-			],
-			'RESPONSIBLE' => [
-				'data_type' => 'Bitrix\Main\User',
-				'reference' => ['=this.RESPONSIBLE_ID' => 'ref.ID']
-			],
-			(new OneToMany("MEMBERS", TemplateMemberTable::class, "TEMPLATE")),
-			(new OneToMany("TAG_LIST", TemplateTagTable::class, "TEMPLATE")),
-			(new OneToMany("DEPENDENCIES", TemplateDependenceTable::class, "TEMPLATE")),
-			(
-				new Reference(
-					'SCENARIO',
-					\Bitrix\Tasks\Internals\Task\Template\ScenarioTable::class,
-					Join::on('this.ID', 'ref.TEMPLATE_ID')
-				)
-			)->configureJoinType('left'),
+			(new IntegerField('CREATED_BY'))
+				->configureRequired(),
+
+			(new StringField('XML_ID'))
+				->addValidator(new LengthValidator(null, 50)),
+
+			(new BooleanField('ALLOW_CHANGE_DEADLINE'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
+
+			(new BooleanField('ALLOW_TIME_TRACKING'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
+
+			(new BooleanField('TASK_CONTROL'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
+
+			(new BooleanField('ADD_IN_REPORT'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
+
+			(new BooleanField('MATCH_WORK_TIME'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
+
+			(new IntegerField('GROUP_ID')),
+
+			(new IntegerField('PARENT_ID')),
+
+			(new BooleanField('MULTITASK'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
+
+			(new StringField('SITE_ID'))
+				->configureRequired()
+				->addValidator(new LengthValidator(null, 2)),
+
+			(new TextField('REPLICATE_PARAMS')),
+
+			(new TextField('TAGS')),
+
+			(new TextField('ACCOMPLICES')),
+
+			(new TextField('AUDITORS')),
+
+			(new TextField('RESPONSIBLES')),
+
+			(new TextField('DEPENDS_ON')),
+
+			(new IntegerField('DEADLINE_AFTER')),
+
+			(new IntegerField('START_DATE_PLAN_AFTER')),
+
+			(new IntegerField('END_DATE_PLAN_AFTER')),
+
+			(new IntegerField('TASK_ID')),
+
+			(new IntegerField('TPARAM_TYPE')),
+
+			(new IntegerField('TPARAM_REPLICATION_COUNT'))
+				->configureDefaultValue(0),
+
+			(new TextField('ZOMBIE'))
+				->configureDefaultValue('N'),
+
+			(new Reference(
+				'CREATOR',
+				UserTable::getEntity(),
+				Join::on('this.CREATED_BY', 'ref.ID')
+			))
+				->configureJoinType(Join::TYPE_LEFT),
+
+			(new Reference(
+				'RESPONSIBLE',
+				UserTable::getEntity(),
+				Join::on('this.RESPONSIBLE_ID', 'ref.ID')
+			))
+				->configureJoinType(Join::TYPE_LEFT),
+
+			(new OneToMany(
+				'MEMBERS',
+				TemplateMemberTable::class,
+				'TEMPLATE'
+			)),
+
+			(new OneToMany(
+				'TAG_LIST',
+				TemplateTagTable::class,
+				'TEMPLATE'
+			)),
+
+			(new OneToMany(
+				'DEPENDENCIES',
+				TemplateDependenceTable::class,
+				'TEMPLATE'
+			)),
+
+			(new Reference(
+				'SCENARIO',
+				\Bitrix\Tasks\Internals\Task\Template\ScenarioTable::class,
+				Join::on('this.ID', 'ref.TEMPLATE_ID')
+			))->configureJoinType(Join::TYPE_LEFT),
+
 			(new Reference(
 				'CHECKLIST_DATA',
 				\Bitrix\Tasks\Internals\Task\Template\CheckListTable::getEntity(),
 				['this.ID' => 'ref.TEMPLATE_ID'],
-			))->configureJoinType(Join::TYPE_LEFT)
-		);
-	}
-	/**
-	 * Returns validators for TITLE field.
-	 *
-	 * @return array
-	 */
-	public static function validateTitle()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 255),
-		);
-	}
-	/**
-	 * Returns validators for PRIORITY field.
-	 *
-	 * @return array
-	 */
-	public static function validatePriority()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 1),
-		);
-	}
-	/**
-	 * Returns validators for STATUS field.
-	 *
-	 * @return array
-	 */
-	public static function validateStatus()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 1),
-		);
-	}
-	/**
-	 * Returns validators for XML_ID field.
-	 *
-	 * @return array
-	 */
-	public static function validateXmlId()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 50),
-		);
-	}
-	/**
-	 * Returns validators for SITE_ID field.
-	 *
-	 * @return array
-	 */
-	public static function validateSiteId()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 2),
-		);
+			))->configureJoinType(Join::TYPE_LEFT),
+
+			(new Reference(
+				'PARENT',
+				\Bitrix\Tasks\Internals\Task\Template\DependenceTable::class,
+				Join::on('this.ID', 'ref.TEMPLATE_ID')
+			))->configureJoinType(Join::TYPE_LEFT),
+
+			// deprecated
+			(new StringField('FILES')),
+		];
 	}
 }

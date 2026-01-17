@@ -75,18 +75,18 @@ class CSocServYandexAuth extends CSocServAuth
 
 		if($arParams["FOR_INTRANET"])
 		{
-			return array("ON_CLICK" => 'onclick="BX.util.popup(\''.htmlspecialcharsbx(CUtil::JSEscape($url)).'\', 680, 600)"');
+			return array("ON_CLICK" => 'onclick="BX.util.popup(\''.htmlspecialcharsbx(CUtil::JSEscape($url)).'\', 680, 800)"');
 		}
 		else
 		{
-			return '<a href="javascript:void(0)" onclick="BX.util.popup(\''.htmlspecialcharsbx(CUtil::JSEscape($url)).'\', 680, 600)" class="bx-ss-button yandex-button"></a><span class="bx-spacer"></span><span>'.$phrase.'</span>';
+			return '<a href="javascript:void(0)" onclick="BX.util.popup(\''.htmlspecialcharsbx(CUtil::JSEscape($url)).'\', 680, 800)" class="bx-ss-button yandex-button"></a><span class="bx-spacer"></span><span>'.$phrase.'</span>';
 		}
 	}
 
 	public function GetOnClickJs($arParams)
 	{
 		$url = static::getUrl('opener', null, $arParams);
-		return "BX.util.popup('".CUtil::JSEscape($url)."', 680, 600)";
+		return "BX.util.popup('".CUtil::JSEscape($url)."', 680, 800)";
 	}
 
 	public function getStorageToken()

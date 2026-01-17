@@ -278,7 +278,10 @@ class CTaskPlannerMaintance
 
 				$service = Container::getInstance()->getAddTaskService();
 
-				$config = new AddConfig(self::$USER_ID);
+				$config = new AddConfig(
+					userId: self::$USER_ID,
+					useConsistency: true,
+				);
 
 				try
 				{

@@ -137,7 +137,6 @@ class Menu
 			(new MapSection('task', 'tasks_switcher'))
 				->add(new MapItem('user', 'TASK_USER_LIST_TOOLBAR'))
 				->add(new MapItem('group', 'TASK_GROUP_LIST_TOOLBAR'))
-				->skipMarketPlacementCode()
 			,
 			(new MapSection('sonet_group', 'socialnetwork'))
 				->add(new MapItem('group_notifications', 'SONET_GROUP_TOOLBAR'))
@@ -272,7 +271,7 @@ class Menu
 
 		$code = $placementMap[$marketCode] ?? '';
 
-		return "{$defaultRef}/?placement={$code}";
+		return "{$defaultRef}?placement={$code}";
 	}
 
 	protected static function getSection(string $sectionCode): ?MapSection

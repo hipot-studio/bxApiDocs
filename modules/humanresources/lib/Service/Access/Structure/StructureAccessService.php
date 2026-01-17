@@ -278,5 +278,27 @@ class StructureAccessService
 
 			\COption::SetOptionInt("humanresources", "re_hr_access_user_update", 1);
 		}
+
+		if (\COption::GetOptionInt("humanresources", "re_register_on_after_user_add_handler") !== 1)
+		{
+			\Bitrix\Main\EventManager::getInstance()->unRegisterEventHandler(
+				'main',
+				'onAfterUserAdd',
+				'humanresources',
+				\Bitrix\HumanResources\Compatibility\Event\UserEventHandler::class,
+				'onAfterUserAdd',
+			);
+
+			\Bitrix\Main\EventManager::getInstance()->registerEventHandler(
+				'main',
+				'onAfterUserAdd',
+				'humanresources',
+				\Bitrix\HumanResources\Compatibility\Event\UserEventHandler::class,
+				'onAfterUserAdd',
+				9,
+			);
+
+			\COption::SetOptionInt("humanresources", "re_register_on_after_user_add_handler", 1);
+		}
 	}
 }

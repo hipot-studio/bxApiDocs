@@ -38,7 +38,7 @@ abstract class BaseMenuItemCreator
 
 	protected function getMenuItemTitle(): string
 	{
-		return Loc::getMessage('BIC_SCOPE_MENU_ITEM_TITLE');
+		return Loc::getMessage('BIC_SCOPE_MENU_ITEM_TITLE_MSGVER_1');
 	}
 
 	protected function getAdditionalItems(): array

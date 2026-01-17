@@ -94,6 +94,7 @@ abstract class Kanban
 		'ADDRESS', 'ADDRESS_POSTAL_CODE', 'ADDRESS_COUNTRY', 'CREATED_BY_ID', 'ORIGINATOR_ID', 'ORIGINATOR_ID',
 		'UTM_SOURCE', 'UTM_MEDIUM', 'UTM_CAMPAIGN', 'UTM_CONTENT', 'UTM_TERM',
 		'STAGE_ID_FROM_HISTORY', 'STAGE_ID_FROM_SUPPOSED_HISTORY', 'STAGE_SEMANTIC_ID_FROM_HISTORY',
+		'STATUS_ID_FROM_HISTORY', 'STATUS_ID_FROM_SUPPOSED_HISTORY', 'STATUS_SEMANTIC_ID_FROM_HISTORY',
 		'ACTIVITY_RESPONSIBLE_IDS', 'LAST_ACTIVITY_TIME',
 	];
 
@@ -137,6 +138,8 @@ abstract class Kanban
 		}
 
 		$this->params = $params;
+
+		$this->entity->setIsFilterOnlyItems($this->isOnlyItems());
 
 		$categoryId = (isset($this->params['CATEGORY_ID']) ? (int)$this->params['CATEGORY_ID'] : null);
 		$this->setCategoryId($categoryId);
@@ -661,7 +664,14 @@ abstract class Kanban
 			'ADDRESS', 'ADDRESS_2', 'ADDRESS_PROVINCE', 'ADDRESS_REGION', 'ADDRESS_CITY',
 			'ADDRESS_COUNTRY', 'ADDRESS_POSTAL_CODE'
 		];
-		$filterHistory = ['STAGE_ID_FROM_HISTORY', 'STAGE_ID_FROM_SUPPOSED_HISTORY', 'STAGE_SEMANTIC_ID_FROM_HISTORY'];
+		$filterHistory = [
+			'STAGE_ID_FROM_HISTORY',
+			'STAGE_ID_FROM_SUPPOSED_HISTORY',
+			'STAGE_SEMANTIC_ID_FROM_HISTORY',
+			'STATUS_ID_FROM_HISTORY',
+			'STATUS_ID_FROM_SUPPOSED_HISTORY',
+			'STATUS_SEMANTIC_ID_FROM_HISTORY',
+		];
 		$filterUtm = ['UTM_SOURCE', 'UTM_MEDIUM', 'UTM_CAMPAIGN', 'UTM_CONTENT', 'UTM_TERM'];
 		/**
 		 * possible subtype values for example:
@@ -678,9 +688,26 @@ abstract class Kanban
 		{
 			$grid->setCurrentFilterPresetId($filterId);
 		}
+
 		$gridFilter = $entity->getGridFilter($filterId);
 		$search = $grid->GetFilter($gridFilter);
 		\Bitrix\Crm\UI\Filter\EntityHandler::internalize($gridFilter, $search);
+
+		$filterFactory = Container::getInstance()->getFilterFactory();
+
+		$filterSettings = $filterFactory->getSettings(
+			$entity->getTypeId(),
+			$grid->getId(),
+		);
+		$filterFields =
+			$filterFactory
+				->getFilter($filterSettings)
+				?->getFields()
+			?? []
+		;
+
+		$search = UserBasedField::breakDepartmentsToUsers($search, $filterFields);
+
 		if(!isset($search['FILTER_APPLIED']))
 		{
 			$search = [];
@@ -946,7 +973,7 @@ abstract class Kanban
 		//invoice, smart-invoice, etc.
 		if($entity->isRecurringSupported())
 		{
-			$filter['=IS_RECURRING'] = 'N';
+			$filter['!=IS_RECURRING'] = 'Y';
 		}
 		if(isset($filter['OVERDUE']))
 		{
@@ -2040,6 +2067,7 @@ abstract class Kanban
 		{
 			throw new EntityNotFoundException('Set Entity before use this method');
 		}
+
 		return $this->entity;
 	}
 

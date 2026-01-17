@@ -6,10 +6,11 @@ namespace Bitrix\HumanResources\Command\Structure\Node\Handler;
 
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
+use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeRepository as InternalNodeRepository;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\Application;
-use Bitrix\HumanResources\Internals;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\ObjectPropertyException;
@@ -19,12 +20,12 @@ use Bitrix\Main\SystemException;
 class NodeOrderCommandHandler
 {
 	private NodeRepository $nodeRepository;
-	private Internals\Service\Structure\NodeSettingsService $nodeSettingsService;
+	private InternalNodeRepository $internalNodeRepository;
 
 	public function __construct()
 	{
 		$this->nodeRepository = Container::getNodeRepository();
-		$this->nodeSettingsService = Internals\Service\Container::getNodeSettingsService();
+		$this->internalNodeRepository = InternalContainer::getNodeRepository();
 	}
 
 	/**
@@ -43,7 +44,7 @@ class NodeOrderCommandHandler
 			return $result;
 		}
 
-		$siblings = $this->nodeRepository->getChildOf($parent);
+		$siblings = $this->internalNodeRepository->getChildrenOfNode($parent);
 
 		if ($siblings->empty())
 		{

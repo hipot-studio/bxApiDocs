@@ -82,4 +82,5 @@ abstract class Icon
 	public const PERSON = 'ui-btn-icon-person';
 	public const WORKFLOW_STOP = 'ui-btn-icon-workflow-stop';
 	public const MARKET = 'ui-btn-icon-market';
+	public const KEY = 'ui-btn-icon-key';
 }

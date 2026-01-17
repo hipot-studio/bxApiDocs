@@ -289,10 +289,12 @@ class Landing
 	 *
 	 * @param string $codeBlock The code of the block to add or remove from favourites.
 	 * @param string $action The action to perform: 'add' to add to favourites, 'remove' to remove from favourites.
+	 * @param string $type The type of the site or widget for metrika tracking.
+	 * @param string $blockSection The section of the block for metrika tracking.
 	 *
 	 * @return PublicActionResult Result object with status or error information.
 	 */
-	public static function markFavouriteBlock(string $codeBlock, string $action, string $type): PublicActionResult
+	public static function markFavouriteBlock(string $codeBlock, string $action, string $type, string $blockSection): PublicActionResult
 	{
 		$result = new PublicActionResult();
 		$userId = Manager::getUserId();
@@ -368,10 +370,15 @@ class Landing
 
 		if (isset($metrikaEvent))
 		{
-			$metrika = new Metrika\Metrika(Metrika\Categories::getBySiteType($type), $metrikaEvent);
+			$metrika = new Metrika\Metrika(
+				Metrika\Categories::WidgetList,
+				$metrikaEvent,
+				Metrika\Tools::getBySiteType($type),
+			);
 			$metrika
 				->setSection(Metrika\Sections::siteEditor)
-				->setSubSection('code_' .  $codeBlock)
+				->setSubSection('section_' .  $blockSection)
+				->setParam(2, 'widgetId', $codeBlock)
 				->send()
 			;
 		}

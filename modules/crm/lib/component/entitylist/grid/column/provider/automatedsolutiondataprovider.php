@@ -75,6 +75,13 @@ final class AutomatedSolutionDataProvider extends DataProvider
 				->setDefault(true)
 			,
 
+			$this->createColumn('PERMISSIONS')
+				->setType(Type::HTML)
+				->setName(Loc::getMessage('CRM_GRID_AUTOMATED_SOLUTION_COLUMN_PERMISSIONS'))
+				->setTitle(Loc::getMessage('CRM_GRID_AUTOMATED_SOLUTION_COLUMN_PERMISSIONS'))
+				->setDefault(true)
+			,
+
 			$this->createColumn('LAST_ACTIVITY_TIME')
 				->setType(Type::DATE)
 				->setName(Loc::getMessage('CRM_TYPE_ITEM_FIELD_LAST_ACTIVITY_TIME_2'))

@@ -10,16 +10,18 @@ class EntityAddressFormatter
 	const USA = 3;
 	const RUS = 4;
 	const RUS2 = 5;
+	const UZ = 6;
 
 	const Dflt = 1;
 	const First = 1;
-	const Last = 5;
+	const Last = 6;
 
 	const EUName = 'EU';
 	const UKName = 'UK';
 	const USAName = 'USA';
 	const RUSName = 'RUS';
 	const RUS2Name = 'RUS2';
+	const UZName = 'UZ';
 
 	private static $formatID = null;
 	private static $allDescriptions = null;
@@ -28,7 +30,7 @@ class EntityAddressFormatter
 
 	private static function getAll()
 	{
-		return array(self::EU, self::UK, self::USA, self::RUS, self::RUS2);
+		return [self::EU, self::UK, self::USA, self::RUS, self::RUS2, self::UZ];
 	}
 	private static function resolveID($name)
 	{
@@ -44,6 +46,8 @@ class EntityAddressFormatter
 				return self::RUS;
 			case self::RUS2Name:
 				return self::RUS2;
+			case self::UZName:
+				return self::UZ;
 			default:
 				return self::Undefined;
 		}
@@ -62,6 +66,8 @@ class EntityAddressFormatter
 				return self::RUSName;
 			case self::RUS2:
 				return self::RUS2Name;
+			case self::UZ:
+				return self::UZName;
 			default:
 				return '';
 		}
@@ -208,6 +214,7 @@ class EntityAddressFormatter
 				 * CRM_ENTITY_ADDR_FRMT_USA
 				 * CRM_ENTITY_ADDR_FRMT_RUS
 				 * CRM_ENTITY_ADDR_FRMT_RUS2
+				 * CRM_ENTITY_ADDR_FRMT_UZ
 				 */
 				self::$allDescriptions[$ID] = GetMessage("CRM_ENTITY_ADDR_FRMT_{$name}");
 			}
@@ -245,6 +252,7 @@ class EntityAddressFormatter
 				 * CRM_ENTITY_ADDR_FRMT_SMPL_USA
 				 * CRM_ENTITY_ADDR_FRMT_SMPL_RUS
 				 * CRM_ENTITY_ADDR_FRMT_SMPL_RUS2
+				 * CRM_ENTITY_ADDR_FRMT_SMPL_UZ
 				 */
 				self::$allExamples[$ID] = GetMessage("CRM_ENTITY_ADDR_FRMT_SMPL_{$name}");
 			}
@@ -317,7 +325,7 @@ class EntityAddressFormatter
 				$lines[] = $postalCode;
 			}
 		}
-		elseif($formatID === self::RUS2)
+		elseif(in_array($formatID, [self::RUS2, self::UZ]))
 		{
 			$tempLines = array();
 			

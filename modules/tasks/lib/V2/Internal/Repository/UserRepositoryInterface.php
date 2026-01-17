@@ -9,4 +9,6 @@ interface UserRepositoryInterface
 {
 	public function getByIds(array $userIds): Entity\UserCollection;
 	public function getAdmins(): Entity\UserCollection;
+
+	public function isExists(int $userId): bool;
 }

@@ -8,6 +8,7 @@ class SkuProviderConfig
 {
 	public function __construct(
 		public readonly bool $loadSections = false,
+		public readonly bool $onlyActiveAndAvailable = false,
 	)
 	{
 	}

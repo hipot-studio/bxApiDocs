@@ -31,7 +31,7 @@ class SiteCopilotComponent extends LandingBaseComponent
 		$metrika = new Metrika\Metrika(
 			Metrika\Categories::SiteGeneration,
 			Metrika\Events::open,
-			Metrika\Tools::ai,
+			Metrika\Tools::Ai,
 		);
 		if ($this->request('st_section'))
 		{

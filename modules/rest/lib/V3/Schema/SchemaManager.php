@@ -5,12 +5,18 @@ namespace Bitrix\Rest\V3\Schema;
 use Bitrix\Main\ClassLocator;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
-use Bitrix\Rest\V3\Attributes\DtoType;
-use Bitrix\Rest\V3\Attributes\Scope;
+use Bitrix\Main\Localization\LocalizableMessage;
+use Bitrix\Rest\V3\Attribute\Enabled;
+use Bitrix\Rest\V3\Attribute\Description;
+use Bitrix\Rest\V3\Attribute\DtoType;
+use Bitrix\Rest\V3\Attribute\Scope;
+use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\CacheManager;
-use Bitrix\Rest\V3\Controllers\RestController;
+use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Dto\Dto;
-use Bitrix\Rest\V3\Exceptions\TooManyAttributesException;
+use Bitrix\Rest\V3\Dto\Generator;
+use Bitrix\Rest\V3\Exception\TooManyAttributesException;
+use Bitrix\Rest\V3\Interaction\Response\Response;
 use ReflectionClass;
 use ReflectionMethod;
 
@@ -20,7 +26,7 @@ final class SchemaManager
 	private const CONTROLLERS_DATA_CACHE_KEY = 'rest.v3.SchemaManager.controllersData.cache.key';
 	private const METHOD_DESCRIPTIONS_CACHE_KEY = 'rest.v3.SchemaManager.methodDescriptions.cache.key';
 
-	public const CACHE_DIR = 'rest/v3';
+	public const GENERATED_DTO_CACHE_KEY = 'rest.v3.SchemaManager.generatedDto.cache.key';
 
 	private array $reflections = [];
 
@@ -31,12 +37,15 @@ final class SchemaManager
 		{
 			$modulesConfig = ServiceLocator::getInstance()->get(ModuleManager::class)->getConfigs();
 
-			foreach ($modulesConfig as $config) {
-				if (empty($config['routes']) || !is_array($config['routes'])) {
+			foreach ($modulesConfig as $moduleConfig)
+			{
+				if (empty($moduleConfig->routes))
+				{
 					continue;
 				}
 
-				foreach ($config['routes'] as $route => $routeMethod) {
+				foreach ($moduleConfig->routes as $route => $routeMethod)
+				{
 					$routes[$route] = strtolower($routeMethod);
 				}
 			}
@@ -47,66 +56,52 @@ final class SchemaManager
 		return $routes;
 	}
 
+	/**
+	 * @return MethodDescription[]
+	 */
 	public function getMethodDescriptions(): array
 	{
-		$methodDescriptions = CacheManager::get(self::METHOD_DESCRIPTIONS_CACHE_KEY);
-		if ($methodDescriptions === null)
+		$methodDescriptionsCacheData = CacheManager::get(self::METHOD_DESCRIPTIONS_CACHE_KEY);
+		$methodDescriptions = [];
+		if ($methodDescriptionsCacheData === null)
 		{
-			$methodDescriptions = [
-				'batch' => [
-					'method' => 'execute',
-					'controller' => null,
-					'scope' => \CRestUtil::GLOBAL_SCOPE,
-					'moduleId' => 'rest',
-				]
-			];
+			$batchMethodDescription = new MethodDescription(
+				module: 'rest',
+				controller: null,
+				method: 'execute',
+				dtoClass: null,
+				scopes: [\CRestUtil::GLOBAL_SCOPE, 'rest', 'rest.batch'],
+				actionUri: 'batch',
+				title: new LocalizableMessage(code: 'REST_V3_SCHEMA_SCHEMAMANAGER_BATCH_ACTION_TITLE', phraseSrcFile: __FILE__),
+				description: new LocalizableMessage(code: 'REST_V3_SCHEMA_SCHEMAMANAGER_BATCH_ACTION_DESCRIPTION', phraseSrcFile: __FILE__),
+			);
+
+			$methodDescriptions[$batchMethodDescription->actionUri] = $batchMethodDescription;
 
 			$controllersData = $this->getControllersData()['byName'];
 
+			/** @var ControllerData $controllerData */
 			foreach ($controllersData as $controllerData)
 			{
-				foreach ($controllerData->getController()->getMethods(ReflectionMethod::IS_PUBLIC) as $method)
+				foreach ($controllerData->getMethods() as $methodDescription)
 				{
-					if (!str_ends_with($method->name, 'Action'))
-					{
-						continue;
-					}
-
-					$scope = $controllerData->getModuleId();
-					$attributes = $method->getAttributes(Scope::class);
-
-					if (!empty($attributes))
-					{
-						/** @var Scope $scopeAttribute */
-						$scopeAttribute = $attributes[0]->newInstance();
-						$scope = $scopeAttribute->value;
-					}
-
-					$methodName = str_replace('Action', '', $method->name);
-					$actionUri = $controllerData->getMethodUri($methodName);
-
-					$methodDescriptions[$actionUri] = [
-						'method' => $methodName,
-						'controller' => $controllerData->getController()->name,
-						'scope' => $scope,
-						'moduleId' => $controllerData->getModuleId(),
-					];
-
-					CacheManager::set($this->getActionCacheKey($actionUri), $methodDescriptions[$actionUri]);
+					$methodDescriptions[$methodDescription->actionUri] = $methodDescription;
 				}
 			}
 
-			CacheManager::set(self::METHOD_DESCRIPTIONS_CACHE_KEY, $methodDescriptions);
+			foreach ($methodDescriptions as $methodDescription)
+			{
+				$methodDescriptionsCacheData[$methodDescription->actionUri] = $methodDescription;
+				CacheManager::set($this->getActionCacheKey($methodDescription->actionUri), $methodDescription, CacheManager::ONE_HOUR_TTL);
+			}
+			CacheManager::set(self::METHOD_DESCRIPTIONS_CACHE_KEY, $methodDescriptionsCacheData, CacheManager::ONE_HOUR_TTL);
 		}
-
-		foreach ($methodDescriptions as $actionUri => $methodDescriptionData)
+		else
 		{
-			$methodDescriptions[$actionUri] = new MethodDescription(
-				$methodDescriptionData['method'],
-				$methodDescriptionData['controller'],
-				$methodDescriptionData['scope'],
-				$methodDescriptionData['moduleId']
-			);
+			foreach ($methodDescriptionsCacheData as $actionUri => $methodDescription)
+			{
+				$methodDescriptions[$actionUri] = $methodDescription;
+			}
 		}
 
 		return $methodDescriptions;
@@ -114,19 +109,21 @@ final class SchemaManager
 
 	public function getMethodDescription(string $actionUri): ?MethodDescription
 	{
-		$methodDescriptionData = CacheManager::get($this->getActionCacheKey($actionUri));
-		if ($methodDescriptionData === null)
+		$methodDescription = CacheManager::get($this->getActionCacheKey($actionUri));
+		if ($methodDescription === null)
 		{
 			$methodDescription = $this->getMethodDescriptions()[$actionUri] ?? null;
 		}
-		else
+
+		if ($methodDescription === null)
 		{
-			$methodDescription = new MethodDescription(
-				$methodDescriptionData['method'],
-				$methodDescriptionData['controller'],
-				$methodDescriptionData['scope'],
-				$methodDescriptionData['moduleId']
-			);
+			return $methodDescription;
+		}
+
+		$generatedDtos = $this->getGeneratedDtosByModuleId($methodDescription->module);
+		foreach ($generatedDtos as $generatedDto)
+		{
+			Generator::generateByDto($generatedDto);
 		}
 
 		return $methodDescription;
@@ -170,14 +167,16 @@ final class SchemaManager
 		}
 		else
 		{
-			$controllerData = new ControllerData(...$controllerCacheData);
+			$controllerData = ControllerData::fromArray($controllerCacheData);
 		}
+
 		return $controllerData;
 	}
 
 	public function getControllersByModules(): array
 	{
 		$controllersData = $this->getControllersData();
+
 		return $controllersData['byModule'] ?? [];
 	}
 
@@ -193,39 +192,61 @@ final class SchemaManager
 		{
 			foreach ($items as $controllerCacheData)
 			{
-				$controllerData = new ControllerData(...$controllerCacheData);
-				$controllersData['byName'][$controllerData->getController()->getName()] =
-				$controllersData['byModule'][$controllerData->getModuleId()][$controllerData->getController()->getName()] = $controllerData;
+				$controllerData = ControllerData::fromArray($controllerCacheData);
+				$controllersData['byName'][$controllerData->controller->getName()]
+				= $controllersData['byModule'][$controllerData->module][$controllerData->controller->getName()] = $controllerData;
 			}
 		}
 		else
 		{
 			$controllersCacheData = [];
 			$modulesConfig = ServiceLocator::getInstance()->get(ModuleManager::class)->getConfigs();
-
-			foreach ($modulesConfig as $moduleId => $config)
+			foreach ($modulesConfig as $moduleId => $moduleConfig)
 			{
-				if (empty($config['defaultNamespace']))
-				{
-					continue;
-				}
-
-				$namespaces = array_merge(
-					[$config['defaultNamespace']],
-					(array)($config['namespaces'] ?? []),
-				);
-
+				$generatedDtoCacheData = [];
 				if (!Loader::includeModule($moduleId))
 				{
 					continue;
 				}
 
+				$namespaces = array_merge(
+					[$moduleConfig->defaultNamespace],
+					$moduleConfig->namespaces,
+				);
+
+				$customControllerData = [];
+
+				if (
+					$moduleConfig->schemaProviderClass !== null
+					&& class_exists($moduleConfig->schemaProviderClass)
+					&& is_subclass_of($moduleConfig->schemaProviderClass, SchemaProvider::class)
+				) {
+					/** @var SchemaProvider $schemaProvider */
+					$schemaProvider = new ($moduleConfig->schemaProviderClass);
+					/** @var GeneratedDto $generatedDto */
+					foreach ($schemaProvider->getDataForDtoGeneration() as $generatedDto)
+					{
+						if (!$generatedDto instanceof GeneratedDto)
+						{
+							throw new \InvalidArgumentException('SchemaProvider::getDataForDtoGeneration must return array of GeneratedDto instances.');
+						}
+						Generator::generateByDto($generatedDto);
+						$generatedDtoCacheData[] = $generatedDto;
+					}
+
+					/** @var ControllerData $controllerData */
+					foreach ($schemaProvider->getControllersData() as $controllerData)
+					{
+						$customControllerData[$controllerData->controller->getName()] = $controllerData;
+					}
+				}
+
 				foreach ($namespaces as $namespace)
 				{
 					$classes = ClassLocator::getClassesByNamespace($namespace);
-					foreach ($classes as $class)
+					foreach ($classes as $controllerClass)
 					{
-						$controllerReflection = new ReflectionClass($class);
+						$controllerReflection = new ReflectionClass($controllerClass);
 						if (!$controllerReflection->isSubclassOf(RestController::class))
 						{
 							continue;
@@ -233,26 +254,130 @@ final class SchemaManager
 
 						$dtoClass = $this->getDtoClassFromAttributes($controllerReflection);
 
-						$controllerCacheData = [
-							'moduleId' => $moduleId,
-							'controllerClass' => $class,
-							'dtoClass' => $dtoClass,
-							'namespace' => $namespace,
-						];
+						$controllerData = new ControllerData(
+							module: $moduleId,
+							controller: $controllerClass,
+							dto: $dtoClass,
+							namespace: $namespace,
+						);
 
-						CacheManager::set($this->getControllerCacheKey($controllerReflection->getName()), $controllerCacheData);
+						$this->addMethodsToControllerData($controllerData);
+						if (isset($customControllerData[$controllerClass]))
+						{
+							foreach ($customControllerData[$controllerClass]->getMethods() as $customMethodDescription)
+							{
+								$controllerData->addMethod($customMethodDescription);
+							}
+							unset($customControllerData[$controllerClass]);
+						}
+
+						$controllerCacheData = $controllerData->toArray();
+
+						CacheManager::set($this->getControllerCacheKey($controllerReflection->getName()), $controllerCacheData, CacheManager::ONE_HOUR_TTL);
 						$controllersCacheData[$controllerReflection->getName()] = $controllerCacheData;
-						$controllerData = new ControllerData(...$controllerCacheData);
-						$controllersData['byName'][$controllerData->getController()->getName()] =
-						$controllersData['byModule'][$controllerData->getModuleId()][$controllerData->getController()->getName()] = $controllerData;
+						$controllersData['byName'][$controllerReflection->getName()]
+							= $controllersData['byModule'][$controllerData->module][$controllerReflection->getName()] = $controllerData;
 					}
 				}
-			}
 
-			CacheManager::set(self::CONTROLLERS_DATA_CACHE_KEY, $controllersCacheData);
+				foreach ($customControllerData as $controllerData)
+				{
+					$controllerCacheData = $controllerData->toArray();
+
+					CacheManager::set($this->getControllerCacheKey($controllerData->controller->getName()), $controllerCacheData, CacheManager::ONE_HOUR_TTL);
+					$controllersCacheData[$controllerData->controller->getName()] = $controllerCacheData;
+					$controllersData['byName'][$controllerData->controller->getName()]
+						= $controllersData['byModule'][$controllerData->module][$controllerData->controller->getName()] = $controllerData;
+				}
+				$this->saveGeneratedDtosByModuleId($moduleId, $generatedDtoCacheData);
+			}
+			CacheManager::set(self::CONTROLLERS_DATA_CACHE_KEY, $controllersCacheData, CacheManager::ONE_HOUR_TTL);
 		}
 
 		return $controllersData;
+	}
+
+	private function addMethodsToControllerData(ControllerData $controllerData): void
+	{
+		foreach ($controllerData->controller->getMethods(ReflectionMethod::IS_PUBLIC) as $method)
+		{
+			if (!str_ends_with($method->name, 'Action'))
+			{
+				continue;
+			}
+
+			$methodName = str_replace('Action', '', $method->name);
+
+			$returnType = $method->getReturnType()?->getName();
+
+			if ($returnType === null || !is_subclass_of($returnType, Response::class))
+			{
+				continue;
+			}
+
+			$actionUri = $controllerData->getMethodUri($methodName);
+
+			$scopeParts = explode('.', $actionUri);
+			$scopeString = $scopeParts[0];
+			$scopes = [$scopeString];
+			$scopesCount = count($scopeParts);
+			for ($i = 1; $i < $scopesCount; $i++)
+			{
+				if (!isset($scopeParts[$i]))
+				{
+					break;
+				}
+				$scopeString .= '.' . $scopeParts[$i];
+				$scopes[] = $scopeString;
+			}
+
+			$methodDescriptionData = [
+				'module' => $controllerData->module,
+				'method' => $methodName,
+				'controller' => $controllerData->controller->name,
+				'dtoClass' => $controllerData->dto?->getName(),
+				'scopes' => $scopes,
+				'actionUri' => $actionUri,
+				'title' => null,
+				'description' => null,
+				'isEnabled' => true,
+				'queryParams' => null,
+			];
+
+			foreach ($method->getAttributes() as $attribute)
+			{
+				$attributeName = $attribute->getName();
+				$attributeInstance = $attribute->newInstance();
+
+				match ($attributeName)
+				{
+					Scope::class => $methodDescriptionData['scopes'][] = $attributeInstance->value,
+					Title::class => $methodDescriptionData['title'] = $attributeInstance->value,
+					Description::class => $methodDescriptionData['description'] = $attributeInstance->value,
+					Enabled::class => call_user_func(function () use ($attributeInstance, &$methodDescriptionData) {
+						/** @var CheckEnabledProvider $provider */
+						$provider = new $attributeInstance->provider();
+						$methodDescriptionData['isEnabled'] = $provider->isEnabled();
+					}),
+					default => null,
+				};
+			}
+
+			$methodDescription = new MethodDescription(
+				module: $methodDescriptionData['module'],
+				controller: $methodDescriptionData['controller'],
+				method: $methodDescriptionData['method'],
+				dtoClass: $methodDescriptionData['dtoClass'],
+				scopes: array_unique($methodDescriptionData['scopes']),
+				actionUri: $methodDescriptionData['actionUri'],
+				title: $methodDescriptionData['title'],
+				description: $methodDescriptionData['description'],
+				isEnabled: $methodDescriptionData['isEnabled'],
+				queryParams: $methodDescriptionData['queryParams'],
+			);
+
+			$controllerData->addMethod($methodDescription);
+		}
 	}
 
 	private function getControllerCacheKey(string $controllerName): string
@@ -263,5 +388,21 @@ final class SchemaManager
 	private function getActionCacheKey(string $action): string
 	{
 		return self::METHOD_DESCRIPTIONS_CACHE_KEY . '.' . $action;
+	}
+
+	private function saveGeneratedDtosByModuleId(string $moduleId, array $generatedDtoCacheData)
+	{
+		CacheManager::set(self::GENERATED_DTO_CACHE_KEY . '.' . $moduleId, $generatedDtoCacheData, CacheManager::ONE_HOUR_TTL);
+	}
+
+	/**
+	 * @param string $moduleId
+	 * @return GeneratedDto[]
+	 */
+	private function getGeneratedDtosByModuleId(string $moduleId): array
+	{
+		$dtos = CacheManager::get(self::GENERATED_DTO_CACHE_KEY . '.' . $moduleId);
+
+		return $dtos !== null ? $dtos : [];
 	}
 }

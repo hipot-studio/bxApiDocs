@@ -54,7 +54,11 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 		];
 	}
 
-	public function startWorkflowAction(int $templateId, ?int $startDuration = null): ?array
+	public function startWorkflowAction(
+		int $templateId,
+		?int $startDuration = null,
+		?string $triggerType = null,
+	): ?array
 	{
 		if (!$this->checkBizprocFeature())
 		{
@@ -100,16 +104,24 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 			}
 
 			$starter =
-				\Bitrix\Bizproc\Starter\Starter::getByScenario(Scenario::onManual)
-					->setUser($this->getCurrentUserId())
-					->setDocument(new DocumentDto($complexDocumentId, $complexDocumentType))
-					->setParameters(
-						array_merge($this->getRequest()->toArray(), $this->getRequest()->getFileList()->toArray())
-					)
-					->setMetaData(new MetaDataDto($startDuration >= 0 ? $startDuration : null))
-					->setTemplateIds([$templateId])
-					->setContext(new ContextDto('bizproc'))
+				\Bitrix\Bizproc\Starter\Starter::getByScenario(
+					!empty($triggerType)
+						? Scenario::onEvent : Scenario::onManual,
+				)
+				->setUser($this->getCurrentUserId())
+				->setDocument(new DocumentDto($complexDocumentId, $complexDocumentType))
+				->setParameters(
+					array_merge($this->getRequest()->toArray(), $this->getRequest()->getFileList()->toArray()),
+				)
+				->setMetaData(new MetaDataDto($startDuration >= 0 ? $startDuration : null))
+				->setTemplateIds([$templateId])
+				->setContext(new ContextDto('bizproc'))
 			;
+
+			if (!empty($triggerType))
+			{
+				$starter->addEvent($triggerType);
+			}
 
 			$result = $starter->start();
 			if (!$result->isSuccess())

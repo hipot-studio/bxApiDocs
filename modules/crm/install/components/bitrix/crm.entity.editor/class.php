@@ -12,6 +12,7 @@ use Bitrix\Crm\Agent\Requisite\ContactAddressConvertAgent;
 use Bitrix\Crm\Agent\Requisite\ContactUfAddressConvertAgent;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
+use Bitrix\Crm\EntityForm\ScopeAccess;
 use Bitrix\Crm\FieldContext\ContextManager;
 use Bitrix\Crm\FieldContext\Repository;
 use Bitrix\Crm\Integration\HumanResources\HumanResources;
@@ -529,6 +530,13 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			$this->arResult['ADDITIONAL_FIELDS_DATA'] = $this->getAdditionalFieldsData();
 		}
 
+		$this->arResult['MAIN_CAN_HANDLE_UF_TOOLTIPS'] = method_exists(
+			Main\UserField\Dispatcher::class,
+			'prepareFieldInfo',
+		);
+
+		$this->arResult['HOST_COLUMN_FOR_QUICK_EDITOR_ID'] = $this->arParams['HOST_COLUMN_FOR_QUICK_EDITOR_ID'] ?? null;
+
 		$this->prepareConfig();
 
 		$this->arResult['ENABLE_SETTINGS_FOR_ALL'] = Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
@@ -731,6 +739,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		$this->arResult['EDITOR_OPTIONS'] = [
 			'show_always' => 'Y',
 			'useHumanResourcesModule' => HumanResources::getInstance()->isUsed() ? 'Y' : 'N',
+			'useOnAddOnUpdateSegregation' => ScopeAccess::getInstance('crm')->canUseOnAddOnUpdateSegregation() ? 'Y' : 'N',
 		];
 		$this->arResult['ENTITY_CONFIG_CATEGORY_NAME'] = $this->getConfigurationCategoryName();
 
@@ -1014,7 +1023,18 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		}
 		if (!EntityEditorConfigScope::isDefined($configScope))
 		{
-			$configScope = $configuration->getScope($scopeConfigId);
+			$baseScope =
+				($this->arParams['ENTITY_ID'] > 0)
+					? Scope::getScopeNameOnUpdate('crm', $scopeConfigId)
+					: Scope::getScopeNameOnAdd('crm', $scopeConfigId)
+			;
+
+			$configScope = $configuration->getScope($baseScope, true);
+
+			if (!$configScope)
+			{
+				$configScope = $configuration->getScope($scopeConfigId);
+			}
 		}
 
 		$userScopeId = null;
@@ -1030,10 +1050,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		if (isset($scopeConfigId))
 		{
 			$moduleId = ($this->arParams['MODULE_ID'] ?? null);
-			$userScopes = method_exists(\Bitrix\Ui\EntityForm\Scope::class, 'getAllUserScopes')
-				? Scope::getInstance()->getAllUserScopes($scopeConfigId, $moduleId, false)
-				: Scope::getInstance()->getUserScopes($scopeConfigId, $moduleId, false)
-			;
+			$userScopes = Scope::getInstance()->getUserScopesEntityEditor($scopeConfigId, $moduleId);
 		}
 
 		$config = null;

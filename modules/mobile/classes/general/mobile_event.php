@@ -119,7 +119,7 @@ class CMobileEvent
 				if ($sectionIndex !== null)
 				{
 					$data[$sectionIndex]['items'] = array_merge(
-						$menu[$sectionIndex]['items'] ?? [],
+						$data[$sectionIndex]['items'] ?? [],
 							[
 								[
 									'id' => 'voximplant',
@@ -162,7 +162,7 @@ class CMobileEvent
 								[
 									'id' => 'knowledge',
 									'sectionCode' => 'teamwork',
-									'sort' => 400,
+									'sort' => 700,
 									'title' => Loc::getMessage('MENU_TEAMWORK_KNOWLEDGE'),
 									'imageUrl' => '/bitrix/images/landing/mobile/knowledge.png?4',
 									'imageName' => 'knowledge_base',
@@ -298,6 +298,13 @@ class CMobileEvent
 			'title' => 'Developer playground',
 			'imageName' => 'form',
 			'path' => '/development/playground',
+		];
+
+		$developerMenuItems[] = [
+			'id' => 'testing.tools',
+			'title' => 'Manual Testing Tools',
+			'imageName' => 'form',
+			'path' => '/development/testing.tools',
 		];
 
 		$developerMenuItems[] = [

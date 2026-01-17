@@ -12,11 +12,30 @@ class EventDispatcher
 {
 	public static function onAfterUserFired(array $data): EventResult
 	{
-		return UserUpdateEventListener::getInstance()->onAfterUserFired($data);
+		$eventResult = new EventResult(EventResult::SUCCESS);
+
+		$isFired = ($data['ACTIVE'] ?? '') === 'N';
+		if (!$isFired)
+		{
+			return $eventResult;
+		}
+
+		$userId = (int)($data['ID'] ?? 0);
+		if ($userId <= 0)
+		{
+			return $eventResult;
+		}
+
+		return UserUpdateEventListener::getInstance()->onAfterUserFired($userId);
 	}
 
 	public static function onAfterUserDelete(int $userId): EventResult
 	{
+		if ($userId <= 0)
+		{
+			return new EventResult(EventResult::SUCCESS);
+		}
+
 		return UserDeleteEventListener::getInstance()->onAfterUserDelete($userId);
 	}
 }

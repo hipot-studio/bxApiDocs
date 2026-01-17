@@ -12,7 +12,7 @@ class EntityNotFoundException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_ENTITY_NOT_FOUND';
+		return 'REST_V3_EXCEPTIONS_ENTITYNOTFOUNDEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

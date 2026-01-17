@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\AI;
 
-use Bitrix\AI\Result;
-use Bitrix\Im\V2\Integration\AI\Transcription\Item\Status;
-use Bitrix\Im\V2\Integration\AI\Transcription\Result\TranscribeResult;
+use Bitrix\Im\V2\Integration\AI\Queue\TaskCreationJob;
+use Bitrix\Im\V2\Integration\AI\Queue\TranscriptionJob;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
-use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 
 class QueueManager
@@ -26,43 +24,17 @@ class QueueManager
 		if (
 			empty($moduleId)
 			|| $moduleId != 'im'
-			|| empty($contextId)
-			|| $contextId !== TranscribeManager::CONTEXT_ID
-			|| empty($parameters)
-			|| empty($parameters['fileId'])
-			|| empty($parameters['chatId'])
-			|| empty($parameters['diskFileId'])
 		)
 		{
 			return;
 		}
 
-		$result = $event->getParameter('result');
-		if (!($result instanceof Result))
+		match (true)
 		{
-			return;
-		}
-
-		$text = $result->getPrettifiedData();
-		$fileId = (int)$parameters['fileId'];
-		$diskFileId = (int)$parameters['diskFileId'];
-		$chatId = (int)$parameters['chatId'];
-
-		$transcribeManager = new TranscribeManager($fileId, $diskFileId, $chatId);
-
-		if (!empty($text) && mb_strlen($text) <= TranscribeManager::MAX_TRANSCRIPTION_CHARS)
-		{
-			$transcribeFileItem = $transcribeManager->createFileItem(Status::Success, trim($text));
-			$result = (new TranscribeResult($transcribeFileItem));
-		}
-		else
-		{
-			$transcribeFileItem = $transcribeManager->createErrorFileItem();
-			$error = new Error('', 'MAX_TRANSCRIPTION_CHARS');
-			$result = (new TranscribeResult($transcribeFileItem))->addError($error);
-		}
-
-		$transcribeManager->handleTranscriptionResponse($result);
+			self::isTranscribeJob($contextId, $parameters) => (new TranscriptionJob($event))->processQueueJob(),
+			self::isTaskCreationJob($contextId, $parameters) => (new TaskCreationJob($event))->processQueueJob(),
+			default => null,
+		};
 	}
 
 	public static function onQueueJobFail(Event $event): void
@@ -78,31 +50,51 @@ class QueueManager
 		if (
 			empty($moduleId)
 			|| $moduleId != 'im'
-			|| empty($contextId)
-			|| $contextId !== TranscribeManager::CONTEXT_ID
-			|| empty($parameters)
-			|| empty($parameters['fileId'])
-			|| empty($parameters['chatId'])
-			|| empty($parameters['diskFileId'])
 		)
 		{
 			return;
 		}
 
-		$error = $event->getParameter('error') ?? null;
-		if (!($error instanceof Error))
+		match (true)
 		{
-			return;
+			self::isTranscribeJob($contextId, $parameters) => (new TranscriptionJob($event))->processFailedJob(),
+			self::isTaskCreationJob($contextId, $parameters) => (new TaskCreationJob($event))->processFailedJob(),
+			default => null,
+		};
+	}
+
+	private static function isTranscribeJob(string $contextId, mixed $parameters): bool
+	{
+		if (
+			empty($contextId)
+			|| $contextId !== TranscribeManager::CONTEXT_ID
+			|| empty($parameters)
+			|| empty($parameters['fileId'])
+			|| empty($parameters['chatId'])
+			|| empty($parameters['diskFileId'])
+			|| empty($parameters['messageId'])
+		)
+		{
+			return false;
 		}
 
-		$fileId = (int)$parameters['fileId'];
-		$diskFileId = (int)$parameters['diskFileId'];
-		$chatId = (int)$parameters['chatId'];
+		return true;
+	}
 
-		$transcribeManager = new TranscribeManager($fileId, $diskFileId, $chatId);
-		$transcribeFileItem = $transcribeManager->createErrorFileItem();
+	private static function isTaskCreationJob(string $contextId, mixed $parameters): bool
+	{
+		if (
+			empty($contextId)
+			|| $contextId !== TaskCreationManager::CONTEXT_ID
+			|| empty($parameters)
+			|| empty($parameters['fileId'])
+			|| empty($parameters['diskFileId'])
+			|| empty($parameters['messageId'])
+		)
+		{
+			return false;
+		}
 
-		$transcribeResult = (new TranscribeResult($transcribeFileItem))->addError($error);
-		$transcribeManager->handleTranscriptionResponse($transcribeResult);
+		return true;
 	}
 }

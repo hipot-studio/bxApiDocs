@@ -27,6 +27,8 @@ use Bitrix\Main\ORM\Fields\StringField;
  */
 class EntityStageHistoryWithSupposedTable extends DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_crm_entity_stage_history_with_supposed';

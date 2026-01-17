@@ -19,8 +19,15 @@ class AddRelatedTaskHandler
 
 	public function __invoke(AddRelatedTaskCommand $command): Task
 	{
-		return $this->consistencyResolver->resolve('task.related.add')->wrap(
-			fn (): Task => $this->relatedTaskService->add($command->taskId, [$command->relatedTaskId], $command->userId),
-		);
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.related.add')->wrap(
+				fn (): Task => $this->relatedTaskService->add($command->taskId, [$command->relatedTaskId], $command->userId),
+			);
+		}
+		else
+		{
+			return $this->relatedTaskService->add($command->taskId, [$command->relatedTaskId], $command->userId);
+		}
 	}
 }

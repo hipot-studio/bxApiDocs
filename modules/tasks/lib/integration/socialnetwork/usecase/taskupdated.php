@@ -170,16 +170,33 @@ class TaskUpdated extends BaseCase
 			['ID', 'ENTITY_TYPE', 'ENTITY_ID']
 		);
 
+		// If no log - create it
+		// This is necessary because a task can be created with only one participant.
+		// In this case, the task will be created without entry in b_sonet_log.
+		if ($rsSocNetLogItems->selectedRowsCount() === 0)
+		{
+			$arSoFields['CALLBACK_FUNC'] = false;
+			$arSoFields['SOURCE_ID'] = $taskId;
+			$arSoFields['ENABLE_COMMENTS'] = 'Y';
+			$arSoFields['URL'] = ''; // url is user-specific, cant keep in database
+			$arSoFields['TITLE_TEMPLATE'] = '#TITLE#';
+
+			// Set all sites because any user from any site may be
+			// added to task in future. For example, new auditor, etc.
+			$arSoFields['SITE_ID'] = $this->getSiteIds();
+
+			$logId = (int)\CSocNetLog::add($arSoFields, false);
+
+			$this->finalizeLogCreation($logId, $message);
+
+			return;
+		}
+
 		while ($log = $rsSocNetLogItems->Fetch())
 		{
 			$logId = (int)$log['ID'];
 
-			$arSoFields['TAG'] = [];
-			$tagsResult = \CTaskTags::getList([], ['TASK_ID' => $taskId]);
-			while ($tag = $tagsResult->fetch())
-			{
-				$arSoFields['TAG'][] = $tag['NAME'];
-			}
+			$arSoFields['TAG'] = $this->getTagNames($taskId);
 
 			\CSocNetLog::Update($logId, $arSoFields);
 

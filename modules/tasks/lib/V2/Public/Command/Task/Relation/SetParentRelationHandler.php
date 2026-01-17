@@ -19,8 +19,15 @@ class SetParentRelationHandler
 
 	public function __invoke(SetParentRelationCommand $command): Entity\Task
 	{
-		return $this->consistencyResolver->resolve('task.parent.set')->wrap(
-			fn (): Entity\Task => $this->parentService->setParent($command->taskId, $command->parentId, $command->userId),
-		);
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.parent.set')->wrap(
+				fn (): Entity\Task => $this->parentService->setParent($command->taskId, $command->parentId, $command->userId),
+			);
+		}
+		else
+		{
+			return $this->parentService->setParent($command->taskId, $command->parentId, $command->userId);
+		}
 	}
 }

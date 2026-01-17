@@ -6,7 +6,7 @@ use Bitrix\Main\Localization\Loc;
 
 use Bitrix\Tasks\Internals\TaskDataManager;
 use Bitrix\Tasks\Util\Assert;
-use Bitrix\Tasks\TaskTable;
+use Bitrix\Tasks\Integration\Report\Internals\TaskTable;
 
 Loc::loadMessages(__FILE__);
 

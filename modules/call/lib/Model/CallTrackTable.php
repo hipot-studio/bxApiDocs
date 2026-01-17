@@ -75,6 +75,8 @@ class CallTrackTable extends DataManager
 				->configureValues([
 					Track::TYPE_TRACK_PACK,
 					Track::TYPE_RECORD,
+					Track::TYPE_VIDEO_RECORD,
+					Track::TYPE_VIDEO_PREVIEW
 				])
 				->configureNullable(),
 

@@ -10,8 +10,10 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Elapsed\Source;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ElapsedTime;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Timer;
-use Bitrix\Tasks\V2\Internal\Exception\Task\TimerNotFoundException;
+use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
 use Bitrix\Tasks\V2\Internal\Repository\TimerRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\CacheService;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Service\PushService;
@@ -23,6 +25,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StartTimerCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StopTimerCommand;
+use Bitrix\Tasks\V2\Public\Provider\TaskElapsedTimeProvider;
 
 class TimeManagementService
 {
@@ -37,6 +40,9 @@ class TimeManagementService
 		private readonly PushService $pushService,
 		private readonly CacheService $cacheService,
 		private readonly EgressInterface $egressController,
+		private readonly ChatNotificationInterface $chatNotification,
+		private readonly TaskElapsedTimeProvider $elapsedTimeProvider,
+		private readonly UserRepositoryInterface $userRepository,
 	)
 	{
 
@@ -107,7 +113,7 @@ class TimeManagementService
 		return $timer;
 	}
 
-	public function stopTimer(int $userId, int $taskId = 0): ?Timer
+	public function stopTimer(int $userId, int $taskId = 0, bool $sendNotification = true): ?Timer
 	{
 		$timer = $this->timerService->stop($userId, $taskId);
 		if ($timer === null || $timer->seconds <= 0)
@@ -182,14 +188,69 @@ class TimeManagementService
 			$parameters
 		);
 
+		if (!$sendNotification)
+		{
+			return $timer;
+		}
+
 		$this->egressController->process(
 			new StopTimerCommand(
 				userId: $userId,
-				taskId: $taskId,
+				taskId: $timer->taskId,
+				seconds: $timer->seconds,
 			)
 		);
 
 		return $timer;
+	}
+
+	/**
+	 * @throws TaskNotFoundException
+	 */
+	public function stopAllTimers(
+		int $taskId,
+		array $userIds,
+		int $currentUserId,
+		bool $sendNotification = true,
+	): void
+	{
+		if ($taskId <= 0 || empty($userIds))
+		{
+			return;
+		}
+
+		$activeTimers = $this->timerRepository->getRunningTimersByTaskId($taskId);
+
+		foreach ($userIds as $userId)
+		{
+			$this->stopTimer(
+				userId: (int)$userId,
+				taskId: $taskId,
+				sendNotification : false,
+			);
+		}
+
+		if (!$sendNotification || $activeTimers->isEmpty())
+		{
+			return;
+		}
+
+		$task = $this->taskRepository->getById($taskId);
+		$triggeredBy = $this->userRepository->getByIds([$currentUserId])->findOneById($currentUserId);
+
+		if (!$task)
+		{
+			return;
+		}
+
+		$this->chatNotification->notify(
+			type: NotificationType::TaskTimersStopped,
+			task: $task,
+			args: [
+				'triggeredBy' => $triggeredBy,
+				'seconds' => $this->elapsedTimeProvider->getTimeSpentOnTask($taskId),
+			],
+		);
 	}
 
 	private function getAffectedUserIds(Task $task, int $userId): array

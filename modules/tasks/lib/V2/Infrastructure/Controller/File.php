@@ -37,6 +37,26 @@ class File extends BaseController
 	}
 
 	/**
+	 * @ajaxAction tasks.V2.File.listObjects
+	 *
+	 * @param string[] $ids
+	 * Disk objects
+	 * e.g. ['n1', 'n2']
+	 *
+	 * @param int[] $ids
+	 * Attached disk objects
+	 * e.g. [1, 2]
+	 */
+	#[CloseSession]
+	public function listObjectsAction(
+		array $ids,
+		DiskFileProvider $diskFileProvider,
+	): DiskFileCollection
+	{
+		return $diskFileProvider->getObjectsByIds($ids);
+	}
+
+	/**
 	 * @ajaxAction tasks.V2.File.attach
 	 *
 	 * @param string[] $ids
@@ -52,6 +72,7 @@ class File extends BaseController
 			taskId: $task->id,
 			userId: $this->userId,
 			fileIds: $ids,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -80,6 +101,7 @@ class File extends BaseController
 			taskId: $task->id,
 			userId: $this->userId,
 			fileIds: $ids,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())

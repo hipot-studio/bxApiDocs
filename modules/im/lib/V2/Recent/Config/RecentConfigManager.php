@@ -5,11 +5,13 @@ namespace Bitrix\Im\V2\Recent\Config;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\ExtendedType;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 
 class RecentConfigManager
 {
 	public const EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION = false;
+	public const DEFAULT_SECTION_NAME = 'default';
 
 	private static self $instance;
 
@@ -20,7 +22,7 @@ class RecentConfigManager
 
 	private function __construct()
 	{
-		$this->externalTypeRegistry = ExternalTypeRegistry::getInstance();
+		$this->externalTypeRegistry = ServiceLocator::getInstance()->get(ExternalTypeRegistry::class);
 		$this->converterToCamelCase = new Converter(Converter::TO_CAMEL | Converter::LC_FIRST);
 	}
 
@@ -53,7 +55,7 @@ class RecentConfigManager
 
 		if ($config->useDefaultRecentSection)
 		{
-			$recentSections[] = 'default';
+			$recentSections[] = self::DEFAULT_SECTION_NAME;
 		}
 
 		if ($config->hasOwnRecentSection)

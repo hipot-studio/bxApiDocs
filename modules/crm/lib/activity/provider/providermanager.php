@@ -98,6 +98,11 @@ class ProviderManager
 			$providersList[RepeatSale::getId()] = RepeatSale::className();
 		}
 
+		if (Feature::enabled(Feature\TelegramActivity::class))
+		{
+			$providersList[Telegram::getId()] = Telegram::className();
+		}
+
 		return array_merge($providersList, self::anotherProviders());
 	}
 

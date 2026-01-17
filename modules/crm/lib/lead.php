@@ -240,8 +240,6 @@ class LeadTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_LEAD_ENTITY_IS_RETURN_CUSTOMER_FIELD'))
 			,
 
-			$fieldRepository->getFaceId(),
-
 			$fieldRepository->getSearchContent(),
 
 			$fieldRepository->getIsManualOpportunity(),

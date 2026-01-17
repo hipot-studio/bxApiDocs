@@ -65,4 +65,15 @@ class InMemoryTaskUserOptionRepository implements TaskUserOptionRepositoryInterf
 			unset($this->cache[$userId]);
 		}
 	}
+
+	public function invalidate(int $taskId): void
+	{
+		foreach ($this->cache as $userId => &$data)
+		{
+			if (isset($data[$taskId]))
+			{
+				unset($data[$taskId]);
+			}
+		}
+	}
 }

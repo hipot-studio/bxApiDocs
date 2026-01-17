@@ -1,23 +1,10 @@
 <?php
+declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Chat;
 
-use Bitrix\Im\V2\Chat;
-
 enum ExtendedType: string
 {
-	protected const INTERNAL_TYPES = [
-		Chat::IM_TYPE_PRIVATE => self::Private,
-		Chat::IM_TYPE_OPEN_LINE => self::Lines,
-		Chat::IM_TYPE_CHANNEL => self::Channel,
-		Chat::IM_TYPE_OPEN_CHANNEL => self::OpenChannel,
-		Chat::IM_TYPE_COMMENT => self::Comment,
-		Chat::IM_TYPE_COLLAB => self::Collab,
-		Chat::IM_TYPE_COPILOT => self::Copilot,
-		Chat::IM_TYPE_OPEN => self::OpenChat,
-		Chat::IM_TYPE_CHAT => self::Chat,
-	];
-
 	case Private = 'PRIVATE';
 	case Chat = 'CHAT';
 	case OpenChat = 'OPEN';
@@ -40,21 +27,4 @@ enum ExtendedType: string
 	case Tasks = 'TASKS';
 	case Call = 'CALL';
 	case Lines = 'LINES';
-
-	public function isInternal(): bool
-	{
-		return in_array($this, self::INTERNAL_TYPES, true);
-	}
-
-	public static function tryFromEntityType(string $entityType): ?self
-	{
-		$extendedType = self::tryFrom($entityType);
-
-		return $extendedType?->isInternal() ? null : $extendedType;
-	}
-
-	public static function tryFromTypeLiteral(string $typeLiteral): self
-	{
-		return self::INTERNAL_TYPES[$typeLiteral] ?? self::Chat;
-	}
 }

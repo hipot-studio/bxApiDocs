@@ -18,10 +18,14 @@ final class BIAnalytics extends Column
 
 	public function prepareData(Flow $flow, array $params = []): array
 	{
+		$flowBIAnalytics = FlowBIAnalytics::getInstance();
+		$dashboards = $flowBIAnalytics->getFlowDashboards($flow->getId());
+
 		return [
 			'flowId' => $flow->getId(),
 			'efficiency' => (new FlowProvider())->getEfficiency($flow),
-			'dashboards' => FlowBIAnalytics::getInstance()->getFlowDashboards($flow->getId()),
+			'dashboards' => $dashboards,
+			'isDashboardsExist' => !empty($dashboards) || $flowBIAnalytics->isDashboardsExist(),
 		];
 	}
 

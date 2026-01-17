@@ -25,8 +25,15 @@ class UpdateDependenceHandler
 			type: $command->linkType,
 		);
 
-		$this->consistencyResolver->resolve('task.gantt.update.dependence')->wrap(
-			fn() => $this->ganttDependenceService->update($entity)
-		);
+		if ($command->useConsistency)
+		{
+			$this->consistencyResolver->resolve('task.gantt.update.dependence')->wrap(
+				fn() => $this->ganttDependenceService->update($entity),
+			);
+		}
+		else
+		{
+			$this->ganttDependenceService->update($entity);
+		}
 	}
 }

@@ -30,6 +30,8 @@ use Bitrix\Tasks\Internals\Dto\AbstractBaseDto;
  * @method self setNotifyOnTasksInProgressOverflow(int $notifyOnTasksInProgressOverflow)
  * @method self setNotifyWhenEfficiencyDecreases(int $notifyWhenEfficiencyDecreases)
  * @method self setTaskControl(bool $taskControl)
+ * @method self setMatchWorkTime(bool $matchWorkTime)
+ * @method self setMatchSchedule(bool $matchSchedule)
  *
  * @method bool hasTaskCreators()
  * @method bool hasResponsibleList()

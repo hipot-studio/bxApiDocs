@@ -13,7 +13,7 @@ class MailboxDataProvider extends DataProvider
 	public function prepareActions(): array
 	{
 		return [
-			new OpenSettingsAction(),
+			new OpenSettingsAction($this->getSettings()),
 			new SyncMailboxAction($this->getSettings()),
 		];
 	}

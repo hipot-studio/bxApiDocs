@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Main\Grid\Panel;
 
@@ -8,7 +8,6 @@ use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
-
 
 /**
  * Group actions panel snippets factory

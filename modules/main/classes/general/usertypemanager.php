@@ -6,8 +6,11 @@ use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\UI\FileInputUtility;
-use Bitrix\Main\UserField\Types\BaseType;
-use Bitrix\Main\UserField\Types\DateTimeType;
+use Bitrix\Main\UserField\Types;
+use Bitrix\Main\Type\Date;
+use Bitrix\Main\UserFieldTable;
+use Bitrix\Main\EventResult;
+use Bitrix\Main\ArgumentException;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -97,7 +100,7 @@ class CUserTypeManager
 	{
 		if ($arUserField['MULTIPLE'] == 'Y')
 		{
-			$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
+			$sqlHelper = Application::getConnection()->getSqlHelper();
 			return $sqlHelper->getColumnTypeByField(new Fields\TextField('TMP'));
 		}
 		else
@@ -391,7 +394,7 @@ class CUserTypeManager
 
 			foreach ($event->getResults() as $eventResult)
 			{
-				if ($eventResult->getType() == \Bitrix\Main\EventResult::SUCCESS)
+				if ($eventResult->getType() == EventResult::SUCCESS)
 				{
 					$result = $eventResult->getParameters(); // [ENTITY_ID => 'SomeTable']
 					foreach ($result as $entityId => $entityClass)
@@ -737,14 +740,14 @@ class CUserTypeManager
 			{
 				$value1 = $GLOBALS['find_' . $fieldName . '_from'] ?? null;
 				$value2 = $GLOBALS['find_' . $fieldName . '_to'] ?? null;
-				if ($this->IsNotEmpty($value1) && \Bitrix\Main\Type\Date::isCorrect($value1))
+				if ($this->IsNotEmpty($value1) && Date::isCorrect($value1))
 				{
-					$date = new \Bitrix\Main\Type\Date($value1);
+					$date = new Date($value1);
 					$arFilter['>=' . $fieldName] = $date;
 				}
-				if ($this->IsNotEmpty($value2) && \Bitrix\Main\Type\Date::isCorrect($value2))
+				if ($this->IsNotEmpty($value2) && Date::isCorrect($value2))
 				{
-					$date = new \Bitrix\Main\Type\Date($value2);
+					$date = new Date($value2);
 					if ($arUserField['USER_TYPE_ID'] != 'date')
 					{
 						$date->add('+1 day');
@@ -791,14 +794,14 @@ class CUserTypeManager
 			{
 				$value1 = $filterData[$fieldName . '_from'] ?? '';
 				$value2 = $filterData[$fieldName . '_to'] ?? '';
-				if ($this->IsNotEmpty($value1) && \Bitrix\Main\Type\Date::isCorrect($value1))
+				if ($this->IsNotEmpty($value1) && Date::isCorrect($value1))
 				{
-					$date = new \Bitrix\Main\Type\Date($value1);
+					$date = new Date($value1);
 					$arFilter['>=' . $fieldName] = $date;
 				}
-				if ($this->IsNotEmpty($value2) && \Bitrix\Main\Type\Date::isCorrect($value2))
+				if ($this->IsNotEmpty($value2) && Date::isCorrect($value2))
 				{
-					$date = new \Bitrix\Main\Type\Date($value2);
+					$date = new Date($value2);
 					if ($arUserField['USER_TYPE_ID'] != 'date')
 					{
 						$date->add('+1 day');
@@ -899,14 +902,7 @@ class CUserTypeManager
 			{
 				if ($arUserField["USER_TYPE"] && is_callable([$arUserField["USER_TYPE"]["CLASS_NAME"], "getfilterhtml"]))
 				{
-					if ($arUserField["LIST_FILTER_LABEL"])
-					{
-						$arFindFields[$FIELD_NAME] = htmlspecialcharsbx($arUserField["LIST_FILTER_LABEL"]);
-					}
-					else
-					{
-						$arFindFields[$FIELD_NAME] = $arUserField["FIELD_NAME"];
-					}
+					$arFindFields[$FIELD_NAME] = $arUserField["LIST_FILTER_LABEL"] ?: $arUserField["FIELD_NAME"];
 				}
 			}
 		}
@@ -1466,7 +1462,7 @@ class CUserTypeManager
 		$event->send();
 		foreach ($event->getResults() as $evenResult)
 		{
-			if ($evenResult->getType() == \Bitrix\Main\EventResult::SUCCESS)
+			if ($evenResult->getType() == EventResult::SUCCESS)
 			{
 				$html = $evenResult->getParameters();
 				break;
@@ -1550,7 +1546,7 @@ class CUserTypeManager
 		$event->send();
 		foreach ($event->getResults() as $evenResult)
 		{
-			if ($evenResult->getType() == \Bitrix\Main\EventResult::SUCCESS)
+			if ($evenResult->getType() == EventResult::SUCCESS)
 			{
 				$html = $evenResult->getParameters();
 				break;
@@ -1904,7 +1900,7 @@ class CUserTypeManager
 			}
 		}
 
-		//3 Return succsess/fail flag
+		//3 Return success/fail flag
 		if (!empty($aMsg))
 		{
 			$e = new CAdminException($aMsg);
@@ -2078,7 +2074,7 @@ class CUserTypeManager
 			}
 		}
 
-		//3 Return succsess/fail flag
+		//3 Return success/fail flag
 		if (!empty($aMsg))
 		{
 			$e = new CAdminException($aMsg);
@@ -2092,17 +2088,17 @@ class CUserTypeManager
 	protected function isValueEmpty(array $userField, $value): bool
 	{
 		$className = $userField['USER_TYPE']['CLASS_NAME'] ?? null;
-		if (!is_a($className, BaseType::class, true))
+		if (!is_a($className, Types\BaseType::class, true))
 		{
-			$className = BaseType::class;
+			$className = Types\BaseType::class;
 		}
 		if (!$className::isMandatorySupported())
 		{
 			return false;
 		}
 		$isNumberType = (
-			$userField['USER_TYPE_ID'] === \Bitrix\Main\UserField\Types\IntegerType::USER_TYPE_ID
-			|| $userField['USER_TYPE_ID'] === \Bitrix\Main\UserField\Types\DoubleType::USER_TYPE_ID
+			$userField['USER_TYPE_ID'] === Types\IntegerType::USER_TYPE_ID
+			|| $userField['USER_TYPE_ID'] === Types\DoubleType::USER_TYPE_ID
 		);
 		if (
 			$isNumberType
@@ -2207,11 +2203,11 @@ class CUserTypeManager
 
 					if ($arUserField['USER_TYPE_ID'] == 'datetime')
 					{
-						$serialized = \Bitrix\Main\UserFieldTable::serializeMultipleDatetime($arInsert[$arUserField["ID"]]);
+						$serialized = UserFieldTable::serializeMultipleDatetime($arInsert[$arUserField["ID"]]);
 					}
 					elseif ($arUserField['USER_TYPE_ID'] == 'date')
 					{
-						$serialized = \Bitrix\Main\UserFieldTable::serializeMultipleDate($arInsert[$arUserField["ID"]]);
+						$serialized = UserFieldTable::serializeMultipleDate($arInsert[$arUserField["ID"]]);
 					}
 					else
 					{
@@ -2282,7 +2278,7 @@ class CUserTypeManager
 			}
 			foreach ($arField as $value)
 			{
-				if ($value instanceof \Bitrix\Main\Type\Date)
+				if ($value instanceof Date)
 				{
 					// little hack to avoid timezone vs 00:00:00 ambiguity. for utm only
 					$value = new \Bitrix\Main\Type\DateTime($value->format('Y-m-d H:i:s'), 'Y-m-d H:i:s');
@@ -2297,7 +2293,7 @@ class CUserTypeManager
 						break;
 					case "datetime":
 						$userFieldName = $arInsertType[$FieldId]['FIELD_NAME'];
-						$value = DateTimeType::charToDate($arUserFields[$userFieldName], $value);
+						$value = Types\DateTimeType::charToDate($arUserFields[$userFieldName], $value);
 						break;
 					default:
 						$value = "'" . $helper->forSql($value) . "'";
@@ -2524,7 +2520,7 @@ class CUserTypeManager
 					;
 					break;
 				default:
-					throw new \Bitrix\Main\ArgumentException(sprintf(
+					throw new ArgumentException(sprintf(
 						'Unknown userfield base type `%s`', $arUserField["USER_TYPE"]['BASE_TYPE']
 					));
 			}
@@ -2532,7 +2528,7 @@ class CUserTypeManager
 
 		$ufHandlerClass = $arUserField['USER_TYPE']['CLASS_NAME'];
 
-		if (is_subclass_of($ufHandlerClass, BaseType::class))
+		if (is_subclass_of($ufHandlerClass, Types\BaseType::class))
 		{
 			$defaultValue = $ufHandlerClass::getDefaultValue($arUserField);
 			$field->configureDefaultValue($defaultValue);
@@ -2569,7 +2565,7 @@ class CUserTypeManager
 		$event->send();
 		foreach ($event->getResults() as $eventResult)
 		{
-			if ($eventResult->getType() === \Bitrix\Main\EventResult::SUCCESS)
+			if ($eventResult->getType() === EventResult::SUCCESS)
 			{
 				$parameters = $eventResult->getParameters();
 				if (isset($parameters['values']) && is_array($parameters['values']))
@@ -2601,11 +2597,11 @@ class CUserTypeManager
 		$event->send();
 		foreach ($event->getResults() as $eventResult)
 		{
-			if ($eventResult->getType() === \Bitrix\Main\EventResult::SUCCESS)
+			if ($eventResult->getType() === EventResult::SUCCESS)
 			{
 				$result = true;
 			}
-			elseif ($eventResult->getType() === \Bitrix\Main\EventResult::ERROR)
+			elseif ($eventResult->getType() === EventResult::ERROR)
 			{
 				$result = false;
 			}
@@ -2622,11 +2618,11 @@ class CUserTypeManager
 		$event->send();
 		foreach ($event->getResults() as $eventResult)
 		{
-			if ($eventResult->getType() === \Bitrix\Main\EventResult::SUCCESS)
+			if ($eventResult->getType() === EventResult::SUCCESS)
 			{
 				$result = true;
 			}
-			elseif ($eventResult->getType() === \Bitrix\Main\EventResult::ERROR)
+			elseif ($eventResult->getType() === EventResult::ERROR)
 			{
 				$result = false;
 			}

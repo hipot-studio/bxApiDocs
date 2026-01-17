@@ -1,18 +1,12 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage tasks
- * @copyright 2001-2016 Bitrix
- *
- * @access private
- */
 
 namespace Bitrix\Tasks\Util\UserField\Task;
 
-class Template extends \Bitrix\Tasks\Util\UserField\Task
+use Bitrix\Tasks\Util\UserField\Task;
+
+class Template extends Task
 {
-	public static function getEntityCode()
+	public static function getEntityCode(): string
 	{
 		return 'TASKS_TASK_TEMPLATE';
 	}

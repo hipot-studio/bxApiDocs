@@ -14,7 +14,7 @@ class AdjustDeadline
 		$result = [];
 		$registry = TaskRegistry::getInstance();
 		$registry->load($taskIds, true);
-		$control = new Task($userId);
+		$control = (new Task($userId))->useConsistency();
 
 		$termAdjust = $adjust['num'].' '.$adjust['type'];
 

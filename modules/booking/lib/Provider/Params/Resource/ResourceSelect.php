@@ -51,6 +51,16 @@ class ResourceSelect implements SelectInterface
 			$fields[] = 'ENTITIES';
 		}
 
+		if (in_array('SKUS', $this->select, true))
+		{
+			$fields[] = 'SKUS';
+		}
+
+		if (in_array('SKUS_YANDEX', $this->select, true))
+		{
+			$fields[] = 'SKUS_YANDEX';
+		}
+
 		return $fields;
 	}
 
@@ -64,6 +74,7 @@ class ResourceSelect implements SelectInterface
 			'SETTINGS',
 			'NOTIFICATION_SETTINGS',
 			'ENTITIES',
+			'SKUS',
 		];
 	}
 }

@@ -3,14 +3,20 @@
 namespace Bitrix\Call\Integration\AI\Task;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\Json;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Call\Model\EO_CallAITask;
 use Bitrix\Call\Model\CallAITaskTable;
 use Bitrix\Call\Integration\AI\Outcome;
 use Bitrix\Call\Integration\AI\SenseType;
-use Bitrix\Main\Web\Json;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Entity;
 
 /**
  * @see EO_CallAITask
@@ -39,8 +45,8 @@ use Bitrix\Main\Web\Json;
  * @method \Bitrix\Im\Model\EO_Call fillCall()
  * @method \Bitrix\Call\Track fillTrack()
  * @method \Bitrix\Call\Integration\AI\Outcome fillOutcome()
- * @method \Bitrix\Main\DB\Result save()
- * @method \Bitrix\Main\DB\Result delete()
+ * @method \Bitrix\Main\ORM\Data\Result save()
+ * @method \Bitrix\Main\ORM\Data\Result delete()
  */
 abstract class AITask
 {
@@ -111,9 +117,49 @@ abstract class AITask
 			}
 			public function allowNotifyTaskFailed(): bool
 			{
-				return false;
+				return true;
+			}
+			public function getVersion(): int
+			{
+				return 1;
 			}
 		};
+	}
+
+	public static function getTasksForCall(int $callId): array
+	{
+		// Create subquery to get MAX(ID) per TYPE for this CALL_ID
+		$subQuery = CallAITaskTable::query()
+			->addSelect('TYPE')
+			->addSelect(new ExpressionField('MAX_ID', 'MAX(ID)'))
+			->addFilter('=CALL_ID', $callId)
+			->setGroup(['TYPE']);
+
+		// Main query - get full task objects by joining with subquery
+		$query = CallAITaskTable::query()
+			->addSelect('*')
+			->registerRuntimeField(new Reference('SUB',
+				Entity::getInstanceByQuery($subQuery),
+				[
+					'=this.ID' => 'ref.MAX_ID',
+				],
+				['join_type' => 'INNER']
+			)
+		);
+
+		$taskObjects = $query->exec()->fetchCollection();
+		if ($taskObjects->isEmpty())
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($taskObjects as $taskObj)
+		{
+			$result[$taskObj->getType()] = self::buildBySource($taskObj);
+		}
+
+		return $result;
 	}
 
 	public static function getTaskForCall(int $callId, SenseType $senseType): ?self
@@ -198,7 +244,10 @@ abstract class AITask
 			'taskId' => $this->task->getId(),
 		]);
 
-		//$context->setLanguage($this->task->getLanguageId() ?? '');
+		if ($this->task->getLanguageId())
+		{
+			$context->setLanguage($this->task->getLanguageId());
+		}
 
 		return $context;
 	}
@@ -208,7 +257,13 @@ abstract class AITask
 	abstract public function getAISenseType(): string;
 
 	/**
-	 * Allows to output thw chat error message then task failed.
+	 * Outcome version for compatibility with previous variant.
+	 * @return int
+	 */
+	abstract public function getVersion(): int;
+
+	/**
+	 * Allows outputting the chat error message then a task failed.
 	 * @return bool
 	 */
 	abstract public function allowNotifyTaskFailed(): bool;
@@ -241,11 +296,6 @@ abstract class AITask
 		return 1;
 	}
 
-	public static function getAIPromptFields(): array
-	{
-		return [];
-	}
-
 	public function filterResult(array $jsonData): array
 	{
 		return $jsonData;
@@ -261,14 +311,11 @@ abstract class AITask
 		$outcome
 			->setType($this->getAISenseType())
 			->setCallId($this->getCallId())
+			->setProperty('version', $this->getVersion())
 		;
 		if ($this->getTrackId())
 		{
 			$outcome->setTrackId($this->getTrackId());
-		}
-		if ($this->getLanguageId())
-		{
-			$outcome->setLanguageId($this->getLanguageId());
 		}
 
 		$jsonData = $this->extractJsonData($aiResult);
@@ -280,6 +327,11 @@ abstract class AITask
 		else
 		{
 			$outcome->setContent($aiResult->getPrettifiedData());
+		}
+
+		if ($this->getLanguageId())
+		{
+			$outcome->setLanguageId($this->getLanguageId());
 		}
 
 		return $outcome;
@@ -319,7 +371,8 @@ abstract class AITask
 	{
 		return preg_replace_callback(
 			'/\\\\u([0-9a-fA-F]{4})/',
-			function ($match) {
+			function ($match)
+			{
 				return mb_convert_encoding(pack('H*', $match[1]), 'UTF-8', 'UCS-2BE');
 			},
 			$str
@@ -332,5 +385,79 @@ abstract class AITask
 		unset($this->task);
 
 		return $result;
+	}
+
+	/**
+	 * @param int $callId
+	 * @return \stdClass|null
+	 */
+	protected function getMeetingEvent(int $callId): ?\stdClass
+	{
+		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);
+
+		static $meetings = [];
+		if (
+			!isset($meetings[$callId])
+			&& ($chatId = $call?->getChatId())
+			&& ($chat = Chat::getInstance($chatId))
+			&& $chat->getEntityType() == Chat\ExtendedType::Calendar->value
+			&& Loader::includeModule('calendar')
+			&& ($entryId = $chat->getEntityId())
+		)
+		{
+			/**
+			 * @var \Bitrix\Calendar\Core\Mappers\Factory $calendarFactory
+			 * @var \Bitrix\Calendar\Core\Event\Event $event
+			 */
+			$calendarFactory = ServiceLocator::getInstance()->get('calendar.service.mappers.factory');
+			$event = $calendarFactory->getEvent()->getById($entryId);
+			if ($event)
+			{
+				$meeting = new \stdClass();
+				$meeting->title = $event->getName() ?? '';
+				$meeting->description = $event->getDescription() ?? '';
+
+				$eventStart = clone $event->getStart();
+				if ($event->getStartTimeZone())
+				{
+					$eventStart->setTimezone(clone $event->getStartTimeZone()->getTimeZone());
+				}
+				$meeting->eventStart = $eventStart->getTimestamp();
+
+				$eventEnd = clone $event->getEnd();
+				if ($event->getEndTimeZone())
+				{
+					$eventEnd->setTimezone(clone $event->getEndTimeZone()->getTimeZone());
+				}
+				$meeting->eventEnd = $eventEnd->getTimestamp();
+
+				$meeting->duration = $meeting->eventEnd - $meeting->eventStart;
+				$meeting->overhead = false;
+
+				if ($meeting->duration > 0 && $meeting->duration <= 86400)
+				{
+					$meeting->callStart = $call->getStartDate()->getTimestamp();
+					$meeting->callEnd = $call->getEndDate()?->getTimestamp() ?? (new DateTime())->getTimestamp();
+					$meeting->callDuration = $meeting->callEnd - $meeting->callStart;
+					if ($meeting->callDuration > 0 && $meeting->callDuration <= 86400)
+					{
+						$meeting->overhead = $meeting->callDuration > $meeting->duration + 120; // 2 minutes lag
+					}
+				}
+
+				$meetings[$callId] = $meeting;
+			}
+		}
+
+		return $meetings[$callId] ?? null;
+	}
+
+	/**
+	 * Detects user language.
+	 * @return string|null
+	 */
+	protected function getDefaultLanguageId(): string
+	{
+		return Loader::includeModule('ai') ? \Bitrix\AI\Facade\User::getUserLanguage() : '';
 	}
 }

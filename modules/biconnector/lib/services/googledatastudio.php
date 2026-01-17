@@ -5,6 +5,7 @@ use Bitrix\BIConnector\LimitManager;
 use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Service;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
 
@@ -113,10 +114,13 @@ class GoogleDataStudio extends Service
 
 		$connector->sendAnalytic();
 
+		$licenseLimit = $limitManager->getLimit();
+		$isOverLimit = false;
+		$count = 0;
+
 		$queryResult = $connector->query($parameters, $limit, static::$dateFormats);
 		if ($connector->isFulfilledOutput())
 		{
-			$count = null;
 			foreach ($queryResult as $item)
 			{
 				echo $item;
@@ -125,7 +129,6 @@ class GoogleDataStudio extends Service
 		}
 		else
 		{
-			$count = 0;
 			foreach ($queryResult as $row)
 			{
 				if (!$firstLinePrinted)
@@ -134,6 +137,12 @@ class GoogleDataStudio extends Service
 					echo $output;
 					$size += strlen($output);
 					$firstLinePrinted = true;
+				}
+				elseif ($licenseLimit > 0 && $licenseLimit <= $count)
+				{
+					$count++;
+
+					continue;
 				}
 
 				if (is_array($row))
@@ -172,15 +181,48 @@ class GoogleDataStudio extends Service
 				$size += strlen($output);
 			}
 
-			$output = ']' . ($data['filtersApplied'] ? ',"filtersApplied":true' : '') . '}';
+			$output = ']' . ($data['filtersApplied'] ? ',"filtersApplied":true' : '');
 			echo $output;
 			$size += strlen($output);
 		}
 
-		$manager->endQuery($logId, $count, $size, $limitManager->fixLimit((int)$count));
+		if ($licenseLimit > 0 && $licenseLimit < $count)
+		{
+			$error = $this->getLimitExceededError($count, $licenseLimit);
+
+			$output = ",\n" . '"error":' . Json::encode($error['error']);
+			$output .= ",\n" . '"error_message":' . Json::encode($error['errorMessage']) . "\n";
+
+			echo $output;
+
+			$isOverLimit = true;
+		}
+
+		$out = '}';
+		echo $out;
+		$size += strlen($out);
+
+		$limitManager->fixLimit($count);
+		$manager->endQuery($logId, $count, $size, $isOverLimit);
 
 		$databaseConnection->unlock('biconnector_data');
 
 		return $result;
+	}
+
+	private function getLimitExceededError(int $count, int $limit): array
+	{
+		return [
+			'error' => 'OVER_LIMIT',
+			'errorMessage' => Loc::getMessagePlural(
+				'BICONNECTOR_TABLE_OVER_LIMIT_ERROR_MSGVER_1',
+				$count - $limit,
+				[
+					'#LIMIT#' => $this->formatLimitValue($count - $limit),
+					'#OVERLIMIT_COUNT#' => $this->formatLimitValue($limit),
+				],
+				$this->getLanguage(),
+			),
+		];
 	}
 }

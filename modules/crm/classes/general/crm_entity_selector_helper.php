@@ -237,6 +237,12 @@ class CCrmEntitySelectorHelper
 					? $arRes['POST']
 					: (isset($arRes['COMPANY_TITLE']) ? $arRes['COMPANY_TITLE'] : '');
 
+				if ($bEntityEditorFormat)
+				{
+					$result['companyTitle'] = $arRes['COMPANY_TITLE'];
+					$result['post'] = $arRes['POST'];
+				}
+
 				$result[$imageKey] = isset($arImages[$photoID]['src']) ? $arImages[$photoID]['src'] : '';
 				$result[$largeImageKey] = isset($arLargeImages[$photoID]['src']) ? $arLargeImages[$photoID]['src'] : '';
 

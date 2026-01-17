@@ -30,10 +30,7 @@ class SetAuditorsCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$memberService = Container::getInstance()->getMemberService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new SetAuditorsHandler($memberService, $consistencyResolver);
+		$handler = Container::getInstance()->get(SetAuditorsHandler::class);
 
 		try
 		{

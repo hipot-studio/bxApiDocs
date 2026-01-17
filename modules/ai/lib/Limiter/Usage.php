@@ -4,6 +4,9 @@ namespace Bitrix\AI\Limiter;
 
 use Bitrix\AI\Config;
 use Bitrix\AI\Context;
+use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Limiter\Period\Daily;
+use Bitrix\AI\Limiter\Period\Monthly;
 use Bitrix\AI\Model\UsageTable;
 use Bitrix\Main\Type\DateTime;
 
@@ -14,6 +17,10 @@ class Usage
 	private const PERIODS = [
 		Period\Daily::class,
 		Period\Monthly::class,
+	];
+
+	private const PERIODS_FOR_MARKET = [
+		Period\Daily::class,
 	];
 
 	public function __construct(
@@ -124,6 +131,11 @@ class Usage
 	 */
 	private function getAvailablePeriods(): array
 	{
+		if (Bitrix24::isMarketAvailable())
+		{
+			return self::PERIODS_FOR_MARKET;
+		}
+
 		return self::PERIODS;
 	}
 

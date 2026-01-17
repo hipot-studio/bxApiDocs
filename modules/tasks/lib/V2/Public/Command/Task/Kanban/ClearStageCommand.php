@@ -21,12 +21,12 @@ class ClearStageCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$taskStageRepository = Container::getInstance()->getTaskStageRepository();
+		$result = new Result();
 
-		$handler = new ClearStageHandler($taskStageRepository);
+		$handler = Container::getInstance()->get(ClearStageHandler::class);
 
 		$handler($this);
 
-		return new Result();
+		return $result;
 	}
 }

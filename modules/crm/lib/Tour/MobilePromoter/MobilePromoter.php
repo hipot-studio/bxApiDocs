@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Tour\MobilePromoter;
 
-use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tour\Base;
 use Bitrix\Main\Data\Cache;
 use CUserOptions;
@@ -68,53 +67,36 @@ abstract class MobilePromoter extends Base
 		return '';
 	}
 
-	protected function isEntityTypeUsed(int $entityTypeId): bool
+	protected function hasItemsByAssigned(int $entityTypeId): bool
 	{
+		$userId = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId();
+
 		$cache = Cache::createInstance();
 		if ($cache->initCache(
 			self::CACHE_TTL,
-			'crm.tour.mobile-promoter.isEntityTypeUsed.' . $entityTypeId,
-			self::CACHE_DIR
+			'crm.tour.mobile-promoter.hasItemsByAssigned.' . $entityTypeId . '.' . $userId,
+			self::CACHE_DIR,
 		))
 		{
-			$items = $cache->getVars();
+			$hasItemsByAssigned = (bool)$cache->getVars();
 		}
 		else
 		{
-			$factory = Container::getInstance()->getFactory($entityTypeId);
-			$itemsCollection = $factory->getItems([
-				'select' => ['ID', 'CREATED_TIME', 'UPDATED_TIME'],
-				'limit' => 2,
-			]);
-
-			$items = [];
-			foreach ($itemsCollection as $item)
-			{
-				$items[] = [
-					'ID' => $item->getId(),
-					'CREATED_TIME' => $item->getCreatedTime(),
-					'UPDATED_TIME' => $item->getUpdatedTime(),
-				];
-			}
+			$hasItemsByAssigned = \Bitrix\Crm\Service\Container::getInstance()
+				->getFactory($entityTypeId)
+				?->checkIfTotalItemsCountExceeded(
+					limit: 1,
+					filter: [
+						\Bitrix\Crm\Item::FIELD_NAME_ASSIGNED => $userId,
+					],
+				) ?? false
+			;
 
 			$cache->startDataCache();
-			$cache->endDataCache($items);
+			$cache->endDataCache($hasItemsByAssigned);
 		}
 
-		if (count($items) > 1)
-		{
-			return true;
-		}
-		if (count($items) === 1)
-		{
-			$item = $items[0];
-			if ($item['UPDATED_TIME'] !== $item['CREATED_TIME'])
-			{
-				return true;
-			}
-		}
-
-		return false;
+		return $hasItemsByAssigned;
 	}
 
 	protected function getAnalytics(): array

@@ -30,15 +30,15 @@ class BookingCommon
 				continue;
 			}
 
-			$ownerId = $client->id;
-			if (!$ownerId)
+			$ownerId = (int)$client->id;
+			if ($ownerId <= 0)
 			{
 				continue;
 			}
 
 			$bindings[] = [
 				'OWNER_TYPE_ID' => (int)$ownerTypeId,
-				'OWNER_ID' => (int)$ownerId,
+				'OWNER_ID' => $ownerId,
 			];
 		}
 
@@ -46,7 +46,7 @@ class BookingCommon
 		{
 			$isCrm = $externalData->moduleId === 'crm';
 			$ownerTypeId = \CCrmOwnerType::ResolveID($externalData->entityTypeId);
-			$ownerId = $externalData->value;
+			$ownerId = (int)$externalData->value;
 
 			if (
 				$isCrm
@@ -54,12 +54,12 @@ class BookingCommon
 					$ownerTypeId === \CCrmOwnerType::Deal
 					|| \CCrmOwnerType::isPossibleDynamicTypeId($ownerTypeId)
 				)
-				&& $ownerId
+				&& $ownerId >= 0
 			)
 			{
 				$bindings[] = [
 					'OWNER_TYPE_ID' => (int)$ownerTypeId,
-					'OWNER_ID' => (int)$ownerId,
+					'OWNER_ID' => $ownerId,
 				];
 			}
 		}

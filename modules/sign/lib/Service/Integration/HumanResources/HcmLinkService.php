@@ -2,6 +2,10 @@
 
 namespace Bitrix\Sign\Service\Integration\HumanResources;
 
+use Bitrix\HumanResources\Item\Collection\HcmLink\EmployeeCollection;
+use Bitrix\HumanResources\Item\HcmLink\Employee;
+use Bitrix\HumanResources\Item\HcmLink\Company;
+use Bitrix\HumanResources\Item\HcmLink\Person;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\HcmLink\JobStatus;
 use Bitrix\Main\Error;
@@ -118,5 +122,65 @@ class HcmLinkService
 	public function isCompanyExistWithId(int $companyId): bool
 	{
 		return Container::getHcmLinkCompanyRepository()->getById($companyId) !== null;
+	}
+
+	public function getCompanyByUniqueId(string $companyUuid): ?Company
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		return Container::getHcmLinkCompanyRepository()->getByUnique($companyUuid);
+	}
+
+	public function getCompanyById(int $id): ?Company
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		return Container::getHcmLinkCompanyRepository()->getById($id);
+	}
+
+	public function getCompanyByMyCompanyId(int $myCompanyId): ?Company
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		return Container::getHcmLinkCompanyRepository()->getByCompanyId($myCompanyId)->getFirst();
+	}
+
+	public function getEmployeesByIds(array $ids): EmployeeCollection
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return new EmployeeCollection();
+		}
+
+		return Container::getHcmLinkEmployeeRepository()->getByIds($ids);
+	}
+
+	public function getEmployeesByUnique(int $companyId, string $code): ?Employee
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		return Container::getHcmLinkEmployeeRepository()->getByUnique($companyId, $code);
+	}
+
+	public function getPersonById(int $personId): ?Person
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		return Container::getHcmLinkPersonRepository()->getById($personId);
 	}
 }

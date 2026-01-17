@@ -5,6 +5,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
@@ -337,6 +339,7 @@ class CCrmLeadDetailsComponent
 				//'PRODUCT' =>  null,
 				'PRODUCT_DATA_FIELD_NAME' => $this->arResult['PRODUCT_DATA_FIELD_NAME'],
 				'BUILDER_CONTEXT' => Crm\Product\Url\ProductBuilder::TYPE_ID,
+				'IS_COPY_MODE' => $this->isCopyMode,
 			],
 			false,
 			[
@@ -606,25 +609,6 @@ class CCrmLeadDetailsComponent
 		if($this->entityID > 0 && \Bitrix\Crm\Settings\HistorySettings::getCurrent()->isViewEventEnabled())
 		{
 			CCrmEvent::RegisterViewEvent(CCrmOwnerType::Lead, $this->entityID, $this->userID);
-		}
-		//endregion
-
-		//region SCORING
-		$stageSemanticId = \CCrmLead::GetSemanticID($this->entityData['STATUS_ID']);
-		$this->arResult['IS_STAGE_FINAL'] = Crm\PhaseSemantics::isFinal($stageSemanticId);
-
-		if($this->entityID > 0)
-		{
-			if(!$this->arResult['IS_STAGE_FINAL'])
-			{
-				Crm\Ml\ViewHelper::subscribePredictionUpdate(CCrmOwnerType::Lead, $this->entityID);
-			}
-			$this->arResult['SCORING'] = Crm\Ml\ViewHelper::prepareData(CCrmOwnerType::Lead, $this->entityID);
-		}
-
-		if(!Crm\Ml\Scoring::isEnabled())
-		{
-			CBitrix24::initLicenseInfoPopupJS();
 		}
 		//endregion
 
@@ -1453,7 +1437,9 @@ class CCrmLeadDetailsComponent
 				'FIELD' => $fieldName,
 				'MULTIPLE' => $userField['MULTIPLE'],
 				'MANDATORY' => $userField['MANDATORY'],
-				'SETTINGS' => isset($userField['SETTINGS']) ? $userField['SETTINGS'] : null
+				'ADDITIONAL' => $userField['ADDITIONAL'] ?? [],
+				'HELP_MESSAGE' => $userField['HELP_MESSAGE'] ?? '',
+				'SETTINGS' => $userField['SETTINGS'] ?? null,
 				//'CONTEXT' => $this->guid
 			);
 
@@ -1463,14 +1449,12 @@ class CCrmLeadDetailsComponent
 			}
 			elseif($userField['USER_TYPE_ID'] === 'file')
 			{
-				$fieldInfo['ADDITIONAL'] = array(
-					'URL_TEMPLATE' => \CComponentEngine::MakePathFromTemplate(
-						$this->getFileUrlTemplate(),
-						array(
-							'owner_id' => $this->entityID,
-							'field_name' => $fieldName
-						)
-					)
+				$fieldInfo['ADDITIONAL']['URL_TEMPLATE'] = CComponentEngine::MakePathFromTemplate(
+					$this->getFileUrlTemplate(),
+					[
+						'owner_id' => $this->entityID,
+						'field_name' => $fieldName
+					],
 				);
 			}
 
@@ -2119,6 +2103,20 @@ class CCrmLeadDetailsComponent
 		//region Product row
 
 		$this->entityData['PRODUCT_ROW_SUMMARY'] = $this->getProductRowSummaryData();
+		if (
+			$this->isCopyMode
+			&& $this->entityData['IS_MANUAL_OPPORTUNITY'] !== 'Y'
+			&& $this->isCatalogModuleIncluded
+			&& !AccessController::getCurrent()->checkByValue(
+				ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+				\CCrmOwnerType::Lead,
+			)
+		)
+		{
+			$this->entityData['OPPORTUNITY'] =
+				$this->entityData['PRODUCT_ROW_SUMMARY']['totalRaw']['amount']
+			;
+		}
 
 		//endregion
 

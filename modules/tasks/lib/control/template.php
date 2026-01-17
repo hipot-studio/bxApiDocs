@@ -5,8 +5,10 @@ namespace Bitrix\Tasks\Control;
 use Bitrix\Main\Application;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Control\Exception\TemplateAddException;
+use Bitrix\Tasks\Control\Exception\TemplateNotFoundException;
 use Bitrix\Tasks\Control\Exception\TemplateUpdateException;
 use Bitrix\Tasks\Control\Exception\UserFieldTemplateAddException;
+use Bitrix\Tasks\Control\Exception\WrongTemplateIdException;
 use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
 use Bitrix\Tasks\Control\Handler\TemplateFieldHandler;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
@@ -25,6 +27,12 @@ use Bitrix\Tasks\Item\SystemLog;
 use Bitrix\Tasks\Member\Service\TemplateMemberService;
 use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
 use Bitrix\Tasks\Replication\Template\Option\Options;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\Config\DeleteConfig;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Config\UpdateConfig;
+use Exception;
 
 class Template
 {
@@ -40,7 +48,6 @@ class Template
 	private $templateId;
 	private $template;
 
-	private $checkFileRights = false;
 	private $deleteSubTemplates = false;
 	private $unsafeDelete = false;
 	private $skipAgent = false;
@@ -50,15 +57,6 @@ class Template
 	{
 		$this->userId = $userId;
 		$this->init();
-	}
-
-	/**
-	 * @return $this
-	 */
-	public function withCheckFileRights(): self
-	{
-		$this->checkFileRights = true;
-		return $this;
 	}
 
 	/**
@@ -99,6 +97,24 @@ class Template
 	{
 		$this->reset();
 
+		if (FormV2Feature::isOn('template', (int)($fields['GROUP_ID'] ?? null)))
+		{
+			$config = new AddConfig(userId: $this->userId);
+
+			$mapper = Container::getInstance()->getOrmTemplateMapper();
+			$service = Container::getInstance()->getAddTemplateService();
+
+			$entity = $mapper->mapToEntity($fields);
+
+			$entity = $service->add(
+				template: $entity,
+				config: $config,
+				useConsistency: false
+			);
+
+			return $mapper->mapToObject($entity);
+		}
+
 		try
 		{
 			$fields = $this->prepareFields($fields);
@@ -130,7 +146,7 @@ class Template
 			$template = $this->insert($fields);
 			$this->templateId = $template->getId();
 		}
-		catch (\Exception $e)
+		catch (Exception $e)
 		{
 			throw new TemplateAddException();
 		}
@@ -158,12 +174,38 @@ class Template
 	 */
 	public function delete(int $id): bool
 	{
+		$this->reset();
+
+		if (FormV2Feature::isOn('template'))
+		{
+			$config = new DeleteConfig(
+				userId: $this->userId,
+				unsafeDelete: $this->unsafeDelete,
+				deleteSubTemplates: $this->deleteSubTemplates,
+			);
+
+			$service = Container::getInstance()->getDeleteTemplateService();
+
+			try
+			{
+				$service->delete(
+					templateId: $id,
+					config: $config,
+					useConsistency: false
+				);
+			}
+			catch (Exception $e)
+			{
+				Container::getInstance()->getLogger()->logError($e);
+
+				return false;
+			}
+		}
+
 		if ($id < 1)
 		{
 			return false;
 		}
-
-		$this->reset();
 
 		$this->templateId = $id;
 
@@ -206,7 +248,7 @@ class Template
 
 			$this->onDelete($template);
 		}
-		catch (\Exception $e)
+		catch (Exception $e)
 		{
 			return false;
 		}
@@ -227,12 +269,34 @@ class Template
 	 */
 	public function update(int $id, array $fields): TemplateObject
 	{
+		$this->reset();
+
+		if (FormV2Feature::isOn('template', (int)($fields['GROUP_ID'] ?? null)))
+		{
+			$config = new UpdateConfig(
+				userId: $this->userId,
+				skipAgent: $this->skipAgent
+			);
+
+			$mapper = Container::getInstance()->getOrmTemplateMapper();
+			$service = Container::getInstance()->getUpdateTemplateService();
+
+			$fields['ID'] = $id;
+			$entity = $mapper->mapToEntity($fields);
+
+			$entity = $service->update(
+				template: $entity,
+				config: $config,
+				useConsistency: false
+			);
+
+			return $mapper->mapToObject($entity);
+		}
+
 		if ($id < 1)
 		{
 			throw new TemplateUpdateException();
 		}
-
-		$this->reset();
 
 		$this->templateId = $id;
 		$template = $this->getTemplateData();
@@ -301,7 +365,7 @@ class Template
 	 */
 	private function setMembers(array $fields)
 	{
-		$handler = new TemplateMember($this->userId, $this->templateId);
+		$handler = new TemplateMember($this->templateId);
 		$handler->set($fields);
 	}
 
@@ -334,7 +398,7 @@ class Template
 	 */
 	private function setTags(array $fields)
 	{
-		$handler = new TemplateTag($this->userId, $this->templateId);
+		$handler = new TemplateTag($this->templateId, $this->userId);
 		$handler->set($fields);
 	}
 
@@ -349,7 +413,7 @@ class Template
 	 */
 	private function setDependTasks(array $fields)
 	{
-		$handler = new TemplateDependence($this->userId, $this->templateId);
+		$handler = new TemplateDependence($this->templateId);
 		$handler->set($fields);
 	}
 
@@ -812,7 +876,7 @@ class Template
 				'params' => $params,
 			]);
 		}
-		catch (\Exception $exception)
+		catch (Exception $exception)
 		{
 			LogFacade::logThrowable($exception);
 

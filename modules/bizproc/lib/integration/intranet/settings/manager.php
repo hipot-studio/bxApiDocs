@@ -32,7 +32,7 @@ class Manager
 			'settings-automation-field-' . self::WAIT_FOR_CLOSURE_TASK_OPTION,
 			self::WAIT_FOR_CLOSURE_TASK_OPTION,
 			Loc::getMessage('BIZPROC_AUTOMATION_SETTINGS_WAIT_FOR_CLOSURE_TASK_1') ?? '',
-			Option::get('bizproc', self::WAIT_FOR_CLOSURE_TASK_OPTION),
+			Option::get('bizproc', self::WAIT_FOR_CLOSURE_TASK_OPTION, 'Y'),
 			[
 				'on' => Loc::getMessage('BIZPROC_AUTOMATION_SETTINGS_WAIT_FOR_CLOSURE_TASK_DESCR') ?? '',
 			]
@@ -42,7 +42,7 @@ class Manager
 			'settings-automation-field-' . self::WAIT_FOR_CLOSURE_COMMENTS_OPTION,
 			self::WAIT_FOR_CLOSURE_COMMENTS_OPTION,
 			Loc::getMessage('BIZPROC_AUTOMATION_SETTINGS_WAIT_FOR_CLOSURE_COMMENTS_1') ?? '',
-			Option::get('bizproc', self::WAIT_FOR_CLOSURE_COMMENTS_OPTION),
+			Option::get('bizproc', self::WAIT_FOR_CLOSURE_COMMENTS_OPTION, 'Y'),
 			[
 				'on' => Loc::getMessage('BIZPROC_AUTOMATION_SETTINGS_WAIT_FOR_CLOSURE_COMMENTS_DESCR') ?? '',
 			]

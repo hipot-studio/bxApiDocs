@@ -1,9 +1,9 @@
-<?
+<?php
+
 /**
  * @deprecated Use \Bitrix\Main\IO
  */
-abstract class CBXVirtualFileBase
-	implements IBXGetErrors
+abstract class CBXVirtualFileBase implements IBXGetErrors
 {
 	protected $path = null;
 
@@ -41,8 +41,7 @@ abstract class CBXVirtualFileBase
 /**
  * @deprecated Use \Bitrix\Main\IO
  */
-abstract class CBXVirtualFile
-	extends CBXVirtualFileBase
+abstract class CBXVirtualFile extends CBXVirtualFileBase
 {
 	public function IsDirectory()
 	{
@@ -71,8 +70,7 @@ abstract class CBXVirtualFile
 /**
  * @deprecated Use \Bitrix\Main\IO
  */
-abstract class CBXVirtualDirectory
-	extends CBXVirtualFileBase
+abstract class CBXVirtualDirectory extends CBXVirtualFileBase
 {
 	public function IsDirectory()
 	{

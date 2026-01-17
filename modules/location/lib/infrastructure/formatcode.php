@@ -58,6 +58,7 @@ class FormatCode
 			'it' => 'EU',
 			'pl' => 'EU',
 			'uk' => 'UK',
+			'uz' => 'UZ',
 		];
 
 		return $map[$regionId] ?? 'RU';

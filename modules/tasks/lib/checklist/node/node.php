@@ -40,6 +40,7 @@ class Node extends AbstractBaseDto
 	public int $parentId = 0;
 	public string $parentNodeId = '0';
 	public int $sortIndex = 0;
+	public ?int $copiedId = null;
 
 	protected static function modifyKeyFromArray(string $key): string
 	{
@@ -69,6 +70,10 @@ class Node extends AbstractBaseDto
 			static fn (array $member): bool => $member['TYPE'] === $role
 		);
 
-		return array_unique(array_keys($members));
+		$ids = array_column($members, 'ID');
+
+		$filteredIds = array_filter($ids, static fn ($id): bool => !empty($id) && $id !== 0);
+
+		return array_unique($filteredIds);
 	}
 }

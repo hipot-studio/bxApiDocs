@@ -25,11 +25,11 @@ Main\Loader::includeModule('catalog');
 class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 {
 	public const PATH_TO = [
-		'LIST' => '/shop/documents/#DOCUMENT_TYPE#/',
-		'STORES' => '/shop/documents-stores/',
-		'CATALOG' => '/shop/documents-catalog/',
-		'CONTRACTORS' => '/shop/documents/contractors/',
-		'CONTRACTORS_CONTACTS' => '/shop/documents/contractors_contacts/',
+		'LIST' => SITE_DIR . 'shop/documents/#DOCUMENT_TYPE#/',
+		'STORES' => SITE_DIR . 'shop/documents-stores/',
+		'CATALOG' => SITE_DIR . 'shop/documents-catalog/',
+		'CONTRACTORS' => SITE_DIR . 'shop/documents/contractors/',
+		'CONTRACTORS_CONTACTS' => SITE_DIR . 'shop/documents/contractors_contacts/',
 	];
 
 	private $isIframe = false;

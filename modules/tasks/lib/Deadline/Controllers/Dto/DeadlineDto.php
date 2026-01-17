@@ -24,7 +24,7 @@ class DeadlineDto extends AbstractBaseDto
 	public int $default;
 
 	public bool $isExactTime = false;
-	public bool $canChangeDeadline = false;
+	public bool $canChangeDeadline = true;
 	public ?DateTime $maxDeadlineChangeDate = null;
 	public ?int $maxDeadlineChanges = null;
 	public bool $requireDeadlineChangeReason = false;

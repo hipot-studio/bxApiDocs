@@ -105,6 +105,7 @@ namespace PHPSTORM_META
 		'photogallery',
 		'propertiesservice',
 		'pull',
+		'rag',
 		'recyclebin',
 		'report',
 		'rest',

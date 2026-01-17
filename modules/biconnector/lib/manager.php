@@ -627,4 +627,29 @@ class Manager
 
 		return (int)$user->fetchObject()?->getId();
 	}
+
+	public function isExistBiConnection(): bool
+	{
+		$pool = \Bitrix\Main\Application::getInstance()->getConnectionPool();
+		$connections = $this->getConnections();
+
+		return empty($connections[$pool::DEFAULT_CONNECTION_NAME]);
+	}
+
+	public function isSupersetKeyUseBiConnection(): bool
+	{
+		$pool = \Bitrix\Main\Application::getInstance()->getConnectionPool();
+
+		$key = \Bitrix\BIConnector\KeyTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=ACTIVE' => 'Y',
+				'=SERVICE_ID' => 'superset',
+				'!=CONNECTION' => $pool::DEFAULT_CONNECTION_NAME,
+			],
+			'limit' => 1,
+		]);
+
+		return (bool)$key->fetch();
+	}
 }

@@ -722,7 +722,6 @@ class Item extends Base
 			'categoryId' => $categoryId,
 			'skipFields' => [
 				$factory->getEntityFieldNameByMap(\Bitrix\Crm\Item::FIELD_NAME_STAGE_ID),
-				$factory->getEntityFieldNameByMap(\Bitrix\Crm\Item::FIELD_NAME_RECURRING),
 			],
 		];
 		//@codingStandardsIgnoreEnd
@@ -817,6 +816,7 @@ class Item extends Base
 		$editorConfig['READ_ONLY'] = ($params['READ_ONLY'] ?? 'N') === 'Y';
 		$editorConfig['ENABLE_CONFIGURATION_UPDATE'] = ($params['ENABLE_CONFIGURATION_UPDATE'] ?? 'Y') === 'Y';
 		$editorConfig['ENABLE_REQUIRED_USER_FIELD_CHECK'] = ($params['ENABLE_REQUIRED_USER_FIELD_CHECK'] ?? 'Y') === 'Y';
+		$editorConfig['HOST_COLUMN_FOR_QUICK_EDITOR_ID'] = $params['HOST_COLUMN_FOR_QUICK_EDITOR_ID'] ?? null;
 
 		$allowedInitialModes = ['view', 'edit'];
 		$editorConfig['INITIAL_MODE'] = in_array($params['INITIAL_MODE'] ?? null, $allowedInitialModes, true)

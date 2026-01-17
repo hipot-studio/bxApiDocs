@@ -6,6 +6,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Integration\Catalog\CatalogSettingsProvider;
 use Bitrix\Booking\Internals\Service\Enum\AhaMoment;
 use Bitrix\Booking\Provider\OptionProvider;
 use Bitrix\Booking\Service\BookingFeature;
@@ -48,7 +49,10 @@ class BookingComponent extends CBitrixComponent
 
 		$this->arResult['currentUserId'] = $userId;
 
-		$this->arResult['isFeatureEnabled'] = BookingFeature::isFeatureEnabled();
+		$this->arResult['isFeatureEnabled'] = BookingFeature::isFeatureEnabled(
+			BookingFeature::FEATURE_ID_BOOKING
+		);
+		$this->arResult['features'] = BookingFeature::getFeatures();
 		$this->arResult['canTurnOnTrial'] = BookingFeature::canTurnOnTrial();
 		$this->arResult['canTurnOnDemo'] = BookingFeature::canTurnOnDemo();
 
@@ -206,12 +210,32 @@ class BookingComponent extends CBitrixComponent
 
 	private function getTopMenuItems(): array
 	{
-		return [
+		$menuItems = [
 			[
 				'ID' => 'records',
 				'TEXT' => Loc::getMessage('BOOKING_TOP_MENU_ITEM_RECORDS'),
 				'IS_ACTIVE' => true,
 			],
 		];
+
+		if (Loader::includeModule('catalog'))
+		{
+			$url = (new CatalogSettingsProvider())->getCatalogPresetUrl();
+
+			$menuItems[] = [
+				'ID' => 'services',
+				'TEXT' => Loc::getMessage('BOOKING_TOP_MENU_ITEM_SERVICES'),
+				'ITEMS' => [
+					[
+						'ID' => 'all_services',
+						'TEXT' => Loc::getMessage('BOOKING_TOP_MENU_SERVICES_ALL_SERVICES'),
+						'URL' => $url,
+						'ON_CLICK' => 'event.preventDefault();BX.SidePanel.Instance.open("' . CUtil::JSescape($url) . '", {cacheable: false, customLeftBoundary: 0,})',
+					],
+				],
+			];
+		}
+
+		return $menuItems;
 	}
 }

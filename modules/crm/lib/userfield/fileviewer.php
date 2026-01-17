@@ -28,7 +28,7 @@ class FileViewer
 	{
 		if (\CCrmOwnerType::isUseDynamicTypeBasedApproach($this->entityTypeID))
 		{
-			return Container::getInstance()->getRouter()->getFileUrl($this->entityTypeID, $entityID, $fieldName, $fileID)->getUri();
+			return Container::getInstance()->getRouter()->getFileUrl($this->entityTypeID, $entityID, $fieldName, $fileID, isAbsolute: false)->getUri();
 		}
 
 		$params = array('owner_id' => $entityID, 'field_name' => $fieldName);

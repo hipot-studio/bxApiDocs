@@ -7,9 +7,6 @@
  */
 namespace Bitrix\Vote;
 
-use \Bitrix\Main\Localization\Loc;
-Loc::loadMessages(__FILE__);
-
 class DBResult extends \CDBResult
 {
 	/**

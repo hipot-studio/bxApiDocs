@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sign\Type;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Helper\StringHelper;
 
 /**
@@ -33,7 +34,7 @@ final class ProviderCode
 	}
 
 	/**
-	 * @return array
+	 * @return array<string>
 	 */
 	public static function getAllFormattedCodes(): array
 	{
@@ -82,6 +83,11 @@ final class ProviderCode
 		};
 	}
 
+	public static function isNotRepresentativeString(string $value): bool
+	{
+		return in_array($value, self::getAll(), true);
+	}
+
 	public static function toAnalyticString(string $providerCode): string
 	{
 		return match ($providerCode)
@@ -90,6 +96,19 @@ final class ProviderCode
 			self::GOS_KEY => 'integration_Goskluch',
 			self::EXTERNAL => 'integration_external',
 			default => 'integration_N',
+		};
+	}
+
+	public static function getProviderName(string $providerCode, ?string $language = null): string
+	{
+		return match ($providerCode) {
+			'goskey' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_GOSKEY_NAME', language: $language) ?? '',
+			'taxcom' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_TAXCOM_NAME', language: $language) ?? '',
+			'ses-ru' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_SES_NAME', language: $language) ?? '',
+			'ses-com' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_SES_COM_NAME', language: $language) ?? '',
+			'ses-ru-express' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_SES_RU_EXPRESS_NAME', language: $language) ?? '',
+			'external' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_EXTERNAL_NAME', language: $language) ?? '',
+			default => '',
 		};
 	}
 }

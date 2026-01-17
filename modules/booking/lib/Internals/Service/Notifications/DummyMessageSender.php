@@ -56,4 +56,9 @@ class DummyMessageSender implements MessageSender
 	{
 		return true;
 	}
+
+	public function checkLicense(): bool
+	{
+		return true;
+	}
 }

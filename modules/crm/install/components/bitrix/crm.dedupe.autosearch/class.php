@@ -92,7 +92,7 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 		);
 		$list->setSortOrder(SORT_ASC);
 
-		if (!$progressData['MERGE_DATA'])
+		if (!($progressData['MERGE_DATA'] ?? null))
 		{
 			$progressData['MERGE_DATA'] = [
 				'TOTAL' => $list->getRootItemCount(),

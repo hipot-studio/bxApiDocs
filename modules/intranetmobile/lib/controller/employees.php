@@ -5,6 +5,7 @@ use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\Intranet\Controller\Invite;
 use Bitrix\IntranetMobile\Dto\SortingDto;
 use Bitrix\IntranetMobile\Dto\FilterDto;
+use Bitrix\IntranetMobile\Dto\UserDto;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Loader;
@@ -38,12 +39,17 @@ class Employees extends Base
 		$result = $userProvider->getByPage(filter: $filter, sorting: $sorting, nav: $nav);
 
 		$users = $result['users'];
+		$tabs = $userProvider->getUserListTabs();
 		$isOnlyCurrentUser = count($users) === 1 && $users[0]->id === (int)$this->getCurrentUser()->getId();
 
 		if ($isOnlyCurrentUser && $userProvider->isDefaultOrEmptyFilter($filter))
 		{
-			return [];
+			return [
+				'tabs' => $tabs,
+			];
 		}
+
+		$result['tabs'] = $tabs;
 
 		return $result;
 	}
@@ -63,31 +69,6 @@ class Employees extends Base
 				'extranet' => $isExtranetUser,
 			],
 		]);
-	}
-
-	public function getSearchBarPresetsAction(): array
-	{
-		$presets = (new UserProvider())->getPresets();
-
-		$intranetUser = new \Bitrix\Intranet\User();
-		$result = [];
-
-		foreach ($presets as $preset)
-		{
-			if ($preset['id'] === 'invited')
-			{
-				$preset['value'] = $intranetUser->getInvitationCounterValue();
-			}
-			if ($preset['id'] === 'wait_confirmation')
-			{
-				$preset['value'] = $intranetUser->getWaitConfirmationCounterValue();
-			}
-			$result[] = $preset;
-		}
-
-		return [
-			'presets' => $result,
-		];
 	}
 
 	public function updateDepartmentAction(array $newDepartmentsIds, int $userId): array|bool

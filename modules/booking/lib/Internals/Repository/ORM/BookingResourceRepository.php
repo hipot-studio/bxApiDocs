@@ -7,6 +7,7 @@ namespace Bitrix\Booking\Internals\Repository\ORM;
 use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Model\BookingResourceTable;
 
 class BookingResourceRepository
@@ -27,7 +28,11 @@ class BookingResourceRepository
 
 		if (!empty($data))
 		{
-			BookingResourceTable::addMulti($data, true);
+			$result = BookingResourceTable::addMulti($data, true);
+			if (!$result->isSuccess())
+			{
+				throw new Exception($result->getErrors()[0]->getMessage());
+			}
 		}
 	}
 

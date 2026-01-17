@@ -13,6 +13,7 @@ class SelectField extends SingleField
 		public readonly string $title,
 		public readonly bool $isEditable,
 		public readonly bool $isShowAlways,
+		public readonly bool $isVisible,
 		/** @var $items array<string, string> */
 		public readonly array $items,
 		public readonly mixed $value = null,
@@ -53,49 +54,28 @@ class SelectField extends SingleField
 			throw new ArgumentException('Selectable user field required items');
 		}
 
-		return new SelectField(
+		return new static(
 			id: $fieldData['name'],
 			title: $fieldData['title'],
 			isEditable: $fieldData['editable'] ?? false,
 			isShowAlways: $fieldData['showAlways'] ?? false,
+			isVisible: $fieldData['isVisible'] ?? false,
 			items: $items,
-			value: $value,
+			value: static::parseValue($value),
 		);
 	}
 
-	public function getId(): string
+	public function isValid(mixed $value): bool
 	{
-		return $this->id;
-	}
-
-	/**
-	 * @return string|int|null - selected item id or null if value is not valid
-	 */
-	public function getValue(): int|string|null
-	{
-		return $this->isValid() ? $this->value : null;
-	}
-
-	public function getTitle(): string
-	{
-		return $this->title;
-	}
-
-	public function isEditable(): bool
-	{
-		return $this->isEditable;
-	}
-
-	public function isShowAlways(): bool
-	{
-		return $this->isShowAlways;
-	}
-
-	public function isValid(mixed $value = null): bool
-	{
-		$value ??= $this->value;
-
 		return (is_int($value) || is_string($value))
 			&& array_key_exists($value, $this->items);
+	}
+
+	public function toArray(): array
+	{
+		return [
+			...parent::toArray(),
+			'items' => $this->items,
+		];
 	}
 }

@@ -3,6 +3,9 @@
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
 use Bitrix\Crm\Activity\Provider\BaseMessage;
+use Bitrix\Crm\Activity\Provider\Notification;
+use Bitrix\Crm\Activity\Provider\Telegram;
+use Bitrix\Crm\Activity\Provider\WhatsApp;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
 use Bitrix\Crm\Service\Timeline\Item\Model;
@@ -14,15 +17,11 @@ use Bitrix\Main\Localization\Loc;
 
 class SmsStatus extends LogMessage
 {
-	private const WHATSAPP_PROVIDER_ID = 'ednaru';
-
-	private bool $isSmsChannel;
 	private array $messageInfo;
 
 	public function __construct(Context $context, Model $model)
 	{
-		$this->isSmsChannel = !empty($model->getAssociatedEntityModel()?->get('SMS_INFO'));
-		if ($this->isSmsChannel)
+		if (!empty($model->getAssociatedEntityModel()?->get('SMS_INFO')))
 		{
 			$this->messageInfo = $model->getAssociatedEntityModel()?->get('SMS_INFO') ?? [];
 		}
@@ -55,41 +54,41 @@ class SmsStatus extends LogMessage
 	public function getTitle(): ?string
 	{
 		$messenger = $this->messageInfo['PROVIDER_DATA']['DESCRIPTION'] ?? '';
-		$isSmsChannel = $this->isSmsChannel;
-		$isWhatsApp = $this->isSmsChannel && $this->messageInfo['senderId'] === self::WHATSAPP_PROVIDER_ID;
+		$infix = $this->getStatusMessageInfix();
 
 		return match ($this->getStatus())
 		{
-			BaseMessage::MESSAGE_FAILURE => $isSmsChannel
-				? Loc::getMessage($isWhatsApp
-					? 'CRM_TIMELINE_LOG_WHATSAPP_STATUS_TITLE_FAILURE'
-					: 'CRM_TIMELINE_LOG_SMS_STATUS_TITLE_FAILURE'
-				)
-				: Loc::getMessage(
-					'CRM_TIMELINE_LOG_MSG_STATUS_TITLE_FAILURE',
-					['#MESSENGER#' => $messenger]
-				),
-			BaseMessage::MESSAGE_SUCCESS => $isSmsChannel
-				? Loc::getMessage($isWhatsApp
-					? 'CRM_TIMELINE_LOG_WHATSAPP_STATUS_TITLE_SUCCESS'
-					: 'CRM_TIMELINE_LOG_SMS_STATUS_TITLE_SUCCESS'
-				)
-				: Loc::getMessage(
-					'CRM_TIMELINE_LOG_MSG_STATUS_TITLE_SUCCESS',
-					['#MESSENGER#' => $messenger]
-				),
-			BaseMessage::MESSAGE_READ => $isSmsChannel
-				? Loc::getMessage($isWhatsApp
-					? 'CRM_TIMELINE_LOG_WHATSAPP_STATUS_TITLE_READ'
-					: 'CRM_TIMELINE_LOG_SMS_STATUS_TITLE_READ'
-				)
-				: Loc::getMessage(
-					'CRM_TIMELINE_LOG_MSG_STATUS_TITLE_READ',
-					['#MESSENGER#' => $messenger]
-				),
+			BaseMessage::MESSAGE_FAILURE => Loc::getMessage(
+				"CRM_TIMELINE_LOG_${infix}_STATUS_TITLE_FAILURE",
+				['#MESSENGER#' => $messenger],
+			),
+			BaseMessage::MESSAGE_SUCCESS => Loc::getMessage(
+				"CRM_TIMELINE_LOG_${infix}_STATUS_TITLE_SUCCESS",
+				['#MESSENGER#' => $messenger],
+			),
+			BaseMessage::MESSAGE_READ => Loc::getMessage(
+				"CRM_TIMELINE_LOG_${infix}_STATUS_TITLE_READ",
+				['#MESSENGER#' => $messenger],
+			),
 			default => Loc::getMessage('CRM_TIMELINE_LOG_SMS_STATUS_TITLE_UNKNOWN'),
 		};
+	}
 
+	private function getStatusMessageInfix(): string
+	{
+		if ($this->isNotification())
+		{
+			return 'MSG';
+		}
+
+		$activityProviderId = $this->getAssociatedEntityModel()?->get('PROVIDER_ID');
+
+		return match ($activityProviderId)
+		{
+			WhatsApp::getId() => 'WHATSAPP',
+			Telegram::getId() => 'TELEGRAM',
+			default => 'SMS',
+		};
 	}
 
 	public function getContentBlocks(): ?array
@@ -99,7 +98,7 @@ class SmsStatus extends LogMessage
 		$client = $this->buildClientBlock(Client::BLOCK_WITH_FORMATTED_VALUE, Loc::getMessage('CRM_TIMELINE_LOG_SMS_STATUS_RECIPIENT'));
 		if ($client)
 		{
-			if ($client instanceof LineOfTextBlocks && $this->isSmsChannel)
+			if ($client instanceof LineOfTextBlocks && !$this->isNotification())
 			{
 				$client->addContentBlock(
 					'provider',
@@ -126,9 +125,9 @@ class SmsStatus extends LogMessage
 
 		$statusTag = new Tag(Loc::getMessage('CRM_TIMELINE_LOG_TAG_SENDING_ERROR'), Tag::TYPE_FAILURE);
 
-		$errorText = $this->isSmsChannel
-			? ($this->messageInfo['errorText'] ?? '')
-			: ($this->messageInfo['ERROR_MESSAGE'] ?? '');
+		$errorText = $this->isNotification()
+			? ($this->messageInfo['ERROR_MESSAGE'] ?? '')
+			: ($this->messageInfo['errorText'] ?? '');
 
 		if (!empty($errorText))
 		{
@@ -149,5 +148,10 @@ class SmsStatus extends LogMessage
 		}
 
 		return null;
+	}
+
+	private function isNotification(): bool
+	{
+		return $this->getAssociatedEntityModel()?->get('PROVIDER_ID') === Notification::getId();
 	}
 }

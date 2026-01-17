@@ -1,9 +1,11 @@
 <?php
 
+use Bitrix\Mail\Helper\Message;
 use Bitrix\Main;
 use Bitrix\Main\Security;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail;
+use Bitrix\Main\Web\Uri;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -71,21 +73,20 @@ class CMailUfMessageComponent extends CBitrixComponent
 
 		if (!empty($access))
 		{
+			$message['__href'] = Message::addSourceAnalyticsToMessage($message['__href'], $access['ENTITY_TYPE'] ?? '');
+
 			$signer = new Security\Sign\Signer(new Security\Sign\HmacAlgorithm('md5'));
 
-			$message['__href'] = \CHTTP::urlAddParams(
-				$message['__href'],
-				array(
-					'mail_uf_message_token' => sprintf(
-						'%s:%s',
-						$access['TOKEN'],
-						$signer->getSignature($access['SECRET'], sprintf('user%u', $USER->getId()))
-					),
+			$uri = new Uri($message['__href']);
+			$uri->addParams([
+				'mail_uf_message_token' => sprintf(
+					'%s:%s',
+					$access['TOKEN'],
+					$signer->getSignature($access['SECRET'], sprintf('user%u', $USER->getId())),
 				),
-				array(
-					'encode' => true,
-				)
-			);
+			]);
+
+			$message['__href'] = $uri->getUri();
 		}
 
 		$message['__thread_new'] = 0;
@@ -139,5 +140,4 @@ class CMailUfMessageComponent extends CBitrixComponent
 
 		$this->includeComponentTemplate();
 	}
-
 }

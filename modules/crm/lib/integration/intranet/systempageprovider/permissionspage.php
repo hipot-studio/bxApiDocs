@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Integration\Intranet\SystemPageProvider;
 
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Intranet\CustomSection\DataStructures\CustomSection;
@@ -71,11 +70,20 @@ final class PermissionsPage extends SystemPageProvider
 
 	public static function isPageAvailable(CustomSection $section): bool
 	{
-		$automatedSolution =  Container::getInstance()->getAutomatedSolutionManager()->getExistingAutomatedSolutions()[$section->getId()] ?? null;
-		return
-			parent::isPageAvailable($section)
-			&& $automatedSolution
-			&& Container::getInstance()->getUserPermissions()->automatedSolution()->isAutomatedSolutionAdmin($automatedSolution['ID'])
+		$automatedSolution = Container::getInstance()
+			->getAutomatedSolutionManager()
+			->getExistingAutomatedSolutions()[$section->getId()] ?? null
+		;
+
+		if ($automatedSolution === null)
+		{
+			return false;
+		}
+
+		return Container::getInstance()
+			->getUserPermissions()
+			->automatedSolution()
+			->isAutomatedSolutionAdmin($automatedSolution['ID'])
 		;
 	}
 }

@@ -20,6 +20,18 @@ require_once 'bootstrap.php';
 // initialize symfony
 use Symfony\Component\Console\Application;
 
+if (class_exists(Application::class) === false)
+{
+	die(<<<TXT
+
+	Symfony Console is not installed.
+	Please install and configure composer in your project.
+	For details see official documentation https://docs.1c-bitrix.ru/pages/get-started/composer.html
+
+
+	TXT);
+}
+
 $application = new Application();
 
 // register  commands

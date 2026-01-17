@@ -56,7 +56,7 @@ class Provider implements AuthProviderInterface
 			$client = $this->getClient();
 			$authResult = $client->getAuth($clientId, $scope, $additionalParams);
 
-			if($authResult['result'])
+			if (!empty($authResult['result']) && is_array($authResult['result']))
 			{
 				if($authResult['result']['access_token'])
 				{

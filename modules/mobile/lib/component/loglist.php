@@ -18,6 +18,7 @@ use Bitrix\Mobile\Component\LogList\Counter;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\Application;
 use Bitrix\Mobile\Livefeed;
+use Bitrix\Tasks\V2\FormV2Feature;
 
 Loader::requireModule('socialnetwork');
 
@@ -692,20 +693,33 @@ class LogList  extends \Bitrix\Socialnetwork\Component\LogListCommon
 				: 'N'
 		);
 
-		if ($result['SHOW_EXPERT_MODE'] === 'Y')
+		$isTasksV2Form = (
+			Loader::includeModule('tasks')
+			&& class_exists(FormV2Feature::class)
+			&& FormV2Feature::isOn()
+		);
+		if ($isTasksV2Form)
 		{
-			$result['EXPERT_MODE'] = 'N';
-			$res = \Bitrix\Socialnetwork\LogViewTable::getList([
-				'order' => [],
-				'filter' => [
-					"USER_ID" => $result['currentUserId'],
-					"=EVENT_ID" => 'tasks'
-				],
-				'select' => [ 'TYPE' ]
-			]);
-			if ($logViewFields = $res->fetch())
+			$result['SHOW_EXPERT_MODE'] = 'N';
+			$result['EXPERT_MODE'] = 'Y';
+		}
+		else
+		{
+			if ($result['SHOW_EXPERT_MODE'] === 'Y')
 			{
-				$result['EXPERT_MODE'] = ($logViewFields['TYPE'] === 'N' ? 'Y' : 'N');
+				$result['EXPERT_MODE'] = 'N';
+				$res = \Bitrix\Socialnetwork\LogViewTable::getList([
+					'order' => [],
+					'filter' => [
+						"USER_ID" => $result['currentUserId'],
+						"=EVENT_ID" => 'tasks'
+					],
+					'select' => [ 'TYPE' ]
+				]);
+				if ($logViewFields = $res->fetch())
+				{
+					$result['EXPERT_MODE'] = ($logViewFields['TYPE'] === 'N' ? 'Y' : 'N');
+				}
 			}
 		}
 	}

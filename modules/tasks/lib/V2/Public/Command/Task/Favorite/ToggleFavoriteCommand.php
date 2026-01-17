@@ -26,15 +26,9 @@ class ToggleFavoriteCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$favoriteTaskRepository = Container::getInstance()->getFavoriteTaskRepository();
-		$favoriteService = Container::getInstance()->getFavoriteService();
-
-		$handler = new ToggleFavoriteHandler(
-			$favoriteTaskRepository,
-			$favoriteService
-		);
-
 		$result = new Result();
+
+		$handler = Container::getInstance()->get(ToggleFavoriteHandler::class);
 
 		try
 		{

@@ -265,6 +265,7 @@ class CIMMessenger
 		{
 			$arFields['PARAMS'] = Array();
 		}
+
 		if (!isset($arFields['EXTRA_PARAMS']))
 		{
 			$arFields['EXTRA_PARAMS'] = Array();
@@ -1682,6 +1683,8 @@ class CIMMessenger
 
 				if (isset($arFields['NOTIFY_TITLE']) && trim($arFields['NOTIFY_TITLE']) <> '')
 					$arParams['NOTIFY_TITLE'] = trim($arFields['NOTIFY_TITLE']);
+
+				$arFields['PARAMS'] = \CIMNotify::prepareNotifyParams($arFields['PARAMS']);
 
 				if ($arParams['NOTIFY_TYPE'] == IM_NOTIFY_CONFIRM)
 				{
@@ -5367,7 +5370,7 @@ class CIMMessenger
 		return $finalGroup;
 	}
 
-	protected static function getMessageObject(array $fields): \Bitrix\Im\V2\Message
+	public static function prepareFieldsForMessageObject(array $fields): array
 	{
 		$fields['FROM_USER_ID'] ??= 0;
 		$fields['AUTHOR_ID'] ??= (int)$fields['FROM_USER_ID'];
@@ -5381,6 +5384,13 @@ class CIMMessenger
 		{
 			$fields['NOTIFY_ANSWER'] = $fields['NOTIFY_ANSWER'] === 'Y';
 		}
+
+		return $fields;
+	}
+
+	protected static function getMessageObject(array $fields): \Bitrix\Im\V2\Message
+	{
+		$fields = self::prepareFieldsForMessageObject($fields);
 
 		$message = new \Bitrix\Im\V2\Message($fields);
 

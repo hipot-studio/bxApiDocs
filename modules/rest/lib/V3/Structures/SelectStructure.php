@@ -3,11 +3,10 @@
 namespace Bitrix\Rest\V3\Structures;
 
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Rest\V3\Attributes\ElementType;
-use Bitrix\Rest\V3\Attributes\RelationToMany;
-use Bitrix\Rest\V3\Attributes\RelationToOne;
 use Bitrix\Rest\V3\Attributes\ResolvedBy;
+use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
+use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\PropertyHelper;
 use Bitrix\Rest\V3\Exceptions\InvalidSelectException;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
@@ -27,8 +26,6 @@ final class SelectStructure extends Structure
 	/** @var string[] $items */
 	protected array $items = [];
 
-	protected \ReflectionClass $dtoReflection;
-
 	protected bool $multiple = false;
 
 	protected array $relationFields = [];
@@ -39,27 +36,35 @@ final class SelectStructure extends Structure
 
 		$value = (array)$value;
 
-		$dtoReflection = new \ReflectionClass($dtoClass);
-		$structure->dtoReflection = $dtoReflection;
+		$dto = self::getDto($dtoClass);
 
-		if (!empty($value))
-		{
-			foreach ($value as $item)
-			{
+		$fields = $dto->getFields();
+
+		$availableFields = [];
+
+		if ($request->getOptions()['scope']) {
+			$availableFields = $request->getOptions()['scope']->fields;
+		}
+
+		if (!empty($value)) {
+			foreach ($value as $item) {
 				if (!is_array($item))
 				{
-					if (str_starts_with($item, 'UF_'))
-					{
-						$structure->userFields[] = $item;
-
-						continue;
-					}
-
 					if (strpos($item, '.') === false)
 					{
-						if (!PropertyHelper::isValidProperty($dtoReflection, $item))
+						if (!isset($fields[$item]))
 						{
-							throw new UnknownDtoPropertyException($dtoClass, $item);
+							throw new UnknownDtoPropertyException($dto->getShortName(), $item);
+						}
+
+						if (!empty($availableFields) && !in_array($item, $availableFields, true)) {
+							throw new UnknownDtoPropertyException($dto->getShortName(), $item);
+						}
+
+						if (str_starts_with($item, 'UF_'))
+						{
+							$structure->userFields[] = $item;
+							continue;
 						}
 
 						$structure->items[] = $item;
@@ -75,13 +80,12 @@ final class SelectStructure extends Structure
 				}
 			}
 		}
-
 		return $structure;
 	}
 
-	public function getList($includeUserFields = false): array
+	public function getList(): array
 	{
-		return $includeUserFields ? array_merge($this->items, $this->getUserFields()) : $this->items;
+		return $this->items;
 	}
 
 	private static function processRelationField(string $field, self $structure, Request $request): void
@@ -90,100 +94,75 @@ final class SelectStructure extends Structure
 		$relationName = $parts[0];
 		$remaining = $parts[1] ?? null;
 
+		/** @var Dto $dto */
+		$parentDto = $structure::getDto($request->getDtoClass());
+
 		$relation = $request->getRelation($relationName);
+
 		if ($relation === null)
 		{
-			if ($structure->dtoReflection->hasProperty($relationName))
+			if (!isset($parentDto->getFields()[$relationName]) || $parentDto->getFields()[$relationName]->getRelation() === null)
 			{
-				$type = $structure->dtoReflection->getProperty($relationName)->getType();
-				if ($type instanceof \ReflectionNamedType && !$type->isBuiltin())
-				{
-					if ($type->getName() === DtoCollection::class)
-					{
-						$elementTypeAttributes = $structure->dtoReflection->getProperty($relationName)->getAttributes(ElementType::class);
-						if (empty($elementTypeAttributes))
-						{
-							throw new InvalidSelectException($field);
-						}
+				throw new UnknownDtoPropertyException($parentDto->getShortName(), $relationName);
+			}
 
-						/** @var ElementType $elementTypeInstance */
-						$elementTypeInstance = $elementTypeAttributes[0]->newInstance();
-						$childDtoReflection = PropertyHelper::getReflection($elementTypeInstance->type);
-					}
-					else
-					{
-						$childDtoReflection = PropertyHelper::getReflection($type->getName());
-					}
-				}
-				else
-				{
-					throw new InvalidSelectException($field);
-				}
+			/** @var DtoField $relationDtoField */
+			$relationDtoField = $parentDto->getFields()[$relationName];
 
-				$resolvedByAttributes = $childDtoReflection->getAttributes(ResolvedBy::class);
-				if (empty($resolvedByAttributes))
-				{
-					throw new InvalidSelectException($field);
-				}
-
-				/** @var ResolvedBy $resolvedByInstance */
-				$resolvedByInstance = $resolvedByAttributes[0]->newInstance();
-
-				$attributes = $structure->dtoReflection->getProperty($relationName)->getAttributes();
-				foreach ($attributes as $attribute)
-				{
-					if (in_array($attribute->getName(), [RelationToOne::class, RelationToMany::class], true))
-					{
-						$controllerData = ServiceLocator::getInstance()->get(SchemaManager::class)->getControllerDataByName($resolvedByInstance->controller);
-						$arguments = $attribute->getArguments();
-						if (!empty($arguments))
-						{
-							$relationRequest = new ListRequest($childDtoReflection->getName());
-							[$fromField, $toField] = $arguments;
-							if ($fromField === null || $toField === null)
-							{
-								throw new InvalidSelectException($field);
-							}
-							$relationRequest->select = self::create([], $relationRequest->getDtoClass(), $relationRequest);
-							if (isset($arguments[2]['order']) && is_array($arguments[2]['order']))
-							{
-								$relationRequest->order = OrderStructure::create($arguments[2]['order'], $relationRequest->getDtoClass(), $relationRequest);
-							}
-
-							$method = $controllerData->getMethodUri('list');
-							$relation = new Relation($relationName, $method, $fromField, $toField, $relationRequest, $attribute->getName() == RelationToMany::class);
-							$relation->getRequest()->select->relationFields[] = $toField;
-							$request->addRelation($relation);
-							$structure->relationFields[] = $fromField;
-						}
-						else
-						{
-							throw new InvalidSelectException($field);
-						}
-
-						break;
-					}
-				}
+			$type = $relationDtoField->getPropertyType();
+			if ($type === DtoCollection::class)
+			{
+				$childDtoReflection = PropertyHelper::getReflection($parentDto->getFields()[$relationName]->getElementType());
 			}
 			else
 			{
-				throw new UnknownDtoPropertyException($structure->dtoReflection->name, $field);
+				$childDtoReflection = PropertyHelper::getReflection($type);
 			}
+
+			$childDto = self::getDto($childDtoReflection->getName());
+			if (!$childDto)
+			{
+				$childDto = $childDtoReflection->getName()::create();
+				self::addDto($childDto);
+			}
+
+			/** @var ResolvedBy|null $resolvedBy */
+			$resolvedBy = $childDto->getAttributeByName(ResolvedBy::class);
+			if ($resolvedBy === null)
+			{
+				throw new InvalidSelectException($field);
+			}
+
+			$controllerData = ServiceLocator::getInstance()->get(SchemaManager::class)->getControllerDataByName($resolvedBy->controller);
+
+			$relationRequest = new ListRequest($childDtoReflection->getName());
+			$relationRequest->select = self::create([], $relationRequest->getDtoClass(), $relationRequest);
+			if ($relationDtoField->getRelation()->sort !== null)
+			{
+				$relationRequest->order = OrderStructure::create($relationDtoField->getRelation()->sort['order'], $relationRequest->getDtoClass(), $relationRequest);
+			}
+
+			$method = $controllerData->getMethodUri('list');
+			$relation = new Relation($relationName, $method, $relationDtoField->getRelation()->thisField, $relationDtoField->getRelation()->refField, $relationRequest, $relationDtoField->getRelation()->multiple);
+			$relation->getRequest()->select->relationFields[] = $relationDtoField->getRelation()->refField;
+			$request->addRelation($relation);
+			$structure->relationFields[] = $relationDtoField->getRelation()->thisField;
 		}
 
 		if ($remaining !== null)
 		{
+			$childDto = self::getDto($relation->getRequest()->getDtoClass());
+
 			$relation->getRequest()->select->items[] = $remaining;
 			if (strpos($remaining, '.') !== false)
 			{
-
 				self::processRelationField($remaining, $relation->getRequest()->select, $relation->getRequest());
 			}
 			else
 			{
-				if (!PropertyHelper::isValidProperty($relation->getRequest()->select->dtoReflection, $remaining))
+				if (!isset($childDto->getFields()[$remaining]))
 				{
-					throw new UnknownDtoPropertyException($relation->getRequest()->select->dtoReflection->name, $remaining);
+					throw new UnknownDtoPropertyException($parentDto->getShortName(), $remaining);
 				}
 			}
 		}

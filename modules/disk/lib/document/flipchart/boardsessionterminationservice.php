@@ -4,75 +4,147 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Document\Flipchart;
 
+use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\SessionTerminationService;
 use Bitrix\Disk\File;
-use Bitrix\Main\NotImplementedException;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Main\DI\ServiceLocator;
 
 class BoardSessionTerminationService implements SessionTerminationService
 {
-	private readonly array $userIds;
-	private readonly int $objectId;
-
 	/**
-	 * @param int $objectId
-	 * @param array $userIds
-
+	 * @param BaseObject $object
 	 */
-	public function __construct(int $objectId, array $userIds)
+	public function __construct(
+		private readonly BaseObject $object,
+	)
 	{
-		$this->userIds = $userIds;
-		$this->objectId = $objectId;
 	}
 
-	public function terminateAllSessions(): void
+	public function terminateSessionsWithInsufficientRights(): void
 	{
-		$localSessions = $this->getLocalSessions();
-
-		if (empty($localSessions))
+		if (!$this->object instanceof File)
 		{
 			return;
 		}
 
-		$this->deleteLocalSession($localSessions);
+		$unallowedSessions = $this->findUnallowedSessions($this->object);
 
-		$file = File::loadById($this->objectId);
-		if ($file)
+		if (empty($unallowedSessions))
 		{
-			BoardService::kickUsers($file, $this->userIds);
+			return;
 		}
+
+		$this->markSessionAsNonActive($unallowedSessions);
+		BoardService::kickUnallowedUsers($unallowedSessions, $this->object);
+	}
+
+	public function findUnallowedSessions(File|AttachedObject $object): array
+	{
+		$manager = new SessionManager();
+		$unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
+
+		if ($object instanceof File)
+		{
+			$manager->setFile($object);
+			$sessionContext = new DocumentSessionContext(
+				(int)$object->getId(),
+				null,
+				null,
+			);
+
+			$supportsUnifiedLink = $object->supportsUnifiedLink();
+		}
+		else
+		{
+			$manager->setFile($object->getFile());
+			$sessionContext = new DocumentSessionContext(
+				(int)$object->getFileId(),
+				(int)$object->getId(),
+				null,
+			);
+
+			$supportsUnifiedLink = (bool)$object->getFile()?->supportsUnifiedLink();
+		}
+
+		$manager->setSessionContext($sessionContext);
+		$sessions = $manager->findAllSessions();
+		$unallowed = [];
+
+		foreach ($sessions as $session)
+		{
+			if ($session->getUserId() < 0)
+			{
+				continue;
+			}
+
+			$userId = $session->getUserId();
+			if ($object instanceof File)
+			{
+				$context = $object->getStorage()?->getSecurityContext($session->getUserId());
+				$canUpdate = $object->canUpdate($context);
+				$canRead = $canUpdate || $object->canRead($context);
+
+				$canUpdateByLink = false;
+				$canReadByLink = false;
+
+				if (!$canUpdate && $supportsUnifiedLink)
+				{
+					$attachedObject = $session->getContext()?->getAttachedObject();
+					$unifiedLinkAccessLevel = $unifiedLinkAccessService->check($object, $attachedObject, $userId);
+					$canUpdateByLink = $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Edit;
+					$canReadByLink = $canUpdateByLink || $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Read;
+				}
+			}
+			else
+			{
+				/** @var AttachedObject $object */
+				$canUpdate = $object->canUpdate($userId);
+				$canRead = $canUpdate || $object->canRead($userId);
+				$canUpdateByLink = false;
+				$canReadByLink = false;
+
+				if (!$canUpdate && $supportsUnifiedLink)
+				{
+					$unifiedLinkAccessLevel = $unifiedLinkAccessService->check($object->getFile(), $object, $userId);
+					$canUpdateByLink = $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Edit;
+					$canReadByLink = $canUpdateByLink || $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Read;
+				}
+			}
+
+			if (
+				(
+					$session->isEdit()
+					&& !$canUpdate
+					&& !$canUpdateByLink
+				)
+				|| (
+					$session->isView()
+					&& !$canRead
+					&& !$canReadByLink
+				)
+			)
+			{
+				$unallowed[] = $session;
+			}
+		}
+
+		return $unallowed;
 	}
 
 	/**
-	 * @param DocumentSession[] $localSessions
+	 * @param DocumentSession[] $sessions
 	 * @return void
 	 */
-	private function deleteLocalSession(array $localSessions): void
+	private function markSessionAsNonActive(array $sessions): void
 	{
-		foreach ($localSessions as $session)
+		foreach ($sessions as $session)
 		{
-			$session->delete();
+			$session->setAsNonActive();
 		}
-	}
-
-	/**
-	 * @param DocumentSession[] $localSessions
-	 * @return void
-	 * @throws NotImplementedException
-	 */
-	private function terminateExternalSession(array $localSessions): void
-	{
-		throw new NotImplementedException();
-	}
-
-	private function getLocalSessions(): array
-	{
-		return DocumentSession::getModelList([
-			'filter' => [
-				'OBJECT_ID' => $this->objectId,
-				'USER_ID' => $this->userIds,
-				'STATUS' => DocumentSession::STATUS_ACTIVE,
-			]
-		]);
 	}
 }

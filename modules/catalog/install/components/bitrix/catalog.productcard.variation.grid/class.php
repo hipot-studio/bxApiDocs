@@ -28,6 +28,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Catalog\Store\EnableWizard\Manager;
 
 class CatalogProductVariationGridComponent
 	extends \CBitrixComponent
@@ -724,7 +725,7 @@ class CatalogProductVariationGridComponent
 
 	private function getDomElementForReservedQuantity($quantity): string
 	{
-		return $this->isNewProduct() ? (string)$quantity : '<a class="main-grid-cell-content-catalog-reserved-quantity">' . $quantity . '</a>';
+		return $this->isNewProduct() || Manager::isOnecMode() ? (string)$quantity : '<a class="main-grid-cell-content-catalog-reserved-quantity">' . $quantity . '</a>';
 	}
 
 	protected function getGridEditData(array $rows): array
@@ -1091,6 +1092,11 @@ class CatalogProductVariationGridComponent
 
 	private function getReservedDealsSliderLink(): bool|string
 	{
+		if (Manager::isOnecMode())
+		{
+			return false;
+		}
+
 		$sliderUrl = \CComponentEngine::makeComponentPath('bitrix:catalog.productcard.reserved.deal.list');
 
 		return getLocalPath('components'.$sliderUrl.'/slider.php');

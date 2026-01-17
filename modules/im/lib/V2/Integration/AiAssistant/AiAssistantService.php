@@ -15,7 +15,7 @@ class AiAssistantService
 
 	public function __construct()
 	{
-		if (Loader::includeModule('aiassistant'))
+		if (Loader::includeModule('aiassistant') && Loader::includeModule('imbot'))
 		{
 			$this->botManager = ServiceLocator::getInstance()->get(BotManager::class);
 		}

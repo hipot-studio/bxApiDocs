@@ -165,6 +165,9 @@ class CIntranetUserListComponent extends UserList
 			[
 				'NAV_COMPONENT_TEMPLATE' => 'modern',
 				'TOTAL_ROWS_COUNT_HTML' => $grid->getTotalRowsCountHtml(),
+				'NAV_PARAMS' => [
+					'BASE_LINK' => $this->arParams['LIST_URL'] ?? '/company/',
+				],
 			]
 		);
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Entity\Resource\Resource;
+use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Exception\Resource\CreateResourceException;
 use Bitrix\Booking\Internals\Exception\Resource\UpdateResourceException;
 use Bitrix\Booking\Internals\Model\ResourceDataTable;
@@ -13,10 +15,10 @@ use Bitrix\Booking\Internals\Model\ResourceTable;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ResourceDataMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ResourceMapper;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
+use Bitrix\Booking\Internals\Service\ResourceSkuService;
 use Bitrix\Booking\Provider\Params\FilterInterface;
 use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
-use Bitrix\Booking\Provider\Params\SelectInterface;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\QueryHelper;
@@ -26,13 +28,12 @@ use Bitrix\Main\Type\DateTime;
 
 class ResourceRepository implements ResourceRepositoryInterface
 {
-	private ResourceMapper $mapper;
-	private ResourceDataMapper $resourceDataMapper;
-
-	public function __construct(ResourceMapper $mapper, ResourceDataMapper $resourceDataMapper)
+	public function __construct(
+		private readonly ResourceMapper $mapper,
+		private readonly ResourceDataMapper $resourceDataMapper,
+		private readonly ResourceSkuService $resourceSkuService,
+	)
 	{
-		$this->mapper = $mapper;
-		$this->resourceDataMapper = $resourceDataMapper;
 	}
 
 	public function getList(
@@ -40,13 +41,13 @@ class ResourceRepository implements ResourceRepositoryInterface
 		int|null $offset = null,
 		FilterInterface $filter = null,
 		array|null $sort = null,
-		SelectInterface|null $select = null,
+		array|null $select = null,
 		int|null $userId = null,
 	): Entity\Resource\ResourceCollection
 	{
 		$query = ResourceTable::query()
 			->setSelect(array_merge(
-				['*'], $select ? $select->prepareSelect() : []
+				['*'], $select ?: []
 			))
 		;
 
@@ -131,7 +132,7 @@ class ResourceRepository implements ResourceRepositoryInterface
 		$result = $this->getList(
 			limit: 1,
 			filter: new ResourceFilter(['ID' => $id]),
-			select: new ResourceSelect(),
+			select: (new ResourceSelect())->prepareSelect(),
 		)->getFirstCollectionItem();
 
 		return $result;
@@ -161,6 +162,30 @@ class ResourceRepository implements ResourceRepositoryInterface
 				'IS_DELETED' => 'Y',
 			],
 		);
+	}
+
+	public function withSkus(ResourceCollection $collection): self
+	{
+		$skuCollections = array_map(
+			static fn(Resource $resource) => $resource->getSkuCollection(),
+			$collection->getCollectionItems(),
+		);
+
+		$this->resourceSkuService->loadForCollection(...$skuCollections);
+
+		return $this;
+	}
+
+	public function withSkusYandex(ResourceCollection $collection): self
+	{
+		$skuCollections = array_map(
+			static fn(Resource $resource) => $resource->getSkuYandexCollection(),
+			$collection->getCollectionItems(),
+		);
+
+		$this->resourceSkuService->loadForCollection(...$skuCollections);
+
+		return $this;
 	}
 
 	/**

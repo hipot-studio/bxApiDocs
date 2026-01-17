@@ -101,7 +101,10 @@ abstract class BaseLinkCollection extends Collection implements LinkRestConverti
 			/** @var BaseLinkItem $linkItem */
 			$linkItem = new $linkItemClass;
 			$linkItem->setEntity($entity)->setMessageInfo($message);
-			$linkCollection->add($linkItem);
+			if ($linkItem->needToAddLink())
+			{
+				$linkCollection->add($linkItem);
+			}
 		}
 
 		return $linkCollection;

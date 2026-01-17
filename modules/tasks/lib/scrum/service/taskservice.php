@@ -74,7 +74,7 @@ class TaskService implements Errorable
 	private static $isSubordinate = null;
 	private static $isSuper = null;
 
-	public function __construct(int $executiveUserId, \CMain $application = null)
+	public function __construct(int $executiveUserId = 0, \CMain $application = null)
 	{
 		$this->executiveUserId = $executiveUserId;
 		$this->application = $application;
@@ -428,7 +428,7 @@ class TaskService implements Errorable
 				],
 				'filter' => [
 					'=TASK_ID' => $taskIds,
-				]
+				],
 			]);
 			while ($tag = $queryObject->fetch())
 			{
@@ -577,8 +577,8 @@ class TaskService implements Errorable
 
 			$taskData = $taskItemObject->getData(false, [
 				'select' => [
-					'CLOSED_DATE'
-				]
+					'CLOSED_DATE',
+				],
 			]);
 
 			if ($taskData['CLOSED_DATE'])
@@ -901,7 +901,7 @@ class TaskService implements Errorable
 				$text,
 				[
 					'maxStringLen' => 0,
-					'USER_FIELDS' => $ufFields
+					'USER_FIELDS' => $ufFields,
 				]
 			);
 		}
@@ -1069,7 +1069,7 @@ class TaskService implements Errorable
 			[],
 			[
 				'ENTITY_ID' => 'TASKS_TASK',
-				'MANDATORY' => 'Y'
+				'MANDATORY' => 'Y',
 			]
 		);
 
@@ -1088,7 +1088,7 @@ class TaskService implements Errorable
 
 	public static function onAfterTaskAdd(int $taskId, array &$fields)
 	{
-		if ($fields['GROUP_ID'] && Loader::includeModule('socialnetwork'))
+		if (!empty($fields['GROUP_ID']) && Loader::includeModule('socialnetwork'))
 		{
 			$currentGroupId = (int) $fields['GROUP_ID'];
 			$group = Workgroup::getById($currentGroupId);
@@ -1413,6 +1413,17 @@ class TaskService implements Errorable
 		}
 
 		return [];
+	}
+
+	public function isInBacklog(int $taskId, int $groupId): bool
+	{
+		$type = \Bitrix\Tasks\V2\Internal\DI\Container::getInstance()->getGroupRepository()->getType($groupId);
+		if ($type !== 'scrum')
+		{
+			return false;
+		}
+
+		return !static::isTaskInActiveSprint($taskId, $groupId);
 	}
 
 	public function getActualParentIds(array $parentIds, int $groupId): array

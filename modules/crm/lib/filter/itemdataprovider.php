@@ -10,6 +10,7 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\AssignedTable;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\ParentFieldManager;
@@ -24,6 +25,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Text\StringHelper;
+use CCrmOwnerType;
 
 class ItemDataProvider extends EntityDataProvider
 {
@@ -223,7 +225,7 @@ class ItemDataProvider extends EntityDataProvider
 			'displayGrid' => true,
 			'displayFilter' => true,
 			'defaultGrid' => true,
-			'defaultFilter' => false,
+			'defaultFilter' => true,
 			'filterOptionPreset' => static::PRESET_ENTITY_SELECTOR,
 		];
 		$fields[Item::FIELD_NAME_CREATED_TIME] = [
@@ -239,7 +241,7 @@ class ItemDataProvider extends EntityDataProvider
 			'displayGrid' => true,
 			'displayFilter' => true,
 			'defaultGrid' => false,
-			'defaultFilter' => false,
+			'defaultFilter' => true,
 			'filterOptionPreset' => static::PRESET_ENTITY_SELECTOR,
 		];
 		$fields[Item::FIELD_NAME_UPDATED_TIME] = [
@@ -319,7 +321,7 @@ class ItemDataProvider extends EntityDataProvider
 						'displayGrid' => true,
 						'displayFilter' => true,
 						'defaultGrid' => false,
-						'defaultFilter' => false,
+						'defaultFilter' => true,
 						'filterOptionPreset' => static::PRESET_ENTITY_SELECTOR,
 					],
 					Item::FIELD_NAME_MOVED_TIME => [
@@ -487,7 +489,7 @@ class ItemDataProvider extends EntityDataProvider
 			];
 		}
 
-		if ($this->factory->isRecurringMode())
+		if ($this->settings->isRecurring())
 		{
 			$this->appendRecurringFields($fields);
 		}
@@ -499,7 +501,7 @@ class ItemDataProvider extends EntityDataProvider
 
 	protected function appendRecurringFields(array &$fields): void
 	{
-		$fields[Item::FIELD_NAME_RECURRING_ACTIVE] = [
+		$fields[RecurringFieldEditorAdapter::RECURRING_ACTIVE] = [
 			'type' => static::TYPE_BOOLEAN,
 			'displayGrid' => true,
 			'displayFilter' => true,
@@ -515,7 +517,7 @@ class ItemDataProvider extends EntityDataProvider
 			$code .= '_INVOICE';
 		}
 
-		$fields[Item::FIELD_NAME_RECURRING_COUNTER_REPEAT] = [
+		$fields[RecurringFieldEditorAdapter::RECURRING_COUNTER_REPEAT] = [
 			'type' => static::TYPE_NUMBER,
 			'displayGrid' => true,
 			'displayFilter' => true,
@@ -523,7 +525,7 @@ class ItemDataProvider extends EntityDataProvider
 			'defaultFilter' => false,
 			'customCaption' => Loc::getMessage($code),
 		];
-		$fields[Item::FIELD_NAME_RECURRING_NEXT_EXECUTION] = [
+		$fields[RecurringFieldEditorAdapter::RECURRING_NEXT_EXECUTION] = [
 			'type' => static::TYPE_DATE,
 			'displayGrid' => true,
 			'displayFilter' => true,
@@ -531,7 +533,7 @@ class ItemDataProvider extends EntityDataProvider
 			'defaultFilter' => false,
 			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_NEXT_EXECUTION'),
 		];
-		$fields[Item::FIELD_NAME_RECURRING_START_DATE] = [
+		$fields[RecurringFieldEditorAdapter::RECURRING_START_DATE] = [
 			'type' => static::TYPE_DATE,
 			'displayGrid' => true,
 			'displayFilter' => true,
@@ -539,7 +541,7 @@ class ItemDataProvider extends EntityDataProvider
 			'defaultFilter' => false,
 			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_START_DATE'),
 		];
-		$fields[Item::FIELD_NAME_RECURRING_LIMIT_DATE] = [
+		$fields[RecurringFieldEditorAdapter::RECURRING_LIMIT_DATE] = [
 			'type' => static::TYPE_DATE,
 			'displayGrid' => true,
 			'displayFilter' => true,
@@ -547,7 +549,7 @@ class ItemDataProvider extends EntityDataProvider
 			'defaultFilter' => false,
 			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_RECURRING_LIMIT_DATE'),
 		];
-		$fields[Item::FIELD_NAME_RECURRING_LIMIT_REPEAT] = [
+		$fields[RecurringFieldEditorAdapter::RECURRING_LIMIT_REPEAT] = [
 			'type' => static::TYPE_NUMBER,
 			'displayGrid' => true,
 			'displayFilter' => true,
@@ -578,16 +580,16 @@ class ItemDataProvider extends EntityDataProvider
 			];
 
 			$factory = Container::getInstance()->getFactory($parentEntityTypeId);
-			if ($factory && \CCrmOwnerType::isPossibleDynamicTypeId($parentEntityTypeId))
+			if ($factory && CCrmOwnerType::isPossibleDynamicTypeId($parentEntityTypeId))
 			{
 				$fieldInfo['customCaption'] = $factory->getEntityDescription();
 			}
 			elseif (
-				!\CCrmOwnerType::isPossibleDynamicTypeId($parentEntityTypeId)
+				!CCrmOwnerType::isPossibleDynamicTypeId($parentEntityTypeId)
 				&& !$relation->isPredefined()
 			)
 			{
-				$fieldInfo['customCaption'] = \CCrmOwnerType::GetCategoryCaption($parentEntityTypeId);
+				$fieldInfo['customCaption'] = CCrmOwnerType::GetCategoryCaption($parentEntityTypeId);
 			}
 
 			if (isset($fieldInfo['customCaption']))
@@ -903,30 +905,7 @@ class ItemDataProvider extends EntityDataProvider
 				$params['isEnableStructureNode'] = true;
 			}
 
-			$selectorParams = $this->getUserEntitySelectorParams(EntitySelector::CONTEXT, $params);
-
-			// @todo delete this after deploy main 25.700.0
-			if (
-				$this->canUseAssignedTableForUserProvider()
-				&& $fieldID === Item::FIELD_NAME_ASSIGNED
-			)
-			{
-				foreach ($selectorParams['params']['dialogOptions']['entities'] as $entityKey => $entity)
-				{
-					if ($entity['id'] === 'fired-user')
-					{
-						$referenceFieldName = 'ASSIGNED_BY';
-						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['fieldName'] = $referenceFieldName;
-						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['referenceClass'] = AssignedTable::class;
-						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['referenceFieldName'] = $referenceFieldName;
-						$selectorParams['params']['dialogOptions']['entities'][$entityKey]['options']['referenceAdditionalFilter'] = ['ENTITY_TYPE_ID' => $this->getEntityTypeId()];
-
-						break;
-					}
-				}
-			}
-
-			return $selectorParams;
+			return $this->getDepartmentSelectorParams(EntitySelector::CONTEXT, $params);
 		}
 
 		if (in_array($fieldID, $this->getFieldNamesByType(static::TYPE_CRM_ENTITY, static::DISPLAY_IN_FILTER)))
@@ -1059,7 +1038,7 @@ class ItemDataProvider extends EntityDataProvider
 		{
 			return EntityCounterType::getListFilterInfo(
 				['params' => ['multiple' => 'Y']],
-				['ENTITY_TYPE_ID' => \CCrmOwnerType::SmartInvoice]
+				['ENTITY_TYPE_ID' => CCrmOwnerType::SmartInvoice]
 			);
 		}
 
@@ -1122,6 +1101,15 @@ class ItemDataProvider extends EntityDataProvider
 
 	protected function applySettingsDependantFilter(array &$filterFields): void
 	{
+		if ($this->getSettings()?->checkFlag(ItemSettings::FLAG_RECURRING))
+		{
+			$filterFields['=IS_RECURRING'] = 'Y';
+		}
+		else
+		{
+			$filterFields['!=IS_RECURRING'] = 'Y';
+		}
+
 		$categoryId = $this->getSettings()->getCategoryId();
 		if ($categoryId > 0)
 		{

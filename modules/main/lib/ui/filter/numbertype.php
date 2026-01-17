@@ -1,7 +1,6 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\Filter;
-
 
 /**
  * Class NumberType. Subtypes of number field

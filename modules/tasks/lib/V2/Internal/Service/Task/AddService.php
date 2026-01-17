@@ -7,7 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddGanttLinks;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddParent;
 use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -35,9 +35,8 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\RunIntegration;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendAnalytics;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendNotification;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendPush;
-use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\CounterService;
+use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Prepare\Add\EntityFieldService;
 
@@ -46,8 +45,7 @@ class AddService
 	public function __construct(
 		private readonly TaskRepositoryInterface $repository,
 		private readonly EgressInterface $egressController,
-		private readonly ChatRepositoryInterface $chatRepository,
-		private readonly CounterService $counterService,
+		private readonly Counter\Service $counterService,
 	)
 	{
 		
@@ -69,11 +67,25 @@ class AddService
 
 		$fields['ID'] = $id;
 
+		(new AddMembers($config))($fields);
+
 		(new AddScenario($config))($fields);
 
-		(new AddFavorite($config))($fields);
+		$task = $this->repository->getById($id);
 
-		(new AddMembers($config))($fields);
+		$isFullFormOn = FormV2Feature::isOn('', $task->group?->id);
+		if ($isFullFormOn)
+		{
+			// notify external services about newly created task
+			$this->egressController->processAddTaskCommand(
+				command: new AddTaskCommand(
+					task: $task,
+					config: $config,
+				),
+			);
+		}
+
+		(new AddFavorite($config))($fields);
 
 		(new AddParameters($config))($fields);
 
@@ -87,7 +99,7 @@ class AddService
 
 		(new AddUserOptions($config))($fields);
 
-		$this->counterService->addEvent(EventDictionary::EVENT_AFTER_TASK_ADD, $fields);
+		$this->counterService->send(new Counter\Command\AfterTaskAdd(data: $fields));
 
 		(new AddSync($config))($fields);
 
@@ -113,6 +125,8 @@ class AddService
 
 		(new AddParent($config))($fields);
 
+		(new AddGanttLinks($config))($fields);
+
 		(new Pin($config))($fields);
 
 		(new RunIntegration($config))($fields, $source);
@@ -127,25 +141,7 @@ class AddService
 			throw new TaskAddException();
 		}
 
-		$isMiniFormOn = FormV2Feature::isOn('miniform');
-		$isFullFormOn = FormV2Feature::isOn('', $task->group?->id);
-
-		if ($isMiniFormOn && !$isFullFormOn)
-		{
-			return [$task, $fields];
-		}
-
-		// notify external services about newly created task
-		$createdTask = $this->egressController->processAddTaskCommand(
-			command: new AddTaskCommand(
-				task: $task,
-				config: $config,
-			)
-		);
-
-		$this->chatRepository->save($createdTask->chatId, $createdTask->id);
-
-		return [$createdTask, $fields];
+		return [$task, $fields];
 	}
 
 	private function loadMessages(): void

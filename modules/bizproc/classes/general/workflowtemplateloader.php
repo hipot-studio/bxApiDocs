@@ -2,10 +2,11 @@
 
 use Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
+use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable;
-use Bitrix\Bizproc\Workflow\Template\Tpl;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Localization\Loc;
@@ -114,7 +115,7 @@ class CBPWorkflowTemplateLoader
 					$childErrors = CBPActivity::callStaticMethod(
 						$arActivity['Type'],
 						'ValidateChild',
-						[$arChildActivity['Type'], $bFirst]
+						[$arChildActivity['Type'], $bFirst, $arChildActivity]
 					);
 
 					foreach ($childErrors as $i => $e)
@@ -250,6 +251,9 @@ class CBPWorkflowTemplateLoader
 		$loader->setShowInTimelineBeforeAdd($fields);
 		$loader->setTemplateType($fields);
 
+		$fields['CREATED_BY'] = (int)CurrentUser::get()->getId();
+		$fields['UPDATED_BY'] = (int)CurrentUser::get()->getId();
+
 		$id = $loader->AddTemplate($fields, $systemImport);
 		$loader->addTemplateSettings($id, $fields);
 
@@ -293,6 +297,8 @@ class CBPWorkflowTemplateLoader
 		{
 			$fields['IS_MODIFIED'] = 'Y';
 		}
+
+		$fields['UPDATED_BY'] = (int)CurrentUser::get()->getId();
 
 		$returnId = $loader->UpdateTemplate($id, $fields, $systemImport, $validationRequired);
 		$loader->updateTemplateSettings($id, $fields);
@@ -383,7 +389,11 @@ class CBPWorkflowTemplateLoader
 		}
 
 		$this->templateType = WorkflowTemplateType::Default->value;
-		if ($this->isRobot((int)$fields['AUTO_EXECUTE']))
+		if ($this->isNodes($fields['TEMPLATE']))
+		{
+			$this->templateType = WorkflowTemplateType::Nodes->value;
+		}
+		elseif ($this->isRobot((int)$fields['AUTO_EXECUTE']))
 		{
 			$this->templateType = WorkflowTemplateType::Robots->value;
 			if ($this->isExternalModified($fields))
@@ -412,6 +422,11 @@ class CBPWorkflowTemplateLoader
 	private function isRobot(int $autoExecute): bool
 	{
 		return $autoExecute === \CBPDocumentEventType::Automation || $autoExecute === \CBPDocumentEventType::Script;
+	}
+
+	private function isNodes(array $template): bool
+	{
+		return ($template[0]['Type'] ?? '') === NodesToTemplate::ROOT_NODE_TYPE;
 	}
 
 	public function setShowInTimelineBeforeAdd(array &$fields): void
@@ -462,7 +477,6 @@ class CBPWorkflowTemplateLoader
 		$hasInstance = (bool)WorkflowInstanceTable::getRow([
 			'select' => ['ID'],
 			'filter' => ['=WORKFLOW_TEMPLATE_ID' => $id],
-			'order' => ['DOCUMENT_ID' => 'DESC'],
 		]);
 
 		if (!$hasInstance)
@@ -550,7 +564,8 @@ class CBPWorkflowTemplateLoader
 			$activity = $this->createActivity($activityFormatted);
 			if ($activity === null)
 			{
-				throw new Exception('Activity is not found.');
+				$code = $activityFormatted['Type'] ?? '(?)';
+				throw new Exception("Activity {$code} is not found.");
 			}
 
 			$activity->initializeFromArray($activityFormatted['Properties']);
@@ -573,6 +588,7 @@ class CBPWorkflowTemplateLoader
 		$code = $activityFormatted['Type'];
 		$name = $activityFormatted['Name'];
 		$activated = !isset($activityFormatted['Activated']) || $activityFormatted['Activated'] === 'Y';
+		$documentContext = $activityFormatted['Document'] ?? null;
 
 		if (CBPActivity::includeActivityFile($code))
 		{
@@ -580,13 +596,17 @@ class CBPWorkflowTemplateLoader
 			if ($instance)
 			{
 				$instance->setActivated($activated);
+				if ($documentContext)
+				{
+					$instance->setDocumentContext($documentContext);
+				}
 			}
 
 			return $instance;
 		}
 		else
 		{
-			throw new Exception('Activity is not found.');
+			throw new Exception("Activity {$code} is not found.");
 		}
 	}
 
@@ -972,7 +992,7 @@ class CBPWorkflowTemplateLoader
 		return $result;
 	}
 
-	public static function &FindActivityByName(&$arWorkflowTemplate, $activityName)
+	public static function &findActivityByName(&$arWorkflowTemplate, $activityName)
 	{
 		$res = null;
 
@@ -1003,6 +1023,7 @@ class CBPWorkflowTemplateLoader
 
 	public static function &FindParentActivityByName(&$arWorkflowTemplate, $activityName)
 	{
+		$res = null;
 		foreach ($arWorkflowTemplate as $key => $value)
 		{
 			if (is_array($value["Children"]))
@@ -1017,7 +1038,8 @@ class CBPWorkflowTemplateLoader
 					return $res;
 			}
 		}
-		return null;
+
+		return $res;
 	}
 
 	public static function exportTemplate($id, $bCompress = true)

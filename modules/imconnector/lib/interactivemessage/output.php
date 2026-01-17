@@ -145,26 +145,6 @@ class Output
 	}
 
 	/**
-	 * Sets an array of catalog products external (facebook) ID's for a message.
-	 *
-	 * @param array $ids External (facebook) ids of catalog products.
-	 */
-	public function setProductIds(array $ids = []): void
-	{
-	}
-
-	/**
-	 * Checks if an interactive message is available for the open line.
-	 *
-	 * @param int $lineId Open line id.
-	 * @return bool
-	 */
-	public function isAvailable(int $lineId): bool
-	{
-		return false;
-	}
-
-	/**
 	 * Setting the custom imessage application params.
 	 *
 	 * @param array $params

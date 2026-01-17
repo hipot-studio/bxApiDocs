@@ -5,7 +5,7 @@ namespace Bitrix\Rest\V3\Exceptions;
 class UnknownDtoPropertyException extends RestException
 {
 	public function __construct(
-		public string $dtoClass,
+		public string $dtoShortName,
 		public string $propertyName,
 	) {
 		return parent::__construct();
@@ -13,13 +13,13 @@ class UnknownDtoPropertyException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_UNKNOWN_DTO_PROPERTY_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_UNKNOWNDTOPROPERTYEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array
 	{
 		return [
-			'#DTO#' => (new \ReflectionClass($this->dtoClass))->getShortName(),
+			'#DTO#' => $this->dtoShortName,
 			'#FIELD#' => $this->propertyName,
 		];
 	}

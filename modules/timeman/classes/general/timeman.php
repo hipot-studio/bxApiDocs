@@ -55,8 +55,6 @@ class CTimeMan
 			->getWorktimeActionList()
 			->buildPossibleActionsListForUser($TMUSER->GetID());
 
-		$actions = $actionsBuilder->getAllActions();
-
 		if ($STATE == 'CLOSED')
 		{
 			$info['CAN_OPEN'] = $TMUSER->OpenAction();
@@ -69,7 +67,7 @@ class CTimeMan
 		$arSettings = $TMUSER->GetSettings(['UF_TM_REPORT_REQ']);
 		$info['REPORT_REQ'] = $arSettings['UF_TM_REPORT_REQ'] ?? null;
 		$info['TM_FREE'] = false;
-		if ($arInfo = $TMUSER->GetCurrentInfo(count($actions) > 1))
+		if ($arInfo = $TMUSER->GetCurrentInfo(true))
 		{
 			$record = WorktimeRecord::wakeUpRecord($arInfo);
 			foreach ($actionsBuilder->getAllActions() as $worktimeAction)

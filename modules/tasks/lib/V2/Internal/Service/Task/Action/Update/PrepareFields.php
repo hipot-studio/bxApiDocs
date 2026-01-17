@@ -27,7 +27,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareTags;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareTitle;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PreparePipeline;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ApplicationErrorTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\ApplicationErrorTrait;
 
 class PrepareFields
 {

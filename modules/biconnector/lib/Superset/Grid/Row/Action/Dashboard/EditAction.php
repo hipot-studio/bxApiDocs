@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\LimitManager;
+use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -64,7 +65,8 @@ final class EditAction extends BaseAction
 			return null;
 		}
 
-		$manager = LimitManager::getInstance()->setIsSuperset();
+		$service = \Bitrix\BIConnector\Manager::getInstance()->createService(ApacheSuperset::getServiceId());
+		$manager = LimitManager::getInstance()->setService($service);
 		if (!$manager->checkLimit())
 		{
 			return null;

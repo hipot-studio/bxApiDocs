@@ -47,17 +47,17 @@ class UserField implements EventBindInterface
 	 *
 	 * Handler for result improvement to REST event handlers
 	 *
-	 * @param array $arParams
-	 * @param array $arHandler
+	 * @param array $params
+	 * @param array $handler
 	 * @return array[]
 	 * @throws RestException
 	 */
-	public static function processItemEvent(array $arParams, array $arHandler): array
+	public static function processItemEvent(array $params, array $handler): array
 	{
-		$item = $arParams[0] ?? null;
-		$id = $arParams[1] ?? null;
+		$item = $params[0] ?? null;
+		$id = $params[1] ?? null;
 
-		$id = $id?:$item['ID'];
+		$id = $id ?: $item['ID'];
 
 		if (!$id)
 		{

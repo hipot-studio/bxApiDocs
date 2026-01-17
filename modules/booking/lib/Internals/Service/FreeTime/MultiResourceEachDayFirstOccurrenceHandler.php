@@ -28,13 +28,14 @@ class MultiResourceEachDayFirstOccurrenceHandler
 		{
 			$singleResourceCollectionQueryResponse = (new EachDayFirstOccurrenceHandler())(
 				new EachDayFirstOccurrenceRequest(
-					$resourceCollection,
-					$this->getFilteredBookingCollection(
+					resourceCollection: $resourceCollection,
+					eventCollection: $this->getFilteredBookingCollection(
 						$request->eventCollection,
 						$resourceCollection
 					),
-					$currentSearchDates,
-					$request->sizeInMinutes
+					searchDates: $currentSearchDates,
+					sizeInMinutes: $request->sizeInMinutes,
+					ignorePastTime: $request->ignorePastTime,
 				)
 			);
 

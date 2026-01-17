@@ -24,7 +24,7 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\ActivityController;
-use Bitrix\Crm\Timeline\AI\Call\Controller;
+use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
@@ -925,10 +925,10 @@ abstract class AbstractOperation
 			return;
 		}
 
-		Badge\Badge::deleteByEntity($itemIdentifier, Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT);
+		Badge\Badge::deleteByEntity($itemIdentifier, Badge\Badge::AI_FIELDS_FILLING_RESULT);
 		if (!empty($badgeValue))
 		{
-			$badge = Container::getInstance()->getBadge(Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT, $badgeValue);
+			$badge = Container::getInstance()->getBadge(Badge\Badge::AI_FIELDS_FILLING_RESULT, $badgeValue);
 			$sourceIdentifier = new Badge\SourceIdentifier(
 				Badge\SourceIdentifier::CRM_OWNER_TYPE_PROVIDER,
 				CCrmOwnerType::Activity,
@@ -948,7 +948,7 @@ abstract class AbstractOperation
 		}
 
 		$supportedTypes = [
-			Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT,
+			Badge\Badge::AI_FIELDS_FILLING_RESULT,
 		];
 		if (in_array($badgeType, $supportedTypes, true))
 		{
@@ -1209,12 +1209,15 @@ abstract class AbstractOperation
 	private static function constructJobFinishEventBuilder(EO_Queue $job): ?AIBaseEvent
 	{
 		$activityId = self::extractActivityIdFromJob($job);
-		$owner = null;
-		if ($activityId >= 0)
+		if ($activityId <= 0)
 		{
-			$owner = Container::getInstance()->getActivityBroker()->getOwner($activityId);
+			return null;
 		}
-		if ($activityId <= 0 || !$owner)
+
+		$broker = Container::getInstance()->getActivityBroker();
+		$owner = $broker->getOwner($activityId);
+		$provider = $broker->getById($activityId)['PROVIDER_ID'] ?? null;
+		if (!$owner || !$provider)
 		{
 			return null;
 		}
@@ -1240,6 +1243,7 @@ abstract class AbstractOperation
 			->setIsManualLaunch($job->requireIsManualLaunch())
 			->setActivityOwnerTypeId($owner->getEntityTypeId())
 			->setActivityId($activityId)
+			->setActivityProvider($provider)
 		;
 	}
 

@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Services;
 use Bitrix\BIConnector\DataSourceConnector\ApacheSupersetFieldDto;
 use Bitrix\BIConnector\DataSourceConnector\Connector;
 use Bitrix\BIConnector\DataSourceConnector\FieldDto;
+use Bitrix\BIConnector\LimitManager;
 
 class ApacheSuperset extends MicrosoftPowerBI
 {

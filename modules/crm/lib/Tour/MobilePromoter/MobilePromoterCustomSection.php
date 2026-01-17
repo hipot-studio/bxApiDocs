@@ -50,21 +50,18 @@ class MobilePromoterCustomSection extends MobilePromoter
 			$dynamicTypes = TypeTable::getList([
 				'select' => ['ID', 'ENTITY_TYPE_ID', 'CUSTOM_SECTION_ID'],
 				'filter' => ['>=CUSTOM_SECTION_ID' => 0],
-				'limit' => 2,
 			])->fetchAll();
 
 			$cache->startDataCache();
 			$cache->endDataCache($dynamicTypes);
 		}
 
-		if (count($dynamicTypes) > 1)
+		foreach ($dynamicTypes as $dynamicType)
 		{
-			return true;
-		}
-
-		if (count($dynamicTypes) === 1)
-		{
-			return $this->isEntityTypeUsed($dynamicTypes[0]['ENTITY_TYPE_ID']);
+			if ($this->hasItemsByAssigned($dynamicType['ENTITY_TYPE_ID']))
+			{
+				return true;
+			}
 		}
 
 		return false;

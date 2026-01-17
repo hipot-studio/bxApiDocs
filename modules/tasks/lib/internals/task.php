@@ -34,6 +34,7 @@ use Bitrix\Tasks\Util\Entity\DateTimeField;
 use Bitrix\Tasks\Util\UserField;
 use Bitrix\Tasks\V2\Internal\Model\TaskChatTable;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Tasks\Internals\Counter\CounterTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -156,8 +157,7 @@ class TaskTable extends TaskDataManager
 				->addValidator(new LengthValidator(null, 50)),
 
 			(new StringField('XML_ID'))
-				->addValidator(new LengthValidator(null, 200))
-				->configureTitle(Loc::getMessage('TASKS_ENTITY_XML_ID_FIELD')),
+				->addValidator(new LengthValidator(null, 200)),
 
 			(new EnumField('MARK'))
 				->configureValues(Mark::getMarks()),
@@ -325,6 +325,13 @@ class TaskTable extends TaskDataManager
 				->configureRemoteReference('TAG')
 				->configureTableName(TaskTagTable::getTableName())
 				->configureJoinType(Join::TYPE_INNER),
+
+			(new Reference(
+				'COUNTERS',
+				CounterTable::class,
+				Join::on('this.ID', 'ref.TASK_ID')
+			))
+				->configureJoinType(Join::TYPE_LEFT),
 		];
 	}
 

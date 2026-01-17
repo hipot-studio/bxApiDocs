@@ -2,14 +2,14 @@
 
 namespace Bitrix\Bizproc\Activity\Operator;
 
-use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Main\Localization\Loc;
 
 class NotContainOperator extends ContainOperator
 {
 	public static function getCode(): string
 	{
-		return '!contain';
+		return Operator::NotContain->value;
 	}
 
 	public static function getTitle(): string

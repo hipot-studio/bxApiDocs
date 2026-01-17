@@ -15,28 +15,39 @@ use Bitrix\Crm\Reservation\Strategy\Factory\OptionStrategyFactory;
 use Bitrix\Crm\Reservation\Strategy\Reserve\ReservationResult;
 use Bitrix\Crm\Reservation\Strategy\ReservePaidProductsStrategy;
 use Bitrix\Crm\Reservation\Strategy\ReserveQuantityEqualProductQuantityStrategy;
+use Bitrix\Crm\Reservation\Strategy\ReserveStrategy;
 use Bitrix\Crm\Reservation\Strategy\Strategy;
 use Bitrix\Crm\Service\Sale\BasketService;
+use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
-use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Sale\Configuration;
 use Bitrix\Sale\Order;
 use CCrmOwnerType;
 use CCrmOwnerTypeAbbr;
+use Bitrix\Catalog\Store\EnableWizard\Manager;
 
 /**
  * Service for work with reservation of product rows.
  */
 class ReservationService
 {
+	private const DEFAULT_HOUR_END = 18;
+	private const DEFAULT_MIN_END = 0;
+
+	private array $restrictedProductTypes;
+
 	public function __construct()
 	{
 		Loader::requireModule('sale');
 		Loc::loadMessages(__FILE__);
+
+		$this->initRestrictedProductTypes();
 	}
 
 	/**
@@ -61,6 +72,8 @@ class ReservationService
 
 	/**
 	 * Default date reserve end, if it is not filled.
+	 * @deprecated
+	 * @see self::getDefaultDateReserveEndWithTime()
 	 *
 	 * @return Date
 	 */
@@ -70,6 +83,101 @@ class ReservationService
 		$days = (int)$config->getReserveWithdrawalPeriod();
 
 		return (new Date())->add($days . 'D');
+	}
+
+	public function getDefaultDateReserveEndWithTime(): DateTime
+	{
+		$config = EntityFactory::make(Deal::CODE);
+		$days = (int)$config->getReserveWithdrawalPeriod();
+
+		[$hour, $minute] = $this->getWorkTimeEnd();
+
+		$date = new DateTime();
+		if ($days > 0)
+		{
+			$date->add($days . 'D');
+		}
+		$date->setTime($hour, $minute);
+
+		return $date;
+	}
+
+	public function setWorkTimeEnd(DateTime $date): void
+	{
+		[$hour, $minute] = $this->getWorkTimeEnd();
+		$date->setTime($hour, $minute);
+	}
+
+	public function createDateReserveEndWithTimeFromString(?string $timeString): DateTime
+	{
+		$timeString = trim((string)$timeString);
+		if ($timeString === '')
+		{
+			return $this->getDefaultDateReserveEndWithTime();
+		}
+
+		try
+		{
+			$result = new DateTime($timeString);
+			$this->setWorkTimeEnd($result);
+
+			return $result;
+		}
+		catch (\Exception)
+		{
+			return $this->getDefaultDateReserveEndWithTime();
+		}
+	}
+
+	public function prepareDateReserveEndWithTime(null|int|string|Date|DateTime $date): DateTime
+	{
+		if ($date === null || is_string($date))
+		{
+			return $this->createDateReserveEndWithTimeFromString($date);
+		}
+
+		if (is_int($date))
+		{
+			$datetime = DateTime::createFromTimestamp($date);
+			$this->setWorkTimeEnd($datetime);
+
+			return $datetime;
+		}
+
+		if ($date instanceof Date)
+		{
+			$datetime = DateTime::createFromTimestamp($date->getTimestamp());
+			$this->setWorkTimeEnd($datetime);
+
+			return $datetime;
+		}
+
+		$datetime = clone $date;
+		$this->setWorkTimeEnd($datetime);
+
+		return $datetime;
+	}
+
+	private function getWorkTimeEnd(): array
+	{
+		$hour = self::DEFAULT_HOUR_END;
+		$minute = self::DEFAULT_MIN_END;
+
+		if (Loader::includeModule('calendar'))
+		{
+			$settings = \CCalendar::GetSettings();
+			if (!empty($settings['work_time_end']))
+			{
+				$time = explode('.', (string)$settings['work_time_end']);
+				$hour = (int)$time[0];
+				if (!empty($time[1]))
+				{
+					$minute = (int)$time[1];
+				}
+			}
+		}
+
+		return [$hour, $minute];
 	}
 
 	/**
@@ -85,13 +193,10 @@ class ReservationService
 			return null;
 		}
 
-		if (
-			$strategy instanceof ReserveQuantityEqualProductQuantityStrategy
-			|| $strategy instanceof ReservePaidProductsStrategy
-		)
+		if ($strategy instanceof ReserveStrategy)
 		{
-			$strategy->defaultStoreId = $this->getDefaultStoreId();
-			$strategy->defaultDateReserveEnd = $this->getDefaultDateReserveEnd();
+			$strategy->setDefaultStoreId($this->getDefaultStoreId());
+			$strategy->setDefaultDateReserveEnd($this->getDefaultDateReserveEndWithTime());
 		}
 
 		return $strategy;
@@ -215,17 +320,22 @@ class ReservationService
 			}
 
 			$storeId = $row['STORE_ID'] ?? null;
-			$dateReserveEnd = $row['DATE_RESERVE_END'] ?? null;
+			$dateReserveEnd = $this->prepareDateReserveEndWithTime($row['DATE_RESERVE_END'] ?? null);
 			$reserveQuantity = $row['INPUT_RESERVE_QUANTITY'] ?? $row['RESERVE_QUANTITY'] ?? null;
 
-			if (empty($storeId) && empty($dateReserveEnd) && empty($reserveQuantity))
+			if (empty($storeId) && empty($reserveQuantity))
 			{
 				continue;
 			}
 
 			$reserveQuantity = (float)$reserveQuantity;
 			$storeId = $storeId ? (int)$storeId : null;
-			$dateReserveEnd = $dateReserveEnd ? Date::createFromText($dateReserveEnd) : null;
+
+			if (Manager::isOnecMode())
+			{
+				$reserveQuantity = 0;
+				$dateReserveEnd = null;
+			}
 
 			$reserveResult = $this->reservationProductRow($rowId, $reserveQuantity, $storeId, $dateReserveEnd);
 			$result->addErrors($reserveResult->getErrors());
@@ -272,11 +382,11 @@ class ReservationService
 	 * @param int $productRowId
 	 * @param float $quantity
 	 * @param int|null $storeId
-	 * @param Date|null $dateReserveEnd
+	 * @param DateTime|Date|null $dateReserveEnd - Attention! Date and null only for compatibility.
 	 *
 	 * @return Result
 	 */
-	public function reservationProductRow(int $productRowId, float $quantity, ?int $storeId = null, ?Date $dateReserveEnd = null): Result
+	public function reservationProductRow(int $productRowId, float $quantity, ?int $storeId = null, null|Date|DateTime $dateReserveEnd = null): Result
 	{
 		$result = new Result();
 
@@ -307,9 +417,10 @@ class ReservationService
 		{
 			$storeId = $this->getDefaultStoreId();
 		}
-		if (!isset($dateReserveEnd))
+
+		if (!($dateReserveEnd instanceof DateTime))
 		{
-			$dateReserveEnd = $this->getDefaultDateReserveEnd();
+			$dateReserveEnd = $this->prepareDateReserveEndWithTime($dateReserveEnd);
 		}
 
 		$result = $strategy->reservationProductRow($productRowId, $quantity, $storeId, $dateReserveEnd);
@@ -342,6 +453,8 @@ class ReservationService
 		$crmReserves = [];
 		if (!empty($productRowIds))
 		{
+			$dateFormat = Date::convertFormatToPhp(Context::getCurrent()->getCulture()->getDateFormat());
+
 			$rows = ProductRowReservationTable::getList([
 				'select' => [
 					'ROW_ID',
@@ -361,7 +474,11 @@ class ReservationService
 					'STORE_ID' => isset($row['STORE_ID']) ? (int)$row['STORE_ID'] : null,
 					'RESERVE_ID' => isset($row['RESERVE_ID']) ? (int)$row['RESERVE_ID'] : null,
 					'RESERVE_QUANTITY' => isset($row['RESERVE_QUANTITY']) ? (float)$row['RESERVE_QUANTITY'] : null,
-					'DATE_RESERVE_END' => isset($row['DATE_RESERVE_END']) ? (string)$row['DATE_RESERVE_END'] : null,
+					'DATE_RESERVE_END' =>
+						$row['DATE_RESERVE_END'] instanceof DateTime
+							? $row['DATE_RESERVE_END']->format($dateFormat)
+							: null
+					,
 				];
 			}
 		}
@@ -550,14 +667,19 @@ class ReservationService
 
 	public function isRestrictedType(int $type): bool
 	{
-		return in_array($type, $this->getRestrictedProductTypes(), true);
+		return isset($this->restrictedProductTypes[$type]);
 	}
 
 	public function getRestrictedProductTypes(): array
 	{
-		return [
-			ProductType::TYPE_SET,
-			ProductType::TYPE_SERVICE,
+		return array_keys($this->restrictedProductTypes);
+	}
+
+	private function initRestrictedProductTypes(): void
+	{
+		$this->restrictedProductTypes = [
+			ProductType::TYPE_SET => true,
+			ProductType::TYPE_SERVICE => true,
 		];
 	}
 }

@@ -17,6 +17,8 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\File\Param\ParamName;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
+use Bitrix\Im\V2\Integration\AI\Transcription\Item\TranscribeFileItem;
+use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
@@ -39,6 +41,8 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	protected ?int $diskFileId = null;
 	protected ?File $diskFile = null;
 	protected ?string $contentType = null;
+	private ?TranscribeFileItem $completedTranscription = null;
+	private bool $transcriptionChecked = false;
 
 	/**
 	 * @param int|File $diskFile
@@ -120,7 +124,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			return $this->diskFileId;
 		}
 
-		return $this->getDiskFile()->getId();
+		return (int)$this->getDiskFile()?->getId();
 	}
 
 	public function getOriginalFileId(): int
@@ -257,6 +261,8 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'viewerAttrs' => $this->getViewerAttributes(),
 			'mediaUrl' => $this->getMediaUrl(),
 			'isTranscribable' => $this->isTranscribable(),
+			'isVideoNote' => $this->isVideoNote(),
+			'isVoiceNote' => $this->isVoiceNote(),
 		];
 	}
 
@@ -394,7 +400,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 	private function getDownloadLink(): string
 	{
-		return $this->getLink(new FileLinkConfig('disk.api.file.download'));
+		return $this->getLink(new FileLinkConfig('disk.api.file.download', null));
 	}
 
 	private function getFilePreviewLink(?int $size = self::MAX_PREVIEW_IMAGE_SIZE, $exact = false): string
@@ -506,6 +512,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 				$fileData['CONTENT_TYPE'] = 'application/board';
 			}
 
+			if ($diskFile->supportsUnifiedLink())
+			{
+				$fileData[FileAttributes::KEY_FILE_OBJECT] = $diskFile;
+			}
+
 			$viewerType = FileAttributes::buildByFileData($fileData, $this->getDownloadLink())
 				->setObjectId($diskFile->getId())
 				->setGroupBy($this->getChatId() ?? $diskFile->getParentId())
@@ -581,5 +592,42 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	public function isTranscribable(): bool
 	{
 		return $this->getParams()->getParam(ParamName::IsTranscribable)?->getValue() ?? false;
+	}
+
+	public function isVideoNote(): bool
+	{
+		return $this->getParams()->getParam(ParamName::IsVideoNote)?->getValue() ?? false;
+	}
+
+	public function isVoiceNote(): bool
+	{
+		return $this->getParams()->getParam(ParamName::IsVoiceNote)?->getValue() ?? false;
+	}
+
+	public function setCompletedTranscription(?TranscribeFileItem $item): self
+	{
+		$this->completedTranscription = $item;
+		$this->transcriptionChecked = true;
+
+		return $this;
+	}
+
+	public function getCompletedTranscription(): ?TranscribeFileItem
+	{
+		if ($this->transcriptionChecked)
+		{
+			return $this->completedTranscription;
+		}
+
+		if (!$this->isTranscribable())
+		{
+			return null;
+		}
+
+		$transcriptions = TranscribeManager::getCompletedTranscriptions([$this]);
+		$transcription = $transcriptions[$this->getOriginalFileId()] ?? null;
+		$this->setCompletedTranscription($transcription);
+
+		return $this->completedTranscription;
 	}
 }

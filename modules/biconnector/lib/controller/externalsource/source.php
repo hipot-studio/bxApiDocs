@@ -236,7 +236,7 @@ class Source extends Controller
 		$supersetIsReady = !(SupersetInitializer::isSupersetLoading() || SupersetInitializer::isSupersetUnavailable());
 
 		return [
-			'connection' => $saveResult->getData()['connection'],
+			'connection' => $saveResult->getData()['connection'], // TODO add isSupportMapping parameter
 			'supersetIsReady' => $supersetIsReady,
 		];
 	}

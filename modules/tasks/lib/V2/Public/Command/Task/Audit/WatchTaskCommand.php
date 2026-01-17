@@ -21,6 +21,7 @@ class WatchTaskCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $auditorId,
 		public readonly bool $skipNotification = false,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -30,23 +31,17 @@ class WatchTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$memberRepository = Container::getInstance()->getTaskMemberRepository();
-		$updateTaskService = Container::getInstance()->getUpdateTaskService();
-
-		$handler = new WatchTaskHandler(
-			$memberRepository,
-			$updateTaskService,
-		);
+		$handler = Container::getInstance()->get(WatchTaskHandler::class);
 
 		try
 		{
 			$handler($this);
+
+			return $result;
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

@@ -39,6 +39,8 @@ use \Bitrix\Tasks\Access\ActionDictionary;
 
 use \Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Onboarding\DI\OnboardingContainer;
+use Bitrix\Tasks\Promotion\TasksNewCard;
+use Bitrix\Tasks\Promotion\TasksNewChatButton;
 use Bitrix\Tasks\Scrum\Form\EpicForm;
 use Bitrix\Tasks\Scrum\Form\ItemForm;
 use Bitrix\Tasks\Scrum\Service\EpicService;
@@ -1366,6 +1368,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 			'time_logs_start' => (int)$item['TIME_SPENT_IN_LOGS'],
 			'time_estimate' => $item['TIME_ESTIMATE'],
 			// rights
+
 			'allow_change_deadline' => $task->isActionAllowed(CTaskItem::ACTION_CHANGE_DEADLINE),
 			'allow_delegate' => $task->isActionAllowed(CTaskItem::ACTION_DELEGATE) || $canEdit,
 			'allow_complete' => $task->isActionAllowed(CTaskItem::ACTION_COMPLETE),
@@ -2176,6 +2179,14 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 
 	private function canProceedTours(): bool
 	{
+		if (
+			(new TasksNewCard())->shouldShow((int)$this->arParams['USER_ID'])
+			|| (new TasksNewChatButton())->shouldShow((int)$this->arParams['USER_ID'])
+		)
+		{
+			return false;
+		}
+
 		return $this->isMyList() && !$this->request->isAjaxRequest();
 	}
 
@@ -2704,7 +2715,12 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 							$acceesAllowed = true;
 							if ($stages[$columnId]['TO_UPDATE_ACCESS'])
 							{
-								if (!$taskInst->checkAccess(ActionDictionary::getActionByLegacyId($stages[$columnId]['TO_UPDATE_ACCESS'])))
+								if (
+									!$taskInst->checkAccess(
+										ActionDictionary::getActionByLegacyId($stages[$columnId]['TO_UPDATE_ACCESS']),
+										$stages[$columnId]['TO_UPDATE'],
+									)
+								)
 								{
 									$acceesAllowed = false;
 								}
@@ -3812,7 +3828,12 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 			foreach ($taskIds as $taskId)
 			{
 				$task = CTaskItem::getInstance($taskId, $this->userId);
-				if ($task->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE))
+				if (
+					$task->checkAccess(
+						ActionDictionary::ACTION_TASK_DEADLINE,
+						['DEADLINE' => $deadline],
+					)
+				)
 				{
 					$update = array(
 						'DEADLINE' => $deadline

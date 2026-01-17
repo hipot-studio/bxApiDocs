@@ -37,6 +37,7 @@ class WatchTaskHandler
 		$config = new UpdateConfig(
 			userId: $command->userId,
 			skipNotifications: $command->skipNotification,
+			useConsistency: $command->useConsistency,
 		);
 
 		$taskAfter = $this->updateTaskService->update(

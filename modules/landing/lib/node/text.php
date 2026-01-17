@@ -27,9 +27,7 @@ class Text extends \Bitrix\Landing\Node
 		$result = [];
 		$doc = $block->getDom();
 		$resultList = $doc->querySelectorAll($selector);
-		$additional['sanitize'] = !isset($additional['sanitize']) ||
-								  isset($additional['sanitize']) &&
-								  $additional['sanitize'] === true;
+		$needSanitize = ($additional['sanitize'] ?? true) === true;
 
 		foreach ($data as $pos => $value)
 		{
@@ -60,7 +58,7 @@ class Text extends \Bitrix\Landing\Node
 			{
 				$result[$pos] = [];
 
-				if ($additional['sanitize'])
+				if ($needSanitize)
 				{
 					$value = \Bitrix\Landing\Manager::sanitize($value, $bad);
 				}

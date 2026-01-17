@@ -265,6 +265,12 @@ final class ServiceLocator implements ContainerInterface
 			}
 
 			$classNameInParams = $type->getName();
+			if ($param->isDefaultValueAvailable())
+			{
+				$paramsForClass[] = $param->getDefaultValue();
+				continue;
+			}
+
 			if (!class_exists($classNameInParams) && !interface_exists($classNameInParams))
 			{
 				throw new ServiceNotFoundException(

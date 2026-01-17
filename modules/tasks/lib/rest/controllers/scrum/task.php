@@ -79,7 +79,7 @@ class Task extends Base
 		}
 
 		$entity = (new EntityService())->getEntityById($scrumTask->getEntityId());
-		if (!$entity->getId() || !$this->checkAccess($entity->getGroupId()))
+		if (!$entity->getId() || !$this->checkAccess($entity->getGroupId(), $taskId))
 		{
 			$this->errorCollection->add([new Error('Access denied')]);
 

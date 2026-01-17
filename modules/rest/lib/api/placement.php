@@ -111,17 +111,17 @@ class Placement extends \IRestService
 
 		if($placement == '')
 		{
-			throw new Exceptions\ArgumentNullException("PLACEMENT");
+			throw new Exceptions\ArgumentNullException("The placement code is not specified");
 		}
 
 		if($placement == PlacementTable::PLACEMENT_DEFAULT)
 		{
-			throw new Exceptions\ArgumentNullException("Wrong value", "PLACEMENT");
+			throw new Exceptions\ArgumentNullException("The placement code has an incorrect value");
 		}
 
 		if($placementHandler == '')
 		{
-			throw new Exceptions\ArgumentNullException("HANDLER");
+			throw new Exceptions\ArgumentNullException("The URL of the placement handler is not specified");
 		}
 
 		$appInfo = static::getApplicationInfo($server);

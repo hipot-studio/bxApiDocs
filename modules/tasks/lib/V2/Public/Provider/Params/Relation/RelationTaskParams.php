@@ -14,6 +14,7 @@ class RelationTaskParams extends GridParams
 	public function __construct(
 		public int $userId,
 		public int $taskId,
+		public int $templateId,
 		public PagerInterface $pager,
 		public bool $checkRootAccess = true,
 		public ?SelectInterface $select = null,

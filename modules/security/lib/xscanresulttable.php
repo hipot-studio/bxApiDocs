@@ -4,6 +4,8 @@ namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
 
 /**
  * Class XScanResultTable
@@ -21,13 +23,14 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\XScanResult wakeUpObject($row)
  * @method static \Bitrix\Security\XScanResults wakeUpCollection($rows)
  */
-class XScanResultTable extends \Bitrix\Main\Entity\DataManager
+class XScanResultTable extends DataManager
 {
 	private const trace = [
 		'/bitrix/modules/security/lib/controller/xscan.php',
 		'',
 		'/bitrix/modules/main/lib/engine/autowire/binder.php',
 		'/bitrix/modules/main/lib/engine/action.php',
+		'/bitrix/modules/main/lib/engine/controller.php',
 		'/bitrix/modules/main/lib/engine/controller.php',
 		'/bitrix/modules/main/lib/httpapplication.php',
 		'/bitrix/modules/main/lib/httpapplication.php',
@@ -43,17 +46,17 @@ class XScanResultTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			new \Bitrix\Main\Entity\IntegerField('ID', ['primary' => true, 'autocomplete' => true]),
-			new \Bitrix\Main\Entity\EnumField('TYPE', [
+			new Fields\IntegerField('ID', ['primary' => true, 'autocomplete' => true]),
+			new Fields\EnumField('TYPE', [
 				'values' => ['file', 'agent', 'event', 'tmpl', 'trigg'],
 				'default_value' => 'file',
 			]),
-			new \Bitrix\Main\Entity\StringField('SRC'),
-			new \Bitrix\Main\Entity\StringField('MESSAGE'),
-			new \Bitrix\Main\Entity\FloatField('SCORE'),
-			new \Bitrix\Main\Entity\DatetimeField('CTIME'),
-			new \Bitrix\Main\Entity\DatetimeField('MTIME'),
-			new \Bitrix\Main\Entity\StringField('TAGS'),
+			new Fields\StringField('SRC'),
+			new Fields\StringField('MESSAGE'),
+			new Fields\FloatField('SCORE'),
+			new Fields\DatetimeField('CTIME'),
+			new Fields\DatetimeField('MTIME'),
+			new Fields\StringField('TAGS'),
 		];
 	}
 

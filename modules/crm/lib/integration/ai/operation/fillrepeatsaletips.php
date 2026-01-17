@@ -25,7 +25,7 @@ use Bitrix\Crm\RepeatSale\DataCollector\CopilotMarkerLimitManager;
 use Bitrix\Crm\RepeatSale\Logger;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItemChecker;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Timeline\AI\Call\Controller;
+use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main;
 use Bitrix\Main\Web\Json;
 use CCrmActivity;
@@ -217,7 +217,7 @@ final class FillRepeatSaleTips extends AbstractOperation
 		{
 			$analyticsStatus = \Bitrix\Crm\Integration\Analytics\Dictionary::STATUS_SUCCESS;
 
-			self::cleanBadgeByType($activityId, Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT);
+			self::cleanBadgeByType($activityId, Badge\Badge::AI_FIELDS_FILLING_RESULT);
 			self::notifyTimelinesAboutActivityUpdate($activityId);
 		}
 		else

@@ -3,11 +3,12 @@
 namespace Bitrix\Im\V2;
 
 use ArrayAccess;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessage;
-use Bitrix\Im\V2\Permission\Action;
+use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Im\V2\TariffLimit\Limit;
@@ -174,7 +175,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	protected ?string $dialogId = null;
 	protected ?int $prevId = null;
 
-	protected bool $hasMentionAll = false;
+	protected ?bool $hasMentionAll = null;
 
 	/**
 	 * @param int|array|EO_Message|null $source
@@ -266,7 +267,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			return $this->hasMentionAll;
 		}
 
-		$this->setHasMentionAll((preg_match("/\[USER=(all)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage())));
+		$hasMention = (bool)preg_match("/\[USER=(all)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage());
+		$this->setHasMentionAll($hasMention);
 
 		return $this->hasMentionAll;
 	}
@@ -292,7 +294,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			return $this->importantFor;
 		}
 
-		if ($this->hasMentionAll)
+		if ($this->hasMentionAll())
 		{
 			$this->setImportantFor([]);
 		}
@@ -428,6 +430,16 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		return null;
+	}
+
+	public function getReplyId(): ?int
+	{
+		return $this->getParams()->get(Params::REPLY_ID)->getValue();
+	}
+
+	public function hasReply(): bool
+	{
+		return $this->getParams()->isSet(Params::REPLY_ID);
 	}
 
 	public function setUnread(bool $isUnread): self
@@ -799,9 +811,9 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	{
 		$ids = [];
 
-		if ($this->getParams()->isSet(Params::REPLY_ID))
+		if ($this->hasReply())
 		{
-			$ids[] = $this->getParams()->get(Params::REPLY_ID)->getValue();
+			$ids[] = $this->getReplyId();
 		}
 
 		return $ids;
@@ -1602,6 +1614,11 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getPreviewMessage(?int $messageSize = 200): string
 	{
+		if ($this->getParams()->isSet(Params::STICKER_PARAMS))
+		{
+			return StickerService::getPlaceholder();
+		}
+
 		$previewMessage = trim($this->getFormattedMessage());
 		$hasFiles = $this->hasFiles();
 		$hasAttach = mb_strpos($previewMessage, '[ATTACH=') !== false;
@@ -1740,26 +1757,42 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			return $this->mentionedUserIds;
 		}
 
-		$this->mentionedUserIds = [];
-		$chat = $this->getChat();
-
-		if (preg_match_all("/\[USER=([0-9]+|all)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage(), $matches))
-		{
-			foreach ($matches[1] as $userId)
-			{
-				if ($userId === 'all')
-				{
-					$this->mentionedUserIds = $chat->getAllUserIdsForMention();
-					$this->setHasMentionAll(true);
-					$this->markAsImportant();
-
-					break;
-				}
-				$this->mentionedUserIds[(int)$userId] = (int)$userId;
-			}
-		}
+		$this->mentionedUserIds = $this->parseMentions();
 
 		return $this->mentionedUserIds;
+	}
+
+	private function parseMentions(): array
+	{
+		$mentionedUserIds = [];
+		$this->setHasMentionAll(false);
+
+		if (!preg_match_all("/\[USER=([0-9]+|all)( REPLACE)?](.*?)\[\/USER]/i", $this->getParsedMessage(), $matches))
+		{
+			return [];
+		}
+
+		$isMentionAllFound = false;
+
+		foreach ($matches[1] as $userId)
+		{
+			if ($userId === 'all')
+			{
+				$isMentionAllFound = true;
+				continue;
+			}
+
+			$mentionedUserIds[(int)$userId] = (int)$userId;
+		}
+
+		if ($isMentionAllFound && Features::isMentionAllAvailable())
+		{
+			$mentionedUserIds += $this->getChat()->getAllUserIdsForMention();
+			$this->setHasMentionAll(true);
+			$this->markAsImportant();
+		}
+
+		return $mentionedUserIds;
 	}
 
 	public function getUserIdsToSendMentions(): array
@@ -1810,6 +1843,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			&& !$this->getParams()->isSet(Params::FILE_ID)
 			&& !$this->getParams()->isSet(Params::KEYBOARD)
 			&& !$this->getParams()->isSet(Params::ATTACH)
+			&& !$this->getParams()->isSet(Params::STICKER_PARAMS)
 		);
 	}
 
@@ -2163,5 +2197,39 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	public function getActionContextUserId(): int
 	{
 		return $this->getAuthorId() ?: $this->getContext()->getUserId();
+	}
+
+	public function isVoiceNote(): bool
+	{
+		$files = $this->getFiles();
+
+		if ($files->count() !== 1)
+		{
+			return false;
+		}
+
+		foreach ($files as $file)
+		{
+			return $file->isVoiceNote();
+		}
+
+		return false;
+	}
+
+	public function isVideoNote(): bool
+	{
+		$files = $this->getFiles();
+
+		if ($files->count() !== 1)
+		{
+			return false;
+		}
+
+		foreach ($files as $file)
+		{
+			return $file->isVideoNote();
+		}
+
+		return false;
 	}
 }

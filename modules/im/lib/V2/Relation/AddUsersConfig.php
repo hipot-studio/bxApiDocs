@@ -12,6 +12,7 @@ final class AddUsersConfig
 	public readonly Reason $reason;
 	public readonly bool $skipAnalytics;
 	public readonly array $hiddenUserIds;
+	public readonly bool $byAutoJoin;
 
 	public function __construct(
 		array $managerIds = [],
@@ -22,6 +23,7 @@ final class AddUsersConfig
 		Reason $reason = Reason::DEFAULT,
 		array $hiddenUserIds = [],
 		bool $skipAnalytics = true,
+		bool $byAutoJoin = false,
 	)
 	{
 		$this->managerIds = $this->normalizeIds($managerIds);
@@ -32,6 +34,7 @@ final class AddUsersConfig
 		$this->reason = $reason;
 		$this->hiddenUserIds = $this->normalizeIds($hiddenUserIds);
 		$this->skipAnalytics = $skipAnalytics;
+		$this->byAutoJoin = $byAutoJoin;
 	}
 
 	public function isManager(int $userId): bool
@@ -63,6 +66,11 @@ final class AddUsersConfig
 	public function setHideHistory(?bool $hideHistory): self
 	{
 		return $this->with(['hideHistory' => $hideHistory]);
+	}
+
+	public function setWithMessage(bool $withMessage): self
+	{
+		return $this->with(['withMessage' => $withMessage]);
 	}
 
 	public function isHidden(int $userId): bool

@@ -125,14 +125,27 @@ class MainUfDetailComponent extends ConfigComponent implements Engine\Contract\C
 		$labelsEntity = UserFieldLangTable::getEntity();
 
 		$labelTitle = $labelsEntity->getField('EDIT_FORM_LABEL')->getTitle();
+
 		$languages = $this->getLanguages();
-		foreach($languages as $language)
+		foreach ($languages as $language)
 		{
 			$form['editFormLabel'][] = [
 				'label' => $labelTitle,
 				'language' => $language,
 			];
+
+			$form['editFormTooltip'][] = [
+				'label' => Loc::getMessage(
+					'MAIN_FIELD_CONFIG_TOOLTIP_TEXT_MULTILANG',
+					[
+						'#LANGUAGE_NAME#' => $language['name'],
+					],
+				),
+				'language' => $language,
+			];
 		}
+
+		$form['generalTooltipLabel'] = Loc::getMessage('MAIN_FIELD_CONFIG_TOOLTIP_TEXT');
 
 		$form['fieldName'] = [
 			'label' => $entity->getField('FIELD_NAME')->getTitle(),

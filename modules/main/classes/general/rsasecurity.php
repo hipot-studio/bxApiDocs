@@ -48,23 +48,18 @@ class CRsaSecurity
 	protected $provider = false;
 	protected $lib = '';
 
-	public function __construct($lib=false)
+	public function __construct()
 	{
-		if(extension_loaded('openssl') && ($lib == false || $lib == 'openssl'))
+		if (extension_loaded('openssl'))
 		{
 			$this->provider = new CRsaOpensslProvider();
 			$this->lib = 'openssl';
-		}
-		elseif(extension_loaded('bcmath') && ($lib == false || $lib == 'bcmath'))
-		{
-			$this->provider = new CRsaBcmathProvider();
-			$this->lib = 'bcmath';
 		}
 	}
 
 	public static function Possible()
 	{
-		return (extension_loaded('openssl') || extension_loaded('bcmath'));
+		return extension_loaded('openssl');
 	}
 
 	public function SetKeys($arKeys)
@@ -156,7 +151,7 @@ top.BX.defer(top.rsasec_form_bind)('.Json::encode($arData).');
 		$data1 = mb_substr($data, 0, -47);
 		$sha1 = mb_substr($data, -40);
 
-		if($sha1 <> sha1($data1))
+		if($sha1 !== sha1($data1))
 	  		return self::ERROR_INTEGRITY; //integrity check error
 
 		parse_str($data, $accepted_params);

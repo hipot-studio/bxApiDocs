@@ -7,4 +7,5 @@ enum BackgroundId: string
 	case MartaAI = 'martaAI';
 	case Copilot = 'copilot';
 	case Collab = 'collab';
+	case Notifications = 'notifications';
 }

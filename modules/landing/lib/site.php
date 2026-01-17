@@ -1802,7 +1802,8 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 		{
 			$metrika = new Metrika\Metrika(
 				Metrika\Categories::getBySiteType($site['TYPE']),
-				$params->event
+				$params->event,
+				Metrika\Tools::getBySiteType($site['TYPE']),
 			);
 			$metrika->setType($params->type);
 			$metrika->setSubSection($params->subSection);

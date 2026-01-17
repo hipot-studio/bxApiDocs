@@ -46,6 +46,13 @@ class Company extends Base
 
 	protected function loadAdditionalValues(): void
 	{
+		if ($this->id <= 0)
+		{
+			$this->document = [];
+
+			return;
+		}
+
 		$this->appendDefaultUserPrefixes();
 
 		if (!$this->optimizationEnabled || in_array('CONTACT_ID', $this->select, true))

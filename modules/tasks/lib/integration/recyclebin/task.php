@@ -53,6 +53,8 @@ use Bitrix\Tasks\Util\Entity\DateTimeField;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskRestoredEvent;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use CCrmActivity;
 use CCrmActivityType;
 use CModule;
@@ -366,6 +368,14 @@ class Task implements Recyclebinable
 			$log = new CTaskLog();
 			$log->Add($logFields);
 
+			// this event will up task's chat
+			Container::getInstance()->getEventDispatcher()::dispatch(
+				new OnTaskRestoredEvent(
+					task: new \Bitrix\Tasks\V2\Internal\Entity\Task(id: $taskId, title: $task['TITLE']),
+					triggeredBy: new \Bitrix\Tasks\V2\Internal\Entity\User(id: User::getId())
+				)
+			);
+
 			Counter\CounterService::addEvent(
 				Counter\Event\EventDictionary::EVENT_AFTER_TASK_RESTORE,
 				$task->getData(false)
@@ -641,6 +651,8 @@ class Task implements Recyclebinable
 			ItemTable::deleteBySourceId($taskId);
 
 			TaskTable::delete($taskId);
+
+			Container::getInstance()->get(Chat::class)->deleteChatByTaskId($taskId);
 		}
 		catch (Exception $e)
 		{

@@ -441,14 +441,6 @@ class CAllCrmActivity
 			{
 				ExecuteModuleEventEx($arEvent, array($ID, &$arFields));
 			}
-
-			if($arFields['COMPLETED'] === 'Y')
-			{
-				Crm\Ml\Scoring::queuePredictionUpdate($arFields['OWNER_TYPE_ID'], $arFields['OWNER_ID'], [
-					'EVENT_TYPE' => Crm\Ml\Scoring::EVENT_ACTIVITY,
-					'ASSOCIATED_ACTIVITY_ID'=> $ID
-				]);
-			}
 		}
 
 		return $ID;
@@ -1152,16 +1144,6 @@ class CAllCrmActivity
 		);
 		$event->send();
 
-		if(($arFields['COMPLETED'] ?? null) === 'Y')
-		{
-			$ownerId = $arFields['OWNER_ID'] ?? $arPrevEntity['OWNER_ID'];
-			$ownerTypeId = $arFields['OWNER_TYPE_ID'] ?? $arPrevEntity['OWNER_TYPE_ID'];
-			Crm\Ml\Scoring::queuePredictionUpdate($ownerTypeId, $ownerId, [
-				'EVENT_TYPE' => Crm\Ml\Scoring::EVENT_ACTIVITY,
-				'ASSOCIATED_ACTIVITY_ID'=> $ID
-			]);
-		}
-
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{
 			$GLOBALS["CACHE_MANAGER"]->ClearByTag("CRM_ACTIVITY_".$ID);
@@ -1440,8 +1422,6 @@ class CAllCrmActivity
 		}
 
 		FastSearch\Sync\Monitor::getInstance()->onActivityDelete($ID, $ary);
-
-		\Bitrix\Crm\Ml\Scoring::onActivityDelete($ID);
 
 		if(!$movedToRecycleBin)
 		{

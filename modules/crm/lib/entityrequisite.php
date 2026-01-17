@@ -81,7 +81,7 @@ class EntityRequisite
 	private static $fixedPresetList = null;
 	private static $FIELD_INFOS = null;
 
-	private static $allowedRqFieldCountryIds = array(1, 4, 6, 14, 34, 46, 77, 110, 122, 132);
+	private static $allowedRqFieldCountryIds = array(1, 4, 6, 14, 34, 46, 77, 110, 122, 132, 13);
 	private static $rqFieldCountryMap = null;
 	private static $rqFieldTitleMap = null;
 	private static $userFieldTitles = null;
@@ -2284,14 +2284,14 @@ class EntityRequisite
 				'RQ_LAST_NAME' => [1, 34, 46, 77, 110, 122, 132],
 				'RQ_SECOND_NAME' => [1],
 				'RQ_COMPANY_ID' => [110],
-				'RQ_COMPANY_NAME' => [1, 4, 6, 14, 34, 46, 77, 110, 122, 132],
-				'RQ_COMPANY_FULL_NAME' => [1, 4, 6, 77, 110],
+				'RQ_COMPANY_NAME' => [1, 4, 6, 14, 34, 46, 77, 110, 122, 132, 13],
+				'RQ_COMPANY_FULL_NAME' => [1, 4, 6, 77, 110, 13],
 				'RQ_COMPANY_REG_DATE' => [1, 4],
-				'RQ_DIRECTOR' => [1, 4, 14],
-				'RQ_ACCOUNTANT' => [1, 4, 14],
+				'RQ_DIRECTOR' => [1, 4, 14, 13],
+				'RQ_ACCOUNTANT' => [1, 4, 14, 13],
 				'RQ_CEO_NAME' => [6],
 				'RQ_CEO_WORK_POS' => [6],
-				'RQ_ADDR' => [1, 4, 6, 14, 34, 46, 77, 110, 122, 132],
+				'RQ_ADDR' => [1, 4, 6, 14, 34, 46, 77, 110, 122, 132, 13],
 				'RQ_CONTACT' => [1, 4, 6, 14, 46, 122],
 				'RQ_EMAIL' => [1, 4, 6, 14, 46, 122],
 				'RQ_PHONE' => [1, 4, 6, 14, 46, 122],
@@ -2304,7 +2304,7 @@ class EntityRequisite
 				'RQ_IDENT_DOC_DATE' => [1, 4],
 				'RQ_IDENT_DOC_ISSUED_BY' => [1, 4],
 				'RQ_IDENT_DOC_DEP_CODE' => [1],
-				'RQ_INN' => [1, 4, 6, 14, 46, 77, 110],
+				'RQ_INN' => [1, 4, 6, 14, 46, 77, 110, 13],
 				'RQ_KPP' => [1],
 				'RQ_USRLE' => [46],
 				'RQ_IFNS' => [1],
@@ -2312,7 +2312,7 @@ class EntityRequisite
 				'RQ_OGRNIP' => [1],
 				'RQ_OKPO' => [1, 4, 6],
 				'RQ_OKTMO' => [1],
-				'RQ_OKVED' => [1, 132],
+				'RQ_OKVED' => [1, 132, 13],
 				'RQ_EDRPOU' => [14],
 				'RQ_DRFO' => [14],
 				'RQ_KBE' => [6],
@@ -2351,6 +2351,7 @@ class EntityRequisite
 					Country::ID_POLAND,
 					Country::ID_FRANCE,
 					Country::ID_BRAZIL,
+					Country::ID_UZBEKISTAN,
 				],
 				'RQ_STAMP' => [
 					Country::ID_RUSSIA,
@@ -2363,6 +2364,7 @@ class EntityRequisite
 					Country::ID_POLAND,
 					Country::ID_FRANCE,
 					Country::ID_BRAZIL,
+					Country::ID_UZBEKISTAN,
 				],
 			];
 		}
@@ -5835,6 +5837,161 @@ class EntityRequisite
 						'LAST_FIELD_ID' => 8,
 					],
 				],
+				// uz
+				23 => [
+					'ID' => 24,
+					'ENTITY_TYPE_ID' => '8',
+					'COUNTRY_ID' => '13',
+					'NAME' => $requisite->getPhrase('CRM_REQUISITE_FIXED_PRESET_LEGALENTITY_UZ_TITLE', 13),
+					'ACTIVE' => 'Y',
+					'XML_ID' => '#CRM_REQUISITE_PRESET_DEF_UZ_LEGALENTITY#',
+					'SORT' => 500,
+					'SETTINGS' => [
+						'FIELDS' => [
+							0 => [
+								'ID' => 1,
+								'FIELD_NAME' => 'RQ_COMPANY_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 510,
+							],
+							1 => [
+								'ID' => 2,
+								'FIELD_NAME' => 'RQ_COMPANY_FULL_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 520,
+							],
+							2 => [
+								'ID' => 3,
+								'FIELD_NAME' => 'RQ_ADDR',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 530,
+							],
+							3 => [
+								'ID' => 4,
+								'FIELD_NAME' => 'RQ_INN',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 540,
+							],
+							4 => [
+								'ID' => 5,
+								'FIELD_NAME' => 'RQ_ACCOUNTANT',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 550,
+							],
+							5 => [
+								'ID' => 6,
+								'FIELD_NAME' => 'RQ_DIRECTOR',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 560,
+							],
+							6 => [
+								'ID' => 7,
+								'FIELD_NAME' => 'RQ_OKVED',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 570,
+							],
+							7 => [
+								'ID' => 8,
+								'FIELD_NAME' => 'RQ_SIGNATURE',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 580,
+							],
+							8 => [
+								'ID' => 9,
+								'FIELD_NAME' => 'RQ_STAMP',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 590,
+							],
+						],
+						'LAST_FIELD_ID' => 9,
+					],
+				],
+				24 => [
+					'ID' => 25,
+					'ENTITY_TYPE_ID' => '8',
+					'COUNTRY_ID' => '13',
+					'NAME' => $requisite->getPhrase('CRM_REQUISITE_FIXED_PRESET_PERSON_UZ_TITLE', 13),
+					'ACTIVE' => 'Y',
+					'XML_ID' => '#CRM_REQUISITE_PRESET_DEF_UZ_PERSON#',
+					'SORT' => 500,
+					'SETTINGS' => [
+						'FIELDS' => [
+							0 => [
+								'ID' => 1,
+								'FIELD_NAME' => 'RQ_COMPANY_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 510,
+							],
+							1 => [
+								'ID' => 2,
+								'FIELD_NAME' => 'RQ_COMPANY_FULL_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 520,
+							],
+							2 => [
+								'ID' => 3,
+								'FIELD_NAME' => 'RQ_ADDR',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 530,
+							],
+							3 => [
+								'ID' => 4,
+								'FIELD_NAME' => 'RQ_INN',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 540,
+							],
+							4 => [
+								'ID' => 5,
+								'FIELD_NAME' => 'RQ_ACCOUNTANT',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 550,
+							],
+							5 => [
+								'ID' => 6,
+								'FIELD_NAME' => 'RQ_DIRECTOR',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 560,
+							],
+							6 => [
+								'ID' => 7,
+								'FIELD_NAME' => 'RQ_OKVED',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 570,
+							],
+							7 => [
+								'ID' => 8,
+								'FIELD_NAME' => 'RQ_SIGNATURE',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 580,
+							],
+							8 => [
+								'ID' => 9,
+								'FIELD_NAME' => 'RQ_STAMP',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 590,
+							],
+						],
+						'LAST_FIELD_ID' => 9,
+					],
+				],
 			];
 		}
 
@@ -8193,6 +8350,9 @@ class EntityRequisite
 				122 => [    // us
 					'RQ_VAT_ID',
 				],
+				13 => [    // uz
+					'RQ_INN',
+				]
 			];
 		}
 
@@ -8601,6 +8761,7 @@ class EntityRequisite
 				110 => 'pl',
 				132 => 'fr',
 				122 => 'en',
+				13 => 'uz',
 			];
 		}
 

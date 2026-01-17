@@ -33,6 +33,7 @@ abstract class Engine
 	protected const AGREEMENT_CODE = '';
 	protected const FEATURE_CODE = '';
 	protected const SHARD_PREFIX = '';
+	protected const REQUIRES_PERSONAL_DATA_OBFUSCATION = true;
 
 	protected const PARAM_CONSUMPTION_ID = 'consumptionId';
 	protected const PARAM_QUALITY = 'qualityParam';
@@ -47,6 +48,7 @@ abstract class Engine
 	protected bool $historyState = false;
 	protected bool $cache = false;
 	protected bool $isModeResponseJson = false;
+	protected bool $reasoningMode = false;
 	protected int $historyGroupId = -1;//Group ID for save history. -1 - no grouped, 0 - first item of group
 	protected ?IPayload $payload = null;
 	protected $onSuccessCallback;
@@ -151,6 +153,16 @@ abstract class Engine
 	public function getCode(): string
 	{
 		return static::ENGINE_CODE;
+	}
+
+	/**
+	 * Returns whether the engine requires personal data obfuscation.
+	 *
+	 * @return bool
+	 */
+	public function requiresPersonalDataObfuscation(): bool
+	{
+		return static::REQUIRES_PERSONAL_DATA_OBFUSCATION;
 	}
 
 	/**
@@ -661,10 +673,7 @@ abstract class Engine
 		elseif (is_callable($this->onErrorCallback))
 		{
 			$error = $http->getError();
-			call_user_func(
-				$this->onErrorCallback,
-				new Error(current($error), key($error)),
-			);
+			$this->onResponseError(current($error), array_key_first($error));
 		}
 	}
 
@@ -700,7 +709,11 @@ abstract class Engine
 
 		if (isset($postParams['reasoning_effort']))
 		{
-			$returnArray['reasoning_effort'] = $postParams['reasoning_effort'];
+			if ($this->supportsReasoning())
+			{
+				$returnArray['reasoning_effort'] = $postParams['reasoning_effort'];
+				$this->reasoningMode = true;
+			}
 		}
 
 		if (isset($postParams['max_tokens']))
@@ -788,6 +801,11 @@ abstract class Engine
 		return false;
 	}
 
+	public function supportsReasoning(): bool
+	{
+		return $this->hasQuality(new Quality(['reasoning']));
+	}
+
 	/**
 	 * Return cache state
 	 *
@@ -831,6 +849,28 @@ abstract class Engine
 	{
 		$quality = new Quality(['json_response_mode']);
 		$this->isModeResponseJson = $this->hasQuality($quality) && $enable;
+	}
+
+	/**
+	 * Set reasoning mode.
+	 *
+	 * @param bool $enable
+	 *
+	 * @return void
+	 */
+	public function setReasoningMode(bool $enable): void
+	{
+		$this->reasoningMode = $this->supportsReasoning() && $enable;
+	}
+
+	/**
+	 * Check if reasoning mode is enabled.
+	 *
+	 * @return bool
+	 */
+	public function isReasoningEnabled(): bool
+	{
+		return $this->reasoningMode;
 	}
 
 	protected function restoreReplacements(mixed $value): mixed

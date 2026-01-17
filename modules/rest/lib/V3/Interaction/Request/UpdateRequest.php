@@ -2,8 +2,8 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
-use Bitrix\Rest\V3\Structures\FieldsStructure;
-use Bitrix\Rest\V3\Structures\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\FieldsStructure;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
 
 class UpdateRequest extends Request
 {

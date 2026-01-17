@@ -288,7 +288,7 @@ class Generation
 		$metrika = new Metrika\Metrika(
 			$this->scenario->getAnalyticCategory(),
 			$event,
-			Metrika\Tools::ai
+			Metrika\Tools::Ai
 		);
 
 		$this->metrikaProviderParamService->setParams($metrika, $event);

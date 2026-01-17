@@ -50,6 +50,7 @@ class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\I
 		#[Copyable]
 		public ?string $externalId = null,
 		public ?int $stoppedById = null,
+		#[Copyable]
 		public ?Main\Type\DateTime $externalDateCreate = null,
 		#[Copyable]
 		public ?string $providerCode = null,

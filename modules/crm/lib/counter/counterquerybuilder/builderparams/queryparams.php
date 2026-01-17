@@ -27,6 +27,8 @@ final class QueryParams
 
 	private bool $useActivityResponsible;
 
+	private bool $completed;
+
 	/**
 	 * @todo description
 	 * @var Date|null

@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Copilot\Model;
 use Bitrix\Landing\Copilot\Model\Helper\EmojiDataProcessor;
 use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -24,7 +25,7 @@ use Bitrix\Main\Type\DateTime;
  * @method static \Bitrix\Landing\Copilot\Model\EO_Generations wakeUpObject($row)
  * @method static \Bitrix\Landing\Copilot\Model\EO_Generations_Collection wakeUpCollection($rows)
  */
-class GenerationsTable extends Entity\DataManager
+class GenerationsTable extends DataManager
 {
 	/**
 	 * @inheritdoc

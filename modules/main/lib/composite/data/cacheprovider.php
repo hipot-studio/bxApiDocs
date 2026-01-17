@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Main\Composite\Data;
 
 abstract class CacheProvider

@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Integration\AI\Function\Category\Stage;
 
 use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Category\Dto\Stage\DeleteParameters;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\DeleteEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -59,6 +61,14 @@ final class Delete implements AIFunction
 			return Result::fail(Loc::getMessage('CRM_INTEGRATION_AI_FUNCTION_CATEGORY_STAGE_DELETE_STAGE_NOT_FOUND_ERROR'), 'STAGE_NOT_FOUND');
 		}
 
-		return $stageToDelete->delete();
+		$result = $stageToDelete->delete();
+
+		(new DeleteEvent(section: Dictionary::SECTION_AI))
+			->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
+			->buildEvent()
+			->send()
+		;
+
+		return $result;
 	}
 }

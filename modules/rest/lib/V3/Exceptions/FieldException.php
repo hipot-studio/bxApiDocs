@@ -13,9 +13,9 @@ abstract class FieldException extends RestException
 		parent::__construct();
 	}
 
-	public function output($localErrorLanguage = null): array
+	public function output($responseLanguage = null): array
 	{
-		$out = parent::output($localErrorLanguage);
+		$out = parent::output($responseLanguage);
 
 		$out['field'] = $this->field;
 

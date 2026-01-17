@@ -22,7 +22,10 @@ class ClientBaseFilter extends Base
 		$fieldsList = parent::getFieldsList();;
 
 		$contactFilter = Factory::createEntityFilter(
-			new ContactSettings(array('ID' => EventHandler::CLIENT_BASE_BOARD_KEY))
+			new ContactSettings([
+				'ID' => EventHandler::CLIENT_BASE_BOARD_KEY,
+				'disableDepartmentSelector' => true,
+			]),
 		);
 
 		$fields = $contactFilter->getFields();

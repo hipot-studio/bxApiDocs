@@ -4,12 +4,14 @@ namespace Bitrix\Booking\Command\WaitListItem;
 
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Exception\WaitListItem\CreateWaitListItemException;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\WaitListItemService;
+use Bitrix\Booking\Service\BookingFeature;
 
 class AddWaitListItemCommandHandler
 {
@@ -26,6 +28,8 @@ class AddWaitListItemCommandHandler
 
 	public function __invoke(AddWaitListItemCommand $command): Entity\WaitListItem\WaitListItem
 	{
+		$this->checkFeatures();
+
 		return $this->transactionHandler->handle(
 			fn: function () use ($command) {
 				$waitListItem = $this->waitListItemService->create($command->waitListItem, $command->createdBy);
@@ -48,5 +52,16 @@ class AddWaitListItemCommandHandler
 			},
 			errType: CreateWaitListItemException::class,
 		);
+	}
+
+	private function checkFeatures(): void
+	{
+		if (!BookingFeature::areFeaturesEnabled([
+			BookingFeature::FEATURE_ID_BOOKING,
+			BookingFeature::FEATURE_ID_WAIT_LIST,
+		]))
+		{
+			throw new Exception('Feature is not available');
+		}
 	}
 }

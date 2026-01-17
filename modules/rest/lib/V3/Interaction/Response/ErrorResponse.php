@@ -15,14 +15,23 @@ class ErrorResponse extends ArrayResponse implements RestExceptionInterface
 
 	protected int $code;
 
-	/**
-	 * @param Error[] $errors
-	 */
 	public function __construct(array $errors)
 	{
-		$error = $errors[0];
+
+		$currentError = null;
+		foreach ($errors as $error)
+		{
+			if ($error::class === Error::class)
+			{
+				$currentError = $error;
+
+				break;
+			}
+		}
+
+		$error = $currentError ?? $errors[0];
 		$this->status = $error->getCode();
-		$this->code = (int) $error->getCode();
+		$this->code = (int)$error->getCode();
 		$result = ['error' => $this->getSingleErrorResponseData($error)];
 		parent::__construct($result);
 	}

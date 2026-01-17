@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Reservation;
 use Bitrix\Crm;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 
 class ProductRowReservation extends Crm\Reservation\Internals\EO_ProductRowReservation
 {
@@ -80,17 +81,8 @@ class ProductRowReservation extends Crm\Reservation\Internals\EO_ProductRowReser
 			$fields['RESERVE_QUANTITY'] = $fields['INPUT_RESERVE_QUANTITY'];
 		}
 
-		if (!array_key_exists('DATE_RESERVE_END', $fields))
-		{
-			$fields['DATE_RESERVE_END'] = ReservationService::getInstance()->getDefaultDateReserveEnd();
-		}
-
-		if (is_int($fields['DATE_RESERVE_END']))
-		{
-			$fields['DATE_RESERVE_END'] = Date::createFromPhp(
-				(new \DateTime())->setTimestamp($fields['DATE_RESERVE_END'])
-			);
-		}
+		$service = ReservationService::getInstance();
+		$fields['DATE_RESERVE_END'] = $service->prepareDateReserveEndWithTime($fields['DATE_RESERVE_END'] ?? null);
 
 		return array_filter(
 			$fields,

@@ -66,7 +66,7 @@ class Bitrix24Manager
 	{
 		if(static::isEnabled())
 		{
-			return \Bitrix\Bitrix24\Feature::getVariable('documentgenerator_create_documents');
+			return Feature::getVariable('documentgenerator_create_documents');
 		}
 
 		return 0;
@@ -208,14 +208,11 @@ class Bitrix24Manager
 		}
 	}
 
-	/**
-	 * @return bool
-	 */
-	public static function isPermissionsFeatureEnabled()
+	public static function isPermissionsFeatureEnabled(): bool
 	{
-		if(static::isEnabled())
+		if (static::isEnabled())
 		{
-			return \Bitrix\Bitrix24\Feature::isFeatureEnabled("documentgenerator_permissions");
+			return Feature::isFeatureEnabled("documentgenerator_permissions");
 		}
 
 		return true;

@@ -166,10 +166,7 @@ class EventTable extends Main\Entity\DataManager
 		$restDescription = $provider->getDescription();
 		foreach($restDescription as $scope => $scopeDescription)
 		{
-			if(
-				is_array($scopeDescription[\CRestUtil::EVENTS])
-				&& array_key_exists($eventName, $scopeDescription[\CRestUtil::EVENTS])
-			)
+			if (!empty($scopeDescription[\CRestUtil::EVENTS][$eventName]))
 			{
 				\Bitrix\Rest\Event\Sender::bind(
 					$scopeDescription[\CRestUtil::EVENTS][$eventName][0],
@@ -213,8 +210,8 @@ class EventTable extends Main\Entity\DataManager
 				'=APP_ID' => $data['APP_ID'],
 				'=EVENT_NAME' => $data['EVENT_NAME'],
 				'=EVENT_HANDLER' => $data['EVENT_HANDLER'],
-				'=USER_ID' => $data['USER_ID'],
-				'=CONNECTOR_ID' => $data['CONNECTOR_ID'],
+				'=USER_ID' => $data['USER_ID'] ?? 0,
+				'=CONNECTOR_ID' => $data['CONNECTOR_ID'] ?? '',
 			),
 			'select' => array('ID')
 		));

@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Main\Update;
 
 use Bitrix\Main\Application;

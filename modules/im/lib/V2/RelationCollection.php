@@ -41,6 +41,7 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 	protected array $relationsByUserId = [];
 	protected ?self $activeOnly = null;
 	protected ?self $notifyOnly = null;
+	protected ?self $activeMembers = null;
 
 	public static function getCollectionElementClass(): string
 	{
@@ -150,6 +151,26 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 		}
 
 		return $this->activeOnly;
+	}
+
+	public function filterActiveMembers(): self
+	{
+		if (isset($this->activeMembers))
+		{
+			return $this->activeMembers;
+		}
+
+		$this->activeMembers = new static();
+
+		foreach ($this->filterActive() as $relation)
+		{
+			if (!$relation->isHidden())
+			{
+				$this->activeMembers->add($relation);
+			}
+		}
+
+		return $this->activeMembers;
 	}
 
 	public function filterNotifySubscribed(): self
@@ -313,6 +334,7 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 
 		$this->activeOnly = null;
 		$this->notifyOnly = null;
+		$this->activeMembers = null;
 	}
 
 	public function offsetUnset(mixed $key)
@@ -328,6 +350,7 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 
 		$this->activeOnly = null;
 		$this->notifyOnly = null;
+		$this->activeMembers = null;
 	}
 
 	public function onAfterRelationDelete(int $chatId, int $userId): void
@@ -339,5 +362,10 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 		}
 		unset($this->relationsByUserId[$chatId][$userId]);
 		unset(self::$startIdStaticCache[$chatId][$userId]);
+	}
+
+	public function clearActiveMemberCache(): void
+	{
+		$this->activeMembers = null;
 	}
 }

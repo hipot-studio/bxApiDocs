@@ -14,7 +14,8 @@ class EachDayFirstOccurrenceRequest
 		public readonly ResourceCollection $resourceCollection,
 		public readonly BookingCollection $eventCollection,
 		public readonly DateTimeCollection $searchDates,
-		public readonly int|null $sizeInMinutes = null
+		public readonly int|null $sizeInMinutes = null,
+		public readonly bool $ignorePastTime = true,
 	)
 	{
 	}

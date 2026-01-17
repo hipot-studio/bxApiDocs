@@ -472,8 +472,9 @@ abstract class BaseUfComponent extends CBitrixComponent
 
 		if(empty($this->additionalParameters['bVarsFromForm']) && !isset($this->additionalParameters['VALUE']))
 		{
+			$forceUseValueInsteadOfDefault = ($this->additionalParameters['FORCE_USE_VALUE'] ?? 'N') === 'Y';
 			$value = (
-				isset($this->userField['ENTITY_VALUE_ID']) && $this->userField['ENTITY_VALUE_ID'] <= 0
+				isset($this->userField['ENTITY_VALUE_ID']) && $this->userField['ENTITY_VALUE_ID'] <= 0 && !$forceUseValueInsteadOfDefault
 					? ($this->userField['SETTINGS']['DEFAULT_VALUE'] ?? [])
 					: ($this->userField['VALUE'] ?? [])
 			);

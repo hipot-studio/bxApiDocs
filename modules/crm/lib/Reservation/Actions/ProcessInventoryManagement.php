@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Reservation\Actions;
 
+use Bitrix\Crm\Integration\Sale\Reservation\Config\Entity\Deal;
+use Bitrix\Crm\Integration\Sale\Reservation\Config\EntityFactory;
 use Bitrix\Main;
 use Bitrix\Crm;
 use Bitrix\Catalog;
@@ -23,8 +25,15 @@ abstract class ProcessInventoryManagement extends Base
 
 		if ($semanticId === Crm\PhaseSemantics::SUCCESS)
 		{
-			$processInventoryManagementResult = $this->ship($item);
-			if ($processInventoryManagementResult->isSuccess())
+			if (EntityFactory::make(Deal::CODE)->getAutoWriteOffOnFinalize())
+			{
+				$processInventoryManagementResult = $this->ship($item);
+				if ($processInventoryManagementResult->isSuccess())
+				{
+					$processInventoryManagementResult = $this->unReserve($item);
+				}
+			}
+			else
 			{
 				$processInventoryManagementResult = $this->unReserve($item);
 			}
@@ -75,7 +84,11 @@ abstract class ProcessInventoryManagement extends Base
 		$defaultStore = Catalog\StoreTable::getDefaultStoreId();
 		foreach ($productRows as $product)
 		{
-			$storeId = (int)$product['STORE_ID'] > 0 ? (int)$product['STORE_ID'] : $defaultStore;
+			$storeId = (int)($product['STORE_ID'] ?? 0);
+			if ($storeId <= 0)
+			{
+				$storeId = $defaultStore;
+			}
 
 			$xmlId = null;
 			if (isset($reservationMap[$product['ID']]))

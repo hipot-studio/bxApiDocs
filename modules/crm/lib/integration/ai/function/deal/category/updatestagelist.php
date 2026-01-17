@@ -7,6 +7,10 @@ use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\EO_Status_Collection;
 use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Deal\Dto\Category\UpdateStageListParameters;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\CreateEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\DeleteEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\RenameEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
@@ -31,6 +35,10 @@ final class UpdateStageList implements AIFunction
 	private readonly DefaultProcessColorGenerator $stageColorGenerator;
 
 	private const SORT_STEP = 10;
+
+	private int $stagesToAddCount = 0;
+	private int $stagesToRenameCount = 0;
+	private int $stagesToDeleteCount = 0;
 
 	public function __construct(
 		private readonly int $currentUserId,
@@ -65,6 +73,7 @@ final class UpdateStageList implements AIFunction
 			$this->connection->startTransaction();
 
 			$existsStageCollection = $this->factory->getStages($parameters->categoryId);
+			$this->countStageChanges($existsStageCollection, $parameters->stages);
 			$newStageCollection = $this->applyStageChanges($existsStageCollection, $parameters->stages);
 
 			$this->saveStages($newStageCollection, $parameters->categoryId);
@@ -72,11 +81,13 @@ final class UpdateStageList implements AIFunction
 		catch (Throwable $e)
 		{
 			$this->connection->rollbackTransaction();
+			$this->sendAnalyticsEvents(Dictionary::STATUS_ERROR);
 
 			return Result::fail($e->getMessage(), $e->getCode());
 		}
 
 		$this->connection->commitTransaction();
+		$this->sendAnalyticsEvents(Dictionary::STATUS_SUCCESS);
 
 		return Result::success();
 	}
@@ -220,5 +231,57 @@ final class UpdateStageList implements AIFunction
 		$entityId = $this->factory->getStagesEntityId($categoryId);
 
 		return new CCrmStatus($entityId);
+	}
+
+	private function countStageChanges(EO_Status_Collection $existsStages, array $stagesToUpdate): void
+	{
+		$inProcessStages = array_filter(
+			$existsStages->getAll(),
+			static fn(EO_Status $stage) => !PhaseSemantics::isFinal($stage->getSemantics()),
+		);
+
+		$existsStagesCount = count($inProcessStages);
+		$stagesToUpdateCount = count($stagesToUpdate);
+
+		if ($stagesToUpdateCount > $existsStagesCount)
+		{
+			$this->stagesToAddCount = $stagesToUpdateCount - $existsStagesCount;
+			$this->stagesToRenameCount = $existsStagesCount;
+		}
+		else
+		{
+			$this->stagesToDeleteCount = $existsStagesCount - $stagesToUpdateCount;
+			$this->stagesToRenameCount = $stagesToUpdateCount;
+		}
+	}
+
+	private function sendAnalyticsEvents(string $status): void
+	{
+		if ($this->stagesToAddCount > 0)
+		{
+			(new CreateEvent(section: Dictionary::SECTION_AI, count: $this->stagesToAddCount))
+				->setStatus($status)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		if ($this->stagesToRenameCount > 0)
+		{
+			(new RenameEvent(section: Dictionary::SECTION_AI, count: $this->stagesToRenameCount))
+				->setStatus($status)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		if ($this->stagesToDeleteCount > 0)
+		{
+			(new DeleteEvent(section: Dictionary::SECTION_AI, count: $this->stagesToDeleteCount))
+				->setStatus($status)
+				->buildEvent()
+				->send()
+			;
+		}
 	}
 }

@@ -18,6 +18,7 @@ class SetAverageTaskPriorityCommand extends AbstractCommand
 		public readonly int $taskId,
 		#[PositiveNumber]
 		public readonly int $userId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -27,19 +28,17 @@ class SetAverageTaskPriorityCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$updateTaskService = Container::getInstance()->getUpdateTaskService();
-
-		$handler = new SetAverageTaskPriorityHandler($updateTaskService);
+		$handler = Container::getInstance()->get(SetAverageTaskPriorityHandler::class);
 
 		try
 		{
 			$handler($this);
+
+			return $result;
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

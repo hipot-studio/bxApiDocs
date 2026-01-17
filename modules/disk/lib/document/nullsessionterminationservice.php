@@ -7,7 +7,7 @@ namespace Bitrix\Disk\Document;
 class NullSessionTerminationService implements SessionTerminationService
 {
 
-	public function terminateAllSessions(): void
+	public function terminateSessionsWithInsufficientRights(): void
 	{
 	}
 }

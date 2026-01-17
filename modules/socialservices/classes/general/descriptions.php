@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServDescription
@@ -146,5 +147,3 @@ class CSocServDescription
 		);
 	}
 }
-
-AddEventHandler("socialservices", "OnAuthServicesBuildList", array("CSocServDescription", "GetDescription"));

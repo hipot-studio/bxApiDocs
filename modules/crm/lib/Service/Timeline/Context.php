@@ -86,6 +86,25 @@ class Context
 		return $this->getUserPermissions()->item()->canReadItemIdentifier($this->getIdentifier());
 	}
 
+	public function canAddItems(): bool
+	{
+		if ($this->getEntityCategoryId() === null)
+		{
+			return $this->getUserPermissions()
+				->entityType()
+				->canAddItems($this->getEntityTypeId())
+			;
+		}
+
+		return $this->getUserPermissions()
+			->entityType()
+			->canAddItemsInCategory(
+				$this->getEntityTypeId(),
+				$this->getEntityCategoryId(),
+			)
+		;
+	}
+
 	final public function isClosedEntity(): bool
 	{
 		return ComparerBase::isClosed($this->getIdentifier(), true);

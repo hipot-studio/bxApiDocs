@@ -597,6 +597,7 @@ class CCrmDealDetailsComponent
 				'PRODUCT_DATA_FIELD_NAME' => $this->arResult['PRODUCT_DATA_FIELD_NAME'] ?? '',
 				'CATEGORY_ID' => $this->entityData['CATEGORY_ID'] ?? null,
 				'BUILDER_CONTEXT' => Crm\Product\Url\ProductBuilder::TYPE_ID,
+				'IS_COPY_MODE' => $this->isCopyMode,
 			],
 			false,
 			[
@@ -1016,24 +1017,6 @@ class CCrmDealDetailsComponent
 		}
 		//endregion
 
-		//region SCORING
-		$stageSemanticId = \CCrmDeal::GetSemanticID(
-			$this->entityData['STAGE_ID'],
-			(isset($this->entityData['CATEGORY_ID']) ? $this->entityData['CATEGORY_ID'] : 0)
-		);
-
-		$isStageFinal = Crm\PhaseSemantics::isFinal($stageSemanticId);
-		$this->arResult['IS_STAGE_FINAL'] = $isStageFinal;
-		if($this->entityID > 0)
-		{
-			if(!$isStageFinal)
-			{
-				Crm\Ml\ViewHelper::subscribePredictionUpdate(CCrmOwnerType::Deal, $this->entityID);
-			}
-			$this->arResult['SCORING'] = Crm\Ml\ViewHelper::prepareData(CCrmOwnerType::Deal, $this->entityID);
-		}
-		//endregion
-
 		// region AUTOMATION DEBUG
 		$activeDebugEntityIds = CCrmBizProcHelper::getActiveDebugEntityIds(CCrmOwnerType::Deal);
 		if (in_array($this->entityID, $activeDebugEntityIds))
@@ -1042,7 +1025,7 @@ class CCrmDealDetailsComponent
 		}
 		// endregion
 
-		if ((!$this->isEnableRecurring || !Crm\Ml\Scoring::isEnabled()) && CModule::IncludeModule('bitrix24'))
+		if (CModule::IncludeModule('bitrix24'))
 		{
 			CBitrix24::initLicenseInfoPopupJS();
 		}
@@ -1123,12 +1106,15 @@ class CCrmDealDetailsComponent
 	{
 		$this->categoryID = $categoryID;
 	}
+
 	public function prepareFieldInfos()
 	{
 		if(isset($this->entityFieldInfos))
 		{
 			return $this->entityFieldInfos;
 		}
+
+		Container::getInstance()->getLocalization()->loadMessages();
 
 		//region Recurring Deals
 		if (isset($this->entityData['IS_RECURRING']) && $this->entityData['IS_RECURRING'] === 'Y')
@@ -1239,6 +1225,15 @@ class CCrmDealDetailsComponent
 			CCrmOwnerType::Deal,
 			$this->categoryID
 		);
+
+		$isCategoriesEnabled = false;
+		$categories = [];
+		if (!empty($this->arResult['CREATE_CATEGORY_LIST']) && is_array($this->arResult['CREATE_CATEGORY_LIST']))
+		{
+			$isCategoriesEnabled = true;
+			$categories = $this->arResult['CREATE_CATEGORY_LIST'];
+		}
+
 		$this->entityFieldInfos = array(
 			array(
 				'name' => 'ID',
@@ -1503,17 +1498,16 @@ class CCrmDealDetailsComponent
 				Loc::getMessage("CRM_DEAL_FIELD_PRODUCTS"),
 				"PRODUCT_ROW_SUMMARY"
 			),
-			array(
-				"name" => "RECURRING",
-				"title" => DealDefaultEntityConfig::getRecurringSectionTitle(),
-				"type" => "recurring",
-				"editable" => isset($this->arResult['CREATE_CATEGORY_LIST'])
+			[
+				'name' => 'RECURRING',
+				'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_RECURRING_DEAL'),
+				'type' => 'recurringV2',
+				'editable' => isset($this->arResult['CREATE_CATEGORY_LIST'])
 								&& is_array($this->arResult['CREATE_CATEGORY_LIST'])
 								&& count($this->arResult['CREATE_CATEGORY_LIST']) > 0,
-				"transferable" => false,
+				'transferable' => false,
 				'enableAttributes' => false,
-				"enableRecurring" => $this->isEnableRecurring,
-				"elements" => $this->prepareRecurringElements(),
+				'enableRecurring' => $this->isEnableRecurring,
 				'data' => [
 					'loaders' => [
 						'url' => UrlManager::getInstance()->create('crm.recurring.hint.get')->getUri(),
@@ -1521,14 +1515,11 @@ class CCrmDealDetailsComponent
 					'view' => [
 						'text' => $recurringViewText,
 					],
-					'fieldData' => [
-						'MULTIPLE_EXECUTION' => Recurring\Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Recurring\Manager::SINGLE_EXECUTION,
-						'NON_ACTIVE' => Recurring\Calculator::SALE_TYPE_NON_ACTIVE_DATE,
-					],
 					'restrictScript' => (!$this->isEnableRecurring && $dealRecurringRestriction !== null) ? $dealRecurringRestriction->prepareInfoHelperScript() : '',
+					'isCategoriesEnabled' => $isCategoriesEnabled,
+					'categories' => $categories
 				],
-			),
+			],
 			[
 				'name' => 'MOVED_BY_ID',
 				'title' => Loc::getMessage('CRM_DEAL_FIELD_MOVED_BY_ID'),
@@ -1562,23 +1553,19 @@ class CCrmDealDetailsComponent
 			'enableAttributes' => false
 		);
 
-		//region WAITING FOR LOCATION SUPPORT
-		/*
-		if($this->isTaxMode)
+		if ($this->isTaxMode)
 		{
-			$this->entityFieldInfos[] = array(
+			$this->entityFieldInfos[] = [
 				'name' => 'LOCATION_ID',
 				'title' => Loc::getMessage('CRM_DEAL_FIELD_LOCATION_ID'),
 				'type' => 'custom',
-				'data' => array(
+				'data' => [
 					'edit' => 'LOCATION_EDIT_HTML',
-					'view' => 'LOCATION_VIEW_HTML'
-				),
-				'editable' => true
-			);
+					'view' => 'LOCATION_VIEW_HTML',
+				],
+				'editable' => true,
+			];
 		}
-		*/
-		//endregion
 
 		$this->entityFieldInfos = array_merge(
 			$this->entityFieldInfos,
@@ -1694,7 +1681,9 @@ class CCrmDealDetailsComponent
 				'FIELD' => $fieldName,
 				'MULTIPLE' => $userField['MULTIPLE'],
 				'MANDATORY' => $userField['MANDATORY'],
-				'SETTINGS' => isset($userField['SETTINGS']) ? $userField['SETTINGS'] : null
+				'ADDITIONAL' => $userField['ADDITIONAL'] ?? [],
+				'HELP_MESSAGE' => $userField['HELP_MESSAGE'] ?? '',
+				'SETTINGS' => $userField['SETTINGS'] ?? null,
 			);
 
 			if($userField['USER_TYPE_ID'] === 'enumeration')
@@ -1703,14 +1692,12 @@ class CCrmDealDetailsComponent
 			}
 			elseif($userField['USER_TYPE_ID'] === 'file')
 			{
-				$fieldInfo['ADDITIONAL'] = array(
-					'URL_TEMPLATE' => \CComponentEngine::MakePathFromTemplate(
-						$this->getFileUrlTemplate(),
-						array(
-							'owner_id' => $this->entityID,
-							'field_name' => $fieldName
-						)
-					)
+				$fieldInfo['ADDITIONAL']['URL_TEMPLATE'] = CComponentEngine::MakePathFromTemplate(
+					$this->getFileUrlTemplate(),
+					[
+						'owner_id' => $this->entityID,
+						'field_name' => $fieldName
+					],
 				);
 			}
 
@@ -1986,6 +1973,8 @@ class CCrmDealDetailsComponent
 			{
 				$this->entityData['CATEGORY_ID'] = $this->categoryID;
 			}
+
+			$this->prepareLocationData();
 		}
 		else
 		{
@@ -2030,52 +2019,9 @@ class CCrmDealDetailsComponent
 
 			$this->entityData['ORDER_LIST'] = $this->getOrderList();
 
-			//region UTM
-			ob_start();
-			$APPLICATION->IncludeComponent(
-				'bitrix:crm.utm.entity.view',
-				'',
-				array('FIELDS' => $this->entityData),
-				false,
-				array('HIDE_ICONS' => 'Y', 'ACTIVE_COMPONENT' => 'Y')
-			);
-			$this->entityData['UTM_VIEW_HTML'] = ob_get_contents();
-			ob_end_clean();
-			//endregion
+			$this->prepareUtmData();
+			$this->prepareLocationData();
 
-			//region WAITING FOR LOCATION SUPPORT
-			/*
-			if($this->isTaxMode)
-			{
-				$locationID = isset($this->entityData['LOCATION_ID']) ? $this->entityData['LOCATION_ID'] : '';
-				ob_start();
-				\CSaleLocation::proxySaleAjaxLocationsComponent(
-					array(
-						'AJAX_CALL' => 'N',
-						'COUNTRY_INPUT_NAME' => 'LOC_COUNTRY',
-						'REGION_INPUT_NAME' => 'LOC_REGION',
-						'CITY_INPUT_NAME' => 'LOC_CITY',
-						'CITY_OUT_LOCATION' => 'Y',
-						'LOCATION_VALUE' => $locationID,
-						'ORDER_PROPS_ID' => "DEAL_{$this->entityID}",
-						'ONCITYCHANGE' => 'CrmProductRowSetLocation',
-						'SHOW_QUICK_CHOOSE' => 'N'
-					),
-					array(
-						"CODE" => $locationID,
-						"ID" => "",
-						"PROVIDE_LINK_BY" => "code",
-						"JS_CALLBACK" => 'CrmProductRowSetLocation'
-					),
-					'popup'
-				);
-				$locationHtml = ob_get_contents();
-				ob_end_clean();
-
-				$this->entityData['LOCATION_EDIT_HTML'] = $locationHtml;
-				$this->entityData['LOCATION_VIEW_HTML'] = '';
-			}
-			*/
 			//region Default Responsible and Stage ID for copy mode
 			if($this->isCopyMode)
 			{
@@ -2436,6 +2382,20 @@ class CCrmDealDetailsComponent
 		//region Product row
 
 		$this->entityData["PRODUCT_ROW_SUMMARY"] = $this->getProductRowSummaryData();
+		if (
+			$this->isCopyMode
+			&& $this->entityData['IS_MANUAL_OPPORTUNITY'] !== 'Y'
+			&& $this->isCatalogModuleIncluded
+			&& !AccessController::getCurrent()->checkByValue(
+				ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+				\CCrmOwnerType::Deal,
+			)
+		)
+		{
+			$this->entityData['OPPORTUNITY'] =
+				$this->entityData['PRODUCT_ROW_SUMMARY']['totalRaw']['amount']
+			;
+		}
 
 		//endregion
 		//region Recurring Deals
@@ -2648,6 +2608,67 @@ class CCrmDealDetailsComponent
 		return $this->entityData;
 	}
 
+	private function prepareUtmData(): void
+	{
+		global $APPLICATION;
+
+		ob_start();
+		$APPLICATION->IncludeComponent(
+			'bitrix:crm.utm.entity.view',
+			'',
+			[
+				'FIELDS' => $this->entityData,
+			],
+			false,
+			[
+				'HIDE_ICONS' => 'Y',
+				'ACTIVE_COMPONENT' => 'Y',
+			],
+		);
+
+		$this->entityData['UTM_VIEW_HTML'] = ob_get_clean();
+	}
+
+	private function prepareLocationData(): void
+	{
+		if (!$this->isTaxMode)
+		{
+			return;
+		}
+
+		$locationId = $this->entityData['LOCATION_ID'] ?? '';
+
+		$locationString = CCrmLocations::getLocationStringByCode($locationId);
+		if (empty($locationString))
+		{
+			$locationString = '';
+		}
+
+		ob_start();
+		\CSaleLocation::proxySaleAjaxLocationsComponent(
+			[
+				'AJAX_CALL' => 'N',
+				'COUNTRY_INPUT_NAME' => 'LOCATION_ID_COUNTRY',
+				'REGION_INPUT_NAME' => 'LOCATION_ID_REGION',
+				'CITY_INPUT_NAME' => 'LOCATION_ID',
+				'CITY_OUT_LOCATION' => 'Y',
+				'LOCATION_VALUE' => $locationId,
+				'ORDER_PROPS_ID' => "DEAL_{$this->entityID}",
+				'SHOW_QUICK_CHOOSE' => 'N',
+			],
+			[
+				'CODE' => $locationId,
+				'ID' => '',
+				'PROVIDE_LINK_BY' => 'code',
+			],
+			'popup',
+		);
+		$locationHtml = ob_get_clean();
+
+		$this->entityData['LOCATION_EDIT_HTML'] = $locationHtml;
+		$this->entityData['LOCATION_VIEW_HTML'] = $locationString;
+	}
+
 	protected function getProductRowSummaryData(): array
 	{
 		$productRowSummaryData = [];
@@ -2742,6 +2763,11 @@ class CCrmDealDetailsComponent
 		if ($this->isCopyMode)
 		{
 			return ComponentMode::COPING;
+		}
+
+		if ($this->conversionWizard !== null)
+		{
+			return ComponentMode::CONVERSION;
 		}
 
 		return ComponentMode::VIEW;
@@ -2953,383 +2979,11 @@ class CCrmDealDetailsComponent
 
 		return $result;
 	}
+
+	/* @deprecated since crm 25.800.0 */
 	protected function prepareRecurringElements()
 	{
-		if (!$this->isEnableRecurring || (($this->arResult['READ_ONLY'] ?? null) === true))
-		{
-			return [];
-		}
-		$data = [
-			[
-				'name' => 'RECURRING[MODE]',
-				'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING'),
-				'type' => 'list',
-				'editable' => true,
-				'enableAttributes' => false,
-				'enabledMenu' => false,
-				'data' => array(
-					'items' => [
-						[
-							'VALUE' => Recurring\Calculator::SALE_TYPE_NON_ACTIVE_DATE,
-							'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_NOT_REPEAT")
-						],
-						[
-							'VALUE' => Recurring\Manager::MULTIPLY_EXECUTION,
-							'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_MANY_TIMES")
-						],
-						[
-							'VALUE' => Recurring\Manager::SINGLE_EXECUTION,
-							'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_ONCE_TIME")
-						]
-					]
-				),
-			],
-			[
-				'name' => 'SINGLE_PARAMS',
-				'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_SINGLE_TITLE'),
-				'type' => 'recurring_single_row',
-				'editable' => true,
-				'enableAttributes' => false,
-				'enabledMenu' => false,
-				'data' => array(
-					'select' => array(
-						'name' => 'RECURRING[SINGLE_TYPE]',
-						'items' => [
-							[
-								'VALUE' => Recurring\Calculator::SALE_TYPE_DAY_OFFSET,
-								'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_SINGLE_TYPE_DAY")
-							],
-							[
-								'VALUE' => Recurring\Calculator::SALE_TYPE_WEEK_OFFSET,
-								'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_SINGLE_TYPE_WEEK")
-							],
-							[
-								'VALUE' => Recurring\Calculator::SALE_TYPE_MONTH_OFFSET,
-								'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_SINGLE_TYPE_MONTH")
-							]
-						]
-					),
-					'amount' => 'RECURRING[SINGLE_INTERVAL_VALUE]',
-					'date' => 'RECURRING[SINGLE_DATE_BEFORE]',
-				),
-			],
-			[
-				"name" => "MULTIPLE_PARAMS",
-				"type" => "recurring",
-				"editable" => isset($this->arResult['CREATE_CATEGORY_LIST'])
-					&& is_array($this->arResult['CREATE_CATEGORY_LIST'])
-					&& count($this->arResult['CREATE_CATEGORY_LIST']) > 0,
-				"transferable" => false,
-				'enableAttributes' => false,
-				"enableRecurring" => $this->isEnableRecurring,
-				"elements" => [
-					[
-						'name' => 'RECURRING[MULTIPLE_TYPE]',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_MUTLTIPLE_PERIOD_TITLE'),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'items' => [
-								[
-									'VALUE' => Recurring\Calculator::SALE_TYPE_DAY_OFFSET,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_EVERYDAY")
-								],
-								[
-									'VALUE' => Recurring\Calculator::SALE_TYPE_WEEK_OFFSET,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_EVERY_WEEK")
-								],
-								[
-									'VALUE' => Recurring\Calculator::SALE_TYPE_MONTH_OFFSET,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_EVERY_MONTH")
-								],
-								[
-									'VALUE' => Recurring\Calculator::SALE_TYPE_YEAR_OFFSET,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_EVERY_YEAR")
-								],
-								[
-									'VALUE' => Recurring\Calculator::SALE_TYPE_CUSTOM_OFFSET,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_INTERVAL")
-								],
-							]
-						),
-					],
-					[
-						'name' => 'MULTIPLE_CUSTOM',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_CUSTOM_INTERVAL_TITLE'),
-						'type' => 'recurring_custom_row',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'select' => array(
-								'name' => 'RECURRING[MULTIPLE_CUSTOM_TYPE]',
-								'items' => [
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_DAY_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_DAY")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_WEEK_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_WEEK")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_MONTH_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_MONTH")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_YEAR_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_YEAR")
-									]
-								]
-							),
-							'amount' => 'RECURRING[MULTIPLE_CUSTOM_INTERVAL_VALUE]',
-
-						),
-					]
-				],
-				"data" => array(
-					"view" => [],
-					"fieldData" => [
-						'MULTIPLE_EXECUTION' => Recurring\Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Recurring\Manager::SINGLE_EXECUTION,
-						'MULTIPLE_CUSTOM' => Recurring\Calculator::SALE_TYPE_CUSTOM_OFFSET,
-					]
-				)
-			],
-			[
-				'name' => 'RECURRING[MULTIPLE_DATE_START]',
-				'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_MULTIPLE_START_DATE_TITLE'),
-				'type' => 'datetime',
-				'editable' => true,
-				'enableAttributes' => false,
-				'enabledMenu' => false,
-				'data' =>  array('enableTime' => false)
-			],
-			[
-				"name" => "MULTIPLE_LIMIT",
-				"type" => "recurring",
-				"editable" => isset($this->arResult['CREATE_CATEGORY_LIST'])
-					&& is_array($this->arResult['CREATE_CATEGORY_LIST'])
-					&& count($this->arResult['CREATE_CATEGORY_LIST']) > 0,
-				"transferable" => false,
-				'enableAttributes' => false,
-				"enableRecurring" => $this->isEnableRecurring,
-				"elements" => [
-					[
-						'name' => 'RECURRING[MULTIPLE_TYPE_LIMIT]',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_MULTIPLE_FINAL_LIMIT_TITLE'),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'items' => [
-								[
-									'VALUE' => Recurring\Entity\Base::NO_LIMITED,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_MULTIPLE_FINAL_NO_LIMIT")
-								],
-								[
-									'VALUE' => Recurring\Entity\Base::LIMITED_BY_DATE,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_MULTIPLE_FINAL_LIMIT_DATE")
-								],
-								[
-									'VALUE' => Recurring\Entity\Base::LIMITED_BY_TIMES,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_MULTIPLE_FINAL_LIMIT_TIMES")
-								]
-							]
-						),
-					],
-					[
-						'name' => 'RECURRING[MULTIPLE_DATE_LIMIT]',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_MULTIPLE_LIMIT_DATE_TITLE'),
-						'type' => 'datetime',
-						'editable' => true,
-						'enabledMenu' => false,
-						'enableAttributes' => false,
-						'data' =>  array('enableTime' => false)
-					],
-					[
-						'name' => 'RECURRING[MULTIPLE_TIMES_LIMIT]',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_MULTIPLE_LIMIT_TIMES_TITLE'),
-						'type' => 'number',
-						'editable' => true,
-						'enabledMenu' => false,
-						'enableAttributes' => false,
-					]
-				],
-				"data" => array(
-					"view" => [],
-					"fieldData" => [
-						'MULTIPLE_EXECUTION' => Recurring\Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Recurring\Manager::SINGLE_EXECUTION,
-						'NO_LIMIT' => Recurring\Entity\Deal::NO_LIMITED,
-						'LIMITED_BY_DATE' => Recurring\Entity\Deal::LIMITED_BY_DATE,
-						'LIMITED_BY_TIMES' => Recurring\Entity\Deal::LIMITED_BY_TIMES,
-					]
-				)
-			],
-			[
-				"name" => "NEW_BEGINDATE",
-				"type" => "recurring",
-				"editable" => isset($this->arResult['CREATE_CATEGORY_LIST'])
-					&&  is_array($this->arResult['CREATE_CATEGORY_LIST'])
-					&& count($this->arResult['CREATE_CATEGORY_LIST']) > 0,
-				"transferable" => false,
-				'enableAttributes' => false,
-				"enableRecurring" => $this->isEnableRecurring,
-				"elements" => [
-					[
-						'name' => 'RECURRING[BEGINDATE_TYPE]',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_NEW_BEGINDATE_VALUE_TITLE'),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'items' => [
-								[
-									'VALUE' => Recurring\Entity\Deal::SETTED_FIELD_VALUE,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_NEW_VALUE_CURRENT_FIELD")
-								],
-								[
-									'VALUE' => Recurring\Entity\Deal::CALCULATED_FIELD_VALUE,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_NEW_VALUE_DATE_CREATION_OFFSET")
-								]
-							]
-						),
-					],
-					[
-						'name' => 'OFFSET_BEGINDATE',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_DATE_CREATION_BEGINDATE_OFFSET_TITLE'),
-						'type' => 'recurring_custom_row',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'select' => array(
-								'name' => 'RECURRING[OFFSET_BEGINDATE_TYPE]',
-								'items' => [
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_DAY_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_DAY")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_WEEK_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_WEEK")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_MONTH_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_MONTH")
-									]
-								]
-							),
-							'amount' => 'RECURRING[OFFSET_BEGINDATE_VALUE]',
-						),
-					]
-				],
-				"data" => array(
-					"view" => [],
-					"fieldData" => [
-						'SETTED_FIELD_VALUE' => Recurring\Entity\Deal::SETTED_FIELD_VALUE,
-						'CALCULATED_FIELD_VALUE' => Recurring\Entity\Deal::CALCULATED_FIELD_VALUE,
-						'MULTIPLE_EXECUTION' => Recurring\Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Recurring\Manager::SINGLE_EXECUTION,
-					]
-				)
-			],
-			[
-				"name" => "NEW_CLOSEDATE",
-				"type" => "recurring",
-				"editable" => isset($this->arResult['CREATE_CATEGORY_LIST'])
-					&& is_array($this->arResult['CREATE_CATEGORY_LIST'])
-					&& count($this->arResult['CREATE_CATEGORY_LIST']) > 0,
-				"transferable" => false,
-				'enableAttributes' => false,
-				"enableRecurring" => $this->isEnableRecurring,
-				"elements" => [
-					[
-						'name' => 'RECURRING[CLOSEDATE_TYPE]',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_NEW_CLOSEDATE_VALUE_TITLE'),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'items' => [
-								[
-									'VALUE' => Recurring\Entity\Deal::SETTED_FIELD_VALUE,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_NEW_VALUE_CURRENT_FIELD")
-								],
-								[
-									'VALUE' => Recurring\Entity\Deal::CALCULATED_FIELD_VALUE,
-									'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_NEW_VALUE_DATE_CREATION_OFFSET")
-								]
-							]
-						),
-					],
-					[
-						'name' => 'OFFSET_CLOSEDATE',
-						'title' => Loc::getMessage('CRM_DEAL_FIELD_RECURRING_DATE_CREATION_CLOSEDATE_OFFSET_TITLE'),
-						'type' => 'recurring_custom_row',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => array(
-							'select' => array(
-								'name' => 'RECURRING[OFFSET_CLOSEDATE_TYPE]',
-								'items' => [
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_DAY_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_DAY")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_WEEK_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_WEEK")
-									],
-									[
-										'VALUE' => Recurring\Calculator::SALE_TYPE_MONTH_OFFSET,
-										'NAME' => Loc::getMessage("CRM_DEAL_FIELD_RECURRING_CUSTOM_MONTH")
-									]
-								]
-							),
-							'amount' => 'RECURRING[OFFSET_CLOSEDATE_VALUE]',
-						),
-					]
-				],
-				"data" => array(
-					"view" => [],
-					"fieldData" => [
-						'SETTED_FIELD_VALUE' => Recurring\Entity\Deal::SETTED_FIELD_VALUE,
-						'CALCULATED_FIELD_VALUE' => Recurring\Entity\Deal::CALCULATED_FIELD_VALUE,
-						'MULTIPLE_EXECUTION' => Recurring\Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Recurring\Manager::SINGLE_EXECUTION,
-					]
-				)
-			]
-		];
-
-		if (
-			isset($this->arResult['CREATE_CATEGORY_LIST'])
-			&& is_array($this->arResult['CREATE_CATEGORY_LIST'])
-			&& count($this->arResult['CREATE_CATEGORY_LIST']) > 0
-		)
-		{
-			$data[] = [
-				'name' => 'RECURRING[CATEGORY_ID]',
-				'title' => Loc::getMessage('CRM_DEAL_FIELD_CATEGORY_RECURRING'),
-				'type' => 'list',
-				'editable' => true,
-				'enabledMenu' => false,
-				'enableAttributes' => false,
-				'data' => array(
-					'items' => $this->arResult['CREATE_CATEGORY_LIST']
-				),
-			];
-		}
-
-		return $data;
+		return [];
 	}
 
 	protected function prepareScoringData()

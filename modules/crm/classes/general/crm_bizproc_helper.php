@@ -455,6 +455,25 @@ class CCrmBizProcHelper
 		;
 		$event->send();
 	}
+
+	public static function getDynamicDocumentTypesWithProducts(): array
+	{
+		$result = [];
+		$crmDynamicTypesMap =
+			\Bitrix\Crm\Service\Container::getInstance()
+				->getDynamicTypesMap()
+				->load(['isLoadStages' => false, 'isLoadCategories' => false])
+		;
+		foreach ($crmDynamicTypesMap->getTypes() as $dynamicType)
+		{
+			if ($dynamicType->getIsLinkWithProductsEnabled())
+			{
+				$result[] = self::ResolveDocumentType($dynamicType->getEntityTypeId());
+			}
+		}
+
+		return $result;
+	}
 }
 
 class CCrmBizProcEventType

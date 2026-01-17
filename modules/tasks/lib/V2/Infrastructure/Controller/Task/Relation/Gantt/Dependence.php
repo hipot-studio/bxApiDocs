@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Access\Task\Gantt\Permission\Update;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Read;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLink;
+use Bitrix\Tasks\V2\Internal\Service\Task\Gantt\GanttDependenceService;
 use Bitrix\Tasks\V2\Public\Command\Gantt\AddDependenceCommand;
 use Bitrix\Tasks\V2\Public\Command\Gantt\DeleteDependenceCommand;
 use Bitrix\Tasks\V2\Public\Command\Gantt\UpdateDependenceCommand;
@@ -31,26 +32,27 @@ class Dependence extends BaseController
 	public function listAction(
 		#[Read]
 		Task $task,
-		SelectInterface $relationTaskSelect,
 		PageNavigation $pageNavigation,
-		GanttDependenceProvider $subTaskProvider,
+		GanttDependenceProvider $ganttDependenceProvider,
+		?SelectInterface $relationTaskSelect = null,
 		bool $withIds = true,
 	): array
 	{
 		$params = new RelationTaskParams(
 			userId: $this->userId,
 			taskId: (int)$task->id,
+			templateId: 0,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
 			select: $relationTaskSelect,
 		);
 
 		$response = [
-			'tasks' => $subTaskProvider->getTasks($params),
+			'tasks' => $ganttDependenceProvider->getTasks($params),
 		];
 
 		if ($withIds)
 		{
-			$response['ids'] = $subTaskProvider->getTaskIds($params);
+			$response['ids'] = $ganttDependenceProvider->getTaskIds($params);
 		}
 
 		return $response;
@@ -72,7 +74,29 @@ class Dependence extends BaseController
 	}
 
 	/**
-	 * @ajaxAction tasks.V2.Task.Gantt.Dependence.add
+	 * @ajaxAction tasks.V2.Task.Relation.Gantt.Dependence.check
+	 */
+	#[GanttRestriction]
+	public function checkAction(
+		#[Update]
+		GanttLink $ganttLink,
+		GanttDependenceService $ganttDependenceService,
+	): ?bool
+	{
+		$result = $ganttDependenceService->check($ganttLink);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Task.Relation.Gantt.Dependence.add
 	 */
 	#[GanttRestriction]
 	public function addAction(
@@ -85,6 +109,7 @@ class Dependence extends BaseController
 			dependentId: $ganttLink->dependentId,
 			userId: $this->userId,
 			linkType: $ganttLink->type,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -98,7 +123,7 @@ class Dependence extends BaseController
 	}
 
 	/**
-	 * @ajaxAction tasks.V2.Task.Gantt.Dependence.update
+	 * @ajaxAction tasks.V2.Task.Relation.Gantt.Dependence.update
 	 */
 	public function updateAction(
 		#[Update]
@@ -109,6 +134,7 @@ class Dependence extends BaseController
 			taskId: $ganttLink->taskId,
 			dependentId: $ganttLink->dependentId,
 			linkType: $ganttLink->type,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -122,7 +148,7 @@ class Dependence extends BaseController
 	}
 
 	/**
-	 * @ajaxAction tasks.V2.Task.Gantt.Dependence.delete
+	 * @ajaxAction tasks.V2.Task.Relation.Gantt.Dependence.delete
 	 */
 	public function deleteAction(
 		#[Update]
@@ -132,6 +158,7 @@ class Dependence extends BaseController
 		$result = (new DeleteDependenceCommand(
 			taskId: $ganttLink->taskId,
 			dependentId: $ganttLink->dependentId,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())

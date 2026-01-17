@@ -8,6 +8,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
+use Bitrix\Imbot\Integration\Tasks;
 
 Loc::loadMessages(__FILE__);
 
@@ -21,13 +22,12 @@ class Marta extends Base
 		if (!\Bitrix\Main\Loader::includeModule('im'))
 			return false;
 
-		$language = null;
+		$language = Application::getInstance()->getLicense()->getRegion() ?? 'en';
 		if (isset($params['LANG']))
 		{
 			$language = $params['LANG'];
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
-		$language = in_array($language, Array('ru', 'en'))? $language: 'ru';
 
 		$agentMode = isset($params['AGENT']) && $params['AGENT'] == 'Y';
 
@@ -126,6 +126,11 @@ class Marta extends Base
 		}
 
 		return $agentMode? "": $botId;
+	}
+
+	public static function getBotIdOrRegister(): int
+	{
+		return self::getBotId() ?: (int)self::register();
 	}
 
 	public static function uploadAvatar($lang = LANGUAGE_ID)
@@ -736,7 +741,7 @@ class Marta extends Base
 				$tasksCounter = \CTaskListCtrl::getMainCounterForUser($userId);
 				if ($tasksCounter > 0)
 				{
-					$tasksUrl = \CTaskCountersNotifier::getTasksListLink($userId);
+					$tasksUrl = (new Tasks\Service\UrlService())->getTasksListLink((int)$userId);
 
 					$pluralForm = \CTasksTools::getPluralForm($tasksCounter, true);
 					if ($pluralForm !== false)

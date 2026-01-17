@@ -39,6 +39,11 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 
 		foreach ($this->chats as $chat)
 		{
+			if ($chat instanceof Chat\NullChat)
+			{
+				continue;
+			}
+
 			$restData = $chat->toRestFormat(['CHAT_SHORT_FORMAT' => true]);
 			$rest[] = array_merge($restData, $this->getSelfAdditionalParams($chat));
 		}

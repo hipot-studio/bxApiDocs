@@ -200,7 +200,7 @@ abstract class SessionManager implements IErrorable
 	/**
 	 * @throws ArgumentException
 	 */
-	protected function buildFilter(): array
+	protected function buildFields(): array
 	{
 		$filter = [
 			'USER_ID' => $this->userId,
@@ -240,13 +240,37 @@ abstract class SessionManager implements IErrorable
 	}
 
 	/**
+	 * @throws ArgumentException
+	 */
+	protected function buildFilter(): array
+	{
+		$filter = $this->buildFields();
+
+		if (array_key_exists('SERVICE', $filter))
+		{
+			$filter['=SERVICE'] = $filter['SERVICE'];
+
+			unset($filter['SERVICE']);
+		}
+
+		if (array_key_exists('EXTERNAL_HASH', $filter))
+		{
+			$filter['=EXTERNAL_HASH'] = $filter['EXTERNAL_HASH'];
+
+			unset($filter['EXTERNAL_HASH']);
+		}
+
+		return $filter;
+	}
+
+	/**
 	 * @return DocumentSession|null
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 */
 	public function addSession(): ?DocumentSession
 	{
-		$fields = $this->buildFilter();
+		$fields = $this->buildFields();
 		$fields['OWNER_ID'] = $this->userId;
 		$fields['CONTEXT'] = $this->sessionContext->toJson();
 		$fields['SERVICE'] = $this->service->value;

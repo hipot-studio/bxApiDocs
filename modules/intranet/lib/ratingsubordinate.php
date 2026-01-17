@@ -16,9 +16,9 @@ use Bitrix\Main\Entity;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_RatingSubordinate_Query query()
- * @method static EO_RatingSubordinate_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_RatingSubordinate_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_RatingSubordinate_Result getById($id)
- * @method static EO_RatingSubordinate_Result getList(array $parameters = array())
+ * @method static EO_RatingSubordinate_Result getList(array $parameters = [])
  * @method static EO_RatingSubordinate_Entity getEntity()
  * @method static \Bitrix\Intranet\EO_RatingSubordinate createObject($setDefaultValues = true)
  * @method static \Bitrix\Intranet\EO_RatingSubordinate_Collection createCollection()

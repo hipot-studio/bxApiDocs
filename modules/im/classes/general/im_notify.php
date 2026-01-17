@@ -2,8 +2,10 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Im as IM;
+use Bitrix\Im\Text;
 use Bitrix\Im\User;
 use Bitrix\Im\V2\Chat\NotifyChat;
+use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -61,6 +63,17 @@ class CIMNotify
 			}
 		}
 
+		if (
+			isset($arFields['PARAMS']['COMPONENT_PARAMS'])
+			&& is_array($arFields['PARAMS']['COMPONENT_PARAMS'])
+		)
+		{
+			$arFields['PARAMS']['COMPONENT_PARAMS'] = self::localizeParams(
+				$arFields['PARAMS']['COMPONENT_PARAMS'],
+				(int)$arFields['TO_USER_ID']
+			);
+		}
+
 		$arFields['MESSAGE_TYPE'] = IM_MESSAGE_SYSTEM;
 
 		return CIMMessenger::Add($arFields);
@@ -82,6 +95,36 @@ class CIMNotify
 		$langId = $user->getLanguageId();
 
 		return $locFunction($langId, $userId);
+	}
+
+	private static function localizeParams(array $params, int $userId): array
+	{
+		$locFields = [
+			'SUBJECT',
+			'PLAIN_TEXT',
+			'TITLE',
+			'VALUE',
+			'TEXT',
+			'ADDITIONAL_TEXT',
+			'PREV',
+			'NEXT',
+		];
+
+		foreach ($params as $key => $value)
+		{
+			if (in_array($key, $locFields, true) && is_callable($value))
+			{
+				$localizeText = self::getTextMessageByLang($userId, $value);
+				$params[$key] = $localizeText;
+			}
+
+			if (is_array($value))
+			{
+				$params[$key] = self::localizeParams($value, $userId);
+			}
+		}
+
+		return $params;
 	}
 
 	public function GetNotifyList($arParams = array())
@@ -614,24 +657,10 @@ class CIMNotify
 		$chatId = (int)$findResult->getResult()['ID'];
 
 		$readService = new IM\V2\Message\ReadService($this->user_id);
-		$counterService = $readService->getCounterService();
 
 		if ($id === 0)
 		{
-			$readService->readAllInChat($chatId);
-			if (CModule::IncludeModule("pull"))
-			{
-				\Bitrix\Pull\Event::add($this->user_id, Array(
-					'module_id' => 'im',
-					'command' => 'notifyReadAll',
-					'params' => Array(
-						'chatId' => $chatId,
-					),
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				));
-
-				\Bitrix\Pull\MobileCounter::send($this->user_id, $appId);
-			}
+			$this->ReadAllNotifications($appId, $chatId, $readService);
 
 			return true;
 		}
@@ -683,6 +712,51 @@ class CIMNotify
 		CIMMessenger::SpeedFileDelete($this->user_id, IM_SPEED_NOTIFY);
 
 		return true;
+	}
+
+	public function ReadAllNotifications(
+		string $appId = 'Bitrix24',
+		?int $chatId = null,
+		?IM\V2\Message\ReadService $readService = null,
+	): Result
+	{
+		if (!$chatId)
+		{
+			$notifyChat = \Bitrix\Im\V2\Chat\NotifyChat::getByUser();
+			if (!$notifyChat)
+			{
+				return (new Result())->addError(new \Bitrix\Im\V2\Error('CHAT_NOT_FOUND'));
+			}
+
+			$chatId = $notifyChat->getChatId();
+		}
+
+		if (!$readService)
+		{
+			$readService = new IM\V2\Message\ReadService($this->user_id);
+		}
+
+		$readResult = $readService->readAllInChat($chatId);
+		$newCounter = $readResult->getResult()['COUNTER'];
+		if (CModule::IncludeModule("pull"))
+		{
+			\Bitrix\Pull\Event::add(
+				$this->user_id,
+				[
+					'module_id' => 'im',
+					'command' => 'notifyReadAll',
+					'params' => [
+						'chatId' => $chatId,
+						'newCounter' => $newCounter,
+					],
+					'extra' => \Bitrix\Im\Common::getPullExtra(),
+				],
+			);
+
+			\Bitrix\Pull\MobileCounter::send($this->user_id, $appId);
+		}
+
+		return $readResult;
 	}
 
 	public function MarkNotifyReadBySubTag($subTagList = array())
@@ -1668,5 +1742,38 @@ class CIMNotify
 	public static function GetCounters($chatIds)
 	{
 		return \Bitrix\Im\Notify::getCounters($chatIds);
+	}
+
+	public static function prepareNotifyParams(array $params): array
+	{
+		if (is_string($params['COMPONENT_PARAMS']['PLAIN_TEXT']) ?? null)
+		{
+			$params['COMPONENT_PARAMS']['PLAIN_TEXT'] = self::prepareNotifyParam($params['COMPONENT_PARAMS']['PLAIN_TEXT']);
+		}
+
+		if (
+			($params['COMPONENT_PARAMS']['ENTITY']['CONTENT_TYPE'] ?? '') === 'text'
+			&& is_string($params['COMPONENT_PARAMS']['ENTITY']['CONTENT']['VALUE'] ?? null)
+		)
+		{
+			$params['COMPONENT_PARAMS']['ENTITY']['CONTENT']['VALUE'] = self::prepareNotifyParam(
+				$params['COMPONENT_PARAMS']['ENTITY']['CONTENT']['VALUE']
+			);
+		}
+
+		return $params;
+	}
+
+	private static function prepareNotifyParam(string $param): string
+	{
+		$param = trim(str_replace(Array('[BR]', '[br]', '#BR#'), "\n", $param));
+		if (mb_strlen($param) > \CIMMessenger::MESSAGE_LIMIT + 6)
+		{
+			$param = mb_substr($param, 0, \CIMMessenger::MESSAGE_LIMIT).' (...)';
+		}
+
+		$param = Text::convertHtmlToBbCode($param);
+
+		return $param;
 	}
 }

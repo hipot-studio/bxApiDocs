@@ -245,6 +245,17 @@ function tasksGetItemMenu($task, $arPaths, $site_id = SITE_ID, $bGantt = false, 
 				{
 					var BX = top.BX;
 
+					const responseCallback = (response) => {
+						const data = BX.parseJSON(response);
+						if (data.status === 'failure')
+						{
+							const content = data.message ? data.message : 'System error';
+							BX.loadExt('ui.notification').then(() => {
+								BX.UI.Notification.Center.notify({ content });
+							});
+						}
+					};
+
 					if (BX.hasClass(item.layout.item, "task-menu-popup-item-add-deadline"))
 					{
 						BX.removeClass(item.layout.item, "task-menu-popup-item-add-deadline");
@@ -268,7 +279,7 @@ function tasksGetItemMenu($task, $arPaths, $site_id = SITE_ID, $bGantt = false, 
 							id : this.params.task.id,
 							deadline : top.tasksFormatDate(deadline)
 						};
-						BX.ajax.post(top.ajaxUrl, data);
+						BX.ajax.post(top.ajaxUrl, data, responseCallback);
 					}
 					else
 					{
@@ -285,7 +296,7 @@ function tasksGetItemMenu($task, $arPaths, $site_id = SITE_ID, $bGantt = false, 
 							id : this.params.task.id,
 							deadline : ""
 						};
-						BX.ajax.post(top.ajaxUrl, data);
+						BX.ajax.post(top.ajaxUrl, data, responseCallback);
 					}
 				})
 			},

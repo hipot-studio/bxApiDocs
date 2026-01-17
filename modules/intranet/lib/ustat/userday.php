@@ -19,9 +19,9 @@ use Bitrix\Main\Entity\DataManager;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_UserDay_Query query()
- * @method static EO_UserDay_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_UserDay_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_UserDay_Result getById($id)
- * @method static EO_UserDay_Result getList(array $parameters = array())
+ * @method static EO_UserDay_Result getList(array $parameters = [])
  * @method static EO_UserDay_Entity getEntity()
  * @method static \Bitrix\Intranet\UStat\EO_UserDay createObject($setDefaultValues = true)
  * @method static \Bitrix\Intranet\UStat\EO_UserDay_Collection createCollection()

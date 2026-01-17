@@ -34,7 +34,7 @@ class B2eDocumentService
 
 		if ($company === null)
 		{
-			return $result->addError(new Main\Error('Company doesnt exist'));
+			return $result->addError(new Main\Error('Company doesnt exist', 'COMPANY_DOESNT_EXIST'));
 		}
 
 		$smartB2eDocument = Container::getInstance()

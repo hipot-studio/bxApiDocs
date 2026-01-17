@@ -4,7 +4,9 @@ namespace Bitrix\Crm\Integration\Catalog\Access;
 
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Crm\Discount;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Order\BasketItem;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
 
@@ -173,6 +175,52 @@ class ProductRowChecker
 		}
 
 		return $result;
+	}
+
+	public function updateCatalogPricesForItem(Item $item): void
+	{
+		$productRows = $item->getProductRows();
+		if (!$productRows)
+		{
+			return;
+		}
+
+		$updatedProductArrays = $this->updateCatalogPrices(
+			$productRows->toArray(),
+			$item->getCurrencyId(),
+		);
+		$setProductRowsResult = $item->setProductRowsFromArrays($updatedProductArrays);
+		if (!$setProductRowsResult->isSuccess())
+		{
+			Container::getInstance()->getLogger('Default')->error(
+				'{method}: Errors when updating product prices {errors}',
+				[
+					'method' => __METHOD__,
+					'errors' => $setProductRowsResult->getErrors(),
+				],
+			);
+		}
+	}
+
+	public function updateCatalogPrices(array $productRows, ?string $currencyId = null): array
+	{
+		$updatedProductRows = [];
+		foreach ($productRows as $productRow)
+		{
+			$catalogPrice = $this->getCatalogPrice($currencyId, $productRow['PRODUCT_ID']);
+			if ($catalogPrice !== null)
+			{
+				$calculator = new Calculator($productRow);
+				$calculator->calculateBasePrice($catalogPrice);
+				$updatedProductRows[] = [...$productRow, ...$calculator->getProduct()];
+			}
+			else
+			{
+				$updatedProductRows[] = $productRow;
+			}
+		}
+
+		return $updatedProductRows;
 	}
 
 	protected function canEditPrice(int $ownerTypeId): bool
@@ -357,14 +405,14 @@ class ProductRowChecker
 		];
 	}
 
-	private function comparePrices(array $productRow, ?array $productRowForCompare): bool
+	private function comparePrices(array $productRow, ?array $originalProductRow): bool
 	{
-		if (!$productRowForCompare)
+		if (!$originalProductRow)
 		{
 			return true;
 		}
 
-		$calculator = new Calculator($productRowForCompare);
+		$calculator = new Calculator($originalProductRow);
 		if (isset($productRow['TAX_INCLUDED']))
 		{
 			$calculator->calculateTaxIncluded($productRow['TAX_INCLUDED']);
@@ -385,9 +433,9 @@ class ProductRowChecker
 		{
 			$calculator->calculateDiscount((float)$productRow['DISCOUNT_SUM']);
 		}
-		$calculatedProductRowForCompare = $calculator->getProduct();
+		$calculatedOriginalProductRow = $calculator->getProduct();
 
-		foreach ($calculatedProductRowForCompare as $key => $value)
+		foreach ($calculatedOriginalProductRow as $key => $value)
 		{
 			if (!isset($productRow[$key]))
 			{

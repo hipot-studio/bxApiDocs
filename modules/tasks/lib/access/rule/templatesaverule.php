@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Access\Rule;
 
 use Bitrix\Main\Access\AccessibleItem;
+use Bitrix\Main\Access\Rule\AbstractRule;
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TemplateModel;
@@ -10,76 +11,86 @@ use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\Rule\Traits\AssignTrait;
 use Bitrix\Tasks\Access\Rule\Traits\GroupTrait;
+use Bitrix\Tasks\Access\TemplateAccessController;
 
-class TemplateSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
+/**
+ * @property TemplateAccessController $controller
+ */
+class TemplateSaveRule extends AbstractRule
 {
 	use AssignTrait;
 	use GroupTrait;
 
-	private AccessibleItem $oldTemplate;
-	private AccessibleItem $newTemplate;
-
-	public function execute(AccessibleItem $template = null, $params = null): bool
+	/**
+	 * @property TemplateAccessController $controller
+	 */
+	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
-		if (!$template)
+		if (
+			!$item instanceof TemplateModel
+			|| !$params instanceof TemplateModel
+		)
 		{
 			$this->controller->addError(static::class, 'Incorrect template');
 			return false;
 		}
 
-		if (!$this->checkParams($params))
-		{
-			$this->controller->addError(static::class, 'Incorrect params');
-			return false;
-		}
-
-		$this->oldTemplate = $template;
-		$this->newTemplate = $params;
+		$oldTemplate = $item;
+		$newTemplate = $params;
 
 		if (
-			!$this->oldTemplate->getId()
-			&& !$this->controller->check(ActionDictionary::ACTION_TEMPLATE_CREATE, $this->oldTemplate, $params)
+			!$oldTemplate->getId()
+			&& !$this->controller->check(ActionDictionary::ACTION_TEMPLATE_CREATE, $oldTemplate, $params)
 		)
 		{
 			$this->controller->addError(static::class, 'Access to create or update template denied');
+
 			return false;
 		}
-		elseif (!$this->controller->check(ActionDictionary::ACTION_TEMPLATE_EDIT, $this->oldTemplate, $params))
+
+		if (
+			!$this->controller->check(ActionDictionary::ACTION_TEMPLATE_EDIT, $oldTemplate, $params)
+		)
 		{
 			$this->controller->addError(static::class, 'Access to create or update template denied');
+
 			return false;
 		}
 
-		if (!$this->canAssignMembersExtranet())
+		if (!$this->canAssignMembersExtranet($newTemplate, $oldTemplate))
 		{
+			$this->controller->addError(static::class, 'Access to assign extranet members denied');
+
 			return false;
 		}
 
-		if (!$this->newTemplate->isRegular())
+		if (!$newTemplate->isRegular())
 		{
 			return true;
 		}
 
-		$members = $this->newTemplate->getMembers();
+		$members = $newTemplate->getMembers();
 
 		$user = UserModel::createFromId($members[RoleDictionary::ROLE_DIRECTOR][0]);
 
 		if (
-			$this->newTemplate->getGroupId()
-			&& $this->oldTemplate->getGroupId() !== $this->newTemplate->getGroupId()
-			&& !$this->canSetGroup($user->getUserId(), $this->newTemplate->getGroupId())
+			$newTemplate->getGroupId()
+			&& $oldTemplate->getGroupId() !== $newTemplate->getGroupId()
+			&& !$this->canSetGroup($user->getUserId(), $newTemplate->getGroupId())
 		)
 		{
 			$this->controller->addError(static::class, 'Access to set group denied');
+
 			return false;
 		}
 
-		$responsibleList =  $members[RoleDictionary::ROLE_RESPONSIBLE] ?? [];
+		$responsibleList = $members[RoleDictionary::ROLE_RESPONSIBLE] ?? [];
 		foreach ($responsibleList as $responsibleId)
 		{
-			if (!$this->canAssign($user, $responsibleId, [], $template->getGroupId()))
+			if (!$this->canAssign($user, $responsibleId, [], $item->getGroupId()))
 			{
 				$this->controller->addError(static::class, 'Access to assign responsible denied');
+
 				return false;
 			}
 		}
@@ -87,9 +98,10 @@ class TemplateSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		$accompliceList = $members[RoleDictionary::ROLE_ACCOMPLICE] ?? [];
 		foreach ($accompliceList as $accompliceId)
 		{
-			if (!$this->canAssign($user, $accompliceId, [], $template->getGroupId()))
+			if (!$this->canAssign($user, $accompliceId, [], $item->getGroupId()))
 			{
 				$this->controller->addError(static::class, 'Access to assign accomplice denied');
+
 				return false;
 			}
 		}
@@ -97,18 +109,8 @@ class TemplateSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		return true;
 	}
 
-	/**
-	 * @param $params
-	 * @return bool
-	 */
-	private function checkParams($params = null): bool
+	private function canAssignMembersExtranet(TemplateModel $newTemplate, TemplateModel $oldTemplate): bool
 	{
-		return $params instanceof TemplateModel;
-	}
-
-	private function canAssignMembersExtranet(): bool
-	{
-
 		if (!Loader::includeModule('socialnetwork'))
 		{
 			$this->controller->addError(static::class, 'Unable to load sonet');
@@ -129,9 +131,9 @@ class TemplateSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		$memberIds = array_unique(
 			array_merge(
-				$this->getNewMembers(RoleDictionary::ROLE_ACCOMPLICE),
-				$this->getNewMembers(RoleDictionary::ROLE_RESPONSIBLE),
-				$this->getNewMembers(RoleDictionary::ROLE_AUDITOR),
+				$this->getNewMembers(RoleDictionary::ROLE_ACCOMPLICE, $newTemplate, $oldTemplate),
+				$this->getNewMembers(RoleDictionary::ROLE_RESPONSIBLE, $newTemplate, $oldTemplate),
+				$this->getNewMembers(RoleDictionary::ROLE_AUDITOR, $newTemplate, $oldTemplate)
 			)
 		);
 
@@ -149,8 +151,8 @@ class TemplateSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		return true;
 	}
 
-	private function getNewMembers(string $key): array
+	private function getNewMembers(string $key, TemplateModel $newTemplate, TemplateModel $oldTemplate): array
 	{
-		return array_diff($this->newTemplate->getMembers($key), $this->oldTemplate->getMembers($key));
+		return array_diff($newTemplate->getMembers($key), $oldTemplate->getMembers($key));
 	}
 }

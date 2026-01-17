@@ -300,7 +300,7 @@ class Rating
 		Config\Option::set('sender', "~r_limit_$name", $value);
 	}
 
-	public static function getNotifyText(string $code): \Closure
+	public static function getNotifyText(string $code): string
 	{
 		return (self::getNotifyCallback($code))();
 	}

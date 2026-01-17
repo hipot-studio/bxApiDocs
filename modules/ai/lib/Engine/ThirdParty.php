@@ -13,10 +13,9 @@ use Bitrix\AI\ThirdParty\Item;
 use Bitrix\AI\ThirdParty\Manager;
 use Bitrix\AI\Tokenizer\GPT;
 use Bitrix\Main\Application;
-use Bitrix\Main\Error;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\Web\HttpClient;
 
 class ThirdParty extends Engine implements IEngine, IQueue, IContext
@@ -187,7 +186,7 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 		return match (strtolower($this->modelContextType))
 		{
 			'symbol' => mb_strlen($message->getContent()),
-			'token' => (new GPT($message->getContent()))->count(),
+			'token' => $this->getTokenizer()->count($message->getContent()),
 			default => 0,
 		};
 	}
@@ -336,5 +335,10 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 				'height' => 1024,
 			],
 		];
+	}
+
+	protected function getTokenizer(): GPT
+	{
+		return ServiceLocator::getInstance()->get(GPT::class);
 	}
 }

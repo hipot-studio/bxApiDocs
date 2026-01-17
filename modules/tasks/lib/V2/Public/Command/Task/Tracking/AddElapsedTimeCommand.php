@@ -8,13 +8,13 @@ use Bitrix\Main\Error;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ElapsedTime;
 use Bitrix\Tasks\V2\Internal\DI\Container;
-use Bitrix\Tasks\V2\Internal\Exception\Task\ElapsedTimeException;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Exception;
 
 class AddElapsedTimeCommand extends AbstractCommand
 {
 	public function __construct(
-		public readonly ElapsedTime $elapsedTime
+		public readonly ElapsedTime $elapsedTime,
 	)
 	{
 
@@ -23,9 +23,7 @@ class AddElapsedTimeCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$elapsedTimeService = Container::getInstance()->getElapsedTimeService();
-
-		$handler = new AddElapsedTimeHandler($elapsedTimeService);
+		$handler = Container::getInstance()->get(AddElapsedTimeHandler::class);
 
 		try
 		{
@@ -33,7 +31,7 @@ class AddElapsedTimeCommand extends AbstractCommand
 
 			return $result->setObject($elapsedTime);
 		}
-		catch (ElapsedTimeException $e)
+		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}

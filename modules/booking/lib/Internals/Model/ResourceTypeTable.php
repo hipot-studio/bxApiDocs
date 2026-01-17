@@ -72,7 +72,7 @@ final class ResourceTypeTable extends DataManager
 			,
 			(new Reference(
 				'NOTIFICATION_SETTINGS',
-				ResourceTypeNotificationSettingsTable::getEntity(),
+				ResourceTypeNotificationSettingsTable::class,
 				Join::on('this.ID', 'ref.TYPE_ID')
 			)),
 		];

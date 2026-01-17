@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Crm\Entity;
 
 use Bitrix\Main\Localization\Loc;
@@ -6,12 +7,12 @@ use Bitrix\Ui\EntityForm\Scope;
 
 class EntityEditorConfigScope
 {
-	const UNDEFINED = '';
-	const PERSONAL = 'P';
-	const COMMON = 'C';
-	const CUSTOM = 'CUSTOM';
+	public const UNDEFINED = '';
+	public const PERSONAL = 'P';
+	public const COMMON = 'C';
+	public const CUSTOM = 'CUSTOM';
 
-	private static $captions = [];
+	private static array $captions = [];
 
 	/**
 	 * @param string $scope
@@ -19,7 +20,7 @@ class EntityEditorConfigScope
 	 */
 	public static function isDefined(string $scope): bool
 	{
-		return (in_array($scope, self::scopes(), true));
+		return in_array($scope, self::scopes(), true);
 	}
 
 	public static function scopes(): array
@@ -42,16 +43,12 @@ class EntityEditorConfigScope
 		{
 			Loc::loadMessages(__FILE__);
 
-			self::$captions[LANGUAGE_ID] = array(
+			self::$captions[LANGUAGE_ID] = [
 				self::PERSONAL => Loc::getMessage('CRM_ENTITY_ED_CONFIG_SCOPE_PERSONAL_MSGVER_1'),
-				self::COMMON => Loc::getMessage('CRM_ENTITY_ED_CONFIG_SCOPE_COMMON_MSGVER_1')
-			);
+				self::COMMON => Loc::getMessage('CRM_ENTITY_ED_CONFIG_SCOPE_COMMON_MSGVER_1'),
+			];
 
-			$customScopes = method_exists(\Bitrix\Ui\EntityForm\Scope::class, 'getAllUserScopes')
-				? Scope::getInstance()->getAllUserScopes($entityTypeId, $moduleId, false)
-				: Scope::getInstance()->getUserScopes($entityTypeId, $moduleId, false)
-			;
-
+			$customScopes = Scope::getInstance()->getUserScopesEntityEditor($entityTypeId, $moduleId);
 			if ($entityTypeId && $customScopes)
 			{
 				self::$captions[LANGUAGE_ID] = array_merge(
@@ -75,7 +72,7 @@ class EntityEditorConfigScope
 		string $scope,
 		string $entityTypeId = '',
 		?int $scopeId = null,
-		?string $moduleId = null
+		?string $moduleId = null,
 	): string
 	{
 		$captions = self::getCaptions($entityTypeId, $moduleId);

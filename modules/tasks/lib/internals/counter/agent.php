@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Internals\Counter;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
 use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\Integration\Bizproc\Listener;
@@ -22,6 +23,7 @@ use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
 use CAgent;
 use CTimeZone;
+use DateTimeZone;
 
 /**
  * Class Agent
@@ -76,6 +78,11 @@ class Agent
 
 		self::remove($taskId);
 
+		if (Option::get('tasks', 'task_deadline_timezone_fix', 'N') === 'Y')
+		{
+			$agentStart = $agentStart->setTimeZone((new DateTime())->getTimeZone());
+		}
+
 		CTimeZone::Disable();
 		CAgent::AddAgent($agentName, 'tasks', 'Y', 0, '', 'Y', $agentStart);
 		CTimeZone::Enable();
@@ -100,6 +107,7 @@ class Agent
 
 		if (
 			$task === null
+			|| !$task->isExpired()
 			|| !$task->getResponsibleId()
 			|| !$task->getCreatedBy()
 			|| in_array((int)$task->getStatus(), $statesCompleted, true)
@@ -222,7 +230,7 @@ class Agent
 
 	private function notifyTaskChat(): static
 	{
-		if ($this->eventType !== static::EVENT_TASK_EXPIRED || !FormV2Feature::isOn('create'))
+		if (!FormV2Feature::isOn('create'))
 		{
 			return $this;
 		}
@@ -233,11 +241,19 @@ class Agent
 
 		if ($taskEntity)
 		{
-			$this->chatNotification->notify(
-				type: NotificationType::TaskOverdue,
-				task: $taskEntity,
-				args: ['triggeredBy' => null],
-			);
+			match ($this->eventType)
+			{
+				static::EVENT_TASK_EXPIRED => $this->chatNotification->notify(
+					type: NotificationType::TaskOverdue,
+					task: $taskEntity,
+					args: ['triggeredBy' => null],
+				),
+				static::EVENT_TASK_EXPIRED_SOON => $this->chatNotification->notify(
+					type: NotificationType::TaskOverdueSoon,
+					task: $taskEntity,
+					args: ['triggeredBy' => null],
+				),
+			};
 		}
 
 		return $this;

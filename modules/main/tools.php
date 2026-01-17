@@ -4721,7 +4721,7 @@ function IncludeAJAX()
 	/** @global CMain $APPLICATION */
 	global $APPLICATION;
 
-	$APPLICATION->AddHeadString('<script>var ajaxMessages = {wait:"' . CUtil::JSEscape(GetMessage('AJAX_WAIT')) . '"}</script>', true);
+	$APPLICATION->AddHeadString('<script>var ajaxMessages = {wait:"' . CUtil::JSEscape(GetMessage('AJAX_WAIT')) . '"};</script>', true);
 	$APPLICATION->AddHeadScript('/bitrix/js/main/cphttprequest.js', true);
 }
 

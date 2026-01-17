@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Entity\Url;
 
 use Bitrix\Im\Common;
+use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Main\UrlPreview\UrlMetadataTable;
@@ -12,6 +13,8 @@ use CIMMessageParamAttach;
 
 class UrlItem implements RestEntity
 {
+	use ContextCustomer;
+
 	protected string $url = '';
 	protected ?array $metadata = [];
 	protected static array $staticMetadataCache = [];
@@ -286,7 +289,8 @@ class UrlItem implements RestEntity
 		{
 			if ($this->isRich())
 			{
-				$this->urlAttach = \CIMMessageLink::formatAttach($this->getMetadata()) ?: null;
+				$userId = $this->getContext()->getUserId();
+				$this->urlAttach = \CIMMessageLink::formatAttach($this->getMetadata(), $userId) ?: null;
 			}
 		}
 

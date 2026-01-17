@@ -43,14 +43,17 @@ class CrmAutomatedSolutionDetailsComponent extends Base
 			return;
 		}
 
-		if (!$this->userPermissions->automatedSolution()->canEdit())
+		$id = (int)($this->arParams['id'] ?? null);
+		$canEdit = $this->userPermissions->automatedSolution()->canEdit($id);
+
+		if ($id === 0 && !$canEdit)
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
 			return;
 		}
 
-		$id = (int)($this->arParams['id'] ?? null);
+		$this->arResult['readOnly'] = !$canEdit;
 
 		if ($id > 0)
 		{

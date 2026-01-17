@@ -3,9 +3,9 @@
 /**
  * @deprecated
  */
-class CAllPageOption
+class CPageOption
 {
-	protected  static $MAIN_PAGE_OPTIONS = [];
+	protected static $MAIN_PAGE_OPTIONS = [];
 
 	public static function GetOptionString($module_id, $name, $def="", $site=false)
 	{
@@ -60,8 +60,4 @@ class CAllPageOption
 	{
 		return static::SetOptionString($module_id, $name, intval($value), $desc, $site);
 	}
-}
-
-class CPageOption extends CAllPageOption
-{
 }

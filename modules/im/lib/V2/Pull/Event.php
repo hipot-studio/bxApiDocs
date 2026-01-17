@@ -9,7 +9,7 @@ use Bitrix\Im\V2\Result;
 interface Event
 {
 	public function send(): Result;
-	public function getBase(): array;
+	public function getPullForPublic(): array;
 
 	/**
 	 * @return Group[]

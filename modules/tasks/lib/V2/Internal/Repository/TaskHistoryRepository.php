@@ -19,7 +19,7 @@ class TaskHistoryRepository implements TaskHistoryRepositoryInterface
 
 	}
 
-	public function tail(int $taskId, int $offset = 0): HistoryLogCollection
+	public function tail(int $taskId, int $offset = 0, int $limit = 50): HistoryLogCollection
 	{
 		$filter = new ConditionTree();
 		$filter->where('TASK_ID', $taskId);
@@ -37,7 +37,7 @@ class TaskHistoryRepository implements TaskHistoryRepositoryInterface
 			->setOrderBy(['ID' => 'DESC'])
 			->setDistinct(false)
 			->setOffset($offset)
-			->setLimit(50)
+			->setLimit($limit)
 			->setWhere($filter)
 		;
 

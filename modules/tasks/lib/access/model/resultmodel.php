@@ -4,13 +4,22 @@ namespace Bitrix\Tasks\Access\Model;
 
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Type\Contract\Arrayable;
+use Bitrix\Tasks\Internals\Task\Result\Result;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
+use Bitrix\Tasks\V2\Internal\Access\Registry\ResultRegistry;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Entity\Chat;
+use ReflectionClass;
 
-class ResultModel implements AccessibleItem
+final class ResultModel implements AccessibleItem
 {
 	private int $id;
 	private ?int $taskId = null;
-	private int $createdBy = 0;
+	private ?int $createdBy = null;
+	private ?int $status = null;
+	private ?int $messageId = null;
+	private ?Chat $chat = null;
+
 	private static array $cache = [];
 
 	public static function createFromId(int $itemId): self
@@ -21,59 +30,23 @@ class ResultModel implements AccessibleItem
 		}
 
 		$model = new self();
-		$result = ResultTable::getByPrimary($itemId)->fetchObject();
-		if (is_null($result))
-		{
-			$model->setId(0);
-			return $model;
-		}
-		$model->setId($itemId);
-		$model->setCreatedBy($result->getCreatedBy());
+		$model->id = $itemId;
+
 		self::$cache[$itemId] = $model;
 
-		return self::$cache[$itemId];
+		return $model;
 	}
 
-	public function getId(): int
-	{
-		return $this->id;
-	}
-
-	public function getTaskId(): ?int
-	{
-		return $this->taskId;
-	}
-
-	public function setId(int $id): void
-	{
-		$this->id = $id;
-	}
-
-	private function setCreatedBy(int $createdBy): void
-	{
-		$this->createdBy = $createdBy;
-	}
-
-	public function getCreatedBy(): int
-	{
-		return $this->createdBy;
-	}
-
-	public static function invalidate(): void
-	{
-		static::$cache = [];
-	}
-
-	public static function createFromArray(array|Arrayable $data): static
+	public static function createFromArray(array|Arrayable $data): self
 	{
 		if ($data instanceof Arrayable)
 		{
 			$data = $data->toArray();
 		}
 
-		$model = new static();
+		$model = new self();
 
-		$reflection = new \ReflectionClass($model);
+		$reflection = new ReflectionClass($model);
 
 		foreach ($data as $key => $value)
 		{
@@ -84,5 +57,50 @@ class ResultModel implements AccessibleItem
 		}
 
 		return $model;
+	}
+
+	public function getId(): int
+	{
+		return $this->id;
+	}
+
+	public function getTaskId(): ?int
+	{
+		$this->taskId ??= $this->getEntity()?->getTaskId();
+
+		return $this->taskId;
+	}
+
+	public function getCreatedBy(): ?int
+	{
+		$this->createdBy ??= $this->getEntity()?->getCreatedBy();
+
+		return $this->createdBy;
+	}
+
+	public function isOpened(): bool
+	{
+		$this->status ??= $this->getEntity()?->getStatus();
+
+		return $this->status === ResultTable::STATUS_OPENED;
+	}
+
+	public function getChat(): ?Chat
+	{
+		$this->messageId ??= $this->getEntity()?->getMessage()?->getMessageId();
+
+		if ($this->messageId > 0)
+		{
+			$repository = Container::getInstance()->getMessageRepository();
+
+			$this->chat ??= $repository->getById($this->messageId)?->chat;
+		}
+
+		return $this->chat;
+	}
+
+	private function getEntity(): ?Result
+	{
+		return ResultRegistry::getInstance()->get($this->id);
 	}
 }

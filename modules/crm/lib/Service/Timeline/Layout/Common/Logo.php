@@ -21,6 +21,7 @@ class Logo
 	public const DOCUMENT_PRINT = 'document-print';
 	public const DOCUMENT_SIGNED = 'document-signed';
 	public const DOCUMENT_DRAFT = 'document-draft';
+	public const OPENLINE = 'openline';
 	public const CHANNEL_CHAT = 'channel-chat';
 	public const CHANNEL_AVITO = 'channel-avito';
 	public const CHANNEL_APPLE = 'channel-apple';
@@ -28,7 +29,7 @@ class Logo
 	public const CHANNEL_FACEBOOK_CHAT = 'channel-fb-chat';
 	public const CHANNEL_INSTAGRAM_DIRECT = 'channel-instagram-direct';
 	public const CHANNEL_BITRIX = 'channel-bitrix';
-	public const CHANNEL_ODNOKLASSNIKI = 'channel-ok';
+	public const CHANNEL_OK = 'channel-ok';
 	public const CHANNEL_TELEGRAM = 'channel-telegram';
 	public const CHANNEL_VIBER = 'channel-viber';
 	public const CHANNEL_VK = 'channel-vk';
@@ -108,6 +109,7 @@ class Logo
 			case self::CALL_INCOMING:
 			case self::CALL_DEFAULT:
 			case self::CALL_OUTGOING:
+			case self::OPENLINE:
 			case self::CHANNEL_CHAT:
 			case self::CHANNEL_AVITO:
 			case self::CHANNEL_APPLE:
@@ -115,7 +117,7 @@ class Logo
 			case self::CHANNEL_FACEBOOK_CHAT:
 			case self::CHANNEL_INSTAGRAM_DIRECT:
 			case self::CHANNEL_BITRIX:
-			case self::CHANNEL_ODNOKLASSNIKI:
+			case self::CHANNEL_OK:
 			case self::CHANNEL_TELEGRAM:
 			case self::CHANNEL_VIBER:
 			case self::CHANNEL_VK:
@@ -138,9 +140,7 @@ class Logo
 			case self::BIZPROC:
 			case self::BIZPROC_TASK:
 			case self::REPEAT_SALE:
-				return (new Body\Logo($this->getCode()))
-					->setInCircle(true)
-				;
+				return (new Body\Logo($this->getCode()))->setInCircle();
 		}
 
 		return null;

@@ -2,8 +2,12 @@
 
 namespace Bitrix\Bizproc\Workflow\Template\Entity;
 
+use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\ConstantsFileService;
 use Bitrix\Bizproc\Workflow\Template\Tpl;
+use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
 use Bitrix\Main;
+use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Event;
 use Bitrix\Main\Web\Json;
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
 
@@ -23,7 +27,7 @@ use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
  * @method static \Bitrix\Bizproc\Workflow\Template\Tpl wakeUpObject($row)
  * @method static \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection wakeUpCollection($rows)
  */
-class WorkflowTemplateTable extends Main\Entity\DataManager
+class WorkflowTemplateTable extends Main\ORM\Data\DataManager
 {
 	/**
 	 * @return string
@@ -140,7 +144,36 @@ class WorkflowTemplateTable extends Main\Entity\DataManager
 				'TEMPLATE_SETTINGS',
 				\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable::class,
 				'TEMPLATE'
-			)
+			),
+			new \Bitrix\Main\ORM\Fields\Relations\OneToMany(
+				'TEMPLATE_DRAFT',
+				\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable::class,
+				'TEMPLATE'
+			),
+			'CREATED_BY' => [
+				'data_type' => 'integer',
+			],
+			'UPDATED_BY' => [
+				'data_type' => 'integer',
+			],
+			'ACTIVATED_BY' => [
+				'data_type' => 'integer',
+			],
+			'ACTIVATED_AT' => [
+				'data_type' => 'datetime',
+			],
+			new ORM\Fields\Relations\Reference(
+				'UPDATED_USER',
+				Main\UserTable::class,
+				ORM\Query\Join::on('this.UPDATED_BY', 'ref.ID'),
+				['join_type' => 'LEFT'],
+			),
+			new ORM\Fields\Relations\Reference(
+				'CREATED_USER',
+				Main\UserTable::class,
+				ORM\Query\Join::on('this.CREATED_BY', 'ref.ID'),
+				['join_type' => 'LEFT'],
+			),
 		];
 	}
 
@@ -231,5 +264,58 @@ class WorkflowTemplateTable extends Main\Entity\DataManager
 		}
 
 		return $value;
+	}
+
+	public static function onAfterAdd(Event $event): void
+	{
+		$id = $event->getParameter('primary')['ID'];
+		$template = $event->getParameter('fields')['TEMPLATE'] ?? null;
+		if (is_array($template))
+		{
+			$active = ($event->getParameter('fields')['ACTIVE'] ?? 'Y') === 'Y';
+			WorkflowTemplateTriggerTable::onTemplateAdd($id, $template, $active);
+		}
+
+		$constants = $event->getParameter('fields')['CONSTANTS'] ?? null;
+		if (is_array($constants))
+		{
+			self::getConstantsFileService()->add($id, $constants);
+		}
+	}
+
+	public static function onAfterUpdate(Event $event): void
+	{
+		$template = $event->getParameter('fields')['TEMPLATE'] ?? null;
+		$active = $event->getParameter('fields')['ACTIVE'] ?? null;
+		$id = $event->getParameter('primary')['ID'];
+
+		if (is_array($template))
+		{
+			WorkflowTemplateDraftTable::deleteByTemplateId($id);
+		}
+
+		if (is_array($template) || $active !== null)
+		{
+			WorkflowTemplateTriggerTable::onTemplateUpdate($id);
+		}
+
+		$constants = $event->getParameter('fields')['CONSTANTS'] ?? null;
+		if (is_array($constants))
+		{
+			self::getConstantsFileService()->update($id, $constants);
+		}
+	}
+
+	public static function onAfterDelete(Event $event): void
+	{
+		$id = $event->getParameter('primary')['ID'];
+		WorkflowTemplateTriggerTable::onTemplateDelete($id);
+
+		self::getConstantsFileService()->delete($id);
+	}
+
+	private static function getConstantsFileService(): ConstantsFileService
+	{
+		return Main\DI\ServiceLocator::getInstance()->get(ConstantsFileService::class);
 	}
 }

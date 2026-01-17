@@ -2,6 +2,12 @@
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
 use Bitrix\Bitrix24\Feature;
+
+use Bitrix\Intranet\Entity\UserOtp;
+use Bitrix\Intranet\Internal\Integration;
+use Bitrix\Intranet\Internal\Service;
+use Bitrix\Intranet\Internal\Enum;
+use Bitrix\Intranet\Internal\Access;
 use Bitrix\Intranet\User\Access\Model\TargetUserModel;
 use Bitrix\Intranet\User\Access\UserAccessController;
 use Bitrix\Main\Analytics\AnalyticsEvent;
@@ -131,18 +137,11 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->arResult["FormId"] = "intranet-user-profile";
 		$this->arResult["IsOwnProfile"] = $currentUserId === $ownerUserId;
 		$this->arResult["StressLevel"] = $this->getStressLevelInstance()->getStub();
+		$userEntity = \Bitrix\Intranet\Entity\User::initByArray($this->arResult['User']);
 
 		$this->filterHiddenFields();
 		$this->checkNumAdminRestrictions();
-
-		if (Loader::includeModule("security") && \Bitrix\Security\Mfa\Otp::isOtpEnabled())
-		{
-			$this->arResult["OTP_IS_ENABLED"] = "Y";
-		}
-		else
-		{
-			$this->arResult["OTP_IS_ENABLED"] = "N";
-		}
+		$this->prepareOtpInfo($userEntity);
 
 		$this->arResult["isExtranetSite"] = (Loader::includeModule("extranet") && \CExtranet::isExtranetSite());
 
@@ -166,7 +165,6 @@ class CIntranetUserProfileComponent extends UserProfile
 
 		$userService = \Bitrix\Intranet\Service\ServiceContainer::getInstance()->getUserService();
 		$access = UserAccessController::createByDefault();
-		$userEntity = \Bitrix\Intranet\Entity\User::initByArray($this->arResult['User']);
 		$userAccessModel = TargetUserModel::createFromUserEntity($userEntity);
 		$availableActions = $userService->getAvailableActions($userEntity);
 		$availableActions = $access->batchCheck(
@@ -196,9 +194,75 @@ class CIntranetUserProfileComponent extends UserProfile
 			];
 		}
 
-
-
 		$this->includeComponentTemplate();
+	}
+
+	private function prepareOtpInfo(\Bitrix\Intranet\Entity\User $userEntity): void
+	{
+		$otpSettings = Loader::includeModule('security') ? new Integration\Security\OtpSettings() : null;
+
+		if (!$otpSettings?->isEnabled())
+		{
+			$this->arResult["OTP_IS_ENABLED"] = "N";
+
+			return;
+		}
+
+		$this->arResult["OTP_IS_ENABLED"] = "Y";
+		$otpPermission = new Access\Otp\UserPermission($userEntity);
+
+		if (!$otpPermission->canDeactivate())
+		{
+			return;
+		}
+
+		$personalSettings = $otpSettings?->getPersonalSettingsByUserId($userEntity->getId());
+		$otpUser = $personalSettings->getOtpInfo();
+		$otpSigner = new Integration\Main\OtpSigner();
+		$deactivateStatus = null;
+		$deactivateTitle = '';
+
+		if (
+			$otpUser->getDeactivateRemainder()
+			&& $userEntity->getActive()
+			&& Service\Otp\MobilePush::createByDefault()
+				->getPromoteMode()
+				->isGreaterOrEqual(Enum\Otp\PromoteMode::Low)
+		)
+		{
+			[$deactivateStatus, $deactivateTitle] = $this->getDeactivateOtpStatusText($otpUser);
+		}
+
+		$this->arResult['OTP'] = [
+			'canEdit' => $otpPermission->canEdit(),
+			'canDeactivate' => $otpPermission->canDeactivate(),
+			'isActive' => $otpUser->isActive ?? false,
+			'isMandatory' => $personalSettings->isRequired(),
+			'dateDeactivate' => $otpUser?->dateDeactivate,
+			'deactivateStatus' => $deactivateStatus ?? null,
+			'signedUserId' => $otpSigner->signUserId($userEntity->getId()),
+			'deactivateTitle' => $deactivateTitle,
+		];
+	}
+
+	private function getDeactivateOtpStatusText(UserOtp $otpUser): ?array
+	{
+		if ($otpUser->isInitialized)
+		{
+			return [
+				Loc::getMessage('INTRANET_USER_PROFILE_OTP_DEACTIVATE_STATUS', [
+					'#REMAINDER#' => $otpUser->getDeactivateRemainder()
+				]),
+				Loc::getMessage('INTRANET_USER_PROFILE_OTP_DEACTIVATED_MSGVER_1')
+			];
+		}
+
+		return [
+			Loc::getMessage('INTRANET_USER_PROFILE_OTP_DEACTIVATE_STATUS_UNINITIALIZED', [
+				'#REMAINDER#' => $otpUser->getDeactivateRemainder()
+			]),
+			Loc::getMessage('INTRANET_USER_PROFILE_OTP_UNINITIALIZED')
+		];
 	}
 
 	private function sendAnalytics()

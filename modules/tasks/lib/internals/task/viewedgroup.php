@@ -1,12 +1,8 @@
 <?php
+
 namespace Bitrix\Tasks\Internals\Task;
 
-use Bitrix\Main;
-use Bitrix\Main\Type\DateTime;
-use Bitrix\Tasks\Comments\Viewed\Enum;
-use Bitrix\Tasks\Comments\Viewed\Group;
 use Bitrix\Tasks\Internals\TaskDataManager;
-use Bitrix\Tasks\MemberTable;
 
 /**
  * Class ViewedTable
@@ -28,7 +24,7 @@ use Bitrix\Tasks\MemberTable;
  */
 class ViewedGroupTable extends TaskDataManager
 {
-
+	// TODO: useless table? drop it?
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -77,50 +73,5 @@ class ViewedGroupTable extends TaskDataManager
 				'required' => true,
 			]
 		];
-	}
-
-	/**
-	 * @param array $data
-	 * @throws Main\DB\SqlQueryException
-	 */
-	public static function upsert(array $data): void
-	{
-		$now = new DateTime();
-
-		$typeId = (int)($data['TYPE_ID']) ? (int)$data['TYPE_ID'] : Enum::UNDEFINED;
-		$userId = isset($data['USER_ID']) ? (int)$data['USER_ID'] : 0;
-		$groupId = isset($data['GROUP_ID']) ? (int)$data['GROUP_ID'] : 0;
-		$memberType = in_array($data['MEMBER_TYPE'], MemberTable::possibleTypes()) ? $data['MEMBER_TYPE']: Group::MEMBER_TYPE_UNDEFINED;
-
-		$insertFields = [
-
-			'TYPE_ID' => $typeId,
-			'USER_ID' => $userId,
-			'GROUP_ID' => $groupId,
-			'VIEWED_DATE' => $now,
-			'MEMBER_TYPE' => $memberType,
-		];
-
-		$updateFields = [
-			'VIEWED_DATE' => $now,
-		];
-
-		$connection = Main\Application::getConnection();
-		$queries = $connection->getSqlHelper()->prepareMerge(
-			static::getTableName(),
-			[
-				'MEMBER_TYPE',
-				'USER_ID',
-				'GROUP_ID',
-				'TYPE_ID'
-			],
-			$insertFields,
-			$updateFields
-		);
-
-		foreach($queries as $query)
-		{
-			$connection->queryExecute($query);
-		}
 	}
 }

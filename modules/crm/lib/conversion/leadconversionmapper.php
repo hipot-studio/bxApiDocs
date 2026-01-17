@@ -342,6 +342,7 @@ class LeadConversionMapper extends EntityConversionMapper
 					&& is_array($dstFields['PRODUCT_ROWS'])
 					&& !empty($dstFields['PRODUCT_ROWS']))
 				{
+					$dstFields = $this->prepareProductRowsPrices($dstEntityTypeID, $dstFields, $options);
 					$totalInfo = \CCrmProductRow::CalculateTotalInfo('D', 0, false, $dstFields, $dstFields['PRODUCT_ROWS']);
 					$dstFields['OPPORTUNITY'] = isset($totalInfo['OPPORTUNITY']) ? $totalInfo['OPPORTUNITY'] : 1.0;
 					$dstFields['TAX_VALUE'] = isset($totalInfo['TAX_VALUE']) ? $totalInfo['TAX_VALUE'] : 0.0;

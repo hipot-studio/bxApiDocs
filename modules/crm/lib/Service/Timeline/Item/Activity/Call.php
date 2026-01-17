@@ -3,18 +3,16 @@
 namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\StatisticsMark;
-use Bitrix\Crm\Badge\Badge;
-use Bitrix\Crm\Badge\SourceIdentifier;
-use Bitrix\Crm\Badge\Type\AiCallFieldsFillingResult;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
 use Bitrix\Crm\Format\Duration;
-use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\OperationState;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
-use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotButtonTrait;
+use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
+use Bitrix\Crm\Service\Timeline\Item\Interfaces\HasCopilot;
+use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
 use Bitrix\Crm\Service\Timeline\Item\Payload;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
@@ -48,9 +46,9 @@ use CCrmFieldMulti;
 use CCrmOwnerType;
 use CFile;
 
-class Call extends Activity
+class Call extends Activity implements HasCopilot
 {
-	use CopilotButtonTrait;
+	use CopilotHelper;
 
 	private const BLOCK_DELIMITER = '&bull;';
 
@@ -302,7 +300,7 @@ class Call extends Activity
 	{
 		$doneButton = (new Button(Loc::getMessage('CRM_TIMELINE_BUTTON_CALL_COMPLETE'), Button::TYPE_PRIMARY))->setAction($this->getCompleteAction());
 		$scheduleButton = $this->getScheduleButton('Call:Schedule');
-		$aiButton = $this->getAIButton();
+		$aiButton = $this->getCopilotButton();
 		$communication = $this->getAssociatedEntityModel()?->get('COMMUNICATION') ?? [];
 
 		switch ($this->fetchDirection())
@@ -333,7 +331,7 @@ class Call extends Activity
 						: [
 							'doneButton' => $doneButton,
 							'scheduleButton' => $scheduleButton,
-							'aiButton' => $this->getAIButton(),
+							'aiButton' => $this->getCopilotButton(),
 						];
 				}
 
@@ -343,7 +341,7 @@ class Call extends Activity
 					]
 					: [
 						'callButton' => $this->getCallButton($communication, Button::TYPE_SECONDARY),
-						'aiButton' => $this->getAIButton(),
+						'aiButton' => $this->getCopilotButton(),
 					];
 			case CCrmActivityDirection::Outgoing:
 				return empty($communication)
@@ -438,56 +436,13 @@ class Call extends Activity
 			);
 		}
 
-		return array_merge($tags, $this->getAiTags());
-	}
-
-	/**
-	 * @return Tag[]
-	 */
-	private function getAiTags(): array
-	{
-		$tags = [];
-		$entityTypeId = $this->getContext()->getIdentifier()->getEntityTypeId();
-
-		if (
-			$this->isCopilotScope()
-			&& (new OperationState(
-				$this->getActivityId(),
-				$entityTypeId,
-				$this->getContext()->getIdentifier()->getEntityId(),
-
-			))->isFillFieldsScenarioSuccess()
-		)
-		{
-			$tags['copilotDone'] = new Tag(
-				Loc::getMessage('CRM_TIMELINE_TAG_COPILOT_DONE'),
-				Tag::TYPE_LAVENDER
-			);
-
-			return $tags;
-		}
-
-		$limitExceededBadge = Container::getInstance()->getBadge(
-			Badge::AI_CALL_FIELDS_FILLING_RESULT,
-			AiCallFieldsFillingResult::ERROR_LIMIT_EXCEEDED,
+		$aiTags = $this->getAiTags(
+			$this->getContext()->getIdentifier()->getEntityTypeId(),
+			$this->getContext()->getIdentifier()->getEntityId(),
+			$this->getActivityId()
 		);
 
-		$itemIdentifier = $this->getContext()->getIdentifier();
-		$sourceIdentifier = new SourceIdentifier(
-			SourceIdentifier::CRM_OWNER_TYPE_PROVIDER,
-			CCrmOwnerType::Activity,
-			$this->getActivityId(),
-		);
-
-		if ($limitExceededBadge->isBound($itemIdentifier, $sourceIdentifier))
-		{
-			$tags['copilotLimitExceeded'] = new Tag(
-				AiCallFieldsFillingResult::getLimitExceededTextValue(),
-				Tag::TYPE_FAILURE,
-			);
-		}
-
-		return $tags;
+		return array_merge($tags, $aiTags);
 	}
 
 	public function needShowNotes(): bool
@@ -497,7 +452,7 @@ class Call extends Activity
 
 	public function getPayload(): ?Payload
 	{
-		$aiButton = $this->getAIButton();
+		$aiButton = $this->getCopilotButton();
 
 		if ($aiButton === null || $aiButton->getState() === Layout\Button::STATE_DISABLED)
 		{
@@ -531,6 +486,24 @@ class Call extends Activity
 				$isWelcomeTourManuallyEnabled
 			)
 		;
+	}
+
+	public function getCopilotButton(): ?BaseButton
+	{
+		// don't show the button
+		//	- if call processing with AI not enabled
+		//	- OR if user has no update rights
+		//	- OR if the entity type is not supported
+		//	- OR if there are no audio recordings
+		//	- OR if the entity is closed
+		//	- OR if there is another entity that is selected as target for this call
+		$isButtonVisible = $this->isCopilotScope()
+			&& $this->hasUpdatePermission()
+			&& count($this->fetchAudioRecordList()) > 0
+			&& $this->isItemHashValid($this->getActivityId(), $this->getContext())
+		;
+
+		return $isButtonVisible ? $this->createCopilotButton() : null;
 	}
 
 	protected function canMoveTo(): bool
@@ -707,9 +680,8 @@ class Call extends Activity
 
 	private function buildCopilotCallScoringPill(): ?ContentBlock
 	{
-		$isPillVisible = AIManager::isAiCallProcessingEnabled()
+		$isPillVisible = $this->isCopilotScope()
 			&& $this->hasUpdatePermission()
-			&& $this->isCopilotScope()
 			&& count($this->fetchAudioRecordList()) > 0
 		;
 
@@ -768,6 +740,7 @@ class Call extends Activity
 			->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_SCRIPT'))
 			->setContentBlock($pill)
 			->setInline()
+			->setScopeWeb()
 		;
 	}
 
@@ -815,36 +788,6 @@ class Call extends Activity
 		}
 
 		return $button;
-	}
-
-	private function getAIButton(): ?Activity\Call\CopilotButton
-	{
-		$activityId = $this->getActivityId();
-
-		// don't show the button
-		//	- if call processing with AI not enabled
-		//	- OR if user has no update rights
-		//	- OR if the entity type is not supported
-		//	- OR if there are no audio recordings
-		//	- OR if the entity is closed
-		//	- OR if there is another entity that is selected as target for this call
-		$isButtonVisible = AIManager::isAiCallProcessingEnabled()
-			&& $this->hasUpdatePermission()
-			&& $this->isCopilotScope()
-			&& count($this->fetchAudioRecordList()) > 0
-			&& $this->isItemHashValid($activityId, $this->getContext())
-		;
-
-		if (!$isButtonVisible)
-		{
-			return null;
-		}
-
-		return new Activity\Call\CopilotButton(
-			$this->getContext(),
-			$this->getAssociatedEntityModel(),
-			$activityId,
-		);
 	}
 
 	private function mapClientMark(int $callVote): ?string
@@ -955,14 +898,5 @@ class Call extends Activity
 	private function isTranscribed(array $input): bool
 	{
 		return isset($input['HAS_TRANSCRIPT']) && $input['HAS_TRANSCRIPT'];
-	}
-
-	private function isCopilotScope(): bool
-	{
-		return in_array(
-			$this->getContext()->getEntityTypeId(),
-			AIManager::SUPPORTED_ENTITY_TYPE_IDS,
-			true
-		);
 	}
 }

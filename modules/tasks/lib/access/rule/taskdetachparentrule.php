@@ -30,12 +30,7 @@ class TaskDetachParentRule extends AbstractRule
 		}
 
 		$parentId = $item->getParentId();
-		if ($parentId <= 0)
-		{
-			return true;
-		}
-
-		if (!$this->controller->checkByItemId(ActionDictionary::ACTION_TASK_READ, $parentId))
+		if ($parentId > 0 && !$this->controller->checkByItemId(ActionDictionary::ACTION_TASK_READ, $parentId))
 		{
 			$this->controller->addError(static::class, 'Access to parent task denied');
 

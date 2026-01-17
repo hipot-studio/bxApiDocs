@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Service\UserPermissions;
 
+use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
+
 /**
  * @internal
  * Do not use directly, only through \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->dynamicType()
@@ -21,13 +23,15 @@ final class DynamicType
 	 * Can user add a dynamic type (smart-process)
 	 * @param int|null $automatedSolutionId
 	 * @return bool
-	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
 	public function canAdd(?int $automatedSolutionId = null): bool
 	{
 		if ($automatedSolutionId)
 		{
-			return $this->automatedSolution->isAutomatedSolutionAdmin($automatedSolutionId);
+			return
+				$this->automatedSolution->isAutomatedSolutionAdmin($automatedSolutionId)
+				&& !CapabilityAccessChecker::getInstance()->isLockedAutomatedSolution($automatedSolutionId)
+			;
 		}
 
 		return $this->admin->isCrmAdmin();
@@ -41,6 +45,11 @@ final class DynamicType
 	public function canUpdate(int $entityTypeId): bool
 	{
 		if (\CCrmOwnerType::isDynamicTypeBasedStaticEntity($entityTypeId))
+		{
+			return false;
+		}
+
+		if (CapabilityAccessChecker::getInstance()->isLockedEntityType($entityTypeId))
 		{
 			return false;
 		}

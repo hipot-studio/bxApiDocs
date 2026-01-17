@@ -9,7 +9,7 @@ use Bitrix\Tasks\Internals;
 
 class TaskMarkMapper
 {
-	public function mapToEnum(string $mark): Entity\Task\Mark
+	public function mapToEnum(string $mark): ?Entity\Task\Mark
 	{
 		return match ($mark)
 		{

@@ -7,10 +7,9 @@ class ConfigContainer
 	private static self $configContainer;
 
 	private const PROXY_REGION_OPTION = '~superset_config_proxy_region';
-
 	private const PORTAL_ID_OPTION = '~superset_config_portal_id';
 	private const PORTAL_ID_VERIFIED = '~superset_config_portal_id_verified';
-
+	private const CLEAR_CONFIG_REASON = '~superset_config_clear_config_reason';
 
 	public static function getConfigContainer(): self
 	{
@@ -64,9 +63,42 @@ class ConfigContainer
 		return \Bitrix\Main\Config\Option::get('biconnector', self::PORTAL_ID_VERIFIED, 'N') === 'Y';
 	}
 
-	public function clearConfig(): void
+	public function clearConfig(string $reason = ''): void
 	{
+		$this->saveClearConfigReason($reason);
+
 		$this->clearPortalId();
 		$this->clearProxyRegion();
+	}
+
+	private function saveClearConfigReason(string $reason): void
+	{
+		$reasons = \Bitrix\Main\Config\Option::get('biconnector', self::CLEAR_CONFIG_REASON, '[]');
+		try
+		{
+			$reasons = \Bitrix\Main\Web\Json::decode($reasons);
+		}
+		catch (\Exception)
+		{
+			$reasons = [];
+		}
+
+		if (!is_array($reasons))
+		{
+			$reasons = [];
+		}
+
+		$reasons[] = [
+			'time' => time(),
+			'reason' => $reason,
+			'portalId' => $this->getPortalId(),
+			'isVerified' => $this->isPortalIdVerified(),
+		];
+
+		\Bitrix\Main\Config\Option::set(
+			'biconnector',
+			self::CLEAR_CONFIG_REASON,
+			\Bitrix\Main\Web\Json::encode($reasons)
+		);
 	}
 }

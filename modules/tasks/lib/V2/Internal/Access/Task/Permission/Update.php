@@ -6,7 +6,6 @@ namespace Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 
 use Attribute;
 use Bitrix\Main\Access\AccessibleController;
-use Bitrix\Tasks\Access\AccessCacheLoader;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Internal\Access\Factory\AccessControllerTrait;
@@ -30,7 +29,7 @@ class Update implements AttributeAccessInterface
 			return $this->checkEntity($entity, $accessController);
 		}
 
-		(new AccessCacheLoader())->preload($context->getUserId(), $entity->getIds());
+		Container::getInstance()->getTaskModelPreloader()->preload($context->getUserId(), $entity->getIds());
 
 		foreach ($entity as $item)
 		{

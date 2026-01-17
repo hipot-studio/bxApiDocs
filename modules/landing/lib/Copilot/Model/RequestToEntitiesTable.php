@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Copilot\Model;
 use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\ORM\Query;
+use Bitrix\Main\ORM\Data\DataManager;
 
 /**
  * Class RequestToEntitiesTable
@@ -23,7 +24,7 @@ use Bitrix\Main\ORM\Query;
  * @method static \Bitrix\Landing\Copilot\Model\EO_RequestToEntities wakeUpObject($row)
  * @method static \Bitrix\Landing\Copilot\Model\EO_RequestToEntities_Collection wakeUpCollection($rows)
  */
-class RequestToEntitiesTable extends Entity\DataManager
+class RequestToEntitiesTable extends DataManager
 {
 	/**
 	 * @inheritdoc

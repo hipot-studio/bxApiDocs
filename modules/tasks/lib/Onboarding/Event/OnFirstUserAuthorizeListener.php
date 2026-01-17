@@ -10,7 +10,7 @@ use Bitrix\Tasks\Onboarding\Internal\Factory\CommandModelFactory;
 use Bitrix\Tasks\Onboarding\Internal\Type;
 use Bitrix\Tasks\Onboarding\Transfer\CommandModelCollection;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 
 final class OnFirstUserAuthorizeListener extends AbstractEventListener
 {

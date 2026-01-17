@@ -777,7 +777,9 @@ class BizprocUserProcessesStart
 
 				foreach ($this->listIBlockBpTemplates[$iblockId] as &$template)
 				{
-					$template['bizprocEditorUrl'] = CBPDocumentService::getBizprocEditorUrl($documentType);
+					$template['bizprocEditorUrl'] = CBPRuntime::getRuntime()->getDocumentService()
+						->getBizprocEditorUrl($documentType)
+					;
 					$template['canEdit'] = CBPDocument::CanUserOperateDocumentType(
 						CBPCanUserOperateOperation::CreateWorkflow,
 						$this->getCurrentUserId(),

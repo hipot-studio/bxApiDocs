@@ -673,6 +673,11 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 		return null;
 	}
 
+	protected function prepareDateTimeValue(mixed $value): ?DateTime
+	{
+		return $value instanceof DateTime ? $value : null;
+	}
+
 	protected static function mirrorDataEntityFields(): array
 	{
 		return [
@@ -781,51 +786,61 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 				'field' => 'dateCreate',
 				'set' => 'setDateCreate',
 				'get' => 'getDateCreate',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_OPERATOR' => [
 				'field' => 'dateOperator',
 				'set' => 'setDateOperator',
 				'get' => 'getDateOperator',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_MODIFY' => [
 				'field' => 'dateModify',
 				'set' => 'setDateModify',
 				'get' => 'getDateModify',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_OPERATOR_ANSWER' => [
 				'field' => 'dateOperatorAnswer',
 				'set' => 'setDateOperatorAnswer',
 				'get' => 'getDateOperatorAnswer',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_OPERATOR_CLOSE' => [
 				'field' => 'dateOperatorClose',
 				'set' => 'setDateOperatorClose',
 				'get' => 'getDateOperatorClose',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_FIRST_ANSWER' => [
 				'field' => 'dateFirstAnswer',
 				'set' => 'setDateFirstAnswer',
 				'get' => 'getDateFirstAnswer',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_LAST_MESSAGE' => [
 				'field' => 'dateLastMessage',
-				'set' => 'set',
-				'get' => 'get',
+				'set' => 'setDateLastMessage',
+				'get' => 'getDateLastMessage',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_FIRST_LAST_USER_ACTION' => [
 				'field' => 'dateFirstLastUserAction',
 				'set' => 'setDateFirstLastUserAction',
 				'get' => 'getDateFirstLastUserAction',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_CLOSE' => [
 				'field' => 'dateClose',
 				'set' => 'setDateClose',
 				'get' => 'getDateClose',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'DATE_CLOSE_VOTE' => [
 				'field' => 'dateCloseVote',
 				'set' => 'setDateCloseVote',
 				'get' => 'getDateCloseVote',
+				'loadFilter' => 'prepareDateTimeValue',
 			],
 			'TIME_FIRST_ANSWER' => [
 				'field' => 'timeFirstAnswer',

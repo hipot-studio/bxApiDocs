@@ -77,4 +77,18 @@ class WorkflowTemplateDraftTable extends DataManager
 			'filter' => ['=TEMPLATE_ID' => $templateId],
 		])->fetchAll();
 	}
+
+	public static function deleteByTemplateId(string $templateId): void
+	{
+		$iterator =
+			static::query()
+				->setFilter(['=TEMPLATE_ID' => $templateId])
+				->exec()
+		;
+
+		while ($draft = $iterator->fetchObject())
+		{
+			$draft->delete();
+		}
+	}
 }

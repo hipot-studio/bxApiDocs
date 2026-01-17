@@ -335,4 +335,9 @@ class SmartDocument extends Dynamic
 	{
 		return true;
 	}
+
+	public function isRecurringEnabled(): bool
+	{
+		return false;
+	}
 }

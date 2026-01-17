@@ -94,6 +94,11 @@ class ExternalConnectionProvider extends BaseProvider
 			{
 				$avatar = $restSourceAvatars[$source->getId()];
 			}
+			$restSourceSupportMappingList = self::loadSupportMappingInfo();
+			if (!empty($restSourceSupportMappingList[$source->getId()]))
+			{
+				$isSupportMapping = $restSourceSupportMappingList[$source->getId()];
+			}
 		}
 
 		$itemParams = [
@@ -106,6 +111,7 @@ class ExternalConnectionProvider extends BaseProvider
 			'linkTitle' => Loc::getMessage('EXTERNAL_CONNECTION_PROVIDER_LINK_TEXT'),
 			'customData' => [
 				'connectionType' => $source->getType(),
+				'isSupportMapping' => $isSupportMapping ?? false,
 			],
 		];
 
@@ -134,5 +140,30 @@ class ExternalConnectionProvider extends BaseProvider
 		}
 
 		return $icons;
+	}
+
+
+	private static function loadSupportMappingInfo(): array
+	{
+		static $isSupportMapping = null;
+		if ($isSupportMapping)
+		{
+			return $isSupportMapping;
+		}
+
+		$isSupportMapping = [];
+		$sources = ExternalSourceRestTable::getList([
+			'select' => [
+				'SOURCE_ID',
+				'SUPPORT_MAPPING' => 'CONNECTOR.SUPPORT_MAPPING'
+			],
+		]);
+
+		while ($source = $sources->fetch())
+		{
+			$isSupportMapping[$source['SOURCE_ID']] = $source['SUPPORT_MAPPING'];
+		}
+
+		return $isSupportMapping;
 	}
 }

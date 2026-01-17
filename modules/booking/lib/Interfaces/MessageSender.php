@@ -24,4 +24,6 @@ interface MessageSender
 	public function send(Booking $booking, $message): Result;
 
 	public function canUse(): bool;
+
+	public function checkLicense(): bool;
 }

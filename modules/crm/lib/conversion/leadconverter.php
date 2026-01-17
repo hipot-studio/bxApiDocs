@@ -181,6 +181,7 @@ class LeadConverter extends EntityConverter
 			$options = array();
 		}
 		$options['INIT_DATA'] = $this->config->getEntityInitData($entityTypeID);
+		$options['CHECK_CATALOG_PRICES'] = $this->config->isPermissionCheckEnabled();
 
 		$fields = $this->getMapper()->map($this->getMap($entityTypeID), $options);
 
@@ -570,7 +571,13 @@ class LeadConverter extends EntityConverter
 				);
 			}
 
-			$fields = $mapper->map($map, array('INIT_DATA' => $config->getInitData()));
+			$fields = $mapper->map(
+				$map,
+				[
+					'INIT_DATA' => $config->getInitData(),
+					'CHECK_CATALOG_PRICES' => $this->config->isPermissionCheckEnabled(),
+				],
+			);
 			if(empty($fields))
 			{
 				throw new EntityConversionException(
@@ -700,7 +707,7 @@ class LeadConverter extends EntityConverter
 
 				$entity = new \CCrmDeal(false);
 				$entityID = $entity->Add($fields, true, $this->getAddOptions());
-				if($entityID <= 0)
+				if ($entityID <= 0)
 				{
 					throw new EntityConversionException(
 						\CCrmOwnerType::Lead,
@@ -711,7 +718,7 @@ class LeadConverter extends EntityConverter
 					);
 				}
 
-				if(isset($fields['PRODUCT_ROWS'])
+				if (isset($fields['PRODUCT_ROWS'])
 					&& is_array($fields['PRODUCT_ROWS'])
 					&& !empty($fields['PRODUCT_ROWS']))
 				{

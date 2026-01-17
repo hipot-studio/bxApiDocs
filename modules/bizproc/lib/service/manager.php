@@ -14,6 +14,7 @@ class Manager
 	public const DOCUMENT_SERVICE_NAME = 'documentService';
 	public const ANALYTICS_SERVICE_NAME = 'analyticsService';
 	public const USER_SERVICE_NAME = 'userService';
+	public const AI_DESCRIPTION_SERVICE = 'aiDescriptionService';
 
 	/** @var ServiceLocator */
 	private $serviceLocator;
@@ -57,6 +58,7 @@ class Manager
 			static::DOCUMENT_SERVICE_NAME,
 			static::ANALYTICS_SERVICE_NAME,
 			static::USER_SERVICE_NAME,
+			static::AI_DESCRIPTION_SERVICE,
 		];
 	}
 

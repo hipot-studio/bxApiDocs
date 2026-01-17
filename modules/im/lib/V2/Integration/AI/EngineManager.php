@@ -73,6 +73,7 @@ class EngineManager
 	{
 		$result = [];
 		$engines = $this->getAvailableEngines();
+		$defaultEngineCode = self::getDefaultEngineCode();
 
 		foreach ($engines as $engine)
 		{
@@ -80,6 +81,8 @@ class EngineManager
 				'code' => $engine->getCode(),
 				'name' => $engine->getName(),
 				'recommended' => $engine->isPreferredForQuality(new Quality(self::QUALITY)),
+				'default' => $engine->getCode() === $defaultEngineCode,
+				'supportsReasoning' => $engine->supportsReasoning(),
 			];
 		}
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Integration\Crm;
 
 use Bitrix\Booking\Command\Booking\BookingResult;
-use Bitrix\Booking\Entity\ExternalData\ItemType\CatalogSkuItemType;
+use Bitrix\Booking\Entity\Booking\BookingSku;
+use Bitrix\Booking\Entity\Booking\BookingSkuCollection;
+use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Model\ClientTypeTable;
 use Bitrix\Crm\Item;
@@ -159,7 +161,6 @@ class EventsHandler
 		}
 
 		$resourceCollection = new ResourceCollection();
-		$externalDataCollection = new ExternalDataCollection();
 		foreach ($resources as $resource)
 		{
 			if (!isset($resource['id']))
@@ -171,20 +172,20 @@ class EventsHandler
 
 			if (isset($resource['skus']))
 			{
-				foreach ($resource['skus'] as $sku)
-				{
-					$externalDataCollection->add(
-						(new CatalogSkuItemType())->createItem()->setValue((string)$sku['id'])
-					);
-				}
+				$skus = array_map(
+					static fn(array $sku) => (new BookingSku())->setId((int)$sku['id']),
+					$resource['skus'],
+				);
+
+				$booking->setSkuCollection(new BookingSkuCollection(...$skus));
 			}
 		}
 
 		$booking->setResourceCollection($resourceCollection);
-		$booking->setExternalDataCollection($externalDataCollection);
 
 		$timelineBindings = [];
 		$booking
+			->setSource(BookingSource::CrmForm)
 			->setClientCollection(
 				self::getClientCollectionFromEntityList(
 					$crmEntityList,

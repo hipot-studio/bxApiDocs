@@ -9,7 +9,7 @@ use Bitrix\Intranet\Exception\UpdateFailedException;
 
 interface UserRepository
 {
-	public function getUserById(int $id): User;
+	public function getUserById(int $id): ?User;
 
 	public function findUsersByLogins(array $logins): UserCollection;
 
@@ -36,6 +36,10 @@ interface UserRepository
 	public function findActiveUsersWithDepartmentsOnline(int $limitOnlineSeconds, int $limitRows = 0): UserCollection;
 
 	public function findActiveUsersWithDepartmentsOnlineCount(int $limitOnlineSeconds): int;
+
+	public function isConfirmedAuthPhone(int $userId, string $phoneNumber): bool;
+
+	public function getTsSentConfirmationCode(int $userId): ?int;
 
 	public function create(User $user): User;
 

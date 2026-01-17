@@ -49,8 +49,17 @@ class Features
 		public readonly bool $teamsInStructureAvailable,
 		public readonly bool $isDesktopRedirectAvailable,
 		public readonly bool $aiAssistantAvailable,
+		public readonly bool $isCopilotMentionAvailable,
 		public readonly bool $aiFileTranscriptionAvailable,
 		public readonly bool $isTasksRecentListAvailable,
+		public readonly bool $videoNoteAvailable,
+		public readonly bool $mentionAllAvailable,
+		public readonly bool $unreadRecentModeAvailable,
+		public readonly bool $isMultipleReactionsAvailable,
+		public readonly bool $aiAssistantMcpSelectorAvailable,
+		public readonly bool $videoNoteTranscriptionAvailable,
+		public readonly bool $stickersAvailable,
+		public readonly bool $isCopilotReasoningAvailable,
 	){}
 
 	public static function get(): self
@@ -92,8 +101,17 @@ class Features
 			Structure::isTeamsAvailable(),
 			self::isDesktopRedirectAvailable(),
 			self::isAiAssistantAvailable(),
+			self::isCopilotMentionAvailable(),
 			self::isAiFileTranscriptionAvailable(),
 			self::isTasksRecentListAvailable(),
+			self::isVideoNoteAvailable(),
+			self::isMentionAllAvailable(),
+			self::isUnreadRecentModeAvailable(),
+			self::isMultipleReactionsAvailable(),
+			self::isAiAssistantMcpSelectorAvailable(),
+			self::isVideoNoteTranscriptionAvailable(),
+			self::isStickersAvailable(),
+			self::isCopilotReasoningAvailable(),
 		);
 	}
 
@@ -160,11 +178,38 @@ class Features
 		return ServiceLocator::getInstance()->get(AiAssistantService::class)->isAiAssistantAvailable();
 	}
 
+	public static function isCopilotMentionAvailable(): bool
+	{
+		if (!CopilotChat::isActive())
+		{
+			return false;
+		}
+
+		if (\CUserOptions::GetOption('im', 'copilot_mention_user', 'N') === 'Y')
+		{
+			return true;
+		}
+
+		return Option::get('im', 'copilot_mention', 'N') === 'Y';
+	}
+
 	public static function isAiFileTranscriptionAvailable(): bool
 	{
 		return Option::get('im', 'file_transcription_available', 'N') === 'Y'
 			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
 		;
+	}
+
+	public static function isVideoNoteTranscriptionAvailable(): bool
+	{
+		return Option::get('im', 'video_note_transcription_available', 'N') === 'Y'
+			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
+		;
+	}
+
+	public static function isUnreadRecentModeAvailable(): bool
+	{
+		return Option::get('im', 'unread_recent_mode_available', 'N') === 'Y';
 	}
 
 	public static function isTasksRecentListAvailable(): bool
@@ -173,5 +218,40 @@ class Features
 			Option::get('im', 'is_tasks_recent_list_available', 'N') === 'Y'
 			&& Loader::includeModule('tasks')
 		;
+	}
+
+	public static function isVideoNoteAvailable(): bool
+	{
+		return Option::get('im', 'video_note_available', 'N') === 'Y';
+	}
+
+	public static function isMentionAllAvailable(): bool
+	{
+		return Option::get('im', 'mention_all_available', 'N') === 'Y';
+	}
+
+	public static function isMultipleReactionsAvailable(): bool
+	{
+		return Option::get('im', 'multiple_reactions_available', 'N') === 'Y';
+	}
+
+	public static function isTranscriptionEmotionsAvailable(): bool
+	{
+		return Option::get('im', 'transcription_emotions_available', 'N') === 'Y';
+	}
+
+	public static function isStickersAvailable(): bool
+	{
+		return Option::get('im', 'stickers_available', 'N') === 'Y';
+	}
+
+	public static function isCopilotReasoningAvailable(): bool
+	{
+		return Option::get('im', 'copilot_reasoning_available', 'N') === 'Y';
+	}
+
+	public static function isAiAssistantMcpSelectorAvailable(): bool
+	{
+		return Option::get('im', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 }

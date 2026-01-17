@@ -32,7 +32,7 @@ use Bitrix\Main\Type\DateTime;
 
 IncludeModuleLangFile(__FILE__);
 
-class CAllUser extends CDBResult
+class CUser extends CDBResult
 {
 	const STATUS_ONLINE = 'online';
 	const STATUS_OFFLINE = 'offline';
@@ -308,6 +308,16 @@ class CAllUser extends CDBResult
 			if (Option::get('main', 'user_profile_history') === 'Y')
 			{
 				UserProfileHistoryTable::addHistory($ID, UserProfileHistoryTable::TYPE_ADD);
+			}
+
+			if (Option::get('main', 'event_log_register', 'N') === 'Y')
+			{
+				$info = [
+					'login' => $arFields['LOGIN'] ?? '',
+					'name' => $arFields['NAME'] ?? '',
+					'lastName' => $arFields['LAST_NAME'] ?? '',
+				];
+				CEventLog::Log(CEventLog::SEVERITY_SECURITY, 'USER_REGISTER', 'main', $ID, $info);
 			}
 
 			$Result = $ID;
@@ -1517,6 +1527,11 @@ class CAllUser extends CDBResult
 			;
 		}
 
+		if (isset($_SERVER['BX24_REQUEST_ID']))
+		{
+			$context->setRequestId($_SERVER['BX24_REQUEST_ID']);
+		}
+
 		$arUser = $this->UpdateSessionData($context, $onlyActive);
 
 		if ($arUser !== false)
@@ -1615,11 +1630,6 @@ class CAllUser extends CDBResult
 						'DATE_LOGIN' => new DateTime(),
 						'LAST_IP' => $_SERVER["REMOTE_ADDR"],
 					]);
-				}
-
-				if (isset($_SERVER['BX24_REQUEST_ID']))
-				{
-					$context->setRequestId($_SERVER['BX24_REQUEST_ID']);
 				}
 
 				if (Option::get('main', 'event_log_login_success', 'N') === 'Y')
@@ -1858,6 +1868,7 @@ class CAllUser extends CDBResult
 
 				$arParams["CAPTCHA_WORD"] = $_REQUEST["captcha_word"] ?? '';
 				$arParams["CAPTCHA_SID"] = $_REQUEST["captcha_sid"] ?? '';
+				$arParams["AUTH_CONTEXT"] = json_encode($context);
 
 				$doAuthorize = \Bitrix\Security\Mfa\Otp::verifyUser($arParams);
 			}
@@ -1865,6 +1876,11 @@ class CAllUser extends CDBResult
 			if ($doAuthorize)
 			{
 				$context->setUserId($user_id);
+
+				if (!empty($arParams['OTP']))
+				{
+					$context->setOtpUsed(true);
+				}
 
 				$this->Authorize($context, ($arParams["REMEMBER"] == 'Y'));
 			}
@@ -2264,17 +2280,39 @@ class CAllUser extends CDBResult
 			return ["MESSAGE" => GetMessage("USER_LOGIN_OTP_INCORRECT") . "<br>", "TYPE" => "ERROR"];
 		}
 
-		$context = (new Authentication\Context())
+		if (!empty($userParams["AUTH_CONTEXT"]))
+		{
+			$context = Authentication\Context::jsonDecode($userParams["AUTH_CONTEXT"]);
+		}
+		else
+		{
+			$context = new Authentication\Context();
+		}
+		$context
 			->setUserId($userParams["USER_ID"])
-			->setMethod(Method::Otp)
+			->setOtpUsed(true)
 		;
 
 		$this->Authorize($context, ($userParams["REMEMBER"] == 'Y'));
+
 		return true;
 	}
 
-	public function AuthorizeWithOtp($user_id, $bSave = false)
+	/**
+	 * @param Authentication\Context|int $context Contains user id.
+	 * @param bool $bSave Save authorization in cookies.
+	 * @return bool
+	 */
+	public function AuthorizeWithOtp($context, $bSave = false)
 	{
+		// compatibility magic
+		if (!($context instanceof Authentication\Context))
+		{
+			$context = (new Authentication\Context())
+				->setUserId($context)
+			;
+		}
+
 		$doAuthorize = true;
 
 		if (CModule::IncludeModule("security"))
@@ -2285,12 +2323,16 @@ class CAllUser extends CDBResult
 			- OTP is not active for the user;
 			When authorization is disallowed the OTP form will be shown on the next hit.
 			*/
-			$doAuthorize = \Bitrix\Security\Mfa\Otp::verifyUser(["USER_ID" => $user_id]);
+			$params = [
+				"USER_ID" => $context->getUserId(),
+				"AUTH_CONTEXT" => json_encode($context),
+			];
+			$doAuthorize = \Bitrix\Security\Mfa\Otp::verifyUser($params);
 		}
 
 		if ($doAuthorize)
 		{
-			return $this->Authorize($user_id, $bSave);
+			return $this->Authorize($context, $bSave);
 		}
 
 		return false;
@@ -3068,14 +3110,7 @@ class CAllUser extends CDBResult
 
 		if (is_array($result_message))
 		{
-			if ($result_message["TYPE"] == "OK")
-			{
-				if (Option::get('main', 'event_log_register', 'N') === 'Y')
-				{
-					CEventLog::Log(CEventLog::SEVERITY_SECURITY, 'USER_REGISTER', 'main', $ID, ['login' => $USER_LOGIN, 'name' => $USER_NAME, 'lastName' => $USER_LAST_NAME]);
-				}
-			}
-			else
+			if ($result_message["TYPE"] != "OK")
 			{
 				if (Option::get('main', 'event_log_register_fail', 'N') === 'Y')
 				{
@@ -3223,14 +3258,7 @@ class CAllUser extends CDBResult
 
 		if (is_array($result_message))
 		{
-			if ($result_message["TYPE"] == "OK")
-			{
-				if (Option::get('main', 'event_log_register', 'N') === 'Y')
-				{
-					CEventLog::Log(CEventLog::SEVERITY_SECURITY, 'USER_REGISTER', 'main', $ID, ['login' => $arFields["LOGIN"]]);
-				}
-			}
-			else
+			if ($result_message["TYPE"] != "OK")
 			{
 				if (Option::get('main', 'event_log_register_fail', 'N') === 'Y')
 				{
@@ -4432,9 +4460,9 @@ class CAllUser extends CDBResult
 			CFile::Delete($arUser['WORK_LOGO']);
 		}
 
-		CAccess::OnUserDelete($ID);
-
 		$userFilter = ['=USER_ID' => $ID];
+
+		CAccess::OnUserDelete($ID);
 
 		UserGroupTable::deleteByFilter($userFilter);
 
@@ -4449,6 +4477,8 @@ class CAllUser extends CDBResult
 		CHotKeys::DeleteByUser($ID);
 
 		CFavorites::OnUserDelete($ID);
+
+		CUserOptions::OnUserDelete($ID);
 
 		UserPasswordTable::deleteByFilter($userFilter);
 
@@ -6045,8 +6075,4 @@ class CAllUser extends CDBResult
 			}
 		}
 	}
-}
-
-class CUser extends CAllUser
-{
 }

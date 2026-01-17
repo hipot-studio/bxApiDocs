@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\MessageSender\SendFacilitator;
 
+use Bitrix\Crm\Activity;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\MessageSender\Channel;
 use Bitrix\Crm\MessageSender\SendFacilitator;
@@ -24,10 +25,12 @@ final class Sms extends SendFacilitator
 
 	protected function getActivityProviderTypeId(): string
 	{
-		return SmsManager::isEdnaWhatsAppSendingEnabled($this->channel->getId())
-			? \Bitrix\Crm\Activity\Provider\WhatsApp::PROVIDER_TYPE_WHATSAPP
-			: \Bitrix\Crm\Activity\Provider\Sms::PROVIDER_TYPE_SMS
-		;
+		return match (SmsManager::getActivityProviderId($this->channel->getId(), $this->getFrom()->getType()))
+		{
+			Activity\Provider\WhatsApp::getId() => Activity\Provider\WhatsApp::PROVIDER_TYPE_WHATSAPP,
+			Activity\Provider\Telegram::getId() => Activity\Provider\Telegram::PROVIDER_TYPE_TELEGRAM,
+			default => Activity\Provider\Sms::PROVIDER_TYPE_SMS,
+		};
 	}
 
 	public function setMessageBody(string $body): self

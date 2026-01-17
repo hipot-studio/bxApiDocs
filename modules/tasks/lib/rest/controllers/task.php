@@ -48,6 +48,7 @@ use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
 use Bitrix\UI\FileUploader\Uploader;
 use CBitrixComponent;
 use CComponentEngine;
@@ -2178,8 +2179,7 @@ final class Task extends Base
 		$taskId = (int)$taskData['ID'];
 		$userId = $this->getCurrentUser()->getId();
 
-		$commentPoster = CommentPoster::getInstance($taskId, $userId);
-		$commentPoster && $commentPoster->postCommentsOnTaskStatusPinged($taskData);
+		Container::getInstance()->get(PingActionInterface::class)->execute($taskId, $userId, $taskData);
 
 		CTaskNotifications::sendPingStatusMessage($taskData, $userId);
 

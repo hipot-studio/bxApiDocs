@@ -4,10 +4,7 @@ namespace Bitrix\Crm\Service\UserPermissions\EntityPermissions;
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\EO_Status_Collection;
-use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
-use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\PermissionsManager;
-use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
 
 /**
@@ -17,6 +14,8 @@ use Bitrix\Crm\Service\UserPermissions;
 
 class Stage
 {
+	use UserPermissions\AutomatedSolutionEntityLockedTrait;
+
 	public function __construct(
 		private readonly PermissionsManager $permissionsManager,
 	)
@@ -32,6 +31,11 @@ class Stage
 	 */
 	public function canAddInStage(int $entityTypeId, ?int $categoryId, string $stageId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->hasPermissions($entityTypeId, $categoryId, $stageId, UserPermissions::OPERATION_ADD);
 	}
 
@@ -44,6 +48,11 @@ class Stage
 	 */
 	public function canUpdateInStage(int $entityTypeId, ?int $categoryId, string $stageId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->hasPermissions($entityTypeId, $categoryId, $stageId, UserPermissions::OPERATION_UPDATE);
 	}
 

@@ -23,7 +23,7 @@ class PushService
 
 	private function send(string $eventName, ReactionItem $reaction): void
 	{
-		$converter = new Converter(Converter::KEYS | Converter::VALUES | Converter::TO_LOWER | Converter::LC_FIRST);
+		$converter = new Converter(Converter::TO_CAMEL | Converter::LC_FIRST);
 		$messageId = $reaction->getMessageId();
 		$reactionMessage = (new ReactionMessages([$messageId], false))->getReactionMessage($messageId);
 		$params = [

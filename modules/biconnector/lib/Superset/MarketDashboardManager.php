@@ -165,6 +165,7 @@ final class MarketDashboardManager
 			->setAppId($appCode)
 			->setStatus($dashboardStatus)
 			->setDateModify(new DateTime())
+			->setLang($externalDashboard['langCode'] ?? null)
 			->save()
 		;
 
@@ -207,12 +208,18 @@ final class MarketDashboardManager
 	{
 		if (!$dashboardSettings && Feature::isCheckPermissionsByGroup())
 		{
+			MarketDashboardLogger::logInfo('applyDashboardSettings: no settings, add crm group by default', [
+				'app_id' => $dashboard->getAppId() ?? 'no app_id',
+			]);
 			$this->saveDashboardGroupByScope($dashboard->getId(), self::getDefaultDashboardGroupScope());
 
 			return;
 		}
 
-		if (isset($dashboardSettings['period']))
+		if (
+			isset($dashboardSettings['period'])
+			&& empty($dashboard->fillFilterPeriod())
+		)
 		{
 			$periodSetting = $dashboardSettings['period'];
 			if ($periodSetting['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_DEFAULT)
@@ -269,7 +276,6 @@ final class MarketDashboardManager
 
 		if (Feature::isCheckPermissionsByGroup())
 		{
-
 			if (
 				isset($dashboardSettings['groupCode'])
 				&& is_string($dashboardSettings['groupCode'])

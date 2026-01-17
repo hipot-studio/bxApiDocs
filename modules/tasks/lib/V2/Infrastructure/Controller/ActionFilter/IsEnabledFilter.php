@@ -17,9 +17,10 @@ use Bitrix\Tasks\V2\FormV2Feature;
 
 class IsEnabledFilter extends Base
 {
-	private const ENABLED_ACTIONS = [
+	protected const ENABLED_ACTIONS = [
 		Task::class => ['add'],
 		CheckList::class => ['save'],
+		Group::class => ['get'],
 		Group\Url::class => ['get'],
 	];
 
@@ -30,7 +31,8 @@ class IsEnabledFilter extends Base
 		/** @var Action $action */
 		$action = $event->getParameter('action');
 
-		if (FormV2Feature::isOn() || FormV2Feature::isDevMode())
+		// @todo Remove FormV2Feature::isOn('team_form') before release
+		if (FormV2Feature::isOn() || FormV2Feature::isDevMode() || FormV2Feature::isOn('team_form'))
 		{
 			return null;
 		}

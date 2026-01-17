@@ -7,7 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ApplicationErrorTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\ApplicationErrorTrait;
 
 class RunBeforeUpdateEvent
 {
@@ -17,12 +17,17 @@ class RunBeforeUpdateEvent
 	/**
 	 * @throws TaskUpdateException
 	 */
-	public function __invoke(array $fields, array $fullTaskData): array
+	public function __invoke(array $fields, array $fullTaskData, ?callable $eventFilter = null): array
 	{
 		$eventTaskData = $fullTaskData;
 
 		foreach (GetModuleEvents('tasks', 'OnBeforeTaskUpdate', true) as $arEvent)
 		{
+			if ($eventFilter !== null && !$eventFilter($arEvent))
+			{
+				continue;
+			}
+
 			if (ExecuteModuleEventEx($arEvent, [(int)$fullTaskData['ID'], &$fields, &$eventTaskData]) === false)
 			{
 				$message = $this->getApplicationError(Loc::getMessage('TASKS_UNKNOWN_UPDATE_ERROR'));

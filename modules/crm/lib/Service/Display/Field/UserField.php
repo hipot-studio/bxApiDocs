@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Display\Field;
 
+use Bitrix\Crm\Grid\Render\User\ClickableUser;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Options;
 use Bitrix\Crm\UI\EntitySelector;
@@ -9,6 +10,8 @@ use Bitrix\Crm\UI\EntitySelector;
 class UserField extends BaseLinkedEntitiesField
 {
 	public const TYPE = 'user';
+
+	public const FILE_IS_ALLOW_SWITCH_VIEW = 'Y';
 
 	public function getFormattedValue(
 		$fieldValue,
@@ -34,12 +37,14 @@ class UserField extends BaseLinkedEntitiesField
 		$fieldValue = is_array($fieldValue) ? $fieldValue : [$fieldValue];
 		foreach ($fieldValue as $elementId)
 		{
+			$elementId = (int)$elementId;
+
 			if (!$this->isMultiple())
 			{
-				return $this->getPreparedValue($elementId, $prefix);
+				return $this->getPreparedValue($elementId, $prefix, $displayOptions);
 			}
 
-			$preparedValue = $this->getPreparedValue($elementId, $prefix);
+			$preparedValue = $this->getPreparedValue($elementId, $prefix, $displayOptions);
 			if ($preparedValue !== '')
 			{
 				$results[] = $preparedValue;
@@ -49,12 +54,7 @@ class UserField extends BaseLinkedEntitiesField
 		return $results;
 	}
 
-	/**
-	 * @param int|string $elementId
-	 * @param string $prefix
-	 * @return array|null|string
-	 */
-	protected function getPreparedValue($elementId, string $prefix)
+	protected function getPreparedValue(int $elementId, string $prefix, Options $displayOptions): array|string
 	{
 		if (!is_scalar($elementId))
 		{
@@ -86,13 +86,27 @@ class UserField extends BaseLinkedEntitiesField
 				];
 			}
 
-			return \CCrmViewHelper::PrepareUserBaloonHtml([
-				'PREFIX' => $prefix,
-				'USER_ID' => $user['ID'],
-				'USER_NAME' => $user['FORMATTED_NAME'],
-				'USER_PROFILE_URL' => $showUrl,
-				'ENCODE_USER_NAME' => true,
+			if ($displayOptions->isUseRawValue()) // for kanban
+			{
+				return \CCrmViewHelper::PrepareUserBaloonHtml([
+					'PREFIX' => $prefix,
+					'USER_ID' => $user['ID'],
+					'USER_NAME' => $user['FORMATTED_NAME'],
+					'USER_PROFILE_URL' => $showUrl,
+					'ENCODE_USER_NAME' => true,
+				]);
+			}
+
+			$userRender = new ClickableUser([
+				$user['ID'] => $user,
 			]);
+
+			return $userRender->render(
+				$user['ID'],
+				$this->getId(),
+				$prefix,
+				$displayOptions->getFilterFields(),
+			);
 		}
 
 		return '';

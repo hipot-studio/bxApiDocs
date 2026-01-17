@@ -46,7 +46,8 @@ class Item extends BaseController
 		$result = (new SetItemsCommand(
 			taskId: $task->id,
 			userId: $this->userId,
-			crmItemIds: $task->crmItemIds
+			crmItemIds: $task->crmItemIds,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -71,7 +72,8 @@ class Item extends BaseController
 		$result = (new DeleteItemsCommand(
 			taskId: $task->id,
 			userId: $this->userId,
-			crmItemIds: $task->crmItemIds
+			crmItemIds: $task->crmItemIds,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -96,7 +98,8 @@ class Item extends BaseController
 		$result = (new AddItemsCommand(
 			taskId: $task->id,
 			userId: $this->userId,
-			crmItemIds: $task->crmItemIds
+			crmItemIds: $task->crmItemIds,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())

@@ -7,10 +7,12 @@ use Bitrix\Main\Access\BaseAccessController;
 use Bitrix\Main\Access\User\AccessibleUser;
 use Bitrix\Tasks\Access\Model\ResultModel;
 use Bitrix\Tasks\Access\Model\UserModel;
+use Bitrix\Tasks\V2\Internal\Access\UserErrorTrait;
 
 class ResultAccessController extends BaseAccessController implements AccessErrorable
 {
 	use AccessErrorTrait;
+	use UserErrorTrait;
 
 	public static array $cache = [];
 

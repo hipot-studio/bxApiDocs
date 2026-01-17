@@ -10,6 +10,7 @@
 use Bitrix\Main\Application;
 use Bitrix\Main\UserFieldTable;
 use Bitrix\Main\UserFieldLangTable;
+use Bitrix\Main\ORM\Fields;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -17,106 +18,47 @@ IncludeModuleLangFile(__FILE__);
  * This class is used to manage metadata of user properties.
  *
  * <p>Selections, Deletion, Addition, and Update of metadata in the b_user_field table.</p>
- * create table b_user_field (
- * ID    int(11) not null auto_increment,
- * ENTITY_ID  varchar(50),
- * FIELD_NAME  varchar(50),
- * USER_TYPE_ID  varchar(50),
- * XML_ID    varchar(255),
- * SORT    int,
- * MULTIPLE  char(1) not null default 'N',
- * MANDATORY  char(1) not null default 'N',
- * SHOW_FILTER  char(1) not null default 'N',
- * SHOW_IN_LIST  char(1) not null default 'Y',
- * EDIT_IN_LIST  char(1) not null default 'Y',
- * IS_SEARCHABLE  char(1) not null default 'N',
- * SETTINGS  text,
- * PRIMARY KEY (ID),
- * UNIQUE ux_user_type_entity(ENTITY_ID, FIELD_NAME)
- * )
- * ------------------
  * ID
  * ENTITY_ID (example: IBLOCK_SECTION, USER ....)
  * FIELD_NAME (example: UF_EMAIL, UF_SOME_COUNTER ....)
  * SORT -- used to do check in the specified order
  * BASE_TYPE - String, Number, Integer, Enumeration, File, DateTime
  * USER_TYPE_ID
- * SETTINGS (blob) -- to store some settings which may be useful for an field instance
- * [some base settings comon to all types: mandatory or no, etc.]
- * <p>b_user_field</p>
- * <ul>
- * <li><b>ID</b> int(11) not null auto_increment
- * <li>ENTITY_ID varchar(50)
- * <li>FIELD_NAME varchar(20)
- * <li>USER_TYPE_ID varchar(50)
- * <li>XML_ID varchar(255)
- * <li>SORT int
- * <li>MULTIPLE char(1) not null default 'N'
- * <li>MANDATORY char(1) not null default 'N'
- * <li>SHOW_FILTER char(1) not null default 'N'
- * <li>SHOW_IN_LIST char(1) not null default 'Y'
- * <li>EDIT_IN_LIST char(1) not null default 'Y'
- * <li>IS_SEARCHABLE char(1) not null default 'N'
- * <li>SETTINGS text
- * <li>PRIMARY KEY (ID),
- * <li>UNIQUE ux_user_type_entity(ENTITY_ID, FIELD_NAME)
- * </ul>
- * create table b_user_field_lang (
- * USER_FIELD_ID int(11) REFERENCES b_user_field(ID),
- * LANGUAGE_ID char(2),
- * EDIT_FORM_LABEL varchar(255),
- * LIST_COLUMN_LABEL varchar(255),
- * LIST_FILTER_LABEL varchar(255),
- * ERROR_MESSAGE varchar(255),
- * HELP_MESSAGE varchar(255),
- * PRIMARY KEY (USER_FIELD_ID, LANGUAGE_ID)
- * )
- * <p>b_user_field_lang</p>
- * <ul>
- * <li><b>USER_FIELD_ID</b> int(11) REFERENCES b_user_field(ID)
- * <li><b>LANGUAGE_ID</b> char(2)
- * <li>EDIT_FORM_LABEL varchar(255)
- * <li>LIST_COLUMN_LABEL varchar(255)
- * <li>LIST_FILTER_LABEL varchar(255)
- * <li>ERROR_MESSAGE varchar(255)
- * <li>HELP_MESSAGE varchar(255)
- * <li>PRIMARY KEY (USER_FIELD_ID, LANGUAGE_ID)
- * </ul>
- * @package usertype
- * @subpackage classes
+ * SETTINGS (blob) -- to store some settings which may be useful for a field instance
+ * [some base settings common to all types: mandatory or no, etc.]
  */
 class CAllUserTypeEntity extends CDBResult
 {
 	protected static $cache = [];
 
-	function CreatePropertyTables($entity_id)
+	protected function CreatePropertyTables($entityId)
 	{
+		$entityId = strtolower($entityId);
+
 		$connection = Application::getConnection();
 
-		if (!$connection->isTableExists("b_utm_" . strtolower($entity_id)))
+		if (!$connection->isTableExists("b_utm_" . $entityId))
 		{
-			$connection->createTable("b_utm_" . strtolower($entity_id), [
-				'ID' => new \Bitrix\Main\ORM\Fields\IntegerField('ID'),
-				'VALUE_ID' => new \Bitrix\Main\ORM\Fields\IntegerField('VALUE_ID'),
-				'FIELD_ID' => new \Bitrix\Main\ORM\Fields\IntegerField('FIELD_ID'),
-				'VALUE' => new \Bitrix\Main\ORM\Fields\TextField('VALUE', ['nullable' => true]),
-				'VALUE_INT' => new \Bitrix\Main\ORM\Fields\IntegerField('VALUE_INT', ['nullable' => true]),
-				'VALUE_DOUBLE' => new \Bitrix\Main\ORM\Fields\FloatField('VALUE_DOUBLE', ['nullable' => true]),
-				'VALUE_DATE' => new \Bitrix\Main\ORM\Fields\DatetimeField('VALUE_DATE', ['nullable' => true]),
+			$connection->createTable("b_utm_" . $entityId, [
+				'ID' => new Fields\IntegerField('ID'),
+				'VALUE_ID' => new Fields\IntegerField('VALUE_ID'),
+				'FIELD_ID' => new Fields\IntegerField('FIELD_ID'),
+				'VALUE' => new Fields\TextField('VALUE', ['nullable' => true]),
+				'VALUE_INT' => new Fields\IntegerField('VALUE_INT', ['nullable' => true]),
+				'VALUE_DOUBLE' => new Fields\FloatField('VALUE_DOUBLE', ['nullable' => true]),
+				'VALUE_DATE' => new Fields\DatetimeField('VALUE_DATE', ['nullable' => true]),
 			], ['ID'], ['ID']);
 
-			$connection->createIndex("b_utm_" . strtolower($entity_id), "ix_utm_" . $entity_id . "_2", ["VALUE_ID"]);
-			$connection->createIndex("b_utm_" . strtolower($entity_id), "ix_utm_" . $entity_id . "_4", ["FIELD_ID", "VALUE_ID", "VALUE_INT"]);
+			$connection->createIndex("b_utm_" . $entityId, "ix_utm_" . $entityId . "_2", ["VALUE_ID"]);
+			$connection->createIndex("b_utm_" . $entityId, "ix_utm_" . $entityId . "_4", ["FIELD_ID", "VALUE_ID", "VALUE_INT"]);
 		}
 
-		if (!$connection->isTableExists("b_uts_" . strtolower($entity_id)))
+		if (!$connection->isTableExists("b_uts_" . $entityId))
 		{
-			$connection->createTable("b_uts_" . strtolower($entity_id), [
-				'VALUE_ID' => new \Bitrix\Main\ORM\Fields\IntegerField('VALUE_ID'),
+			$connection->createTable("b_uts_" . $entityId, [
+				'VALUE_ID' => new Fields\IntegerField('VALUE_ID'),
 			], ['VALUE_ID']);
 		}
-
-		return true;
 	}
 
 	/**
@@ -179,8 +121,7 @@ class CAllUserTypeEntity extends CDBResult
 				$arResult = $CACHE_MANAGER->Get($cacheId);
 				$res = new CDBResult;
 				$res->InitFromArray($arResult);
-				$res = new CUserTypeEntity($res);
-				return $res;
+				return new CUserTypeEntity($res);
 			}
 		}
 
@@ -544,47 +485,58 @@ class CAllUserTypeEntity extends CDBResult
 
 		if ($commonEventResult['PROVIDE_STORAGE'])
 		{
-			if (!$this->CreatePropertyTables($arFields["ENTITY_ID"]))
-			{
-				return false;
-			}
-
 			$strType = $USER_FIELD_MANAGER->getUtsDBColumnType($arFields);
 
 			if (!$strType)
 			{
-				$aMsg = [];
-				$aMsg[] = [
+				$aMsg = [[
 					"id" => "FIELD_NAME",
 					"text" => GetMessage("USER_TYPE_ADD_ERROR", [
 						"#FIELD_NAME#" => htmlspecialcharsbx($arFields["FIELD_NAME"]),
 						"#ENTITY_ID#" => htmlspecialcharsbx($arFields["ENTITY_ID"]),
 					]),
-				];
+				]];
 				$e = new CAdminException($aMsg);
 				$APPLICATION->ThrowException($e);
+
 				return false;
 			}
 
-			$tableName = 'b_uts_' . mb_strtolower($arFields['ENTITY_ID']);
+			$entityId = strtolower($arFields['ENTITY_ID']);
+
+			$connection = Application::getConnection();
+
+			// prevents concurrent execution
+			$connection->lock('uf_add_' . $entityId, -1);
+
+			$this->CreatePropertyTables($arFields["ENTITY_ID"]);
+
+			$tableName = 'b_uts_' . $entityId;
 			$tableFields = $DB->GetTableFields($tableName);
-			if (!array_key_exists($arFields['FIELD_NAME'], $tableFields))
+
+			if (isset($tableFields[$arFields['FIELD_NAME']]))
 			{
-				$ddl = 'ALTER TABLE ' . $tableName . ' ADD ' . $arFields['FIELD_NAME'] . ' ' . $strType;
-				if (!$DB->DDL($ddl, true))
-				{
-					$aMsg = [];
-					$aMsg[] = [
-						"id" => "FIELD_NAME",
-						"text" => GetMessage("USER_TYPE_ADD_ERROR", [
-							"#FIELD_NAME#" => htmlspecialcharsbx($arFields["FIELD_NAME"]),
-							"#ENTITY_ID#" => htmlspecialcharsbx($arFields["ENTITY_ID"]),
-						]),
-					];
-					$e = new CAdminException($aMsg);
-					$APPLICATION->ThrowException($e);
-					return false;
-				}
+				// delayed drop hasn't finished job yet, call it manually
+				static::syncColumnsAgent($arFields['ENTITY_ID']);
+			}
+
+			$result = $DB->DDL('ALTER TABLE ' . $tableName . ' ADD ' . $arFields['FIELD_NAME'] . ' ' . $strType, true);
+
+			$connection->unlock('uf_add_' . $entityId);
+
+			if (!$result)
+			{
+				$aMsg = [[
+					"id" => "FIELD_NAME",
+					"text" => GetMessage("USER_TYPE_ADD_ERROR", [
+						"#FIELD_NAME#" => htmlspecialcharsbx($arFields["FIELD_NAME"]),
+						"#ENTITY_ID#" => htmlspecialcharsbx($arFields["ENTITY_ID"]),
+					]),
+				]];
+				$e = new CAdminException($aMsg);
+				$APPLICATION->ThrowException($e);
+
+				return false;
 			}
 		}
 
@@ -891,7 +843,11 @@ class CAllUserTypeEntity extends CDBResult
 			{
 				// only if we store values
 				$DB->Query("DELETE FROM b_utm_" . $entityId . " WHERE FIELD_ID = '" . $ID . "'");
-				$DB->Query("ALTER TABLE b_uts_" . $entityId . " DROP " . $arField["FIELD_NAME"]);
+
+				// delayed column drop
+				CTimeZone::Disable();
+				CAgent::AddAgent("CUserTypeEntity::syncColumnsAgent('{$arField["ENTITY_ID"]}');", 'main', 'N', 1, '', 'Y', ConvertTimeStamp(time() + 30, 'FULL'), 100, false, false);
+				CTimeZone::Enable();
 			}
 		}
 		return $rs;
@@ -924,11 +880,9 @@ class CAllUserTypeEntity extends CDBResult
 			}
 		}
 
-		$bDropTable = false;
 		$rsFields = $this->GetList([], ["ENTITY_ID" => $entity_id]);
 		while ($arField = $rsFields->Fetch())
 		{
-			$bDropTable = true;
 			$DB->Query("DELETE FROM b_user_field_lang WHERE USER_FIELD_ID = " . $arField["ID"]);
 			$rs = $DB->Query("DELETE FROM b_user_field WHERE ID = " . $arField["ID"]);
 
@@ -940,12 +894,9 @@ class CAllUserTypeEntity extends CDBResult
 
 		static::cleanCache();
 
-		if ($bDropTable)
-		{
-			$entityId = strtolower($entity_id);
-			$DB->Query("DROP TABLE IF EXISTS b_uts_" . $entityId);
-			$DB->Query("DROP TABLE IF EXISTS b_utm_" . $entityId);
-		}
+		$entityId = strtolower($entity_id);
+		$DB->Query("DROP TABLE IF EXISTS b_uts_" . $entityId);
+		$DB->Query("DROP TABLE IF EXISTS b_utm_" . $entityId);
 
 		return $rs;
 	}
@@ -978,6 +929,55 @@ class CAllUserTypeEntity extends CDBResult
 			$res["SETTINGS"] = unserialize($res["SETTINGS"], ['allowed_classes' => false]);
 		}
 		return $res;
+	}
+
+	public static function syncColumnsAgent(string $entityId): string
+	{
+		global $DB;
+
+		$entityId = strtolower($entityId);
+		$table = 'b_uts_' . $entityId;
+
+		$connection = Application::getConnection();
+
+		if (!$connection->isTableExists($table))
+		{
+			return '';
+		}
+
+		// prevents concurrent execution
+		$connection->lock('uf_sync_' . $entityId, -1);
+
+		$fields = [];
+		$fieldsResult = UserFieldTable::getList([
+			'select' => ['FIELD_NAME'],
+			'filter' => ['=ENTITY_ID' => strtoupper($entityId)],
+		]);
+		while ($field = $fieldsResult->fetch())
+		{
+			$fields[$field["FIELD_NAME"]] = 1;
+		}
+
+		$columns = $DB->GetTableFieldsList($table);
+
+		$drops = [];
+		foreach ($columns as $column)
+		{
+			if (str_starts_with($column, 'UF_') && !isset($fields[$column]))
+			{
+				$drops[] = 'DROP ' . $column;
+			}
+		}
+
+		if (!empty($drops))
+		{
+			$DB->DDL('ALTER TABLE ' . $table . ' '. implode(', ', $drops));
+		}
+
+		$connection->unlock('uf_sync_' . $entityId);
+
+		// one time agent
+		return '';
 	}
 }
 

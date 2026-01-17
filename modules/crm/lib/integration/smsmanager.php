@@ -2,16 +2,12 @@
 
 namespace Bitrix\Crm\Integration;
 
-use Bitrix\Crm\Binding\EntityBinding;
-use Bitrix\Crm\CustomerType;
-use Bitrix\Crm\DealTable;
-use Bitrix\Crm\Item;
-use Bitrix\Crm\LeadTable;
+use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Communications;
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\MessageSender\Channel;
 use Bitrix\Crm\MessageSender\Channel\Correspondents\From;
 use Bitrix\Crm\MessageSender\ICanSendMessage;
-use Bitrix\Crm\Multifield\Type\Phone;
-use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\MessageSender\UI\Taxonomy;
 use Bitrix\Crm\Settings;
 use Bitrix\Main;
 use Bitrix\MessageService;
@@ -106,6 +102,8 @@ class SmsManager implements ICanSendMessage
 					(string)($fromInfo['name'] ?? ''),
 					isset($fromInfo['description']) ? (string)$fromInfo['description'] : null,
 					isset($fromInfo['isDefault']) && is_bool($fromInfo['isDefault']) ? $fromInfo['isDefault'] : false,
+					true,
+					isset($fromInfo['type']) ? (string)$fromInfo['type'] : null,
 				);
 			}
 
@@ -139,6 +137,13 @@ class SmsManager implements ICanSendMessage
 		if (!$sender->canUse())
 		{
 			return $result->addError(Channel\ErrorCode::getUnusableChannelError());
+		}
+
+		if (empty($channel->getFromList()))
+		{
+			// from is required field for sending message
+			/** @see \Bitrix\MessageService\Message::checkFields */
+			return $result->addError(Channel\ErrorCode::getNoFromError());
 		}
 
 		return $result;
@@ -276,6 +281,26 @@ class SmsManager implements ICanSendMessage
 			}
 		}
 		return $name;
+	}
+
+	final public static function getSenderFromType(string $senderId, string $fromId): ?string
+	{
+		$sender = self::getSenderById($senderId);
+		if (!$sender)
+		{
+			return null;
+		}
+
+		$fromList = $sender->getFromList();
+		foreach ($fromList as $fromItem)
+		{
+			if ((string)$fromItem['id'] === $fromId && isset($fromItem['type']))
+			{
+				return (string)$fromItem['type'];
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -452,178 +477,7 @@ class SmsManager implements ICanSendMessage
 	 */
 	public static function getEntityPhoneCommunications($entityTypeId, $entityId)
 	{
-		$entityTypeId = (int)$entityTypeId;
-		$entityId = (int)$entityId;
-
-		$communications = [];
-
-		if (in_array($entityTypeId, array(\CCrmOwnerType::Lead, \CCrmOwnerType::Contact, \CCrmOwnerType::Company), true))
-		{
-			$communications[] = static::prepareEntityCommunications($entityTypeId, $entityId);
-		}
-		elseif ($entityTypeId === \CCrmOwnerType::Deal)
-		{
-			$entity = DealTable::query()
-				->setSelect(['ID', 'COMPANY_ID'])
-				->where('ID', $entityId)
-				->fetch()
-			;
-			if (!empty($entity))
-			{
-				$dealContactIds = \Bitrix\Crm\Binding\DealContactTable::getDealContactIds($entityId);
-				if (!empty($dealContactIds))
-				{
-					foreach ($dealContactIds as $contactId)
-					{
-						$communications[] = static::prepareEntityCommunications(\CCrmOwnerType::Contact, $contactId);
-					}
-				}
-
-				$dealCompanyId = isset($entity['COMPANY_ID']) ? (int)$entity['COMPANY_ID'] : 0;
-				if ($dealCompanyId > 0)
-				{
-					$communications[] = static::prepareEntityCommunications(\CCrmOwnerType::Company, $dealCompanyId);
-				}
-			}
-		}
-		elseif ($entityTypeId === \CCrmOwnerType::Order)
-		{
-			$dbRes = \Bitrix\Crm\Order\ContactCompanyCollection::getList(array(
-				'select' => array('ENTITY_ID', 'ENTITY_TYPE_ID'),
-				'filter' => array(
-					'=ORDER_ID' => $entityId,
-					'IS_PRIMARY' => 'Y'
-				)
-			));
-			while ($entity = $dbRes->fetch())
-			{
-				if ((int)$entity['ENTITY_TYPE_ID'] === \CCrmOwnerType::Contact)
-				{
-					$communications[] = static::prepareEntityCommunications(
-						\CCrmOwnerType::Contact,
-						$entity['ENTITY_ID']
-					);
-				}
-				elseif ((int)$entity['ENTITY_TYPE_ID'] === \CCrmOwnerType::Company)
-				{
-					$communications[] = static::prepareEntityCommunications(
-						\CCrmOwnerType::Company,
-						$entity['ENTITY_ID']
-					);
-				}
-			}
-		}
-		else
-		{
-			$factory = Container::getInstance()->getFactory($entityTypeId);
-			if($factory && $factory->isClientEnabled())
-			{
-				$item = $factory->getItem($entityId, [
-					Item::FIELD_NAME_ID,
-					Item::FIELD_NAME_CONTACT_BINDINGS,
-					Item::FIELD_NAME_COMPANY_ID,
-				]);
-				if($item)
-				{
-					foreach($item->getContactBindings() as $binding)
-					{
-						$contactId = EntityBinding::prepareEntityID(\CCrmOwnerType::Contact, $binding);
-						if($contactId > 0)
-						{
-							$communications[] = static::prepareEntityCommunications(
-								\CCrmOwnerType::Contact,
-								$contactId
-							);
-						}
-					}
-					$companyId = $item->getCompanyId();
-					if($companyId > 0)
-					{
-						$communications[] = static::prepareEntityCommunications(
-							\CCrmOwnerType::Company,
-							$companyId
-						);
-					}
-				}
-			}
-		}
-
-		$communications = array_filter($communications);
-
-		if (
-			$entityTypeId === \CCrmOwnerType::Lead
-			&& \CCrmLead::GetCustomerType($entityId) === CustomerType::RETURNING
-		)
-		{
-			$entity = LeadTable::query()
-				->setSelect(['ID', 'COMPANY_ID', 'CONTACT_ID'])
-				->where('ID', $entityId)
-				->fetch()
-			;
-			if (!empty($entity))
-			{
-				if ($entity['CONTACT_ID'] > 0)
-				{
-					$communications[] = static::prepareEntityCommunications(\CCrmOwnerType::Contact, $entity['CONTACT_ID']);
-				}
-				if ($entity['COMPANY_ID'] > 0)
-				{
-					$communications[] = static::prepareEntityCommunications(\CCrmOwnerType::Company, $entity['COMPANY_ID']);
-				}
-			}
-		}
-
-		return array_values(array_filter($communications));
-	}
-
-	/**
-	 * @param int $entityTypeId
-	 * @param int $entityId
-	 * @return array|null
-	 */
-	private static function prepareEntityCommunications($entityTypeId, $entityId)
-	{
-		$caption = \CCrmOwnerType::GetCaption($entityTypeId, $entityId);
-		if (!$caption)
-		{
-			return null;
-		}
-
-		$typeName = \CCrmOwnerType::ResolveName($entityTypeId);
-		$result = array(
-			'entityTypeId' => $entityTypeId,
-			'entityTypeName' => $typeName,
-			'entityId' => $entityId,
-			'caption' => $caption,
-			'phones' => array()
-		);
-
-		$iterator = \CCrmFieldMulti::GetList(
-			array('ID' => 'asc'),
-			array('ENTITY_ID' => $typeName,
-				'ELEMENT_ID' => $entityId,
-				'TYPE_ID' => \CCrmFieldMulti::PHONE
-			)
-		);
-
-		$multiFieldEntityTypes = \CCrmFieldMulti::GetEntityTypes();
-		while ($row = $iterator->fetch())
-		{
-			if (empty($row['VALUE']))
-			{
-				continue;
-			}
-
-			$result['phones'][] = [
-				'value' => $row['VALUE'],
-				'valueFormatted' => Main\PhoneNumber\Parser::getInstance()->parse($row['VALUE'])->format(),
-				'type' => $row['VALUE_TYPE'],
-				'typeLabel' => $multiFieldEntityTypes[Phone::ID][$row['VALUE_TYPE']]['SHORT'],
-				'id' => $row['ID'],
-			];
-		}
-
-		return count($result['phones']) > 0 ? $result : null;
+		return (new Communications((int)$entityTypeId, (int)$entityId))->setCheckPermissions(false)->get();
 	}
 
 	/**
@@ -656,6 +510,7 @@ class SmsManager implements ICanSendMessage
 			'ADDITIONAL_FIELDS' => array_merge(
 				$commonOptions['ADDITIONAL_FIELDS'],
 				[
+					'ACTIVITY_PROVIDER_ID' => $options['ACTIVITY_PROVIDER_ID'] ?? null,
 					'ACTIVITY_PROVIDER_TYPE_ID' => $options['ACTIVITY_PROVIDER_TYPE_ID'] ?? null,
 					'ACTIVITY_AUTHOR_ID' => $commonOptions['USER_ID'],
 					'ACTIVITY_DESCRIPTION' => $options['MESSAGE_BODY'],
@@ -671,5 +526,20 @@ class SmsManager implements ICanSendMessage
 		}
 
 		return $fields;
+	}
+
+	final public static function getActivityProviderId(string $channelId, ?string $fromType): string
+	{
+		if (Taxonomy::isWhatsAppByParams(self::getSenderCode(), $channelId, $fromType))
+		{
+			return \Bitrix\Crm\Activity\Provider\WhatsApp::getId();
+		}
+
+		if (Feature::enabled(Feature\TelegramActivity::class) && Taxonomy::isTelegramByParams(self::getSenderCode(), $channelId, $fromType))
+		{
+			return \Bitrix\Crm\Activity\Provider\Telegram::getId();
+		}
+
+		return \Bitrix\Crm\Activity\Provider\Sms::getId();
 	}
 }

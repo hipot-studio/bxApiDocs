@@ -133,7 +133,8 @@ class HcmLinkSignedFileService
 			documentDate: $document->dateCreate,
 			documentName: $document->title,
 			fileName: $fileNameResult->fileName,
-			documentUid: $this->getDocumentUid($document, $member->id),
+			uid: $this->getDocumentUid($document, $member->id),
+			documentUid: $document->uid,
 		);
 	}
 

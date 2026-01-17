@@ -12,7 +12,7 @@ class InvalidOrderException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_INVALID_ORDER_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_INVALIDORDEREXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

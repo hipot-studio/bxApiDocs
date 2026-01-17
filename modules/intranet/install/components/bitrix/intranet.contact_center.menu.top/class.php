@@ -72,29 +72,36 @@ class IntranetContactCenterMenuTop extends \CBitrixComponent
 				'ON_CLICK' => 'top.location="' . CUtil::JSEscape($this->arParams['COMPONENT_BASE_DIR'] . 'dialog_list/') . '"',
 			];
 
-			if(Limit::canUseReport())
+			if (
+				CModule::IncludeModule('report')
+				&& \Bitrix\Report\VisualConstructor\Helper\Analytic::isEnable()
+		)
 			{
-				$result[] = [
-					'TEXT' => Loc::getMessage('MENU_CONTACT_CENTER_IMOL_STATISTICS'),
-					'URL' => $this->arParams['COMPONENT_BASE_DIR'] . 'dialog_statistics/',
-					'ID' => 'menu_contact_center_statistics',
-					'IS_ACTIVE' => isset($this->arParams['SECTION_ACTIVE']) && $this->arParams['SECTION_ACTIVE'] === 'dialog_statistics',
-					'ON_CLICK' => 'top.location="' . CUtil::JSEscape($this->arParams['COMPONENT_BASE_DIR'] . 'dialog_statistics/') . '"',
-				];
-			}
-			else
-			{
-				$result[] = [
-					'TEXT' => Loc::getMessage('MENU_CONTACT_CENTER_IMOL_STATISTICS'),
-					'ON_CLICK' => 'BX.UI.InfoHelper.show(\'' . Limit::INFO_HELPER_LIMIT_CONTACT_CENTER_ANALYTICS_REPORTS . '\'); ',
-					'ID' => 'menu_contact_center_statistics'
-				];
+				if (Limit::canUseReport())
+				{
+					$result[] = [
+						'TEXT' => Loc::getMessage('MENU_CONTACT_CENTER_IMOL_STATISTICS'),
+						'URL' => $this->arParams['COMPONENT_BASE_DIR'] . 'dialog_statistics/',
+						'ID' => 'menu_contact_center_statistics',
+						'IS_ACTIVE' => isset($this->arParams['SECTION_ACTIVE']) && $this->arParams['SECTION_ACTIVE'] === 'dialog_statistics',
+						'ON_CLICK' => 'top.location="' . CUtil::JSEscape($this->arParams['COMPONENT_BASE_DIR'] . 'dialog_statistics/') . '"',
+					];
+				}
+				else
+				{
+					$result[] = [
+						'TEXT' => Loc::getMessage('MENU_CONTACT_CENTER_IMOL_STATISTICS'),
+						'ON_CLICK' => 'BX.UI.InfoHelper.show(\'' . Limit::INFO_HELPER_LIMIT_CONTACT_CENTER_ANALYTICS_REPORTS . '\'); ',
+						'ID' => 'menu_contact_center_statistics'
+					];
+				}
 			}
 		}
 
 		if (
-			CModule::IncludeModule('voximplant') &&
-			CModule::IncludeModule('report')
+			CModule::IncludeModule('voximplant')
+			&& CModule::IncludeModule('report')
+			&& \Bitrix\Report\VisualConstructor\Helper\Analytic::isEnable()
 		)
 		{
 			$result[] = [

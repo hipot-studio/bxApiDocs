@@ -13,9 +13,13 @@ use Bitrix\Booking\Interfaces\ProviderInterface;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
+use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuCreator;
 use Bitrix\Booking\Internals\Integration\Crm\WebForm;
+use Bitrix\Booking\Internals\Service\Integration\IntegrationManager;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSenderPicker;
 use Bitrix\Booking\Internals\Repository\CounterRepositoryInterface;
+use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
+use Bitrix\Booking\Internals\Service\Timezone;
 use Bitrix\Booking\Provider\BookingProvider;
 use Bitrix\Booking\Provider\ClientStatisticsProvider;
 use Bitrix\Booking\Provider\FavoritesProvider;
@@ -45,6 +49,7 @@ class MainPage extends BaseController
 	private MoneyStatisticsProvider $moneyStatisticsProvider;
 	private ClientStatisticsProvider $clientStatisticsProvider;
 	private WaitListItemProvider $waitListItemProvider;
+	private WhatsAppEmergencyService $whatsAppEmergencyService;
 
 	public function __construct(Request $request = null)
 	{
@@ -58,6 +63,7 @@ class MainPage extends BaseController
 		$this->moneyStatisticsProvider = new MoneyStatisticsProvider();
 		$this->clientStatisticsProvider = new ClientStatisticsProvider();
 		$this->waitListItemProvider = new WaitListItemProvider();
+		$this->whatsAppEmergencyService = Container::getWhatsAppEmergencyService();
 	}
 
 	public function getForBookingAction(
@@ -107,7 +113,9 @@ class MainPage extends BaseController
 				waitListItemCollection: $waitListItemCollection,
 				isIntersectionForAll: true,
 				counters: $this->counterRepository->getList($userId),
-				formsMenu: $this->getFormsMenu(),
+				//@todo deprecated and should be removed
+				formsMenu: [],
+				catalogSkuEntityOptions: (new ServiceSkuCreator())->getEntitySelectorEntityOptions($userId),
 			);
 		}
 		catch (Exception $e)
@@ -146,7 +154,10 @@ class MainPage extends BaseController
 				waitListItemCollection: $waitListItems,
 				isIntersectionForAll: $this->isIntersectionForAll($userId),
 				counters: $this->counterRepository->getList($userId),
-				formsMenu: $this->getFormsMenu(),
+				//@todo deprecated and should be removed
+				formsMenu: [],
+				catalogSkuEntityOptions: (new ServiceSkuCreator())->getEntitySelectorEntityOptions($userId),
+				shouldShowWhatsAppEmergency: $this->whatsAppEmergencyService->shouldNotify($userId),
 			);
 		}
 		catch (Exception $e)
@@ -187,6 +198,39 @@ class MainPage extends BaseController
 		);
 	}
 
+	public function getTimezonesAction(Timezone $timezoneService): array
+	{
+		try
+		{
+			return $timezoneService->getTimezoneList();
+		}
+		catch (Exception $e)
+		{
+			$this->addError(ErrorBuilder::buildFromException($e));
+
+			return [];
+		}
+	}
+
+	public function getSaleChannelsAction(
+		IntegrationManager $integrationManager,
+	): array
+	{
+		try
+		{
+			return [
+				'formsMenu' => $this->getFormsMenu(),
+				'integrations' => $integrationManager->getIntegrationsData(),
+			];
+		}
+		catch (Exception $e)
+		{
+			$this->addError(ErrorBuilder::buildFromException($e));
+
+			return [];
+		}
+	}
+
 	private function isIntersectionForAll(int $userId): bool
 	{
 		return (new OptionProvider())->isIntersectionForAll($userId);
@@ -198,6 +242,7 @@ class MainPage extends BaseController
 			managerId: $userId,
 			datePeriod: $datePeriod,
 			withCounters: true,
+			withSku: true,
 		);
 	}
 
@@ -229,6 +274,8 @@ class MainPage extends BaseController
 					'RESOURCES',
 					'EXTERNAL_DATA',
 					'NOTE',
+					'CLIENT_NOTE',
+					'SKUS',
 				]),
 			),
 			userId: $userId,
@@ -239,6 +286,7 @@ class MainPage extends BaseController
 			->withClientsData($bookings)
 			->withExternalData($bookings)
 			->withMessages($bookings)
+			->withSkus($bookings)
 		;
 
 		return $bookings;
@@ -284,16 +332,16 @@ class MainPage extends BaseController
 
 	private function getFormsMenu(): array
 	{
-		if (!WebForm::isAvailable() || !WebForm::canRead())
+		if (!WebForm::isAvailable())
 		{
 			return [];
 		}
 
 		return [
 			'canEdit' => WebForm::canEdit(),
-			'createFormLink' => WebForm::getCreateFormLink(),
+			'presets' => WebForm::getPresets(),
 			'formsListLink' => WebForm::getFormsListLink(),
-			'formList' => WebForm::getFormsList(),
+			'formsCount' => WebForm::getFormsCount(),
 		];
 	}
 }

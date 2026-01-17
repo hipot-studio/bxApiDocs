@@ -6,7 +6,6 @@ namespace Bitrix\Tasks\V2\Internal\Access\Task\Result\Permission;
 
 use Attribute;
 use Bitrix\Tasks\Access\ActionDictionary;
-use Bitrix\Tasks\Access\Model\ResultModel;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Internal\Access\Factory\AccessControllerTrait;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
@@ -20,12 +19,13 @@ class Update implements AttributeAccessInterface
 
 	public function check(Entity\EntityInterface $entity, Context $context, array $parameters = []): bool
 	{
-		$accessController = $this->getAccessController(Type::Task, $context);
-		$adapter = $this->getAdapter($entity);
+		if (!$entity instanceof Entity\Result)
+		{
+			return false;
+		}
 
-		/** @var ?ResultModel $model */
-		$model = $adapter->transform();
-
-		return $accessController->checkByItemId(ActionDictionary::ACTION_TASK_RESULT_EDIT, $model?->getTaskId());
+		return
+			$this->getAccessController(Type::Result, $context)
+				->checkByItemId(ActionDictionary::ACTION_RESULT_EDIT, $entity->getId());
 	}
 }

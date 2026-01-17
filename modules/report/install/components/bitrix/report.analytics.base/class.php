@@ -11,6 +11,11 @@ class ReportAnalyticsBase extends CBitrixComponent
 
 	public function executeComponent()
 	{
+		if (\Bitrix\Report\VisualConstructor\Helper\Db::isPgSqlDb())
+		{
+			LocalRedirect('/');
+		}
+
 		if (!\Bitrix\Main\Loader::includeModule('report'))
 		{
 			$this->showError(Loc::getMessage('RAB_MODULE_NOT_FOUND'));

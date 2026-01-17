@@ -15,7 +15,6 @@ use Bitrix\Sign\Engine\Controller;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\Document\Template;
 use Bitrix\Sign\Operation;
-use Bitrix\Sign\Operation\CreateDocumentPreviewPage;
 use Bitrix\Sign\Result\CreateDocumentResult;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Service\Sign\Document\Template\AccessService;

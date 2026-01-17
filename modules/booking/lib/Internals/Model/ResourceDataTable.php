@@ -76,6 +76,9 @@ class ResourceDataTable extends DataManager
 
 			(new DatetimeField('DELETED_AT'))
 				->configureDefaultValue(null),
+
+			(new IntegerField('AVATAR_ID'))
+				->configureNullable(),
 		];
 	}
 }

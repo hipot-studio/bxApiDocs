@@ -2,8 +2,12 @@
 
 namespace Bitrix\Tasks\Ui\Preview;
 
+use Bitrix\Im\V2\Service\Locator;
+use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ObjectException;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
@@ -31,7 +35,7 @@ class Task
 		return ob_get_clean();
 	}
 
-	public static function checkUserReadAccess(array $params)
+	public static function checkUserReadAccess(array $params, int $userId = 0)
 	{
 		$taskId = (int)$params['taskId'];
 		if(!$taskId)
@@ -41,7 +45,7 @@ class Task
 
 		try
 		{
-			$task = new \CTaskItem($taskId, static::getUser()->GetID());
+			$task = new \CTaskItem($taskId, static::getUser()?->getId() ?: $userId);
 		}
 		catch (\CTaskAssertException $e)
 		{
@@ -66,7 +70,9 @@ class Task
 			return false;
 		}
 
-		$task = new \CTaskItem($taskId, static::getUser()->getId());
+		$userId = static::getUser()?->getId() ?: Locator::getContext()->getUserId();
+
+		$task = new \CTaskItem($taskId, $userId);
 		if (!$task)
 		{
 			return false;
@@ -74,7 +80,16 @@ class Task
 
 		try
 		{
-			$select = ['ID', 'TITLE', 'DESCRIPTION', 'CREATED_BY', 'RESPONSIBLE_ID', 'STATUS', 'DEADLINE', 'GROUP_ID'];
+			$select = [
+				'ID',
+				'TITLE',
+				'DESCRIPTION',
+				'CREATED_BY',
+				'RESPONSIBLE_ID',
+				'REAL_STATUS',
+				'DEADLINE',
+				'GROUP_ID',
+			];
 			$taskData = $task->getData(false, ['select' => $select], false);
 		}
 		catch (\TasksException $exception)
@@ -123,7 +138,9 @@ class Task
 			return false;
 		}
 
-		$task = new \CTaskItem($taskId, static::getUser()->getId());
+		$userId = static::getUser()?->getId() ?: Locator::getContext()->getUserId();
+
+		$task = new \CTaskItem($taskId, $userId);
 		if (!$task)
 		{
 			return false;
@@ -175,11 +192,11 @@ class Task
 		$display = 'COLUMN';
 		$columnWidth = 120;
 
-		if ($taskData['STATUS'] > 0)
+		if ($taskData['REAL_STATUS'] > 0)
 		{
 			$grid[] = [
 				'NAME' => Loc::getMessage('TASK_PREVIEW_FIELD_STATUS') . ':',
-				'VALUE' => Loc::getMessage('TASKS_TASK_STATUS_' . $taskData['STATUS']),
+				'VALUE' => Loc::getMessage('TASKS_TASK_STATUS_' . $taskData['REAL_STATUS']),
 				'DISPLAY' => $display,
 				'WIDTH' => $columnWidth,
 			];
@@ -201,26 +218,22 @@ class Task
 			'WIDTH' => $columnWidth,
 		];
 
-		if ((string)$taskData['DEADLINE'] !== '')
+		$deadline = self::formatDeadline((string)($taskData['DEADLINE'] ?? ''));
+
+		if ($deadline !== '')
 		{
 			$grid[] = [
 				'NAME' => Loc::getMessage('TASK_PREVIEW_FIELD_DEADLINE') . ':',
-				'VALUE' => $taskData['DEADLINE'],
+				'VALUE' => $deadline,
 				'DISPLAY' => $display,
 				'WIDTH' => $columnWidth,
 			];
 		}
 
-		if ((string)$taskData['DESCRIPTION'] !== '')
-		{
-			$description = \CTextParser::clearAllTags(
-				htmlspecialchars_decode(htmlspecialcharsback($taskData['DESCRIPTION']), ENT_QUOTES)
-			);
-			if (mb_strlen($description) > 100)
-			{
-				$description = mb_substr($description, 0, 100) . '...';
-			}
+		$description = self::prepareDescription((string)($taskData['DESCRIPTION'] ?? ''));
 
+		if ($description !== '')
+		{
 			$grid[] = [
 				'NAME' => Loc::getMessage('TASK_PREVIEW_FIELD_DESCRIPTION') . ':',
 				'VALUE' => $description,
@@ -246,6 +259,59 @@ class Task
 		}
 
 		return $grid;
+	}
+
+	protected static function formatDeadline(string $deadline): string
+	{
+		if ($deadline === '')
+		{
+			return '';
+		}
+
+		$culture = Context::getCurrent()?->getCulture();
+
+		if (!$culture)
+		{
+			return $deadline;
+		}
+
+		try
+		{
+			$deadlineDate = new DateTime($deadline);
+
+			$format = "{$culture->getShortDateFormat()} {$culture->getShortTimeFormat()}";
+
+			return $deadlineDate->format($format);
+		}
+		catch (ObjectException)
+		{
+			return $deadline;
+		}
+	}
+
+	protected static function prepareDescription(string $description): string
+	{
+		if ($description === '')
+		{
+			return '';
+		}
+
+		$description = htmlspecialchars_decode(htmlspecialcharsback($description), ENT_QUOTES);
+		$description = \CTextParser::clearAllTags($description);
+		$description = trim($description);
+		$description = preg_replace('/\n{3,}/', "\n\n", $description);
+
+		if ($description === '')
+		{
+			return '';
+		}
+
+		if (mb_strlen($description) > 100)
+		{
+			$description = mb_substr($description, 0, 100) . '...';
+		}
+
+		return $description;
 	}
 
 	protected static function getUser()

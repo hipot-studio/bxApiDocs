@@ -60,7 +60,7 @@ class BizprocMobileCommentsComponent extends CBitrixComponent
 		$this->arResult['GUID'] = $this->arParams['GUID'] ?? null;
 		$this->arResult['PATH_TEMPLATE_TO_USER_PROFILE'] =
 			$this->arParams['PATH_TEMPLATE_TO_USER_PROFILE']
-			?? '/company/personal/user/#user_id#/'
+			?? '/mobile/users/?user_id=#user_id#/'
 		;
 	}
 

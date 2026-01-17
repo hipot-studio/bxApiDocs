@@ -9,7 +9,7 @@ class SetTaskControl
 	public function runBatch(int $userId, array $taskIds, string $state): array
 	{
 		$result = [];
-		$control = new Task($userId);
+		$control = (new Task($userId))->useConsistency();
 
 		foreach ($taskIds as $id)
 		{

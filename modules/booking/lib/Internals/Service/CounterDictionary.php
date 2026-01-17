@@ -12,6 +12,7 @@ enum CounterDictionary: string implements \JsonSerializable
 	case Total = 'total';
 	case BookingUnConfirmed = 'booking_unconfirmed';
 	case BookingDelayed = 'booking_delayed';
+	case BookingNewYandexMaps = 'booking_new_yandex_maps';
 
 	public function jsonSerialize(): array
 	{

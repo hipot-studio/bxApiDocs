@@ -36,7 +36,7 @@ final class LocalizedErrorService
 		return $localizedErrors;
 	}
 
-	private function getMessage(Error $error): string
+	private function getMessage(Error $error): ?string
 	{
 		$code = (string)$error->getCode();
 		return match ($code)

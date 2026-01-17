@@ -25,6 +25,8 @@ class Provider
 				Library::ID_FB_COMMENTS_CONNECTOR,
 				Library::ID_FBINSTAGRAM_CONNECTOR,
 				Library::ID_FBINSTAGRAMDIRECT_CONNECTOR,
+				Library::ID_WAZZUP_CONNECTOR,
+				Library::ID_MAX_CONNECTOR,
 			],
 		'livechat' => [Library::ID_LIVE_CHAT_CONNECTOR],
 		'network' => [Library::ID_NETWORK_CONNECTOR],

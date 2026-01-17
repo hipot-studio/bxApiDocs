@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Result;
 
+use Bitrix\Tasks\V2\Internal\Entity\EntityCollectionInterface;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 
 class Result extends \Bitrix\Main\Result
@@ -26,6 +27,24 @@ class Result extends \Bitrix\Main\Result
 		$this->data['id'] = $object->getId();
 
 		return $this;
+	}
+
+	public function setCollection(EntityCollectionInterface $collection): self
+	{
+		$this->data['collection'] = $collection;
+		$this->data['ids'] = $collection->getIds();
+
+		return $this;
+	}
+
+	public function getCollection(): ?EntityCollectionInterface
+	{
+		return $this->data['collection'] ?? null;
+	}
+
+	public function getIds(): ?array
+	{
+		return $this->data['ids'] ?? null;
 	}
 
 	public function getObject(): ?EntityInterface

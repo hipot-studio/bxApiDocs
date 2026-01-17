@@ -10,9 +10,10 @@ use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Entity\EntityInterface;
 use Bitrix\Booking\Entity\EventInterface;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
+use Bitrix\Booking\Entity\Sku\SkuCollection;
 
 /**
- * @method \Bitrix\Booking\Entity\Booking\Booking|null getFirstCollectionItem()
+ * @method Booking|null getFirstCollectionItem()
  * @method \ArrayIterator<Booking> getIterator()
  */
 class BookingCollection extends BaseEntityCollection
@@ -47,6 +48,22 @@ class BookingCollection extends BaseEntityCollection
 		foreach ($this as $booking)
 		{
 			foreach ($booking->getExternalDataCollection() as $item)
+			{
+				$result->add($item);
+			}
+		}
+
+		return $result;
+	}
+
+	public function getSkuCollection(): SkuCollection
+	{
+		$result = new SkuCollection();
+
+		/** @var Booking $booking */
+		foreach ($this as $booking)
+		{
+			foreach ($booking->getSkuCollection() as $item)
 			{
 				$result->add($item);
 			}

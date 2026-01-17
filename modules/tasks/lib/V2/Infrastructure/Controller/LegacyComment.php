@@ -10,10 +10,12 @@ use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\Csrf;
 use Bitrix\Main\Engine\ActionFilter\FilterType;
 use Bitrix\Main\Error;
 use Bitrix\Main\HttpResponse;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
+use Bitrix\UI\Toolbar;
 
 class LegacyComment extends BaseController
 {
@@ -44,6 +46,17 @@ class LegacyComment extends BaseController
 		{
 			return null;
 		}
+
+		// Prepare localization.
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/V2/Infrastructure/Controller/LegacyComment.php');
+		$templateTitle = Loc::getMessage('TASKS_IM_TASK_PANEL_PREVIOUS_COMMENTS') ?? '';
+
+		// Setup toolbar for the panel widget.
+		$manager = Toolbar\Manager::getInstance();
+		$toolbar = $manager->getToolbarById(Toolbar\Facade\Toolbar::DEFAULT_ID) ?: $manager->createToolbar(Toolbar\Facade\Toolbar::DEFAULT_ID, []);
+
+		$toolbar->deleteFavoriteStar();
+		$toolbar->setTitle($templateTitle);
 
 		$content = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:ui.sidepanel.wrapper',

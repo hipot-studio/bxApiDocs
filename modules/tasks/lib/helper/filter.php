@@ -19,6 +19,7 @@ use Bitrix\Tasks\Internals\SearchIndex;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Item\Task;
 use Bitrix\Tasks\Kanban\StagesTable;
+use Bitrix\Tasks\V2\Internal\Service\Comment\Availability\CommentFeature;
 use Bitrix\Tasks\Replication\Replicator\RegularTaskReplicator;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Service\EpicService;
@@ -845,7 +846,10 @@ class Filter extends Common
 			];
 		}
 
-		if (in_array('COMMENT', $fields))
+		if (
+			in_array('COMMENT', $fields)
+			&& CommentFeature::isEnabled()
+		)
 		{
 			$filter['COMMENT_SEARCH_INDEX'] = [
 				'id' => 'COMMENT_SEARCH_INDEX',
@@ -993,6 +997,7 @@ class Filter extends Common
 			CTaskListState::VIEW_TASK_CATEGORY_WAIT_CTRL,
 			CTaskListState::VIEW_TASK_CATEGORY_DEFERRED,
 			CTaskListState::VIEW_TASK_CATEGORY_NEW_COMMENTS,
+			CTaskListState::VIEW_TASK_CATEGORY_MENTIONED,
 		];
 
 		foreach ($taskCategories as $categoryId)
@@ -1240,6 +1245,10 @@ class Filter extends Common
 
 					case Type::TYPE_PROJECT_NEW_COMMENTS:
 						$filter['PROJECT_NEW_COMMENTS'] = 'Y';
+						break;
+
+					case Type::TYPE_MENTIONED:
+						$filter['MENTIONED'] = 'Y';
 						break;
 
 					default:

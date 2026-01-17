@@ -48,6 +48,20 @@ class Calculator
 		return $this->product;
 	}
 
+	public function calculateBasePrice(float $basePrice): void
+	{
+		if ($this->product['TAX_INCLUDED'] === 'Y')
+		{
+			$this->setField('PRICE_BRUTTO', $basePrice);
+		}
+		else
+		{
+			$this->setField('PRICE_NETTO', $basePrice);
+		}
+
+		$this->updatePrice();
+	}
+
 	public function calculateDiscount(float $newDiscountRate): void
 	{
 		if ($this->product['DISCOUNT_RATE'] === $newDiscountRate)
@@ -198,22 +212,22 @@ class Calculator
 	{
 		if ($this->product['DISCOUNT_TYPE_ID'] === Discount::PERCENTAGE)
 		{
-			$this->setField(
-				'PRICE_EXCLUSIVE',
-				Discount::calculatePrice($this->product['PRICE_NETTO'], $this->product['DISCOUNT_RATE']),
-			);
+			$priceExclusive = Discount::calculatePrice($this->product['PRICE_NETTO'], $this->product['DISCOUNT_RATE']);
 		}
 		elseif ($this->product['DISCOUNT_TYPE_ID'] === Discount::MONETARY)
 		{
-			$this->setField(
-				'PRICE_EXCLUSIVE',
-				$this->product['PRICE_NETTO'] - $this->product['DISCOUNT_SUM'],
-			);
+			$priceExclusive = $this->product['PRICE_NETTO'] - $this->product['DISCOUNT_SUM'];
 		}
+		else
+		{
+			$priceExclusive = $this->product['PRICE_EXCLUSIVE'];
+		}
+
+		$this->setField('PRICE_EXCLUSIVE', $priceExclusive);
 		$this->setField(
 			'PRICE',
 			Container::getInstance()->getAccounting()->calculatePriceWithTax(
-				$this->product['PRICE_EXCLUSIVE'],
+				$priceExclusive,
 				$this->product['TAX_RATE'],
 			),
 		);

@@ -40,7 +40,8 @@ class ReportTable extends Entity\DataManager
 		$fieldsMap = array(
 			'ID' => array(
 				'data_type' => 'integer',
-				'primary' => true
+				'primary' => true,
+				'autocomplete' => true,
 			),
 			'OWNER_ID' => array(
 				'data_type' => 'string'

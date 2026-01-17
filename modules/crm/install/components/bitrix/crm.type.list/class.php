@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
+use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Filter;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
@@ -10,7 +12,10 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar;
 
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
 
 \Bitrix\Main\Loader::includeModule('crm');
 
@@ -36,6 +41,8 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 	protected $gridId;
 	protected ?int $filteredByAutomatedSolutionId = null;
 	protected bool $showAllFromAutomatedSolutions = false;
+
+	private bool $hasImportedAutomatedSolution = false;
 
 	protected function init(): void
 	{
@@ -93,6 +100,8 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 		$this->arResult['isEmptyList'] = !$this->isAtLeastOneDynamicTypeExists();
 		$this->arResult['filter'] = $this->prepareFilter();
 		$this->arResult['welcome'] = $this->getPreparedEmptyState();
+		$this->arResult['hasImportedAutomatedSolution'] = $this->hasImportedAutomatedSolution;
+
 		$this->includeComponentTemplate();
 	}
 
@@ -176,10 +185,24 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 			$this->users = Container::getInstance()->getUserBroker()->getBunchByIds($userIds);
 			foreach($list as $item)
 			{
+				$isLocked = false;
 				if (!empty($item['CUSTOM_SECTION_ID']))
 				{
 					$solution = Container::getInstance()->getAutomatedSolutionManager()->getAutomatedSolution((int)$item['CUSTOM_SECTION_ID']);
 					$item['AUTOMATED_SOLUTION'] = $solution;
+
+					if ($solution)
+					{
+						$isLocked = CapabilityAccessChecker::getInstance()->isLockedAutomatedSolution(
+							$solution['ID'],
+							$solution['SOURCE_ID'],
+						);
+
+						if (AutomatedSolutionTable::isImportedFromMarketplace((int)$solution['SOURCE_ID']))
+						{
+							$this->hasImportedAutomatedSolution = true;
+						}
+					}
 				}
 
 				$eventData = \CUtil::PhpToJSObject([
@@ -202,6 +225,25 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 					];
 				}
 
+				$deleteAction = [
+					'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_DELETE'),
+					'ONCLICK' => "BX.Event.EventEmitter.emit('BX.Crm.TypeListComponent:onClickDelete', ".$eventData.")",
+				];
+
+				if ($isLocked)
+				{
+					$onClick = "(new BX.UI.FeaturePromoter({ code: 'limit_v2_crm_automated_solution_marketplace' })).show()";
+
+					unset($editAction['HREF']);
+					$editAction['ONCLICK'] = $onClick;
+
+					unset($fieldsAction['HREF']);
+					$fieldsAction['ONCLICK'] = $onClick;
+
+					unset($deleteAction['HREF']);
+					$deleteAction['ONCLICK'] = $onClick;
+				}
+
 				$item['LAST_ACTIVITY_TIME'] = FormatDate($format, CCrmDateTimeHelper::getUserTime($this->getLastActivityTime($item)), $currentTime);
 				$item['CREATED_TIME'] = FormatDate($format, CCrmDateTimeHelper::getUserTime($item['CREATED_TIME']), $currentTime);
 				$item['UPDATED_TIME'] = FormatDate($format, CCrmDateTimeHelper::getUserTime($item['UPDATED_TIME']), $currentTime);
@@ -209,15 +251,12 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 				$grid['ROWS'][] = [
 					'id' => $item['ID'],
 					'data' => $item,
-					'columns' => $this->getItemColumn($item),
+					'columns' => $this->getItemColumn($item, $isLocked),
 					'actions' => [
 						$editAction,
 						$fieldsAction,
-						[
-							'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_DELETE'),
-							'ONCLICK' => "BX.Event.EventEmitter.emit('BX.Crm.TypeListComponent:onClickDelete', ".$eventData.")",
-						]
-					]
+						$deleteAction,
+					],
 				];
 			}
 		}
@@ -290,7 +329,7 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 		];
 	}
 
-	protected function getItemColumn(array $item): array
+	protected function getItemColumn(array $item, bool $isLocked = false): array
 	{
 		$createdBy = $item['CREATED_BY'];
 		$updatedBy = $item['UPDATED_BY'];
@@ -308,16 +347,20 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 
 		$detailUrl = htmlspecialcharsbx(Container::getInstance()->getRouter()->getItemListUrlInCurrentView($item['ENTITY_TYPE_ID']));
 		$item['TITLE'] = '<a href="'.$detailUrl.'">'.htmlspecialcharsbx($item['TITLE']).'</a>';
+		if ($isLocked)
+		{
+			$item['TITLE'] = '<span class="crm-type-grid-custom-section-title">' . $item['TITLE'] . '<span class="ui-icon-set --lock"></span></span>';
+		}
 
 		if (!empty($item['AUTOMATED_SOLUTION']))
 		{
-			$item = $this->getAutomatedSolutionItemCell($item);
+			$item = $this->getAutomatedSolutionItemCell($item, $isLocked);
 		}
 
 		return $item;
 	}
 
-	private function getAutomatedSolutionItemCell(array $item): array
+	private function getAutomatedSolutionItemCell(array $item, bool $isLocked = false): array
 	{
 		$id = (int)$item['AUTOMATED_SOLUTION']['ID'];
 		$title = htmlspecialcharsbx($item['AUTOMATED_SOLUTION']['TITLE']);
@@ -328,12 +371,14 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 		$activeClass = 'crm-type-grid-custom-section-'
 			. (isset($requestFilter['AUTOMATED_SOLUTION']) ? 'active' : 'inactive');
 
+		$lockedHtml = $isLocked ? '<span class="ui-icon-set --lock"></span>' : '';
+
 		$item['AUTOMATED_SOLUTION'] = <<<HTML
 <div class='crm-type-grid-custom-section-wrapper $activeClass'>
 	<span 
 		class="crm-type-grid-custom-section-title"
 		onclick="BX.Event.EventEmitter.emit('BX.Crm.TypeListComponent:onFilterByAutomatedSolution', '$id')"
-	>$title</span>
+	>$title $lockedHtml</span>
 	<div 
 		class="crm-type-grid-filter-remove"
 		onclick="BX.Event.EventEmitter.emit('BX.Crm.TypeListComponent:onResetFilterByAutomatedSolution')"

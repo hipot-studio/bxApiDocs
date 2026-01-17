@@ -47,9 +47,9 @@ class TemplateControlMapper
 		}
 
 		$fields['PRIORITY'] = match ($fields['PRIORITY']) {
-			Entity\Task\Priority::Low->value => Priority::LOW,
-			Entity\Task\Priority::Average->value => Priority::AVERAGE,
-			Entity\Task\Priority::High->value => Priority::HIGH,
+			Entity\Priority::Low->value => Priority::LOW,
+			Entity\Priority::Average->value => Priority::AVERAGE,
+			Entity\Priority::High->value => Priority::HIGH,
 		};
 	}
 

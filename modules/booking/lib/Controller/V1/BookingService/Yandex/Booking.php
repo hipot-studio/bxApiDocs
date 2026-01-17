@@ -8,15 +8,18 @@ use Bitrix\Booking\Controller\V1\BookingService\Yandex\Request\Booking\CreateBoo
 use Bitrix\Booking\Controller\V1\BookingService\Yandex\Response\Booking\AddBookingResponse;
 use Bitrix\Booking\Controller\V1\BookingService\Yandex\Response\Booking\CancelBookingResponse;
 use Bitrix\Booking\Controller\V1\BookingService\Yandex\Response\Booking\GetBookingResponse;
+use Bitrix\Booking\Controller\V1\BookingService\Yandex\Response\Booking\UpdateBookingResponse;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Yandex\BookingProvider;
 use Bitrix\Booking\Internals\Service\Yandex\DeleteBookingService;
 use Bitrix\Booking\Internals\Service\Yandex\CreateBookingService;
+use Bitrix\Booking\Internals\Service\Yandex\UpdateBookingService;
 use Bitrix\Main\Request;
 
 class Booking extends BaseController
 {
 	private CreateBookingService $createBookingService;
+	private UpdateBookingService $updateBookingService;
 	private DeleteBookingService $deleteBookingService;
 	private BookingProvider $bookingProvider;
 
@@ -25,6 +28,7 @@ class Booking extends BaseController
 		parent::__construct($request);
 
 		$this->createBookingService = Container::getYandexCreateBookingService();
+		$this->updateBookingService = Container::getYandexUpdateBookingService();
 		$this->deleteBookingService = Container::getYandexDeleteBookingService();
 		$this->bookingProvider = Container::getYandexBookingProvider();
 	}
@@ -46,6 +50,23 @@ class Booking extends BaseController
 					CreateBookingRequest::mapFromArray(
 						$booking
 					)
+				)
+			)
+		);
+	}
+
+	public function updateAction(
+		string $bookingId,
+		string $datetime,
+		string|null $comment = null,
+	): UpdateBookingResponse|null
+	{
+		return $this->handle(
+			fn() => new UpdateBookingResponse(
+				booking: $this->updateBookingService->update(
+					$bookingId,
+					$datetime,
+					$comment,
 				)
 			)
 		);

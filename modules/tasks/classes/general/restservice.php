@@ -425,9 +425,17 @@ final class CTaskRestService extends IRestService
 				throw new Exception('Unknown REST-method signature given');
 			}
 
+			/** @var CRestServer $server */
+			$server = $args[2];
+
 			$methodArgs = [];
 			foreach ($args[0] as $value)
 			{
+				if (is_string($value) && str_contains($value, (string)$server->getMethod()))
+				{
+					continue;
+				}
+
 				$methodArgs[] = $value;
 			}
 

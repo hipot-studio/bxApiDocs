@@ -4,20 +4,22 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Command\Task\Deadline;
 
+use Bitrix\Main\Command\Exception\CommandValidationException;
+use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
+use Bitrix\Tasks\Control\Exception\TaskUpdateException;
+use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
 use Bitrix\Tasks\Deadline\Policy\DeadlinePolicy;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Exception\Task\UpdateDeadlineException;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserFields;
-use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
 class UpdateDeadlineHandler
 {
 	public function __construct(
-		private readonly ConsistencyResolverInterface $consistencyResolver,
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateService,
 		private readonly DeadlinePolicy $deadlinePolicy,
 		private readonly DeadlineChangeLogRepositoryInterface $deadlineChangeLogRepository,
 	)
@@ -25,11 +27,20 @@ class UpdateDeadlineHandler
 
 	}
 
+	/**
+	 * @throws TaskNotExistsException
+	 * @throws CommandValidationException
+	 * @throws UpdateDeadlineException
+	 * @throws ObjectException
+	 * @throws WrongTaskIdException
+	 * @throws TaskUpdateException
+	 */
 	public function __invoke(UpdateDeadlineCommand $updateDeadlineCommand): Entity\Task
 	{
 		$entity = new Entity\Task(
 			id: $updateDeadlineCommand->taskId,
 			deadlineTs: $updateDeadlineCommand->deadlineTs,
+			deadlineChangeReason: $updateDeadlineCommand->reason,
 		);
 
 		$userChangesCount = $this->deadlineChangeLogRepository
@@ -47,24 +58,16 @@ class UpdateDeadlineHandler
 			throw new UpdateDeadlineException("Cannot update deadline: " . implode(', ', $violations));
 		}
 
-		[$task, $fields] = $this->consistencyResolver->resolve('task.update')->wrap(
-			function ($entity, $command): array {
-				$result = $this->updateService->update($entity, $command->updateConfig);
+		$task = $this->updateService->update($entity, $updateDeadlineCommand->updateConfig);
 
-				$this->deadlineChangeLogRepository->append(
-					taskId: $entity->getId(),
-					userId: $command->updateConfig->getUserId(),
-					dateTime: DateTime::createFromTimestamp($command->deadlineTs),
-					reason: $command->reason,
-				);
-
-				return $result;
-			},
-			[$entity, $updateDeadlineCommand]
+		/* todo Recover after the deadline changes from all places through the new api.
+		$this->deadlineChangeLogRepository->append(
+			taskId: $entity->getId(),
+			userId: $updateDeadlineCommand->updateConfig->getUserId(),
+			dateTime: DateTime::createFromTimestamp($updateDeadlineCommand->deadlineTs),
+			reason: $updateDeadlineCommand->reason,
 		);
-
-		// this action is outside of consistency because it is containing nested transactions
-		(new UpdateUserFields($updateDeadlineCommand->updateConfig))($fields, $updateDeadlineCommand->taskId);
+		*/
 
 		return $task;
 	}

@@ -15,9 +15,9 @@ use Bitrix\Main\ORM\Data\DeleteResult;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_ExternalLink_Query query()
- * @method static EO_ExternalLink_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_ExternalLink_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_ExternalLink_Result getById($id)
- * @method static EO_ExternalLink_Result getList(array $parameters = array())
+ * @method static EO_ExternalLink_Result getList(array $parameters = [])
  * @method static EO_ExternalLink_Entity getEntity()
  * @method static \Bitrix\DocumentGenerator\Model\EO_ExternalLink createObject($setDefaultValues = true)
  * @method static \Bitrix\DocumentGenerator\Model\EO_ExternalLink_Collection createCollection()

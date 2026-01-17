@@ -7,7 +7,7 @@ namespace Bitrix\Booking\Controller\V1;
 use Bitrix\Booking\Command\Booking\RemoveBookingCommand;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
-use Bitrix\Booking\Service\BookingFeature;
+use Bitrix\Booking\Internals\Repository\ORM\ResourceRepository;
 use Bitrix\Booking\Command\Resource\AddResourceCommand;
 use Bitrix\Booking\Command\Resource\RemoveResourceCommand;
 use Bitrix\Booking\Command\Resource\UpdateResourceCommand;
@@ -49,14 +49,17 @@ class Resource extends BaseController
 		);
 	}
 
-	public function getAction(int $id): Entity\Resource\Resource|null
+	public function getAction(
+		ResourceRepository $repository,
+		int $id,
+	): Entity\Resource\Resource|null
 	{
 		try
 		{
-			return (new ResourceProvider())->getById(
-				userId: $this->userId,
-				resourceId: $id
-			);
+			$resource = $repository->getById($id, $this->userId);
+			$repository->withSkus(new Entity\Resource\ResourceCollection($resource));
+
+			return $resource;
 		}
 		catch (Exception $e)
 		{
@@ -68,16 +71,6 @@ class Resource extends BaseController
 
 	public function addAction(array $resource, int|null $copies = null): Entity\Resource\Resource|null
 	{
-		if (
-			!BookingFeature::isFeatureEnabled()
-			&& !BookingFeature::canTurnOnTrial()
-		)
-		{
-			$this->addError(ErrorBuilder::build('Access denied'));
-
-			return null;
-		}
-
 		try
 		{
 			$resource = Entity\Resource\Resource::mapFromArray($resource);
@@ -108,13 +101,6 @@ class Resource extends BaseController
 
 	public function updateAction(array $resource): Entity\Resource\Resource|null
 	{
-		if (!BookingFeature::isFeatureEnabled())
-		{
-			$this->addError(ErrorBuilder::build('Access denied'));
-
-			return null;
-		}
-
 		if (empty($resource['id']))
 		{
 			$this->addError(ErrorBuilder::build('Resource identifier is not specified.'));

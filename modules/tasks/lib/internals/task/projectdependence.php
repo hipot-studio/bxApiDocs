@@ -11,7 +11,7 @@ use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
-use Bitrix\Tasks\TaskTable;
+use Bitrix\Tasks\Integration\Report\Internals\TaskTable;
 use Bitrix\Tasks\Internals\DataBase\Mesh;
 use Bitrix\Tasks\Internals\DataBase\Tree;
 use Bitrix\Tasks\ActionFailedException;

@@ -2,9 +2,9 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
-use Bitrix\Rest\V3\Structures\CursorStructure;
-use Bitrix\Rest\V3\Structures\Filtering\FilterStructure;
-use Bitrix\Rest\V3\Structures\SelectStructure;
+use Bitrix\Rest\V3\Structure\CursorStructure;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\SelectStructure;
 
 class TailRequest extends Request
 {

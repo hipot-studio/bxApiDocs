@@ -58,7 +58,7 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 			return;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToMailbox($mailboxId))
+		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
 		{
 			showError(Loc::getMessage('MAIL_CLIENT_DENIED'));
 
@@ -101,12 +101,14 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 		if (!$mailboxId || (empty($dirs) && empty($dirsTypes)))
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+
 			return false;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToMailbox($mailboxId))
+		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
 		{
 			$this->errorCollection[] = new Error('access denied');
+
 			return false;
 		}
 
@@ -131,7 +133,7 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 			return false;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToMailbox($mailboxId, true))
+		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessOrCanEditMailbox($mailboxId))
 		{
 			$this->errorCollection[] = new Error('access denied');
 			return false;

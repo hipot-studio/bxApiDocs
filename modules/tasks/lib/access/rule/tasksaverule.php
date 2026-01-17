@@ -147,7 +147,7 @@ class TaskSaveRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->checkParentTask($this->newTask))
+		if (!$this->checkParentTask($this->newTask, $this->oldTask))
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_PARENT_TASK_DENIED')));
 			$this->controller->addError(static::class, 'Access to add parent denied');
@@ -236,10 +236,15 @@ class TaskSaveRule extends AbstractRule
 		return $this->controller->check(ActionDictionary::ACTION_TASK_ADD_AUDITORS, $this->oldTask, $auditors);
 	}
 
-	private function checkParentTask(TaskModel $task): bool
+	private function checkParentTask(TaskModel $newTask, TaskModel $oldTask): bool
 	{
-		$parentId = $task->getParentId();
+		$parentId = $newTask->getParentId();
 		if ($parentId <= 0)
+		{
+			return true;
+		}
+
+		if ($parentId === $oldTask->getParentId())
 		{
 			return true;
 		}

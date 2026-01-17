@@ -1,12 +1,12 @@
 <?php
 namespace Bitrix\AI\Engine\Trait;
 
-use Bitrix\AI\Config;
 use Bitrix\AI\Context\Message;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
+use Bitrix\Main\DI\ServiceLocator;
 
 trait ChatGPTCommonTrait
 {
@@ -24,7 +24,7 @@ trait ChatGPTCommonTrait
 
 	private function shouldUseReasoning(): bool
 	{
-		return true;
+		return $this->reasoningMode;
 	}
 
 	private function isGpt4(): bool
@@ -60,7 +60,7 @@ trait ChatGPTCommonTrait
 	 */
 	protected function getMessageLength(Message $message): int
 	{
-		return (new GPT($message->getContent()))->count();
+		return $this->getTokenizer()->count($message->getContent());
 	}
 
 	/**
@@ -114,6 +114,11 @@ trait ChatGPTCommonTrait
 			$postParams['response_format'] = ['type' => 'json_object'];
 		}
 
+		if ($this->isReasoningEnabled())
+		{
+			$postParams['reasoning_effort'] = 2;
+		}
+
 		if ($this->getPayload() instanceof Prompt && $this->getPayload()->getJsonSchema() !== null)
 		{
 			$postParams['response_format'] = [
@@ -161,4 +166,8 @@ trait ChatGPTCommonTrait
 		return true;
 	}
 
+	protected function getTokenizer(): GPT
+	{
+		return ServiceLocator::getInstance()->get(GPT::class);
+	}
 }

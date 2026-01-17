@@ -5,6 +5,7 @@ if (!CModule::IncludeModule('report'))
 use Bitrix\Main;
 use Bitrix\Crm;
 use Bitrix\Crm\UtmTable;
+use Bitrix\Crm\DbHelper;
 
 class CCrmReportManager
 {
@@ -2260,7 +2261,7 @@ class CCrmInvoiceReportHelper extends CCrmReportHelperBase
 			'values' => array(0, 1)
 		), 'IS_CANCELED');
 
-		$datetimeNull = 'CAST(NULL AS DATETIME)';
+		$datetimeNull = DbHelper::getSqlByDbType('CAST(NULL AS DATETIME)',  'CAST(NULL AS TIMESTAMP)');
 
 		$entity->addField(array(
 			'data_type' => 'datetime',
@@ -2920,7 +2921,7 @@ class CCrmLeadReportHelper extends CCrmReportHelperBase
 			'values' => array(0, 1)
 		), 'IS_REJECT');
 
-		$datetimeNull = 'CAST(NULL AS DATETIME)';
+		$datetimeNull = DbHelper::getSqlByDbType('CAST(NULL AS DATETIME)',  'CAST(NULL AS TIMESTAMP)');
 
 		$entity->addField(array(
 			'data_type' => 'datetime',

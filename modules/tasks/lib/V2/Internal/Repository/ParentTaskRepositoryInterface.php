@@ -7,4 +7,6 @@ namespace Bitrix\Tasks\V2\Internal\Repository;
 interface ParentTaskRepositoryInterface
 {
 	public function getParentId(int $taskId): ?int;
+
+	public function getParentIds(array $taskIds): array;
 }

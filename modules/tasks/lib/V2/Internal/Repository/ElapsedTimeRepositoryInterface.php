@@ -8,9 +8,13 @@ use Bitrix\Tasks\V2\Internal\Entity;
 
 interface ElapsedTimeRepositoryInterface
 {
+	public function getById(int $id): ?Entity\Task\ElapsedTime;
+
 	public function save(Entity\Task\ElapsedTime $elapsedTime): int;
 
 	public function delete(int $id): void;
 
 	public function getSum(int $taskId): int;
+
+	public function getCount(int $taskId): int;
 }

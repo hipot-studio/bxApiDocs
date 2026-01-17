@@ -1,7 +1,6 @@
-<?
+<?php
 
 namespace Bitrix\Main\Grid;
-
 
 /**
  * Class Declension

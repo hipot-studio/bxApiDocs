@@ -9,6 +9,7 @@ use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
+use Bitrix\Booking\Internals\Service\BookingSkuService;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
 use Bitrix\Booking\Internals\Service\ExternalDataService;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmLink;
@@ -23,11 +24,13 @@ class BookingProvider
 		private BookingRepositoryInterface|null $repository = null,
 		private BookingMessageRepositoryInterface|null $messageRepository = null,
 		private ExternalDataService|null $externalDataService = null,
+		private BookingSkuService|null $skuService = null,
 	)
 	{
 		$this->repository = $repository ?? Container::getBookingRepository();
 		$this->messageRepository = $messageRepository ?? Container::getBookingMessageRepository();
 		$this->externalDataService = $this->externalDataService ?? Container::getExternalDataService();
+		$this->skuService = Container::getBookingSkuService();
 	}
 
 	public function getList(GridParams $gridParams, int $userId): BookingCollection
@@ -77,6 +80,13 @@ class BookingProvider
 		return $this;
 	}
 
+	public function withSkus(BookingCollection $bookingCollection): self
+	{
+		$this->repository->withSkus($bookingCollection);
+
+		return $this;
+	}
+
 	public function withClientsData(BookingCollection $bookingCollection): self
 	{
 		$clientCollections = [];
@@ -118,6 +128,7 @@ class BookingProvider
 		bool $withCounters = true,
 		bool $withClientsData = true,
 		bool $withExternalData = true,
+		bool $withSkus = true,
 	): Booking|null
 	{
 		return $this->repository->getById(
@@ -126,6 +137,7 @@ class BookingProvider
 			withCounters: $withCounters,
 			withClientsData: $withClientsData,
 			withExternalData: $withExternalData,
+			withSkus: $withSkus,
 		);
 	}
 

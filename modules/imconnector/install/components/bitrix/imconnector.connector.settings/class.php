@@ -296,6 +296,9 @@ class ImConnectorConnectorSettings extends \CBitrixComponent
 			$this->arResult['ID'] = Connector::getConnectorRealId($this->arResult['ID']);
 			$this->arResult['SHOW_LIST_LINES'] = $this->request['LINE_SETTING'] !== 'Y';
 
+			$admins = \Bitrix\ImOpenLines\Common::getAdministrators();
+			$this->arResult['FIRST_ADMIN_ID'] = !empty($admins) ? reset($admins) : null;
+
 			if(!empty($this->arResult['ID']) && Connector::isConnector($this->arResult['ID']))
 			{
 				if(

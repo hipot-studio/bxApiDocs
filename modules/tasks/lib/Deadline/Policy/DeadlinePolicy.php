@@ -22,9 +22,10 @@ class DeadlinePolicy
 		private readonly bool $canChangeDeadline,
 		private readonly ?DateTime $dateTime = null,
 		private readonly ?int $maxDeadlineChanges = null,
-		private readonly bool $requireDeadlineChangeReason = false
+		private readonly bool $requireDeadlineChangeReason = false,
 	)
 	{
+
 	}
 
 	/**
@@ -46,12 +47,14 @@ class DeadlinePolicy
 		?string $reason = null
 	): array
 	{
+		if ($this->canChangeDeadline)
+		{
+			return [true, []];
+		}
+
 		$violations = [];
 
-		if (!$this->canChangeDeadline)
-		{
-			$violations[] = 'forbidden';
-		}
+		$dateTime->setTime(0, 0);
 
 		if ($this->dateTime instanceof \Bitrix\Main\Type\DateTime && $dateTime > $this->dateTime)
 		{
@@ -71,19 +74,13 @@ class DeadlinePolicy
 		return [empty($violations), $violations];
 	}
 
-	public function isReasonRequired(): bool
-	{
-		return $this->requireDeadlineChangeReason;
-	}
-
-	// Accessors for synchronization with frontend (optional)
-	public function getPolicyOptions(): array
+	public function toArray(): array
 	{
 		return [
 			'canChangeDeadline' => $this->canChangeDeadline,
 			'maxDeadlineChangeDate' => $this->dateTime?->format(DateTime::getFormat()),
 			'maxDeadlineChanges' => $this->maxDeadlineChanges,
-			'requireDeadlineChangeReason' => $this->requireDeadlineChangeReason
+			'requireDeadlineChangeReason' => $this->requireDeadlineChangeReason,
 		];
 	}
 }

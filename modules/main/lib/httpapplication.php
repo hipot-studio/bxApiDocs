@@ -24,6 +24,7 @@ use Bitrix\Main\UI\PageNavigation;
 class HttpApplication extends Application
 {
 	public const EXCEPTION_UNKNOWN_CONTROLLER = 221001;
+	public const EVENT_ON_RESPONSE_FINALIZED = 'onApplicationResponseFinalized';
 
 	/**
 	 * Initializes context of the current request.
@@ -161,15 +162,29 @@ class HttpApplication extends Application
 		$response = $this->buildResponse($result, $errorCollection);
 		$response = $this->context->getResponse()->copyHeadersTo($response);
 
-		if ($controller)
+		if ($controller instanceof Controller)
 		{
 			$controller->finalizeResponse($response);
 		}
 
+		$this->dispatchResponseFinalizedEvent($response, $controller);
 		$this->context->setResponse($response);
 
 		//todo exit code in Response?
 		$this->end(0, $response);
+	}
+
+	private function dispatchResponseFinalizedEvent(Response $response, $controller): void
+	{
+		$event = new Event(
+			'main',
+			static::EVENT_ON_RESPONSE_FINALIZED,
+			[
+				'response' => $response,
+				'controller' => $controller,
+			]
+		);
+		$event->send($this);
 	}
 
 	private function shouldWriteToLogException(\Throwable $e): bool

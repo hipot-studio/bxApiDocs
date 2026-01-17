@@ -25,6 +25,7 @@ use Bitrix\Main\Type\Collection;
 class UserOptionTable extends Main\Entity\DataManager
 {
 	use Main\ORM\Data\Internal\DeleteByFilterTrait;
+	use Main\ORM\Data\AddStrategy\Trait\InsertIgnoreByDefaultTrait;
 
 	/**
 	 * @return string

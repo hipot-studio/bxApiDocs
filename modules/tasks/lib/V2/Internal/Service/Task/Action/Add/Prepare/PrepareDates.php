@@ -38,9 +38,10 @@ class PrepareDates implements PrepareFieldInterface
 			!empty($deadline)
 			&& $fields['MATCH_WORK_TIME']
 			&& !isset($fields['FLOW_ID']) // skip, because the deadline has already been set
+			&& !in_array('DEADLINE', $this->config->getSkipTimeZoneFields(), true)
 		)
 		{
-			$fields['DEADLINE'] = $this->getDeadlineMatchWorkTime($fields['DEADLINE']);
+			$fields['DEADLINE'] = $this->getDeadlineMatchWorkTime($deadline);
 		}
 
 		return $fields;

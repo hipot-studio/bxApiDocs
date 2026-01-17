@@ -27,6 +27,7 @@ class ResourceDataMapper
 			->setDescription($resource->getDescription())
 			->setCreatedBy($resource->getCreatedBy())
 			->setIsDeleted($resource->isDeleted())
+			->setAvatarId($resource->getAvatar()?->getId())
 		;
 
 		if ($resource->getDeletedAt())

@@ -537,7 +537,11 @@ class CBPRestActivity extends CBPActivity implements
 
 		/** @var CBPDocumentService $documentService */
 		$documentService = $runtime->GetService("DocumentService");
-		$activityDocumentType = is_array($activityData['DOCUMENT_TYPE']) ? $activityData['DOCUMENT_TYPE'] : $dialog->getDocumentType();
+		$activityDocumentType = is_array($activityData['DOCUMENT_TYPE'])
+			? CBPHelper::normalizeComplexDocumentId($activityData['DOCUMENT_TYPE'])
+			: null
+		;
+		$activityDocumentType ??= $dialog->getDocumentType();
 		$properties = isset($activityData['PROPERTIES']) && is_array($activityData['PROPERTIES']) ? $activityData['PROPERTIES'] : array();
 
 		$currentValues = $dialog->getCurrentValues();
@@ -585,9 +589,12 @@ class CBPRestActivity extends CBPActivity implements
 		else:
 
 		foreach ($properties as $name => $property):
-			$required = CBPHelper::getBool($property['REQUIRED']);
+			$required = CBPHelper::getBool($property['REQUIRED'] ?? null);
 			$name = mb_strtolower($name);
-			$value = !CBPHelper::isEmptyValue($currentValues[static::PROPERTY_NAME_PREFIX.$name]) ? $currentValues[static::PROPERTY_NAME_PREFIX.$name] : $property['DEFAULT'];
+			$value = !CBPHelper::isEmptyValue($currentValues[static::PROPERTY_NAME_PREFIX.$name])
+				? $currentValues[static::PROPERTY_NAME_PREFIX.$name]
+				: ($property['DEFAULT'] ?? null)
+			;
 
 			$property['NAME'] = RestActivityTable::getLocalization($property['NAME'], LANGUAGE_ID);
 			if (isset($property['DESCRIPTION']))
@@ -767,7 +774,11 @@ class CBPRestActivity extends CBPActivity implements
 		$activityProperties = isset($activityData['PROPERTIES']) && is_array($activityData['PROPERTIES']) ? $activityData['PROPERTIES'] : [];
 		/** @var CBPDocumentService $documentService */
 		$documentService = $runtime->GetService('DocumentService');
-		$activityDocumentType = is_array($activityData['DOCUMENT_TYPE']) ? $activityData['DOCUMENT_TYPE'] : $documentType;
+
+		$activityDocumentType = is_array($activityData['DOCUMENT_TYPE'])
+			? CBPHelper::normalizeComplexDocumentId($activityData['DOCUMENT_TYPE'])
+			: $documentType
+		;
 
 		foreach ($activityProperties as $name => $property)
 		{
@@ -781,7 +792,7 @@ class CBPRestActivity extends CBPActivity implements
 			$errors = [];
 
 			$properties[$name] = $documentService->GetFieldInputValue(
-				$activityDocumentType,
+				$activityDocumentType ?? $documentType,
 				$property,
 				$requestName,
 				$currentValues,

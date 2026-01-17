@@ -242,6 +242,7 @@ class ContactController extends BaseController
 
 		$recyclingEntity = Crm\Integration\Recyclebin\Contact::createRecycleBinEntity($entityID);
 		$recyclingEntity->setTitle($entityData['TITLE']);
+		$recyclingEntity->setUserFieldEntityId(\CCrmContact::GetUserFieldEntityID());
 
 		$slots = isset($entityData['SLOTS']) && is_array($entityData['SLOTS']) ? $entityData['SLOTS'] : array();
 		$relations = ContactRelationManager::getInstance()->buildCollection($entityID, $slots);
@@ -267,14 +268,7 @@ class ContactController extends BaseController
 
 		$recyclingEntityID = $recyclingEntity->getId();
 
-
-		//region Convert User Fields to Suspended Type
-		$suspendedUserFields = $this->prepareSuspendedUserFields($entityID);
-		if(!empty($suspendedUserFields))
-		{
-			$this->saveSuspendedUserFields($recyclingEntityID, $suspendedUserFields);
-		}
-		//endregion
+		$this->moveUserFieldsToRecycleBin($entityID, $recyclingEntityID);
 
 		if(isset($slots['QUOTE_IDS']) && is_array($slots['QUOTE_IDS']))
 		{
@@ -352,8 +346,8 @@ class ContactController extends BaseController
 
 		ContactRelationManager::getInstance()->prepareRecoveryFields($fields, $relationMap);
 
-		//region Convert User Fields from Suspended Type
-		$userFields = $this->prepareRestoredUserFields($recyclingEntityID);
+		$userFields = $this->restoreUserFieldsFromRecycleBin($params['UF'] ?? [], $recyclingEntityID);
+
 		if(!empty($userFields))
 		{
 			$fields = array_merge($fields, $userFields);
@@ -428,6 +422,11 @@ class ContactController extends BaseController
 				$newEntityID,
 				$agentContractIds
 			);
+		}
+
+		if (!UserFieldsRecycleBinStorageChecker::getInstance()->isReady(\CCrmOwnerType::Contact))
+		{
+			$this->eraseSuspendedUserFields($recyclingEntityID);
 		}
 
 		$this->eraseSuspendedUserFields($recyclingEntityID);
@@ -523,7 +522,7 @@ class ContactController extends BaseController
 		$this->eraseSuspendedUtm($recyclingEntityID);
 		$this->eraseSuspendedTracing($recyclingEntityID);
 		$this->eraseSuspendedObservers($recyclingEntityID);
-		$this->eraseSuspendedUserFields($recyclingEntityID);
+		$this->eraseUserFieldsOnDeleteFromRecycleBin($entityID, $recyclingEntityID);
 		$this->eraseSuspendedCustomRelations($recyclingEntityID);
 		$this->eraseSuspendedBadges($recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemDelete(

@@ -18,7 +18,7 @@ class ReserveInfo
 	 */
 	private float $deltaReserveQuantity;
 	private ?int $storeId = null;
-	private ?string $dateReserveEnd = null;
+	private DateTime $dateReserveEnd;
 	private bool $changed = false;
 
 	/**
@@ -41,7 +41,7 @@ class ReserveInfo
 	 *
 	 * @return void
 	 */
-	public function setReserveQuantity(float $reserveQuantity)
+	public function setReserveQuantity(float $reserveQuantity): void
 	{
 		$this->reserveQuantity = $reserveQuantity;
 	}
@@ -63,7 +63,7 @@ class ReserveInfo
 	 *
 	 * @return void
 	 */
-	public function setDeltaReserveQuantity(float $deltaReserveQuantity)
+	public function setDeltaReserveQuantity(float $deltaReserveQuantity): void
 	{
 		$this->deltaReserveQuantity = $deltaReserveQuantity;
 	}
@@ -103,33 +103,36 @@ class ReserveInfo
 	/**
 	 * Date end of reserve.
 	 *
-	 * @param string|null $dateReserveEnd
+	 * @return DateTime|null
+	 * *@see getDateReserveEnd
 	 *
+	 * @deprecated
+	 */
+	public function getDateReserveEndAsDateTime(): ?DateTime
+	{
+		return $this->dateReserveEnd ?? null
+		;
+	}
+
+	/**
+	 * Set date end of reserve.
+	 *
+	 * @param DateTime $dateReserveEnd
 	 * @return void
 	 */
-	public function setDateReserveEnd(?string $dateReserveEnd): void
+	public function setDateReserveEnd(DateTime $dateReserveEnd): void
 	{
 		$this->dateReserveEnd = $dateReserveEnd;
 	}
 
 	/**
-	 * Date end of reserve.
+	 * Returns date end of reserve.
 	 *
-	 * @return string|null
+	 * @return DateTime
 	 */
-	public function getDateReserveEnd(): ?string
+	public function getDateReserveEnd(): DateTime
 	{
 		return $this->dateReserveEnd;
-	}
-
-	/**
-	 * Date end of reserve.
-	 *
-	 * @return DateTime|null
-	 */
-	public function getDateReserveEndAsDateTime(): ?DateTime
-	{
-		return $this->dateReserveEnd ? DateTime::createFromText($this->dateReserveEnd) : null;
 	}
 
 	/**

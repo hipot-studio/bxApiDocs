@@ -9,7 +9,7 @@ class SetDeadline
 	public function runBatch(int $userId, array $taskIds, string $deadline): array
 	{
 		$result = [];
-		$control = new Task($userId);
+		$control = (new Task($userId))->useConsistency();
 
 		foreach ($taskIds as $id)
 		{

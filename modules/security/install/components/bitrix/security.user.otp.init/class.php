@@ -14,7 +14,7 @@ class CSecurityUserOtpInit extends CBitrixComponent
 	{
 		$result = array();
 		if (
-			$arParams['SUCCESSFUL_URL']
+			!empty($arParams['SUCCESSFUL_URL'])
 			&& preg_match('#^(?:/|https?://)#', $arParams['SUCCESSFUL_URL'])
 		)
 		{
@@ -35,8 +35,8 @@ class CSecurityUserOtpInit extends CBitrixComponent
 		}
 
 		if (
-			$arParams['SHOW_DESCRIPTION']
-			&& preg_match('#^(Y|N)$#', $arParams['SHOW_DESCRIPTION'])
+			!empty($arParams['SHOW_DESCRIPTION'])
+			&& preg_match('#^([YN])$#', $arParams['SHOW_DESCRIPTION'])
 		)
 		{
 			$result['SHOW_DESCRIPTION'] = $arParams['SHOW_DESCRIPTION'];
@@ -63,7 +63,7 @@ class CSecurityUserOtpInit extends CBitrixComponent
 			$result = $this->toEdit();
 			$result = Json::encode($result);
 			$APPLICATION->RestartBuffer();
-			header('Content-Type: application/json', true);
+			header('Content-Type: application/json');
 			echo $result;
 			die();
 		}
@@ -102,7 +102,7 @@ class CSecurityUserOtpInit extends CBitrixComponent
 		$otp = Otp::getByUser($USER->getid());
 		$otp->regenerate();
 		$result['SECRET'] = $otp->getHexSecret();
-		$result['TYPE'] = $otp->getType();
+		$result['TYPE'] = $otp->getType()->value;
 		$result['APP_SECRET'] = $otp->getAppSecret();
 		$result['APP_SECRET_SPACED'] = chunk_split($result['APP_SECRET'], 4, ' ');
 		$result['PROVISION_URI'] = $otp->getProvisioningUri();

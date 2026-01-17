@@ -9,7 +9,6 @@ use Bitrix\Crm\EventRelationsTable;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Kanban;
-use Bitrix\Crm\Ml;
 use Bitrix\Crm\Model\FieldContentTypeTable;
 use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\Pseudoactivity;
@@ -60,7 +59,6 @@ final class Cleaner
 		Requisite\EntityLink::unregister($this->getEntityTypeId(), $this->getEntityId());
 		UtmTable::deleteEntityUtm($this->getEntityTypeId(), $this->getEntityId());
 		Tracking\Entity::deleteTrace($this->getEntityTypeId(), $this->getEntityId());
-		Ml\Scoring::onEntityDelete($this->getEntityTypeId(), $this->getEntityId());
 		Relation\EntityRelationTable::deleteByItem($this->getEntityTypeId(), $this->getEntityId());
 		Pseudoactivity\WaitEntry::deleteByOwner($this->getEntityTypeId(), $this->getEntityId());
 		Integration\Im\Chat::deleteChat([

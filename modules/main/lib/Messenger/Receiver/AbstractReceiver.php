@@ -181,12 +181,7 @@ abstract class AbstractReceiver implements ReceiverInterface
 			}
 			catch (Exception $e)
 			{
-				$e = new ProcessingException(
-					$messageBox,
-					$e->getMessage() . ' Message: ' . $messageBox->getId(),
-					$e->getCode(),
-					$e
-				);
+				$e = new ProcessingException($messageBox, $e);
 
 				$this->reject($messageBox);
 

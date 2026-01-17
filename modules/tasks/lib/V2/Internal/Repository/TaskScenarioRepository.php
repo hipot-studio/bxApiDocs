@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
 use Bitrix\Tasks\Internals\Task\ScenarioTable;
+use Bitrix\Tasks\V2\Internal\Entity\Task\ScenarioCollection;
 
 class TaskScenarioRepository implements TaskScenarioRepositoryInterface
 {
-	public function getById(int $taskId): array
+	public function getById(int $taskId): ScenarioCollection
 	{
 		$rows = ScenarioTable::query()
 			->setSelect(['SCENARIO'])
 			->where('TASK_ID', $taskId)
 			->fetchAll();
 
-		return array_column($rows, 'SCENARIO');
+		$values = array_column($rows, 'SCENARIO');
+
+		return ScenarioCollection::mapFromArray($values);
 	}
 
 	public function save(int $taskId, array $scenarios): void

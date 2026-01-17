@@ -25,9 +25,7 @@ class AddReminderCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$reminderService = Container::getInstance()->getReminderService();
-
-		$handler = new AddReminderHandler($reminderService);
+		$handler = Container::getInstance()->get(AddReminderHandler::class);
 
 		try
 		{

@@ -166,36 +166,6 @@ class Task extends Dataset
 			"LEFT JOIN b_tasks_dependence DEPENDENCE ON DEPENDENCE.TASK_ID = {$this->getAliasFieldName('ID')}",
 		);
 
-		$elapsedTimeJoin = $this->createJoin(
-			"ELAPSED",
-			"INNER JOIN (
-						SELECT SUM(SECONDS) AS TIME_SPENT_IN_LOGS, TASK_ID
-						FROM b_tasks_elapsed_time
-						GROUP BY TASK_ID
-					) ELAPSED ON ELAPSED.TASK_ID = {$this->getAliasFieldName('ID')}",
-			"LEFT JOIN (
-						SELECT SUM(SECONDS) AS TIME_SPENT_IN_LOGS, TASK_ID
-						FROM b_tasks_elapsed_time
-						GROUP BY TASK_ID
-					) ELAPSED ON ELAPSED.TASK_ID = {$this->getAliasFieldName('ID')}",
-		);
-
-		$commentsCountJoin = $this->createJoin(
-			"UFMC",
-			"INNER JOIN (
-				SELECT XML_ID, COUNT(1) AS COMMENTS_COUNT
-				FROM b_forum_message
-				WHERE SERVICE_TYPE is NULL AND PARAM1 is NULL
-				GROUP BY XML_ID
-			) UFMC on UFMC.XML_ID = CONCAT('TASK_', {$this->getAliasFieldName('ID')})",
-			"LEFT JOIN (
-				SELECT XML_ID, COUNT(1) AS COMMENTS_COUNT
-				FROM b_forum_message
-				WHERE SERVICE_TYPE is NULL AND PARAM1 is NULL
-				GROUP BY XML_ID
-			) UFMC on UFMC.XML_ID = CONCAT('TASK_', {$this->getAliasFieldName('ID')})"
-		);
-
 		$flowJoin = $this->createJoin(
 			"TFT",
 			"INNER JOIN b_tasks_flow_task TFT ON TFT.TASK_ID = {$this->getAliasFieldName('ID')}",
@@ -561,17 +531,17 @@ class Task extends Dataset
 				->setJoin($dependenceJoin)
 				->setMultiple()
 			,
-			(new IntegerField('TIME_SPENT_IN_LOGS'))
-				->setName($elapsedTimeJoin->getJoinFieldName('TIME_SPENT_IN_LOGS'))
-				->setJoin($elapsedTimeJoin)
-			,
-			(new IntegerField('COMMENTS_COUNT'))
-				->setName($commentsCountJoin->getJoinFieldName('COMMENTS_COUNT'))
-				->setJoin($commentsCountJoin)
-			,
 			(new IntegerField('FLOW_ID'))
 				->setName($flowJoin->getJoinFieldName('FLOW_ID'))
 				->setJoin($flowJoin)
+			,
+			//@deprecated
+			// Exists for compatibility user selectors in dashboards
+			(new IntegerField('TIME_SPENT_IN_LOGS'))
+				->setDeprecated()
+			,
+			(new IntegerField('COMMENTS_COUNT'))
+				->setDeprecated()
 			,
 		];
 	}

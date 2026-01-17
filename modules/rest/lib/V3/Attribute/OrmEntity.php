@@ -1,0 +1,23 @@
+<?php
+
+namespace Bitrix\Rest\V3\Attribute;
+
+use Bitrix\Main\Entity\DataManager;
+use Bitrix\Rest\V3\Exception\InvalidClassInstanceProvidedException;
+
+#[\Attribute]
+class OrmEntity extends AbstractAttribute
+{
+	public function __construct(public readonly string $entity)
+	{
+		if (!is_subclass_of($this->entity, DataManager::class))
+		{
+			throw new InvalidClassInstanceProvidedException($this->entity, DataManager::class);
+		}
+	}
+
+	public function getUserFieldId(): ?string
+	{
+		return method_exists($this->entity, 'getUfId') ? $this->entity::getUfId() : null;
+	}
+}

@@ -1049,7 +1049,7 @@ class Asset
 	{
 		if ($label === true)
 		{
-			$label = ' data-template-style="true" ';
+			$label = ' data-template-style="true"';
 		}
 		elseif ($label === false)
 		{
@@ -1062,7 +1062,7 @@ class Asset
 		}
 		else
 		{
-			return "<link href=\"{$css}\" type=\"text/css\" {$label} rel=\"stylesheet\" {$this->xhtmlStyle}>\n";
+			return "<link href=\"{$css}\" type=\"text/css\" rel=\"stylesheet\"{$label}{$this->xhtmlStyle}>\n";
 		}
 	}
 

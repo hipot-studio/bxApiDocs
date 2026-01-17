@@ -17,9 +17,9 @@ Localization\Loc::loadMessages(__FILE__);
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_MailContact_Query query()
- * @method static EO_MailContact_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_MailContact_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_MailContact_Result getById($id)
- * @method static EO_MailContact_Result getList(array $parameters = array())
+ * @method static EO_MailContact_Result getList(array $parameters = [])
  * @method static EO_MailContact_Entity getEntity()
  * @method static \Bitrix\Mail\Internals\EO_MailContact createObject($setDefaultValues = true)
  * @method static \Bitrix\Mail\Internals\EO_MailContact_Collection createCollection()

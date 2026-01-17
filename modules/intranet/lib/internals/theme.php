@@ -20,9 +20,9 @@ use Bitrix\Main\Entity;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Theme_Query query()
- * @method static EO_Theme_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Theme_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Theme_Result getById($id)
- * @method static EO_Theme_Result getList(array $parameters = array())
+ * @method static EO_Theme_Result getList(array $parameters = [])
  * @method static EO_Theme_Entity getEntity()
  * @method static \Bitrix\Intranet\Internals\EO_Theme createObject($setDefaultValues = true)
  * @method static \Bitrix\Intranet\Internals\EO_Theme_Collection createCollection()

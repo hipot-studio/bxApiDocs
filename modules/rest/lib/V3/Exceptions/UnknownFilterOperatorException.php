@@ -12,7 +12,7 @@ class UnknownFilterOperatorException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_UNKNOWN_FILTER_OPERATOR_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_UNKNOWNFILTEROPERATOREXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

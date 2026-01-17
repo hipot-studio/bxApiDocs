@@ -6,11 +6,13 @@ namespace Bitrix\Intranet\Internal\Repository\User\Profile;
 
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\Intranet\Component\UserProfile\Form;
+use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Exception\UserFieldTypeException;
 use Bitrix\Intranet\Exception\WrongIdException;
+use Bitrix\Intranet\Internal\Entity\User\Field\ConvertableToUserFieldValue;
 use Bitrix\Intranet\Internal\Entity\User\Field\FieldCollection;
 use Bitrix\Intranet\Internal\Entity\User\Profile\FieldSectionCollection;
 use Bitrix\Intranet\Internal\Entity\User\Profile\BaseInfo;
@@ -18,10 +20,12 @@ use Bitrix\Intranet\Internal\Entity\User\Field\Field;
 use Bitrix\Intranet\Internal\Entity\User\Profile\FieldSection;
 use Bitrix\Intranet\Internal\Entity\User\Profile\Profile;
 use Bitrix\Intranet\Internal\Factory\User\UserFieldFactory;
-use Bitrix\Intranet\Internal\Integration\Humanresources\DepartmentRepository;
-use Bitrix\Intranet\Internal\Integration\Humanresources\TeamRepository;
+use Bitrix\Intranet\Internal\Integration;
+use Bitrix\Intranet\Internal\Provider\Profile\ProfileUserFieldComponentConfig;
 use Bitrix\Intranet\Internals\Trait\UserUpdateError;
+use Bitrix\Intranet\Service\IntranetOption;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\SystemException;
 
@@ -30,11 +34,16 @@ class ProfileRepository
 	use UserUpdateError;
 
 	private \CUser $cUser;
+	private ?array $visibleFields;
+	private array $profileSections = [];
 
 	public function __construct(
 		private UserFieldFactory $userFieldFactory,
-		private DepartmentRepository $departmentRepository,
-		private TeamRepository $teamRepository,
+		private Integration\Humanresources\DepartmentRepository $departmentRepository,
+		private Integration\Humanresources\TeamRepository $teamRepository,
+		private Integration\Ui\Form\Configuration $formConfiguration,
+		private IntranetOption $option,
+		private ProfileUserFieldComponentConfig $config,
 	)
 	{
 		global $USER;
@@ -43,19 +52,34 @@ class ProfileRepository
 
 	public static function createByDefault(): static
 	{
+
 		return new static(
 			UserFieldFactory::createByDefault(),
-			new DepartmentRepository(),
-			new TeamRepository(),
+			new Integration\Humanresources\DepartmentRepository(),
+			new Integration\Humanresources\TeamRepository(),
+			Integration\Ui\Form\Configuration::createByDefault(),
+			new IntranetOption(),
+			new ProfileUserFieldComponentConfig(ModuleManager::isModuleInstalled('bitrix24'))
 		);
 	}
 
+	/**
+	 * @throws ObjectNotFoundException
+	 */
 	public function getUserDataById(int $userId): array
 	{
-		$filter = [
-			'ID_EQUAL_EXACT' => $userId,
-		];
+		$user = $this->fetchUser($userId);
+		$user['UF_DEPARTMENT'] = $this->getUserDepartmentIds($userId);
+		$user['DEPARTMENT'] = $this->getUserDepartmentNames($userId);
+		$user['DEPARTMENT_HEAD'] = $this->getUserDepartmentHeads($userId);
+		$user['TEAM'] = $this->getUserTeamNames($userId);
 
+		return $user;
+	}
+
+	protected function fetchUser(int $userId): array
+	{
+		$filter = ['ID_EQUAL_EXACT' => $userId];
 		$params = [
 			'FIELDS' => [
 				'ID', 'ACTIVE', 'CONFIRM_CODE', 'EXTERNAL_AUTH_ID', 'LAST_ACTIVITY_DATE', 'DATE_REGISTER',
@@ -70,7 +94,6 @@ class ProfileRepository
 			],
 			'SELECT' => ['UF_PHONE_INNER', 'UF_SKYPE', 'UF_SKYPE_LINK', 'UF_ZOOM', 'UF_PUBLIC'],
 		];
-
 		$dbUser = \CUser::GetList('id', 'asc', $filter, $params);
 		$user = $dbUser->fetch();
 
@@ -79,23 +102,35 @@ class ProfileRepository
 			throw new ObjectNotFoundException('User not found');
 		}
 
+		return $user;
+	}
+
+	private function getUserDepartmentIds(int $userId): array
+	{
 		$userDepartments = $this->departmentRepository->getDepartmentsByUserId($userId);
 
-		$user['UF_DEPARTMENT'] = array_values(
-			$userDepartments->map(fn (Department $department) => $department->getId()),
-		);
+		return array_values($userDepartments->map(fn(Department $department) => $department->getId()));
+	}
 
-		$user['DEPARTMENT'] = $userDepartments->map(fn (Department $department) => $department->getName());
+	private function getUserDepartmentNames(int $userId): array
+	{
+		$userDepartments = $this->departmentRepository->getDepartmentsByUserId($userId);
 
-		$user['DEPARTMENT_HEAD'] = $this->departmentRepository
+		return $userDepartments->map(fn(Department $department) => $department->getName());
+	}
+
+	private function getUserDepartmentHeads(int $userId): UserCollection
+	{
+		return $this->departmentRepository
 			->getDepartmentHeadsByUserId($userId)
-			->map(fn (User $user) => $user->getFormattedName(true, false))
 		;
+	}
 
+	private function getUserTeamNames(int $userId): array
+	{
 		$userTeams = $this->teamRepository->getAllByUserId($userId);
-		$user['TEAM'] = isset($userTeams) ? array_values($userTeams->map(fn (Node $team) => $team->name)) : [];
 
-		return $user;
+		return isset($userTeams) ? array_values($userTeams->map(fn(Node $team) => $team->name)) : [];
 	}
 
 	/**
@@ -113,31 +148,22 @@ class ProfileRepository
 		$profileData = $this->getUserDataById($userId);
 		$profileForm = new Form($userId);
 
-		return $this->createUserProfileByProfileFormAndProfileData($profileForm, $profileData);
+		return $this->createUserProfile($profileForm, $profileData);
 	}
 
 	public function getUserFieldsByUserData(array $userData): FieldCollection
 	{
 		$profileForm = new Form();
+		$profileFieldInfo = $this->getProfileFieldInfo($profileForm, $userData);
 
-		return $this->createUserFieldCollectionByProfileFormAndProfileData(
-			$profileForm,
-			$userData,
-		);
+		return $this->createUserFieldCollection($profileFieldInfo, $userData);
 	}
 
 	public function getUserBaseInfoByUserData(array $userData): BaseInfo
 	{
 		$user = User::initByArray($userData);
-		$fullName = \CUser::FormatName(\CSite::GetNameFormat(), $userData, false, false);
 
-		return new BaseInfo(
-			userId: (int)$userData['ID'],
-			fullName: $fullName,
-			userRole: $user->getRole(),
-			invitationStatus: $user->getInviteStatus(),
-			photoId: isset($userData['PERSONAL_PHOTO']) ? (int)$userData['PERSONAL_PHOTO'] : null,
-		);
+		return BaseInfo::createByUserEntity($user);
 	}
 
 	/**
@@ -148,7 +174,6 @@ class ProfileRepository
 	public function saveUserProfileFields(int $userId, FieldCollection $userFieldCollection): void
 	{
 		$userFieldArray = $this->createArrayFromUserFieldCollection($userFieldCollection);
-
 		$result = $this->cUser->Update($userId, $userFieldArray);
 
 		if (!$result)
@@ -164,22 +189,24 @@ class ProfileRepository
 		/** @var Field $userField */
 		foreach ($userFieldCollection as $userField)
 		{
-			$result[$userField->getId()] = $userField->getValue();
+			$value = $userField->getValue();
+			$result[$userField->getId()] = $value instanceof ConvertableToUserFieldValue
+				? $value->toUserFieldValue()
+				: $value;
 		}
 
 		return $result;
 	}
 
-	private function createUserProfileByProfileFormAndProfileData(Form $profileForm, array $profileData): Profile
+	private function createUserProfile(Form $profileForm, array $profileData): Profile
 	{
-		$profileSections = $profileForm->getNewConfig();
-		$userFieldCollection = $this->createUserFieldCollectionByProfileFormAndProfileData(
-			$profileForm,
+		$profileFieldInfo = $this->getProfileFieldInfo($profileForm, $profileData);
+		$userFieldCollection = $this->createUserFieldCollection(
+			$profileFieldInfo,
 			$profileForm->getData(['User' => $profileData]),
 		);
-
-		$profileSectionCollection = $this->createSectionCollectionFromProfileSectionsAndUserFields(
-			$profileSections,
+		$profileSectionCollection = $this->createSectionCollection(
+			$this->profileSections,
 			$userFieldCollection,
 		);
 
@@ -189,43 +216,18 @@ class ProfileRepository
 		);
 	}
 
-	private function createSectionCollectionFromProfileSectionsAndUserFields(
+	private function createSectionCollection(
 		array $profileSections,
 		FieldCollection $userFieldCollection,
-	): FieldSectionCollection {
+	): FieldSectionCollection
+	{
 		$profileSectionCollection = new FieldSectionCollection();
+		$visibleFields = $this->getVisibleFields();
 
 		foreach ($profileSections as $profileSection)
 		{
-			$sectionUserFieldCollection = new FieldCollection();
-
-			foreach ($profileSection['elements'] as $element)
-			{
-				$userFieldId = $element['name'] ?? null;
-
-				if (empty($userFieldId))
-				{
-					continue;
-				}
-
-				$userField = $userFieldCollection->findById($userFieldId);
-
-				if (isset($userField))
-				{
-					$sectionUserFieldCollection->add($userField);
-					$userFieldCollection->removeItem($userField);
-				}
-			}
-
-			$section = new FieldSection(
-				id: $profileSection['name'],
-				title: $profileSection['title'],
-				isEditable: $profileSection['data']['isChangeable'],
-				isRemovable: $profileSection['data']['isRemovable'],
-				userFieldCollection: $sectionUserFieldCollection,
-				isDefault: $profileSection['data']['isDefault'] ?? false,
-			);
-
+			$sectionUserFieldCollection = $this->getSectionUserFields($profileSection, $userFieldCollection, $visibleFields);
+			$section = $this->createFieldSection($profileSection, $sectionUserFieldCollection);
 			$profileSectionCollection->add($section);
 		}
 
@@ -237,13 +239,55 @@ class ProfileRepository
 		return $profileSectionCollection;
 	}
 
+	private function getSectionUserFields(array $profileSection, FieldCollection $userFieldCollection, ?array $visibleFields): FieldCollection
+	{
+		$sectionUserFieldCollection = new FieldCollection();
+
+		foreach ($profileSection['elements'] as $element)
+		{
+			$userFieldId = $element['name'] ?? null;
+
+			if (empty($userFieldId))
+			{
+				continue;
+			}
+
+			$userField = $userFieldCollection->findById($userFieldId);
+
+			if (isset($userField))
+			{
+				$sectionUserFieldCollection->add($userField);
+				$userFieldCollection->removeItem($userField);
+			}
+		}
+
+		if (isset($visibleFields))
+		{
+			$sectionUserFieldCollection->sortByIdOrder($visibleFields);
+		}
+
+		return $sectionUserFieldCollection;
+	}
+
+	private function createFieldSection(array $profileSection, FieldCollection $sectionUserFieldCollection): FieldSection
+	{
+		return new FieldSection(
+			id: $profileSection['name'],
+			title: $profileSection['title'],
+			isEditable: $profileSection['data']['isChangeable'],
+			isRemovable: $profileSection['data']['isRemovable'],
+			userFieldCollection: $sectionUserFieldCollection,
+			isDefault: $profileSection['data']['isDefault'] ?? false,
+		);
+	}
+
 	private function addUserFieldsToDefaultSection(
 		FieldCollection $userFieldCollection,
 		FieldSectionCollection $profileSectionCollection,
-	): void {
-		/* @var FieldSection $defaultSection */
+	): void
+	{
 		$defaultSection = $profileSectionCollection->find(
-			fn (FieldSection $section) => $section->isDefault,
+			fn(FieldSection $section) => $section->isDefault,
 		);
 
 		if (isset($defaultSection))
@@ -255,21 +299,25 @@ class ProfileRepository
 		}
 	}
 
-	private function createUserFieldCollectionByProfileFormAndProfileData(
-		Form $profileForm,
+	private function createUserFieldCollection(
+		array $profileFieldInfo,
 		array $profileData,
-	): FieldCollection {
-		$profileFieldInfo = $profileForm->getFieldInfo($profileData, [], [], false);
+	): FieldCollection
+	{
 		$userFieldCollection = new FieldCollection();
+		$visibleFields = $this->getVisibleFields() ?? $this->getDefaultVisibleFields();
 
 		foreach ($profileFieldInfo as $fieldInfo)
 		{
 			if (
 				!isset($fieldInfo['name'])
 				|| !array_key_exists($fieldInfo['name'], $profileData)
-			) {
+			)
+			{
 				continue;
 			}
+
+			$fieldInfo['isVisible'] = in_array($fieldInfo['name'], $visibleFields);
 
 			try
 			{
@@ -284,5 +332,68 @@ class ProfileRepository
 		}
 
 		return $userFieldCollection;
+	}
+
+	private function getFormFieldInfoParams(): array
+	{
+		$showYear = $this->option->get('user_profile_show_year');
+
+		if (is_string($showYear))
+		{
+			return [
+				'SHOW_YEAR' => $showYear,
+			];
+		}
+
+		return [];
+	}
+
+	private function getVisibleFields(): ?array
+	{
+		$this->visibleFields ??= $this->formConfiguration->getUserProfileFieldNames();
+
+		return $this->visibleFields;
+	}
+
+	private function getProfileFieldInfo(Form $profileForm, array $profileData)
+	{
+		$profileFieldInfo = $profileForm->getFieldInfo($profileData, [], $this->getFormFieldInfoParams(), false);
+
+		if (!$this->config->isCloud)
+		{
+			$result = ['FormFields' => $profileFieldInfo];
+			$profileForm->prepareSettingsFields(
+				$result,
+				$this->config->get(),
+			);
+			$fieldsForConfig = $result['SettingsFieldsForConfig'];
+			$profileFieldInfo = $result['FormFields'];
+		}
+
+		$this->profileSections = $profileForm->getNewConfig($fieldsForConfig ?? []);
+
+		return $profileFieldInfo;
+	}
+
+	private function getDefaultVisibleFields(): array
+	{
+		$config = $this->profileSections;
+		$fieldNames = [];
+
+		foreach ($config as $section)
+		{
+			if (!empty($section['elements']) && is_array($section['elements']))
+			{
+				foreach ($section['elements'] as $element)
+				{
+					if (isset($element['name']))
+					{
+						$fieldNames[] = $element['name'];
+					}
+				}
+			}
+		}
+
+		return $fieldNames;
 	}
 }

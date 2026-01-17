@@ -8,6 +8,7 @@ use Bitrix\Im\Model\FileParamTable;
 use Bitrix\Im\V2\Entity\File\Param\BaseParam;
 use Bitrix\Im\V2\Entity\File\Param\Param;
 use Bitrix\Im\V2\Entity\File\Param\ParamName;
+use Bitrix\Im\V2\Message\Forward\FileCopyMap;
 use Bitrix\Im\V2\Registry;
 use IteratorAggregate;
 
@@ -113,8 +114,7 @@ final class ParamCollection extends Registry
 		foreach ($params as $param)
 		{
 			if (
-				ParamName::tryFrom((String)$param['PARAM_NAME']) === null
-				|| empty($param['PARAM_VALUE'])
+				ParamName::tryFrom((string)$param['PARAM_NAME']) === null
 				|| empty($param['DISK_FILE_ID'])
 			)
 			{
@@ -124,13 +124,13 @@ final class ParamCollection extends Registry
 			$validParams[] = [
 				'DISK_FILE_ID' => $param['DISK_FILE_ID'],
 				'PARAM_NAME' => $param['PARAM_NAME'],
-				'PARAM_VALUE' => $param['PARAM_VALUE'],
+				'PARAM_VALUE' => $param['PARAM_VALUE'] ?? null,
 			];
 		}
 
 		foreach ($validParams as $validParam)
 		{
-			if (isset(self::$cache[$item['DISK_FILE_ID']]))
+			if (isset(self::$cache[$validParam['DISK_FILE_ID']]))
 			{
 				self::$cache[$validParam['DISK_FILE_ID']]->initByArray([$validParam]);
 			}
@@ -162,19 +162,18 @@ final class ParamCollection extends Registry
 		return $this->fileId;
 	}
 
-	public static function copyParams(array $fileMap): void
+	public static function copyParams(FileCopyMap $fileCopyMap): void
 	{
-		$oldFiles = array_keys($fileMap);
-		self::loadByFileIds($oldFiles);
-		$insertParams = [];
+		self::loadByFileIds($fileCopyMap->getOldFileIds());
 
-		foreach ($fileMap as $oldFileId => $newFileId)
+		$insertParams = [];
+		foreach ($fileCopyMap->getFileMap() as $copyFileId => $oldFileId)
 		{
 			$oldCollection = self::getInstance($oldFileId);
 			foreach ($oldCollection as $item)
 			{
 				$newParam = $item->toArray();
-				$newParam['DISK_FILE_ID'] = $newFileId;
+				$newParam['DISK_FILE_ID'] = $copyFileId;
 				$insertParams[] = $newParam;
 			}
 		}

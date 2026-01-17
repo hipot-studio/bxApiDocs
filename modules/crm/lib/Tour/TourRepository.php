@@ -47,7 +47,7 @@ class TourRepository
 		return null;
 	}
 
-	private function getAllTours(): array
+	public function getAllTours(): array
 	{
 		$result = [];
 
@@ -95,7 +95,7 @@ class TourRepository
 						'optionCategory' => $optionCategory,
 						'optionName' => $optionName,
 						'title' => str_replace(['<br>', '<br/>'], ' ', $steps[0]['title']) ?: $matches[1],
-						'text' => $steps[0]['text'],
+						'text' => $steps[0]['text'] ?? '',
 					];
 				}
 				if (is_subclass_of($className, BaseStubTour::class))

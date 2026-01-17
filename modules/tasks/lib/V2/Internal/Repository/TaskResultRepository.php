@@ -4,16 +4,24 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\DB\SqlException;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Internals\Task\Result\EO_Result_Collection;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\Result;
 use Bitrix\Tasks\V2\Internal\Entity\ResultCollection;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
-use Bitrix\Tasks\V2\Internal\Model\TaskResultFileTable;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskResultMapper;
 
 class TaskResultRepository implements TaskResultRepositoryInterface
 {
 	public function __construct(
-		private readonly UserRepositoryInterface  $userRepository,
+		private readonly TaskResultMapper $taskResultMapper,
+		private readonly UserRepositoryInterface $userRepository,
 		private readonly TaskParameterRepositoryInterface $taskParameterRepository,
 	)
 	{
@@ -24,48 +32,116 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 		return $this->taskParameterRepository->isResultRequired($taskId);
 	}
 
-	public function getById(int $resultId): Result|null
+	public function getById(int $resultId): ?Result
 	{
-		$result = ResultTable::getById($resultId)->fetchObject();
+		return $this->getByIds([$resultId])->getFirstEntity();
+	}
 
-		if (!$result)
+	public function getByIds(array $resultIds): ResultCollection
+	{
+		if (empty($resultIds))
 		{
-			return null;
+			return new ResultCollection();
 		}
 
-		return new Result(
-			id: $result->getId(),
-			taskId: $result->getTaskId(),
-			text: $result->getText(),
-			author: $this->userRepository->getByIds([$result->getCreatedBy()])->findOneById($result->getCreatedBy()),
-			createdAtTs: $result->getCreatedAt() ? $result->getCreatedAt()->getTimestamp() : null,
-			updatedAtTs: $result->getUpdatedAt() ? $result->getUpdatedAt()->getTimestamp() : null,
-			status: Result\Status::fromRaw($result->getStatus()),
-			fileIds: $this->getFiles($resultId),
+		$select = [
+			'ID',
+			'TASK_ID',
+			'CREATED_BY',
+			'CREATED_AT',
+			'UPDATED_AT',
+			'TEXT',
+			'STATUS',
+			'UF_*',
+			'MESSAGE_ID' => 'MESSAGE.MESSAGE_ID',
+		];
+
+		$results = ResultTable::query()
+			->setSelect($select)
+			->whereIn('ID', $resultIds)
+			->fetchCollection();
+
+		if ($results->isEmpty())
+		{
+			return new ResultCollection();
+		}
+
+		$authorIds = $results->getCreatedByList();
+		Collection::normalizeArrayValuesByInt($authorIds, false);
+
+		$authors = $this->userRepository->getByIds($authorIds);
+
+		return $this->taskResultMapper->mapToCollection(
+			$results,
+			$authors,
 		);
 	}
 
-	public function getByTask(int $taskId): ResultCollection
+	public function getByTask(int $taskId, ?int $limit = null, ?int $offset = null): ResultCollection
 	{
-		$collection = [];
+		$select = [
+			'ID',
+			'TASK_ID',
+			'CREATED_BY',
+			'CREATED_AT',
+			'UPDATED_AT',
+			'TEXT',
+			'STATUS',
+			'UF_*',
+			'MESSAGE_ID' => 'MESSAGE.MESSAGE_ID',
+		];
 
-		$results = ResultTable::getByTaskId($taskId);
+		$query = ResultTable::query()
+			->setSelect($select)
+			->where('TASK_ID', $taskId)
+			->setOrder(['ID' => 'DESC'])
+		;
 
-		foreach ($results as $result)
+		if ($limit !== null)
 		{
-			$collection[] = new Result(
-				id: $result->getId(),
-				taskId: $result->getTaskId(),
-				text: $result->getText(),
-				author: $this->userRepository->getByIds([$result->getCreatedBy()])->findOneById($result->getCreatedBy()),
-				createdAtTs: $result->getCreatedAt() ? $result->getCreatedAt()->getTimestamp() : null,
-				updatedAtTs: $result->getUpdatedAt() ? $result->getUpdatedAt()->getTimestamp() : null,
-				status: Result\Status::fromRaw($result->getStatus()),
-				fileIds: $this->getFiles($result->getId()),
-			);
+			$query->setLimit($limit);
 		}
 
-		return new ResultCollection(...$collection);
+		if ($offset !== null)
+		{
+			$query->setOffset($offset);
+		}
+
+		$results = $query->exec()->fetchCollection();
+
+		$authorIds = $results->getCreatedByList();
+		Collection::normalizeArrayValuesByInt($authorIds, false);
+
+		$authors = $this->userRepository->getByIds($authorIds);
+
+		return $this->taskResultMapper->mapToCollection(
+			$results,
+			$authors,
+		);
+	}
+
+	public function getAttachmentIdsByResult(int $resultId): ?array
+	{
+		return $this->getById($resultId)?->fileIds ?? [];
+	}
+
+	public function getResultMessageMap(int $taskId): array
+	{
+		$data = ResultTable::query()
+			->setSelect(['ID', 'MESSAGE_ID' => 'MESSAGE.MESSAGE_ID'])
+			->where('TASK_ID', $taskId)
+			->setOrder(['ID' => 'DESC'])
+			->exec()
+			->fetchAll()
+		;
+
+		$map = [];
+		foreach ($data as $item)
+		{
+			$map[(int)$item['ID']] = $item['MESSAGE_ID'] === null ? null : (int)$item['MESSAGE_ID'];
+		}
+
+		return $map;
 	}
 
 	public function save(Result $entity, int $userId): int
@@ -74,84 +150,137 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 			'COMMENT_ID' => 0,
 			'TASK_ID' => $entity->taskId,
 			'TEXT' => $entity->text,
-			'CREATED_BY' => $userId,
-			'CREATED_AT' => $entity->createdAtTs ? \Bitrix\Main\Type\DateTime::createFromTimestamp($entity->createdAtTs) : null,
-			'UPDATED_AT' => $entity->updatedAtTs ? \Bitrix\Main\Type\DateTime::createFromTimestamp($entity->updatedAtTs) : null,
+			'CREATED_BY' => $entity->author?->id ?? $userId,
+			'CREATED_AT' => $entity->createdAtTs ? DateTime::createFromTimestamp($entity->createdAtTs) : null,
+			'UPDATED_AT' => $entity->updatedAtTs ? DateTime::createFromTimestamp($entity->updatedAtTs) : null,
 			'STATUS' => $entity->status?->getRaw(),
 		];
 
 		if ($entity->id)
 		{
-			// Update existing record
 			ResultTable::update($entity->id, $data);
-			// Update files if required
-			$this->saveFiles($entity->id, $entity);
 
 			return $entity->id;
 		}
 
-		// Add new record
-		$resultId = ResultTable::add($data)->getId();
+		$addResult = ResultTable::add($data);
+		if (!$addResult->isSuccess())
+		{
+			Container::getInstance()->getLogger()->logError($addResult->getError());
 
-		// Save files if required
-		$this->saveFiles($resultId, $entity);
+			throw new SqlException('Error occurred while adding task result');
+		}
+
+		$resultId = $addResult->getId();
+
+		if ($entity->messageId > 0)
+		{
+			TaskResultMessageTable::addInsertIgnore(['RESULT_ID' => $resultId, 'MESSAGE_ID' => $entity->messageId]);
+		}
 
 		return $resultId;
 	}
 
 	public function delete(int $id, int $userId): void
 	{
-		ResultTable::delete($id);
+		$deleteResult = ResultTable::delete($id);
+		if (!$deleteResult->isSuccess())
+		{
+			Container::getInstance()->getLogger()->logError($deleteResult->getError());
+
+			throw new SqlException('Error occurred while deleting task result');
+		}
+
+		TaskResultMessageTable::deleteByFilter(['=RESULT_ID' => $id]);
 	}
 
-	private function getFiles(int $resultId): array
+	public function deleteMessageLink(int $messageId): void
 	{
-		$resp = TaskResultFileTable::query()
-			->setSelect(['FILE_ID'])
-			->where('RESULT_ID', $resultId)
+		TaskResultMessageTable::deleteByFilter(['=MESSAGE_ID' => $messageId]);
+	}
+
+	public function getByTaskId(int $taskId): EO_Result_Collection
+	{
+		return ResultTable::query()
+				->setSelect(['ID', 'TASK_ID', 'COMMENT_ID', 'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'TEXT', 'STATUS', 'UF_*'])
+				->where('TASK_ID', $taskId)
+				->setOrder(['ID' => 'DESC'])
+				->exec()
+				->fetchCollection()
+			;
+	}
+
+	public function getByCommentId(int $commentId): ?\Bitrix\Tasks\Internals\Task\Result\Result
+	{
+		return ResultTable::query()
+				->setSelect(['ID', 'TASK_ID', 'COMMENT_ID', 'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'TEXT', 'STATUS'])
+				->where('COMMENT_ID', $commentId)
+				->exec()
+				->fetchObject()
+			;
+	}
+
+	public function isExists(int $taskId, int $commentId = 0): bool
+	{
+		$query = ResultTable::query()
+			->setSelect([new ExpressionField('1', '1')])
+			->where('TASK_ID', $taskId);
+
+		if ($commentId > 0)
+		{
+			$query->where('COMMENT_ID', $commentId);
+		}
+
+		$row = $query->exec()->fetch();
+
+		return !empty($row);
+	}
+
+	public function getLast(int $taskId): ?Entity\Result
+	{
+		$select = [
+			'ID',
+			'TASK_ID',
+			'CREATED_BY',
+			'CREATED_AT',
+			'UPDATED_AT',
+			'TEXT',
+			'STATUS',
+			'UF_*',
+		];
+
+		$result = ResultTable::query()
+			->setSelect($select)
+			->where('TASK_ID', $taskId)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
 			->exec()
-			->fetchAll()
+			->fetchObject()
 		;
 
-		$fileIds = [];
-
-		foreach ($resp as $row)
+		if ($result === null)
 		{
-			$fileIds[] = (int)$row['FILE_ID'];
+			return null;
 		}
 
-		Collection::normalizeArrayValuesByInt($fileIds);
+		$author = $this->userRepository->getByIds([$result->getCreatedBy()])->findOneById($result->getCreatedBy());
 
-		return $fileIds;
+		return $this->taskResultMapper->mapToEntity(
+			$result,
+			$author,
+		);
 	}
 
-	private function saveFiles(int $resultId, Result $result): void
+	public function containsResults(int $taskId): bool
 	{
-		$filesInDb = $this->getFiles($resultId);
-		$incomingFileIds = $result->fileIds ?? [];
-		Collection::normalizeArrayValuesByInt($incomingFileIds);
+		$result = ResultTable::query()
+			->setSelect([new ExpressionField('EXISTS', 1)])
+			->where('TASK_ID', $taskId)
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
 
-		if ($filesInDb === $incomingFileIds)
-		{
-			return;
-		}
-
-		TaskResultFileTable::deleteByFilter([
-			'RESULT_ID' => $resultId,
-		]);
-
-		$rowsToAdd = [];
-
-		foreach ($incomingFileIds as $fileId)
-		{
-			$rowsToAdd[] = ['RESULT_ID' => $resultId, 'FILE_ID' => (int)$fileId];
-		}
-
-		if (empty($rowsToAdd))
-		{
-			return;
-		}
-
-		TaskResultFileTable::addMergeMulti($rowsToAdd);
+		return $result !== false;
 	}
 }

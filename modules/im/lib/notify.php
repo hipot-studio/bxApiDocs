@@ -10,6 +10,7 @@ use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Notification\Group\Condition\ConditionFactory;
 use Bitrix\Im\V2\Notification\Group\Condition\Conditions;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use CIMMessageParam;
 use CIMNotify;

@@ -1,14 +1,16 @@
-<? if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
+<?php if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
 	die();
 }
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Errorable;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\ActionFilter;
-use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\LanguageTable;
-use Bitrix\Main\ModuleManager;
+use Bitrix\Main;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Engine\Access\HoldEntity;
 use Bitrix\Main\Loader;
@@ -18,10 +20,13 @@ use Bitrix\Main\SystemException;
 use Bitrix\Rest\Url\DevOps;
 use Bitrix\Rest\Analytic;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
+use Bitrix\Rest\Internal;
+use Bitrix\Rest\Infrastructure;
+
 
 Loc::loadMessages(__FILE__);
 
-class RestIntegrationEditComponent extends CBitrixComponent implements Controllerable
+class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engine\Contract\Controllerable
 {
 	private $lengthSecretPassword = 6;
 	protected $error = [];
@@ -90,46 +95,13 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 		$result = [
 			'ERROR_MESSAGE' => [],
 		];
-		$isAdmin = CRestUtil::isAdmin();
-		$userId = $USER->GetID();
+		$userContext = new Internal\Access\UserContext($USER?->GetID());
+		$isAdmin = $userContext->isAdmin();
+		$userId = $userContext->getId();
 		$params = $this->arParams;
 		$presetData = Element::get($params['ELEMENT_CODE']);
 
-		if (empty($presetData['OPTIONS']))
-		{
-			throw new SystemException(Loc::getMessage('REST_INTEGRATION_EDIT_ERROR_NOT_FOUND'));
-		}
-
-		if (
-			!$isAdmin
-			&&
-			(
-				($presetData['ADMIN_ONLY'] ?? 'N') === 'Y'
-				|| $presetData['OPTIONS']['WIDGET_NEEDED'] !== 'D'
-				|| $presetData['OPTIONS']['APPLICATION_NEEDED'] !== 'D'
-			)
-		)
-		{
-			throw new SystemException(Loc::getMessage('REST_INTEGRATION_EDIT_ERROR_ACCESS_DENIED'));
-		}
-
-		if (isset($presetData['REQUIRED_MODULES']) && $presetData['REQUIRED_MODULES'])
-		{
-			foreach ($presetData['REQUIRED_MODULES'] as $val)
-			{
-				if (!ModuleManager::isModuleInstalled($val))
-				{
-					throw new SystemException(
-						Loc::getMessage(
-							'REST_INTEGRATION_EDIT_ERROR_REQUIRED_MODULES',
-							[
-								'#MODULE_CODE#' => $val
-							]
-						)
-					);
-				}
-			}
-		}
+		(new Internal\Access\Preset\PresetAccessChecker($userContext))->ensureCanUse($presetData);
 
 		if (!empty($params['ELEMENT_CODE']) && !empty($presetData))
 		{
@@ -167,7 +139,7 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 
 		if (
 			$isAdmin
-			&& $userId !== $result['USER_ID']
+			&& $userId !== (int)$result['USER_ID']
 			&& $result['QUERY_NEEDED'] !== 'D'
 			&& !empty($result['PASSWORD_DATA_PASSWORD'])
 		)
@@ -376,6 +348,7 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 		{
 			$this->initParams();
 			$this->checkRequiredParams();
+			$this->checkAccess();
 			$this->processResultData();
 			$this->includeComponentTemplate();
 		}
@@ -506,7 +479,7 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 				];
 
 				$data = Provider::saveIntegration($saveData, $saveData['ELEMENT_CODE']);
-				if ($data['ID'] > 0)
+				if (!empty($data['ID']))
 				{
 					Analytic::logToFile(
 						'integrationCreated',
@@ -542,49 +515,75 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Controlle
 		return Provider::deleteIntegration((int) $this->arParams['ID']);
 	}
 
-	public function configureActions()
+	protected function checkAccess(): void
+	{
+		$fullEventName = Main\Engine\Controller::getFullEventName(
+			Main\Engine\Controller::EVENT_ON_BEFORE_ACTION
+		);
+		$eventManager = Main\EventManager::getInstance();
+		$prefilters = $this->getDefaultPreFilters();
+
+		$handlersToRemove = [];
+		foreach ($prefilters as $filter)
+		{
+			$handlersToRemove[] = $eventManager->addEventHandler('rest', $fullEventName, [$filter, Main\Engine\Controller::EVENT_ON_BEFORE_ACTION]);
+		}
+
+		$event = new Event('rest', $fullEventName, ['controller' => $this]);
+		$event->send($this);
+
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() != EventResult::SUCCESS)
+			{
+				$handler = $eventResult->getHandler();
+				if ($handler instanceof Errorable)
+				{
+					$errors = $handler->getErrors();
+					/** @var Main\Error $error */
+					$error = reset($errors);
+					throw new Main\AccessDeniedException($error->getMessage());
+				}
+
+				throw new Main\AccessDeniedException();
+			}
+		}
+		foreach ($handlersToRemove as $handlerId)
+		{
+			$eventManager->removeEventHandler('rest', $fullEventName, $handlerId);
+		}
+	}
+
+	protected function getDefaultPreFilters(): array
 	{
 		return [
-			'saveData' => [
-				'prefilters' => [
-					new ActionFilter\Authentication(),
-					new ActionFilter\HttpMethod(
-						[ActionFilter\HttpMethod::METHOD_POST]
-					),
-					new ActionFilter\Csrf(),
-				],
-				'postfilters' => [
+			new ActionFilter\Authentication(),
+			new Infrastructure\Controller\ActionFilter\IntranetUser(),
+		];
+	}
 
-				]
+	public function configureActions()
+	{
+		$prefilters = [
+			...$this->getDefaultPreFilters(),
+			new ActionFilter\Csrf(),
+			new ActionFilter\HttpMethod(
+				[ActionFilter\HttpMethod::METHOD_POST]
+			),
+		];
+
+		return [
+			'saveData' => [
+				'prefilters' => $prefilters,
 			],
 			'getNewIntegrationUrl' => [
-				'prefilters' => [
-					new ActionFilter\Authentication(),
-					new ActionFilter\HttpMethod(
-						[ActionFilter\HttpMethod::METHOD_POST]
-					),
-					new ActionFilter\Csrf(),
-				],
-				'postfilters' => [
-
-				]
+				'prefilters' => $prefilters,
 			],
 			'analytic' => [
-				'prefilters' => [
-					new ActionFilter\Authentication(),
-					new ActionFilter\HttpMethod(
-						[ActionFilter\HttpMethod::METHOD_POST]
-					),
-					new ActionFilter\Csrf(),
-				],
-				'postfilters' => []
+				'prefilters' => $prefilters,
 			],
 			'delete' => [
-				'prefilters' => [
-					new ActionFilter\Authentication(),
-					new ActionFilter\Csrf(),
-				],
-				'postfilters' => []
+				'prefilters' => $prefilters,
 			]
 		];
 	}

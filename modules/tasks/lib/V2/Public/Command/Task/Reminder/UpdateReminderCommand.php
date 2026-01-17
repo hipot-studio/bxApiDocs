@@ -49,19 +49,17 @@ class UpdateReminderCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$reminderRepository = Container::getInstance()->getReminderRepository();
-
-		$handler = new UpdateReminderHandler($reminderRepository);
+		$handler = Container::getInstance()->get(UpdateReminderHandler::class);
 
 		try
 		{
 			$reminder = $handler($this);
+
+			return $result->setObject($reminder);
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result->setObject($reminder);
 	}
 }

@@ -7,8 +7,9 @@ use Bitrix\AI\Engine\Models\GigaChatModel;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
+use Bitrix\AI\Tokenizer\GigaChat;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 
 trait GigachatCommonTrait
 {
@@ -103,7 +104,7 @@ trait GigachatCommonTrait
 	 */
 	protected function getMessageLength(Context\Message $message): int
 	{
-		return mb_strlen($message->getContent()) / 2.7;
+		return $this->getTokenizer()->count($message->getContent());
 	}
 
 	public function getContextLimit(): int
@@ -235,5 +236,10 @@ trait GigachatCommonTrait
 			$jsonContextIds,
 			true
 		);
+	}
+
+	protected function getTokenizer(): GigaChat
+	{
+		return ServiceLocator::getInstance()->get(GigaChat::class);
 	}
 }

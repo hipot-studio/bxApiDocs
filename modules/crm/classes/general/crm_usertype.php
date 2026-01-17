@@ -1281,6 +1281,7 @@ class CCrmUserType
 		$displayOptions =
 			\Bitrix\Crm\Service\Display\Options::createFromArray($options)
 				->setMultipleFieldsDelimiter((string)$delimiter)
+				->setFilterFields($arParams['DB_FILTER'] ?? [])
 		;
 		$context = ($isInExportMode ? Field::EXPORT_CONTEXT : Field::GRID_CONTEXT);
 		$strategy = (new \Bitrix\Crm\UserField\DisplayStrategy\BulkStrategy($entityTypeId))->setContext($context);
@@ -2128,6 +2129,8 @@ class CCrmUserType
 			$fields = (new ItemCategoryUserField($entityTypeId))->filter($this->options['categoryId'], $fields);
 		}
 
+		$this->setDefaultFileUserFieldsAdditionalSettings($fields);
+
 		return $fields;
 	}
 
@@ -2139,6 +2142,20 @@ class CCrmUserType
 		}
 
 		return VisibilityManager::getVisibleUserFields($userFields, $userId);
+	}
+
+	protected function setDefaultFileUserFieldsAdditionalSettings(array &$userFields): void
+	{
+		foreach ($userFields as &$userField)
+		{
+			$type = $userField['USER_TYPE_ID'] ?? null;
+			if ($type !== CUserTypeManager::BASE_TYPE_FILE)
+			{
+				continue;
+			}
+
+			$userField['ADDITIONAL']['IS_ALLOW_SWITCH_VIEW'] = Field\UserField::FILE_IS_ALLOW_SWITCH_VIEW;
+		}
 	}
 
 	public function setFieldNamePrefix(string $prefix): void

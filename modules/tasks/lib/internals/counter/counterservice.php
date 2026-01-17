@@ -8,6 +8,7 @@ use Bitrix\Tasks\Internals\Counter\Event\Event;
 use Bitrix\Tasks\Internals\Counter\Event\EventCollection;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Counter\Event\EventResourceCollection;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 /**
  * Class CounterService
@@ -76,7 +77,8 @@ class CounterService
 
 		(new Counter\Event\UserEventProcessor())->process();
 		(new Counter\Event\ProjectEventProcessor())->process();
-		(new Counter\Event\GarbageCollector())->process();
+		Container::getInstance()->getMentionedCollector()->process();
+		Container::getInstance()->getCounterGarbageCollector()->process();
 
 		$service->done();
 	}

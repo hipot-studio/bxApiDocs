@@ -316,7 +316,6 @@ class CUtil
 				trigger_error("CUtil::JsObjectToPhp() is deprecated. Probably, data is enclosed in single-quotes. Change it to double-quotes.", E_USER_WARNING);
 			}
 
-			$data = preg_replace('/[\s]*([{}\[\]\"])[\s]*/', '\1', $data);
 			$data = trim($data);
 
 			if (str_starts_with($data, '{')) // object
@@ -341,7 +340,8 @@ class CUtil
 							)
 						)
 						{
-							if ($bStringStarted = !$bStringStarted)
+							$bStringStarted = !$bStringStarted;
+							if ($bStringStarted)
 							{
 								$string_delimiter = $cur_symbol;
 							}
@@ -351,16 +351,15 @@ class CUtil
 							}
 						}
 					}
-
-					elseif ($cur_symbol == '{' || $cur_symbol == '[')
+					elseif (!$bStringStarted && ($cur_symbol == '{' || $cur_symbol == '['))
 					{
 						$depth++;
 					}
-					elseif ($cur_symbol == ']')
+					elseif (!$bStringStarted && $cur_symbol == ']')
 					{
 						$depth--;
 					}
-					elseif ($cur_symbol == '}')
+					elseif (!$bStringStarted && $cur_symbol == '}')
 					{
 						if ($depth == 0)
 						{
@@ -436,7 +435,8 @@ class CUtil
 							)
 						)
 						{
-							if ($bStringStarted = !$bStringStarted)
+							$bStringStarted = !$bStringStarted;
+							if ($bStringStarted)
 							{
 								$string_delimiter = $cur_symbol;
 							}
@@ -446,15 +446,15 @@ class CUtil
 							}
 						}
 					}
-					elseif ($cur_symbol == '{' || $cur_symbol == '[')
+					elseif (!$bStringStarted && ($cur_symbol == '{' || $cur_symbol == '['))
 					{
 						$depth++;
 					}
-					elseif ($cur_symbol == '}')
+					elseif (!$bStringStarted && $cur_symbol == '}')
 					{
 						$depth--;
 					}
-					elseif ($cur_symbol == ']')
+					elseif (!$bStringStarted && $cur_symbol == ']')
 					{
 						if ($depth == 0)
 						{

@@ -20,7 +20,7 @@ class RemoveResourceTypeCommandHandler
 			filter: new ResourceFilter([
 				'TYPE_ID' => $command->id,
 			]),
-			select: new ResourceSelect(),
+			select: (new ResourceSelect())->prepareSelect(),
 		)->isEmpty();
 
 		if (!$hasResourcesOfType)

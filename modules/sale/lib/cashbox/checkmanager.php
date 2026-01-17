@@ -390,8 +390,40 @@ final class CheckManager
 		return false;
 	}
 
+	private static function checkCorrectionVats(array $correction): Result
+	{
+		$result = new Result();
+
+		if (empty($correction['CORRECTION_VAT']) || !is_array($correction['CORRECTION_VAT']))
+		{
+			return $result;
+		}
+
+		$vatTypes = array_column($correction['CORRECTION_VAT'], 'TYPE');
+
+		$hasType20 = in_array(20, $vatTypes, true);
+		$hasType22 = in_array(22, $vatTypes, true);
+
+		if ($hasType20 && $hasType22)
+		{
+			$result->addError(
+				new Error(
+					Loc::getMessage('SALE_CASHBOX_ERROR_CHECK_CORRECTION_VAT_20_AND_22')
+				)
+			);
+		}
+
+		return $result;
+	}
+
 	public static function addCorrection($type, $cashboxId, array $correction)
 	{
+		$checkCorrectionVatsResult = self::checkCorrectionVats($correction);
+		if (!$checkCorrectionVatsResult->isSuccess())
+		{
+			return $checkCorrectionVatsResult;
+		}
+
 		$result = new Result();
 
 		if (!self::isAvailableCorrection())

@@ -12,6 +12,7 @@ use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\UserService;
 use Bitrix\HumanResources\Type\MemberEntityType;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -22,6 +23,11 @@ class UserEventHandler
 {
 	public static function onAfterUserUpdate($fields): void
 	{
+		if ($fields['UF_CONNECTOR_MD5'] ?? false)
+		{
+			return;
+		}
+
 		if (!Storage::instance()->isCompanyStructureConverted(false))
 		{
 			return;
@@ -74,6 +80,11 @@ class UserEventHandler
 
 	public static function onAfterUserAdd($fields): void
 	{
+		if (self::isUserExternal($fields))
+		{
+			return;
+		}
+
 		if (!Storage::instance()->isCompanyStructureConverted(false))
 		{
 			return;
@@ -81,6 +92,14 @@ class UserEventHandler
 
 		if (Container::getSemaphoreService()
 			->isLocked('main-OnAfterUserAdd'))
+		{
+			return;
+		}
+
+		if (
+			Container::getSemaphoreService()
+				->isLocked('hr-OnAfterUserAdd' . $fields['ID'])
+		)
 		{
 			return;
 		}
@@ -150,6 +169,11 @@ class UserEventHandler
 					}
 
 					if (!$node->accessCode)
+					{
+						continue;
+					}
+
+					if ($node->type !== NodeEntityType::DEPARTMENT)
 					{
 						continue;
 					}
@@ -259,6 +283,11 @@ class UserEventHandler
 		}
 
 		return !empty($fields['RESULT']);
+	}
+
+	protected static function isUserExternal(array $fields): bool
+	{
+		return ($fields['EXTERNAL_AUTH_ID'] ?? false) && in_array($fields['EXTERNAL_AUTH_ID'], UserTable::getExternalUserTypes());
 	}
 
 	private static function isActiveChanged(array $fields): bool

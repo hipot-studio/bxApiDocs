@@ -34,7 +34,7 @@ class TaskCopyRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->controller->check(ActionDictionary::ACTION_TASK_CREATE))
+		if (!$this->controller->check(ActionDictionary::ACTION_TASK_CREATE, $item, $params))
 		{
 			$this->controller->addError(static::class, 'Access to create task denied');
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_COPY_RULE_NO_TASK_CREATE_PERMISSIONS')));

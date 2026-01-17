@@ -138,14 +138,14 @@ class ProjectCollector
 	 * @param array $groupIds
 	 * @param array $taskIds
 	 * @param array $userIds
-	 * @return array
+	 * @return array{USER_ID: int, TASK_ID: int, GROUP_ID: int, TYPE: 'project_comments', VALUE: int}[]
 	 * @throws \Bitrix\Main\DB\SqlQueryException
 	 */
-	private function recountComments(array $groupIds = [], array $taskIds = [], array $userIds = []): array
+	protected function recountComments(array $groupIds = [], array $taskIds = [], array $userIds = []): array
 	{
 		$statement = [
 			'join' => [
-				Counter::getJoinForRecountCommentsByType(Enum::PROJECT_NAME, [])
+				'',
 			],
 			'filter' => [
 				Counter::getConditionForRecountComments()

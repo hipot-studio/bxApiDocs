@@ -167,6 +167,12 @@ class EntityBankDetail
 			'RQ_SWIFT',
 			'RQ_BIC',
 		],
+		13 => [
+			'RQ_BANK_NAME',
+			'RQ_ACC_NUM',
+			'RQ_MFO',
+			'RQ_ACC_CURRENCY',
+		],
 	];
 	private static $rqFieldCountryMap = null;
 	private static $rqFieldTitleMap = null;
@@ -1872,6 +1878,9 @@ class EntityBankDetail
 				122 => array(      // us
 					'RQ_ACC_NUM',
 					'RQ_IBAN',
+				),
+				13 => array(      // uz
+					'RQ_ACC_NUM',
 				),
 			);
 		}

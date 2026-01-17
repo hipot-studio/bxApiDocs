@@ -25,7 +25,12 @@ class ReactionCollection extends Collection implements RestConvertible, PopupDat
 		return ReactionItem::class;
 	}
 
-	public static function find(array $filter, array $order, ?int $limit = null, ?Context $context = null): self
+	public static function find(
+		array $filter,
+		array $order = ['ID' => 'DESC'],
+		?int $limit = null,
+		?Context $context = null
+	): self
 	{
 		$reactionOrder = ['ID' => 'DESC'];
 
@@ -36,12 +41,8 @@ class ReactionCollection extends Collection implements RestConvertible, PopupDat
 
 		$query = ReactionTable::query()
 			->setSelect(['ID', 'CHAT_ID', 'MESSAGE_ID', 'USER_ID', 'DATE_CREATE', 'REACTION'])
+			->setOrder($reactionOrder)
 		;
-
-		if ($reactionOrder['ID'] !== 'DESC')
-		{
-			$query->setOrder($reactionOrder);
-		}
 
 		if (isset($limit))
 		{

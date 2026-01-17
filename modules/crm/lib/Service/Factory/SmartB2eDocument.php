@@ -393,4 +393,9 @@ class SmartB2eDocument extends Dynamic
 	{
 		return true;
 	}
+
+	public function isRecurringEnabled(): bool
+	{
+		return false;
+	}
 }

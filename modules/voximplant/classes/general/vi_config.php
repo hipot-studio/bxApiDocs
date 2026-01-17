@@ -211,7 +211,8 @@ class CVoxImplantConfig
 			$externalNumbersCursor = VI\Model\ExternalLineTable::getList(array(
 				'select' => ['*', 'CONFIG_ID' => 'SIP.CONFIG_ID', 'SEARCH_ID' => 'SIP.CONFIG.SEARCH_ID'],
 				'cache' => array(
-					'ttl' => $cacheTtl
+					'ttl' => $cacheTtl,
+					'cache_joins' => true
 				)
 			));
 

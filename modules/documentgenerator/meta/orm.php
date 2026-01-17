@@ -1,6 +1,145 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\DocumentTable:documentgenerator/lib/model/document.php:e461ddb8a69522f16894cfd0abe20463 */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\ActualizeQueueTable:documentgenerator\lib\model\actualizequeuetable.php */
+namespace Bitrix\DocumentGenerator\Model {
+	/**
+	 * EO_ActualizeQueue
+	 * @see \Bitrix\DocumentGenerator\Model\ActualizeQueueTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getDocumentId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue setDocumentId(\int|\Bitrix\Main\DB\SqlExpression $documentId)
+	 * @method bool hasDocumentId()
+	 * @method bool isDocumentIdFilled()
+	 * @method bool isDocumentIdChanged()
+	 * @method null|\int getUserId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue setUserId(null|\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method null|\int remindActualUserId()
+	 * @method null|\int requireUserId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue resetUserId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue unsetUserId()
+	 * @method null|\int fillUserId()
+	 * @method \Bitrix\Main\Type\DateTime getAddedTime()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue setAddedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $addedTime)
+	 * @method bool hasAddedTime()
+	 * @method bool isAddedTimeFilled()
+	 * @method bool isAddedTimeChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualAddedTime()
+	 * @method \Bitrix\Main\Type\DateTime requireAddedTime()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue resetAddedTime()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue unsetAddedTime()
+	 * @method \Bitrix\Main\Type\DateTime fillAddedTime()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue set($fieldName, $value)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue reset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue wakeUp($data)
+	 */
+	class EO_ActualizeQueue {
+		/* @var \Bitrix\DocumentGenerator\Model\ActualizeQueueTable */
+		static public $dataClass = '\Bitrix\DocumentGenerator\Model\ActualizeQueueTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\DocumentGenerator\Model {
+	/**
+	 * EO_ActualizeQueue_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getDocumentIdList()
+	 * @method null|\int[] getUserIdList()
+	 * @method null|\int[] fillUserId()
+	 * @method \Bitrix\Main\Type\DateTime[] getAddedTimeList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillAddedTime()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\DocumentGenerator\Model\EO_ActualizeQueue $object)
+	 * @method bool has(\Bitrix\DocumentGenerator\Model\EO_ActualizeQueue $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue getByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue[] getAll()
+	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_ActualizeQueue $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_ActualizeQueue_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\DocumentGenerator\Model\ActualizeQueueTable */
+		static public $dataClass = '\Bitrix\DocumentGenerator\Model\ActualizeQueueTable';
+	}
+}
+namespace Bitrix\DocumentGenerator\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ActualizeQueue_Result exec()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection fetchCollection()
+	 */
+	class EO_ActualizeQueue_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection fetchCollection()
+	 */
+	class EO_ActualizeQueue_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue createObject($setDefaultValues = true)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection createCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue wakeUpObject($row)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ActualizeQueue_Collection wakeUpCollection($rows)
+	 */
+	class EO_ActualizeQueue_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\DocumentTable:documentgenerator\lib\model\document.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_Document
@@ -176,7 +315,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Document wakeUp($data)
@@ -239,7 +378,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Document[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_Document $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Document_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -252,6 +391,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_Document_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Document_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\DocumentTable */
@@ -266,10 +408,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_Document_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Document fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Document_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_Document_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -285,7 +423,171 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_Document_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\ExternalLinkTable:documentgenerator/lib/model/externallinktable.php:7bc113332199d027f5b9a82216eb938b */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\DocumentBindingTable:documentgenerator\lib\model\documentbindingtable.php */
+namespace Bitrix\DocumentGenerator\Model {
+	/**
+	 * EO_DocumentBinding
+	 * @see \Bitrix\DocumentGenerator\Model\DocumentBindingTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getDocumentId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding setDocumentId(\int|\Bitrix\Main\DB\SqlExpression $documentId)
+	 * @method bool hasDocumentId()
+	 * @method bool isDocumentIdFilled()
+	 * @method bool isDocumentIdChanged()
+	 * @method \int remindActualDocumentId()
+	 * @method \int requireDocumentId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding resetDocumentId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding unsetDocumentId()
+	 * @method \int fillDocumentId()
+	 * @method \string getEntityName()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding setEntityName(\string|\Bitrix\Main\DB\SqlExpression $entityName)
+	 * @method bool hasEntityName()
+	 * @method bool isEntityNameFilled()
+	 * @method bool isEntityNameChanged()
+	 * @method \string remindActualEntityName()
+	 * @method \string requireEntityName()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding resetEntityName()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding unsetEntityName()
+	 * @method \string fillEntityName()
+	 * @method \int getEntityId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding setEntityId(\int|\Bitrix\Main\DB\SqlExpression $entityId)
+	 * @method bool hasEntityId()
+	 * @method bool isEntityIdFilled()
+	 * @method bool isEntityIdChanged()
+	 * @method \int remindActualEntityId()
+	 * @method \int requireEntityId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding resetEntityId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding unsetEntityId()
+	 * @method \int fillEntityId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document getDocument()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document remindActualDocument()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document requireDocument()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding setDocument(\Bitrix\DocumentGenerator\Model\EO_Document $object)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding resetDocument()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding unsetDocument()
+	 * @method bool hasDocument()
+	 * @method bool isDocumentFilled()
+	 * @method bool isDocumentChanged()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document fillDocument()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding set($fieldName, $value)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding reset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\DocumentGenerator\Model\EO_DocumentBinding wakeUp($data)
+	 */
+	class EO_DocumentBinding {
+		/* @var \Bitrix\DocumentGenerator\Model\DocumentBindingTable */
+		static public $dataClass = '\Bitrix\DocumentGenerator\Model\DocumentBindingTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\DocumentGenerator\Model {
+	/**
+	 * EO_DocumentBinding_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getDocumentIdList()
+	 * @method \int[] fillDocumentId()
+	 * @method \string[] getEntityNameList()
+	 * @method \string[] fillEntityName()
+	 * @method \int[] getEntityIdList()
+	 * @method \int[] fillEntityId()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document[] getDocumentList()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection getDocumentCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Document_Collection fillDocument()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\DocumentGenerator\Model\EO_DocumentBinding $object)
+	 * @method bool has(\Bitrix\DocumentGenerator\Model\EO_DocumentBinding $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding getByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding[] getAll()
+	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_DocumentBinding $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_DocumentBinding_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\DocumentGenerator\Model\DocumentBindingTable */
+		static public $dataClass = '\Bitrix\DocumentGenerator\Model\DocumentBindingTable';
+	}
+}
+namespace Bitrix\DocumentGenerator\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_DocumentBinding_Result exec()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection fetchCollection()
+	 */
+	class EO_DocumentBinding_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection fetchCollection()
+	 */
+	class EO_DocumentBinding_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding createObject($setDefaultValues = true)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection createCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding wakeUpObject($row)
+	 * @method \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection wakeUpCollection($rows)
+	 */
+	class EO_DocumentBinding_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\ExternalLinkTable:documentgenerator\lib\model\externallinktable.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_ExternalLink
@@ -361,7 +663,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_ExternalLink wakeUp($data)
@@ -404,7 +706,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_ExternalLink[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_ExternalLink $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_ExternalLink_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -417,6 +719,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_ExternalLink_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_ExternalLink_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_ExternalLink_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\ExternalLinkTable */
@@ -431,10 +736,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_ExternalLink_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_ExternalLink fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_ExternalLink_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_ExternalLink_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -450,7 +751,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_ExternalLink_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\FieldTable:documentgenerator/lib/model/field.php:9e142ccab6820ef23953f962947902da */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\FieldTable:documentgenerator\lib\model\field.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_Field
@@ -616,7 +917,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Field wakeUp($data)
@@ -676,7 +977,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Field[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_Field $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Field_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -689,6 +990,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Field_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_Field_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Field_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\FieldTable */
@@ -703,10 +1007,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_Field_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Field fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Field_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_Field_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -722,7 +1022,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_Field_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\FileTable:documentgenerator/lib/model/file.php:8c4aaa465f463e59c15980c2dbc6993a */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\FileTable:documentgenerator\lib\model\file.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_File
@@ -778,7 +1078,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_File wakeUp($data)
@@ -816,7 +1116,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_File[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_File $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_File_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -829,6 +1129,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_File_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_File_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_File_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\FileTable */
@@ -843,10 +1146,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_File_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_File fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_File_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_File_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -862,7 +1161,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_File_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RegionTable:documentgenerator/lib/model/region.php:353d8a89bca8ce3ae54d20a129c11439 */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RegionTable:documentgenerator\lib\model\region.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_Region
@@ -965,7 +1264,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Region wakeUp($data)
@@ -1014,7 +1313,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Region[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_Region $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Region_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -1027,6 +1326,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Region_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_Region_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Region_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\RegionTable */
@@ -1041,10 +1343,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_Region_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Region fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Region_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_Region_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -1060,7 +1358,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_Region_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RegionPhraseTable:documentgenerator/lib/model/regionphrase.php:60ebbac436ce937276be4907599bcc6b */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RegionPhraseTable:documentgenerator\lib\model\regionphrase.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_RegionPhrase
@@ -1136,7 +1434,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_RegionPhrase wakeUp($data)
@@ -1179,7 +1477,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_RegionPhrase[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_RegionPhrase $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_RegionPhrase_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -1192,6 +1490,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_RegionPhrase_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_RegionPhrase_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_RegionPhrase_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\RegionPhraseTable */
@@ -1206,10 +1507,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_RegionPhrase_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_RegionPhrase fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_RegionPhrase_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_RegionPhrase_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -1225,7 +1522,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_RegionPhrase_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RoleTable:documentgenerator/lib/model/roletable.php:2d79026cff42f062323a3e6ada48c52b */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RoleTable:documentgenerator\lib\model\roletable.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * Role
@@ -1259,6 +1556,28 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\Role resetCode()
 	 * @method \Bitrix\DocumentGenerator\Model\Role unsetCode()
 	 * @method \string fillCode()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection getPermissions()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection requirePermissions()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection fillPermissions()
+	 * @method bool hasPermissions()
+	 * @method bool isPermissionsFilled()
+	 * @method bool isPermissionsChanged()
+	 * @method void addToPermissions(\Bitrix\DocumentGenerator\Model\RolePermission $rolePermission)
+	 * @method void removeFromPermissions(\Bitrix\DocumentGenerator\Model\RolePermission $rolePermission)
+	 * @method void removeAllPermissions()
+	 * @method \Bitrix\DocumentGenerator\Model\Role resetPermissions()
+	 * @method \Bitrix\DocumentGenerator\Model\Role unsetPermissions()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection getAccesses()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection requireAccesses()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection fillAccesses()
+	 * @method bool hasAccesses()
+	 * @method bool isAccessesFilled()
+	 * @method bool isAccessesChanged()
+	 * @method void addToAccesses(\Bitrix\DocumentGenerator\Model\RoleAccess $roleAccess)
+	 * @method void removeFromAccesses(\Bitrix\DocumentGenerator\Model\RoleAccess $roleAccess)
+	 * @method void removeAllAccesses()
+	 * @method \Bitrix\DocumentGenerator\Model\Role resetAccesses()
+	 * @method \Bitrix\DocumentGenerator\Model\Role unsetAccesses()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1281,7 +1600,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\Role wakeUp($data)
@@ -1297,7 +1616,7 @@ namespace Bitrix\DocumentGenerator\Model {
 }
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_Role_Collection
+	 * RoleCollection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -1307,6 +1626,12 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \string[] fillName()
 	 * @method \string[] getCodeList()
 	 * @method \string[] fillCode()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection[] getPermissionsList()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection getPermissionsCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection fillPermissions()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection[] getAccessesList()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection getAccessesCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection fillAccesses()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1319,8 +1644,8 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\Role[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\Role $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_Role_Collection wakeUp($data)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\DocumentGenerator\Model\RoleCollection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
@@ -1332,6 +1657,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection merge(?\Bitrix\DocumentGenerator\Model\RoleCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Role_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\RoleTable */
@@ -1345,66 +1673,62 @@ namespace Bitrix\DocumentGenerator\Model {
 	 *
 	 * @method EO_Role_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\Role fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Role_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection fetchCollection()
 	 */
 	class EO_Role_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
 	 * @method \Bitrix\DocumentGenerator\Model\Role fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Role_Collection fetchCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection fetchCollection()
 	 */
 	class EO_Role_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
 	 * @method \Bitrix\DocumentGenerator\Model\Role createObject($setDefaultValues = true)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Role_Collection createCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection createCollection()
 	 * @method \Bitrix\DocumentGenerator\Model\Role wakeUpObject($row)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Role_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection wakeUpCollection($rows)
 	 */
 	class EO_Role_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RoleAccessTable:documentgenerator/lib/model/roleaccesstable.php:8b1fdd41463819590b0a35d8d05d5117 */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RoleAccessTable:documentgenerator\lib\model\roleaccesstable.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_RoleAccess
+	 * RoleAccess
 	 * @see \Bitrix\DocumentGenerator\Model\RoleAccessTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getRoleId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess setRoleId(\int|\Bitrix\Main\DB\SqlExpression $roleId)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess setRoleId(\int|\Bitrix\Main\DB\SqlExpression $roleId)
 	 * @method bool hasRoleId()
 	 * @method bool isRoleIdFilled()
 	 * @method bool isRoleIdChanged()
 	 * @method \int remindActualRoleId()
 	 * @method \int requireRoleId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess resetRoleId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess unsetRoleId()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess resetRoleId()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess unsetRoleId()
 	 * @method \int fillRoleId()
 	 * @method \string getAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
 	 * @method bool hasAccessCode()
 	 * @method bool isAccessCodeFilled()
 	 * @method bool isAccessCodeChanged()
 	 * @method \string remindActualAccessCode()
 	 * @method \string requireAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess resetAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess unsetAccessCode()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess resetAccessCode()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess unsetAccessCode()
 	 * @method \string fillAccessCode()
 	 * @method \Bitrix\DocumentGenerator\Model\Role getRole()
 	 * @method \Bitrix\DocumentGenerator\Model\Role remindActualRole()
 	 * @method \Bitrix\DocumentGenerator\Model\Role requireRole()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess setRole(\Bitrix\DocumentGenerator\Model\Role $object)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess resetRole()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess unsetRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess setRole(\Bitrix\DocumentGenerator\Model\Role $object)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess resetRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess unsetRole()
 	 * @method bool hasRole()
 	 * @method bool isRoleFilled()
 	 * @method bool isRoleChanged()
@@ -1424,17 +1748,17 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess set($fieldName, $value)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess reset($fieldName)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess unset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess set($fieldName, $value)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess reset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_RoleAccess wakeUp($data)
+	 * @method static \Bitrix\DocumentGenerator\Model\RoleAccess wakeUp($data)
 	 */
 	class EO_RoleAccess {
 		/* @var \Bitrix\DocumentGenerator\Model\RoleAccessTable */
@@ -1447,7 +1771,7 @@ namespace Bitrix\DocumentGenerator\Model {
 }
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_RoleAccess_Collection
+	 * RoleAccessCollection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -1458,33 +1782,36 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \string[] getAccessCodeList()
 	 * @method \string[] fillAccessCode()
 	 * @method \Bitrix\DocumentGenerator\Model\Role[] getRoleList()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection getRoleCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Role_Collection fillRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection getRoleCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection fillRole()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\DocumentGenerator\Model\EO_RoleAccess $object)
-	 * @method bool has(\Bitrix\DocumentGenerator\Model\EO_RoleAccess $object)
+	 * @method void add(\Bitrix\DocumentGenerator\Model\RoleAccess $object)
+	 * @method bool has(\Bitrix\DocumentGenerator\Model\RoleAccess $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess getByPrimary($primary)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess[] getAll()
-	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_RoleAccess $object)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess getByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess[] getAll()
+	 * @method bool remove(\Bitrix\DocumentGenerator\Model\RoleAccess $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection wakeUp($data)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\DocumentGenerator\Model\RoleAccessCollection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess current() Iterator
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection merge(?\Bitrix\DocumentGenerator\Model\RoleAccessCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_RoleAccess_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\RoleAccessTable */
@@ -1497,101 +1824,97 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * ---------------
 	 *
 	 * @method EO_RoleAccess_Result exec()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection fetchCollection()
 	 */
 	class EO_RoleAccess_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection fetchCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection fetchCollection()
 	 */
 	class EO_RoleAccess_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess createObject($setDefaultValues = true)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection createCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess wakeUpObject($row)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess createObject($setDefaultValues = true)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection createCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess wakeUpObject($row)
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection wakeUpCollection($rows)
 	 */
 	class EO_RoleAccess_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RolePermissionTable:documentgenerator/lib/model/rolepermissiontable.php:a62a0d4c547162bb4fffcfaffc84e26a */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\RolePermissionTable:documentgenerator\lib\model\rolepermissiontable.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_RolePermission
+	 * RolePermission
 	 * @see \Bitrix\DocumentGenerator\Model\RolePermissionTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getRoleId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setRoleId(\int|\Bitrix\Main\DB\SqlExpression $roleId)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setRoleId(\int|\Bitrix\Main\DB\SqlExpression $roleId)
 	 * @method bool hasRoleId()
 	 * @method bool isRoleIdFilled()
 	 * @method bool isRoleIdChanged()
 	 * @method \int remindActualRoleId()
 	 * @method \int requireRoleId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission resetRoleId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unsetRoleId()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission resetRoleId()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unsetRoleId()
 	 * @method \int fillRoleId()
 	 * @method \string getEntity()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
 	 * @method bool hasEntity()
 	 * @method bool isEntityFilled()
 	 * @method bool isEntityChanged()
 	 * @method \string remindActualEntity()
 	 * @method \string requireEntity()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission resetEntity()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unsetEntity()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission resetEntity()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unsetEntity()
 	 * @method \string fillEntity()
 	 * @method \string getAction()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setAction(\string|\Bitrix\Main\DB\SqlExpression $action)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setAction(\string|\Bitrix\Main\DB\SqlExpression $action)
 	 * @method bool hasAction()
 	 * @method bool isActionFilled()
 	 * @method bool isActionChanged()
 	 * @method \string remindActualAction()
 	 * @method \string requireAction()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission resetAction()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unsetAction()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission resetAction()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unsetAction()
 	 * @method \string fillAction()
 	 * @method \string getPermission()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setPermission(\string|\Bitrix\Main\DB\SqlExpression $permission)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setPermission(\string|\Bitrix\Main\DB\SqlExpression $permission)
 	 * @method bool hasPermission()
 	 * @method bool isPermissionFilled()
 	 * @method bool isPermissionChanged()
 	 * @method \string remindActualPermission()
 	 * @method \string requirePermission()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission resetPermission()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unsetPermission()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission resetPermission()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unsetPermission()
 	 * @method \string fillPermission()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess getRoleAccess()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess remindActualRoleAccess()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess requireRoleAccess()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setRoleAccess(\Bitrix\DocumentGenerator\Model\EO_RoleAccess $object)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission resetRoleAccess()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unsetRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess getRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess remindActualRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess requireRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setRoleAccess(\Bitrix\DocumentGenerator\Model\RoleAccess $object)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission resetRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unsetRoleAccess()
 	 * @method bool hasRoleAccess()
 	 * @method bool isRoleAccessFilled()
 	 * @method bool isRoleAccessChanged()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess fillRoleAccess()
-	 * @method \Bitrix\ImOpenLines\Model\EO_Role getRole()
-	 * @method \Bitrix\ImOpenLines\Model\EO_Role remindActualRole()
-	 * @method \Bitrix\ImOpenLines\Model\EO_Role requireRole()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission setRole(\Bitrix\ImOpenLines\Model\EO_Role $object)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission resetRole()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unsetRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess fillRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\Role getRole()
+	 * @method \Bitrix\DocumentGenerator\Model\Role remindActualRole()
+	 * @method \Bitrix\DocumentGenerator\Model\Role requireRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission setRole(\Bitrix\DocumentGenerator\Model\Role $object)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission resetRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unsetRole()
 	 * @method bool hasRole()
 	 * @method bool isRoleFilled()
 	 * @method bool isRoleChanged()
-	 * @method \Bitrix\ImOpenLines\Model\EO_Role fillRole()
+	 * @method \Bitrix\DocumentGenerator\Model\Role fillRole()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1607,17 +1930,17 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission set($fieldName, $value)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission reset($fieldName)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission unset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission set($fieldName, $value)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission reset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_RolePermission wakeUp($data)
+	 * @method static \Bitrix\DocumentGenerator\Model\RolePermission wakeUp($data)
 	 */
 	class EO_RolePermission {
 		/* @var \Bitrix\DocumentGenerator\Model\RolePermissionTable */
@@ -1630,7 +1953,7 @@ namespace Bitrix\DocumentGenerator\Model {
 }
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_RolePermission_Collection
+	 * RolePermissionCollection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -1644,37 +1967,40 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \string[] fillAction()
 	 * @method \string[] getPermissionList()
 	 * @method \string[] fillPermission()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess[] getRoleAccessList()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection getRoleAccessCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RoleAccess_Collection fillRoleAccess()
-	 * @method \Bitrix\ImOpenLines\Model\EO_Role[] getRoleList()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection getRoleCollection()
-	 * @method \Bitrix\ImOpenLines\Model\EO_Role_Collection fillRole()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccess[] getRoleAccessList()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection getRoleAccessCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleAccessCollection fillRoleAccess()
+	 * @method \Bitrix\DocumentGenerator\Model\Role[] getRoleList()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection getRoleCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RoleCollection fillRole()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\DocumentGenerator\Model\EO_RolePermission $object)
-	 * @method bool has(\Bitrix\DocumentGenerator\Model\EO_RolePermission $object)
+	 * @method void add(\Bitrix\DocumentGenerator\Model\RolePermission $object)
+	 * @method bool has(\Bitrix\DocumentGenerator\Model\RolePermission $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission getByPrimary($primary)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission[] getAll()
-	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_RolePermission $object)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission getByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission[] getAll()
+	 * @method bool remove(\Bitrix\DocumentGenerator\Model\RolePermission $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection wakeUp($data)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\DocumentGenerator\Model\RolePermissionCollection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission current() Iterator
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection merge(?\Bitrix\DocumentGenerator\Model\RolePermissionCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_RolePermission_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\RolePermissionTable */
@@ -1687,28 +2013,24 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * ---------------
 	 *
 	 * @method EO_RolePermission_Result exec()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection fetchCollection()
 	 */
 	class EO_RolePermission_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection fetchCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection fetchCollection()
 	 */
 	class EO_RolePermission_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission createObject($setDefaultValues = true)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection createCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission wakeUpObject($row)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission createObject($setDefaultValues = true)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection createCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermission wakeUpObject($row)
+	 * @method \Bitrix\DocumentGenerator\Model\RolePermissionCollection wakeUpCollection($rows)
 	 */
 	class EO_RolePermission_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\SpreadsheetTable:documentgenerator/lib/model/spreadsheet.php:215ae81f1a64a78984f113bd16990696 */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\SpreadsheetTable:documentgenerator\lib\model\spreadsheet.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_Spreadsheet
@@ -1804,7 +2126,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Spreadsheet wakeUp($data)
@@ -1850,7 +2172,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Spreadsheet[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_Spreadsheet $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Spreadsheet_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -1863,6 +2185,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Spreadsheet_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_Spreadsheet_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Spreadsheet_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\SpreadsheetTable */
@@ -1877,10 +2202,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_Spreadsheet_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Spreadsheet fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Spreadsheet_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_Spreadsheet_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -1896,7 +2217,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_Spreadsheet_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\TemplateTable:documentgenerator/lib/model/template.php:3289b38e0df7a40c767ce8bd13c46bc9 */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\TemplateTable:documentgenerator\lib\model\template.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_Template
@@ -2040,16 +2361,16 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method bool isProviderFilled()
 	 * @method bool isProviderChanged()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider fillProvider()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser getUser()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser remindActualUser()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser requireUser()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template setUser(\Bitrix\DocumentGenerator\Model\EO_TemplateUser $object)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser getUser()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser remindActualUser()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser requireUser()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template setUser(\Bitrix\DocumentGenerator\Model\TemplateUser $object)
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template resetUser()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template unsetUser()
 	 * @method bool hasUser()
 	 * @method bool isUserFilled()
 	 * @method bool isUserChanged()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser fillUser()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser fillUser()
 	 * @method \int getNumeratorId()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template setNumeratorId(\int|\Bitrix\Main\DB\SqlExpression $numeratorId)
 	 * @method bool hasNumeratorId()
@@ -2070,6 +2391,16 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template resetWithStamps()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template unsetWithStamps()
 	 * @method \boolean fillWithStamps()
+	 * @method \string getProductsTableVariant()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template setProductsTableVariant(\string|\Bitrix\Main\DB\SqlExpression $productsTableVariant)
+	 * @method bool hasProductsTableVariant()
+	 * @method bool isProductsTableVariantFilled()
+	 * @method bool isProductsTableVariantChanged()
+	 * @method \string remindActualProductsTableVariant()
+	 * @method \string requireProductsTableVariant()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template resetProductsTableVariant()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template unsetProductsTableVariant()
+	 * @method \string fillProductsTableVariant()
 	 * @method \boolean getIsDeleted()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template setIsDeleted(\boolean|\Bitrix\Main\DB\SqlExpression $isDeleted)
 	 * @method bool hasIsDeleted()
@@ -2080,6 +2411,16 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template resetIsDeleted()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template unsetIsDeleted()
 	 * @method \boolean fillIsDeleted()
+	 * @method \boolean getIsDefault()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template setIsDefault(\boolean|\Bitrix\Main\DB\SqlExpression $isDefault)
+	 * @method bool hasIsDefault()
+	 * @method bool isIsDefaultFilled()
+	 * @method bool isIsDefaultChanged()
+	 * @method \boolean remindActualIsDefault()
+	 * @method \boolean requireIsDefault()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template resetIsDefault()
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template unsetIsDefault()
+	 * @method \boolean fillIsDefault()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2102,7 +2443,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Template wakeUp($data)
@@ -2151,15 +2492,19 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider[] getProviderList()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template_Collection getProviderCollection()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider_Collection fillProvider()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser[] getUserList()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser[] getUserList()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template_Collection getUserCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection fillUser()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUserCollection fillUser()
 	 * @method \int[] getNumeratorIdList()
 	 * @method \int[] fillNumeratorId()
 	 * @method \boolean[] getWithStampsList()
 	 * @method \boolean[] fillWithStamps()
+	 * @method \string[] getProductsTableVariantList()
+	 * @method \string[] fillProductsTableVariant()
 	 * @method \boolean[] getIsDeletedList()
 	 * @method \boolean[] fillIsDeleted()
+	 * @method \boolean[] getIsDefaultList()
+	 * @method \boolean[] fillIsDefault()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2172,7 +2517,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_Template $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_Template_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -2185,6 +2530,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_Template_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_Template_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Template_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\TemplateTable */
@@ -2199,10 +2547,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_Template_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_Template_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_Template_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -2218,7 +2562,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_Template_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\TemplateProviderTable:documentgenerator/lib/model/templateprovider.php:6e3bb49fa38f0dfb9e1c179537d6ae75 */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\TemplateProviderTable:documentgenerator\lib\model\templateprovider.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
 	 * EO_TemplateProvider
@@ -2269,7 +2613,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_TemplateProvider wakeUp($data)
@@ -2307,7 +2651,7 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider[] getAll()
 	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_TemplateProvider $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\DocumentGenerator\Model\EO_TemplateProvider_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -2320,6 +2664,9 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider_Collection merge(?\Bitrix\DocumentGenerator\Model\EO_TemplateProvider_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_TemplateProvider_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\TemplateProviderTable */
@@ -2334,10 +2681,6 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method EO_TemplateProvider_Result exec()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider fetchObject()
 	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateProvider_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_TemplateProvider_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -2353,40 +2696,30 @@ namespace Bitrix\DocumentGenerator\Model {
 	 */
 	class EO_TemplateProvider_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\TemplateUserTable:documentgenerator/lib/model/templateuser.php:6fc0699370f5d8cfd4a3091013f0d9bc */
+/* ORMENTITYANNOTATION:Bitrix\DocumentGenerator\Model\TemplateUserTable:documentgenerator\lib\model\templateusertable.php */
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_TemplateUser
+	 * TemplateUser
 	 * @see \Bitrix\DocumentGenerator\Model\TemplateUserTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getTemplateId()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
 	 * @method bool hasTemplateId()
 	 * @method bool isTemplateIdFilled()
 	 * @method bool isTemplateIdChanged()
 	 * @method \string getAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
 	 * @method bool hasAccessCode()
 	 * @method bool isAccessCodeFilled()
 	 * @method bool isAccessCodeChanged()
 	 * @method \string remindActualAccessCode()
 	 * @method \string requireAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser resetAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser unsetAccessCode()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser resetAccessCode()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser unsetAccessCode()
 	 * @method \string fillAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template getTemplate()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template remindActualTemplate()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template requireTemplate()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser setTemplate(\Bitrix\DocumentGenerator\Model\EO_Template $object)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser resetTemplate()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser unsetTemplate()
-	 * @method bool hasTemplate()
-	 * @method bool isTemplateFilled()
-	 * @method bool isTemplateChanged()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template fillTemplate()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2402,17 +2735,17 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser set($fieldName, $value)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser reset($fieldName)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser unset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser set($fieldName, $value)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser reset($fieldName)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_TemplateUser wakeUp($data)
+	 * @method static \Bitrix\DocumentGenerator\Model\TemplateUser wakeUp($data)
 	 */
 	class EO_TemplateUser {
 		/* @var \Bitrix\DocumentGenerator\Model\TemplateUserTable */
@@ -2425,7 +2758,7 @@ namespace Bitrix\DocumentGenerator\Model {
 }
 namespace Bitrix\DocumentGenerator\Model {
 	/**
-	 * EO_TemplateUser_Collection
+	 * TemplateUserCollection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -2433,34 +2766,34 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * @method \int[] getTemplateIdList()
 	 * @method \string[] getAccessCodeList()
 	 * @method \string[] fillAccessCode()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template[] getTemplateList()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection getTemplateCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_Template_Collection fillTemplate()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\DocumentGenerator\Model\EO_TemplateUser $object)
-	 * @method bool has(\Bitrix\DocumentGenerator\Model\EO_TemplateUser $object)
+	 * @method void add(\Bitrix\DocumentGenerator\Model\TemplateUser $object)
+	 * @method bool has(\Bitrix\DocumentGenerator\Model\TemplateUser $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser getByPrimary($primary)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser[] getAll()
-	 * @method bool remove(\Bitrix\DocumentGenerator\Model\EO_TemplateUser $object)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser getByPrimary($primary)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser[] getAll()
+	 * @method bool remove(\Bitrix\DocumentGenerator\Model\TemplateUser $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection wakeUp($data)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\DocumentGenerator\Model\TemplateUserCollection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser current() Iterator
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUserCollection merge(?\Bitrix\DocumentGenerator\Model\TemplateUserCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_TemplateUser_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\DocumentGenerator\Model\TemplateUserTable */
@@ -2473,24 +2806,20 @@ namespace Bitrix\DocumentGenerator\Model {
 	 * ---------------
 	 *
 	 * @method EO_TemplateUser_Result exec()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUserCollection fetchCollection()
 	 */
 	class EO_TemplateUser_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser fetchObject()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection fetchCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser fetchObject()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUserCollection fetchCollection()
 	 */
 	class EO_TemplateUser_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser createObject($setDefaultValues = true)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection createCollection()
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser wakeUpObject($row)
-	 * @method \Bitrix\DocumentGenerator\Model\EO_TemplateUser_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUserCollection createCollection()
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUser wakeUpObject($row)
+	 * @method \Bitrix\DocumentGenerator\Model\TemplateUserCollection wakeUpCollection($rows)
 	 */
 	class EO_TemplateUser_Entity extends \Bitrix\Main\ORM\Entity {}
 }

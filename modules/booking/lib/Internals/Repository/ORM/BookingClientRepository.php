@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Internals\Exception\Exception;
+use Bitrix\Booking\Internals\Exception\Resource\CreateResourceException;
 use Bitrix\Booking\Internals\Model\BookingClientTable;
 use Bitrix\Booking\Internals\Model\BookingTable;
 use Bitrix\Booking\Internals\Model\ClientTypeTable;
@@ -44,7 +46,11 @@ class BookingClientRepository implements BookingClientRepositoryInterface
 
 		if (!empty($data))
 		{
-			BookingClientTable::addMulti($data, true);
+			$result = BookingClientTable::addMulti($data, true);
+			if (!$result->isSuccess())
+			{
+				throw new Exception($result->getErrors()[0]->getMessage());
+			}
 		}
 	}
 

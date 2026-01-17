@@ -25,21 +25,19 @@ class UnpinTaskCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$userOptionService = Container::getInstance()->getUserOptionService();
-
-		$handler = new UnpinTaskHandler($userOptionService);
-
 		$result = new Result();
+
+		$handler = Container::getInstance()->get(UnpinTaskHandler::class);
 
 		try
 		{
 			$handler($this);
+
+			return $result;
 		}
 		catch (UserOptionException $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

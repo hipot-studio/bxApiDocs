@@ -3,13 +3,13 @@
 namespace Bitrix\Intranet\Integration\Templates\Air;
 
 use Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker;
-use Bitrix\Main\Config\Configuration;
-use Bitrix\Main\Config\Option;
+use Bitrix\Intranet\Internal\Integration;
 use Bitrix\Main\ModuleManager;
 use Bitrix\UI\Buttons;
 
 final class AirTemplate
 {
+
 	static private ?bool $enabled = null;
 	static private bool $applied = false;
 
@@ -142,6 +142,22 @@ final class AirTemplate
 		$GLOBALS['APPLICATION']->addBufferContent([AirTemplate::class, 'getJsTitle']);
 	}
 
+	public static function showHeadAssets(): void
+	{
+		ThemePicker::getInstance()?->showHeadAssets();
+
+		$accountConnection = new Integration\Im\Desktop\AccountConnection();
+		if ($accountConnection->isAvailable() && $accountConnection->isRequired())
+		{
+			$accountConnection->addHeadScript();
+		}
+	}
+
+	public static function showBodyAssets(): void
+	{
+		ThemePicker::getInstance()?->showBodyAssets();
+	}
+
 	public static function getJsTitle(): string
 	{
 		$title = $GLOBALS['APPLICATION']->getTitle('title', true);
@@ -182,8 +198,7 @@ final class AirTemplate
 	{
 		$bodyClasses = [];
 
-		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
-		if (str_starts_with($request->getRequestUri(), SITE_DIR . 'online/'))
+		if (self::isMessengerEmbedded())
 		{
 			$bodyClasses[] = 'im-chat-embedded';
 		}

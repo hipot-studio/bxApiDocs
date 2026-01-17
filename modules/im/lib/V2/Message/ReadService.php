@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Message;
 
+use Bitrix\Im\Common;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\MessageViewedTable;
@@ -18,6 +19,9 @@ use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\Loader;
+use Bitrix\Pull\Event;
+use Bitrix\Pull\MobileCounter;
 use Bitrix\Im\V2\Anchor;
 
 class ReadService
@@ -52,8 +56,7 @@ class ReadService
 
 	public function readTo(Message $message): Result
 	{
-		$this->setLastIdForRead($message->getMessageId(), $message->getChatId());
-		$this->counterService->deleteTo($message);
+		$this->counterService->deleteTo($message->getId(), $message->getChatId());
 		$counter = $this->counterService->getByChat($message->getChatId());
 		$viewResult = $this->viewedService->addTo($message);
 		$this->updateDateRecent($message->getChatId());
@@ -75,8 +78,7 @@ class ReadService
 	public function read(MessageCollection $messages, Chat $chat): Result
 	{
 		$maxId = max($messages->getIds());
-		$this->setLastIdForRead($maxId, $chat->getChatId());
-		$this->counterService->deleteTo($messages[$maxId]);
+		$this->counterService->deleteTo($maxId, $chat->getId());
 		$userId = $this->getContext()->getUserId();
 		$counter = $this->counterService->getByChat($chat->getChatId());
 		$messagesToView = $messages
@@ -119,17 +121,65 @@ class ReadService
 		return (new Result())->setResult(['COUNTERS' => $counters]);
 	}
 
+	public function readUserNotifications(MessageCollection $notifications, int $chatId): Result
+	{
+		$result = new Result();
+		$userId = $this->getContext()->getUserId();
+		$notificationIds = $notifications->getIds();
+
+		if (empty($notificationIds))
+		{
+			return $result;
+		}
+
+		$this->counterService->deleteNotificationsByIds($chatId, $notificationIds);
+
+		$newCounter = $this->counterService->getByChat($chatId);
+
+		if (Loader::includeModule("pull"))
+		{
+			Event::add($userId, [
+				'module_id' => 'im',
+				'command' => 'notifyRead',
+				'params' => [
+					'chatId' => $chatId,
+					'list' => $notificationIds,
+					'counter' => $newCounter,
+				],
+				'extra' => Common::getPullExtra(),
+			]);
+
+			$appId = 'Bitrix24';
+			MobileCounter::send($userId, $appId);
+		}
+
+		return $result->setResult([
+			'CHAT_ID' => $chatId,
+			'COUNTER' => $newCounter,
+			'VIEWED_MESSAGES' => $notificationIds,
+		]);
+	}
+
 	public function readAllInChat(int $chatId): Result
 	{
 		$lastId = $this->getLastMessageIdInChat($chatId);
-		$this->setLastIdForRead($lastId, $chatId);
-		$this->counterService->deleteByChatId($chatId);
-		$counter = 0;
+
+		$chat = Chat::getInstance($chatId);
+		if ($chat->getType() === Chat::IM_TYPE_SYSTEM)
+		{
+			$this->counterService->deleteNotifyByChatId($chatId);
+			$counter = $this->counterService->getByChat($chatId);
+		}
+		else
+		{
+			$this->counterService->deleteTo($lastId, $chatId);
+			$counter = 0;
+		}
+
 		//$this->viewedController->addAllFromChat($chatId);
 		$this->updateDateRecent($chatId);
 		$this->anchorReadService->readByChatId($chatId);
 		$userId = $this->getContext()->getUserId();
-		$chat = Chat::getInstance($chatId);
 		$chat->onAfterAllMessagesRead($userId);
 
 		if ($chat instanceof Chat\ChannelChat)
@@ -149,7 +199,6 @@ class ReadService
 			return $childrenToRead;
 		}
 
-		$this->setLastIdForReadByIds($childrenToRead);
 		$this->counterService->deleteByChatIds($childrenToRead);
 
 		return $childrenToRead;
@@ -157,12 +206,35 @@ class ReadService
 
 	public function readAll(): void
 	{
-		$this->setLastIdForReadAll();
+		$userId = $this->getContext()->getUserId();
 		$this->counterService->deleteAll();
+		Recent::readAll($userId);
+		Anchor\DI\AnchorContainer::getInstance()
+			->getReadService()
+			->withContextUser($userId)
+			->readAll();
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::READ_ALL_EVENT, Sync\Event::CHAT_ENTITY, 0),
 			$this->getContext()->getUserId()
 		);
+
+		(new Message\Pull\ReadAll($userId))->send();
+		(new Message\Event\AfterReadAllChatsEvent($userId))->send();
+	}
+
+	public function readAllByType(Chat\Type $type): void
+	{
+		$userId = $this->getContext()->getUserId();
+		$this->counterService->deleteByChatType($type);
+		Recent::readByType($userId, $type);
+		Anchor\DI\AnchorContainer::getInstance()
+			->getReadService()
+			->withContextUser($userId)
+			->readByType($type)
+		;
+
+		(new Message\Pull\ReadAllByType($userId, $type))->send();
+		(new Message\Event\AfterReadAllChatsByTypeEvent($userId, $type))->send();
 	}
 
 	public function unreadTo(Message $message): Result
@@ -215,7 +287,7 @@ class ReadService
 	public function markMessageUnread(Message $message, RelationCollection $relations): self
 	{
 		$this->counterService->addForEachUser($message, $relations);
-		$this->counterService->deleteTo($message);
+		$this->counterService->deleteTo($message->getId(), $message->getChatId(), false);
 		return $this;
 	}
 
@@ -421,18 +493,6 @@ class ReadService
 		return $this->anchorReadService;
 	}
 
-
-	public function setLastIdForRead(int $lastId, int $chatId): void
-	{
-		$sql = "
-			UPDATE b_im_relation
-			SET LAST_ID=(CASE WHEN LAST_ID > {$lastId} THEN LAST_ID ELSE {$lastId} END)
-			WHERE CHAT_ID={$chatId} AND USER_ID={$this->getContext()->getUserId()}
-		";
-
-		Application::getConnection()->queryExecute($sql);
-	}
-
 	public function setContext(?Context $context): self
 	{
 		$this->defaultSetContext($context);
@@ -441,72 +501,6 @@ class ReadService
 		$this->getAnchorReadService()->setContext($context);
 
 		return $this;
-	}
-
-	private function getChildrenToReadIds(Chat $parentChat): array
-	{
-		$parentId = $parentChat->getId();
-		if (!$parentId)
-		{
-			return [];
-		}
-
-		$query = ChatTable::query()
-			->setSelect(['ID'])
-			->where('PARENT_ID', $parentId)
-		;
-		$alias = Application::getConnection()->getSqlHelper()->quote($query->getInitAlias());
-
-		$subQuery = MessageUnreadTable::query()
-			->setSelect(['CHAT_ID'])
-			->where('USER_ID', $this->getContext()->getUserId())
-			->where('CHAT_ID', new SqlExpression('?#', "{$alias}.ID"))
-		;
-
-		return $query
-			->whereIn('ID', $subQuery)
-			->fetchCollection()
-			->getIdList()
-		;
-	}
-
-	private function setLastIdForReadAll(): void
-	{
-		$connection = Application::getConnection();
-		$helper = $connection->getSqlHelper();
-
-		$connection->queryExecute($helper->prepareCorrelatedUpdate(
-			'b_im_relation',
-			'R',
-			[
-				'LAST_ID' => 'C.LAST_MESSAGE_ID',
-			],
-			' b_im_chat C ',
-			" C.ID = R.CHAT_ID AND R.MESSAGE_TYPE NOT IN ('" . IM_MESSAGE_OPEN_LINE . "', '" . IM_MESSAGE_SYSTEM . "')
-				AND R.USER_ID = {$this->getContext()->getUserId()}"
-		));
-	}
-
-	private function setLastIdForReadByIds(array $chatIds): void
-	{
-		if (empty($chatIds))
-		{
-			return;
-		}
-
-		$chatIdsString = implode(',', $chatIds);
-		$connection = Application::getConnection();
-		$helper = $connection->getSqlHelper();
-
-		$connection->queryExecute($helper->prepareCorrelatedUpdate(
-			'b_im_relation',
-			'R',
-			[
-				'LAST_ID' => 'C.LAST_MESSAGE_ID',
-			],
-			' b_im_chat C ',
-			" C.ID = R.CHAT_ID AND R.CHAT_ID IN ({$chatIdsString}) AND R.USER_ID = {$this->getContext()->getUserId()}"
-		));
 	}
 
 	private function updateDateRecent(int $chatId): void

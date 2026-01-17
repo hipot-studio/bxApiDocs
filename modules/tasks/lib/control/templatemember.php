@@ -9,155 +9,127 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Control\Exception\TemplateNotFoundException;
 use \Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
+use Bitrix\Tasks\Internals\Task\TemplateTable;
 
 class TemplateMember
 {
-	use BaseTemplateControlTrait;
-
-	private const FIELD_CREATED_BY = 'CREATED_BY';
-	private const FIELD_RESPONSIBLES = 'RESPONSIBLES';
-	private const FIELD_ACCOMPLICES = 'ACCOMPLICES';
-	private const FIELD_AUDITORS = 'AUDITORS';
-
-	/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateObject $template */
-	private $template;
-
-	public function __construct(private int $userId, private int $templateId)
+	public function __construct(
+		private readonly int $templateId
+	)
 	{
+
 	}
 
-	/**
-	 * @throws TemplateNotFoundException
-	 * @throws ArgumentException
-	 * @throws SqlQueryException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	public function set(array $data): void
+	public function add(array $data): void
 	{
-		$this->loadByTemplate();
-
-		$members = $this->getCurrentMembers();
-
-		$changed = false;
-		if (array_key_exists(self::FIELD_CREATED_BY, $data))
-		{
-			$members[TemplateMemberTable::MEMBER_TYPE_ORIGINATOR] = [];
-			$members[TemplateMemberTable::MEMBER_TYPE_ORIGINATOR][] = [
-				'USER_ID' => $data[self::FIELD_CREATED_BY],
-				'TYPE' => TemplateMemberTable::MEMBER_TYPE_ORIGINATOR,
-			];
-
-			$changed = true;
-		}
-
-		if (array_key_exists(self::FIELD_RESPONSIBLES, $data))
-		{
-			$members[TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE] = [];
-			foreach ($data[self::FIELD_RESPONSIBLES] as $userId)
-			{
-				$members[TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE][] = [
-					'USER_ID' => $userId,
-					'TYPE' => TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE,
-				];
-			}
-
-			$changed = true;
-		}
-
-		if (array_key_exists(self::FIELD_ACCOMPLICES, $data))
-		{
-			$members[TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE] = [];
-			foreach ($data[self::FIELD_ACCOMPLICES] as $userId)
-			{
-				$members[TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE][] = [
-					'USER_ID' => $userId,
-					'TYPE' => TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE,
-				];
-			}
-
-			$changed = true;
-		}
-
-		if (array_key_exists(self::FIELD_AUDITORS, $data))
-		{
-			$members[TemplateMemberTable::MEMBER_TYPE_AUDITOR] = [];
-			foreach ($data[self::FIELD_AUDITORS] as $userId)
-			{
-				$members[TemplateMemberTable::MEMBER_TYPE_AUDITOR][] = [
-					'USER_ID' => $userId,
-					'TYPE' => TemplateMemberTable::MEMBER_TYPE_AUDITOR,
-				];
-			}
-
-			$changed = true;
-		}
-
-		if (!$changed)
-		{
-			return;
-		}
-
-		$this->deleteByTemplate();
+		$members = $this->prepareMembers($data);
 
 		if (empty($members))
 		{
 			return;
 		}
 
-		$insertRows = [];
-		foreach ($members as $type => $list)
-		{
-			$insertRows = array_merge(
-				$insertRows,
-				array_map(function($el) {
-					$implode = (int) $el['USER_ID'];
-					$implode .= ','.$this->templateId;
-					$implode .= ',\''.$el['TYPE'].'\'';
-					return $implode;
-				}, $list)
-			);
-		}
-
-		$sql = $this->getInsertIgnore(
-			'(USER_ID, TEMPLATE_ID, TYPE)',
-			"VALUES (" . implode("),(", $insertRows) . ")"
-		);
-
-		Application::getConnection()->query($sql);
+		TemplateMemberTable::addInsertIgnoreMulti($members, true);
 	}
 
-	/**
-	 * @throws TemplateNotFoundException
-	 * @throws SystemException
-	 */
-	private function loadByTemplate(): void
+	public function set(array $data): void
 	{
-		$this->loadTemplate();
-		$this->template->fillMembers();
+		$members = $this->getCurrentMembers();
+
+		$members = $this->prepareMembers($data, $members);
+
+		if (empty($members))
+		{
+			return;
+		}
+
+		$this->deleteByTemplateId();
+
+		TemplateMemberTable::addInsertIgnoreMulti($members, true);
 	}
 
 	private function getCurrentMembers(): array
 	{
 		$members = [];
 
-		$this->template->fillMembers();
-
-		$memberList = $this->template->getMembers();
+		$template = TemplateTable::getByPrimary($this->templateId, ['select' => ['*', 'MEMBERS']])->fetchObject();
+		if ($template === null)
+		{
+			return $members;
+		}
+		
+		$memberList = $template->getMembers();
 		foreach($memberList as $member)
 		{
 			$memberType = $member->getType();
 			$members[$memberType][] = [
 				'USER_ID' => $member->getUserId(),
 				'TYPE' => $memberType,
+				'TEMPLATE_ID' => $this->templateId,
 			];
 		}
 
 		return $members;
 	}
 
-	public function getTableClass(): string
+	private function prepareMembers(array $data, array $members = []): array
 	{
-		return TemplateMemberTable::class;
+		if (array_key_exists('CREATED_BY', $data))
+		{
+			$members[TemplateMemberTable::MEMBER_TYPE_ORIGINATOR] = [];
+			$members[TemplateMemberTable::MEMBER_TYPE_ORIGINATOR][] = [
+				'USER_ID' => $data['CREATED_BY'],
+				'TYPE' => TemplateMemberTable::MEMBER_TYPE_ORIGINATOR,
+				'TEMPLATE_ID' => $this->templateId,
+			];
+		}
+
+		if (array_key_exists('RESPONSIBLES', $data))
+		{
+			$members[TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE] = [];
+			foreach ($data['RESPONSIBLES'] as $userId)
+			{
+				$members[TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE][] = [
+					'USER_ID' => $userId,
+					'TYPE' => TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE,
+					'TEMPLATE_ID' => $this->templateId,
+				];
+			}
+		}
+
+		if (array_key_exists('ACCOMPLICES', $data))
+		{
+			$members[TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE] = [];
+			foreach ($data['ACCOMPLICES'] as $userId)
+			{
+				$members[TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE][] = [
+					'USER_ID' => $userId,
+					'TYPE' => TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE,
+					'TEMPLATE_ID' => $this->templateId,
+				];
+			}
+		}
+
+		if (array_key_exists('AUDITORS', $data))
+		{
+			$members[TemplateMemberTable::MEMBER_TYPE_AUDITOR] = [];
+			foreach ($data['AUDITORS'] as $userId)
+			{
+				$members[TemplateMemberTable::MEMBER_TYPE_AUDITOR][] = [
+					'USER_ID' => $userId,
+					'TYPE' => TemplateMemberTable::MEMBER_TYPE_AUDITOR,
+					'TEMPLATE_ID' => $this->templateId,
+				];
+			}
+		}
+
+		return array_merge(...array_values($members));
+	}
+	
+	private function deleteByTemplateId(): void
+	{
+		TemplateMemberTable::deleteList([
+			'TEMPLATE_ID' => $this->templateId,
+		]);
 	}
 }

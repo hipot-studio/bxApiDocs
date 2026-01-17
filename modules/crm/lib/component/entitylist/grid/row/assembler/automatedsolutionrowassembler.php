@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Row\Assembler;
 
+use Bitrix\Crm\Component\EntityList\Grid\Row\Assembler\Field\AutomatedSolution\FormattedPermissionsButtonFieldAssembler;
 use Bitrix\Crm\Component\EntityList\Grid\Row\Assembler\Field\AutomatedSolution\LinkToTypeListFieldAssembler;
 use Bitrix\Crm\Component\EntityList\Grid\Row\Assembler\Field\AutomatedSolution\TypesFieldAssembler;
 use Bitrix\Crm\Component\EntityList\Grid\Row\Assembler\Field\FormattedDateTimeFieldAssembler;
@@ -30,6 +31,9 @@ final class AutomatedSolutionRowAssembler extends RowAssembler
 			]),
 			new FormattedDateTimeFieldAssembler([
 				'LAST_ACTIVITY_TIME',
+			]),
+			new FormattedPermissionsButtonFieldAssembler([
+				'PERMISSIONS',
 			]),
 		];
 	}

@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Booking;
 
 use Bitrix\Booking\Internals\Integration\Crm\BookingActivity;
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Crm\Dto\Booking\Booking\BookingFields;
 use Bitrix\Crm\Dto\Booking\Booking\BookingFieldsMapper;
 use Bitrix\Crm\Dto\Booking\Booking\BookingStatusEnum;
 use Bitrix\Crm\Dto\Booking\Message\Message;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Service\Timeline\Item\Model;
@@ -21,6 +24,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockWithTitle;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -147,6 +151,21 @@ class Booking extends Activity
 		if ($secondaryResourceBlockMob)
 		{
 			$result['secondaryResourceMob'] = $secondaryResourceBlockMob;
+		}
+
+		$skusBlocksWeb = $this->buildSkusBlockWeb();
+		$skusBlockMob = $this->buildSkusBlockMobile();
+
+		if ($skusBlocksWeb)
+		{
+			foreach ($skusBlocksWeb as $i => $skusBlockWeb)
+			{
+				$result['skusWeb' . $i] = $skusBlockWeb;
+			}
+		}
+		if ($skusBlockMob)
+		{
+			$result['skusMob'] = $skusBlockMob;
 		}
 
 		if ($noteBlock = $this->buildNoteBlock())
@@ -452,10 +471,91 @@ class Booking extends Activity
 		return $titleBlockObject;
 	}
 
+	private function buildSkusBlockMobile(): ContentBlock|null
+	{
+		$booking = $this->getAssociatedEntityModelFields();
+		$skus = $booking->skus ?? null;
+		if (!$skus)
+		{
+			return null;
+		}
+
+		return (new ContentBlockWithTitle())
+			->setInline()
+			->setScopeMobile()
+			->setTitle(Loc::getMessage('CRM_TIMELINE_BOOKING_CONTENT_BLOCK_SKUS_TITLE'))
+			->setContentBlock(
+				(new ContentBlock\Text())
+					->setScopeMobile()
+					->setValue(implode(', ', array_map(static fn($sku) => $sku->name, $skus)))
+			);
+	}
+
+	private function buildSkusBlockWeb(): array|null
+	{
+		$booking = $this->getAssociatedEntityModelFields();
+		$skus = $booking->skus ?? null;
+		if (!$skus)
+		{
+			return null;
+		}
+
+		$skuIds = array_map(static fn ($sku) => $sku->id, $skus);
+		$detailUrls = $this->hasCatalogAccess() ? $this->generateSkuUrls($skuIds) : [];
+		$blocks = [];
+		foreach ($skus as $i => $sku)
+		{
+			if ($url = $detailUrls[$sku->id] ?? null)
+			{
+				$skuBlock = (new ContentBlock\Link())->setScopeWeb()
+					->setValue($sku->name)
+					->setAction($this->getOpenSkuAction($url));
+			}
+			else
+			{
+				$skuBlock = (new ContentBlock\Text())->setScopeWeb()->setValue($sku->name);
+			}
+
+			$titleBlockObject = new ContentBlockWithTitle();
+			$titleBlockObject
+				->setInline()
+				->setScopeWeb()
+				->setContentBlock($skuBlock);
+
+			if ($i === 0)
+			{
+				$titleBlockObject->setTitle(Loc::getMessage('CRM_TIMELINE_BOOKING_CONTENT_BLOCK_SKUS_TITLE'));
+			}
+
+			$blocks[] = $titleBlockObject;
+		}
+
+		return $blocks;
+	}
+
 	private function getOpenBookingAction(): Action\JsEvent
 	{
 		return (new Action\JsEvent($this->getType() . ':ShowBooking'))
 			->addActionParamInt('id', $this->getBookingId());
+	}
+
+	private function getOpenSkuAction(string $url): Action\JsEvent
+	{
+		return (new Action\JsEvent($this->getType() . ':ShowSku'))
+			->addActionParamString('url', $url);
+	}
+
+	private function generateSkuUrls(array $skuIds): array
+	{
+		$skus = Container::getInstance()->getIBlockElementBroker()->getBunchByIds($skuIds);
+
+		$links = [];
+		foreach ($skus as $sku)
+		{
+			$links[$sku['ID']] = $sku['DETAIL_PAGE_URL'];
+		}
+
+		return $links;
 	}
 
 	private function getBookingId(): int
@@ -619,5 +719,13 @@ class Booking extends Activity
 		}
 
 		return $result;
+	}
+
+	private function hasCatalogAccess(): bool
+	{
+		return Loader::includeModule('catalog')
+			&& AccessController::getInstance((int)CurrentUser::get()->getId())
+				->check(ActionDictionary::ACTION_CATALOG_READ)
+		;
 	}
 }

@@ -3,6 +3,10 @@
 namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 
 /**
  * Class IPRuleExclIPTable
@@ -20,7 +24,7 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\IPRuleExclIP wakeUpObject($row)
  * @method static \Bitrix\Security\IPRuleExclIPs wakeUpCollection($rows)
  */
-class IPRuleExclIPTable extends \Bitrix\Main\Entity\DataManager
+class IPRuleExclIPTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -30,19 +34,29 @@ class IPRuleExclIPTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			(new \Bitrix\Main\Entity\IntegerField('IPRULE_ID'))
-				->configurePrimary(),
-			(new \Bitrix\Main\Entity\StringField('RULE_IP'))
+			(new Fields\IntegerField('IPRULE_ID'))
 				->configurePrimary()
-				->configureSize(50),
-			(new \Bitrix\Main\Entity\IntegerField('SORT'))
-				->configureDefaultValue(500),
-			(new \Bitrix\Main\Entity\IntegerField('IP_START'))
-				->configureSize(18)
-				->configureNullable(),
-			(new \Bitrix\Main\Entity\IntegerField('IP_END'))
+			,
+			(new Fields\StringField('RULE_IP'))
+				->configurePrimary()
+				->configureSize(50)
+			,
+			(new Fields\IntegerField('SORT'))
+				->configureDefaultValue(500)
+			,
+			(new Fields\IntegerField('IP_START'))
 				->configureSize(18)
 				->configureNullable()
+			,
+			(new Fields\IntegerField('IP_END'))
+				->configureSize(18)
+				->configureNullable()
+			,
+			new Reference(
+				'IPRULE',
+				IPRuleTable::class,
+				Join::on('this.IPRULE_ID', 'ref.ID'),
+			),
 		];
 	}
 

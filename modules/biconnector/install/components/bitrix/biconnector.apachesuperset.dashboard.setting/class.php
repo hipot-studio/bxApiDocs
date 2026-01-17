@@ -321,7 +321,7 @@ class ApacheSupersetDashboardSettingComponent
 		{
 			$startTime = null;
 			$endTime = null;
-			$includeLastFilterDate = $data['INCLUDE_LAST_FILTER_DATE'] === 'Y' ? 'Y' : 'N';
+			$includeLastFilterDate = 'Y';
 
 			try
 			{
@@ -344,7 +344,6 @@ class ApacheSupersetDashboardSettingComponent
 			$result['DATE_FILTER_START'] = $startTime;
 			$result['DATE_FILTER_END'] = $endTime;
 			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_RANGE;
-			$result['INCLUDE_LAST_FILTER_DATE'] = $includeLastFilterDate;
 		}
 		else
 		{

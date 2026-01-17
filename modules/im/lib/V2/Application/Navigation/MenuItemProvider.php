@@ -45,14 +45,14 @@ class MenuItemProvider
 				text: Loc::getMessage('IM_NAVIGATION_MENU_CHATS'),
 			),
 			new MenuItem(
+				id: 'tasksTask',
+				text: Loc::getMessage('IM_NAVIGATION_MENU_TASKS_MSGVER_1'),
+				isVisible: $this->applicationFeatures->isTasksRecentListAvailable,
+			),
+			new MenuItem(
 				id: 'copilot',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_COPILOT'),
 				isVisible: $this->applicationFeatures->copilotAvailable,
-			),
-			new MenuItem(
-				id: 'tasksTask',
-				text: Loc::getMessage('IM_NAVIGATION_MENU_TASKS'),
-				isVisible: $this->applicationFeatures->isTasksRecentListAvailable,
 			),
 			new MenuItem(
 				id: 'collab',
@@ -95,7 +95,7 @@ class MenuItemProvider
 			),
 			new MenuItem(
 				id: 'market',
-				text: Loc::getMessage('IM_NAVIGATION_MENU_MARKET_TITLE'),
+				text: Loc::getMessage('IM_NAVIGATION_MENU_MARKET_TITLE_MSGVER_1'),
 				isVisible: $this->isGlobalActionPermitted(GlobalAction::GetMarket),
 			),
 			...$this->getMarketAppMenuItems(),

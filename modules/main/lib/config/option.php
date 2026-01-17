@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2025 Bitrix
  */
 
 namespace Bitrix\Main\Config;
@@ -21,20 +21,25 @@ class Option
 	/**
 	 * Returns a value of an option.
 	 *
-	 * @param string $moduleId The module ID.
-	 * @param string $name The option name.
+	 * @param string $moduleId The module ID (case-insensitive).
+	 * @param string $name The option name (case-insensitive).
 	 * @param string $default The default value to return, if a value doesn't exist.
 	 * @param bool|string $siteId The site ID, if the option differs for sites.
 	 * @return string
 	 */
 	public static function get($moduleId, $name, $default = "", $siteId = false)
 	{
+		static $moduleDefaults = [];
+
 		$value = static::getRealValue($moduleId, $name, $siteId);
 
 		if ($value !== null)
 		{
 			return $value;
 		}
+
+		$moduleId = mb_strtolower($moduleId);
+		$name = mb_strtolower($name);
 
 		if (isset(self::$options[$moduleId]["-"][$name]))
 		{
@@ -43,10 +48,15 @@ class Option
 
 		if ($default == "")
 		{
-			$moduleDefaults = static::getDefaults($moduleId);
-			if (isset($moduleDefaults[$name]))
+			if (!isset($moduleDefaults[$moduleId]))
 			{
-				return $moduleDefaults[$name];
+				$defaults = static::getDefaults($moduleId);
+				$moduleDefaults[$moduleId] = array_change_key_case($defaults);
+			}
+
+			if (isset($moduleDefaults[$moduleId][$name]))
+			{
+				return $moduleDefaults[$moduleId][$name];
 			}
 		}
 
@@ -56,8 +66,8 @@ class Option
 	/**
 	 * Returns the real value of an option as it's written in a DB.
 	 *
-	 * @param string $moduleId The module ID.
-	 * @param string $name The option name.
+	 * @param string $moduleId The module ID (case-insensitive).
+	 * @param string $name The option name (case-insensitive).
 	 * @param bool|string $siteId The site ID.
 	 * @return null|string
 	 * @throws Main\ArgumentNullException
@@ -72,6 +82,9 @@ class Option
 		{
 			throw new Main\ArgumentNullException("name");
 		}
+
+		$moduleId = mb_strtolower($moduleId);
+		$name = mb_strtolower($name);
 
 		if (isset(self::$loading[$moduleId]))
 		{
@@ -88,7 +101,7 @@ class Option
 			$siteId = static::getDefaultSite();
 		}
 
-		$siteKey = ($siteId == ""? "-" : $siteId);
+		$siteKey = ($siteId == "" ? "-" : $siteId);
 
 		if (isset(self::$options[$moduleId][$siteKey][$name]))
 		{
@@ -119,16 +132,16 @@ class Option
 			throw new Main\ArgumentOutOfRangeException("moduleId");
 		}
 
-		$path = Main\Loader::getLocal("modules/".$moduleId."/default_option.php");
+		$path = Main\Loader::getLocal("modules/" . $moduleId . "/default_option.php");
 		if ($path === false)
 		{
 			$defaultsCache[$moduleId] = [];
-			return $defaultsCache[$moduleId];
+			return [];
 		}
 
-		include($path);
+		include $path;
 
-		$varName = str_replace(".", "_", $moduleId)."_default_option";
+		$varName = str_replace(".", "_", $moduleId) . "_default_option";
 		if (isset(${$varName}) && is_array(${$varName}))
 		{
 			$defaultsCache[$moduleId] = ${$varName};
@@ -136,13 +149,13 @@ class Option
 		}
 
 		$defaultsCache[$moduleId] = [];
-		return $defaultsCache[$moduleId];
+		return [];
 	}
 
 	/**
 	 * Returns an array of set options array(name => value).
 	 *
-	 * @param string $moduleId The module ID.
+	 * @param string $moduleId The module ID (case-insensitive).
 	 * @param bool|string $siteId The site ID, if the option differs for sites.
 	 * @return array
 	 * @throws Main\ArgumentNullException
@@ -153,6 +166,8 @@ class Option
 		{
 			throw new Main\ArgumentNullException("moduleId");
 		}
+
+		$moduleId = mb_strtolower($moduleId);
 
 		if (!isset(self::$options[$moduleId]))
 		{
@@ -166,7 +181,7 @@ class Option
 
 		$result = self::$options[$moduleId]["-"];
 
-		if($siteId <> "" && !empty(self::$options[$moduleId][$siteId]))
+		if ($siteId <> "" && !empty(self::$options[$moduleId][$siteId]))
 		{
 			//options for the site override general ones
 			$result = array_replace($result, self::$options[$moduleId][$siteId]);
@@ -183,14 +198,14 @@ class Option
 
 		if ($cacheTtl !== false)
 		{
-			if($cache->read($cacheTtl, "b_option:{$moduleId}", self::CACHE_DIR))
+			if ($cache->read($cacheTtl, "b_option:{$moduleId}", self::CACHE_DIR))
 			{
 				self::$options[$moduleId] = $cache->get("b_option:{$moduleId}");
 				$loadFromDb = false;
 			}
 		}
 
-		if($loadFromDb)
+		if ($loadFromDb)
 		{
 			self::$loading[$moduleId] = true;
 
@@ -213,7 +228,8 @@ class Option
 			$res = $con->query($query);
 			while ($ar = $res->fetch())
 			{
-				self::$options[$moduleId]["-"][$ar["NAME"]] = $ar["VALUE"];
+				$name = mb_strtolower($ar["NAME"]);
+				self::$options[$moduleId]["-"][$name] = $ar["VALUE"];
 			}
 
 			try
@@ -229,31 +245,31 @@ class Option
 				$res = $con->query($query);
 				while ($ar = $res->fetch())
 				{
-					self::$options[$moduleId][$ar["SITE_ID"]][$ar["NAME"]] = $ar["VALUE"];
+					$name = mb_strtolower($ar["NAME"]);
+					self::$options[$moduleId][$ar["SITE_ID"]][$name] = $ar["VALUE"];
 				}
 			}
-			catch(Main\DB\SqlQueryException)
+			catch (Main\DB\SqlQueryException)
 			{
 			}
 
 			$pool->useMasterOnly(false);
 
-			if($cacheTtl !== false)
+			if ($cacheTtl !== false)
 			{
 				$cache->setImmediate("b_option:{$moduleId}", self::$options[$moduleId]);
 			}
 
 			unset(self::$loading[$moduleId]);
 		}
-
 		/*patchvalidationoptions4*/
 	}
 
 	/**
 	 * Sets an option value and saves it into a DB. After saving the OnAfterSetOption event is triggered.
 	 *
-	 * @param string $moduleId The module ID.
-	 * @param string $name The option name.
+	 * @param string $moduleId The module ID (case-insensitive).
+	 * @param string $name The option name (case-insensitive).
 	 * @param string $value The option value.
 	 * @param string $siteId The site ID, if the option depends on a site.
 	 * @throws Main\ArgumentOutOfRangeException
@@ -274,6 +290,9 @@ class Option
 			trigger_error("Option name {$name} will be truncated on saving.", E_USER_WARNING);
 		}
 
+		$moduleId = mb_strtolower($moduleId);
+		$name = mb_strtolower($name);
+
 		if ($siteId === false)
 		{
 			$siteId = static::getDefaultSite();
@@ -286,7 +305,7 @@ class Option
 			"VALUE" => $value,
 		];
 
-		if($siteId == "")
+		if ($siteId == "")
 		{
 			$insertFields = [
 				"MODULE_ID" => $moduleId,
@@ -320,20 +339,20 @@ class Option
 
 		$event = new Main\Event(
 			"main",
-			"OnAfterSetOption_".$name,
-			array("value" => $value)
+			"OnAfterSetOption_" . $name,
+			["value" => $value]
 		);
 		$event->send();
 
 		$event = new Main\Event(
 			"main",
 			"OnAfterSetOption",
-			array(
+			[
 				"moduleId" => $moduleId,
 				"name" => $name,
 				"value" => $value,
 				"siteId" => $siteId,
-			)
+			]
 		);
 		$event->send();
 	}
@@ -354,20 +373,18 @@ class Option
 
 		$triggersCache[$moduleId] = true;
 
-		$path = Main\Loader::getLocal("modules/".$moduleId."/option_triggers.php");
-		if ($path === false)
+		$path = Main\Loader::getLocal("modules/" . $moduleId . "/option_triggers.php");
+		if ($path !== false)
 		{
-			return;
+			include $path;
 		}
-
-		include($path);
 	}
 
 	protected static function getCacheTtl()
 	{
 		static $cacheTtl = null;
 
-		if($cacheTtl === null)
+		if ($cacheTtl === null)
 		{
 			$cacheFlags = Configuration::getValue("cache_flags");
 			$cacheTtl = $cacheFlags["config_options"] ?? 3600;
@@ -378,19 +395,21 @@ class Option
 	/**
 	 * Deletes options from a DB.
 	 *
-	 * @param string $moduleId The module ID.
+	 * @param string $moduleId The module ID (case-insensitive).
 	 * @param array $filter {name: string, site_id: string} The array with filter keys:
-	 * 		name - the name of the option;
-	 * 		site_id - the site ID (can be empty).
+	 *        name - the name of the option;
+	 *        site_id - the site ID (can be empty).
 	 * @throws Main\ArgumentNullException
 	 * @throws Main\ArgumentException
 	 */
-	public static function delete($moduleId, array $filter = array())
+	public static function delete($moduleId, array $filter = [])
 	{
 		if ($moduleId == '')
 		{
 			throw new Main\ArgumentNullException("moduleId");
 		}
+
+		$moduleId = mb_strtolower($moduleId);
 
 		$con = Main\Application::getConnection();
 		$sqlHelper = $con->getSqlHelper();
@@ -427,7 +446,7 @@ class Option
 			}
 		}
 
-		if($moduleId == 'main')
+		if ($moduleId == 'main')
 		{
 			$sqlWhere .= "
 				AND NAME NOT LIKE '~%'
@@ -439,7 +458,7 @@ class Option
 			$sqlWhere .= " AND NAME <> '~bsm_stop_date'";
 		}
 
-		if($sqlWhereSite == '')
+		if ($sqlWhereSite == '')
 		{
 			$con->queryExecute("
 				DELETE FROM b_option
@@ -448,7 +467,7 @@ class Option
 			");
 		}
 
-		if($deleteForSites)
+		if ($deleteForSites)
 		{
 			$con->queryExecute("
 				DELETE FROM b_option_site

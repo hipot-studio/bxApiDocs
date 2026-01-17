@@ -8,6 +8,8 @@ class MobileCounter
 {
 	const MOBILE_APP = 'Bitrix24';
 
+	private static array $counterCache = [];
+
 	public static function getTypes()
 	{
 		$types = Array();
@@ -49,6 +51,11 @@ class MobileCounter
 		if (!$userId)
 		{
 			return false;
+		}
+
+		if (isset(self::$counterCache[$userId]))
+		{
+			return self::$counterCache[$userId];
 		}
 
 		$counter = 0;
@@ -109,6 +116,9 @@ class MobileCounter
 				}
 			}
 		}
+
+		self::$counterCache[$userId] = $counter;
+
 		return $counter;
 	}
 

@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Integration;
 
-use Bitrix\Crm\Ml\Scoring;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Main\DI\ServiceLocator;
@@ -418,12 +417,6 @@ class PullManager
 
 		$timelineTagName = TimelineEntry::prepareEntityPushTag($entityTypeId, $entityId);
 		\CPullWatch::Delete($userId, $timelineTagName);
-
-		if (in_array($entityTypeId, [\CCrmOwnerType::Lead, \CCrmOwnerType::Deal], true))
-		{
-			$predictionTagName = Scoring::getPredictionUpdatePullTag($entityTypeId, $entityId);
-			\CPullWatch::Delete($userId, $predictionTagName);
-		}
 
 		$itemUpdateTag = static::getItemEventName(
 			static::EVENT_ITEM_UPDATED,

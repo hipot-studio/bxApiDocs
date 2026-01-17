@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage\StoreDocument;
 
+use Bitrix\Crm\Currency;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
@@ -44,6 +45,7 @@ abstract class Base extends LogMessage
 								)
 								->setCurrencyId(
 									(string)$this->getHistoryItemModel()->get('CURRENCY')
+										?: Currency::getBaseCurrencyId()
 								)
 						,
 					]

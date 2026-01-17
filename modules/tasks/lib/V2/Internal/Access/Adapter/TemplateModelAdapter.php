@@ -28,27 +28,44 @@ class TemplateModelAdapter implements EntityModelAdapterInterface
 
 		$data['GROUP_ID'] = (int)$this->entity->group?->getId();
 
+		$hasMembers = false;
 		if ($this->entity->creator !== null)
 		{
 			$data['CREATED_BY'] = $this->entity->creator->getId();
+			$hasMembers = true;
 		}
 
 		if ($this->entity->responsibleCollection !== null)
 		{
 			$data['RESPONSIBLES'] = $this->entity->responsibleCollection->getIds();
+			$hasMembers = true;
 		}
 
 		if ($this->entity->accomplices !== null)
 		{
 			$data['ACCOMPLICES'] = $this->entity->accomplices->getIds();
+			$hasMembers = true;
 		}
 
 		if ($this->entity->auditors !== null)
 		{
 			$data['AUDITORS'] = $this->entity->auditors->getIds();
+			$hasMembers = true;
 		}
 
-		return Model\TemplateModel::createFromArray($data);
+		if ($this->entity->base?->id !== null)
+		{
+			$data['BASE_TEMPLATE_ID'] = (int)$this->entity->base->id;
+		}
+
+		$model = Model\TemplateModel::createFromArray($data);
+
+		if (!$hasMembers)
+		{
+			return $model->setMembers(null);
+		}
+
+		return $model;
 	}
 
 	public function create(): AccessibleItem

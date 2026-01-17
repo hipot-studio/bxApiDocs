@@ -41,21 +41,20 @@ final class MessageTemplateProvider extends BaseProvider
 
 		if ($this->entityId > 0)
 		{
-			$hasAccess = $userPermissions->item()->canUpdate($this->entityTypeId, $this->entityId);
+			$hasAccess = $userPermissions->messageSender()->canSend($this->entityTypeId, $this->entityId);
 		}
 		else
 		{
 			$hasAccess = ((is_null($this->categoryId))
-				? $userPermissions->entityType()->canUpdateItems($this->entityTypeId)
-				: $userPermissions->entityType()->canUpdateItemsInCategory($this->entityTypeId, $this->categoryId))
+				? $userPermissions->messageSender()->canSendFromItems($this->entityTypeId)
+				: $userPermissions->messageSender()->canSendFromItemsInCategory($this->entityTypeId, $this->categoryId))
 			;
 		}
 
 		return !is_null($this->sender)
-			&& SmsManager::isEdnaWhatsAppSendingEnabled($this->sender->getId())
 			&& $this->sender->canUse()
 			&& $this->sender->isConfigurable()
-			&& $this->sender->isTemplatesBased()
+			&& ($this->sender instanceof MessageService\Sender\BaseConfigurable && $this->sender->isTemplatesBased())
 			&& $hasAccess
 		;
 	}
@@ -64,16 +63,15 @@ final class MessageTemplateProvider extends BaseProvider
 	{
 		$items = $this->makeItems();
 
-		array_walk(
-			$items,
-			static function (Item $item, int $index) use ($dialog) {
-				if (empty($dialog->getContext()))
-				{
-					$item->setSort($index);
-				}
-				$dialog->addRecentItem($item);
+		foreach ($items as $index => $item)
+		{
+			if (empty($dialog->getContext()))
+			{
+				$item->setSort($index);
 			}
-		);
+
+			$dialog->addRecentItem($item);
+		}
 	}
 
 	public function getItems(array $ids): array

@@ -27,6 +27,23 @@ class Vibe extends Controller
 	}
 
 	/**
+	 * Configures filter for ajax request.
+	 *
+	 * @return array
+	 */
+	public function configureActions(): array
+	{
+		return [
+			'getCoreConfig' => [
+				'prefilters' => [],
+			],
+			'getAssetsConfig' => [
+				'prefilters' => [],
+			],
+		];
+	}
+
+	/**
 	 * Get core extensions and styles configs, load relations, load lang phrases
 	 *
 	 * @return array - array of assets by type

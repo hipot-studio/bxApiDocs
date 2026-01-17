@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
 use \Bitrix\Main;
@@ -6,7 +7,7 @@ use \Bitrix\Intranet\UI\LeftMenu;
 
 class Custom extends PresetAbstract
 {
-	const CODE = 'custom';
+	public const CODE = 'custom';
 
 	public function getName(): string
 	{
@@ -16,13 +17,37 @@ class Custom extends PresetAbstract
 	public function getStructure(): array
 	{
 		$structure = unserialize(
-			\COption::GetOptionString('intranet', 'left_menu_custom_preset_sort', '')
-			, ['allowed_classes' => false]
+			\COption::GetOptionString('intranet', 'left_menu_custom_preset_sort', ''),
+			['allowed_classes' => false],
 		);
-		return is_array($structure) ? [
+		$structure = is_array($structure) ? [
 			'shown' => isset($structure['show']) && is_array($structure['show']) ? $structure['show'] : [],
-			'hidden' => isset($structure['hide']) && is_array($structure['hide']) ? $structure['hide'] : []
+			'hidden' => isset($structure['hide']) && is_array($structure['hide']) ? $structure['hide'] : [],
 		] : [];
+
+		$baseStructure = (new Social($this->getSiteId()))->getStructure();
+		$existingIds = $this->collectIds($structure);
+		foreach (['shown', 'hidden'] as $section)
+		{
+			if (!isset($baseStructure[$section]))
+			{
+				continue;
+			}
+
+			if (!is_array($structure[$section]))
+			{
+				$structure[$section] = [];
+			}
+
+			$this->mergeBaseItemsIntoCustom(
+				$baseStructure[$section],
+				$structure[$section],
+				$existingIds,
+				false,
+			);
+		}
+
+		return $structure;
 	}
 
 	public static function isAvailable(): bool
@@ -31,6 +56,7 @@ class Custom extends PresetAbstract
 		{
 			return \Bitrix\Bitrix24\Feature::isFeatureEnabled('intranet_menu_to_all');
 		}
+
 		return true;
 	}
 
@@ -43,8 +69,8 @@ class Custom extends PresetAbstract
 		}
 		$result = parent::getItems();
 		$items = unserialize(
-			\COption::GetOptionString('intranet', 'left_menu_custom_preset_items', '')
-			, ['allowed_classes' => false]
+			\COption::GetOptionString('intranet', 'left_menu_custom_preset_items', ''),
+			['allowed_classes' => false],
 		);
 		$items = (is_array($items) ? $items : []);
 		foreach ($items as $itemData)
@@ -60,6 +86,47 @@ class Custom extends PresetAbstract
 			] , $itemData));
 			$result[] = $item;
 		}
+
 		return $result;
+	}
+
+	private function collectIds(array $structure): array
+	{
+		$ids = [];
+		$walker = static function ($value) use (&$walker, &$ids) {
+			if (is_array($value))
+			{
+				array_walk($value, $walker);
+			}
+			else
+			{
+				$ids[] = (string)$value;
+			}
+		};
+		array_walk($structure, $walker);
+
+		return array_unique($ids);
+	}
+
+	private function mergeBaseItemsIntoCustom(array $baseSection, array &$customSection, array &$existingIds, bool $inGroup): void
+	{
+		foreach ($baseSection as $key => $value)
+		{
+			if (is_array($value))
+			{
+				if (isset($customSection[$key]) && is_array($customSection[$key]))
+				{
+					$this->mergeBaseItemsIntoCustom($value, $customSection[$key], $existingIds, true);
+				}
+
+				continue;
+			}
+
+			if ($inGroup && !in_array($value, $existingIds, true))
+			{
+				$customSection[] = $value;
+				$existingIds[] = $value;
+			}
+		}
 	}
 }

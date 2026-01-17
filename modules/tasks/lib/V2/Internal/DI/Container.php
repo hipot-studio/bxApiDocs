@@ -4,36 +4,44 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\DI;
 
+use Bitrix\Tasks\Access\AccessCacheLoader;
 use Bitrix\Tasks\Deadline\Internals\Repository\Cache\Managed\CacheDeadlineUserOptionRepository;
 use Bitrix\Tasks\Deadline\Internals\Repository\DeadlineUserOptionRepositoryInterface;
 use Bitrix\Tasks\DI\AbstractContainer;
+use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Provider\Log\TaskLogProvider;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
 use Bitrix\Tasks\V2\Internal\Access\Factory\ControllerFactoryInterface;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
+use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
-use Bitrix\Tasks\V2\Internal\Integration\CRM\Service\CrmItemService;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Repository\DiskFileRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\Task\AttachmentService;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Repository\MessageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\UserUrlService;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\GanttLinkRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ReminderMapper;
-use Bitrix\Tasks\V2\Internal\Repository\ParentTaskRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\OrmTemplateMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserMapper;
 use Bitrix\Tasks\V2\Internal\Repository\RelatedTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskParameterRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskTagRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskResultRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
+use Bitrix\Tasks\V2\Internal\Service\AddTemplateService;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\FavoriteTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ElapsedTimeMapper;
-use Bitrix\Tasks\V2\Internal\Repository\Mapper\OrmTaskMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Task\OrmTaskMapper;
 use Bitrix\Tasks\V2\Internal\Repository\TaskStageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskScenarioRepositoryInterface;
@@ -41,53 +49,72 @@ use Bitrix\Tasks\V2\Internal\Repository\TimerRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\StageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskMemberRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\TemplateRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskUserOptionRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service;
-use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListService;
-use Bitrix\Tasks\V2\Internal\Service\CheckList\Prepare\Save\CheckListEntityFieldService;
+use Bitrix\Tasks\V2\Internal\Service\DeleteTemplateService;
+use Bitrix\Tasks\V2\Internal\Service\Esg\Detector\ChecklistOperationDetector;
+use Bitrix\Tasks\V2\Internal\Service\Esg\EgressController;
+use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Service\Extension\ConfigService;
 use Bitrix\Tasks\V2\Internal\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
 use Bitrix\Tasks\V2\Internal\Service\TariffService;
 use Bitrix\Tasks\V2\Internal\Service\DeleteTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ElapsedTimeService;
-use Bitrix\Tasks\V2\Internal\Service\Task\FavoriteService;
-use Bitrix\Tasks\V2\Internal\Service\Task\Gantt\GanttDependenceService;
-use Bitrix\Tasks\V2\Internal\Service\Task\MemberService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ParentService;
 use Bitrix\Tasks\V2\Internal\Service\Task\PlannerService;
 use Bitrix\Tasks\V2\Internal\Service\Task\RelatedTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ReminderService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ResultService;
 use Bitrix\Tasks\V2\Internal\Repository\Compatibility;
+use Bitrix\Tasks\V2\Internal\Repository\CounterRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\Counter\Collector\MentionedCollector;
+use Bitrix\Tasks\V2\Internal\Service\Counter\Collector\UserCollector;
 use Bitrix\Tasks\V2\Internal\Service\Task\TaskStageService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ScenarioService;
-use Bitrix\Tasks\V2\Internal\Service\Task\StatusService;
 use Bitrix\Tasks\V2\Internal\Service\Task\TimeManagementService;
 use Bitrix\Tasks\V2\Internal\Service\Task\TimerService;
 use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
 use Bitrix\Tasks\V2\Internal\Service\Task\UserOptionService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ViewService;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTemplateService;
 use Bitrix\Tasks\V2\Internal\Service\UrlService;
 use Bitrix\Tasks\V2\Internal\Service\UserService;
 use Bitrix\Tasks\V2\Public\Provider\AhaMomentProvider;
 use Bitrix\Tasks\V2\Public\Provider\CheckListProvider;
 use Bitrix\Tasks\V2\Public\Provider\Counter\RoleProvider;
 use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
+use Bitrix\Tasks\V2\Public\Provider\DeadlineProvider;
 use Bitrix\Tasks\V2\Public\Provider\TaskFromTemplateProvider;
+use Bitrix\Tasks\V2\Internal\Service\Task\CopyTaskService;
+use Bitrix\Tasks\V2\Public\Provider\TariffProvider;
 
 class Container extends AbstractContainer
 {
+	public function getTaskModelPreloader(): AccessCacheLoader
+	{
+		return $this->get(AccessCacheLoader::class);
+	}
+
+	public function getEventDispatcher(): EventDispatcher
+	{
+		return $this->get(EventDispatcher::class);
+	}
+
+	public function getMessageRepository(): MessageRepositoryInterface
+	{
+		return $this->get(MessageRepositoryInterface::class);
+	}
+
+	public function getRegularReplicator(): RegularTemplateTaskReplicator
+	{
+		return $this->get('tasks.regular.replicator');
+	}
+
 	public function getParentService(): ParentService
 	{
 		return $this->get(ParentService::class);
-	}
-
-	public function getGanttDependenceService(): GanttDependenceService
-	{
-		return $this->get(GanttDependenceService::class);
 	}
 
 	public function getRelatedTaskRepository(): RelatedTaskRepositoryInterface
@@ -98,6 +125,11 @@ class Container extends AbstractContainer
 	public function getRelatedTaskService(): RelatedTaskService
 	{
 		return $this->get(RelatedTaskService::class);
+	}
+
+	public function getResultRepository(): TaskResultRepositoryInterface
+	{
+		return $this->get(TaskResultRepositoryInterface::class);
 	}
 
 	public function getFeatureService(): FeatureService
@@ -120,24 +152,9 @@ class Container extends AbstractContainer
 		return $this->get(ToolService::class);
 	}
 
-	public function getAttachmentService(): AttachmentService
-	{
-		return $this->get(AttachmentService::class);
-	}
-
 	public function getDiskFileRepository(): DiskFileRepositoryInterface
 	{
 		return $this->get(DiskFileRepositoryInterface::class);
-	}
-
-	public function getTaskFromTemplateProvider(): TaskFromTemplateProvider
-	{
-		return $this->get(TaskFromTemplateProvider::class);
-	}
-
-	public function getCrmItemService(): CrmItemService
-	{
-		return $this->get(CrmItemService::class);
 	}
 
 	public function getCrmAccessService(): CrmAccessService
@@ -168,6 +185,11 @@ class Container extends AbstractContainer
 	public function getUserService(): UserService
 	{
 		return $this->get(UserService::class);
+	}
+
+	public function getUserMapper(): UserMapper
+	{
+		return $this->get(UserMapper::class);
 	}
 
 	public function getTaskReadRepository(): TaskReadRepositoryInterface
@@ -210,24 +232,19 @@ class Container extends AbstractContainer
 		return $this->get(DeleteTaskService::class);
 	}
 
+	public function getDeleteTemplateService(): DeleteTemplateService
+	{
+		return $this->get(DeleteTemplateService::class);
+	}
+
 	public function getAddTaskService(): AddTaskService
 	{
 		return $this->get(AddTaskService::class);
 	}
 
-	public function getCheckListEntityFieldService(): CheckListEntityFieldService
+	public function getAddTemplateService(): AddTemplateService
 	{
-		return $this->get(CheckListEntityFieldService::class);
-	}
-
-	public function getCheckListService(): CheckListService
-	{
-		return $this->get(CheckListService::class);
-	}
-
-	public function getCheckListUserOptionService(): Service\CheckList\UserOptionService
-	{
-		return $this->get(Service\CheckList\UserOptionService::class);
+		return $this->get(AddTemplateService::class);
 	}
 
 	public function getTariffService(): TariffService
@@ -243,11 +260,6 @@ class Container extends AbstractContainer
 	public function getLinkService(): LinkService
 	{
 		return $this->get(LinkService::class);
-	}
-
-	public function getMemberService(): MemberService
-	{
-		return $this->get(MemberService::class);
 	}
 
 	public function getTimeManagementService(): TimeManagementService
@@ -275,9 +287,9 @@ class Container extends AbstractContainer
 		return $this->get(OrmTaskMapper::class);
 	}
 
-	public function getDeadlineRepository(): DeadlineUserOptionRepositoryInterface
+	public function getOrmTemplateMapper(): OrmTemplateMapper
 	{
-		return $this->get(DeadlineUserOptionRepositoryInterface::class);
+		return $this->get(OrmTemplateMapper::class);
 	}
 
 	public function getStageRepository(): StageRepositoryInterface
@@ -310,24 +322,19 @@ class Container extends AbstractContainer
 		return $this->get(ElapsedTimeService::class);
 	}
 
-	public function getStatusService(): StatusService
-	{
-		return $this->get(StatusService::class);
-	}
-
 	public function getUpdateTaskService(): UpdateTaskService
 	{
 		return $this->get(UpdateTaskService::class);
 	}
 
+	public function getUpdateTemplateService(): UpdateTemplateService
+	{
+		return $this->get(UpdateTemplateService::class);
+	}
+
 	public function getUpdateService(): UpdateService
 	{
 		return $this->get(UpdateService::class);
-	}
-
-	public function getFavoriteService(): FavoriteService
-	{
-		return $this->get(FavoriteService::class);
 	}
 
 	public function getTaskMemberRepository(): TaskMemberRepositoryInterface
@@ -345,6 +352,11 @@ class Container extends AbstractContainer
 		return $this->get(Compatibility\TaskRepository::class);
 	}
 
+	public function getTemplateCompatabilityRepository(): Compatibility\TemplateRepository
+	{
+		return $this->get(Compatibility\TemplateRepository::class);
+	}
+
 	public function getFavoriteTaskRepository(): FavoriteTaskRepositoryInterface
 	{
 		return $this->get(FavoriteTaskRepositoryInterface::class);
@@ -353,6 +365,11 @@ class Container extends AbstractContainer
 	public function getTaskLogProvider(): TaskLogProvider
 	{
 		return $this->get(TaskLogProvider::class);
+	}
+
+	public function getDeadlineProvider(): DeadlineProvider
+	{
+		return $this->get(DeadlineProvider::class);
 	}
 
 	public function getAccessControllerFactory(): ControllerFactoryInterface
@@ -420,18 +437,66 @@ class Container extends AbstractContainer
 		return $this->get(AhaMomentProvider::class);
 	}
 
-	public function getEgressController(): Service\Esg\EgressInterface
+	public function getTariffProvider(): TariffProvider
 	{
-		return $this->get(Service\Esg\EgressController::class);
+		return $this->get(TariffProvider::class);
 	}
 
-	public function getChecklistOperationDetector(): Service\Esg\Detector\ChecklistOperationDetector
+	public function getEgressController(): EgressInterface
 	{
-		return $this->get(Service\Esg\Detector\ChecklistOperationDetector::class);
+		return $this->get(EgressController::class);
+	}
+
+	public function getChecklistOperationDetector(): ChecklistOperationDetector
+	{
+		return $this->get(ChecklistOperationDetector::class);
 	}
 
 	public function getCheckListProvider(): CheckListProvider
 	{
 		return $this->get(CheckListProvider::class);
+	}
+
+	public function getCheckListMapper(): CheckListMapper
+	{
+		return $this->get(CheckListMapper::class);
+	}
+
+	public function getCounterProjectCollector(): Counter\Collector\ProjectCollector
+	{
+		return $this->get(Counter\Collector\ProjectCollector::class);
+	}
+
+	public function getCounterUserCollector(int $userId): Counter\Collector\UserCollector
+	{
+		return FormV2Feature::isOn()
+			? UserCollector::getInstance($userId)
+			: Counter\Collector\UserCollector::getInstance($userId)
+		;
+	}
+
+	public function getCounterGarbageCollector(): Counter\Event\GarbageCollector
+	{
+		return $this->get(Counter\Event\GarbageCollector::class);
+	}
+
+	public function getMentionedCollector(): MentionedCollector
+	{
+		return $this->get(MentionedCollector::class);
+	}
+
+	public function getCounterRepository(): CounterRepositoryInterface
+	{
+		return $this->get(CounterRepositoryInterface::class);
+	}
+
+	public function getUserUrlService(): UserUrlService
+	{
+		return $this->get(UserUrlService::class);
+	}
+
+	public function getCopyTaskService(): CopyTaskService
+	{
+		return $this->get(CopyTaskService::class);
 	}
 }

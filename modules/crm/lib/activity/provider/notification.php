@@ -49,6 +49,11 @@ class Notification extends BaseMessage
 		return [$id, $statusId];
 	}
 
+	protected static function getHandledInEventProviderTypeIds(): ?array
+	{
+		return null;
+	}
+
 	/**
 	 * @inheritDoc
 	 */

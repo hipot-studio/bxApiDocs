@@ -120,7 +120,7 @@ class RobotIndexRepository
 
 		foreach ($batch as $item)
 		{
-			$code = $item['ROBOT_CODE'];
+			$code = strtolower((string)($item['ROBOT_CODE'] ?? ''));
 			$version = (int)$item['VERSION'];
 			$dateChanged = $dateForNewRobots;
 

@@ -2,16 +2,13 @@
 
 namespace Bitrix\Crm\Reservation\Strategy;
 
-use Bitrix\Crm\ProductRowTable;
-use Bitrix\Crm\Reservation\Internals\ProductRowReservationTable;
+use Bitrix\Crm\Reservation\Tools\DateTimeComparator;
 use Bitrix\Crm\Reservation\Strategy\Reserve\ReservationResult;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Crm\Service\Sale\Reservation\ShipmentService;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\Date;
-
-Loc::loadMessages(__FILE__);
+use Bitrix\Main\Type\DateTime;
 
 /**
  * Manual change of the reserve quantity.
@@ -19,12 +16,12 @@ Loc::loadMessages(__FILE__);
  * If the reserve quantity is less than product quantity in entity + deducted quantity,
  * the reserve quantity change to `product quantity - deducted quantuty`.
  */
-class ManualStrategy implements Strategy
+class ManualStrategy extends ReserveStrategy
 {
 	/**
 	 * @inheritDoc
 	 */
-	public function reservation(int $ownerTypeId, int $ownerId): ReservationResult
+	public function reservation(int $entityTypeId, int $entityId): ReservationResult
 	{
 		return new ReservationResult();
 	}
@@ -32,7 +29,7 @@ class ManualStrategy implements Strategy
 	/**
 	 * @inheritDoc
 	 */
-	public function reservationProductRow(int $productRowId, float $quantity, int $storeId, ?Date $dateReserveEnd): ReservationResult
+	public function reservationProductRow(int $productRowId, float $quantity, int $storeId, DateTime $dateReserveEnd): ReservationResult
 	{
 		$result = new ReservationResult();
 
@@ -42,6 +39,7 @@ class ManualStrategy implements Strategy
 			$result->addError(
 				new Error(Loc::getMessage('CRM_RESERVATION_STRATEGY_MANUAL_STRATEGY_PRODUCT_NOT_FOUND'))
 			);
+
 			return $result;
 		}
 
@@ -53,6 +51,7 @@ class ManualStrategy implements Strategy
 			$result->addError(
 				new Error(Loc::getMessage('CRM_RESERVATION_STRATEGY_MANUAL_STRATEGY_PRODUCT_NOT_SUPPORT_RESERVATION'))
 			);
+
 			return $result;
 		}
 
@@ -63,18 +62,9 @@ class ManualStrategy implements Strategy
 
 		$reserveInfo = $result->addReserveInfo($productRowId, $quantity, $quantity);
 		$reserveInfo->setStoreId($storeId);
-		$reserveInfo->setDateReserveEnd($dateReserveEnd ? (string)$dateReserveEnd : null);
+		$reserveInfo->setDateReserveEnd($dateReserveEnd);
 
-		$existReserve = ProductRowReservationTable::getRow([
-			'select' => [
-				'ID',
-				'STORE_ID',
-				'RESERVE_QUANTITY',
-			],
-			'filter' => [
-				'=ROW_ID' => $productRowId,
-			],
-		]);
+		$existReserve = $this->getReserve($productRowId);
 		if ($existReserve)
 		{
 			$existReserveQuantity = (float)$existReserve['RESERVE_QUANTITY'];
@@ -98,8 +88,13 @@ class ManualStrategy implements Strategy
 			{
 				$reserveInfo->setChanged();
 			}
+			if (!DateTimeComparator::areEqual($dateReserveEnd, $existReserve['DATE_RESERVE_END']))
+			{
+				$reserveInfo->setChanged();
+			}
 
-			$saveResult = ProductRowReservationTable::update($existReserve['ID'], [
+			$saveResult = $this->saveCrmReserve([
+				'ID' => $existReserve['ID'],
 				'RESERVE_QUANTITY' => $quantity,
 				'STORE_ID' => $storeId,
 				'DATE_RESERVE_END' => $dateReserveEnd,
@@ -107,7 +102,7 @@ class ManualStrategy implements Strategy
 		}
 		else
 		{
-			$saveResult = ProductRowReservationTable::add([
+			$saveResult = $this->saveCrmReserve([
 				'ROW_ID' => $productRowId,
 				'RESERVE_QUANTITY' => $quantity,
 				'STORE_ID' => $storeId,
@@ -134,28 +129,6 @@ class ManualStrategy implements Strategy
 	}
 
 	/**
-	 * Get product row.
-	 *
-	 * @param int $rowId
-	 *
-	 * @return array|null
-	 */
-	private function getProductRow(int $rowId): ?array
-	{
-		return ProductRowTable::getRow([
-			'select' => [
-				'ID',
-				'QUANTITY',
-				'TYPE',
-				'PRODUCT_ID',
-			],
-			'filter' => [
-				'=ID' => $rowId,
-			],
-		]);
-	}
-
-	/**
 	 * The deducted quantity of product row.
 	 *
 	 * @param int $productRowId
@@ -165,6 +138,7 @@ class ManualStrategy implements Strategy
 	private function getDeductedQuantity(int $productRowId): float
 	{
 		$result = ShipmentService::getInstance()->getDeductedProductRowsQuantity([ $productRowId ]);
+
 		return (float)($result[$productRowId] ?? 0.0);
 	}
 }

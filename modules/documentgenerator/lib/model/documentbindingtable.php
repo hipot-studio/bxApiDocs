@@ -8,6 +8,22 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\Result;
 
+/**
+ * Class DocumentBindingTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_DocumentBinding_Query query()
+ * @method static EO_DocumentBinding_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_DocumentBinding_Result getById($id)
+ * @method static EO_DocumentBinding_Result getList(array $parameters = [])
+ * @method static EO_DocumentBinding_Entity getEntity()
+ * @method static \Bitrix\DocumentGenerator\Model\EO_DocumentBinding createObject($setDefaultValues = true)
+ * @method static \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection createCollection()
+ * @method static \Bitrix\DocumentGenerator\Model\EO_DocumentBinding wakeUpObject($row)
+ * @method static \Bitrix\DocumentGenerator\Model\EO_DocumentBinding_Collection wakeUpCollection($rows)
+ */
 class DocumentBindingTable extends DataManager
 {
 	public static function getTableName(): string

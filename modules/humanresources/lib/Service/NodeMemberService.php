@@ -457,6 +457,15 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		$nodeMemberCollectionToUpdate = new Item\Collection\NodeMemberCollection();
 		foreach ($departmentUserIds as $roleXmlId => $userIds)
 		{
+			if ($node->type === NodeEntityType::DEPARTMENT && !in_array($roleXmlId, array_values(Item\NodeMember::DEFAULT_ROLE_XML_ID)))
+			{
+				continue;
+			}
+			elseif ($node->type === NodeEntityType::TEAM && !in_array($roleXmlId, array_values(Item\NodeMember::TEAM_ROLE_XML_ID)))
+			{
+				continue;
+			}
+
 			$role = $this->roleRepository->findByXmlId($roleXmlId);
 
 			if (!$role)

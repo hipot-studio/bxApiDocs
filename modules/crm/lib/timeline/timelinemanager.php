@@ -80,9 +80,9 @@ class TimelineManager
 			return Tasks\Controller::getInstance();
 		}
 
-		if ($typeID === TimelineType::AI_CALL_PROCESSING)
+		if ($typeID === TimelineType::AI_PROCESSING)
 		{
-			return AI\Call\Controller::getInstance();
+			return AI\Controller::getInstance();
 		}
 
 		if ($assocEntityTypeID === \CCrmOwnerType::Activity)
@@ -136,10 +136,6 @@ class TimelineManager
 		elseif($assocEntityTypeID === \CCrmOwnerType::OrderCheck)
 		{
 			return OrderCheckController::getInstance();
-		}
-		elseif($assocEntityTypeID === \CCrmOwnerType::Scoring)
-		{
-			return ScoringController::getInstance();
 		}
 		elseif($assocEntityTypeID === \CCrmOwnerType::StoreDocument)
 		{

@@ -460,6 +460,13 @@ class EntityAddressType
 						self::Home, self::Beneficiary
 					],
 					'default' => self::Delivery
+				],
+				'uz' => [
+					'types' => [
+						self::Delivery, self::Primary, self::Registered,
+						self::Home, self::Beneficiary
+					],
+					'default' => self::Delivery
 				]
 			];
 		}

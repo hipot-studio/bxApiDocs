@@ -1,5 +1,1218 @@
 <?php
 
+/* ORMENTITYANNOTATION:Bitrix\Security\FilterMaskTable:security/lib/filtermasktable.php */
+namespace Bitrix\Security {
+	/**
+	 * FilterMask
+	 * @see \Bitrix\Security\FilterMaskTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Security\FilterMask setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\FilterMask setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\FilterMask resetSort()
+	 * @method \Bitrix\Security\FilterMask unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\string getSiteId()
+	 * @method \Bitrix\Security\FilterMask setSiteId(null|\string|\Bitrix\Main\DB\SqlExpression $siteId)
+	 * @method bool hasSiteId()
+	 * @method bool isSiteIdFilled()
+	 * @method bool isSiteIdChanged()
+	 * @method null|\string remindActualSiteId()
+	 * @method null|\string requireSiteId()
+	 * @method \Bitrix\Security\FilterMask resetSiteId()
+	 * @method \Bitrix\Security\FilterMask unsetSiteId()
+	 * @method null|\string fillSiteId()
+	 * @method null|\string getFilterMask()
+	 * @method \Bitrix\Security\FilterMask setFilterMask(null|\string|\Bitrix\Main\DB\SqlExpression $filterMask)
+	 * @method bool hasFilterMask()
+	 * @method bool isFilterMaskFilled()
+	 * @method bool isFilterMaskChanged()
+	 * @method null|\string remindActualFilterMask()
+	 * @method null|\string requireFilterMask()
+	 * @method \Bitrix\Security\FilterMask resetFilterMask()
+	 * @method \Bitrix\Security\FilterMask unsetFilterMask()
+	 * @method null|\string fillFilterMask()
+	 * @method null|\string getLikeMask()
+	 * @method \Bitrix\Security\FilterMask setLikeMask(null|\string|\Bitrix\Main\DB\SqlExpression $likeMask)
+	 * @method bool hasLikeMask()
+	 * @method bool isLikeMaskFilled()
+	 * @method bool isLikeMaskChanged()
+	 * @method null|\string remindActualLikeMask()
+	 * @method null|\string requireLikeMask()
+	 * @method \Bitrix\Security\FilterMask resetLikeMask()
+	 * @method \Bitrix\Security\FilterMask unsetLikeMask()
+	 * @method null|\string fillLikeMask()
+	 * @method null|\string getPregMask()
+	 * @method \Bitrix\Security\FilterMask setPregMask(null|\string|\Bitrix\Main\DB\SqlExpression $pregMask)
+	 * @method bool hasPregMask()
+	 * @method bool isPregMaskFilled()
+	 * @method bool isPregMaskChanged()
+	 * @method null|\string remindActualPregMask()
+	 * @method null|\string requirePregMask()
+	 * @method \Bitrix\Security\FilterMask resetPregMask()
+	 * @method \Bitrix\Security\FilterMask unsetPregMask()
+	 * @method null|\string fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\FilterMask set($fieldName, $value)
+	 * @method \Bitrix\Security\FilterMask reset($fieldName)
+	 * @method \Bitrix\Security\FilterMask unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\FilterMask wakeUp($data)
+	 */
+	class EO_FilterMask {
+		/* @var \Bitrix\Security\FilterMaskTable */
+		static public $dataClass = '\Bitrix\Security\FilterMaskTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * FilterMasks
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\string[] getSiteIdList()
+	 * @method null|\string[] fillSiteId()
+	 * @method null|\string[] getFilterMaskList()
+	 * @method null|\string[] fillFilterMask()
+	 * @method null|\string[] getLikeMaskList()
+	 * @method null|\string[] fillLikeMask()
+	 * @method null|\string[] getPregMaskList()
+	 * @method null|\string[] fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\FilterMask $object)
+	 * @method bool has(\Bitrix\Security\FilterMask $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\FilterMask getByPrimary($primary)
+	 * @method \Bitrix\Security\FilterMask[] getAll()
+	 * @method bool remove(\Bitrix\Security\FilterMask $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\FilterMasks wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\FilterMask current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\FilterMasks merge(?\Bitrix\Security\FilterMasks $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_FilterMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\FilterMaskTable */
+		static public $dataClass = '\Bitrix\Security\FilterMaskTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_FilterMask_Result exec()
+	 * @method \Bitrix\Security\FilterMask fetchObject()
+	 * @method \Bitrix\Security\FilterMasks fetchCollection()
+	 */
+	class EO_FilterMask_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\FilterMask fetchObject()
+	 * @method \Bitrix\Security\FilterMasks fetchCollection()
+	 */
+	class EO_FilterMask_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\FilterMask createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\FilterMasks createCollection()
+	 * @method \Bitrix\Security\FilterMask wakeUpObject($row)
+	 * @method \Bitrix\Security\FilterMasks wakeUpCollection($rows)
+	 */
+	class EO_FilterMask_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\FrameMaskTable:security/lib/framemasktable.php */
+namespace Bitrix\Security {
+	/**
+	 * FrameMask
+	 * @see \Bitrix\Security\FrameMaskTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Security\FrameMask setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\FrameMask setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\FrameMask resetSort()
+	 * @method \Bitrix\Security\FrameMask unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\string getSiteId()
+	 * @method \Bitrix\Security\FrameMask setSiteId(null|\string|\Bitrix\Main\DB\SqlExpression $siteId)
+	 * @method bool hasSiteId()
+	 * @method bool isSiteIdFilled()
+	 * @method bool isSiteIdChanged()
+	 * @method null|\string remindActualSiteId()
+	 * @method null|\string requireSiteId()
+	 * @method \Bitrix\Security\FrameMask resetSiteId()
+	 * @method \Bitrix\Security\FrameMask unsetSiteId()
+	 * @method null|\string fillSiteId()
+	 * @method null|\string getFrameMask()
+	 * @method \Bitrix\Security\FrameMask setFrameMask(null|\string|\Bitrix\Main\DB\SqlExpression $frameMask)
+	 * @method bool hasFrameMask()
+	 * @method bool isFrameMaskFilled()
+	 * @method bool isFrameMaskChanged()
+	 * @method null|\string remindActualFrameMask()
+	 * @method null|\string requireFrameMask()
+	 * @method \Bitrix\Security\FrameMask resetFrameMask()
+	 * @method \Bitrix\Security\FrameMask unsetFrameMask()
+	 * @method null|\string fillFrameMask()
+	 * @method null|\string getLikeMask()
+	 * @method \Bitrix\Security\FrameMask setLikeMask(null|\string|\Bitrix\Main\DB\SqlExpression $likeMask)
+	 * @method bool hasLikeMask()
+	 * @method bool isLikeMaskFilled()
+	 * @method bool isLikeMaskChanged()
+	 * @method null|\string remindActualLikeMask()
+	 * @method null|\string requireLikeMask()
+	 * @method \Bitrix\Security\FrameMask resetLikeMask()
+	 * @method \Bitrix\Security\FrameMask unsetLikeMask()
+	 * @method null|\string fillLikeMask()
+	 * @method null|\string getPregMask()
+	 * @method \Bitrix\Security\FrameMask setPregMask(null|\string|\Bitrix\Main\DB\SqlExpression $pregMask)
+	 * @method bool hasPregMask()
+	 * @method bool isPregMaskFilled()
+	 * @method bool isPregMaskChanged()
+	 * @method null|\string remindActualPregMask()
+	 * @method null|\string requirePregMask()
+	 * @method \Bitrix\Security\FrameMask resetPregMask()
+	 * @method \Bitrix\Security\FrameMask unsetPregMask()
+	 * @method null|\string fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\FrameMask set($fieldName, $value)
+	 * @method \Bitrix\Security\FrameMask reset($fieldName)
+	 * @method \Bitrix\Security\FrameMask unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\FrameMask wakeUp($data)
+	 */
+	class EO_FrameMask {
+		/* @var \Bitrix\Security\FrameMaskTable */
+		static public $dataClass = '\Bitrix\Security\FrameMaskTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * FrameMasks
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\string[] getSiteIdList()
+	 * @method null|\string[] fillSiteId()
+	 * @method null|\string[] getFrameMaskList()
+	 * @method null|\string[] fillFrameMask()
+	 * @method null|\string[] getLikeMaskList()
+	 * @method null|\string[] fillLikeMask()
+	 * @method null|\string[] getPregMaskList()
+	 * @method null|\string[] fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\FrameMask $object)
+	 * @method bool has(\Bitrix\Security\FrameMask $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\FrameMask getByPrimary($primary)
+	 * @method \Bitrix\Security\FrameMask[] getAll()
+	 * @method bool remove(\Bitrix\Security\FrameMask $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\FrameMasks wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\FrameMask current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\FrameMasks merge(?\Bitrix\Security\FrameMasks $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_FrameMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\FrameMaskTable */
+		static public $dataClass = '\Bitrix\Security\FrameMaskTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_FrameMask_Result exec()
+	 * @method \Bitrix\Security\FrameMask fetchObject()
+	 * @method \Bitrix\Security\FrameMasks fetchCollection()
+	 */
+	class EO_FrameMask_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\FrameMask fetchObject()
+	 * @method \Bitrix\Security\FrameMasks fetchCollection()
+	 */
+	class EO_FrameMask_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\FrameMask createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\FrameMasks createCollection()
+	 * @method \Bitrix\Security\FrameMask wakeUpObject($row)
+	 * @method \Bitrix\Security\FrameMasks wakeUpCollection($rows)
+	 */
+	class EO_FrameMask_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\IPRuleExclIPTable:security/lib/ipruleexcliptable.php */
+namespace Bitrix\Security {
+	/**
+	 * IPRuleExclIP
+	 * @see \Bitrix\Security\IPRuleExclIPTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getIpruleId()
+	 * @method \Bitrix\Security\IPRuleExclIP setIpruleId(\int|\Bitrix\Main\DB\SqlExpression $ipruleId)
+	 * @method bool hasIpruleId()
+	 * @method bool isIpruleIdFilled()
+	 * @method bool isIpruleIdChanged()
+	 * @method \string getRuleIp()
+	 * @method \Bitrix\Security\IPRuleExclIP setRuleIp(\string|\Bitrix\Main\DB\SqlExpression $ruleIp)
+	 * @method bool hasRuleIp()
+	 * @method bool isRuleIpFilled()
+	 * @method bool isRuleIpChanged()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\IPRuleExclIP setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\IPRuleExclIP resetSort()
+	 * @method \Bitrix\Security\IPRuleExclIP unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\int getIpStart()
+	 * @method \Bitrix\Security\IPRuleExclIP setIpStart(null|\int|\Bitrix\Main\DB\SqlExpression $ipStart)
+	 * @method bool hasIpStart()
+	 * @method bool isIpStartFilled()
+	 * @method bool isIpStartChanged()
+	 * @method null|\int remindActualIpStart()
+	 * @method null|\int requireIpStart()
+	 * @method \Bitrix\Security\IPRuleExclIP resetIpStart()
+	 * @method \Bitrix\Security\IPRuleExclIP unsetIpStart()
+	 * @method null|\int fillIpStart()
+	 * @method null|\int getIpEnd()
+	 * @method \Bitrix\Security\IPRuleExclIP setIpEnd(null|\int|\Bitrix\Main\DB\SqlExpression $ipEnd)
+	 * @method bool hasIpEnd()
+	 * @method bool isIpEndFilled()
+	 * @method bool isIpEndChanged()
+	 * @method null|\int remindActualIpEnd()
+	 * @method null|\int requireIpEnd()
+	 * @method \Bitrix\Security\IPRuleExclIP resetIpEnd()
+	 * @method \Bitrix\Security\IPRuleExclIP unsetIpEnd()
+	 * @method null|\int fillIpEnd()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\IPRuleExclIP set($fieldName, $value)
+	 * @method \Bitrix\Security\IPRuleExclIP reset($fieldName)
+	 * @method \Bitrix\Security\IPRuleExclIP unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\IPRuleExclIP wakeUp($data)
+	 */
+	class EO_IPRuleExclIP {
+		/* @var \Bitrix\Security\IPRuleExclIPTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleExclIPTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * IPRuleExclIPs
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIpruleIdList()
+	 * @method \string[] getRuleIpList()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\int[] getIpStartList()
+	 * @method null|\int[] fillIpStart()
+	 * @method null|\int[] getIpEndList()
+	 * @method null|\int[] fillIpEnd()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\IPRuleExclIP $object)
+	 * @method bool has(\Bitrix\Security\IPRuleExclIP $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleExclIP getByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleExclIP[] getAll()
+	 * @method bool remove(\Bitrix\Security\IPRuleExclIP $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\IPRuleExclIPs wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\IPRuleExclIP current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\IPRuleExclIPs merge(?\Bitrix\Security\IPRuleExclIPs $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_IPRuleExclIP_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\IPRuleExclIPTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleExclIPTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IPRuleExclIP_Result exec()
+	 * @method \Bitrix\Security\IPRuleExclIP fetchObject()
+	 * @method \Bitrix\Security\IPRuleExclIPs fetchCollection()
+	 */
+	class EO_IPRuleExclIP_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\IPRuleExclIP fetchObject()
+	 * @method \Bitrix\Security\IPRuleExclIPs fetchCollection()
+	 */
+	class EO_IPRuleExclIP_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\IPRuleExclIP createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\IPRuleExclIPs createCollection()
+	 * @method \Bitrix\Security\IPRuleExclIP wakeUpObject($row)
+	 * @method \Bitrix\Security\IPRuleExclIPs wakeUpCollection($rows)
+	 */
+	class EO_IPRuleExclIP_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\IPRuleExclMaskTable:security/lib/ipruleexclmasktable.php */
+namespace Bitrix\Security {
+	/**
+	 * IPRuleExclMask
+	 * @see \Bitrix\Security\IPRuleExclMaskTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getIpruleId()
+	 * @method \Bitrix\Security\IPRuleExclMask setIpruleId(\int|\Bitrix\Main\DB\SqlExpression $ipruleId)
+	 * @method bool hasIpruleId()
+	 * @method bool isIpruleIdFilled()
+	 * @method bool isIpruleIdChanged()
+	 * @method \string getRuleMask()
+	 * @method \Bitrix\Security\IPRuleExclMask setRuleMask(\string|\Bitrix\Main\DB\SqlExpression $ruleMask)
+	 * @method bool hasRuleMask()
+	 * @method bool isRuleMaskFilled()
+	 * @method bool isRuleMaskChanged()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\IPRuleExclMask setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\IPRuleExclMask resetSort()
+	 * @method \Bitrix\Security\IPRuleExclMask unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\string getLikeMask()
+	 * @method \Bitrix\Security\IPRuleExclMask setLikeMask(null|\string|\Bitrix\Main\DB\SqlExpression $likeMask)
+	 * @method bool hasLikeMask()
+	 * @method bool isLikeMaskFilled()
+	 * @method bool isLikeMaskChanged()
+	 * @method null|\string remindActualLikeMask()
+	 * @method null|\string requireLikeMask()
+	 * @method \Bitrix\Security\IPRuleExclMask resetLikeMask()
+	 * @method \Bitrix\Security\IPRuleExclMask unsetLikeMask()
+	 * @method null|\string fillLikeMask()
+	 * @method null|\string getPregMask()
+	 * @method \Bitrix\Security\IPRuleExclMask setPregMask(null|\string|\Bitrix\Main\DB\SqlExpression $pregMask)
+	 * @method bool hasPregMask()
+	 * @method bool isPregMaskFilled()
+	 * @method bool isPregMaskChanged()
+	 * @method null|\string remindActualPregMask()
+	 * @method null|\string requirePregMask()
+	 * @method \Bitrix\Security\IPRuleExclMask resetPregMask()
+	 * @method \Bitrix\Security\IPRuleExclMask unsetPregMask()
+	 * @method null|\string fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\IPRuleExclMask set($fieldName, $value)
+	 * @method \Bitrix\Security\IPRuleExclMask reset($fieldName)
+	 * @method \Bitrix\Security\IPRuleExclMask unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\IPRuleExclMask wakeUp($data)
+	 */
+	class EO_IPRuleExclMask {
+		/* @var \Bitrix\Security\IPRuleExclMaskTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleExclMaskTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * IPRuleExclMasks
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIpruleIdList()
+	 * @method \string[] getRuleMaskList()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\string[] getLikeMaskList()
+	 * @method null|\string[] fillLikeMask()
+	 * @method null|\string[] getPregMaskList()
+	 * @method null|\string[] fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\IPRuleExclMask $object)
+	 * @method bool has(\Bitrix\Security\IPRuleExclMask $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleExclMask getByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleExclMask[] getAll()
+	 * @method bool remove(\Bitrix\Security\IPRuleExclMask $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\IPRuleExclMasks wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\IPRuleExclMask current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\IPRuleExclMasks merge(?\Bitrix\Security\IPRuleExclMasks $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_IPRuleExclMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\IPRuleExclMaskTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleExclMaskTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IPRuleExclMask_Result exec()
+	 * @method \Bitrix\Security\IPRuleExclMask fetchObject()
+	 * @method \Bitrix\Security\IPRuleExclMasks fetchCollection()
+	 */
+	class EO_IPRuleExclMask_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\IPRuleExclMask fetchObject()
+	 * @method \Bitrix\Security\IPRuleExclMasks fetchCollection()
+	 */
+	class EO_IPRuleExclMask_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\IPRuleExclMask createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\IPRuleExclMasks createCollection()
+	 * @method \Bitrix\Security\IPRuleExclMask wakeUpObject($row)
+	 * @method \Bitrix\Security\IPRuleExclMasks wakeUpCollection($rows)
+	 */
+	class EO_IPRuleExclMask_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\IPRuleInclIPTable:security/lib/ipruleincliptable.php */
+namespace Bitrix\Security {
+	/**
+	 * IPRuleInclIP
+	 * @see \Bitrix\Security\IPRuleInclIPTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getIpruleId()
+	 * @method \Bitrix\Security\IPRuleInclIP setIpruleId(\int|\Bitrix\Main\DB\SqlExpression $ipruleId)
+	 * @method bool hasIpruleId()
+	 * @method bool isIpruleIdFilled()
+	 * @method bool isIpruleIdChanged()
+	 * @method \string getRuleIp()
+	 * @method \Bitrix\Security\IPRuleInclIP setRuleIp(\string|\Bitrix\Main\DB\SqlExpression $ruleIp)
+	 * @method bool hasRuleIp()
+	 * @method bool isRuleIpFilled()
+	 * @method bool isRuleIpChanged()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\IPRuleInclIP setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\IPRuleInclIP resetSort()
+	 * @method \Bitrix\Security\IPRuleInclIP unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\int getIpStart()
+	 * @method \Bitrix\Security\IPRuleInclIP setIpStart(null|\int|\Bitrix\Main\DB\SqlExpression $ipStart)
+	 * @method bool hasIpStart()
+	 * @method bool isIpStartFilled()
+	 * @method bool isIpStartChanged()
+	 * @method null|\int remindActualIpStart()
+	 * @method null|\int requireIpStart()
+	 * @method \Bitrix\Security\IPRuleInclIP resetIpStart()
+	 * @method \Bitrix\Security\IPRuleInclIP unsetIpStart()
+	 * @method null|\int fillIpStart()
+	 * @method null|\int getIpEnd()
+	 * @method \Bitrix\Security\IPRuleInclIP setIpEnd(null|\int|\Bitrix\Main\DB\SqlExpression $ipEnd)
+	 * @method bool hasIpEnd()
+	 * @method bool isIpEndFilled()
+	 * @method bool isIpEndChanged()
+	 * @method null|\int remindActualIpEnd()
+	 * @method null|\int requireIpEnd()
+	 * @method \Bitrix\Security\IPRuleInclIP resetIpEnd()
+	 * @method \Bitrix\Security\IPRuleInclIP unsetIpEnd()
+	 * @method null|\int fillIpEnd()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\IPRuleInclIP set($fieldName, $value)
+	 * @method \Bitrix\Security\IPRuleInclIP reset($fieldName)
+	 * @method \Bitrix\Security\IPRuleInclIP unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\IPRuleInclIP wakeUp($data)
+	 */
+	class EO_IPRuleInclIP {
+		/* @var \Bitrix\Security\IPRuleInclIPTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleInclIPTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * IPRuleInclIPs
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIpruleIdList()
+	 * @method \string[] getRuleIpList()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\int[] getIpStartList()
+	 * @method null|\int[] fillIpStart()
+	 * @method null|\int[] getIpEndList()
+	 * @method null|\int[] fillIpEnd()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\IPRuleInclIP $object)
+	 * @method bool has(\Bitrix\Security\IPRuleInclIP $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleInclIP getByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleInclIP[] getAll()
+	 * @method bool remove(\Bitrix\Security\IPRuleInclIP $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\IPRuleInclIPs wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\IPRuleInclIP current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\IPRuleInclIPs merge(?\Bitrix\Security\IPRuleInclIPs $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_IPRuleInclIP_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\IPRuleInclIPTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleInclIPTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IPRuleInclIP_Result exec()
+	 * @method \Bitrix\Security\IPRuleInclIP fetchObject()
+	 * @method \Bitrix\Security\IPRuleInclIPs fetchCollection()
+	 */
+	class EO_IPRuleInclIP_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\IPRuleInclIP fetchObject()
+	 * @method \Bitrix\Security\IPRuleInclIPs fetchCollection()
+	 */
+	class EO_IPRuleInclIP_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\IPRuleInclIP createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\IPRuleInclIPs createCollection()
+	 * @method \Bitrix\Security\IPRuleInclIP wakeUpObject($row)
+	 * @method \Bitrix\Security\IPRuleInclIPs wakeUpCollection($rows)
+	 */
+	class EO_IPRuleInclIP_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\IPRuleInclMaskTable:security/lib/ipruleinclmasktable.php */
+namespace Bitrix\Security {
+	/**
+	 * IPRuleInclMask
+	 * @see \Bitrix\Security\IPRuleInclMaskTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getIpruleId()
+	 * @method \Bitrix\Security\IPRuleInclMask setIpruleId(\int|\Bitrix\Main\DB\SqlExpression $ipruleId)
+	 * @method bool hasIpruleId()
+	 * @method bool isIpruleIdFilled()
+	 * @method bool isIpruleIdChanged()
+	 * @method \string getRuleMask()
+	 * @method \Bitrix\Security\IPRuleInclMask setRuleMask(\string|\Bitrix\Main\DB\SqlExpression $ruleMask)
+	 * @method bool hasRuleMask()
+	 * @method bool isRuleMaskFilled()
+	 * @method bool isRuleMaskChanged()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\IPRuleInclMask setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\IPRuleInclMask resetSort()
+	 * @method \Bitrix\Security\IPRuleInclMask unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\string getLikeMask()
+	 * @method \Bitrix\Security\IPRuleInclMask setLikeMask(null|\string|\Bitrix\Main\DB\SqlExpression $likeMask)
+	 * @method bool hasLikeMask()
+	 * @method bool isLikeMaskFilled()
+	 * @method bool isLikeMaskChanged()
+	 * @method null|\string remindActualLikeMask()
+	 * @method null|\string requireLikeMask()
+	 * @method \Bitrix\Security\IPRuleInclMask resetLikeMask()
+	 * @method \Bitrix\Security\IPRuleInclMask unsetLikeMask()
+	 * @method null|\string fillLikeMask()
+	 * @method null|\string getPregMask()
+	 * @method \Bitrix\Security\IPRuleInclMask setPregMask(null|\string|\Bitrix\Main\DB\SqlExpression $pregMask)
+	 * @method bool hasPregMask()
+	 * @method bool isPregMaskFilled()
+	 * @method bool isPregMaskChanged()
+	 * @method null|\string remindActualPregMask()
+	 * @method null|\string requirePregMask()
+	 * @method \Bitrix\Security\IPRuleInclMask resetPregMask()
+	 * @method \Bitrix\Security\IPRuleInclMask unsetPregMask()
+	 * @method null|\string fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\IPRuleInclMask set($fieldName, $value)
+	 * @method \Bitrix\Security\IPRuleInclMask reset($fieldName)
+	 * @method \Bitrix\Security\IPRuleInclMask unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\IPRuleInclMask wakeUp($data)
+	 */
+	class EO_IPRuleInclMask {
+		/* @var \Bitrix\Security\IPRuleInclMaskTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleInclMaskTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * IPRuleInclMasks
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIpruleIdList()
+	 * @method \string[] getRuleMaskList()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\string[] getLikeMaskList()
+	 * @method null|\string[] fillLikeMask()
+	 * @method null|\string[] getPregMaskList()
+	 * @method null|\string[] fillPregMask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\IPRuleInclMask $object)
+	 * @method bool has(\Bitrix\Security\IPRuleInclMask $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleInclMask getByPrimary($primary)
+	 * @method \Bitrix\Security\IPRuleInclMask[] getAll()
+	 * @method bool remove(\Bitrix\Security\IPRuleInclMask $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\IPRuleInclMasks wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\IPRuleInclMask current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\IPRuleInclMasks merge(?\Bitrix\Security\IPRuleInclMasks $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_IPRuleInclMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\IPRuleInclMaskTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleInclMaskTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IPRuleInclMask_Result exec()
+	 * @method \Bitrix\Security\IPRuleInclMask fetchObject()
+	 * @method \Bitrix\Security\IPRuleInclMasks fetchCollection()
+	 */
+	class EO_IPRuleInclMask_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\IPRuleInclMask fetchObject()
+	 * @method \Bitrix\Security\IPRuleInclMasks fetchCollection()
+	 */
+	class EO_IPRuleInclMask_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\IPRuleInclMask createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\IPRuleInclMasks createCollection()
+	 * @method \Bitrix\Security\IPRuleInclMask wakeUpObject($row)
+	 * @method \Bitrix\Security\IPRuleInclMasks wakeUpCollection($rows)
+	 */
+	class EO_IPRuleInclMask_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\IPRuleTable:security/lib/ipruletable.php */
+namespace Bitrix\Security {
+	/**
+	 * IPRule
+	 * @see \Bitrix\Security\IPRuleTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Security\IPRule setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getRuleType()
+	 * @method \Bitrix\Security\IPRule setRuleType(\string|\Bitrix\Main\DB\SqlExpression $ruleType)
+	 * @method bool hasRuleType()
+	 * @method bool isRuleTypeFilled()
+	 * @method bool isRuleTypeChanged()
+	 * @method \string remindActualRuleType()
+	 * @method \string requireRuleType()
+	 * @method \Bitrix\Security\IPRule resetRuleType()
+	 * @method \Bitrix\Security\IPRule unsetRuleType()
+	 * @method \string fillRuleType()
+	 * @method \string getActive()
+	 * @method \Bitrix\Security\IPRule setActive(\string|\Bitrix\Main\DB\SqlExpression $active)
+	 * @method bool hasActive()
+	 * @method bool isActiveFilled()
+	 * @method bool isActiveChanged()
+	 * @method \string remindActualActive()
+	 * @method \string requireActive()
+	 * @method \Bitrix\Security\IPRule resetActive()
+	 * @method \Bitrix\Security\IPRule unsetActive()
+	 * @method \string fillActive()
+	 * @method \string getAdminSection()
+	 * @method \Bitrix\Security\IPRule setAdminSection(\string|\Bitrix\Main\DB\SqlExpression $adminSection)
+	 * @method bool hasAdminSection()
+	 * @method bool isAdminSectionFilled()
+	 * @method bool isAdminSectionChanged()
+	 * @method \string remindActualAdminSection()
+	 * @method \string requireAdminSection()
+	 * @method \Bitrix\Security\IPRule resetAdminSection()
+	 * @method \Bitrix\Security\IPRule unsetAdminSection()
+	 * @method \string fillAdminSection()
+	 * @method null|\string getSiteId()
+	 * @method \Bitrix\Security\IPRule setSiteId(null|\string|\Bitrix\Main\DB\SqlExpression $siteId)
+	 * @method bool hasSiteId()
+	 * @method bool isSiteIdFilled()
+	 * @method bool isSiteIdChanged()
+	 * @method null|\string remindActualSiteId()
+	 * @method null|\string requireSiteId()
+	 * @method \Bitrix\Security\IPRule resetSiteId()
+	 * @method \Bitrix\Security\IPRule unsetSiteId()
+	 * @method null|\string fillSiteId()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\IPRule setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\IPRule resetSort()
+	 * @method \Bitrix\Security\IPRule unsetSort()
+	 * @method \int fillSort()
+	 * @method null|\Bitrix\Main\Type\DateTime getActiveFrom()
+	 * @method \Bitrix\Security\IPRule setActiveFrom(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $activeFrom)
+	 * @method bool hasActiveFrom()
+	 * @method bool isActiveFromFilled()
+	 * @method bool isActiveFromChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualActiveFrom()
+	 * @method null|\Bitrix\Main\Type\DateTime requireActiveFrom()
+	 * @method \Bitrix\Security\IPRule resetActiveFrom()
+	 * @method \Bitrix\Security\IPRule unsetActiveFrom()
+	 * @method null|\Bitrix\Main\Type\DateTime fillActiveFrom()
+	 * @method null|\int getActiveFromTimestamp()
+	 * @method \Bitrix\Security\IPRule setActiveFromTimestamp(null|\int|\Bitrix\Main\DB\SqlExpression $activeFromTimestamp)
+	 * @method bool hasActiveFromTimestamp()
+	 * @method bool isActiveFromTimestampFilled()
+	 * @method bool isActiveFromTimestampChanged()
+	 * @method null|\int remindActualActiveFromTimestamp()
+	 * @method null|\int requireActiveFromTimestamp()
+	 * @method \Bitrix\Security\IPRule resetActiveFromTimestamp()
+	 * @method \Bitrix\Security\IPRule unsetActiveFromTimestamp()
+	 * @method null|\int fillActiveFromTimestamp()
+	 * @method null|\Bitrix\Main\Type\DateTime getActiveTo()
+	 * @method \Bitrix\Security\IPRule setActiveTo(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $activeTo)
+	 * @method bool hasActiveTo()
+	 * @method bool isActiveToFilled()
+	 * @method bool isActiveToChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualActiveTo()
+	 * @method null|\Bitrix\Main\Type\DateTime requireActiveTo()
+	 * @method \Bitrix\Security\IPRule resetActiveTo()
+	 * @method \Bitrix\Security\IPRule unsetActiveTo()
+	 * @method null|\Bitrix\Main\Type\DateTime fillActiveTo()
+	 * @method null|\int getActiveToTimestamp()
+	 * @method \Bitrix\Security\IPRule setActiveToTimestamp(null|\int|\Bitrix\Main\DB\SqlExpression $activeToTimestamp)
+	 * @method bool hasActiveToTimestamp()
+	 * @method bool isActiveToTimestampFilled()
+	 * @method bool isActiveToTimestampChanged()
+	 * @method null|\int remindActualActiveToTimestamp()
+	 * @method null|\int requireActiveToTimestamp()
+	 * @method \Bitrix\Security\IPRule resetActiveToTimestamp()
+	 * @method \Bitrix\Security\IPRule unsetActiveToTimestamp()
+	 * @method null|\int fillActiveToTimestamp()
+	 * @method null|\string getName()
+	 * @method \Bitrix\Security\IPRule setName(null|\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method null|\string remindActualName()
+	 * @method null|\string requireName()
+	 * @method \Bitrix\Security\IPRule resetName()
+	 * @method \Bitrix\Security\IPRule unsetName()
+	 * @method null|\string fillName()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\IPRule set($fieldName, $value)
+	 * @method \Bitrix\Security\IPRule reset($fieldName)
+	 * @method \Bitrix\Security\IPRule unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\IPRule wakeUp($data)
+	 */
+	class EO_IPRule {
+		/* @var \Bitrix\Security\IPRuleTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * IPRules
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getRuleTypeList()
+	 * @method \string[] fillRuleType()
+	 * @method \string[] getActiveList()
+	 * @method \string[] fillActive()
+	 * @method \string[] getAdminSectionList()
+	 * @method \string[] fillAdminSection()
+	 * @method null|\string[] getSiteIdList()
+	 * @method null|\string[] fillSiteId()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getActiveFromList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillActiveFrom()
+	 * @method null|\int[] getActiveFromTimestampList()
+	 * @method null|\int[] fillActiveFromTimestamp()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getActiveToList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillActiveTo()
+	 * @method null|\int[] getActiveToTimestampList()
+	 * @method null|\int[] fillActiveToTimestamp()
+	 * @method null|\string[] getNameList()
+	 * @method null|\string[] fillName()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\IPRule $object)
+	 * @method bool has(\Bitrix\Security\IPRule $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\IPRule getByPrimary($primary)
+	 * @method \Bitrix\Security\IPRule[] getAll()
+	 * @method bool remove(\Bitrix\Security\IPRule $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\IPRules wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\IPRule current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\IPRules merge(?\Bitrix\Security\IPRules $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_IPRule_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\IPRuleTable */
+		static public $dataClass = '\Bitrix\Security\IPRuleTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IPRule_Result exec()
+	 * @method \Bitrix\Security\IPRule fetchObject()
+	 * @method \Bitrix\Security\IPRules fetchCollection()
+	 */
+	class EO_IPRule_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\IPRule fetchObject()
+	 * @method \Bitrix\Security\IPRules fetchCollection()
+	 */
+	class EO_IPRule_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\IPRule createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\IPRules createCollection()
+	 * @method \Bitrix\Security\IPRule wakeUpObject($row)
+	 * @method \Bitrix\Security\IPRules wakeUpCollection($rows)
+	 */
+	class EO_IPRule_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Security\Mfa\RecoveryCodesTable:security/lib/mfa/recoverycodes.php */
 namespace Bitrix\Security\Mfa {
 	/**
@@ -96,7 +1309,7 @@ namespace Bitrix\Security\Mfa {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\Mfa\EO_RecoveryCodes wakeUp($data)
@@ -143,7 +1356,7 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes[] getAll()
 	 * @method bool remove(\Bitrix\Security\Mfa\EO_RecoveryCodes $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\Security\Mfa\EO_RecoveryCodes_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -156,8 +1369,9 @@ namespace Bitrix\Security\Mfa {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_RecoveryCodes_Collection merge(?EO_RecoveryCodes_Collection $collection)
+	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes_Collection merge(?\Bitrix\Security\Mfa\EO_RecoveryCodes_Collection $collection)
 	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_RecoveryCodes_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\Mfa\RecoveryCodesTable */
@@ -172,10 +1386,6 @@ namespace Bitrix\Security\Mfa {
 	 * @method EO_RecoveryCodes_Result exec()
 	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes fetchObject()
 	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_RecoveryCodes_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -327,7 +1537,7 @@ namespace Bitrix\Security\Mfa {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\Mfa\EO_User wakeUp($data)
@@ -382,7 +1592,7 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Security\Mfa\EO_User[] getAll()
 	 * @method bool remove(\Bitrix\Security\Mfa\EO_User $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\Security\Mfa\EO_User_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -395,8 +1605,9 @@ namespace Bitrix\Security\Mfa {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_User_Collection merge(?EO_User_Collection $collection)
+	 * @method \Bitrix\Security\Mfa\EO_User_Collection merge(?\Bitrix\Security\Mfa\EO_User_Collection $collection)
 	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_User_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\Mfa\UserTable */
@@ -411,10 +1622,6 @@ namespace Bitrix\Security\Mfa {
 	 * @method EO_User_Result exec()
 	 * @method \Bitrix\Security\Mfa\EO_User fetchObject()
 	 * @method \Bitrix\Security\Mfa\EO_User_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_User_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -430,7 +1637,152 @@ namespace Bitrix\Security\Mfa {
 	 */
 	class EO_User_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Security\SessionTable:security/lib/session.php */
+/* ORMENTITYANNOTATION:Bitrix\Security\RedirectRuleTable:security/lib/redirectruletable.php */
+namespace Bitrix\Security {
+	/**
+	 * RedirectRule
+	 * @see \Bitrix\Security\RedirectRuleTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getIsSystem()
+	 * @method \Bitrix\Security\RedirectRule setIsSystem(\string|\Bitrix\Main\DB\SqlExpression $isSystem)
+	 * @method bool hasIsSystem()
+	 * @method bool isIsSystemFilled()
+	 * @method bool isIsSystemChanged()
+	 * @method \string remindActualIsSystem()
+	 * @method \string requireIsSystem()
+	 * @method \Bitrix\Security\RedirectRule resetIsSystem()
+	 * @method \Bitrix\Security\RedirectRule unsetIsSystem()
+	 * @method \string fillIsSystem()
+	 * @method \int getSort()
+	 * @method \Bitrix\Security\RedirectRule setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Security\RedirectRule resetSort()
+	 * @method \Bitrix\Security\RedirectRule unsetSort()
+	 * @method \int fillSort()
+	 * @method \string getUrl()
+	 * @method \Bitrix\Security\RedirectRule setUrl(\string|\Bitrix\Main\DB\SqlExpression $url)
+	 * @method bool hasUrl()
+	 * @method bool isUrlFilled()
+	 * @method bool isUrlChanged()
+	 * @method \string getParameterName()
+	 * @method \Bitrix\Security\RedirectRule setParameterName(\string|\Bitrix\Main\DB\SqlExpression $parameterName)
+	 * @method bool hasParameterName()
+	 * @method bool isParameterNameFilled()
+	 * @method bool isParameterNameChanged()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\RedirectRule set($fieldName, $value)
+	 * @method \Bitrix\Security\RedirectRule reset($fieldName)
+	 * @method \Bitrix\Security\RedirectRule unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\RedirectRule wakeUp($data)
+	 */
+	class EO_RedirectRule {
+		/* @var \Bitrix\Security\RedirectRuleTable */
+		static public $dataClass = '\Bitrix\Security\RedirectRuleTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * RedirectRules
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getIsSystemList()
+	 * @method \string[] fillIsSystem()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method \string[] getUrlList()
+	 * @method \string[] getParameterNameList()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\RedirectRule $object)
+	 * @method bool has(\Bitrix\Security\RedirectRule $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\RedirectRule getByPrimary($primary)
+	 * @method \Bitrix\Security\RedirectRule[] getAll()
+	 * @method bool remove(\Bitrix\Security\RedirectRule $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\RedirectRules wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\RedirectRule current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\RedirectRules merge(?\Bitrix\Security\RedirectRules $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_RedirectRule_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\RedirectRuleTable */
+		static public $dataClass = '\Bitrix\Security\RedirectRuleTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_RedirectRule_Result exec()
+	 * @method \Bitrix\Security\RedirectRule fetchObject()
+	 * @method \Bitrix\Security\RedirectRules fetchCollection()
+	 */
+	class EO_RedirectRule_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\RedirectRule fetchObject()
+	 * @method \Bitrix\Security\RedirectRules fetchCollection()
+	 */
+	class EO_RedirectRule_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\RedirectRule createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\RedirectRules createCollection()
+	 * @method \Bitrix\Security\RedirectRule wakeUpObject($row)
+	 * @method \Bitrix\Security\RedirectRules wakeUpCollection($rows)
+	 */
+	class EO_RedirectRule_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\SessionTable:security/lib/sessiontable.php */
 namespace Bitrix\Security {
 	/**
 	 * EO_Session
@@ -486,7 +1838,7 @@ namespace Bitrix\Security {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\EO_Session wakeUp($data)
@@ -524,7 +1876,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\EO_Session[] getAll()
 	 * @method bool remove(\Bitrix\Security\EO_Session $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\Security\EO_Session_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -537,8 +1889,9 @@ namespace Bitrix\Security {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_Session_Collection merge(?EO_Session_Collection $collection)
+	 * @method \Bitrix\Security\EO_Session_Collection merge(?\Bitrix\Security\EO_Session_Collection $collection)
 	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_Session_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\SessionTable */
@@ -553,10 +1906,6 @@ namespace Bitrix\Security {
 	 * @method EO_Session_Result exec()
 	 * @method \Bitrix\Security\EO_Session fetchObject()
 	 * @method \Bitrix\Security\EO_Session_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_Session_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
@@ -571,6 +1920,435 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\EO_Session_Collection wakeUpCollection($rows)
 	 */
 	class EO_Session_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\SiteCheckTable:security/lib/sitechecktable.php */
+namespace Bitrix\Security {
+	/**
+	 * SiteCheck
+	 * @see \Bitrix\Security\SiteCheckTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Security\SiteCheck setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime getTestDate()
+	 * @method \Bitrix\Security\SiteCheck setTestDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $testDate)
+	 * @method bool hasTestDate()
+	 * @method bool isTestDateFilled()
+	 * @method bool isTestDateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualTestDate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireTestDate()
+	 * @method \Bitrix\Security\SiteCheck resetTestDate()
+	 * @method \Bitrix\Security\SiteCheck unsetTestDate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillTestDate()
+	 * @method null|\string getResults()
+	 * @method \Bitrix\Security\SiteCheck setResults(null|\string|\Bitrix\Main\DB\SqlExpression $results)
+	 * @method bool hasResults()
+	 * @method bool isResultsFilled()
+	 * @method bool isResultsChanged()
+	 * @method null|\string remindActualResults()
+	 * @method null|\string requireResults()
+	 * @method \Bitrix\Security\SiteCheck resetResults()
+	 * @method \Bitrix\Security\SiteCheck unsetResults()
+	 * @method null|\string fillResults()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\SiteCheck set($fieldName, $value)
+	 * @method \Bitrix\Security\SiteCheck reset($fieldName)
+	 * @method \Bitrix\Security\SiteCheck unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\SiteCheck wakeUp($data)
+	 */
+	class EO_SiteCheck {
+		/* @var \Bitrix\Security\SiteCheckTable */
+		static public $dataClass = '\Bitrix\Security\SiteCheckTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * SiteChecks
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getTestDateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillTestDate()
+	 * @method null|\string[] getResultsList()
+	 * @method null|\string[] fillResults()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\SiteCheck $object)
+	 * @method bool has(\Bitrix\Security\SiteCheck $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\SiteCheck getByPrimary($primary)
+	 * @method \Bitrix\Security\SiteCheck[] getAll()
+	 * @method bool remove(\Bitrix\Security\SiteCheck $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\SiteChecks wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\SiteCheck current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\SiteChecks merge(?\Bitrix\Security\SiteChecks $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_SiteCheck_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\SiteCheckTable */
+		static public $dataClass = '\Bitrix\Security\SiteCheckTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_SiteCheck_Result exec()
+	 * @method \Bitrix\Security\SiteCheck fetchObject()
+	 * @method \Bitrix\Security\SiteChecks fetchCollection()
+	 */
+	class EO_SiteCheck_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\SiteCheck fetchObject()
+	 * @method \Bitrix\Security\SiteChecks fetchCollection()
+	 */
+	class EO_SiteCheck_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\SiteCheck createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\SiteChecks createCollection()
+	 * @method \Bitrix\Security\SiteCheck wakeUpObject($row)
+	 * @method \Bitrix\Security\SiteChecks wakeUpCollection($rows)
+	 */
+	class EO_SiteCheck_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\VirusTable:security/lib/virustable.php */
+namespace Bitrix\Security {
+	/**
+	 * Virus
+	 * @see \Bitrix\Security\VirusTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getId()
+	 * @method \Bitrix\Security\Virus setId(\string|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime getTimestampX()
+	 * @method \Bitrix\Security\Virus setTimestampX(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $timestampX)
+	 * @method bool hasTimestampX()
+	 * @method bool isTimestampXFilled()
+	 * @method bool isTimestampXChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualTimestampX()
+	 * @method null|\Bitrix\Main\Type\DateTime requireTimestampX()
+	 * @method \Bitrix\Security\Virus resetTimestampX()
+	 * @method \Bitrix\Security\Virus unsetTimestampX()
+	 * @method null|\Bitrix\Main\Type\DateTime fillTimestampX()
+	 * @method null|\string getSiteId()
+	 * @method \Bitrix\Security\Virus setSiteId(null|\string|\Bitrix\Main\DB\SqlExpression $siteId)
+	 * @method bool hasSiteId()
+	 * @method bool isSiteIdFilled()
+	 * @method bool isSiteIdChanged()
+	 * @method null|\string remindActualSiteId()
+	 * @method null|\string requireSiteId()
+	 * @method \Bitrix\Security\Virus resetSiteId()
+	 * @method \Bitrix\Security\Virus unsetSiteId()
+	 * @method null|\string fillSiteId()
+	 * @method \string getSent()
+	 * @method \Bitrix\Security\Virus setSent(\string|\Bitrix\Main\DB\SqlExpression $sent)
+	 * @method bool hasSent()
+	 * @method bool isSentFilled()
+	 * @method bool isSentChanged()
+	 * @method \string remindActualSent()
+	 * @method \string requireSent()
+	 * @method \Bitrix\Security\Virus resetSent()
+	 * @method \Bitrix\Security\Virus unsetSent()
+	 * @method \string fillSent()
+	 * @method \string getInfo()
+	 * @method \Bitrix\Security\Virus setInfo(\string|\Bitrix\Main\DB\SqlExpression $info)
+	 * @method bool hasInfo()
+	 * @method bool isInfoFilled()
+	 * @method bool isInfoChanged()
+	 * @method \string remindActualInfo()
+	 * @method \string requireInfo()
+	 * @method \Bitrix\Security\Virus resetInfo()
+	 * @method \Bitrix\Security\Virus unsetInfo()
+	 * @method \string fillInfo()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\Virus set($fieldName, $value)
+	 * @method \Bitrix\Security\Virus reset($fieldName)
+	 * @method \Bitrix\Security\Virus unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\Virus wakeUp($data)
+	 */
+	class EO_Virus {
+		/* @var \Bitrix\Security\VirusTable */
+		static public $dataClass = '\Bitrix\Security\VirusTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Viruss
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getIdList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getTimestampXList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillTimestampX()
+	 * @method null|\string[] getSiteIdList()
+	 * @method null|\string[] fillSiteId()
+	 * @method \string[] getSentList()
+	 * @method \string[] fillSent()
+	 * @method \string[] getInfoList()
+	 * @method \string[] fillInfo()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\Virus $object)
+	 * @method bool has(\Bitrix\Security\Virus $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\Virus getByPrimary($primary)
+	 * @method \Bitrix\Security\Virus[] getAll()
+	 * @method bool remove(\Bitrix\Security\Virus $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\Viruss wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\Virus current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\Viruss merge(?\Bitrix\Security\Viruss $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_Virus_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\VirusTable */
+		static public $dataClass = '\Bitrix\Security\VirusTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Virus_Result exec()
+	 * @method \Bitrix\Security\Virus fetchObject()
+	 * @method \Bitrix\Security\Viruss fetchCollection()
+	 */
+	class EO_Virus_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\Virus fetchObject()
+	 * @method \Bitrix\Security\Viruss fetchCollection()
+	 */
+	class EO_Virus_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\Virus createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\Viruss createCollection()
+	 * @method \Bitrix\Security\Virus wakeUpObject($row)
+	 * @method \Bitrix\Security\Viruss wakeUpCollection($rows)
+	 */
+	class EO_Virus_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Security\WhiteListTable:security/lib/whitelisttable.php */
+namespace Bitrix\Security {
+	/**
+	 * WhiteList
+	 * @see \Bitrix\Security\WhiteListTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Security\WhiteList setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getWhiteSubstr()
+	 * @method \Bitrix\Security\WhiteList setWhiteSubstr(\string|\Bitrix\Main\DB\SqlExpression $whiteSubstr)
+	 * @method bool hasWhiteSubstr()
+	 * @method bool isWhiteSubstrFilled()
+	 * @method bool isWhiteSubstrChanged()
+	 * @method \string remindActualWhiteSubstr()
+	 * @method \string requireWhiteSubstr()
+	 * @method \Bitrix\Security\WhiteList resetWhiteSubstr()
+	 * @method \Bitrix\Security\WhiteList unsetWhiteSubstr()
+	 * @method \string fillWhiteSubstr()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Security\WhiteList set($fieldName, $value)
+	 * @method \Bitrix\Security\WhiteList reset($fieldName)
+	 * @method \Bitrix\Security\WhiteList unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Security\WhiteList wakeUp($data)
+	 */
+	class EO_WhiteList {
+		/* @var \Bitrix\Security\WhiteListTable */
+		static public $dataClass = '\Bitrix\Security\WhiteListTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * WhiteLists
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getWhiteSubstrList()
+	 * @method \string[] fillWhiteSubstr()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Security\WhiteList $object)
+	 * @method bool has(\Bitrix\Security\WhiteList $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Security\WhiteList getByPrimary($primary)
+	 * @method \Bitrix\Security\WhiteList[] getAll()
+	 * @method bool remove(\Bitrix\Security\WhiteList $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Security\WhiteLists wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Security\WhiteList current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Security\WhiteLists merge(?\Bitrix\Security\WhiteLists $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_WhiteList_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Security\WhiteListTable */
+		static public $dataClass = '\Bitrix\Security\WhiteListTable';
+	}
+}
+namespace Bitrix\Security {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WhiteList_Result exec()
+	 * @method \Bitrix\Security\WhiteList fetchObject()
+	 * @method \Bitrix\Security\WhiteLists fetchCollection()
+	 */
+	class EO_WhiteList_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Security\WhiteList fetchObject()
+	 * @method \Bitrix\Security\WhiteLists fetchCollection()
+	 */
+	class EO_WhiteList_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Security\WhiteList createObject($setDefaultValues = true)
+	 * @method \Bitrix\Security\WhiteLists createCollection()
+	 * @method \Bitrix\Security\WhiteList wakeUpObject($row)
+	 * @method \Bitrix\Security\WhiteLists wakeUpCollection($rows)
+	 */
+	class EO_WhiteList_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Security\XScanResultTable:security/lib/xscanresulttable.php */
 namespace Bitrix\Security {
@@ -678,7 +2456,7 @@ namespace Bitrix\Security {
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
 	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\XScanResult wakeUp($data)
@@ -726,7 +2504,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\XScanResult[] getAll()
 	 * @method bool remove(\Bitrix\Security\XScanResult $object)
 	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method static \Bitrix\Security\XScanResults wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
@@ -739,8 +2517,9 @@ namespace Bitrix\Security {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method XScanResults merge(?XScanResults $collection)
+	 * @method \Bitrix\Security\XScanResults merge(?\Bitrix\Security\XScanResults $collection)
 	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
 	 */
 	class EO_XScanResult_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\XScanResultTable */
@@ -755,10 +2534,6 @@ namespace Bitrix\Security {
 	 * @method EO_XScanResult_Result exec()
 	 * @method \Bitrix\Security\XScanResult fetchObject()
 	 * @method \Bitrix\Security\XScanResults fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
 	 */
 	class EO_XScanResult_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**

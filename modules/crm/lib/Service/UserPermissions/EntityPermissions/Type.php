@@ -8,6 +8,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Settings\InvoiceSettings;
+use CCrmOwnerType;
 
 /**
  * @internal
@@ -15,7 +16,11 @@ use Bitrix\Crm\Settings\InvoiceSettings;
  */
 class Type
 {
+	use UserPermissions\AutomatedSolutionEntityLockedTrait;
+
 	private array $canReadSomeItems = [];
+	private array $canUpdateSomeItems = [];
+
 	public function __construct(
 		private readonly PermissionsManager $permissionsManager,
 		private readonly CatalogEntityItem $catalogEntityItem,
@@ -67,11 +72,10 @@ class Type
 		return $this->permissionsManager
 			->hasMaxPermissionLevel(
 				$permissionEntityType,
-				UserPermissions::OPERATION_READ
+				UserPermissions::OPERATION_READ,
 			)
 		;
 	}
-
 
 	/**
 	 * Returns true if user has permission to read at least one entity in CRM
@@ -89,6 +93,15 @@ class Type
 	public function canReadSomeItemsInCrmOrAutomatedSolutions(): bool
 	{
 		return $this->canReadSomeItems(null);
+	}
+
+	/**
+	 * Returns true if user has permission to update at least one entity in CRM or has permission to update any smart process in automated solutions
+	 * @return bool
+	 */
+	public function canUpdateSomeItemsInCrmOrAutomatedSolutions(): bool
+	{
+		return $this->canUpdateSomeItems(null);
 	}
 
 	/**
@@ -127,9 +140,14 @@ class Type
 			return $this->saleEntityItem->canAddItems($this, $entityTypeId);
 		}
 
-		if ($entityTypeId === \CCrmOwnerType::DealRecurring)
+		if ($entityTypeId === CCrmOwnerType::DealRecurring)
 		{
-			$entityTypeId = \CCrmOwnerType::Deal;
+			$entityTypeId = CCrmOwnerType::Deal;
+		}
+
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
 		}
 
 		return $this->canDoOperation($entityTypeId, UserPermissions::OPERATION_ADD);
@@ -153,6 +171,10 @@ class Type
 			return $this->saleEntityItem->canAddItems($this, $entityTypeId);
 		}
 
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
 
 		return $this->canDoOperationInCategory($entityTypeId, $categoryId, UserPermissions::OPERATION_ADD);
 	}
@@ -176,6 +198,11 @@ class Type
 			return $this->saleEntityItem->canUpdateItems($this, $entityTypeId);
 		}
 
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperation($entityTypeId, UserPermissions::OPERATION_UPDATE);
 	}
 
@@ -195,6 +222,11 @@ class Type
 		if (SaleEntityItem::isSaleEntity($entityTypeId))
 		{
 			return $this->saleEntityItem->canUpdateItems($this, $entityTypeId);
+		}
+
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
 		}
 
 		return $this->canDoOperationInCategory($entityTypeId, $categoryId, UserPermissions::OPERATION_UPDATE);
@@ -219,6 +251,11 @@ class Type
 			return $this->saleEntityItem->canDeleteItems($this, $entityTypeId);
 		}
 
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperation($entityTypeId, UserPermissions::OPERATION_DELETE);
 	}
 
@@ -240,26 +277,51 @@ class Type
 			return $this->saleEntityItem->canDeleteItems($this, $entityTypeId);
 		}
 
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperationInCategory($entityTypeId, $categoryId, UserPermissions::OPERATION_DELETE);
 	}
 
 	public function canExportItems(int $entityTypeId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperation($entityTypeId, UserPermissions::OPERATION_EXPORT);
 	}
 
 	public function canExportItemsInCategory(int $entityTypeId, int $categoryId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperationInCategory($entityTypeId, $categoryId, UserPermissions::OPERATION_EXPORT);
 	}
 
 	public function canImportItems(int $entityTypeId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperation($entityTypeId, UserPermissions::OPERATION_IMPORT);
 	}
 
 	public function canImportItemsInCategory(int $entityTypeId, int $categoryId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		return $this->canDoOperationInCategory($entityTypeId, $categoryId, UserPermissions::OPERATION_IMPORT);
 	}
 
@@ -267,14 +329,14 @@ class Type
 	{
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 
-		if (\CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId) && !$factory) // disable access for deleted smart-processes
+		if (CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId) && !$factory) // disable access for deleted smart-processes
 		{
 			return false;
 		}
 
 		$skipAllCategoriesCheckEntityType = [ // client permissions must check default category only
-			\CCrmOwnerType::Contact,
-			\CCrmOwnerType::Company,
+			CCrmOwnerType::Contact,
+			CCrmOwnerType::Company,
 		];
 
 		if (
@@ -312,29 +374,57 @@ class Type
 
 	private function canReadSomeItems(?int $automatedSolutionId): bool
 	{
+		return $this->canDoSomethingWithSomeItems(
+			$automatedSolutionId,
+			$this->canReadSomeItems,
+			function (int $entityTypeId): bool {
+				return $this->canReadItems($entityTypeId);
+			},
+		);
+	}
 
+	private function canUpdateSomeItems(?int $automatedSolutionId): bool
+	{
+		return $this->canDoSomethingWithSomeItems(
+			$automatedSolutionId,
+			$this->canUpdateSomeItems,
+			function (int $entityTypeId): bool {
+				return $this->canUpdateItems($entityTypeId);
+			},
+		);
+	}
+
+	/**
+	 * @param int|null $automatedSolutionId
+	 * @param array $cache
+	 * @param callable(int): bool $checker
+	 *
+	 * @return bool
+	 */
+	private function canDoSomethingWithSomeItems(?int $automatedSolutionId, array $cache, callable $checker): bool
+	{
 		$cacheKey = is_null($automatedSolutionId) ? -1 : $automatedSolutionId;
-		if (isset($this->canReadSomeItems[$cacheKey]))
+		if (isset($cache[$cacheKey]))
 		{
-			return $this->canReadSomeItems[$cacheKey];
+			return $cache[$cacheKey];
 		}
 
-		$result =
+		$result	=
 			!$automatedSolutionId
 			&& (
-				$this->canReadItems(\CCrmOwnerType::Lead)
-				|| $this->canReadItems(\CCrmOwnerType::Contact)
-				|| $this->canReadItems(\CCrmOwnerType::Company)
-				|| $this->canReadItems(\CCrmOwnerType::Deal)
-				|| $this->canReadItems(\CCrmOwnerType::Quote)
+				$checker(CCrmOwnerType::Lead)
+				|| $checker(CCrmOwnerType::Contact)
+				|| $checker(CCrmOwnerType::Company)
+				|| $checker(CCrmOwnerType::Deal)
+				|| $checker(CCrmOwnerType::Quote)
 			);
 		if (!$automatedSolutionId && !$result && InvoiceSettings::getCurrent()->isOldInvoicesEnabled())
 		{
-			$result = $this->canReadItems(\CCrmOwnerType::Invoice);
+			$result = $checker(CCrmOwnerType::Invoice);
 		}
 		if (!$automatedSolutionId && !$result && InvoiceSettings::getCurrent()->isSmartInvoiceEnabled())
 		{
-			$result = $this->canReadItems(\CCrmOwnerType::SmartInvoice);
+			$result = $checker(CCrmOwnerType::SmartInvoice);
 		}
 
 		if (!$result)
@@ -350,7 +440,7 @@ class Type
 			}
 			catch (\Throwable $e)
 			{
-				\Bitrix\Crm\Service\Container::getInstance()->getLogger('Permissions')->critical(
+				Container::getInstance()->getLogger('Permissions')->critical(
 					'canReadAnyItems: unable to load dynamic types map',
 					[
 						'code' => $e->getCode(),
@@ -358,12 +448,12 @@ class Type
 						'file' => $e->getFile(),
 						'line' => $e->getLine(),
 						'trace' => $e->getTraceAsString(),
-					]
+					],
 				);
 			}
 			foreach ($dynamicTypesMap->getTypes() as $type)
 			{
-				if (\CCrmOwnerType::isDynamicTypeBasedStaticEntity($type->getEntityTypeId()))
+				if (CCrmOwnerType::isDynamicTypeBasedStaticEntity($type->getEntityTypeId()))
 				{
 					continue; // already was checked
 				}
@@ -372,15 +462,17 @@ class Type
 						is_null($automatedSolutionId)
 						|| $automatedSolutionId === (int)$type->getCustomSectionId()
 					)
-					&& $this->canReadItems($type->getEntityTypeId()))
+					&& $checker($type->getEntityTypeId()))
 				{
 					$result = true;
+
 					break;
 				}
 			}
 		}
-		$this->canReadSomeItems[$cacheKey] = $result;
 
-		return $this->canReadSomeItems[$cacheKey];
+		$cache[$cacheKey] = $result;
+
+		return $cache[$cacheKey];
 	}
 }

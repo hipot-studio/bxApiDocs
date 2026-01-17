@@ -189,9 +189,15 @@ class TaskCheckListFacade extends CheckListFacade
 		}
 
 		$accomplicesIds = [];
-		foreach ($members as $id => $member)
+		foreach ($members as $member)
 		{
 			$type = (is_array($member) ? $member['TYPE'] : $member);
+			$id = (int)($member['ID'] ?? 0);
+			if ($id <= 0)
+			{
+				continue;
+			}
+
 			if ($type === \Bitrix\Tasks\Internals\Task\MemberTable::MEMBER_TYPE_ACCOMPLICE)
 			{
 				$accomplicesIds[] = $id;
@@ -220,9 +226,15 @@ class TaskCheckListFacade extends CheckListFacade
 		}
 
 		$auditorsIds = [];
-		foreach ($members as $id => $member)
+		foreach ($members as $member)
 		{
 			$type = (is_array($member) ? $member['TYPE'] : $member);
+			$id = (int)($member['ID'] ?? 0);
+			if ($id <= 0)
+			{
+				continue;
+			}
+
 			if ($type === \Bitrix\Tasks\Internals\Task\MemberTable::MEMBER_TYPE_AUDITOR)
 			{
 				$auditorsIds[] = $id;

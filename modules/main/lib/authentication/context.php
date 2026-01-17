@@ -11,15 +11,18 @@ namespace Bitrix\Main\Authentication;
 
 class Context implements \JsonSerializable
 {
-	protected $userId;
-	protected $previousUserId;
-	protected $applicationId;
-	protected $applicationPasswordId;
-	protected $storedAuthId;
-	protected $storedAuthHash;
-	protected $hitAuthId;
-	protected $requestId;
+	protected ?int $userId = null;
+	protected ?int $previousUserId = null;
+	protected ?string $applicationId = null;
+	protected ?int $applicationPasswordId = null;
+	protected ?int $storedAuthId = null;
+	protected ?string $storedAuthHash = null;
+	protected ?int $hitAuthId = null;
+	protected ?string $requestId = null;
 	protected Method $method = Method::Unspecified;
+	protected bool $otpUsed = false;
+	protected ?string $externalAuthId = null;
+	protected ?string $externalId = null;
 
 	public function getUserId(): int
 	{
@@ -109,6 +112,17 @@ class Context implements \JsonSerializable
 		return $this;
 	}
 
+	public function isOtpUsed(): bool
+	{
+		return $this->otpUsed;
+	}
+
+	public function setOtpUsed(bool $otpUsed): static
+	{
+		$this->otpUsed = $otpUsed;
+		return $this;
+	}
+
 	public function getRequestId(): ?string
 	{
 		return $this->requestId;
@@ -117,6 +131,28 @@ class Context implements \JsonSerializable
 	public function setRequestId(?string $requestId): static
 	{
 		$this->requestId = $requestId;
+		return $this;
+	}
+
+	public function getExternalAuthId(): ?string
+	{
+		return $this->externalAuthId;
+	}
+
+	public function setExternalAuthId(?string $externalAuthId): static
+	{
+		$this->externalAuthId = $externalAuthId;
+		return $this;
+	}
+
+	public function getExternalId(): ?string
+	{
+		return $this->externalId;
+	}
+
+	public function setExternalId(?string $externalId): static
+	{
+		$this->externalId = $externalId;
 		return $this;
 	}
 

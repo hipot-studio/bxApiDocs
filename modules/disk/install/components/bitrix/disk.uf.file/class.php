@@ -283,13 +283,6 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		$this->includeComponentTemplate($this->editMode ? 'edit' : 'show'.($this->arParams['INLINE'] === 'Y' ? '_inline' : ''));
 	}
 
-	private function getTokenScopeByAttachedObject(AttachedObject $attachedModel): string
-	{
-		$entityType = str_replace('\\', '', $attachedModel->getEntityType());
-
-		return $entityType . '_' . $attachedModel->getEntityId();
-	}
-
 	private function loadFilesData()
 	{
 		if(empty($this->arParams['PARAMS']['arUserField']))
@@ -356,9 +349,10 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			$accessInfo = ['encryptedScope' => ''];
 			if ($attachedModel)
 			{
+				$scope = $scopeTokenService->getTokenScopeByAttachedObject($attachedModel);
 				$result = $scopeTokenService->grantAccessWithScope(
 					$attachedModel,
-					$this->getTokenScopeByAttachedObject($attachedModel)
+					$scope,
 				);
 
 				if ($result !== null)
@@ -404,6 +398,8 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 				$data['IMAGE'] = $fileModel->getFile();
 			}
 
+			$sources = [];
+			$videoSizes = [];
 			if(!$this->editMode && \Bitrix\Disk\TypeFile::isVideo($fileModel))
 			{
 				if($fileModel->getView()->isHtmlAvailable())
@@ -442,6 +438,10 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 								$previewPath = $urlManager->getUrlUfController('showPreview', array('attachedId' => $id, 'viewId' => $fileModel->getView()->getId()));
 							}
 						}
+
+						$sources = $fileModel->getView()->getSources($viewPath);
+						$videoSizes = $fileModel->getView()->getSizes($maxWidth, $maxHeight);
+
 						$data["VIDEO"] = $fileModel->getView()->render(array(
 							'IS_MOBILE_APP' => ($this->getTemplateName() == 'mobile'),
 							'PATH' => $viewPath,
@@ -516,6 +516,16 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 						'type' => 'download',
 					])
 				;
+
+				if (!empty($sources) && method_exists($attr, 'setSources'))
+				{
+					$attr->setSources($sources);
+					if (!empty($videoSizes))
+					{
+						$attr->setWidth($videoSizes['WIDTH']);
+						$attr->setHeight($videoSizes['HEIGHT']);
+					}
+				}
 
 				if (!$this->arParams['DISABLE_LOCAL_EDIT'])
 				{

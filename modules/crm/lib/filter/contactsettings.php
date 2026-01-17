@@ -9,7 +9,7 @@ class ContactSettings extends EntitySettings implements ISettingsSupportsCategor
 	/** @var int */
 	protected $categoryId;
 
-	function __construct(array $params)
+	public function __construct(array $params)
 	{
 		parent::__construct($params);
 

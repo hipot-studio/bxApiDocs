@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Main\Update;
 
 use Bitrix\Main\Localization\Loc;
@@ -74,4 +75,3 @@ final class UserStepper extends Stepper
 		return $return;
 	}
 }
-?>

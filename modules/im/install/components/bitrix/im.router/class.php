@@ -15,7 +15,7 @@ class ImRouterComponent extends \CBitrixComponent
 {
 	private const NETWORK_LINE = 'networkLines';
 
-	/** @var HttpRequest $request */
+	/** @var \Bitrix\Main\HttpRequest $request */
 	protected $request = array();
 	protected $errors = array();
 	protected $aliasData = array();
@@ -140,6 +140,11 @@ class ImRouterComponent extends \CBitrixComponent
 			}
 			if ($USER->IsAuthorized() && !\Bitrix\Im\User::getInstance()->isConnector())
 			{
+				if ($this->isDesktopRequest())
+				{
+					$this->handleDesktopRequest();
+				}
+
 				$this->checkNetworkLines();
 				$this->showFullscreenChat();
 			}
@@ -203,5 +208,22 @@ class ImRouterComponent extends \CBitrixComponent
 	private function isChatEmbeddedOnPage(): bool
 	{
 		return Locator::getMessenger()->getApplication()->shouldHideQuickAccess();
+	}
+
+	private function isDesktopRequest(): bool
+	{
+		return \Bitrix\Im\V2\Application\Context::getCurrent()->isDesktop();
+	}
+
+	private function handleDesktopRequest(): void
+	{
+		if (!$this->isDesktopRequest())
+		{
+			return;
+		}
+
+		$desktopVersion = (int)($this->request->getQuery('BXD_API_VERSION') ?? 0);
+		CIMMessenger::SetDesktopVersion($desktopVersion);
+		CIMMessenger::SetDesktopStatusOnline(null, false);
 	}
 }

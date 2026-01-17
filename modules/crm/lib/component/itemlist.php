@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Component;
 
+use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
 use Bitrix\Crm\Automation;
 use Bitrix\Crm\Category\CategoryPullManager;
 use Bitrix\Crm\Category\Entity\Category;
@@ -22,8 +23,8 @@ use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\InvoiceSettings;
-use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
 use Bitrix\Crm\UI\Tools\NavigationBar;
+use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -95,12 +96,12 @@ abstract class ItemList extends Base
 		$this->router->setCurrentListView($this->entityTypeId, $this->getListViewType());
 
 		$this->factory = Service\Container::getInstance()->getFactory($this->entityTypeId);
-		if ($this->isRecurring())
-		{
-			$this->factory->setIsRecurringMode(true);
-		}
 
 		$this->kanbanEntity = Kanban\Entity::getInstance($this->factory->getEntityName());
+		if ($this->isRecurring())
+		{
+			$this->kanbanEntity->setIsRecurring();
+		}
 
 		if($this->factory->isCategoriesSupported())
 		{
@@ -267,7 +268,7 @@ abstract class ItemList extends Base
 		}
 		$buttons[Toolbar\ButtonLocation::AFTER_TITLE][] = new Buttons\Button($addButtonParameters);
 
-		if ($this->factory->isCategoriesEnabled() && !$this->factory->isRecurringMode())
+		if (!$this->isRecurring() && $this->factory->isCategoriesEnabled())
 		{
 			$categories = $this->userPermissions->category()->filterAvailableForReadingCategories(
 				$this->factory->getCategories()
@@ -319,10 +320,7 @@ abstract class ItemList extends Base
 			&& Container::getInstance()->getUserPermissions()->entityType()->canReadItems(\CCrmOwnerType::Invoice)
 		)
 		{
-			if (
-				!$this->factory->isRecurringMode()
-				&& !InvoiceSettings::getCurrent()->isOldInvoicesEnabled()
-			)
+			if (!$this->isRecurring() && !InvoiceSettings::getCurrent()->isOldInvoicesEnabled())
 			{
 				$settingsItems[] = [
 					'text' => \CCrmOwnerType::GetCategoryCaption(\CCrmOwnerType::Invoice),
@@ -615,17 +613,17 @@ abstract class ItemList extends Base
 
 		if (Automation\Factory::isAutomationAvailable($this->entityTypeId) && Loader::includeModule('ui'))
 		{
-			$button = (new NavigationBar([]))->getAutomationViewLayout();
-
 			$dynamicTypesLimit = RestrictionManager::getDynamicTypesLimitRestriction();
 			$isTypeSettingsRestricted = $dynamicTypesLimit->isTypeSettingsRestricted($this->entityTypeId);
 			if ($isTypeSettingsRestricted)
 			{
-				$button->bindEvent('click', new Buttons\JsCode($dynamicTypesLimit->getShowFeatureJsFunctionString()));
+				$onClick = (new Buttons\JsCode($dynamicTypesLimit->getShowFeatureJsFunctionString()))->getCode();
+				$buttonHtml = (new NavigationBar([]))->getRobotButtonHtml($this->factory->getEntityName(), '', $onClick);
 			}
 			elseif (!Container::getInstance()->getIntranetToolsManager()->checkRobotsAvailability())
 			{
-				$button->bindEvent('click', new Buttons\JsCode(AvailabilityManager::getInstance()->getRobotsAvailabilityLock()));
+				$onClick = (new Buttons\JsCode(AvailabilityManager::getInstance()->getRobotsAvailabilityLock()))->getCode();
+				$buttonHtml = (new NavigationBar([]))->getRobotButtonHtml($this->factory->getEntityName(), '', $onClick);
 			}
 			else
 			{
@@ -639,14 +637,17 @@ abstract class ItemList extends Base
 					$categoryId
 				);
 
-				$button->setLink((string)$url);
+				$buttonHtml = (new NavigationBar([]))->getRobotButtonHtml($this->factory->getEntityName(), $url);
 			}
 
-			$views[] = [
-				'html' => $button->render(),
-				'isActive' => false,
-				'position' => Toolbar\ButtonLocation::RIGHT,
-			];
+			if ($buttonHtml)
+			{
+				$views[] = [
+					'html' => $buttonHtml,
+					'isActive' => false,
+					'position' => Toolbar\ButtonLocation::RIGHT,
+				];
+			}
 		}
 
 		return $views;
@@ -796,12 +797,21 @@ abstract class ItemList extends Base
 		// disabled button configuration
 		$disabledButtonDataset = [];
 		$disabledButtonClass = '';
-		if($isDisabled)
+
+		if ($isDisabled)
 		{
 			$link = null;
-			$hintMsg = $this->entityTypeId === \CCrmOwnerType::SmartInvoice
-				? 'CRM_SMART_INVOICE_ADD_HINT'
-				: 'CRM_TYPE_ITEM_ADD_HINT';
+
+			if ($this->entityTypeId === \CCrmOwnerType::SmartInvoice)
+			{
+				$hintMsg = 'CRM_SMART_INVOICE_ADD_HINT';
+			}
+			else
+			{
+				$isLocked = CapabilityAccessChecker::getInstance()->isLockedEntityType($this->entityTypeId);
+				$hintMsg = $isLocked ? 'CRM_TYPE_AUTOMATED_SOLUTION_LOCKED_ITEM_ADD_HINT' : 'CRM_TYPE_ITEM_ADD_HINT';
+			}
+
 			$disabledButtonDataset = [
 				'hint' => Loc::getMessage($hintMsg),
 				'hint-no-icon' => '',

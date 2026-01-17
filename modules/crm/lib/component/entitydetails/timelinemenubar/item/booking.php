@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 
+use Bitrix\Booking\Service\BookingFeature;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Context;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 
 class Booking extends Item
@@ -53,6 +55,11 @@ class Booking extends Item
 	public function isNew(): bool
 	{
 		return true;
+	}
+
+	public function hasTariffRestrictions(): bool
+	{
+		return !$this->isFeatureEnabled();
 	}
 
 	public function prepareSettings(): array
@@ -103,6 +110,10 @@ class Booking extends Item
 			],
 			'ahaMoments' => $ahaMoments,
 			'shouldShowBanner' => $shouldShowBanner,
+			'feature' => [
+				'id' => $this->getFeatureId(),
+				'isEnabled' => $this->isFeatureEnabled(),
+			],
 		];
 	}
 
@@ -194,5 +205,27 @@ class Booking extends Item
 		);
 
 		return (bool)($values[$name] ?? false);
+	}
+
+	private function isFeatureEnabled(): bool
+	{
+		$featureId = $this->getFeatureId();
+
+		if (Loader::includeModule('booking') && $featureId)
+		{
+			return BookingFeature::isFeatureEnabled($featureId);
+		}
+
+		return false;
+	}
+
+	private function getFeatureId(): string|null
+	{
+		if (Loader::includeModule('booking'))
+		{
+			return BookingFeature::FEATURE_ID_CRM_CREATE_BOOKING;
+		}
+
+		return null;
 	}
 }

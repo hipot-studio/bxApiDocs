@@ -4,6 +4,12 @@ namespace Bitrix\Intranet\Settings;
 
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Bitrix24\IpAccess\Rights;
+use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
+use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
+use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
+use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\MobileAppSettings;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
@@ -27,6 +33,9 @@ class SecuritySettings extends AbstractSettings
 	private bool $isCloud;
 	private array $deviceHistoryDays;
 	private MobileAppSettings $mobileAppService;
+	private OtpSettings $otpSettings;
+	private ?User $user;
+	private ?PersonalOtp $personalOtp;
 
 	public function __construct(array $data = [])
 	{
@@ -47,6 +56,9 @@ class SecuritySettings extends AbstractSettings
 			$this->deviceHistoryDays[0] = Loc::getMessage('INTRANET_SETTINGS_SECURITY_UNLIMITED_DAYS');
 		}
 		$this->mobileAppService = ServiceLocator::getInstance()->get('intranet.option.mobile_app');
+		$this->otpSettings = new OtpSettings();
+		$this->user = (new UserRepository())->getUserById((int)CurrentUser::get()->getId());
+		$this->personalOtp = $this->user ? new PersonalOtp($this->user) : null;
 	}
 
 	public function validate(): ErrorCollection
@@ -82,7 +94,7 @@ class SecuritySettings extends AbstractSettings
 									[
 										'page' => $this->getType(),
 										'field' => $inputName,
-									])
+									]),
 								);
 
 								break;
@@ -98,7 +110,7 @@ class SecuritySettings extends AbstractSettings
 										[
 											'page' => $this->getType(),
 											'field' => $inputName,
-										])
+										]),
 								);
 
 								break;
@@ -128,29 +140,52 @@ class SecuritySettings extends AbstractSettings
 
 		$otpData = $this->getOtpSettings();
 
-		if (!empty($otpData))
+		if (!empty($otpData) && $this->personalOtp)
 		{
-			$data['SECURITY_OTP'] = $otpData['SECURITY_OTP'];
+			$mobilePushOtp = MobilePush::createByDefault();
+			$data['SECURITY_PUSH_OTP_PROVIDER_DEFAULT'] = $mobilePushOtp->isDefault() || $this->personalOtp->isPushType();
 			$data['SECURITY_OTP_ENABLED'] = $otpData['SECURITY_OTP_ENABLED'];
 			$data['SECURITY_IS_USER_OTP_ACTIVE'] = $otpData['SECURITY_IS_USER_OTP_ACTIVE'];
-			$data['SECURITY_OTP_DAYS'] = [];
-			$data['SEND_OTP_PUSH'] = Option::get('intranet', 'send_otp_push', 'N') === 'Y';
-			$data['SECURITY_OTP_PATH'] = $otpData['SECURITY_OTP_PATH'];
 
-			for ($i = 5; $i <= 10; $i++)
+			if (!$data['SECURITY_PUSH_OTP_PROVIDER_DEFAULT'])
 			{
-				$current = $i === $otpData['SECURITY_OTP_DAYS'];
+				$data['SEND_OTP_PUSH'] = Option::get('intranet', 'send_otp_push', 'N') === 'Y';
+			}
 
-				if ($current)
+			$data['SECURITY_OTP_PATH'] = $otpData['SECURITY_OTP_PATH'];
+			if (!$mobilePushOtp->isDefault())
+			{
+				if ($mobilePushOtp->getPromoteMode()->isGreaterOrEqual(PromoteMode::Medium))
 				{
-					$data['SECURITY_OTP_DAYS']['CURRENT'] = true;
+					$data['SECURITY_OTP_NEED_PUSH_OTP_BANNER'] = true;
 				}
+				elseif ($mobilePushOtp->getPromoteMode() === PromoteMode::Low && (new OtpSettings())->isMandatoryUsing())
+				{
+					$data['SECURITY_OTP_NEED_PUSH_OTP_BANNER'] = $this->personalOtp->isPushType();
+				}
+			}
+			$data['SECURITY_PUSH_OTP_PROVIDE_HIGH'] = $mobilePushOtp->getPromoteMode() === PromoteMode::High;
 
-				$data['SECURITY_OTP_DAYS']['ITEMS'][] = [
-					'value' => $i,
-					'name' => FormatDate('ddiff', time() - 60 * 60 * 24 * $i),
-					'selected' => $current,
-				];
+			if (!$data['SECURITY_PUSH_OTP_PROVIDE_HIGH'])
+			{
+				$data['SECURITY_OTP'] = $otpData['SECURITY_OTP'];
+				$data['SECURITY_OTP_DAYS'] = [];
+
+				for ($i = 5; $i <= 10; $i++)
+				{
+					$current = $i === $otpData['SECURITY_OTP_DAYS'];
+
+					if ($current)
+					{
+						$data['SECURITY_OTP_DAYS']['CURRENT'] = true;
+					}
+
+					$data['SECURITY_OTP_DAYS']['ITEMS'][] = [
+						'value' => $i,
+						'name' => FormatDate('ddiff', time() - 60 * 60 * 24 * $i),
+						'selected' => $current,
+					];
+				}
 			}
 		}
 
@@ -172,8 +207,7 @@ class SecuritySettings extends AbstractSettings
 		elseif (
 			\Bitrix\Main\Loader::includeModule('bitrix24')
 			&& (\CBitrix24::IsLicensePaid() || \CBitrix24::IsNfrLicense() || \CBitrix24::IsDemoLicense())
-		)
-		{
+		) {
 			$data['EVENT_LOG'] = '/settings/configs/event_log.php';
 		}
 
@@ -182,14 +216,14 @@ class SecuritySettings extends AbstractSettings
 			$data['sectionOtp'] = new Section(
 				'settings-security-section-otp',
 				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_OTP'),
-				'ui-icon-set --calendar-1'
+				'ui-icon-set --o-key',
 			);
 
 			$data['fieldSecurityOtp'] = new Switcher(
 				'settigns-security-field-otp',
 				'SECURITY_OTP',
-				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SECURITY_OTP'),
-				$otpData['SECURITY_OTP'] ? 'Y' : 'N'
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SECURITY_OTP_MSGVER_1'),
+				$otpData['SECURITY_OTP'] ? 'Y' : 'N',
 			);
 		}
 
@@ -197,16 +231,16 @@ class SecuritySettings extends AbstractSettings
 		$data['sectionHistory'] = new Section(
 			'settings-security-section-history',
 			Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_DEVICES_HISTORY'),
-			'ui-icon-set --clock-with-arrow',
+			'ui-icon-set --o-clock-back',
 			!(isset($otpData['SECURITY_OTP_ENABLED']) && $otpData['SECURITY_OTP_ENABLED']),
 			$data['DEVICE_HISTORY_SETTINGS']->isEnable(),
-			bannerCode: 'limit_office_login_history'
+			bannerCode: 'limit_office_login_history',
 		);
 
 		$data['sectionEventLog'] = new Section(
 			'settings-security-section-event_log',
 			Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_EVENT_LOG'),
-			'ui-icon-set --list',
+			'ui-icon-set --o-task-list',
 			false,
 			isset($data['EVENT_LOG']),
 			bannerCode: 'limit_office_login_log',
@@ -217,7 +251,7 @@ class SecuritySettings extends AbstractSettings
 			$data['sectionAccessIp'] = new Section(
 				'settings-security-section-access_ip',
 				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_ACCESS_IP'),
-				'ui-icon-set --attention-i-circle',
+				'ui-icon-set --ip-address',
 				false,
 				$data['IP_ACCESS_RIGHTS_ENABLED'],
 				bannerCode: 'limit_admin_ip',
@@ -225,17 +259,17 @@ class SecuritySettings extends AbstractSettings
 			$data['sectionBlackList'] = new Section(
 				'settings-security-section-black_list',
 				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_BLACK_LIST'),
-				'ui-icon-set --cross-50',
+				'ui-icon-set --o-circle-cross',
 				false,
-				canCollapse: false
+				canCollapse: false,
 			);
 		}
 
 		$data['sectionDataLeakProtection'] = new Section(
 			'settings-security-section-data-leak-protection',
 			Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_DATA_LEAK_PROTECTION'),
-			'ui-icon-set --shield-2-checked',
-			false
+			'ui-icon-set --o-shield-checked',
+			false,
 		);
 
 		if ($this->mobileAppService->isReady())
@@ -246,9 +280,9 @@ class SecuritySettings extends AbstractSettings
 				label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DISABLE_COPY_MSGVER_1'),
 				value: $this->mobileAppService->isCopyTextDisabled() ? 'Y' : 'N',
 				hints: [
-					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_DISABLE_COPY_MSGVER_1')
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_DISABLE_COPY_MSGVER_1'),
 				],
-				helpDesk: 'redirect=detail&code=25559182'
+				helpDesk: 'redirect=detail&code=25559182',
 			);
 
 			$data['selectorDisableCopy'] = new Selector(
@@ -264,9 +298,9 @@ class SecuritySettings extends AbstractSettings
 				label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DISABLE_SCREENSHOT_MSGVER_1'),
 				value: $this->mobileAppService->isTakeScreenshotDisabled() ? 'Y' : 'N',
 				hints: [
-					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_DISABLE_SCREENSHOT_MSGVER_1')
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_DISABLE_SCREENSHOT_MSGVER_1'),
 				],
-				helpDesk: 'redirect=detail&code=25559182'
+				helpDesk: 'redirect=detail&code=25559182',
 			);
 
 			$data['selectorDisableScreenshot'] = new Selector(
@@ -287,9 +321,9 @@ class SecuritySettings extends AbstractSettings
 					label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_DELETE_TO_BE_ENABLED'),
 					value: Option::get('im', 'isAutoDeleteMessagesEnabled', 'Y'),
 					hints: [
-						'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_DELETE_TO_BE_ENABLED')
+						'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_DELETE_TO_BE_ENABLED'),
 					],
-					helpDesk: 'redirect=detail&code=24402288'
+					helpDesk: 'redirect=detail&code=24402288',
 				);
 			}
 		}
@@ -300,13 +334,33 @@ class SecuritySettings extends AbstractSettings
 			label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_WATER_MARKS_ENABLED'),
 			value: 'N',
 			hints: [
-				'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_WATER_MARKS_ENABLED')
+				'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_WATER_MARKS_ENABLED'),
 			],
 			isEnable: false,
 			badge: Loc::getMessage('INTRANET_SETTINGS_FIELD_BADGE_WATER_MARKS_SOON'),
 		);
 
 		return new static($data);
+	}
+
+	private function getOtpSettings(): array
+	{
+		$result = [];
+
+		if (!Loader::includeModule('security') || !$this->user || !$this->personalOtp)
+		{
+			return $result;
+		}
+
+		$result['SECURITY_MODULE'] = true;
+		$result['SECURITY_OTP_ENABLED'] = $this->otpSettings->isEnabled();
+		$result['SECURITY_IS_USER_OTP_ACTIVE'] = $this->personalOtp->isActivated();
+		$result['SECURITY_OTP_DAYS'] = $this->otpSettings->getSkipMandatoryDays();
+		$result['SECURITY_OTP'] = $this->otpSettings->isMandatoryUsing();
+		$result['SECURITY_OTP_PATH'] = SITE_DIR . 'company/personal/user/' . $this->user->getId() . '/common_security/?page=otpConnected';
+		$result['SECURITY_OTP_DEFAULT_TYPE'] = $this->otpSettings->getDefaultType();
+
+		return $result;
 	}
 
 	private function getDeviceHistorySettings(): Selector
@@ -325,7 +379,7 @@ class SecuritySettings extends AbstractSettings
 			$deviseHistoryDaysValues[] = [
 				'value' => $value,
 				'name' => $name,
-				'selected' => $value === $deviseHistoryDaysCurrent
+				'selected' => $value === $deviseHistoryDaysCurrent,
 			];
 		}
 
@@ -335,7 +389,7 @@ class SecuritySettings extends AbstractSettings
 			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DEVISE_HISTORY_CLEANUP_DAYS'),
 			$deviseHistoryDaysValues,
 			$deviseHistoryDaysCurrent,
-			isEnable: $deviseHistoryDaysEnabled
+			isEnable: $deviseHistoryDaysEnabled,
 		);
 	}
 
@@ -367,8 +421,7 @@ class SecuritySettings extends AbstractSettings
 		if (
 			is_array($this->data['disable_copy_screenshot_rights'])
 			&& count($this->data['disable_copy_screenshot_rights']) > 0
-		)
-		{
+		) {
 			$this->mobileAppService->setTakeScreenshotRights($this->data['disable_copy_screenshot_rights']);
 		}
 
@@ -380,16 +433,14 @@ class SecuritySettings extends AbstractSettings
 		if (
 			is_array($this->data['disable_copy_text_rights'])
 			&& count($this->data['disable_copy_text_rights']) > 0
-		)
-		{
+		) {
 			$this->mobileAppService->setCopyTextRights($this->data['disable_copy_text_rights']);
 		}
 
 		if (
 			isset($this->data['isAutoDeleteMessagesEnabled'])
 			&& Option::get('im', 'isAutoDeleteMessagesEnabled', null) !== $this->data['isAutoDeleteMessagesEnabled']
-		)
-		{
+		) {
 			if ($this->data['isAutoDeleteMessagesEnabled'] !== 'N')
 			{
 				Option::set('im', 'isAutoDeleteMessagesEnabled', 'Y');
@@ -401,76 +452,19 @@ class SecuritySettings extends AbstractSettings
 		}
 	}
 
-	private function getOtpSettings(): array
-	{
-		$currentUser = CurrentUser::get();
-
-		$result = [];
-
-		if (!Loader::includeModule('security'))
-		{
-			return $result;
-		}
-
-		$result['SECURITY_MODULE'] = true;
-		$result['SECURITY_OTP_ENABLED'] = Security\Mfa\Otp::isOtpEnabled();
-		$result['SECURITY_IS_USER_OTP_ACTIVE'] = \CSecurityUser::IsUserOtpActive($currentUser->getId());
-		$result['SECURITY_OTP_DAYS'] = Security\Mfa\Otp::getSkipMandatoryDays();
-		$result['SECURITY_OTP'] = Security\Mfa\Otp::isMandatoryUsing();
-		$result['SECURITY_OTP_PATH'] = SITE_DIR . 'company/personal/user/' . $currentUser->getId() . '/common_security/?page=otpConnected';
-
-		if ($result['SECURITY_OTP'] && $this->isCloud)
-		{
-			$otpRights = Security\Mfa\Otp::getMandatoryRights();
-			$adminGroup = 'G1';
-			$employeeGroup = 'G' . \CBitrix24::getEmployeeGroupId();
-
-			if (!in_array($adminGroup, $otpRights, true) || !in_array($employeeGroup, $otpRights, true))
-			{
-				$result['SECURITY_OTP'] = false;
-			}
-		}
-
-		return $result;
-	}
-
 	private function saveOtpSettings(): void
 	{
-		if ($this->isCloud)
+		if (MobilePush::createByDefault()->getPromoteMode() === PromoteMode::High)
 		{
-			//otp is always mandatory for integrator group in cloud
-			$otpRights = Security\Mfa\Otp::getMandatoryRights();
-			$employeeGroup = 'G' . \CBitrix24::getEmployeeGroupId();
-			$adminGroup = 'G1';
-
-			if (isset($this->data['SECURITY_OTP']) && $this->data['SECURITY_OTP'] === 'Y')
-			{
-				if (!in_array($adminGroup, $otpRights, true))
-				{
-					$otpRights[] = $adminGroup;
-				}
-
-				if (!in_array($employeeGroup, $otpRights, true))
-				{
-					$otpRights[] = $employeeGroup;
-				}
-			}
-			else
-			{
-				foreach ($otpRights as $key => $group)
-				{
-					if ($group === $adminGroup || $group === $employeeGroup)
-					{
-						unset($otpRights[$key]);
-					}
-				}
-			}
-
-			Security\Mfa\Otp::setMandatoryRights($otpRights);
+			return;
 		}
-		else
+
+		$isMandatory = isset($this->data['SECURITY_OTP']) && $this->data['SECURITY_OTP'] === 'Y';
+		$this->otpSettings->setMandatoryUsing($isMandatory);
+
+		if ($isMandatory && !$this->otpSettings->isDefaultTypePush() && $this->personalOtp?->isPushType())
 		{
-			Security\Mfa\Otp::setMandatoryUsing(isset($this->data['SECURITY_OTP']) && $this->data['SECURITY_OTP'] === 'Y');
+			$this->otpSettings->setDefaultType(Security\Mfa\OtpType::Push);
 		}
 
 		if (isset($this->data['SECURITY_OTP_DAYS']))

@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\ExternalSource;
 
 use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
@@ -103,7 +104,7 @@ class SourceManager
 		if (Loader::includeModule('rest'))
 		{
 			$restSources = ExternalSource\Internal\ExternalSourceRestConnectorTable::getList([
-				'select' => ['TITLE', 'ID'],
+				'select' => ['TITLE', 'ID', 'SUPPORT_MAPPING'],
 			]);
 			while ($restSource = $restSources->fetchObject())
 			{
@@ -111,6 +112,7 @@ class SourceManager
 					'code' => $restSource->getCode(),
 					'type' => ExternalSource\Type::Rest->value,
 					'name' => $restSource->getTitle(),
+					'isSupportMapping' => $restSource->getSupportMapping(),
 				];
 			}
 		}
@@ -205,13 +207,16 @@ class SourceManager
 					return $result;
 				}
 
-				$avatar = ExternalSourceRestTable::getList([
-					'select' => ['CONNECTOR.LOGO'],
-					'filter' => [
-						'CONNECTOR_ID' => $connectorId,
-					],
-					'limit' => 1
-				])->fetchObject()->getConnector()->getLogo();
+				$connector = ExternalSourceRestConnectorTable::getList([
+					'select' => ['LOGO', 'SUPPORT_MAPPING'],
+					'filter' => ['ID' => $connectorId],
+					'limit' => 1,
+				])
+					->fetchObject()
+				;
+
+				$avatar = $connector->getLogo();
+				$isSupportMapping = $connector->getSupportMapping();
 			}
 
 			$connection = [
@@ -223,6 +228,7 @@ class SourceManager
 			if ($type === Type::Rest)
 			{
 				$connection['avatar'] = $avatar;
+				$connection['isSupportMapping'] = $isSupportMapping;
 			}
 
 			$db->commitTransaction();

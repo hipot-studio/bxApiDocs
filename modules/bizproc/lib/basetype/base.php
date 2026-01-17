@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\BaseType;
 
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingType;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\FieldType;
@@ -590,6 +591,10 @@ HTML;
 			$html .= 'name="' . htmlspecialcharsbx($name) . '" ';
 			$html .= 'id="' . htmlspecialcharsbx($controlId) . '" ';
 			$html .= 'style="width: 100%"';
+			if ($fieldType && $fieldType->getDescription())
+			{
+				$html .= 'placeholder="' . htmlspecialcharsbx($fieldType->getDescription()) . '" ';
+			}
 			$html .= '>' . htmlspecialcharsbx((string)$value);
 			$html .= '</textarea></td>';
 			$html .= '<td valign="top" style="padding-left:4px" width="30">';
@@ -887,5 +892,10 @@ HTML;
 	public static function convertPropertyToView(FieldType $fieldType, int $viewMode, array $property): array
 	{
 		return $property;
+	}
+
+	public static function getAiSettingType(): string|SettingType
+	{
+		return static::getType();
 	}
 }

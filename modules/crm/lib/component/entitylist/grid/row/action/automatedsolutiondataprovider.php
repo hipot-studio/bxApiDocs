@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Component\EntityList\Grid\Row\Action;
 use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 use Bitrix\Crm\Component\EntityList\Grid\Row\Action\AutomatedSolution\DeleteAction;
 use Bitrix\Crm\Component\EntityList\Grid\Row\Action\AutomatedSolution\EditAction;
+use Bitrix\Crm\Component\EntityList\Grid\Row\Action\AutomatedSolution\PermissionAction;
 use Bitrix\Crm\Service\Router;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Grid\Row\Action\DataProvider;
@@ -29,6 +30,7 @@ final class AutomatedSolutionDataProvider extends DataProvider
 		{
 			$actions[] = new EditAction($this->router);
 			$actions[] = new DeleteAction($this->getSettings(), $this->automatedSolutionManager, $this->userPermissions);
+			$actions[] = new PermissionAction($this->router);
 		}
 
 		return $actions;

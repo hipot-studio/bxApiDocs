@@ -81,13 +81,16 @@ class Manager
 			return;
 		}
 
-		Rights::setGlobalOff();
-
 		$optionSiteId = (int)Landing\Manager::getOption(self::SITE_ID_OPTION_CODE);
 
 		// check that exists
 		if ($optionSiteId > 0)
 		{
+			$cacheParams = [];
+			if (!$this->isProcessing())
+			{
+				$cacheParams = ['ttl' => 180];
+			}
 			$connectedSite = (Landing\Site::getList([
 				'select' => ['LANDING_ID_INDEX'],
 				'filter' => [
@@ -97,7 +100,7 @@ class Manager
 					'=SPECIAL' => 'Y',
 					'CHECK_PERMISSIONS' => 'N',
 				],
-				'cache' => ['ttl' => 86400],
+				'cache' => $cacheParams,
 			]))->fetch();
 			if ($connectedSite)
 			{
@@ -106,7 +109,6 @@ class Manager
 				{
 					$this->landingId = (int)$connectedSite['LANDING_ID_INDEX'];
 				}
-				Rights::setGlobalOn();
 
 				return;
 			}
@@ -145,8 +147,6 @@ class Manager
 		{
 			Landing\Manager::setOption(self::SITE_ID_OPTION_CODE, $this->siteId);
 		}
-
-		Rights::setGlobalOn();
 	}
 
 	private function createDefaultSite(): ?int
@@ -183,6 +183,11 @@ class Manager
 		// check that exists
 		if ($this->landingId > 0)
 		{
+			$cacheParams = [];
+			if (!$this->isProcessing())
+			{
+				$cacheParams = ['ttl' => 180];
+			}
 			$exists = (Landing\Landing::getList([
 				'select' => ['ID'],
 				'filter' => [
@@ -192,7 +197,7 @@ class Manager
 				'order' => [
 					'ID' => 'asc',
 				],
-				'cache' => ['ttl' => 86400],
+				'cache' => $cacheParams,
 			]))->fetch();
 
 			if ($exists && (int)$exists['ID'])
@@ -337,7 +342,6 @@ class Manager
 			EventHandler::class,
 			'onLicenseHasChanged'
 		);
-		self::setFreeTariffMode();
 	}
 
 	/**
@@ -393,6 +397,7 @@ class Manager
 	public function onStartPageCreation(): void
 	{
 		Landing\Manager::setOption(self::CREATION_OPTION_CODE, self::CREATION_OPTION_PROCESS);
+		self::setFreeTariffMode();
 	}
 
 	/**

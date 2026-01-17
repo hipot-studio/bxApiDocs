@@ -819,7 +819,15 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 					$fields['SOURCE_PARAMS']
 				);
 			}
-			self::prepareBlockContentFromRepository($block);
+
+			$blockContentOriginal = $block->getContent();
+			$blockContent = self::prepareBlockContentFromRepository($blockContentOriginal);
+			$blockContent = self::prepareBlockVideoPlaceholders($blockContent);
+			if ($blockContent !== $blockContentOriginal)
+			{
+				$block->saveContent($blockContent);
+			}
+
 			if (isset($manifest['block']['app_code']))
 			{
 				$block->save([
@@ -844,114 +852,65 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		}
 	}
 
-	protected static function prepareBlockContentFromRepository($block): void
+	/**
+	 * Replaces simple placeholders in the block content, like #YEAR# and #COUNTDOWN#.
+	 *
+	 * @param string $content Block content to process.
+	 *
+	 * @return string Modified content with placeholders replaced.
+	 */
+	private static function prepareBlockContentFromRepository(string $content): string
 	{
-		$blockContent = $block->getContent();
-		if (mb_strpos($blockContent, '#YEAR#') !== false)
+		if (str_contains($content, '#YEAR#'))
 		{
-			$replace = [];
-			$replace['#YEAR#'] = date("Y");
-			$blockContent = str_replace(
-				array_keys($replace),
-				array_values($replace),
-				$blockContent
-			);
-			$block->saveContent($blockContent);
+			$content = str_replace('#YEAR#', date("Y"), $content);
 		}
 
-		if (mb_strpos($blockContent, '#COUNTDOWN#') !== false)
+		if (str_contains($content, '#COUNTDOWN#'))
 		{
-			$replace = [];
-			$replace['#COUNTDOWN#'] = Countdown::getTimestamp();
-			$blockContent = str_replace(
-				array_keys($replace),
-				array_values($replace),
-				$blockContent
-			);
-			$block->saveContent($blockContent);
+			$content = str_replace('#COUNTDOWN#', Countdown::getTimestamp(), $content);
 		}
 
-		self::replaceVideoPlaceholders($block);
-	}
-
-	private static function replaceVideoPlaceholders($block): void
-	{
-		$blockContent = $block->getContent();
-		if (mb_strpos($blockContent, '#DEFAULT_VIDEO_SRC#') !== false)
-		{
-			if (Manager::getZone() === 'ru')
-			{
-				$replace = [
-					'#DEFAULT_VIDEO_SRC#' => 'data-src=""',
-					'#DEFAULT_VIDEO_SOURCE#' => 'data-source=""',
-					'#DEFAULT_VIDEO_PREVIEW#' => 'data-preview=""',
-					'#DEFAULT_VIDEO_STYLE#' => 'style=""',
-					'#DEFAULT_VIDEO_SRC_2#' => 'data-src=""',
-					'#DEFAULT_VIDEO_SOURCE_2#' => 'data-source=""',
-					'#DEFAULT_VIDEO_PREVIEW_2#' => 'data-preview=""',
-					'#DEFAULT_VIDEO_STYLE_2#' => 'style=""',
-				];
-			}
-			else
-			{
-				$replace = [
-					'#DEFAULT_VIDEO_SRC#' => 'data-src="//www.youtube.com/embed/q4d8g9Dn3ww?autoplay=0&controls=1&loop=1&mute=0&rel=0"',
-					'#DEFAULT_VIDEO_SOURCE#' => 'data-source="https://www.youtube.com/watch?v=q4d8g9Dn3ww"',
-					'#DEFAULT_VIDEO_PREVIEW#' => 'data-preview="//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg"',
-					'#DEFAULT_VIDEO_STYLE#' => 'style="background-image:url(//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg)"',
-					'#DEFAULT_VIDEO_SRC_2#' => 'data-src="//www.youtube.com/embed/IISycTRZ-UA?autoplay=0&controls=1&loop=1&mute=0&rel=0"',
-					'#DEFAULT_VIDEO_SOURCE_2#' => 'data-source="https://www.youtube.com/watch?v=IISycTRZ-UA"',
-					'#DEFAULT_VIDEO_PREVIEW_2#' => 'data-preview="//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg"',
-					'#DEFAULT_VIDEO_STYLE_2#' => 'style="background-image:url(//img.youtube.com/vi/IISycTRZ-UA/sddefault.jpg)"',
-				];
-			}
-			$blockContent = str_replace(
-				array_keys($replace),
-				array_values($replace),
-				$blockContent
-			);
-			$block->saveContent($blockContent);
-		}
+		return $content;
 	}
 
 	/**
-	 * New or not the block.
-	 * @param string $block Block code.
-	 * @return boolean
+	 * Replaces video-related placeholders in the block content depending on the current zone.
+	 *
+	 * @param string $content Block content to process.
+	 *
+	 * @return string Modified content with video placeholders replaced.
 	 */
-	protected static function isNewBlock($block)
+	private static function prepareBlockVideoPlaceholders(string $content): string
 	{
-		static $newBlocks = null;
-
-		if (!is_string($block))
+		if (!str_contains($content, '#DEFAULT_VIDEO_SRC#'))
 		{
-			return false;
+			return $content;
 		}
 
-		if ($newBlocks === null)
-		{
-			$newBlocks = unserialize(Manager::getOption('new_blocks'), ['allowed_classes' => false]);
-			if (!is_array($newBlocks))
-			{
-				$newBlocks = array();
-			}
-			if (
-				!isset($newBlocks['date']) ||
-				(
-					isset($newBlocks['date']) &&
-					((time() - $newBlocks['date']) > BlockRepo::NEW_BLOCK_LT)
-				)
-			)
-			{
-				$newBlocks = array();
-			}
-			if (isset($newBlocks['items']))
-			{
-				$newBlocks = $newBlocks['items'];
-			}
-		}
+		$replace = Manager::getZone() === 'ru'
+			? [
+				'#DEFAULT_VIDEO_SRC#' => 'data-src=""',
+				'#DEFAULT_VIDEO_SOURCE#' => 'data-source=""',
+				'#DEFAULT_VIDEO_PREVIEW#' => 'data-preview=""',
+				'#DEFAULT_VIDEO_STYLE#' => 'style=""',
+				'#DEFAULT_VIDEO_SRC_2#' => 'data-src=""',
+				'#DEFAULT_VIDEO_SOURCE_2#' => 'data-source=""',
+				'#DEFAULT_VIDEO_PREVIEW_2#' => 'data-preview=""',
+				'#DEFAULT_VIDEO_STYLE_2#' => 'style=""',
+			]
+			: [
+				'#DEFAULT_VIDEO_SRC#' => 'data-src="//www.youtube.com/embed/q4d8g9Dn3ww?autoplay=0&controls=1&loop=1&mute=0&rel=0"',
+				'#DEFAULT_VIDEO_SOURCE#' => 'data-source="https://www.youtube.com/watch?v=q4d8g9Dn3ww"',
+				'#DEFAULT_VIDEO_PREVIEW#' => 'data-preview="//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg"',
+				'#DEFAULT_VIDEO_STYLE#' => 'style="background-image:url(//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg)"',
+				'#DEFAULT_VIDEO_SRC_2#' => 'data-src="//www.youtube.com/embed/IISycTRZ-UA?autoplay=0&controls=1&loop=1&mute=0&rel=0"',
+				'#DEFAULT_VIDEO_SOURCE_2#' => 'data-source="https://www.youtube.com/watch?v=IISycTRZ-UA"',
+				'#DEFAULT_VIDEO_PREVIEW_2#' => 'data-preview="//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg"',
+				'#DEFAULT_VIDEO_STYLE_2#' => 'style="background-image:url(//img.youtube.com/vi/IISycTRZ-UA/sddefault.jpg)"',
+			];
 
-		return in_array($block, $newBlocks);
+		return str_replace(array_keys($replace), array_values($replace), $content);
 	}
 
 	/**

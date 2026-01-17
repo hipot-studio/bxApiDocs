@@ -7,9 +7,7 @@ namespace Bitrix\Tasks\V2\Public\Command\Task;
 use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Main\Validation\ValidationResult;
-use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
-use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Error\ErrorCode;
@@ -39,12 +37,10 @@ class UpdateTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
+		$handler = Container::getInstance()->get(UpdateTaskHandler::class);
+
 		try
 		{
-			$updateTaskService = Container::getInstance()->getUpdateTaskService();
-
-			$handler = new UpdateTaskHandler($updateTaskService);
-
 			$task = $handler($this);
 
 			return $result->setObject($task);

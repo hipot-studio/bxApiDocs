@@ -4,18 +4,21 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2021 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
+
 namespace Bitrix\Main\Controller;
 
 use Bitrix\Main;
 use Bitrix\Main\Config;
-use Bitrix\Main\Security;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Engine\PullConfigTrait;
 use Bitrix\Pull;
 
 class QrCodeAuth extends Main\Engine\Controller
 {
+	use PullConfigTrait;
+
 	public function isAllowed()
 	{
 		if (Config\Option::get('main', 'allow_qrcode_auth', 'N') !== 'Y')
@@ -73,6 +76,7 @@ class QrCodeAuth extends Main\Engine\Controller
 		if ($siteId == '' || $uniqueId == '' || $channelTag == '')
 		{
 			$this->addError(new Main\Error(Loc::getMessage('qrcodeauth_error_request'), 'ERR_PARAMS'));
+
 			return null;
 		}
 
@@ -111,6 +115,7 @@ class QrCodeAuth extends Main\Engine\Controller
 		if ($uniqueId !== static::getUniqueId())
 		{
 			$this->addError(new Main\Error(Loc::getMessage('qrcodeauth_error_unique_id'), 'ERR_UNIQUE_ID'));
+
 			return null;
 		}
 
@@ -129,6 +134,13 @@ class QrCodeAuth extends Main\Engine\Controller
 			$token = \CUser::AddHitAuthHash($url, false, $siteId, 60);
 		}
 
+		if ($token === false)
+		{
+			$this->addError(new Main\Error(Loc::getMessage('qrcodeauth_error_cant_get_token'), 'ERR_GET_TOKEN'));
+
+			return null;
+		}
+
 		Pull\Event::add(
 			[$channel],
 			[
@@ -143,19 +155,6 @@ class QrCodeAuth extends Main\Engine\Controller
 		);
 
 		return true;
-	}
-
-	public static function getUniqueId()
-	{
-		$uniqid = Config\Option::get('main', '~public_uniq_id', '');
-
-		if ($uniqid == '')
-		{
-			$uniqid = Security\Random::getString(16, true);
-			Config\Option::set('main', '~public_uniq_id', $uniqid);
-		}
-
-		return $uniqid;
 	}
 
 	public function configureActions()

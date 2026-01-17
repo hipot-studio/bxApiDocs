@@ -3,6 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Im as IM;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Pull\Event\ChatHide;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\Engine\Response\Converter;
 
@@ -1535,40 +1536,24 @@ class CAllIMContactList
 			return false;
 		}
 
-		$pullInclude = \Bitrix\Main\Loader::includeModule("pull");
-		$lines = false;
-
 		if (mb_substr($dialogId, 0, 4) == 'chat')
 		{
 			$chatId = (int)mb_substr($dialogId, 4);
-			$lines = Chat::getInstance($chatId)->getType() === Chat::IM_TYPE_OPEN_LINE;
+			$chat = Chat::getInstance($chatId);
+
 			self::deleteRecent($chatId, true, $userId);
 		}
 		else
 		{
 			$dialogId = (int)$dialogId;
-			$chatId = null;
 			$chat = IM\V2\Entity\User\User::getInstance($userId)->getChatWith($dialogId, false);
-			if ($chat !== null)
-			{
-				$chatId = $chat->getId();
-			}
+
 			self::deleteRecent($dialogId, false, $userId);
 		}
 
-		if ($pullInclude)
+		if ($chat !== null)
 		{
-			\Bitrix\Pull\Event::add($userId, Array(
-				'module_id' => 'im',
-				'command' => 'chatHide',
-				'expiry' => 3600,
-				'params' => Array(
-					'dialogId' => $dialogId,
-					'chatId' => $chatId,
-					'lines' => $lines,
-				),
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			));
+			(new ChatHide($chat, [$userId]))->send();
 		}
 
 		return true;

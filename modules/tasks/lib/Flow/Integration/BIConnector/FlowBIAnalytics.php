@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Flow\Integration\BIConnector;
 
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Parameter;
 use Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorTasksFlowsFlow;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -31,6 +32,11 @@ final class FlowBIAnalytics
 		}
 
 		if (!Loader::includeModule('biconnector'))
+		{
+			return [];
+		}
+
+		if (!Feature::isBuilderEnabled())
 		{
 			return [];
 		}
@@ -63,5 +69,15 @@ final class FlowBIAnalytics
 		}
 
 		return $items;
+	}
+
+	public function isDashboardsExist(): bool
+	{
+		if (!Loader::includeModule('biconnector'))
+		{
+			return false;
+		}
+
+		return ScopeService::getInstance()->isDashboardsExist(ScopeService::BIC_SCOPE_TASKS_FLOWS_FLOW);
 	}
 }

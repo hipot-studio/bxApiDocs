@@ -3,14 +3,21 @@
 namespace Bitrix\SalesCenter\Integration;
 
 use Bitrix\Crm\Activity\Provider\BaseMessage;
+use Bitrix\Crm\Integration\NotificationsManager;
+use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\AddressTable;
 use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\EntityAddress;
 use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\MessageSenderEditor;
+use Bitrix\Crm\Format\PlaceholderFormatter;
+use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Order\BindingsMaker\ActivityBindingsMaker;
+use Bitrix\Crm\Order\ContactCompanyEntity;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\OrderRestriction;
 use Bitrix\Crm\Service\Container;
@@ -35,6 +42,7 @@ use Bitrix\Crm\Item\Deal;
 use Bitrix\SalesCenter\Component\PaymentSlip;
 use Bitrix\Salescenter\PaymentSlip\PaymentSlipManager;
 use CCrmOwnerType;
+use Bitrix\Main\Text\Emoji;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 
@@ -42,6 +50,8 @@ class CrmManager extends Base
 {
 	public const SMS_MODE_PAYMENT = 'payment';
 	public const SMS_MODE_COMPILATION = 'compilation';
+
+	private const SENDER_ID_WAZZUP = 'wazzup';
 
 	protected $dealsLink;
 	protected $contactsLink;
@@ -632,28 +642,112 @@ class CrmManager extends Base
 	 * @param array $sendingInfo
 	 * @return bool
 	 */
-	public function sendCompilationBySms(int $compilationId, int $dealId, array $compilationLink, array $sendingInfo): bool
+	public function sendCompilationBySms(
+		int $compilationId,
+		int $dealId,
+		array $compilationLink,
+		array $sendingInfo,
+		?array $messageData = null,
+	): bool
 	{
+		$activityProviderId = null;
+		if (
+			Feature::enabled(MessageSenderEditor::class)
+			&& $messageData
+		)
+		{
+			$messageData = $this->parseMessageData($messageData);
+			if (!$messageData)
+			{
+				return false;
+			}
+
+			$communicationEntityTypeId = $messageData['entityTypeId'];
+			if (
+				$communicationEntityTypeId !== CCrmOwnerType::Contact
+				&& $communicationEntityTypeId !== CCrmOwnerType::Company
+			)
+			{
+				return false;
+			}
+
+			$communicationEntityType = \CCrmOwnerType::ResolveName($communicationEntityTypeId);
+			$communicationEntityId = $messageData['entityId'];
+
+			$relationManager = Container::getInstance()->getRelationManager();
+			if (
+				!$relationManager->areItemsBound(
+					new ItemIdentifier($communicationEntityTypeId, $communicationEntityId),
+					new ItemIdentifier(CCrmOwnerType::Deal, $dealId),
+				)
+			)
+			{
+				return false;
+			}
+
+			$messageTo = self::getEntityPhoneFormat(
+				$communicationEntityId,
+				$communicationEntityTypeId,
+			);
+			if (!$messageTo)
+			{
+				return false;
+			}
+
+			$senderId = $messageData['senderId'];
+			$messageBody = $messageData['body'];
+			$messageFrom = $messageData['fromId'];
+
+			$activityProviderId = SmsManager::getActivityProviderId($senderId, $messageData['fromType']);
+
+			if (Container::getInstance()->getUserPermissions()->isCrmAdmin())
+			{
+				$this->saveSmsTemplate($messageBody, self::SMS_MODE_COMPILATION);
+			}
+
+			if ($dealId)
+			{
+				$messageBody = PlaceholderFormatter::convertToExternalFormat(
+					CCrmOwnerType::Deal,
+					$messageBody,
+				);
+				$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
+					CCrmOwnerType::Deal,
+					$dealId,
+					PlaceholderFormatter::escapeUnknownPlaceholdersInExternal(CCrmOwnerType::Deal, $messageBody),
+					' '
+				) ?? $messageBody;
+			}
+		}
+		else
+		{
+			$communicationEntityTypeId = \CCrmOwnerType::Contact;
+			$communicationEntityType = \CCrmOwnerType::ContactName;
+			$communicationEntityId = $this->getPrimaryContact($dealId)['CONTACT_ID'];
+			$messageTo = $this->getDealContactPhone($dealId);
+			$messageBody = $sendingInfo['text'] ?? '';
+			$senderId = (mb_strpos($sendingInfo['provider'], '|') === false) ? $sendingInfo['provider'] : 'rest';
+			$messageFrom = $senderId === 'rest' ? $sendingInfo['provider'] : null;
+		}
+
 		$linkForMessage = $compilationLink['link'];
 
 		$messageBody = str_replace(
 			'#LINK#',
 			$linkForMessage,
-			$sendingInfo['text']
+			$messageBody,
 		);
 
-		$senderId = (mb_strpos($sendingInfo['provider'], '|') === false) ? $sendingInfo['provider'] : 'rest';
-
-		$messageTo = $this->getDealContactPhone($dealId);
 		$responsibleId = \CCrmOwnerType::GetResponsibleID(\CCrmOwnerType::Deal, $dealId);
 
 		$result = Crm\MessageSender\MessageSender::send(
 			[
-				Crm\Integration\SmsManager::getSenderCode() => [
+				SmsManager::getSenderCode() => [
 					'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_PAYMENT_SENT,
+					'ACTIVITY_PROVIDER_ID' => $activityProviderId,
 					'MESSAGE_BODY' => $messageBody,
 					'SENDER_ID' => $senderId,
-					'MESSAGE_FROM' => $senderId === 'rest' ? $sendingInfo['provider'] : null,
+					'MESSAGE_FROM' => $messageFrom,
 				]
 			],
 			[
@@ -661,16 +755,16 @@ class CrmManager extends Base
 					'PHONE_NUMBER' => $messageTo,
 					'USER_ID' => $responsibleId,
 					'ADDITIONAL_FIELDS' => [
-						'ENTITY_TYPE' => \CCrmOwnerType::ContactName,
-						'ENTITY_TYPE_ID' => \CCrmOwnerType::Contact,
-						'ENTITY_ID' => $this->getPrimaryContact($dealId)['CONTACT_ID'],
+						'ENTITY_TYPE' => $communicationEntityType,
+						'ENTITY_TYPE_ID' => $communicationEntityTypeId,
+						'ENTITY_ID' => $communicationEntityId,
 						'ENTITIES' => [
 							'DEAL' => \CCrmDeal::GetByID($dealId),
 						],
 						'BINDINGS' => [
 							[
-								'OWNER_TYPE_ID' => \CCrmOwnerType::Contact,
-								'OWNER_ID' => $this->getPrimaryContact($dealId)['CONTACT_ID']
+								'OWNER_TYPE_ID' => $communicationEntityTypeId,
+								'OWNER_ID' => $communicationEntityId,
 							],
 							[
 								'OWNER_TYPE_ID' => \CCrmOwnerType::Deal,
@@ -683,7 +777,8 @@ class CrmManager extends Base
 						'COMPILATION_ID' => $compilationId,
 					]
 				]
-			]
+			],
+			SmsManager::getSenderCode(),
 		);
 
 		return $result->isSuccess();
@@ -724,21 +819,173 @@ class CrmManager extends Base
 		Timeline\ProductCompilationController::getInstance()->onCompilationSent($dealId, $timelineParams);
 	}
 
-	public function sendPaymentBySms(Order\Payment $payment, array $sendingInfo, Order\Shipment $shipment = null)
+	private function getEntityCommunicationById(
+		Order\Order $order,
+		int $entityId,
+		int $entityTypeId,
+	): ?ContactCompanyEntity
+	{
+		foreach ($order->getContactCompanyCollection() as $collectionElement)
+		{
+			if (
+				(int)$collectionElement->getField('ENTITY_TYPE_ID') === $entityTypeId
+				&& (int)$collectionElement->getField('ENTITY_ID') === $entityId
+			)
+			{
+				return $collectionElement;
+			}
+		}
+
+		return null;
+	}
+
+	private function getEntityCommunicationPhoneById(ContactCompanyEntity $entityCommunication, int $phoneId): ?string
+	{
+		$phone = Crm\Service\Container::getInstance()
+			->getFactory((int)$entityCommunication->getField('ENTITY_TYPE_ID'))
+			?->getItem(
+				(int)$entityCommunication->getField('ENTITY_ID'),
+				[Item::FIELD_NAME_ID, Item::FIELD_NAME_FM],
+			)
+			?->get(\Bitrix\Crm\Item::FIELD_NAME_FM)
+			?->getById($phoneId)
+			?->getValue()
+		;
+
+		if (!$phone)
+		{
+			return null;
+		}
+
+		return Parser::getInstance()->parse($phone)->format();
+	}
+
+	private function parseMessageData(?array $messageData): ?array
+	{
+		if (!$messageData)
+		{
+			return null;
+		}
+
+		$messageData['fromType'] ??= '';
+
+		$requiredFields = ['fromId', 'senderId', 'senderCode',
+			'entityId', 'entityTypeId', 'phoneId',
+		];
+
+		foreach ($requiredFields as $requiredField)
+		{
+			if (empty($messageData[$requiredField]))
+			{
+				return null;
+			}
+		}
+
+		if ($messageData['senderCode'] === NotificationsManager::getSenderCode())
+		{
+			$messageData['body'] ??= '';
+		}
+		elseif (empty($messageData['body']))
+		{
+			return null;
+		}
+
+		$integerFields = ['entityId', 'entityTypeId', 'phoneId'];
+		foreach ($integerFields as $integerField)
+		{
+			$messageData[$integerField] = (int)$messageData[$integerField];
+		}
+
+		return $messageData;
+	}
+
+	public function sendPaymentBySms(
+		Order\Payment $payment,
+		array $sendingInfo,
+		Order\Shipment $shipment = null,
+		?array $messageData = null,
+	): bool
 	{
 		/** @var Order\Order $order */
 		$order = $payment->getOrder();
+		$activityProviderId = null;
 
-		$entityCommunication = $order->getContactCompanyCollection()->getEntityCommunication();
-		if (!$entityCommunication)
+		if (
+			Feature::enabled(MessageSenderEditor::class)
+			&& $messageData
+		)
 		{
-			return false;
+			$messageData = $this->parseMessageData($messageData);
+			if (!$messageData)
+			{
+				return false;
+			}
+
+			$entityCommunication = $this->getEntityCommunicationById(
+				$order,
+				$messageData['entityId'],
+				$messageData['entityTypeId'],
+			);
+			if (!$entityCommunication)
+			{
+				return false;
+			}
+
+			$messageTo = $this->getEntityCommunicationPhoneById(
+				$entityCommunication,
+				$messageData['phoneId'],
+			);
+			if (!$messageTo)
+			{
+				return false;
+			}
+
+			$senderId = $messageData['senderId'];
+			$currentSenderCode = $messageData['senderCode'];
+			$messageBody = $messageData['body'];
+			$messageFrom = $messageData['fromId'];
+
+			if ($currentSenderCode === SmsManager::getSenderCode())
+			{
+				$activityProviderId = SmsManager::getActivityProviderId($senderId, $messageData['fromType']);
+				if (Container::getInstance()->getUserPermissions()->isCrmAdmin())
+				{
+					$this->saveSmsTemplate($messageBody);
+				}
+			}
+
+			$binding = $order->getEntityBinding();
+			$ownerId = $binding->getOwnerId();
+			$ownerTypeId = $binding->getOwnerTypeId();
+			if ($ownerId && $ownerTypeId)
+			{
+				$messageBody = PlaceholderFormatter::convertToExternalFormat($ownerTypeId, $messageBody);
+				$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
+					$ownerTypeId,
+					$ownerId,
+					PlaceholderFormatter::escapeUnknownPlaceholdersInExternal($ownerTypeId, $messageBody),
+					' '
+				) ?? $messageBody;
+			}
 		}
-
-		$messageTo = $order->getContactCompanyCollection()->getEntityCommunicationPhone();
-		if (!$messageTo)
+		else
 		{
-			return false;
+			$entityCommunication = $order->getContactCompanyCollection()->getEntityCommunication();
+			if (!$entityCommunication)
+			{
+				return false;
+			}
+
+			$messageTo = $order->getContactCompanyCollection()->getEntityCommunicationPhone();
+			if (!$messageTo)
+			{
+				return false;
+			}
+
+			$messageBody = $sendingInfo['text'] ?? '';
+			$currentSenderCode = null;
+			$senderId = (mb_strpos($sendingInfo['provider'], '|') === false) ? $sendingInfo['provider'] : 'rest';
+			$messageFrom = $senderId === 'rest' ? $sendingInfo['provider'] : null;
 		}
 
 		$urlInfoByOrder = LandingManager::getInstance()->getUrlInfoByOrder(
@@ -756,15 +1003,13 @@ class CrmManager extends Base
 		$messageBody = str_replace(
 			'#LINK#',
 			$paymentLink,
-			$sendingInfo['text']
+			$messageBody,
 		);
-
-		$senderId = (mb_strpos($sendingInfo['provider'], '|') === false) ? $sendingInfo['provider'] : 'rest';
 
 		$senders = [];
 		if (Main\Application::getInstance()->getLicense()->getRegion() === 'ru')
 		{
-			$senders[Crm\Integration\NotificationsManager::getSenderCode()] = [
+			$senders[NotificationsManager::getSenderCode()] = [
 				'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_PAYMENT_SENT,
 				'TEMPLATE_CODE' => 'ORDER_LINK',
 				'PLACEHOLDERS' => [
@@ -774,11 +1019,12 @@ class CrmManager extends Base
 			];
 		}
 
-		$senders[Crm\Integration\SmsManager::getSenderCode()] = [
+		$senders[SmsManager::getSenderCode()] = [
 			'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_PAYMENT_SENT,
+			'ACTIVITY_PROVIDER_ID' => $activityProviderId,
 			'MESSAGE_BODY' => $messageBody,
 			'SENDER_ID' => $senderId,
-			'MESSAGE_FROM' => $senderId === 'rest' ? $sendingInfo['provider'] : null,
+			'MESSAGE_FROM' => $messageFrom,
 		];
 
 		$result = Crm\MessageSender\MessageSender::send(
@@ -813,7 +1059,8 @@ class CrmManager extends Base
 						'HIGHLIGHT_URL' => $paymentLink,
 					]
 				]
-			]
+			],
+			$currentSenderCode,
 		);
 
 		return $result->isSuccess();
@@ -848,7 +1095,7 @@ class CrmManager extends Base
 		if ($paymentSlipConfig->isNotificationsEnabled())
 		{
 			$senders = [
-				Crm\Integration\NotificationsManager::getSenderCode() => [
+				NotificationsManager::getSenderCode() => [
 					'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_TERMINAL_PAYMENT_PAID,
 					'TEMPLATE_CODE' => 'ORDER_PAYMENT_SLIP',
 					'PLACEHOLDERS' => [
@@ -860,7 +1107,7 @@ class CrmManager extends Base
 		else if ($senderId = $paymentSlipConfig->getSelectedSmsServiceId())
 		{
 			$senders = [
-				Crm\Integration\SmsManager::getSenderCode() => [
+				SmsManager::getSenderCode() => [
 					'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_TERMINAL_PAYMENT_PAID,
 					'MESSAGE_BODY' => $messageBody,
 					'SENDER_ID' => $senderId,
@@ -927,7 +1174,7 @@ class CrmManager extends Base
 		);
 
 		$senders = [
-			Crm\Integration\SmsManager::getSenderCode() => [
+			SmsManager::getSenderCode() => [
 				'ACTIVITY_PROVIDER_TYPE_ID' => BaseMessage::PROVIDER_TYPE_SALESCENTER_PAYMENT_SENT,
 				'MESSAGE_BODY' => $messageBody,
 				'SENDER_ID' => $senderId,
@@ -1048,11 +1295,11 @@ class CrmManager extends Base
 	{
 		$smsOptions = $this->getSmsTemplateOptionsMap()[$mode];
 		if (!$smsOptions)
-   		{
-   			$smsOptions = $this->getSmsTemplateOptionsMap()[self::SMS_MODE_PAYMENT];
-   		}
+		{
+			$smsOptions = $this->getSmsTemplateOptionsMap()[self::SMS_MODE_PAYMENT];
+		}
 
-		Main\Config\Option::set('salescenter', $smsOptions['option_name'], $template);
+		Main\Config\Option::set('salescenter', $smsOptions['option_name'], Emoji::encode($template));
 	}
 
 	public function getSmsTemplate($mode = self::SMS_MODE_PAYMENT)
@@ -1060,13 +1307,15 @@ class CrmManager extends Base
 		$smsOptions = $this->getSmsTemplateOptionsMap()[$mode];
 		if (!$smsOptions)
 		{
-   			$smsOptions = $this->getSmsTemplateOptionsMap()[self::SMS_MODE_PAYMENT];
-   		}
+			$smsOptions = $this->getSmsTemplateOptionsMap()[self::SMS_MODE_PAYMENT];
+		}
 
-		return Main\Config\Option::get(
-			'salescenter',
-			$smsOptions['option_name'],
-			$smsOptions['default_text']
+		return Emoji::decode(
+			Main\Config\Option::get(
+				'salescenter',
+				$smsOptions['option_name'],
+				$smsOptions['default_text']
+			)
 		);
 	}
 
@@ -1505,9 +1754,14 @@ class CrmManager extends Base
 	 */
 	public static function getContactPhoneFormat(int $contactId): string
 	{
+		return self::getEntityPhoneFormat($contactId, CCrmOwnerType::Contact);
+	}
+
+	private static function getEntityPhoneFormat(int $ownerId, int $ownerTypeId): string
+	{
 		$phones = \CCrmFieldMulti::GetEntityFields(
-			'CONTACT',
-			$contactId,
+			CCrmOwnerType::ResolveName($ownerTypeId),
+			$ownerId,
 			'PHONE',
 			true,
 			false
@@ -1616,7 +1870,7 @@ class CrmManager extends Base
 		$result = [];
 		$restSender = null;
 
-		$senderList = Crm\Integration\SmsManager::getSenderInfoList(true);
+		$senderList = SmsManager::getSenderInfoList(true);
 		foreach ($senderList as $sender)
 		{
 			if ($sender['canUse'])

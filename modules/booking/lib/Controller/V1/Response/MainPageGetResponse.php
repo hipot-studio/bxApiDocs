@@ -21,7 +21,10 @@ class MainPageGetResponse implements \JsonSerializable
 		public readonly WaitListItemCollection $waitListItemCollection,
 		public readonly bool $isIntersectionForAll,
 		public readonly array $counters,
+		//@todo deprecated and should be removed
 		public readonly array $formsMenu,
+		public readonly array $catalogSkuEntityOptions,
+		public readonly bool $shouldShowWhatsAppEmergency = false,
 	)
 	{
 	}
@@ -40,7 +43,10 @@ class MainPageGetResponse implements \JsonSerializable
 			'waitListItems' => $this->waitListItemCollection->toArray(),
 			'isIntersectionForAll' => $this->isIntersectionForAll,
 			'isCurrentSenderAvailable' => $this->isCurrentSenderAvailable,
+			//@todo deprecated and should be removed
 			'formsMenu' => $this->formsMenu,
+			'catalogSkuEntityOptions' => $this->catalogSkuEntityOptions,
+			'shouldShowWhatsAppEmergency' => $this->shouldShowWhatsAppEmergency,
 		];
 	}
 }

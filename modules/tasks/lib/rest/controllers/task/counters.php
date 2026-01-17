@@ -2,8 +2,12 @@
 
 namespace Bitrix\Tasks\Rest\Controllers\Task;
 
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Rest\Controllers\Base;
 use Bitrix\Tasks\Internals\Counter;
 
@@ -12,14 +16,12 @@ class Counters extends Base
 	/**
 	 * Get counter for user (current user if userId=0)
 	 *
-	 * @param int $userId
-	 * @param int $groupId
-	 * @param string $type
-	 *
-	 * @return array
-	 * @throws \TasksException
+	 * @throws ArgumentException
+	 * @throws SqlQueryException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
-	public function getAction($userId = 0, $groupId = 0, $type = 'view_all'): ?array
+	public function getAction(int $userId = 0, int $groupId = 0, string $type = 'view_all'): ?array
 	{
 		if (!$this->checkGroupReadAccess($groupId))
 		{
@@ -34,7 +36,7 @@ class Counters extends Base
 
 		$counterInstance = Counter::getInstance($userId);
 
-		return $counterInstance->getCounters($type, (int)$groupId);
+		return $counterInstance->getCounters($type, $groupId);
 	}
 
 	private function checkGroupReadAccess($groupId)

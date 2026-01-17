@@ -4,6 +4,8 @@ use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\WorkflowTemplateTable;
 
+use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -39,7 +41,7 @@ class BizprocWorkflowEditComponent extends \CBitrixComponent
 	public function onPrepareComponentParams($params)
 	{
 		$params['SET_TITLE'] = !(isset($params['SET_TITLE']) && $params['SET_TITLE'] == 'N');
-		$params['BACK_URL'] = (isset($_REQUEST['back_url']) && $_REQUEST['back_url'][0] === '/' && $_REQUEST['back_url'][1] !== '/') ? (string)$_REQUEST['back_url'] : null;
+		$params['BACK_URL'] = (!empty($_REQUEST['back_url']) && $_REQUEST['back_url'][0] === '/' && $_REQUEST['back_url'][1] !== '/') ? (string)$_REQUEST['back_url'] : null;
 
 		if (!isset($params['MODULE_ID']) && !defined('MODULE_ID') && !empty($params['ID']))
 		{

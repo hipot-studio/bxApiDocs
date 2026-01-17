@@ -33,6 +33,15 @@ use Bitrix\Main\Type\DateTime;
  */
 class AutomatedSolutionTable extends DataManager
 {
+	public const SOURCE_MANUAL = 0;
+	public const SOURCE_IMPORT = 1;
+	public const SOURCE_MARKETPLACE = 2;
+
+	public static function isImportedFromMarketplace(int $sourceId): bool
+	{
+		return $sourceId === self::SOURCE_MARKETPLACE;
+	}
+
 	public static function getTableName(): string
 	{
 		return 'b_crm_automated_solution';
@@ -95,6 +104,10 @@ class AutomatedSolutionTable extends DataManager
 
 			(new OneToMany('TYPES', TypeTable::class, 'AUTOMATED_SOLUTION'))
 				->configureCascadeDeletePolicy(CascadePolicy::SET_NULL)
+			,
+
+			(new IntegerField('SOURCE_ID'))
+				->configureDefaultValue(self::SOURCE_MANUAL)
 			,
 		];
 	}

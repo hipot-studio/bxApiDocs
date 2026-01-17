@@ -19,6 +19,7 @@ use Bitrix\Tasks\Integration\Replica;
 final class User
 {
 	private static array $defaultUserStorage = [];
+	private static array $userTimeOffset = [];
 	private static $accessLevels = array();
 	private static $accessOperations = array();
 
@@ -440,7 +441,7 @@ final class User
 			\CTimeZone::enable();
 		}
 
-		$offset = static::getOffset($userId ? $userId : null, $force) + ($utc ? \Bitrix\Tasks\Util::getServerTimeZoneOffset() : 0);
+		$offset = static::getOffset($userId, $force) + ($utc ? \Bitrix\Tasks\Util::getServerTimeZoneOffset() : 0);
 
 		if($disabled)
 		{
@@ -576,7 +577,7 @@ final class User
 		{
 			// todo: there could be php cache
 
-			$res = \CAllTask::getList(array(), array(
+			$res = \CTask::getList(array(), array(
 				'MODULE_ID' => 'tasks',
 				'BINDING' => $entityName,
 			));
@@ -592,16 +593,23 @@ final class User
 		return static::$accessLevels[$entityName];
 	}
 
-	private static function getOffset($userId, bool $force = false)
+	public static function invalidate(int ...$userIds): void
 	{
-		static $cache = array();
-
-		$key = 'U'.$userId;
-		if (!array_key_exists($key, $cache) || $force)
+		foreach ($userIds as $userId)
 		{
-			$cache[$key] = \CTimeZone::getOffset($userId, $force);
+			unset(self::$defaultUserStorage[$userId], self::$userTimeOffset[$userId]);
 		}
-		return $cache[$key];
+	}
+
+	private static function getOffset(int $userId, bool $force = false)
+	{
+		if (!isset(self::$userTimeOffset[$userId]) || $force)
+		{
+			// Compatibility: CTimeZone return different values for null and 0
+			self::$userTimeOffset[$userId] = \CTimeZone::getOffset($userId ?: null, $force);
+		}
+
+		return self::$userTimeOffset[$userId];
 	}
 
 	/**

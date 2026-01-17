@@ -33,9 +33,9 @@ use Bitrix\Tasks\Integration\CRM\Timeline\Event\OnTaskStatusChanged;
 use Bitrix\Tasks\Integration\CRM\Timeline\Event\OnTaskTitleUpdated;
 use Bitrix\Tasks\Integration\CRM\Timeline\Event\OnTaskViewed;
 use Bitrix\Tasks\Integration\CRM\Timeline\TaskRepository;
-use Bitrix\Tasks\Internals\Task\Result\ResultTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\TaskObject;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class TimeLineManager
 {
@@ -332,11 +332,19 @@ class TimeLineManager
 			return $this;
 		}
 
-		if (
-			is_null($message)
-			|| is_null($this->taskRepository->getTask())
-			|| ResultTable::isResult($message->getId(), $this->taskRepository->getTask()?->getId())
-		)
+		if ($message === null)
+		{
+			return $this;
+		}
+
+		$task = $this->taskRepository->getTask();
+		if ($task === null)
+		{
+			return $this;
+		}
+
+		$service = Container::getInstance()->getResultService();
+		if ($service->isExists($task->getId(), $message->getId()))
 		{
 			return $this;
 		}

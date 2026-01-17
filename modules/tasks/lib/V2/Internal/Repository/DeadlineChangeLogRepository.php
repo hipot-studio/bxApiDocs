@@ -34,6 +34,20 @@ class DeadlineChangeLogRepository implements DeadlineChangeLogRepositoryInterfac
 		}
 	}
 
+	public function clean(int $taskId): bool
+	{
+		$changes = DeadlineChangeLogTable::getList([
+			'select' => ['ID'],
+			'filter' => ['TASK_ID' => $taskId],
+		])->fetchAll();
+		foreach ($changes as $change)
+		{
+			DeadlineChangeLogTable::delete($change['ID']);
+		}
+
+		return true;
+	}
+
 	/**
 	 * @inheritDoc
 	 */

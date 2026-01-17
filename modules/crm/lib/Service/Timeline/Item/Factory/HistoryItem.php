@@ -173,22 +173,22 @@ class HistoryItem
 					return new Item\LogMessage\EmailActivityStatuses\NonDelivered($context, $model);
 				case LogMessageType::EMAIL_INCOMING_MESSAGE:
 					return new Item\LogMessage\EmailActivityStatuses\IncomingMessage($context, $model);
-				case LogMessageType::AI_CALL_START_RECORD_TRANSCRIPT:
-					return new Item\LogMessage\AI\Call\RecordTranscriptStarted($context, $model);
-				case LogMessageType::AI_CALL_START_RECORD_TRANSCRIPT_SUMMARY:
-					return new Item\LogMessage\AI\Call\RecordTranscriptSummaryStarted($context, $model);
-				case LogMessageType::AI_CALL_START_FILLING_ENTITY_FIELDS:
-					return new Item\LogMessage\AI\Call\FillingEntityFieldsStarted($context, $model);
-				case LogMessageType::AI_CALL_FINISH_FILLING_ENTITY_FIELDS:
-					return new Item\LogMessage\AI\Call\FillingEntityFieldsFinished($context, $model);
+				case LogMessageType::AI_START_RECORD_TRANSCRIPT:
+					return new Item\LogMessage\AI\RecordTranscriptStarted($context, $model);
+				case LogMessageType::AI_START_RECORD_TRANSCRIPT_SUMMARY:
+					return new Item\LogMessage\AI\RecordTranscriptSummaryStarted($context, $model);
+				case LogMessageType::AI_START_FILLING_ENTITY_FIELDS:
+					return new Item\LogMessage\AI\FillingEntityFieldsStarted($context, $model);
+				case LogMessageType::AI_FINISH_FILLING_ENTITY_FIELDS:
+					return new Item\LogMessage\AI\FillingEntityFieldsFinished($context, $model);
 				case LogMessageType::AI_CALL_START_SCORING:
-					return new Item\LogMessage\AI\Call\CallScoringResultStarted($context, $model);
+					return new Item\LogMessage\AI\CallScoringResultStarted($context, $model);
 				case LogMessageType::AI_CALL_SCORING_EMPTY:
-					return new Item\LogMessage\AI\Call\CallScoringEmptyResult($context, $model);
-				case LogMessageType::AI_CALL_LAUNCH_ERROR:
-					return new Item\LogMessage\AI\Call\LaunchError($context, $model);
-				case LogMessageType::AI_CALL_AUTOMATION_LAUNCH_ERROR:
-					return new Item\LogMessage\AI\Call\AutomationLaunchError($context, $model);
+					return new Item\LogMessage\AI\CallScoringEmptyResult($context, $model);
+				case LogMessageType::AI_LAUNCH_ERROR:
+					return new Item\LogMessage\AI\LaunchError($context, $model);
+				case LogMessageType::AI_AUTOMATION_LAUNCH_ERROR:
+					return new Item\LogMessage\AI\AutomationLaunchError($context, $model);
 				case LogMessageType::CALL_MOVED:
 				case LogMessageType::OPEN_LINE_MOVED:
 				case LogMessageType::EMAIL_INCOMING_MOVED:
@@ -509,14 +509,14 @@ class HistoryItem
 			}
 		}
 
-		if ($typeId === TimelineType::AI_CALL_PROCESSING)
+		if ($typeId === TimelineType::AI_PROCESSING)
 		{
 			return match ($typeCategoryId)
 			{
-				AI\Call\CategoryType::RECORD_TRANSCRIPT_FINISHED => new Item\AI\Call\TranscriptResult($context, $model),
-				AI\Call\CategoryType::RECORD_TRANSCRIPT_SUMMARY_FINISHED => new Item\AI\Call\TranscriptSummaryResult($context, $model),
-				AI\Call\CategoryType::FILLING_ENTITY_FIELDS_FINISHED => new Item\AI\Call\EntityFieldsFillingResult($context, $model),
-				AI\Call\CategoryType::CALL_SCORING_FINISHED => new Item\AI\Call\CallScoringResult($context, $model),
+				AI\CategoryType::RECORD_TRANSCRIPT_FINISHED => new Item\AI\CallTranscriptResult($context, $model),
+				AI\CategoryType::RECORD_TRANSCRIPT_SUMMARY_FINISHED => new Item\AI\TranscriptSummaryResult($context, $model),
+				AI\CategoryType::FILLING_ENTITY_FIELDS_FINISHED => new Item\AI\EntityFieldsFillingResult($context, $model),
+				AI\CategoryType::CALL_SCORING_FINISHED => new Item\AI\CallScoringResult($context, $model),
 			};
 		}
 

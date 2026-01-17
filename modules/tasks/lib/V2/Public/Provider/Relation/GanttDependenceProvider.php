@@ -30,15 +30,12 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 
 	public function getTasks(RelationTaskParams $relationTaskParams): TaskCollection
 	{
-		if ($relationTaskParams->taskId <= 0)
+		if (!$this->checkRoot($relationTaskParams))
 		{
 			return new TaskCollection();
 		}
 
-		if (
-			$relationTaskParams->checkRootAccess
-			&& !$this->taskRightService->canView($relationTaskParams->userId, $relationTaskParams->taskId)
-		)
+		if (!$this->checkRootAccess($relationTaskParams))
 		{
 			return new TaskCollection();
 		}
@@ -61,13 +58,13 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		$taskIds = array_column($tasks, 'ID');
 		Collection::normalizeArrayValuesByInt($taskIds, false);
 
-		$ganttLinks = $this->ganttLinkRepository->getLinkTypes($relationTaskParams->taskId, $taskIds);
+		$tasksGanttLinks = $this->ganttLinkRepository->getLinkTypes($relationTaskParams->taskId, $taskIds);
 		$rights = $this->getRelationRights($taskIds, $relationTaskParams->taskId, $relationTaskParams->userId);
 
 		return $this->ganttRelationTaskMapper->mapToCollection(
 			tasks: $tasks,
 			rights: $rights,
-			ganttLinks: $ganttLinks,
+			tasksGanttLinks: $tasksGanttLinks,
 		);
 	}
 
@@ -94,13 +91,18 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		$taskIds = array_column($tasks, 'ID');
 		Collection::normalizeArrayValuesByInt($taskIds, false);
 
-		$ganttLinks = array_map(static fn (int $taskId): array => [$taskId => LinkType::FinishStart], $taskIds);
+		$tasksGanttLinks = [];
+		foreach ($taskIds as $taskId)
+		{
+			$tasksGanttLinks[$taskId][0] = LinkType::FinishStart;
+		}
+
 		$rights = $this->getRelationRights($taskIds, 0, $userId);
 
 		return $this->ganttRelationTaskMapper->mapToCollection(
 			tasks: $tasks,
 			rights: $rights,
-			ganttLinks: $ganttLinks,
+			tasksGanttLinks: $tasksGanttLinks,
 		);
 	}
 
@@ -141,14 +143,14 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		return $result;
 	}
 
-	protected function getRelationRights(array $taskIds, int $taskId, int $userId): array
+	protected function getRelationRights(array $taskIds, int $rootId, int $userId): array
 	{
 		if (empty($taskIds))
 		{
 			return [];
 		}
 
-		$params['changeDependence'] = ['dependentId' => $taskId];
+		$params['changeDependence'] = ['dependentId' => $rootId];
 
 		return $this->taskRightService->getTaskRightsBatch(
 			userId: $userId,

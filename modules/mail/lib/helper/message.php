@@ -14,12 +14,22 @@ use Bitrix\Mail\Internals;
 use Bitrix\Mail\Helper\MessageAccess as AccessHelper;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Config\Ini;
+use Bitrix\Main\Web\Uri;
 
 class Message
 {
 	// entity types with special access rules (group tokens)
 	public const ENTITY_TYPE_IM_CHAT = MessageAccessTable::ENTITY_TYPE_IM_CHAT;
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
+	public const ENTITY_TYPE_TASKS_TASK = MessageAccessTable::ENTITY_TYPE_TASKS_TASK;
+	public const ENTITY_TYPE_BLOG_POST = MessageAccessTable::ENTITY_TYPE_BLOG_POST;
+	public const ENTITY_TYPE_NOTIFICATION = 'notification';
+	public const SOURCE_TYPE_CHAT = 'chat';
+	public const SOURCE_TYPE_EVENT = 'event';
+	public const SOURCE_TYPE_TASKS = 'tasks';
+	public const SOURCE_TYPE_POST = 'post';
+	public const SOURCE_TYPE_MAIL = 'mail';
+	public const SOURCE_TYPE_NOTIFICATION = 'notification';
 	private const MAX_FILE_SIZE_MAIL_ATTACHMENT = 20000000;
 
 	public static function getMaxAttachedFilesSize()
@@ -619,13 +629,43 @@ class Message
 		$openingTag = $matches['openingTag'];
 		$closingTag = $matches['closingTag'];
 		$styles = $matches['styles'];
+
+		// remove all rules that do not start with a class selector
+		$styles = preg_replace('/(?:^|})\s*(?!(\.|@|\s*#mail-message-wrapper\s*\.))\s*[^@}{]+\s*\{[^}]*}/is', '', $styles);
+
 		$bodySelectorPattern = '#(.*?)(^|\s)(body)\s*((?:\{)(?:.*?)(?:\}))(.*)#msi';
-		$bodySelector = preg_replace($bodySelectorPattern, '$2'.$wrapper.'$4', $styles);
+		$bodySelector = preg_replace($bodySelectorPattern, '$2' . $wrapper . '$4', $styles);
 		//cut off body selector
 		$styles = preg_replace($bodySelectorPattern, '$1$5', $styles);
 		$styles = preg_replace('#(^|\s)(body)\s*({)#iU', '$1mail-msg-view-body$3', $styles);
 		$styles = preg_replace_callback('%(?:^|\s)(?<head>[@#\.]?[a-z].*?\{)(?<body>.*?)(?<closure>\})%msi', 'static::isolateSelector', $styles);
 		return  $openingTag.$bodySelector.$styles.$closingTag;
+	}
+
+	public static function isolateInlineStyles($matches): string
+	{
+		$styles = $matches['styles'];
+		$quote = $matches['quote'];
+
+		//remove position:fixed
+		$styles = preg_replace('/position\s*:\s*fixed\s*;?/i', '', $styles);
+
+		$styles = preg_replace_callback(
+			'/z-index\s*:\s*(?<value>\d+)\s*;?/i',
+			function ($matches)
+			{
+				//cap z-index at 1000
+				if ((int)$matches['value'] > 1000)
+				{
+					return 'z-index: 1000;';
+				}
+
+				return $matches[0];
+			},
+			$styles
+		);
+
+		return 'style=' . $quote . $styles . $quote;
 	}
 
 	public static function isolateStylesInTheBody($html)
@@ -662,6 +702,12 @@ class Message
 		$messageHtml = preg_replace('%@font-face\b[^{]*({(?>[^{}]++|(?1))*})%mi', '', $messageHtml);
 
 		$messageHtml = static::isolateStylesInTheBody($messageHtml);
+
+		$messageHtml = preg_replace_callback(
+			'/style\s*=\s*(?<quote>["\'])(?<styles>[^"\']*)\k<quote>/i',
+			'static::isolateInlineStyles',
+			$messageHtml
+		);
 
 		return preg_replace_callback('|(?<openingTag><style[^>]*>)(?<styles>.*)(?<closingTag><\/style>)|isU', 'static::isolateStylesInTheTag', $messageHtml);
 	}
@@ -869,6 +915,79 @@ class Message
 		])->fetchAll();
 
 		return ICalMailManager::hasICalAttachments($attachments);
+	}
 
+	public static function addSourceAnalyticsToMessage(string $messageHref, string $entityType): string
+	{
+		$source = self::getAnalyticsSourceByType($entityType);
+
+		if ($source)
+		{
+			return self::addAnalyticsToMessage($messageHref, ['source' => $source]);
+		}
+
+		return $messageHref;
+	}
+
+	public static function addAnalyticsToMessage(string $messageHref, array $analyticsData): string
+	{
+		$uri = new Uri($messageHref);
+		$uri->addParams($analyticsData);
+
+		return $uri->getUri();
+	}
+
+	public static function getAnalyticsSourceByType(string $entityType): ?string
+	{
+		return match ($entityType)
+		{
+			self::ENTITY_TYPE_TASKS_TASK => self::SOURCE_TYPE_TASKS,
+			self::ENTITY_TYPE_BLOG_POST => self::SOURCE_TYPE_POST,
+			self::ENTITY_TYPE_IM_CHAT => self::SOURCE_TYPE_CHAT,
+			self::ENTITY_TYPE_CALENDAR_EVENT => self::SOURCE_TYPE_EVENT,
+			self::ENTITY_TYPE_NOTIFICATION => self::SOURCE_TYPE_NOTIFICATION,
+			default => null,
+		};
+	}
+
+	public static function getValidatedSource(string $context, ?string $source): ?string
+	{
+		if (empty($source))
+		{
+			return null;
+		}
+
+		$allowedSources = match ($context)
+		{
+			'home' => [
+				'left_menu',
+				'horizontal_menu',
+				self::SOURCE_TYPE_NOTIFICATION,
+			],
+			'msg_view', 'msg_new' => [
+				self::SOURCE_TYPE_MAIL,
+				self::SOURCE_TYPE_TASKS,
+				self::SOURCE_TYPE_CHAT,
+				self::SOURCE_TYPE_EVENT,
+				self::SOURCE_TYPE_POST,
+				self::SOURCE_TYPE_NOTIFICATION,
+			],
+			default => [],
+		};
+
+		$mappedSource = self::getAnalyticsSourceByType($source) ?? $source;
+
+		return in_array($mappedSource, $allowedSources, true) ? $source : null;
+	}
+
+	public static function getAvailableDirsForAnalytics(): array
+	{
+		return [
+			'inbox',
+			'sent',
+			'drafts',
+			'spam',
+			'trash',
+		];
 	}
 }

@@ -4,21 +4,24 @@ namespace Bitrix\Tasks\Integration\UI\EntitySelector;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\Emoji;
-use Bitrix\Tasks\Internals\SearchIndex;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\RecentItem;
 use Bitrix\UI\EntitySelector\SearchQuery;
+use Bitrix\UI\EntitySelector\Tab;
 
 class TaskProvider extends BaseProvider
 {
 	protected static $entityId = 'task';
 	protected static $maxCount = 30;
+	protected bool $withTab = false;
 
 	public function __construct(array $options = [])
 	{
 		parent::__construct();
+
+		$this->withTab = $options['withTab'] ?? false;
 	}
 
 	public function isAvailable(): bool
@@ -59,18 +62,11 @@ class TaskProvider extends BaseProvider
 				),
 				'parentId' => $this->getParentId($dialog),
 			]);
-			foreach ($taskItems as $item)
-			{
-				/** @var Item $item */
-				$item->addTab('recents');
-				$dialog->addItem($item);
 
-				if ($dialog->getItemCollection()->count() >= static::$maxCount)
-				{
-					break;
-				}
-			}
+			$dialog->addItems($taskItems);
 		}
+
+		$this->addTab($dialog);
 	}
 
 	protected function fillWithRecentItems(Dialog $dialog): void
@@ -107,21 +103,27 @@ class TaskProvider extends BaseProvider
 			$status = (int)($tasks[$itemId]['STATUS'] ?? 0);
 			$supertitle = static::getSupertitleByStatus($status);
 
-			$dialog->addItem(
-				new Item([
-					'entityId' => static::$entityId,
-					'id' => $itemId,
-					'title' => Emoji::decode($title),
-					'supertitle' => $supertitle,
-					'tabs' => 'recents',
-				]),
-			);
-
-			if ($dialog->getItemCollection()->count() >= static::$maxCount)
-			{
-				break;
-			}
+			$dialog->addItem(static::makeItem($itemId, $title, $supertitle));
 		}
+	}
+
+	protected function addTab(Dialog $dialog): void
+	{
+		if (!$this->withTab)
+		{
+			return;
+		}
+
+		$tab = new Tab([
+			'id' => static::$entityId,
+			'title' => Loc::getMessage('TASKS_UI_ENTITY_SELECTOR_TASK_PROVIDER_TASKS'),
+			'stub' => true,
+			'icon' => [
+				'default' => 'o-task',
+			],
+		]);
+
+		$dialog->addTab($tab);
 	}
 
 	protected function getRecentItemsIds(Dialog $dialog): array
@@ -225,13 +227,12 @@ class TaskProvider extends BaseProvider
 
 	protected function fillSearchFilter(array &$filter, string $searchQuery): void
 	{
-		$searchIndex = SearchIndex::prepareStringToSearch($searchQuery);
-		if ($searchIndex === '')
+		if ($searchQuery === '')
 		{
 			return;
 		}
 
-		$filter['*FULL_SEARCH_INDEX'] = $searchIndex;
+		$filter['META::ID_OR_NAME'] = $searchQuery;
 	}
 
 	protected function makeTaskItems(array $tasks, array $options = []): array
@@ -253,16 +254,21 @@ class TaskProvider extends BaseProvider
 			$status = (int)($task['STATUS'] ?? 0);
 			$supertitle = static::getSupertitleByStatus($status);
 
-			$result[] = new Item([
-				'id' => $id,
-				'entityId' => static::$entityId,
-				'title' => Emoji::decode($title),
-				'supertitle' => $supertitle,
-				'tabs' => 'recents',
-			]);
+			$result[] = static::makeItem($id, $title, $supertitle);
 		}
 
 		return $result;
+	}
+
+	protected static function makeItem(int $id, string $title, string $supertitle): Item
+	{
+		return new Item([
+			'id' => $id,
+			'entityId' => static::$entityId,
+			'title' => Emoji::decode($title),
+			'supertitle' => $supertitle,
+			'tabs' => ['recents', static::$entityId],
+		]);
 	}
 
 	protected function getParentId(Dialog $dialog): ?int

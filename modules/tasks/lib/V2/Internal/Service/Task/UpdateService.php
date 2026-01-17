@@ -6,13 +6,16 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\Counter;
+use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\AttachDependence;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CorrectDatePlan;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunInternalEvent;
@@ -41,7 +44,6 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateTopic;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserOptions;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateViews;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\CounterService;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Task\Prepare\Update\EntityFieldService;
@@ -51,9 +53,10 @@ class UpdateService
 {
 	public function __construct(
 		private readonly TaskRepositoryInterface $repository,
+		private readonly DeadlineChangeLogRepositoryInterface $deadlineChangeLogRepository,
 		private readonly EgressInterface $egressController,
 		private readonly ValidationService $validationService,
-		private readonly CounterService $counterService,
+		private readonly Counter\Service $counterService,
 	)
 	{
 
@@ -65,7 +68,7 @@ class UpdateService
 	 * @throws TaskUpdateException
 	 */
 	public function update(
-		Entity\Task  $task,
+		Entity\Task $task,
 		UpdateConfig $config,
 	): array
 	{
@@ -122,8 +125,6 @@ class UpdateService
 		 */
 		[$sourceTaskData, $fullTaskData, $taskObject, $fields] = $this->reload($fields, $fullTaskData);
 
-		(new StopTimer())($fullTaskData);
-
 		(new UpdateReminders())($fullTaskData, $changes);
 
 		(new UpdateHistoryLog($config))($fullTaskData, $changes);
@@ -136,7 +137,11 @@ class UpdateService
 
 		(new UpdateSync())($fields, $sourceTaskData);
 
-		$fields = (new RunUpdateEvent($config))($fields, $sourceTaskData);
+		$fields = (new RunUpdateEvent($config))(
+			$fields,
+			$sourceTaskData,
+			static fn (mixed $event): bool => is_array($event) && ($event['TO_MODULE_ID'] ?? null) !== 'crm',
+		);
 
 		(new CleanCache($config))($fullTaskData);
 
@@ -146,11 +151,11 @@ class UpdateService
 
 		if (!$config->isSkipRecount())
 		{
-			$this->counterService->addEvent(EventDictionary::EVENT_AFTER_TASK_UPDATE, [
-				'OLD_RECORD' => $sourceTaskData,
-				'NEW_RECORD' => $fullTaskData,
-				'PARAMS' => $config->getByPassParameters(),
-			]);
+			$this->counterService->send(new Counter\Command\AfterTaskUpdate(
+				oldRecord: $sourceTaskData,
+				newRecord: $fullTaskData,
+				params: $config->getByPassParameters(),
+			));
 		}
 
 		(new CloseResult($config))($fullTaskData);
@@ -159,17 +164,37 @@ class UpdateService
 
 		(new UpdateTopic())($fullTaskData, $sourceTaskData);
 
-		(new PostComment($config))($fields, $sourceTaskData, $changes);
+		if (!FormV2Feature::isOn())
+		{
+			(new PostComment($config))($fields, $sourceTaskData, $changes);
+		}
 
 		(new SendPush($config))($fullTaskData, $sourceTaskData, $changes);
-
-		(new RunIntegration($config))($fields, $taskObjectBeforeUpdate);
 
 		// get task object with prepopulated data
 		$taskAfterUpdate = $this->repository->getById($taskObject->getId());
 		if ($taskAfterUpdate === null)
 		{
 			throw new TaskNotExistsException();
+		}
+
+		// todo Delete after the deadline changes from all places through the new api.
+		$deadlineChangeReason = ($fields['DEADLINE_CHANGE_REASON'] ?? null);
+		$taskAfterUpdate->deadlineChangeReason = $deadlineChangeReason;
+		if (isset($fields['DEADLINE']))
+		{
+			$deadlineDateTime = $fields['DEADLINE'];
+			if (!($deadlineDateTime instanceof DateTime))
+			{
+				$deadlineDateTime = null;
+			}
+
+			$this->deadlineChangeLogRepository->append(
+				taskId: $task->getId(),
+				userId: $fields['CHANGED_BY'],
+				dateTime: $deadlineDateTime,
+				reason: $deadlineChangeReason,
+			);
 		}
 
 		// notify external services about updated task
@@ -179,9 +204,13 @@ class UpdateService
 			taskBeforeUpdate: $entityBefore,
 		));
 
+		(new StopTimer($config))($fullTaskData);
+
+		(new RunIntegration($config))($fields, $taskObjectBeforeUpdate);
+
 		(new RunInternalEvent())($entityBefore, $taskAfterUpdate);
 
-		return [$taskAfterUpdate, $fields];
+		return [$taskAfterUpdate, $fields, $entityBefore, $taskObjectBeforeUpdate, $sourceTaskData];
 	}
 
 	private function getChanges(array $fields, array $fullTaskData): array
@@ -249,9 +278,9 @@ class UpdateService
 		$validationResult = $this->validationService->validate($entityBefore->cloneWith($props));
 		if (!$validationResult->isSuccess())
 		{
-			$errors = $validationResult->getErrors();
+			Container::getInstance()->getLogger()->logValidationErrorWarning($validationResult->getErrorCollection());
 
-			throw new CommandValidationException($errors);
+			throw new CommandValidationException($validationResult->getErrors());
 		}
 	}
 

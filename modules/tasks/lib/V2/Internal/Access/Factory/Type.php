@@ -10,4 +10,6 @@ enum Type
 	case Group;
 	case Collab;
 	case Reminder;
+	case Result;
+	case ElapsedTime;
 }

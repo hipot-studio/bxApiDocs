@@ -116,35 +116,8 @@ class TaskCreated extends BaseCase
 		if ($logId > 0)
 		{
 			$this->invalidateLog($task);
-			$logFields = [
-				'TMP_ID' => $logId,
-				'TAG' => [],
-			];
 
-			$tagsResult = \CTaskTags::getList([], ['TASK_ID' => $taskId]);
-			while ($row = $tagsResult->fetch())
-			{
-				$logFields['TAG'][] = $row['NAME'];
-			}
-
-			\CSocNetLog::Update($logId, $logFields);
-
-			$taskMembers = $message->getMetaData()->getUserRepository()->getRecepients(
-				$task,
-				$message->getSender()
-			);
-			$rights = $this->recepients2Rights($taskMembers);
-
-			if ($task->getGroupId())
-			{
-				$rights = array_merge(
-					$rights, ['SG' . $task->getGroupId()]
-				);
-			}
-
-			\CSocNetLogRights::Add($logId, $rights);
-
-			\CSocNetLog::SendEvent($logId, 'SONET_NEW_EVENT', $logId);
+			$this->finalizeLogCreation($logId, $message);
 		}
 	}
 

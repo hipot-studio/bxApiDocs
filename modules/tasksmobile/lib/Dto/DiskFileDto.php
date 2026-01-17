@@ -14,6 +14,7 @@ final class DiskFileDto extends Dto
 
 	public ?string $name = null;
 	public ?string $type = null;
+	public ?int $creator = null;
 
 	public ?string $url = null;
 	public ?int $height = null;

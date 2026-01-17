@@ -226,6 +226,16 @@ class FileItem extends BaseLinkItem
 		return parent::setEntity($entity->setChatId($this->chatId ?? null));
 	}
 
+	public function needToAddLink(): bool
+	{
+		if ($this->getEntity()->isVideoNote())
+		{
+			return false;
+		}
+
+		return parent::needToAddLink();
+	}
+
 	public function getPopupData(array $excludedList = []): PopupData
 	{
 		return parent::getPopupData($excludedList)->add(new Entity\File\FilePopupItem($this->getEntity()));

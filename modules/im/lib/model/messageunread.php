@@ -126,6 +126,11 @@ class MessageUnreadTable extends DataManager
 					'required' => true,
 				]
 			),
+			'CHAT' => (new Reference(
+				'CHAT',
+				ChatTable::class,
+				Join::on('this.CHAT_ID', 'ref.ID')
+			))->configureJoinType(Join::TYPE_INNER),
 		];
 	}
 

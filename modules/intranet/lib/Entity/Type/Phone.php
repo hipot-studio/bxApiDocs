@@ -3,7 +3,8 @@
 namespace Bitrix\Intranet\Entity\Type;
 
 use Bitrix\Main\PhoneNumber\Parser;
-use \Bitrix\Main\PhoneNumber\Format;
+use Bitrix\Main\PhoneNumber\Format;
+use Bitrix\Main\PhoneNumber\Formatter;
 
 class Phone
 {
@@ -43,5 +44,12 @@ class Phone
 		$phoneNumber = Parser::getInstance()->parse($this->phoneNumber, $this->countryCode ?? "");
 
 		return $phoneNumber->isValid();
+	}
+
+	public function getMaskedNumber(): string
+	{
+		$phoneNumber = Parser::getInstance()->parse($this->phoneNumber);
+
+		return Formatter::mask($phoneNumber);
 	}
 }

@@ -3,6 +3,10 @@
 namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 
 /**
  * Class IPRuleInclMaskTable
@@ -20,7 +24,7 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\IPRuleInclMask wakeUpObject($row)
  * @method static \Bitrix\Security\IPRuleInclMasks wakeUpCollection($rows)
  */
-class IPRuleInclMaskTable extends \Bitrix\Main\Entity\DataManager
+class IPRuleInclMaskTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -30,19 +34,29 @@ class IPRuleInclMaskTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			(new \Bitrix\Main\Entity\IntegerField('IPRULE_ID'))
-				->configurePrimary(),
-			(new \Bitrix\Main\Entity\StringField('RULE_MASK'))
+			(new Fields\IntegerField('IPRULE_ID'))
 				->configurePrimary()
-				->configureSize(250),
-			(new \Bitrix\Main\Entity\IntegerField('SORT'))
-				->configureDefaultValue(500),
-			(new \Bitrix\Main\Entity\StringField('LIKE_MASK'))
+			,
+			(new Fields\StringField('RULE_MASK'))
+				->configurePrimary()
 				->configureSize(250)
-				->configureNullable(),
-			(new \Bitrix\Main\Entity\StringField('PREG_MASK'))
+			,
+			(new Fields\IntegerField('SORT'))
+				->configureDefaultValue(500)
+			,
+			(new Fields\StringField('LIKE_MASK'))
 				->configureSize(250)
-				->configureNullable(),
+				->configureNullable()
+			,
+			(new Fields\StringField('PREG_MASK'))
+				->configureSize(250)
+				->configureNullable()
+			,
+			new Reference(
+				'IPRULE',
+				IPRuleTable::class,
+				Join::on('this.IPRULE_ID', 'ref.ID'),
+			),
 		];
 	}
 

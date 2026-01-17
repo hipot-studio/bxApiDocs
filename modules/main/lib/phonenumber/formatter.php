@@ -94,6 +94,22 @@ class Formatter
 		return $formattedNumber;
 	}
 
+	/**
+	 * Mask number with asterisks.
+	 * @param PhoneNumber $number Phone number.
+	 * @param int $trailLength
+	 * @return string
+	 */
+	public static function mask(PhoneNumber $number, int $trailLength = 3): string
+	{
+		$rawNumber = $number->getRawNumber();
+		$countryCode = $number->getCountryCode();
+		$countryCodeLength = strlen($countryCode) + 1;
+		$asterisks = str_repeat('*', strlen($rawNumber) - ($countryCodeLength + $trailLength));
+
+		return substr($rawNumber, 0, $countryCodeLength) . $asterisks . substr($rawNumber, -$trailLength);
+	}
+
 	protected static function selectFormatForNumber(PhoneNumber $number, $formatType, $countryMetadata)
 	{
 		$nationalNumber = $number->getNationalNumber();

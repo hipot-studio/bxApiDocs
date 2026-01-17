@@ -10,6 +10,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Grid\Actions;
@@ -18,7 +19,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\UI\Filter\Options;
-use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access;
 use Bitrix\Tasks\Helper\Filter;
 use Bitrix\Tasks\Helper\FilterRegistry;
@@ -36,6 +36,8 @@ use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\Manager;
 use Bitrix\Tasks\Grid\Task;
 use Bitrix\Tasks\Onboarding\DI\OnboardingContainer;
+use Bitrix\Tasks\Promotion\TasksNewCard;
+use Bitrix\Tasks\Promotion\TasksNewChatButton;
 use Bitrix\Tasks\TourGuide;
 use Bitrix\Tasks\Ui\Controls\Column;
 use Bitrix\Tasks\Util\Error\Collection;
@@ -47,6 +49,7 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\Extranet;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Repository\GanttLinkRepositoryInterface;
 
 Loc::loadMessages(__FILE__);
 
@@ -364,19 +367,13 @@ class TasksTaskListComponent extends TasksBaseComponent
 		$gridId = null;
 		if ($relationToId)
 		{
-			$gridId = match ($relationType) {
-				default => 'tasks-subtasks-grid',
-				'relatedTasks' => 'tasks-related-grid',
-			};
+			$gridId = $this->getRelationGridId($relationType);
 		}
 
 		$filter = Filter::getInstance($userId, $groupId, $gridId)->process();
 		if ($relationToId)
 		{
-			$relationFilterField = match ($relationType) {
-				default => 'PARENT_ID',
-				'relatedTasks' => 'DEPENDS_ON',
-			};
+			$relationFilterField = $this->getRelationFilterField($relationType);
 			$filter[$relationFilterField] = $relationToId;
 		}
 
@@ -763,7 +760,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 	 */
 	protected function needGroupByGroups(): bool
 	{
-		return $this->arParams['GROUP_ID'] == 0;
+		return ($this->arParams['GROUP_ID'] ?? null) == 0;
 	}
 
 	/**
@@ -789,40 +786,34 @@ class TasksTaskListComponent extends TasksBaseComponent
 	 */
 	private function getDefaultSorting(): array
 	{
+		$sort = $this->request->get('relationToId') ? ['TITLE' => 'asc'] : ['ACTIVITY_DATE' => 'desc'];
+
 		return [
-			'sort' => ['ACTIVITY_DATE' => 'desc'],
+			'sort' => $sort,
 			'vars' => ['by' => 'by', 'order' => 'order'],
 		];
 	}
 
 	protected function loadGrid()
 	{
-		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
-		$this->arParams['relationToId'] = (int)$request->get('relationToId');
-		$this->arParams['relationType'] = $request->get('relationType') ?? 'subTasks';
+		$this->arParams['relationToId'] = (int)$this->request->get('relationToId');
+		$this->arParams['relationType'] = $this->request->get('relationType') ?? 'subTasks';
 		$gridId = null;
 		if ($this->arParams['relationToId'])
 		{
-			$gridId = match ($this->arParams['relationType']) {
-				default => 'tasks-subtasks-grid',
-				'relatedTasks' => 'tasks-related-grid',
-			};
-
-			if (empty($request->get('grid_id')))
-			{
-				(new Options($gridId))->reset();
-			}
+			$gridId = $this->getRelationGridId($this->arParams['relationType']);
 		}
 
-		$this->grid = Grid::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"], $gridId)
+		$this->grid = Grid::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"] ?? null, $gridId)
 			->setScope($this->arParams['CONTEXT'] ?? '');
 
-		$this->filter = Filter::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"], $gridId)
+		$this->filter = Filter::getInstance($this->arParams["USER_ID"], $this->arParams["GROUP_ID"] ?? null, $gridId)
 			->setGanttMode(static::class === TasksTaskGanttComponent::class);
 
 		if ($this->arParams['relationToId'])
 		{
 			$this->filter->setContext(FilterRegistry::FILTER_RELATION);
+			$this->filter->setId($gridId);
 		}
 	}
 
@@ -1060,6 +1051,14 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 	private function canProceedTours(): bool
 	{
+		if (
+			(new TasksNewCard())->shouldShow((int)$this->arParams['USER_ID'])
+			|| (new TasksNewChatButton())->shouldShow((int)$this->arParams['USER_ID'])
+		)
+		{
+			return false;
+		}
+
 		return $this->isMyList() && !$this->request->isAjaxRequest();
 	}
 
@@ -1128,6 +1127,10 @@ class TasksTaskListComponent extends TasksBaseComponent
 				'IS_MUTED',
 				'IS_PINNED',
 				'IS_PINNED_IN_GROUP',
+				'START_DATE_PLAN',
+				'END_DATE_PLAN',
+				'REPLICATE',
+				'FORKED_BY_TEMPLATE_ID',
 			];
 
 			$columns = array_merge($columns, $preferredColumns, array_keys($this->getUF()));
@@ -1352,10 +1355,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 		$relationType = $this->arParams['relationType'] ?? 'subTasks';
 		if ($relationToId)
 		{
-			$relationFilterField = match ($relationType) {
-				default => 'PARENT_ID',
-				'relatedTasks' => 'DEPENDS_ON',
-			};
+			$relationFilterField = $this->getRelationFilterField($relationType);
 			$this->listParameters['filter'][$relationFilterField] ??= $relationToId;
 			unset($this->listParameters['filter']['::SUBFILTER-ROLEID']);
 		}
@@ -1465,6 +1465,12 @@ class TasksTaskListComponent extends TasksBaseComponent
 		$this->arResult['LIST'] = self::setCheckListCount($this->arResult['LIST']);
 		$this->arResult['LIST'] = self::setGroupData($this->arResult['LIST']);
 		$this->arResult['LIST'] = self::setUserData($this->arResult['LIST']);
+
+		if (($this->arParams['relationType'] ?? 'subTasks') === 'gantt')
+		{
+			$this->arResult['LIST'] = self::setLinkTypeData($this->arResult['LIST'], $this->arParams['relationToId']);
+		}
+
 		$this->arResult['PAGE_SIZES'] = $this->pageSizes;
 
 		$this->validateCounters();
@@ -1473,6 +1479,26 @@ class TasksTaskListComponent extends TasksBaseComponent
 		{
 			$listState->switchOnSubmode(\CTaskListState::VIEW_SUBMODE_WITH_SUBTASKS);
 		}
+	}
+
+	private function getRelationGridId(string $relationType): string
+	{
+		return match ($relationType) {
+			default => 'tasks-subtasks-grid',
+			'relatedTasks' => 'tasks-related-grid',
+			'relatedTemplateTasks' => 'tasks-related-template-grid',
+			'gantt' => 'tasks-gantt-grid',
+		};
+	}
+
+	private function getRelationFilterField(string $relationType): string
+	{
+		return match ($relationType) {
+			default => 'PARENT_ID',
+			'relatedTasks' => 'DEPENDS_ON',
+			'relatedTemplateTasks' => 'DEPENDS_ON_TEMPLATE',
+			'gantt' => 'GANTT_ANCESTOR_ID',
+		};
 	}
 
 	private function getStub()
@@ -1667,6 +1693,22 @@ class TasksTaskListComponent extends TasksBaseComponent
 		{
 			$list[$id]['MEMBERS']['CREATED_BY'] = $users[$row['CREATED_BY']];
 			$list[$id]['MEMBERS']['RESPONSIBLE_ID'] = $users[$row['RESPONSIBLE_ID']];
+		}
+
+		return $list;
+	}
+
+	private static function setLinkTypeData(array $list, int $relationToId): array
+	{
+		$dependentIds = array_column($list, 'ID');
+		\Bitrix\Main\Type\Collection::normalizeArrayValuesByInt($dependentIds, false);
+
+		$ganttLinkRepository = ServiceLocator::getInstance()->get(GanttLinkRepositoryInterface::class);
+		$linkTypes = $ganttLinkRepository->getLinkTypes($relationToId, $dependentIds);
+
+		foreach ($list as $id => $row)
+		{
+			$list[$id]['LINK_TYPE'] = $linkTypes[$id][$relationToId];
 		}
 
 		return $list;

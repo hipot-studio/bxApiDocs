@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Provider;
 
 use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Repository\TemplateRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Converter\TemplateConverter;
 
 class TaskFromTemplateProvider

@@ -2,13 +2,14 @@
 
 namespace Bitrix\Crm\Integration\AI\Operation;
 
+use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 
 final class Scenario
 {
 	public const UNDEFINED_SCENARIO = '';
-	public const FULL_SCENARIO = 'full';
+	public const FULL_SCENARIO = 'full'; // fill_fields + call_scoring in call
 	public const FILL_FIELDS_SCENARIO = 'fill_fields';
 	public const CALL_SCORING_SCENARIO = 'call_scoring';
 	public const EXTRACT_SCORING_CRITERIA_SCENARIO = 'extract_scoring_criteria';
@@ -37,6 +38,11 @@ final class Scenario
 		];
 
 		return in_array($scenario, $scenarioList, true);
+	}
+
+	public static function isScenarioWithSkipTranscription(?string $providerId): bool
+	{
+		return $providerId === OpenLine::getId();
 	}
 
 	public static function isEnabledScenario(string $scenario): bool

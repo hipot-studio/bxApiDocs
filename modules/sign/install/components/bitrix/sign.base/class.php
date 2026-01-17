@@ -8,7 +8,6 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Sign;
-use Bitrix\Intranet;
 
 Loc::loadMessages(__FILE__);
 
@@ -59,6 +58,12 @@ abstract class SignBaseComponent extends \CBitrixComponent
 	 */
 	protected function exec(): void
 	{
+	}
+
+	protected function checkAuth(): bool
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		return $userId > 0;
 	}
 
 	/**
@@ -400,7 +405,7 @@ abstract class SignBaseComponent extends \CBitrixComponent
 			$this->setParam('PAGE_URL_DOCUMENT', null);
 			$this->setParam('PAGE_URL_B2E_DOCUMENT', null);
 			$this->setParam('PAGE_URL_EDIT', null);
-			$this->includeComponentTemplate('not-available');
+			$this->includeComponentTemplate('not-available', $this->getPath() . '/../sign.base/templates/.default');
 			$return = false;
 		}
 
@@ -413,6 +418,12 @@ abstract class SignBaseComponent extends \CBitrixComponent
 	 */
 	public function executeComponent(): void
 	{
+		if (!$this->checkAuth())
+		{
+			showError('access denied');
+			return;
+		}
+
 		if (!Main\Loader::includeModule($this->baseModuleName))
 		{
 			showError(Loc::getMessage('SIGN_CMP_BASE_ERROR_MODULE_SIGN_NOT_INSTALLED', [

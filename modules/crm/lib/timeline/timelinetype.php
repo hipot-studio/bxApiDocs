@@ -32,7 +32,7 @@ class TimelineType
 	public const LOG_MESSAGE = 25;
 	public const CALENDAR_SHARING = 26;
 	public const TASK = 27;
-	public const AI_CALL_PROCESSING = 28;
+	public const AI_PROCESSING = 28;
 	public const SIGN_B2E_DOCUMENT = 29;
 	public const SIGN_B2E_DOCUMENT_LOG = 30;
 	public const BOOKING = 31;

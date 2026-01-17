@@ -92,6 +92,60 @@ final class MentionService
 		return $text;
 	}
 
+	public function detectUserIdByBBMentions(?string $text): ?int
+	{
+		if ($text)
+		{
+			foreach ($this->searchBb as $userId => $regExp)
+			{
+				if (preg_match("#{$regExp}#iu", $text))
+				{
+					return $userId;
+				}
+			}
+			if (preg_match("#\[user=([0-9]+])\](.+?)\[/user\]#iu", $text, $matches))
+			{
+				if (isset($this->searchBb[(int)$mentions[1]]))
+				{
+					return (int)$matches[1];
+				}
+			}
+		}
+
+		return null;
+	}
+
+	public function detectUserIdByAiMentions(?string $text): ?int
+	{
+		if ($text)
+		{
+			foreach ($this->searchAi as $userId => $regExp)
+			{
+				if (preg_match("#{$regExp}#iu", $text))
+				{
+					return $userId;
+				}
+			}
+			foreach ($this->hashAi as $hash => $userId)
+			{
+				$userName = $this->getAIUserName($userId);
+				if (preg_match("#@?{$userName}\s*_{$hash}#iu",  $text))
+				{
+					return $userId;
+				}
+			}
+			if (preg_match("#@?([[:alnum:]]+)\s*_\s*([0-9]+)#iu", $text, $mentions))
+			{
+				if (isset($this->hashAi[(int)$mentions[1]]))
+				{
+					return (int)$mentions[1];
+				}
+			}
+		}
+
+		return null;
+	}
+
 	public function loadMentionsForCall(int $callId): void
 	{
 		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);

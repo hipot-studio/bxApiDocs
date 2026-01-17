@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Controller;
 
+use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Model\Dynamic;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
@@ -294,11 +295,29 @@ class Type extends Base
 			$hasPermissions = $userPermissions->isAdminForEntity($type->getEntityTypeId());
 		}
 
+		$currentCustomSectionId = $type->getCustomSectionId();
+		if ($currentCustomSectionId > 0)
+		{
+			$currentAutomatedSolution = Container::getInstance()->getAutomatedSolutionManager()->getAutomatedSolution($currentCustomSectionId);
+			if (
+				(int)($currentAutomatedSolution['INTRANET_CUSTOM_SECTION_ID'] !== $automatedSolutionId)
+				&& AutomatedSolutionTable::isImportedFromMarketplace($currentAutomatedSolution['SOURCE_ID'] ?? 0)
+			)
+			{
+				$errorText = Loc::getMessage('CRM_CONTROLLER_TYPE_CHANGE_CUSTOM_SECTION_IN_IMPORTED_AUTOMATED_SOLUTION_ERROR');
+				$this->addError(new Error($errorText));
+
+				return null;
+			}
+		}
+
 		if (!$hasPermissions)
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
+
 			return null;
 		}
+
 		$originalFields = $fields;
 		$fields = $this->convertKeysToUpper($fields);
 		$fieldKeysToUnset = ['ID', 'IS_EXTERNAL', 'CREATED_TIME', 'CREATED_BY', 'UPDATED_TIME', 'UPDATED_BY'];

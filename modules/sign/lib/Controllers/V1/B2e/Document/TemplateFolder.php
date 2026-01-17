@@ -109,7 +109,7 @@ class TemplateFolder extends Controller
 	}
 
 	#[ActionAccess(
-		permission: ActionDictionary::ACTION_B2E_TEMPLATE_DELETE,
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
 		itemType: AccessibleItemType::TEMPLATE_FOLDER,
 		itemIdOrUidRequestKey: 'folderId',
 	)]

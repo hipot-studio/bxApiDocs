@@ -7,6 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
+use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\Service\Timeline\Item\Factory\HistoryItem;
 use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Main;
@@ -134,6 +135,8 @@ class CCrmTimelineComponent extends CBitrixComponent
 			$this->errors[] = GetMessage('CRM_MODULE_NOT_INSTALLED');
 			return;
 		}
+
+		$this->arParams['ENTITY_CONFIG_SCOPE'] ??= EntityEditorConfigScope::UNDEFINED;
 
 		$this->userID = CCrmSecurityHelper::GetCurrentUserID();
 		$this->userPermissions = CCrmPerms::GetCurrentUserPermissions();
@@ -272,6 +275,8 @@ class CCrmTimelineComponent extends CBitrixComponent
 					'ENTRY_CATEGORY_ID' => array(
 						Crm\Filter\TimelineEntryCategory::SMS,
 						Crm\Filter\TimelineEntryCategory::WHATSAPP,
+						Crm\Filter\TimelineEntryCategory::TELEGRAM,
+						Crm\Filter\TimelineEntryCategory::NOTIFICATION,
 						Crm\Filter\TimelineEntryCategory::ACTIVITY_CALL,
 						Crm\Filter\TimelineEntryCategory::ACTIVITY_VISIT,
 						Crm\Filter\TimelineEntryCategory::ACTIVITY_MEETING,
@@ -441,7 +446,7 @@ class CCrmTimelineComponent extends CBitrixComponent
 				{
 					$this->arResult['DOCUMENT_HAS_RUNNING_WORKFLOW'] = true;
 
-					if ($bpTaskAddInTimelineOption['closed'] === 'Y')
+					if (($bpTaskAddInTimelineOption['closed'] ?? null) === 'Y')
 					{
 						return;
 					}
@@ -562,7 +567,7 @@ class CCrmTimelineComponent extends CBitrixComponent
 		if (is_array($messageData) && !empty($messageData['messages']) && is_array($messageData['messages']))
 		{
 			$messageData['messages'][0]['text'] = preg_replace_callback(
-				"/\[USER=([0-9]{1,})\]\[\/USER\]/i",
+				"/\[USER=([0-9]+|all)\]\[\/USER\]/i",
 				['\Bitrix\Im\Text', 'modifyShortUserTag'],
 				$messageData['messages'][0]['text'],
 			);

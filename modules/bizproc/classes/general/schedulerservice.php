@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Bizproc\SchedulerEventTable;
+use Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Entity\WorkflowStartMessage;
 use Bitrix\Main\Loader;
 
 class CBPSchedulerService extends CBPRuntimeService
@@ -141,7 +142,7 @@ class CBPSchedulerService extends CBPRuntimeService
 				'HANDLER' => (string)$eventHandlerName,
 				'EVENT_MODULE' => (string)$eventModule,
 				'EVENT_TYPE' => (string)$eventName,
-				'ENTITY_ID' => (string)$entityId
+				'ENTITY_ID' => (string)$entityId,
 			));
 			$resultId = (int)$result->getId();
 		}
@@ -209,7 +210,7 @@ class CBPSchedulerService extends CBPRuntimeService
 	{
 		$event = SchedulerEventTable::getList([
 			'select' => ['WORKFLOW_ID', 'HANDLER','EVENT_MODULE', 'EVENT_TYPE', 'ENTITY_ID'],
-			'filter' => ['=ID' => $eventId]
+			'filter' => ['=ID' => $eventId],
 		])->fetch();
 
 		if ($event)
@@ -222,6 +223,17 @@ class CBPSchedulerService extends CBPRuntimeService
 				$entityKey ? [$entityKey => $event['ENTITY_ID']] : $event['ENTITY_ID']
 			);
 		}
+	}
+
+	public function subscribeStartWorkflow(string $workflowId, int $delay = 0): void
+	{
+		$message = new WorkflowStartMessage($workflowId);
+		$params = [];
+		if ($delay > 0)
+		{
+			$params[] = new Bitrix\Main\Messenger\Entity\ProcessingParam\DelayParam($delay);
+		}
+		$message->send('start_workflow_queue', $params);
 	}
 
 	/**
@@ -307,7 +319,7 @@ class CBPSchedulerService extends CBPRuntimeService
 		$eventParameters = array(
 			'SchedulerService' => 'OnEvent',  // compatibility
 			'eventModule' => $eventModule,
-			'eventName' => $eventName
+			'eventName' => $eventName,
 		);
 
 		$num = func_num_args();
@@ -319,7 +331,7 @@ class CBPSchedulerService extends CBPRuntimeService
 
 		$filter = array(
 			'=EVENT_MODULE' => $eventModule,
-			'=EVENT_TYPE' => $eventName
+			'=EVENT_TYPE' => $eventName,
 		);
 
 		$entityId = null;
@@ -332,7 +344,7 @@ class CBPSchedulerService extends CBPRuntimeService
 			$filter['=ENTITY_ID'] = $entityId;
 
 		$iterator = SchedulerEventTable::getList(array(
-			'filter' => $filter
+			'filter' => $filter,
 		));
 
 		while ($event = $iterator->fetch())

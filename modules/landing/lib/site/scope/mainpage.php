@@ -19,10 +19,13 @@ class Mainpage extends Scope
 {
 	private const ALLOWED_EXTENSIONS = [
 		'landing.widgetvue',
-		'landing_inline_video',
 		'landing_carousel',
 		'landing_jquery',
 		'landing_icon_fonts',
+		'landing_inline_video',
+		'landing.utils',
+		'mediaplayer',
+		'loader',
 	];
 
 	/**

@@ -19,7 +19,7 @@ class Lead extends Base
 
 	public function getPath()
 	{
-		return '/crm/lead/list/';
+		return SITE_DIR . 'crm/lead/list/';
 	}
 
 	public function query()

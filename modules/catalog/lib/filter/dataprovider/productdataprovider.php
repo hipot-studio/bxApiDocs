@@ -12,7 +12,7 @@ use Bitrix\Iblock\Filter\DataProvider\ElementDataProvider;
 use Bitrix\Main\Filter\Field;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UI\Filter\Type;
+use Bitrix\Main\ModuleManager;
 
 Loader::requireModule('iblock');
 
@@ -96,6 +96,14 @@ class ProductDataProvider extends ElementDataProvider
 			'default' => false,
 			'partial' => true,
 		]);
+
+		if (ModuleManager::isModuleInstalled('booking'))
+		{
+			$result['BOOKING_SERVICES_ONLY'] = $this->createField('BOOKING_SERVICES_ONLY', [
+				'type' => 'checkbox',
+				'default' => false,
+			]);
+		}
 
 		if ($this->isWithVariations())
 		{

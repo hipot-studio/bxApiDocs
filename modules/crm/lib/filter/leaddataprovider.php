@@ -221,6 +221,7 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 				'CREATED_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -228,6 +229,7 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 				'MODIFY_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -416,6 +418,7 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 				'MOVED_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -567,7 +570,7 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 		elseif(in_array($fieldID, ['ASSIGNED_BY_ID', 'CREATED_BY_ID', 'MODIFY_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS', 'OBSERVER_IDS',  'MOVED_BY_ID'], true))
 		{
 			$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Lead);
-			$referenceClass = ($factory ? $factory->getDataClass() : null);
+			$referenceClass = ($factory?->getDataClass());
 
 			if (in_array($fieldID, ['ACTIVITY_RESPONSIBLE_IDS', 'OBSERVER_IDS'], true))
 			{
@@ -577,15 +580,14 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 			$isEnableAllUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 			$isEnableOtherUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 
-			return $this->getUserEntitySelectorParams(
+			return $this->getDepartmentSelectorParams(
 				EntitySelector::CONTEXT,
 				[
 					'fieldName' => $fieldID,
 					'referenceClass' => $referenceClass,
 					'isEnableAllUsers' => $isEnableAllUsers,
 					'isEnableOtherUsers' => $isEnableOtherUsers,
-					'isEnableStructureNode' => true,
-				]
+				],
 			);
 		}
 		elseif($fieldID === 'CONTACT_ID')

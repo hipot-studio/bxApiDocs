@@ -342,6 +342,12 @@ class Options
 			'CALL_TEXT' => $options['callback']['text'],
 
 			'CAPTCHA_SERVICE' => $options['captcha']['service'] ?? 'google',
+
+			'IS_BOOKING_FORM' => !empty(
+				array_filter(
+					$options['data']['fields'] ?? [],
+					static fn ($field) => $field['type'] === Booking::RESOURCE_FIELD_TYPE)
+			)
 		];
 	}
 

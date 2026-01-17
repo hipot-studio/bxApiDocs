@@ -1,7 +1,6 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\Filter;
-
 
 /**
  * Class Theme. Available default filter themes

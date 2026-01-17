@@ -48,12 +48,6 @@ define("BANNER_UNIFORMITY_DIVERGENCE_COEF", 0.05);
 
 class CAdvContract_all
 {
-	public static function err_mess()
-	{
-		$module_id = "advertising";
-		return "<br>Module: ".$module_id."<br>Class: CAdvContract_all<br>File: ".__FILE__;
-	}
-
 	public static function GetNextSort()
 	{
 		$rsContracts = CAdvContract::GetList("s_sort", "desc", array("ID" => "~1", "ID_EXACT_MATCH" => "Y"));
@@ -262,7 +256,6 @@ class CAdvContract_all
 	// получение массива прав текущего пользователя по всем контрактам
 	public static function GetUserPermissions($CONTRACT_ID=0, $USER_ID=false)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: GetUserPermissions<br>Line: ";
 		global $DB, $USER;
 		static $CONTRACT_RIGHTS = array();
 		$USER_ID = ($USER_ID===false) ? intval($USER->GetID()) : intval($USER_ID);
@@ -297,7 +290,7 @@ class CAdvContract_all
 					1=1
 				$strSqlSearch
 				";
-			$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+			$rs = $DB->Query($strSql);
 			while ($ar = $rs->Fetch()) $arrRes[$ar["ID"]][] = $ar["PERMISSION"];
 			if ($isAdmin || $isManager)
 			{
@@ -340,7 +333,6 @@ class CAdvContract_all
 	// получение массива всех прав доступа по заданному контракту
 	public static function GetContractPermissions($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: GetContractPermissions<br>Line: ";
 		global $DB;
 		$arrPerm = array();
 		$CONTRACT_ID = intval($CONTRACT_ID);
@@ -361,7 +353,7 @@ class CAdvContract_all
 			and U.ID = CU.USER_ID
 			ORDER BY CU.ID
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 		{
 			$arrPerm[$ar["PERMISSION"]][] = array(
@@ -460,14 +452,13 @@ class CAdvContract_all
 
 	public static function SendInfo()
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: SendInfo<br>Line: ";
 		global $DB;
 		$rsContracts = CAdvContract::GetList("", "", array("LAMP" => "red", "EMAIL_COUNT_2" => "0"), null, "N");
 		while ($arContract = $rsContracts->Fetch())
 		{
 			CAdvContract::SendEMail($arContract, "< ".GetMessage("AD_CONTRACT_NOT_ACTIVE")." >");
 			$arFields = array("EMAIL_COUNT" => "EMAIL_COUNT + 1");
-			$DB->Update("b_adv_contract",$arFields,"WHERE ID='".$arContract["ID"]."'",$err_mess.__LINE__);
+			$DB->Update("b_adv_contract",$arFields,"WHERE ID='".$arContract["ID"]."'");
 		}
 		return "CAdvContract::SendInfo();";
 	}
@@ -505,7 +496,6 @@ class CAdvContract_all
 	// получаем массив времени и дней недели связанных с контрактом
 	public static function GetWeekdayArray($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: GetWeekdayArray<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0) return false;
@@ -519,7 +509,7 @@ class CAdvContract_all
 			WHERE
 				CONTRACT_ID = $CONTRACT_ID
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 		{
 			$arrRes[$ar["C_WEEKDAY"]][] = $ar["C_HOUR"];
@@ -530,7 +520,6 @@ class CAdvContract_all
 	// получаем массив типов связанных с контрактом
 	public static function GetTypeArray($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: GetTypeArray<br>Line: ";
 		global $DB;
 
 		$CONTRACT_ID = intval($CONTRACT_ID);
@@ -551,7 +540,7 @@ class CAdvContract_all
 		";
 
 		$arrRes = array();
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while($ar = $rs->Fetch())
 		{
 			$arrRes[$ar["SID"]] = $ar["NAME"];
@@ -564,7 +553,6 @@ class CAdvContract_all
 	// получаем массив языков связанных с контрактом
 	public static function GetSiteArray($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: GetSiteArray<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0) return false;
@@ -578,7 +566,7 @@ class CAdvContract_all
 				CS.CONTRACT_ID = $CONTRACT_ID
 			";
 
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch()) $arrRes[] = $ar["SITE_ID"];
 		return $arrRes;
 	}
@@ -586,7 +574,6 @@ class CAdvContract_all
 	// получаем массив страниц связанных с контрактом
 	public static function GetPageArray($CONTRACT_ID, $SHOW="SHOW")
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: GetPageArray<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0) return false;
@@ -601,7 +588,7 @@ class CAdvContract_all
 				CONTRACT_ID = $CONTRACT_ID
 			and	SHOW_ON_PAGE = $SHOW_ON_PAGE
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch()) $arrRes[] = $ar["PAGE"];
 		return $arrRes;
 	}
@@ -661,7 +648,6 @@ class CAdvContract_all
 	// добавляем новый контракт или модифицируем существующий
 	public static function Set($arFields, $CONTRACT_ID, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: Set<br>Line: ";
 		global $DB, $USER;
 		if (CAdvContract::CheckFields($arFields, $CONTRACT_ID, $CHECK_RIGHTS))
 		{
@@ -808,7 +794,7 @@ class CAdvContract_all
 				else
 					$arFields_i["MODIFIED_BY"] = $USER_ID;
 
-				$DB->Update("b_adv_contract",$arFields_i,"WHERE ID='".intval($CONTRACT_ID)."'",$err_mess.__LINE__);
+				$DB->Update("b_adv_contract",$arFields_i,"WHERE ID='".intval($CONTRACT_ID)."'");
 			}
 			elseif ($isAdmin)
 			{
@@ -834,7 +820,7 @@ class CAdvContract_all
 				else
 					$arFields_i["MODIFIED_BY"] = $USER_ID;
 
-				$CONTRACT_ID = $DB->Insert("b_adv_contract",$arFields_i, $err_mess.__LINE__);
+				$CONTRACT_ID = $DB->Insert("b_adv_contract",$arFields_i);
 			}
 
 			$CONTRACT_ID = intval($CONTRACT_ID);
@@ -854,7 +840,7 @@ class CAdvContract_all
 								if (trim($sid) <> '')
 								{
 									$strSql = "INSERT INTO b_adv_contract_2_site(CONTRACT_ID, SITE_ID) VALUES ($CONTRACT_ID, '".$DB->ForSql($sid, 2)."')";
-									$DB->Query($strSql, false, $err_mess.__LINE__);
+									$DB->Query($strSql);
 								}
 							}
 						}
@@ -876,7 +862,7 @@ class CAdvContract_all
 										"PAGE"			=> "'".$DB->ForSql($page, 255)."'",
 										"SHOW_ON_PAGE"	=> "'Y'"
 										);
-									$DB->Insert("b_adv_contract_2_page",$arFields_i, $err_mess.__LINE__);
+									$DB->Insert("b_adv_contract_2_page",$arFields_i);
 								}
 							}
 						}
@@ -898,7 +884,7 @@ class CAdvContract_all
 										"PAGE"			=> "'".$DB->ForSql($page, 255)."'",
 										"SHOW_ON_PAGE"	=> "'N'"
 										);
-									$DB->Insert("b_adv_contract_2_page",$arFields_i, $err_mess.__LINE__);
+									$DB->Insert("b_adv_contract_2_page",$arFields_i);
 								}
 							}
 						}
@@ -915,7 +901,7 @@ class CAdvContract_all
 								if (trim($type) <> '')
 								{
 									$strSql = "INSERT INTO b_adv_contract_2_type(CONTRACT_ID, TYPE_SID) VALUES ($CONTRACT_ID, '".$DB->ForSql($type, 255)."')";
-									$DB->Query($strSql, false, $err_mess.__LINE__);
+									$DB->Query($strSql);
 								}
 							}
 						}
@@ -947,7 +933,7 @@ class CAdvContract_all
 											if ($hour>=0 && $hour<=23)
 											{
 												$strSql = "INSERT INTO b_adv_contract_2_weekday (CONTRACT_ID, C_WEEKDAY, C_HOUR) VALUES (".$CONTRACT_ID.", '".$DB->ForSql($weekday, 10)."', ".$hour.")";
-												$DB->Query($strSql, false, $err_mess.__LINE__);
+												$DB->Query($strSql);
 											}
 										}
 									}
@@ -972,7 +958,7 @@ class CAdvContract_all
 									"USER_ID"		=> intval($user_id),
 									"PERMISSION"	=> "'VIEW'"
 									);
-								$DB->Insert("b_adv_contract_2_user",$arFields_i, $err_mess.__LINE__);
+								$DB->Insert("b_adv_contract_2_user",$arFields_i);
 							}
 						}
 					}
@@ -993,7 +979,7 @@ class CAdvContract_all
 									"USER_ID"		=> intval($user_id),
 									"PERMISSION"	=> "'ADD'"
 									);
-								$DB->Insert("b_adv_contract_2_user",$arFields_i, $err_mess.__LINE__);
+								$DB->Insert("b_adv_contract_2_user",$arFields_i);
 							}
 						}
 					}
@@ -1016,7 +1002,7 @@ class CAdvContract_all
 										"USER_ID"		=> intval($user_id),
 										"PERMISSION"	=> "'EDIT'"
 										);
-									$DB->Insert("b_adv_contract_2_user",$arFields_i, $err_mess.__LINE__);
+									$DB->Insert("b_adv_contract_2_user",$arFields_i);
 								}
 							}
 						}
@@ -1039,7 +1025,7 @@ class CAdvContract_all
 					if ($str_CURRENT_LAMP=="red")
 					{
 						$arFields = array("EMAIL_COUNT" => "EMAIL_COUNT + 1");
-						$DB->Update("b_adv_contract",$arFields,"WHERE ID='".$CONTRACT_ID."'",$err_mess.__LINE__);
+						$DB->Update("b_adv_contract",$arFields,"WHERE ID='".$CONTRACT_ID."'");
 					}
 				}
 
@@ -1051,7 +1037,6 @@ class CAdvContract_all
 	// удаление контракта
 	public static function Delete($CONTRACT_ID, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: Delete<br>Line: ";
 		global $DB, $strError;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=1)
@@ -1060,7 +1045,7 @@ class CAdvContract_all
 		if ($isAdmin)
 		{
 			$strSql = "SELECT ID FROM b_adv_banner WHERE CONTRACT_ID = $CONTRACT_ID";
-			$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+			$rs = $DB->Query($strSql);
 			while ($ar = $rs->Fetch()) CAdvBanner::Delete($ar["ID"], "N");
 
 			CAdvContract::DeletePageLink($CONTRACT_ID);
@@ -1070,7 +1055,7 @@ class CAdvContract_all
 			CAdvContract::DeleteWeekdayLink($CONTRACT_ID);
 
 			$strSql = "DELETE FROM b_adv_contract WHERE ID = $CONTRACT_ID";
-			$DB->Query($strSql, false, $err_mess.__LINE__);
+			$DB->Query($strSql);
 			return true;
 		}
 		else
@@ -1083,72 +1068,66 @@ class CAdvContract_all
 	// удаление связи контракта со страницами
 	public static function DeletePageLink($CONTRACT_ID, $where="")
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: DeletePageLink<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_contract_2_page WHERE CONTRACT_ID = $CONTRACT_ID ".$where;
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи контракта с сайтами
 	public static function DeleteSiteLink($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: DeleteSiteLink<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_contract_2_site WHERE CONTRACT_ID = $CONTRACT_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи контракта с типами баннеров
 	public static function DeleteTypeLink($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: DeleteTypeLink<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_contract_2_type WHERE CONTRACT_ID = $CONTRACT_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи контракта с пользователями
 	public static function DeleteUserLink($CONTRACT_ID, $where="")
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: DeleteUserLink<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_contract_2_user WHERE CONTRACT_ID = $CONTRACT_ID ".$where;
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи контракта со временем и днями недели
 	public static function DeleteWeekdayLink($CONTRACT_ID)
 	{
-		$err_mess = (CAdvContract_all::err_mess())."<br>Function: DeleteWeekdayLink<br>Line: ";
 		global $DB;
 		$CONTRACT_ID = intval($CONTRACT_ID);
 		if ($CONTRACT_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_contract_2_weekday WHERE CONTRACT_ID = $CONTRACT_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	//Получение статистики по контрактам
 	public static function GetStatList($by, $order, $arFilter)
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: GetDynamicList<br>Line: ";
 		global $DB;
 		$arSqlSearch = Array();
 		if (CAdvBanner::CheckDynamicFilter($arFilter))
@@ -1274,7 +1253,7 @@ class CAdvContract_all
 				";
 		}
 
-		return $DB->Query($strSql, false, $err_mess.__LINE__);
+		return $DB->Query($strSql);
 	}
 }
 
@@ -1284,12 +1263,6 @@ class CAdvContract_all
 
 class CAdvBanner_all
 {
-	public static function err_mess()
-	{
-		$module_id = "advertising";
-		return "<br>Module: ".$module_id."<br>Class: CAdvBanner_all<br>File: ".__FILE__;
-	}
-
 	public static function GetCurUri()
 	{
 		global $strAdvCurUri, $APPLICATION;
@@ -1403,14 +1376,13 @@ class CAdvBanner_all
 	// удаление баннера
 	public static function Delete($BANNER_ID, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: Delete<br>Line: ";
 		global $DB, $strError;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 
 		$strSql = "SELECT CONTRACT_ID, IMAGE_ID, TYPE_SID FROM b_adv_banner WHERE ID = '$BANNER_ID'";
-		$rsBanner = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rsBanner = $DB->Query($strSql);
 		if ($arBanner = $rsBanner->Fetch())
 		{
 			$ok = false;
@@ -1443,10 +1415,10 @@ class CAdvBanner_all
 				CAdvBanner::DeleteGroupLink($BANNER_ID);
 
 				$strSql = "DELETE FROM b_adv_banner_2_day WHERE BANNER_ID = $BANNER_ID";
-				$DB->Query($strSql, false, $err_mess.__LINE__);
+				$DB->Query($strSql);
 
 				$strSql = "DELETE FROM b_adv_banner WHERE ID = $BANNER_ID";
-				$DB->Query($strSql, false, $err_mess.__LINE__);
+				$DB->Query($strSql);
 				return true;
 			}
 			else
@@ -1460,77 +1432,71 @@ class CAdvBanner_all
 	// удаление связи баннера со временем и днями недели
 	public static function DeleteWeekdayLink($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: DeleteWeekdayLink<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_banner_2_weekday WHERE BANNER_ID = $BANNER_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи баннера с языками
 	public static function DeleteSiteLink($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: DeleteSiteLink<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_banner_2_site WHERE BANNER_ID = $BANNER_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи баннера со страной
 	public static function DeleteCountryLink($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: DeleteCountryLink<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_banner_2_country WHERE BANNER_ID = $BANNER_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи баннера со рекламными кампаниями статистики
 	public static function DeleteStatAdvLink($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: DeleteStatAdvLink<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_banner_2_stat_adv WHERE BANNER_ID = $BANNER_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// удаление связи баннера со страницами
 	public static function DeletePageLink($BANNER_ID, $where="")
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: DeletePageLink<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_banner_2_page WHERE BANNER_ID = $BANNER_ID ".$where;
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	public static function DeleteGroupLink($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: DeleteGroupLink<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
 			return false;
 		$strSql = "DELETE FROM b_adv_banner_2_group WHERE BANNER_ID = $BANNER_ID";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
@@ -1553,7 +1519,6 @@ class CAdvBanner_all
 	// получаем массив страниц связанных с баннером
 	public static function GetPageArray($BANNER_ID, $SHOW="SHOW")
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetPageArray<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
@@ -1569,7 +1534,7 @@ class CAdvBanner_all
 				BANNER_ID = $BANNER_ID
 			and	SHOW_ON_PAGE = $SHOW_ON_PAGE
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 			$arrRes[] = $ar["PAGE"];
 		return $arrRes;
@@ -1578,7 +1543,6 @@ class CAdvBanner_all
 	// получаем массив групп пользователей связанных с баннером
 	public static function GetGroupArray($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetGroupArray<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
@@ -1593,7 +1557,7 @@ class CAdvBanner_all
 			WHERE
 				BANNER_ID = $BANNER_ID
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 			$arrRes[] = $ar["GROUP_ID"];
 		return $arrRes;
@@ -1602,7 +1566,6 @@ class CAdvBanner_all
 	// получаем массив языков связанных с баннером
 	public static function GetSiteArray($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetSiteArray<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
@@ -1616,7 +1579,7 @@ class CAdvBanner_all
 			WHERE
 				BANNER_ID = $BANNER_ID
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 			$arrRes[] = $ar["SITE_ID"];
 		return $arrRes;
@@ -1625,7 +1588,6 @@ class CAdvBanner_all
 	// получаем массив стран связанных с баннером
 	public static function GetCountryArray($BANNER_ID, $WHAT = "COUNTRY")
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetCountryArray<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
@@ -1666,7 +1628,7 @@ class CAdvBanner_all
 			ORDER BY
 				".implode(", ", $arSelect)."
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while($ar = $rs->Fetch())
 		{
 			if($WHAT === "COUNTRY")
@@ -1680,7 +1642,6 @@ class CAdvBanner_all
 	// получаем массив времени и дней недели связанных с баннером
 	public static function GetWeekdayArray($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetWeekdayArray<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
@@ -1695,7 +1656,7 @@ class CAdvBanner_all
 			WHERE
 				BANNER_ID = $BANNER_ID
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 			$arrRes[$ar["C_WEEKDAY"]][] = $ar["C_HOUR"];
 		return $arrRes;
@@ -1704,7 +1665,6 @@ class CAdvBanner_all
 	// получаем массив рекламных кампаний связанных с баннером
 	public static function GetStatAdvArray($BANNER_ID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetStatAdvArray<br>Line: ";
 		global $DB;
 		$BANNER_ID = intval($BANNER_ID);
 		if ($BANNER_ID<=0)
@@ -1718,7 +1678,7 @@ class CAdvBanner_all
 			WHERE
 				BANNER_ID = $BANNER_ID
 			";
-		$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
 			$arrRes[] = $ar["STAT_ADV_ID"];
 		return $arrRes;
@@ -2084,7 +2044,6 @@ class CAdvBanner_all
 	// добавляем новый баннер или модифицируем существующий
 	public static function Set($arFields, $BANNER_ID, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: Set<br>Line: ";
 		global $DB, $USER, $APPLICATION, $strError;
 		$BANNER_ID = intval($BANNER_ID);
 		if (CAdvBanner::CheckFields($arFields, $BANNER_ID, $CHECK_RIGHTS))
@@ -2287,7 +2246,7 @@ class CAdvBanner_all
 					$arIMAGE["MODULE_ID"] = "advertising";
 					if ($BANNER_ID>0)
 					{
-						$z = $DB->Query("SELECT IMAGE_ID FROM b_adv_banner WHERE ID='$BANNER_ID'", false, $err_mess.__LINE__);
+						$z = $DB->Query("SELECT IMAGE_ID FROM b_adv_banner WHERE ID='$BANNER_ID'");
 						$zr = $z->Fetch();
 						$arIMAGE["old_file"] = $zr["IMAGE_ID"];
 					}
@@ -2314,7 +2273,7 @@ class CAdvBanner_all
 				{
 					if ($BANNER_ID>0)
 					{
-						$z = $DB->Query("SELECT TEMPLATE_FILES FROM b_adv_banner WHERE ID='$BANNER_ID'", false, $err_mess.__LINE__);
+						$z = $DB->Query("SELECT TEMPLATE_FILES FROM b_adv_banner WHERE ID='$BANNER_ID'");
 						$zr = $z->Fetch();
 						if (CheckSerializedData($zr['TEMPLATE_FILES']))
 							$zr = unserialize($zr['TEMPLATE_FILES'], ['allowed_classes' => false]);
@@ -2437,7 +2396,7 @@ class CAdvBanner_all
 					$arrFlashIMAGE["MODULE_ID"] = "advertising";
 					if ($BANNER_ID>0)
 					{
-						$z = $DB->Query("SELECT FLASH_IMAGE FROM b_adv_banner WHERE ID='$BANNER_ID'", false, $err_mess.__LINE__);
+						$z = $DB->Query("SELECT FLASH_IMAGE FROM b_adv_banner WHERE ID='$BANNER_ID'");
 						if($zr = $z->Fetch())
 						{
 							$arrFlashIMAGE["old_file"] = $zr["FLASH_IMAGE"];
@@ -2613,7 +2572,7 @@ class CAdvBanner_all
 								if (trim($sid) <> '')
 								{
 									$strSql = "INSERT INTO b_adv_banner_2_site (BANNER_ID, SITE_ID) VALUES ($BANNER_ID, '".$DB->ForSql($sid, 2)."')";
-									$DB->Query($strSql, false, $err_mess.__LINE__);
+									$DB->Query($strSql);
 								}
 							}
 						}
@@ -2635,7 +2594,7 @@ class CAdvBanner_all
 										"PAGE"			=> "'".$DB->ForSql($page, 255)."'",
 										"SHOW_ON_PAGE"	=> "'Y'"
 										);
-									$DB->Insert("b_adv_banner_2_page",$arFields_i, $err_mess.__LINE__);
+									$DB->Insert("b_adv_banner_2_page",$arFields_i);
 								}
 							}
 						}
@@ -2657,7 +2616,7 @@ class CAdvBanner_all
 										"PAGE"			=> "'".$DB->ForSql($page, 255)."'",
 										"SHOW_ON_PAGE"	=> "'N'"
 										);
-									$DB->Insert("b_adv_banner_2_page",$arFields_i, $err_mess.__LINE__);
+									$DB->Insert("b_adv_banner_2_page",$arFields_i);
 								}
 							}
 						}
@@ -2693,7 +2652,7 @@ class CAdvBanner_all
 							foreach($arrCOUNTRY as $strInsert)
 							{
 								$strSql = "INSERT INTO b_adv_banner_2_country (BANNER_ID, COUNTRY_ID, REGION, CITY_ID) VALUES ($BANNER_ID, ".$strInsert.")";
-								$DB->Query($strSql, false, $err_mess.__LINE__);
+								$DB->Query($strSql);
 								$iCounter++;
 							}
 						}
@@ -2711,7 +2670,7 @@ class CAdvBanner_all
 								if (intval($aid)>0)
 								{
 									$strSql = "INSERT INTO b_adv_banner_2_stat_adv (BANNER_ID, STAT_ADV_ID) VALUES ($BANNER_ID, '".intval($aid)."')";
-									$DB->Query($strSql, false, $err_mess.__LINE__);
+									$DB->Query($strSql);
 								}
 							}
 						}
@@ -2743,7 +2702,7 @@ class CAdvBanner_all
 											if ($hour>=0 && $hour<=23)
 											{
 												$strSql = "INSERT INTO b_adv_banner_2_weekday (BANNER_ID, C_WEEKDAY, C_HOUR) VALUES ($BANNER_ID, '".$DB->ForSql($weekday, 10)."', $hour)";
-												$DB->Query($strSql, false, $err_mess.__LINE__);
+												$DB->Query($strSql);
 											}
 										}
 									}
@@ -2763,7 +2722,7 @@ class CAdvBanner_all
 								if (intval($uid)>0)
 								{
 									$strSql = "INSERT INTO b_adv_banner_2_group (BANNER_ID, GROUP_ID) VALUES ($BANNER_ID, ".intval($uid).")";
-									$DB->Query($strSql, false, $err_mess.__LINE__);
+									$DB->Query($strSql);
 								}
 							}
 						}
@@ -3041,7 +3000,6 @@ class CAdvBanner_all
 	// возвращает массив описывающий произвольный баннер
 	public static function GetRandom($TYPE_SID)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetRandom<br>Line: ";
 		global $APPLICATION, $DB, $arrViewedBanners, $arrADV_VIEWED_BANNERS;
 
 		static $arrWeightSum = false;
@@ -3408,7 +3366,7 @@ class CAdvBanner_all
 				$infUniform = null;
 				$stubs = array();
 
-				$rsBanners = $DB->Query($strSql, false, $err_mess.__LINE__);
+				$rsBanners = $DB->Query($strSql);
 				while($arBanner = $rsBanners->Fetch())
 				{
 					if (isset($arBanner["FLYUNIFORM"]) and $arBanner["FLYUNIFORM"] == "Y")
@@ -3473,7 +3431,6 @@ class CAdvBanner_all
 	// возвращает массив, описывающий $quantity произвольных баннеров
 	public static function GetRandomArray($TYPE_SID, $quantity = 1)
 	{
-		$err_mess = (CAdvBanner_all::err_mess())."<br>Function: GetRandom<br>Line: ";
 		global $APPLICATION, $DB, $arrViewedBanners, $arrADV_VIEWED_BANNERS;
 
 		static $arrWeightSum = false;
@@ -3839,7 +3796,7 @@ class CAdvBanner_all
 				$inf = array();
 				$stubs = array();
 
-				$rsBanners = $DB->Query($strSql, false, $err_mess.__LINE__);
+				$rsBanners = $DB->Query($strSql);
 				while($arBanner = $rsBanners->Fetch())
 				{
 					if (isset($arBanner["FLYUNIFORM"]) and $arBanner["FLYUNIFORM"] == "Y")
@@ -4165,7 +4122,6 @@ class CAdvBanner_all
 	public static function FixShowAll()
 	{
 		global $DB, $CACHE_ADVERTISING, $arrADV_VIEWED_BANNERS, $APPLICATION;
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: FixShowAll<br>Line: ";
 
 		if (is_array($CACHE_ADVERTISING) &&
 			array_key_exists("BANNERS_ALL", $CACHE_ADVERTISING) &&
@@ -4197,7 +4153,7 @@ class CAdvBanner_all
 			foreach($CACHE_ADVERTISING["BANNERS_ALL"] as $b)
 				$group_all .= ($group_all <> ''? ',':'').intval($b);
 
-			$DB->Update("b_adv_banner",$arFields,"WHERE ID IN(".$group_all.")",$err_mess.__LINE__);
+			$DB->Update("b_adv_banner",$arFields,"WHERE ID IN(".$group_all.")");
 
 			if (!$bEqualBanID && !empty($CACHE_ADVERTISING["BANNERS_CNT"]))
 			{
@@ -4205,12 +4161,12 @@ class CAdvBanner_all
 				$group_inc = "";
 				foreach($CACHE_ADVERTISING["BANNERS_CNT"] as $BANNERS_CNT)
 					$group_inc .= ($group_inc <> ""? ",":"").intval($BANNERS_CNT);
-				$DB->Update("b_adv_banner",$arFields,"WHERE ID IN(".$group_inc.")",$err_mess.__LINE__);
+				$DB->Update("b_adv_banner",$arFields,"WHERE ID IN(".$group_inc.")");
 			}
 
 			//Баннеры по дням
 			$strSql = "SELECT BANNER_ID FROM b_adv_banner_2_day WHERE BANNER_ID IN (".$group_all.") and DATE_STAT = ".$DB->GetNowDate();
-			$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+			$res = $DB->Query($strSql);
 			$arExist = $arInsert = Array();
 			while ($ar = $res->Fetch())
 				$arExist[] = $ar["BANNER_ID"];
@@ -4220,7 +4176,7 @@ class CAdvBanner_all
 			foreach ($arInsert as $BANNER_ID)
 			{
 				$strSql = "INSERT INTO b_adv_banner_2_day (DATE_STAT, BANNER_ID, SHOW_COUNT, VISITOR_COUNT) VALUES (".$DB->GetNowDate().", $BANNER_ID,1,1)";
-				$DB->Query($strSql, true, $err_mess.__LINE__);
+				$DB->Query($strSql, true);
 			}
 
 			if (!empty($arExist))
@@ -4233,7 +4189,7 @@ class CAdvBanner_all
 						$sExistInc .= ($sExistInc <> ''? ',':'').intval($b);
 
 					$arFields = Array("SHOW_COUNT" => "SHOW_COUNT + 1", "VISITOR_COUNT" => "VISITOR_COUNT + 1");
-					$DB->Update("b_adv_banner_2_day",$arFields,"WHERE BANNER_ID IN(".$sExistInc.") and DATE_STAT = ".$DB->GetNowDate(),$err_mess.__LINE__);
+					$DB->Update("b_adv_banner_2_day",$arFields,"WHERE BANNER_ID IN(".$sExistInc.") and DATE_STAT = ".$DB->GetNowDate());
 				}
 
 				$arExistInc = array_diff($arExist, $arExistInc);
@@ -4245,7 +4201,7 @@ class CAdvBanner_all
 						$sExistInc .= ($sExistInc <> ''? ',':'').intval($b);
 
 					$arFields = Array("SHOW_COUNT" => "SHOW_COUNT + 1");
-					$DB->Update("b_adv_banner_2_day",$arFields,"WHERE BANNER_ID IN(".$sExistInc.") and DATE_STAT = ".$DB->GetNowDate(),$err_mess.__LINE__);
+					$DB->Update("b_adv_banner_2_day",$arFields,"WHERE BANNER_ID IN(".$sExistInc.") and DATE_STAT = ".$DB->GetNowDate());
 				}
 			}
 
@@ -4277,7 +4233,7 @@ class CAdvBanner_all
 					foreach($arContact as $c)
 						$sContact .= ($sContact <> ''? ',':'').intval($c);
 
-					$DB->Update("b_adv_contract",$arFields,"WHERE ID IN(".$sContact.")",$err_mess.__LINE__);
+					$DB->Update("b_adv_contract",$arFields,"WHERE ID IN(".$sContact.")");
 				}
 
 				if (!empty($CACHE_ADVERTISING["CONTRACTS_CNT"]))
@@ -4287,7 +4243,7 @@ class CAdvBanner_all
 						$sContrCnt .= ($sContrCnt <> ''? ',':'').intval($c);
 
 					$arFields = Array("VISITOR_COUNT" => "VISITOR_COUNT + 1");
-					$DB->Update("b_adv_banner",$arFields,"WHERE ID IN(".$sContrCnt.")",$err_mess.__LINE__);
+					$DB->Update("b_adv_banner",$arFields,"WHERE ID IN(".$sContrCnt.")");
 				}
 			}
 			// сформируем значение cookie
@@ -4703,7 +4659,6 @@ class CAdvBanner_all
 	// возвращает массив описывающий динамику баннеров
 	public static function GetDynamicList($arFilter, &$arrLegend, &$is_filtered)
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: GetDynamicList<br>Line: ";
 		global $DB;
 		$arSqlSearch = Array();
 		if (CAdvBanner::CheckDynamicFilter($arFilter))
@@ -4754,7 +4709,7 @@ class CAdvBanner_all
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = CAdvBanner::GetDynamicList_SQL($strSqlSearch);
 
-		$rsD = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$rsD = $DB->Query($strSql);
 		while ($arD = $rsD->Fetch())
 		{
 			$arrDays[$arD["DATE_STAT"]]["DATE"] = $arD["DATE_STAT"];
@@ -4909,7 +4864,6 @@ class CAdvBanner_all
 
 	public static function GetStatList($by, $order, $arFilter)
 	{
-		$err_mess = (CAdvBanner::err_mess())."<br>Function: GetStatList<br>Line: ";
 		global $DB;
 		$arSqlSearch = Array();
 		if (CAdvBanner::CheckDynamicFilter($arFilter))
@@ -5034,7 +4988,7 @@ class CAdvBanner_all
 				";
 		}
 
-		return $DB->Query($strSql, false, $err_mess.__LINE__);
+		return $DB->Query($strSql);
 	}
 }
 
@@ -5044,12 +4998,6 @@ class CAdvBanner_all
 
 class CAdvType_all
 {
-	public static function err_mess()
-	{
-		$module_id = "advertising";
-		return "<br>Module: ".$module_id."<br>Class: CAdvType_all<br>File: ".__FILE__;
-	}
-
 	public static function CheckFilter($arFilter)
 	{
 		global $strError;
@@ -5077,9 +5025,8 @@ class CAdvType_all
 	public static function GetNextSort()
 	{
 		global $DB;
-		$err_mess = (CAdvType_all::err_mess())."<br>Function: GetNextSort<br>Line: ";
 		$strSql = "SELECT max(SORT) MAX_SORT FROM b_adv_type";
-		$z = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$z = $DB->Query($strSql);
 		$zr = $z->Fetch();
 		return intval($zr["MAX_SORT"])+100;
 	}
@@ -5147,7 +5094,6 @@ class CAdvType_all
 	// добавляем новый тип или модифицируем существующий
 	public static function Set($arFields, $OLD_SID, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvType_all::err_mess())."<br>Function: Set<br>Line: ";
 		global $DB, $USER;
 		$SID = false;
 		$OLD_SID = trim($OLD_SID);
@@ -5186,7 +5132,7 @@ class CAdvType_all
 					}
 					$str = trim($str, ", ");
 					$strSql = "UPDATE b_adv_type SET ".$str." WHERE SID='".$DB->ForSql($OLD_SID, 255)."'";
-					$DB->Query($strSql, false, $err_mess.__LINE__);
+					$DB->Query($strSql);
 
 					if (in_array("SID", $arrKeys))
 					{
@@ -5196,11 +5142,11 @@ class CAdvType_all
 						{
 							// обновим тип у баннеров
 							$arF = array("TYPE_SID" => "'".$DB->ForSql($arFields["SID"],255)."'");
-							$DB->Update("b_adv_banner",$arF,"WHERE TYPE_SID='".$DB->ForSql($OLD_SID, 255)."'",$err_mess.__LINE__);
+							$DB->Update("b_adv_banner",$arF,"WHERE TYPE_SID='".$DB->ForSql($OLD_SID, 255)."'");
 
 							// обновим тип у баннеров
 							$arF = array("TYPE_SID" => "'".$DB->ForSql($arFields["SID"],255)."'");
-							$DB->Update("b_adv_contract_2_type",$arF,"WHERE TYPE_SID='".$DB->ForSql($OLD_SID, 255)."'",$err_mess.__LINE__);
+							$DB->Update("b_adv_contract_2_type",$arF,"WHERE TYPE_SID='".$DB->ForSql($OLD_SID, 255)."'");
 						}
 					}
 					else $SID = $OLD_SID;
@@ -5236,7 +5182,7 @@ class CAdvType_all
 					$str1 = trim($str1, ", ");
 					$str2 = trim($str2, ", ");
 					$strSql = "INSERT INTO b_adv_type (".$str1.") VALUES (".$str2.")";
-					$DB->Query($strSql, false, $err_mess.__LINE__);
+					$DB->Query($strSql);
 					$SID = $arFields["SID"];
 				}
 			}
@@ -5264,7 +5210,6 @@ class CAdvType_all
 	// удаляем тип баннера
 	public static function Delete($TYPE_SID, $CHECK_RIGHTS="Y")
 	{
-		$err_mess = (CAdvType_all::err_mess())."<br>Function: Delete<br>Line: ";
 		global $DB, $strError;
 		if ($TYPE_SID == '') return false;
 		if ($CHECK_RIGHTS=="Y")
@@ -5278,13 +5223,13 @@ class CAdvType_all
 		if ($isAdmin)
 		{
 			$strSql = "SELECT ID FROM b_adv_banner WHERE TYPE_SID = '".$DB->ForSql($TYPE_SID,255)."'";
-			$rs = $DB->Query($strSql, false, $err_mess.__LINE__);
+			$rs = $DB->Query($strSql);
 			while ($ar = $rs->Fetch()) CAdvBanner::Delete($ar["ID"], "N");
 
 			CAdvType::DeleteContractLink($TYPE_SID);
 
 			$strSql = "DELETE FROM b_adv_type WHERE SID = '".$DB->ForSql($TYPE_SID,255)."'";
-			$DB->Query($strSql, false, $err_mess.__LINE__);
+			$DB->Query($strSql);
 			return true;
 		}
 		else
@@ -5296,7 +5241,6 @@ class CAdvType_all
 	// удаляем связь типа с контрактом
 	public static function DeleteContractLink($TYPE_SID)
 	{
-		$err_mess = (CAdvType_all::err_mess())."<br>Function: DeleteContractLink<br>Line: ";
 		global $DB;
 		if ($TYPE_SID == '')
 		{
@@ -5304,14 +5248,13 @@ class CAdvType_all
 		}
 
 		$strSql = "DELETE FROM b_adv_contract_2_type WHERE TYPE_SID = '".$DB->ForSql($TYPE_SID,255)."'";
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 		return true;
 	}
 
 	// получаем список типов баннеров
 	public static function GetList($by = "s_sort", $order = "asc", $arFilter = [], $is_filtered = null, $CHECK_RIGHTS = "Y")
 	{
-		$err_mess = (CAdvType_all::err_mess())."<br>Function: GetList<br>Line: ";
 		global $DB;
 		$arSqlSearch = Array();
 		if ($CHECK_RIGHTS=="Y")
@@ -5438,7 +5381,7 @@ class CAdvType_all
 				$strSqlOrder
 				";
 
-			$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+			$res = $DB->Query($strSql);
 
 			return $res;
 		}

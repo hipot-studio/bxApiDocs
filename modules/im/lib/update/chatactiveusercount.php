@@ -76,7 +76,7 @@ final class ChatActiveUserCount extends Stepper
 					    SELECT COUNT(1)
 					    FROM b_im_relation R
 					    LEFT JOIN b_user U ON R.USER_ID = U.ID
-					    WHERE R.CHAT_ID = C.ID AND U.ACTIVE = 'Y'
+					    WHERE R.CHAT_ID = C.ID AND U.ACTIVE = 'Y' AND R.IS_HIDDEN = 'N'
 					)
 					WHERE C.ID IN (" .$implodedIds. ")
 					ORDER BY C.ID ASC

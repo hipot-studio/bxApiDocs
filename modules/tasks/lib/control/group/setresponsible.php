@@ -14,7 +14,7 @@ class SetResponsible
 		$registry = TaskRegistry::getInstance();
 		$registry->load($taskIds, true);
 
-		$control = new Task($userId);
+		$control = (new Task($userId))->useConsistency();
 
 		foreach ($taskIds as $id)
 		{

@@ -50,6 +50,19 @@ class LazyCleaner
 		return true;
 	}
 
+	public function unmarkForDeletion(int $chatId, int $userId): bool
+	{
+		if (!isset($this->toDelete[$chatId][$userId]))
+		{
+			return true;
+		}
+
+		$this->deletionCount--;
+		unset($this->toDelete[$chatId][$userId]);
+
+		return true;
+	}
+
 	private function schedule(): void
 	{
 		if ($this->isScheduled)

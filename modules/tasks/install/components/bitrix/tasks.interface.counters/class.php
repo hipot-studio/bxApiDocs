@@ -194,7 +194,7 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 		];
 		$currentCounters = array_keys($this->arResult['COUNTERS']);
 
-		return (count(array_intersect($currentCounters, $foreignCounters)) === 0);
+		return empty(array_intersect($currentCounters, $foreignCounters));
 	}
 
 	private function isProjectsTaskList(): bool
@@ -222,16 +222,25 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 		{
 			$value = 0;
 			$roleCounter = $this->getCounterByRole($counter, $this->arParams['ROLE']);
+
 			if ($roleCounter)
 			{
 				$value = $counterProvider->get($roleCounter, $this->arParams['GROUP_ID']);
 			}
+
 			$this->arResult['COUNTERS'][$counter] = [
 				'VALUE' => $value,
 				'FILTER_FIELD' => $this->arParams['FILTER_FIELD'],
 				'FILTER_VALUE' => $this->getFilterValue($counter),
 				'STYLE' => $this->getCounterStyle($counter, $value)
 			];
+
+			if ($counter === CounterDictionary::COUNTER_NEW_COMMENTS)
+			{
+				$this->arResult['COUNTERS'][CounterDictionary::COUNTER_NEW_COMMENTS_TOTAL] = [
+					'VALUE' => $counterProvider->get($counter)
+				];
+			}
 		}
 	}
 
@@ -242,33 +251,45 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 	 */
 	private function getCounterStyle(string $counter, int $value): string
 	{
-		if (in_array($counter, [
-			CounterDictionary::COUNTER_EXPIRED,
-			CounterDictionary::COUNTER_MY_EXPIRED,
-			CounterDictionary::COUNTER_ACCOMPLICES_EXPIRED,
-			CounterDictionary::COUNTER_ORIGINATOR_EXPIRED,
-			CounterDictionary::COUNTER_AUDITOR_EXPIRED,
-			CounterDictionary::COUNTER_PROJECTS_TOTAL_EXPIRED,
-			CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED,
-			CounterDictionary::COUNTER_SONET_TOTAL_EXPIRED,
-			CounterDictionary::COUNTER_FLOW_TOTAL_EXPIRED,
-		]))
+		if (
+			in_array(
+				$counter,
+				[
+					CounterDictionary::COUNTER_EXPIRED,
+					CounterDictionary::COUNTER_MY_EXPIRED,
+					CounterDictionary::COUNTER_ACCOMPLICES_EXPIRED,
+					CounterDictionary::COUNTER_ORIGINATOR_EXPIRED,
+					CounterDictionary::COUNTER_AUDITOR_EXPIRED,
+					CounterDictionary::COUNTER_PROJECTS_TOTAL_EXPIRED,
+					CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED,
+					CounterDictionary::COUNTER_SONET_TOTAL_EXPIRED,
+					CounterDictionary::COUNTER_FLOW_TOTAL_EXPIRED,
+				],
+				true
+			)
+		)
 		{
 			return Counter\Template\CounterStyle::STYLE_RED;
 		}
 
-		if (in_array($counter, [
-			CounterDictionary::COUNTER_NEW_COMMENTS,
-			CounterDictionary::COUNTER_MY_NEW_COMMENTS,
-			CounterDictionary::COUNTER_ACCOMPLICES_NEW_COMMENTS,
-			CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS,
-			CounterDictionary::COUNTER_AUDITOR_NEW_COMMENTS,
-			CounterDictionary::COUNTER_PROJECTS_TOTAL_COMMENTS,
-			CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS,
-			CounterDictionary::COUNTER_SONET_TOTAL_COMMENTS,
-			CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS,
-			CounterDictionary::COUNTER_FLOW_TOTAL_COMMENTS,
-		]))
+		if (
+			in_array(
+				$counter,
+				[
+					CounterDictionary::COUNTER_NEW_COMMENTS,
+					CounterDictionary::COUNTER_MY_NEW_COMMENTS,
+					CounterDictionary::COUNTER_ACCOMPLICES_NEW_COMMENTS,
+					CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS,
+					CounterDictionary::COUNTER_AUDITOR_NEW_COMMENTS,
+					CounterDictionary::COUNTER_PROJECTS_TOTAL_COMMENTS,
+					CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS,
+					CounterDictionary::COUNTER_SONET_TOTAL_COMMENTS,
+					CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS,
+					CounterDictionary::COUNTER_FLOW_TOTAL_COMMENTS,
+				],
+				true
+			)
+		)
 		{
 			return Counter\Template\CounterStyle::STYLE_GREEN;
 		}
@@ -451,7 +472,7 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 			CounterDictionary::COUNTER_GROUP_COMMENTS
 		];
 
-		if (in_array($counter, $nonRolesCounters))
+		if (in_array($counter, $nonRolesCounters, true))
 		{
 			return null;
 		}

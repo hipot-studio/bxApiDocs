@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
-use Bitrix\Rest\V3\Exceptions\InvalidSelectException;
+use Bitrix\Rest\V3\Exception\InvalidSelectException;
 
 class BatchRequest
 {

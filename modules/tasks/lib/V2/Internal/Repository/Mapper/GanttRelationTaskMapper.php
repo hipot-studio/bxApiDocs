@@ -9,6 +9,27 @@ use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
 
 class GanttRelationTaskMapper
 {
+	public function mapToCollection(
+		array $tasks,
+		?array $rights = null,
+		?array $tasksGanttLinks = null,
+	): TaskCollection
+	{
+		$entities = [];
+		foreach ($tasks as $task)
+		{
+			$taskId = (int)($task['ID'] ?? 0);
+
+			$entities[]= $this->mapToEntity(
+				task: $task,
+				rights: $rights[$taskId] ?? null,
+				ganttLinks: $tasksGanttLinks[$taskId],
+			);
+		}
+
+		return new TaskCollection(...$entities);
+	}
+
 	public function mapToEntity(
 		array $task,
 		?array $rights = null,
@@ -23,26 +44,5 @@ class GanttRelationTaskMapper
 			rights: $rights,
 			ganttLinks: $ganttLinks,
 		);
-	}
-
-	public function mapToCollection(
-		array $tasks,
-		?array $rights = null,
-		?array $ganttLinks = null,
-	): TaskCollection
-	{
-		$entities = [];
-		foreach ($tasks as $task)
-		{
-			$taskId = (int)($task['ID'] ?? 0);
-
-			$entities[]= $this->mapToEntity(
-				task: $task,
-				rights: $rights[$taskId] ?? null,
-				ganttLinks: $ganttLinks,
-			);
-		}
-
-		return new TaskCollection(...$entities);
 	}
 }

@@ -135,16 +135,7 @@ class ActivityFastSearchDataProvider extends EntityDataProvider
 		}
 		elseif (in_array($fieldID, ['ACTIVITY_FASTSEARCH_RESPONSIBLE_ID', 'ACTIVITY_FASTSEARCH_AUTHOR_ID']))
 		{
-			return $this->getUserEntitySelectorParams(
-				EntitySelector::CONTEXT,
-				[
-					'fieldName' => $fieldID,
-					'referenceClass' => null,
-					'isEnableAllUsers' => false,
-					'isEnableOtherUsers' => false,
-					'isEnableStructureNode' => true,
-				]
-			);
+			return $this->getDepartmentSelectorParams(EntitySelector::CONTEXT);
 		}
 		elseif ($fieldID === 'ACTIVITY_FASTSEARCH_CREATED')
 		{

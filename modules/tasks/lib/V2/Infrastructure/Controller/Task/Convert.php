@@ -24,9 +24,14 @@ class Convert extends BaseController
 		TaskProvider $taskProvider,
 	): ?Arrayable
 	{
+		$config = new AddConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new TemplateToTaskCommand(
 			templateId: $template->getId(),
-			config: new AddConfig($this->userId),
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())

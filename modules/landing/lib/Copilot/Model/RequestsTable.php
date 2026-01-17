@@ -7,6 +7,7 @@ use Bitrix\Landing\Copilot\Model\Helper\EmojiDataProcessor;
 use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\ORM\Query;
+use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -25,7 +26,7 @@ use Bitrix\Main\Type\DateTime;
  * @method static \Bitrix\Landing\Copilot\Model\EO_Requests wakeUpObject($row)
  * @method static \Bitrix\Landing\Copilot\Model\EO_Requests_Collection wakeUpCollection($rows)
  */
-class RequestsTable extends Entity\DataManager
+class RequestsTable extends DataManager
 {
 	/**
 	 * @inheritdoc

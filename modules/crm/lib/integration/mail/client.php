@@ -7,6 +7,9 @@ use Bitrix\Main\Loader;
 
 class Client
 {
+	/**
+	 * @deprecated
+	 */
 	public static function isReadyToUse(?int $userId = null): bool
 	{
 		if (!(IsModuleInstalled('mail') && Loader::includeModule('mail')))

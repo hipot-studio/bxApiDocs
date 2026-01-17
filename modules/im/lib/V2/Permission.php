@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Entity\User\UserType;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Permission\ActionGroup;
 use Bitrix\Im\V2\Permission\GlobalAction;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 
 class Permission
@@ -98,6 +99,7 @@ class Permission
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 			Action::Send->value => $roleForPostToGeneral,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::GeneralChannel->value] = [
@@ -108,6 +110,7 @@ class Permission
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 			Action::Send->value => $roleForPostToGeneralChannel,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Call->value => Chat::ROLE_NONE,
 		];
 
@@ -115,6 +118,8 @@ class Permission
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Announcement->value] = [
@@ -125,6 +130,7 @@ class Permission
 		self::$permissionsByChatTypes[ExtendedType::Channel->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 		];
@@ -132,6 +138,7 @@ class Permission
 		self::$permissionsByChatTypes[ExtendedType::OpenChannel->value] = [
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 		];
@@ -140,6 +147,7 @@ class Permission
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Extend->value => Chat::ROLE_NONE,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::PinChat->value => Chat::ROLE_NONE,
 			Action::HideChat->value => Chat::ROLE_NONE,
@@ -172,6 +180,8 @@ class Permission
 			Action::Leave->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Collab->value] = [
@@ -184,20 +194,29 @@ class Permission
 			Action::CreateDocumentSign->value => Chat::ROLE_MEMBER,
 			Action::CreateCalendarSlots->value => Chat::ROLE_MEMBER,
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
+			Action::ChangeManagers->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Tasks->value] = [
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Calendar->value] = [
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Crm->value] = [
 			Action::ChangeAvatar->value => Chat::ROLE_NONE,
 			Action::Rename->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Call->value] = [
@@ -206,23 +225,31 @@ class Permission
 			Action::Mute->value => Chat::ROLE_NONE,
 			Action::Leave->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Chat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::OpenChat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Videoconference->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Lines->value] = [
@@ -252,6 +279,7 @@ class Permission
 			Action::CreateTask->value => Chat::ROLE_MEMBER,
 			Action::CreateMeeting->value => Chat::ROLE_MEMBER,
 			Action::DeleteOthersMessage->value => Chat::ROLE_NONE,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_NONE,
 			Action::Update->value => Chat::ROLE_NONE,
 			Action::Delete->value => Chat::ROLE_NONE,
 			Action::UpdateInviteLink->value => Chat::ROLE_NONE,
@@ -268,7 +296,7 @@ class Permission
 
 	private function loadByChatTypesExternal(): void
 	{
-		$externalTypes = ExternalTypeRegistry::getInstance()->getConfigs();
+		$externalTypes = ServiceLocator::getInstance()->get(ExternalTypeRegistry::class)->getConfigs();
 		foreach ($externalTypes as $externalType => $config)
 		{
 			if (!empty($config->permissions))

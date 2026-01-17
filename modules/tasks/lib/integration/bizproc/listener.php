@@ -2,9 +2,14 @@
 
 namespace Bitrix\Tasks\Integration\Bizproc;
 
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
+use Bitrix\Bizproc\Starter\Enum\Scenario;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Tasks\Integration\Bizproc\Document\Task;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Task\EO_Member_Collection;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -82,20 +87,8 @@ class Listener
 		//Run project automation
 		if (isset($fields['GROUP_ID']) && $fields['GROUP_ID'] > 0)
 		{
-			$group = Workgroup::getById($fields['GROUP_ID']);
-			$isScrumTaskUpdated = ($group && $group->isScrumProject());
-
-			if ($isScrumTaskUpdated)
-			{
-				$projectDocumentType = Document\Task::resolveScrumProjectTaskType($fields['GROUP_ID']);
-			}
-			else
-			{
-				$projectDocumentType = Document\Task::resolveProjectTaskType($fields['GROUP_ID']);
-			}
-
-			//run automation
-			Automation\Factory::runOnAdd($projectDocumentType, $id, $fields);
+			$projectDocumentType = $this->resolveProjectTaskType($fields['GROUP_ID']);
+			$this->runOnAdd((int)$id, $projectDocumentType, $fields);
 		}
 
 		//Run plan & personal automation
@@ -105,10 +98,10 @@ class Listener
 		foreach ($members as $memberId)
 		{
 			$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-			Automation\Factory::runOnAdd($planDocumentType, $id, $fields);
+			$this->runOnAdd((int)$id, $planDocumentType, $fields);
 
 			$personalDocumentType = Document\Task::resolvePersonalTaskType($memberId);
-			Automation\Factory::runOnAdd($personalDocumentType, $id, $fields);
+			$this->runOnAdd((int)$id, $personalDocumentType, $fields);
 		}
 	}
 
@@ -134,28 +127,10 @@ class Listener
 			Automation\Factory::stopAutomation($projectTaskType, $id);
 		}
 
-		//Check triggers for project tasks
-		$projectTriggerApplied = ($statusChanged && $this->fireStatusTriggerOnProject($id, $projectId, $fields));
-		if ($projectTriggerApplied === false)
+		if ($projectId)
 		{
-			$projectTriggerApplied = (
-				$changedFields
-				&& static::fireFieldChangedTriggerOnProject($id, $projectId, $changedFields)
-			);
-		}
-
-		//Run project automation
-		$stageChanged = (
-			isset($fields['STAGE_ID'])
-			&& (
-				(int)$fields['STAGE_ID'] === 0
-				|| (int)$fields['STAGE_ID'] !== (int)$previousFields['STAGE_ID']
-			)
-		);
-		if ($projectTriggerApplied !== true && $stageChanged)
-		{
-			$projectDocumentType = $this->resolveProjectTaskType($projectId);
-			Automation\Factory::runOnStatusChanged($projectDocumentType, $id, $fields);
+			$projectDocumentType = $this->resolveProjectTaskType((int)$projectId);
+			$this->runOnUpdateProjectTask((int)$id, $projectDocumentType, $fields, $changedFields);
 		}
 
 		//Run plan & personal automation
@@ -173,46 +148,14 @@ class Listener
 
 		foreach ($membersDiff->plus as $memberId)
 		{
-			//Run plan
-			$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-
-			$runAutomation = !($statusChanged && $this->fireStatusTrigger($planDocumentType, $id, $fields));
-			if ($runAutomation)
-			{
-				$runAutomation = !(
-					$changedFields
-					&& $this->fireFieldChangedTrigger($planDocumentType, $id, $changedFields)
-				);
-			}
-
-			if ($runAutomation)
-			{
-				Automation\Factory::runOnAdd($planDocumentType, $id, $fields);
-			}
-
-			//Run personal
-			$personalDocumentType = Document\Task::resolvePersonalTaskType($memberId);
-			Automation\Factory::runOnAdd($personalDocumentType, $id, $fields);
+			$this->runOnAddMemberToTask((int)$id, $memberId, $fields, $changedFields);
 		}
 
 		if ($changedFields || $statusChanged)
 		{
 			foreach ($membersDiff->current as $memberId)
 			{
-				//Run plan trigger
-				$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-				if ($statusChanged)
-				{
-					$this->fireStatusTrigger($planDocumentType, $id, $fields);
-
-					//Run personal
-					$personalDocumentType = Document\Task::resolvePersonalTaskType($memberId);
-					Automation\Factory::runOnStatusChanged($personalDocumentType, $id, $fields);
-				}
-				if ($changedFields)
-				{
-					$this->fireFieldChangedTrigger($planDocumentType, $id, $changedFields);
-				}
+				$this->runOnUpdatePersonalTask((int)$id, $memberId, $fields, $changedFields);
 			}
 		}
 	}
@@ -225,8 +168,15 @@ class Listener
 		}
 
 		$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-		//run automation
-		Automation\Factory::runOnStatusChanged($planDocumentType, $taskId);
+		$starter = $this->getStarterOnUpdate($taskId, $planDocumentType, ['STATUS']);
+		if ($starter)
+		{
+			$starter->start();
+		}
+		else
+		{
+			Automation\Factory::runOnStatusChanged($planDocumentType, $taskId);
+		}
 	}
 
 	public function onTaskDeleteExecute($id)
@@ -250,22 +200,25 @@ class Listener
 			return false;
 		}
 
+		$documentId = Document\Task::resolveDocumentId($id);
+		$starter = $this->getStarterOnEvent();
+
 		//Run project trigger
 		if ($fields['GROUP_ID'] > 0)
 		{
-			$group = Workgroup::getById($fields['GROUP_ID']);
-			$isScrumTask = ($group && $group->isScrumProject());
-
-			if ($isScrumTask)
+			$projectDocumentType = $this->resolveProjectTaskType($fields['GROUP_ID']);
+			if ($starter)
 			{
-				$projectDocumentType = Document\Task::resolveScrumProjectTaskType($fields['GROUP_ID']);
+				$starter->addEvent(
+					Automation\Trigger\Expired::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $projectDocumentType))],
+					$fields
+				);
 			}
 			else
 			{
-				$projectDocumentType = Document\Task::resolveProjectTaskType($fields['GROUP_ID']);
+				Automation\Trigger\Expired::execute($projectDocumentType, $id, $fields);
 			}
-
-			Automation\Trigger\Expired::execute($projectDocumentType, $id, $fields);
 		}
 
 		//Run plan trigger
@@ -273,8 +226,32 @@ class Listener
 		foreach ($members as $memberId)
 		{
 			$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-			Automation\Trigger\Expired::execute($planDocumentType, $id, $fields);
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\Expired::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					$fields
+				);
+			}
+			else
+			{
+				Automation\Trigger\Expired::execute($planDocumentType, $id, $fields);
+			}
 		}
+
+		if ($starter)
+		{
+			$document = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexId($id);
+			$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
+			$starter->addEvent(
+				'TasksExpiredTrigger',
+				[new DocumentDto($document, $documentType)],
+				$fields
+			);
+		}
+
+		$starter?->start();
 	}
 
 	public function onTaskExpiredSoonExecute($id, array $fields)
@@ -284,22 +261,26 @@ class Listener
 			return false;
 		}
 
+		$documentId = Document\Task::resolveDocumentId($id);
+		$starter = $this->getStarterOnEvent();
+
 		//Run project trigger
 		if ($fields['GROUP_ID'] > 0)
 		{
-			$group = Workgroup::getById($fields['GROUP_ID']);
-			$isScrumTask = ($group && $group->isScrumProject());
+			$projectDocumentType = $this->resolveProjectTaskType($fields['GROUP_ID']);
 
-			if ($isScrumTask)
+			if ($starter)
 			{
-				$projectDocumentType = Document\Task::resolveScrumProjectTaskType($fields['GROUP_ID']);
+				$starter->addEvent(
+					Automation\Trigger\ExpiredSoon::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $projectDocumentType))],
+					$fields
+				);
 			}
 			else
 			{
-				$projectDocumentType = Document\Task::resolveProjectTaskType($fields['GROUP_ID']);
+				Automation\Trigger\ExpiredSoon::execute($projectDocumentType, $id, $fields);
 			}
-
-			Automation\Trigger\ExpiredSoon::execute($projectDocumentType, $id, $fields);
 		}
 
 		//Run plan trigger
@@ -307,8 +288,21 @@ class Listener
 		foreach ($members as $memberId)
 		{
 			$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-			Automation\Trigger\ExpiredSoon::execute($planDocumentType, $id, $fields);
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\ExpiredSoon::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					$fields
+				);
+			}
+			else
+			{
+				Automation\Trigger\ExpiredSoon::execute($planDocumentType, $id, $fields);
+			}
 		}
+
+		$starter?->start();
 	}
 
 	public function onTaskFieldChangedExecute($id, array $fields, array $previousFields): Main\Result
@@ -323,21 +317,36 @@ class Listener
 		if (TaskLimit::isLimitExceeded())
 		{
 			return (
-			$result
-				->addError(new Main\Error(
-					Main\Localization\Loc::getMessage('TASKS_BP_LISTENER_RESUME_RESTRICTED')
-				))
+				$result
+					->addError(new Main\Error(
+						Main\Localization\Loc::getMessage('TASKS_BP_LISTENER_RESUME_RESTRICTED')
+					))
 			);
 		}
 
 		$projectId = $fields['GROUP_ID'] ?? $previousFields['GROUP_ID'];
 		$changedFields = $this->compareFields($fields, $previousFields);
 
+		$documentId = Document\Task::resolveDocumentId($id);
+		$starter = $this->getStarterOnEvent();
+
 		//Run project trigger
 		if ($projectId > 0)
 		{
 			$documentType = $this->resolveProjectTaskType($projectId);
-			Automation\Trigger\TasksFieldChangedTrigger::execute($documentType, $id, ['CHANGED_FIELDS' => $changedFields]);
+
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\TasksFieldChangedTrigger::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $documentType))],
+					['CHANGED_FIELDS' => $changedFields]
+				);
+			}
+			else
+			{
+				Automation\Trigger\TasksFieldChangedTrigger::execute($documentType, $id, ['CHANGED_FIELDS' => $changedFields]);
+			}
 		}
 
 		//Run plan trigger
@@ -345,8 +354,21 @@ class Listener
 		foreach ($members as $memberId)
 		{
 			$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
-			Automation\Trigger\TasksFieldChangedTrigger::execute($planDocumentType, $id, ['CHANGED_FIELDS' => $changedFields]);
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\TasksFieldChangedTrigger::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					['CHANGED_FIELDS' => $changedFields]
+				);
+			}
+			else
+			{
+				Automation\Trigger\TasksFieldChangedTrigger::execute($planDocumentType, $id, ['CHANGED_FIELDS' => $changedFields]);
+			}
 		}
+
+		$starter?->start();
 
 		return $result;
 	}
@@ -359,18 +381,6 @@ class Listener
 		if (Main\Config\Option::get('tasks', self::USE_BACKGROUND_KEY, 'null') !== 'null')
 		{
 			return true;
-		}
-
-		return false;
-	}
-
-	private function fireStatusTriggerOnProject($taskId, $projectId, $fields): bool
-	{
-		$documentType = $this->resolveProjectTaskType($projectId);
-
-		if ($documentType)
-		{
-			return $this->fireStatusTrigger($documentType, $taskId, $fields);
 		}
 
 		return false;
@@ -389,13 +399,6 @@ class Listener
 		}
 
 		return false;
-	}
-
-	private function fireFieldChangedTriggerOnProject($taskId, $projectId, $fields): bool
-	{
-		$documentType = $this->resolveProjectTaskType($projectId);
-
-		return $this->fireFieldChangedTrigger($documentType, $taskId, $fields);
 	}
 
 	private function fireFieldChangedTrigger($documentType, $taskId, $fields): bool
@@ -504,5 +507,244 @@ class Listener
 		}
 
 		return $diff;
+	}
+
+	private function runOnAdd(int $taskId, string $documentType, array $fields): void
+	{
+		$starter = $this->getStarterOnAdd($taskId, $documentType);
+		if ($starter)
+		{
+			$starter->start();
+		}
+		else
+		{
+			//run automation
+			Automation\Factory::runOnAdd($documentType, $taskId, $fields);
+		}
+	}
+
+	private function getStarterOnAdd(int $id, string $taskType): ?Starter
+	{
+		if ($id > 0 && $this->isStarterEnabled())
+		{
+			$documentId = Task::resolveDocumentId($id);
+			$documentType = $this->getComplexDocumentTypeByTaskId($id, $taskType);
+
+			return (
+				Starter::getByScenario(Scenario::onDocumentAdd)
+					->setDocument(new DocumentDto($documentId, $documentType))
+					->setContext(new ContextDto('tasks'))
+			);
+		}
+
+		return null;
+	}
+
+	private function runOnUpdateProjectTask(int $id, string $documentType, array $fields, array $changedFields): void
+	{
+		$documentId = Document\Task::resolveDocumentId($id);
+
+		if (!in_array('STAGE_ID', $changedFields, true) && (isset($fields['STAGE_ID']) && (int)$fields['STAGE_ID'] === 0))
+		{
+			$changedFields[] = 'STAGE_ID';
+		}
+
+		$starter = $this->getStarterOnUpdate($id, $documentType, $changedFields);
+
+		$isTriggerApplied = false;
+
+		if (in_array('STATUS', $changedFields, true))
+		{
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\Status::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $documentType))],
+					$fields
+				);
+			}
+			else
+			{
+				$isTriggerApplied = $this->fireStatusTrigger($documentType, $id, $fields);
+			}
+		}
+
+		if ($changedFields)
+		{
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\TasksFieldChangedTrigger::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $documentType))],
+					['CHANGED_FIELDS' => $changedFields]
+				);
+			}
+			elseif (!$isTriggerApplied)
+			{
+				$isTriggerApplied = $this->fireFieldChangedTrigger($documentType, $id, $changedFields);
+			}
+		}
+
+		if (in_array('STAGE_ID', $changedFields, true) && !$starter && !$isTriggerApplied)
+		{
+			Automation\Factory::runOnStatusChanged($documentType, $id, $fields);
+		}
+
+		$starter?->start();
+	}
+
+	private function runOnAddMemberToTask(int $id, int $memberId, array $fields, array $changedFields): void
+	{
+		$documentId = Document\Task::resolveDocumentId($id);
+
+		$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
+
+		$starter = $this->getStarterOnAdd($id, $planDocumentType);
+
+		$isTriggerApplied = false;
+
+		if (in_array('STATUS', $changedFields, true))
+		{
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\Status::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					$fields
+				);
+			}
+			else
+			{
+				$isTriggerApplied = $this->fireStatusTrigger($planDocumentType, $id, $fields);
+			}
+		}
+
+		if ($changedFields)
+		{
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\TasksFieldChangedTrigger::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					['CHANGED_FIELDS' => $changedFields]
+				);
+			}
+			elseif (!$isTriggerApplied)
+			{
+				$isTriggerApplied = $this->fireFieldChangedTrigger($planDocumentType, $id, $changedFields);
+			}
+		}
+
+		if ($starter)
+		{
+			$starter->start();
+		}
+		elseif (!$isTriggerApplied)
+		{
+			Automation\Factory::runOnAdd($planDocumentType, $id, $fields);
+		}
+
+		//Run personal
+		$personalDocumentType = Document\Task::resolvePersonalTaskType($memberId);
+		$this->runOnAdd($id, $personalDocumentType, $fields);
+	}
+
+	private function runOnUpdatePersonalTask(int $id, int $memberId, array $fields, array $changedFields): void
+	{
+		$documentId = Document\Task::resolveDocumentId($id);
+
+		$planDocumentType = Document\Task::resolvePlanTaskType($memberId);
+
+		$starter = $this->getStarterOnEvent();
+
+		if (in_array('STATUS', $changedFields, true))
+		{
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\Status::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					$fields
+				);
+			}
+			else
+			{
+				$this->fireStatusTrigger($planDocumentType, $id, $fields);
+			}
+		}
+
+		if ($changedFields)
+		{
+			if ($starter)
+			{
+				$starter->addEvent(
+					Automation\Trigger\TasksFieldChangedTrigger::getCode(),
+					[new DocumentDto($documentId, $this->getComplexDocumentTypeByTaskId($id, $planDocumentType))],
+					['CHANGED_FIELDS' => $changedFields]
+				);
+			}
+			else
+			{
+				$this->fireFieldChangedTrigger($planDocumentType, $id, $changedFields);
+			}
+		}
+
+		$starter?->start();
+
+		if (in_array('STATUS', $changedFields, true))
+		{
+			$personalDocumentType = Document\Task::resolvePersonalTaskType($memberId);
+			$starter = $this->getStarterOnUpdate($id, $personalDocumentType, $changedFields);
+			if ($starter)
+			{
+				$starter->start();
+			}
+			else
+			{
+				Automation\Factory::runOnStatusChanged($personalDocumentType, $id, $fields);
+			}
+		}
+	}
+
+	private function getStarterOnUpdate(int $id, string $taskType, array $changedFieldNames): ?Starter
+	{
+		if ($id > 0 && $this->isStarterEnabled())
+		{
+			$documentId = Task::resolveDocumentId($id);
+			$documentType = $this->getComplexDocumentTypeByTaskId($id, $taskType);
+
+			return (
+				Starter::getByScenario(Scenario::onDocumentUpdate)
+					->setDocument(new DocumentDto($documentId, $documentType, $changedFieldNames))
+					->setContext(new ContextDto('tasks'))
+			);
+		}
+
+		return null;
+	}
+
+	private function getStarterOnEvent(): ?Starter
+	{
+		if ($this->isStarterEnabled())
+		{
+			return (
+				Starter::getByScenario(Scenario::onEvent)
+					->setContext(new ContextDto('tasks'))
+			);
+		}
+
+		return null;
+	}
+
+	private function isStarterEnabled(): bool
+	{
+		return $this->loadBizproc() && class_exists(Starter::class) && Starter::isEnabled();
+	}
+
+	private function getComplexDocumentTypeByTaskId(int $id, string $documentType): array
+	{
+		[$moduleId, $entity, $documentId] = Document\Task::resolveDocumentId($id);
+
+		return [$moduleId, $entity, $documentType];
 	}
 }

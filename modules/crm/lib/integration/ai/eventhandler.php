@@ -11,6 +11,7 @@ use Bitrix\Crm\Activity\Provider\RepeatSale;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Controller\AiQueueBufferController;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Entity\AiQueueBufferItem;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Provider\FillRepeatSaleTipsProvider;
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
@@ -42,6 +43,7 @@ final class EventHandler
 	public const SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE = 'crm_copilot_fill_item_from_call_engine_text';
 	public const SETTINGS_FILL_CRM_TEXT_ENABLED_CODE = 'crm_copilot_fill_crm_text_enabled';
 	public const SETTINGS_CALL_ASSESSMENT_ENABLED_CODE = 'crm_copilot_call_assessment_enabled';
+	public const SETTINGS_MESSAGESENDER_EDITOR_ENABLED_CODE = 'crm_copilot_message_sender_editor_enabled';
 	public const SETTINGS_CALL_ASSESSMENT_ENGINE_CODE = 'crm_copilot_call_assessment_engine_code';
 	public const SETTINGS_REPEAT_SALE_ENABLED_CODE = 'crm_copilot_repeat_sale_enabled';
 	public const SETTINGS_REPEAT_SALE_ENGINE_CODE = 'crm_copilot_repeat_sale_engine_code';
@@ -68,6 +70,18 @@ final class EventHandler
 				'default' => true,
 				'sort' => 600,
 			];
+
+			if (Feature::enabled(Feature\MessageSenderEditor::class))
+			{
+				$items[self::SETTINGS_MESSAGESENDER_EDITOR_ENABLED_CODE] = [
+					'group' => Tuning\Defaults::GROUP_TEXT,
+					'header' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_HEADER'),
+					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_TITLE'),
+					'type' => Tuning\Type::BOOLEAN,
+					'default' => true,
+					'sort' => 700,
+				];
+			}
 		}
 
 		if (AIManager::isAiCallProcessingEnabled())
@@ -328,7 +342,7 @@ final class EventHandler
 
 		if (AutoLauncher::isEnabled())
 		{
-			(new AutoLauncher(AutoLauncher::OPERATION_ADD, $activityFields))->run();
+			(new AutoLauncher())->run(AutoLauncher\BaseChannelAutoStartStrategy::OPERATION_ADD, $activityFields);
 		}
 	}
 
@@ -346,7 +360,7 @@ final class EventHandler
 
 		if (AutoLauncher::isEnabled())
 		{
-			(new AutoLauncher(AutoLauncher::OPERATION_UPDATE, $newFields))->run($changedFields);
+			(new AutoLauncher())->run(AutoLauncher\BaseChannelAutoStartStrategy::OPERATION_UPDATE, $newFields, $changedFields);
 		}
 	}
 
@@ -395,6 +409,14 @@ final class EventHandler
 					]
 				])
 			);
+		}
+	}
+
+	public static function onAfterOpenLineActivityComplete(array $changedFields, array $newFields): void
+	{
+		if (AutoLauncher::isEnabled())
+		{
+			(new AutoLauncher())->run(AutoLauncher\BaseChannelAutoStartStrategy::OPERATION_COMPLETE, $newFields, $changedFields);
 		}
 	}
 	// endregion

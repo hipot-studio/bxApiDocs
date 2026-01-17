@@ -7,7 +7,6 @@
  */
 namespace Bitrix\Vote;
 use \Bitrix\Main\Entity;
-use \Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -17,8 +16,6 @@ use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Text\Emoji;
-
-Loc::loadMessages(__FILE__);
 
 /**
  * Class AnswerTable

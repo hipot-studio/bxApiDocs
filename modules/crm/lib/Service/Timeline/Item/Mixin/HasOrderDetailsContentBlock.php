@@ -72,10 +72,17 @@ trait HasOrderDetailsContentBlock
 
 		$price = $blockData['PRICE'] ?? null;
 		$currency = $blockData['CURRENCY'] ?? null;
-		$amountBlock = (new ContentBlock\Money())
-			->setOpportunity((float)$price)
-			->setCurrencyId((string)$currency)
-		;
+		if ($price && $currency)
+		{
+			$amountBlock = (new ContentBlock\Money())
+				->setOpportunity((float)$price)
+				->setCurrencyId((string)$currency)
+			;
+		}
+		else
+		{
+			$amountBlock = new ContentBlock\Text();
+		}
 
 		return ContentBlockFactory::createLineOfTextFromTemplate(
 			$title,

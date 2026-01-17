@@ -80,7 +80,7 @@ final class BookingMessageFailureLogTable extends DataManager
 		return [
 			(new Reference(
 				'BOOKING',
-				BookingTable::getEntity(),
+				BookingTable::class,
 				Join::on('this.BOOKING_ID', 'ref.ID')
 			)),
 		];

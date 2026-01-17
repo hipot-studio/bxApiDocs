@@ -186,19 +186,15 @@ class CBPHistoryService extends CBPRuntimeService
 
 	public static function recoverDocumentFromHistory($id)
 	{
-		$arHistory = self::GetById($id);
-		if (!$arHistory)
-			throw new Exception(str_replace("#ID#", intval($id), GetMessage("BPCGHIST_INVALID_ID")));
+		$history = self::GetById($id);
+		if (!$history)
+		{
+			throw new CBPArgumentException(str_replace("#ID#", intval($id), GetMessage("BPCGHIST_INVALID_ID")));
+		}
 
-		list($moduleId, $entity, $documentId) = CBPHelper::ParseDocumentId($arHistory["DOCUMENT_ID"]);
-
-		if ($moduleId <> '')
-			CModule::IncludeModule($moduleId);
-
-		if (class_exists($entity))
-			return call_user_func_array(array($entity, "RecoverDocumentFromHistory"), array($documentId, $arHistory["DOCUMENT"]));
-
-		return false;
+		return CBPRuntime::getRuntime()->getDocumentService()->recoverDocumentFromHistory(
+			$history["DOCUMENT_ID"], $history["DOCUMENT"]
+		);
 	}
 
 	public static function prepareFileForHistory($documentId, $arFileId, $historyIndex)

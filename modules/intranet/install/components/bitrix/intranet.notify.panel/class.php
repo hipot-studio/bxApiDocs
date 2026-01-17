@@ -2,9 +2,11 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
-	die();
+	die;
 }
 
+use Bitrix\Intranet\Internal\Provider\AnnualSummary\FeatureProvider;
+use Bitrix\Intranet\Internal\Service\AnnualSummary\Visibility;
 use Bitrix\Intranet\License\Notification;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
@@ -29,6 +31,11 @@ class IntranetNotifyPanelComponent extends \CBitrixComponent implements Controll
 			'notify' => $this->getNotifyConfiguration(),
 		];
 
+		if ((new Visibility(CurrentUser::get()->getId()))->canForceShow())
+		{
+			$this->arResult['annualSummary'] = $this->getAnnualSummaryData();
+		}
+
 		return parent::onPrepareComponentParams($arParams);
 	}
 
@@ -43,7 +50,7 @@ class IntranetNotifyPanelComponent extends \CBitrixComponent implements Controll
 
 		foreach ($providersClasses as $providerClass)
 		{
-			$provider = new $providerClass;
+			$provider = new $providerClass();
 
 			if ($provider->isAvailable() && $provider->checkNeedToShow())
 			{
@@ -68,5 +75,16 @@ class IntranetNotifyPanelComponent extends \CBitrixComponent implements Controll
 	public function setLicenseNotifyConfigAction(string $type): void
 	{
 		(new Notification\Popup())->saveShowConfiguration($type);
+	}
+
+	private function getAnnualSummaryData(): array
+	{
+		$annualSummary = new FeatureProvider();
+		$annualSummaryData = $annualSummary->getTop();
+
+		return [
+			'features' => $annualSummaryData['topFeatures'],
+			'options' => $annualSummaryData['options'],
+		];
 	}
 }

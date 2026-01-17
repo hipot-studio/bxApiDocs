@@ -8,10 +8,12 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Loader;
 use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Menu\MenuList;
+use Bitrix\Mobile\Menu\AhaMoment;
 use Bitrix\Mobile\Menu\Service\MenuListCache;
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Mobile\Provider\UserRepository;
+use Bitrix\Mobile\Provider\ThemeProvider;
+use Bitrix\Timeman\Model\Schedule\Schedule;
+use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 
 class Menu extends Controller
 {
@@ -23,9 +25,17 @@ class Menu extends Controller
 					new CloseSession(),
 				],
 			],
+			'getInitialMenuData' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
 		];
 	}
 
+	/*
+	 * @restMethod mobile.Menu.getMenu
+	 */
 	public function getMenuAction(bool $forceRefresh = false): array
 	{
 		if (!Loader::includeModule('mobileapp'))
@@ -54,24 +64,42 @@ class Menu extends Controller
 		$cache = new MenuListCache($context->userId);
 
 		$supportBotId = $this->getSupportBotId();
+		$currentTheme = (new ThemeProvider($userId))->getCurrentTheme();
+
+		$canUseTimeMan = $this->canUseTimeMan($context);
+
+		$workTime = [];
+		$canManageWorkTimeOnMobile = true;
+
+		if ($canUseTimeMan)
+		{
+			$workTime = $this->getWorkTime();
+
+			$canManageWorkTimeOnMobile = $this->canManageWorkTimeOnMobile($userId, $forceRefresh);
+		}
 
 		return [
 			'user' => $user,
 			'menuList' => (new MenuList($context, $cache))->build($forceRefresh),
 			'currentShift' => $this->getCurrentShift($context, $userId),
-			'workTime' => $this->getWorkTime(),
+			'workTime' => $workTime,
 			'company' => $this->getCompany($context),
-			'license' => $this->getLicense($context),
 			'helpdeskUrl' => Loader::includeModule('ui') ? \Bitrix\UI\Util::getHelpdeskUrl(true) : null,
 			'supportBotId' => $supportBotId,
+			'ahaMoment' => $this->getAhaMoment(),
+			'currentTheme' => $currentTheme,
 
-			'canEditProfile' => $USER->CanDoOperation('edit_own_profile'),
-			'canUseTimeMan' => $this->canUseTimeMan($context, $userId),
-			'canUseCheckIn' => $this->canUseCheckIn($context),
-			'canUseSupport' => $supportBotId > 0,
-			'canInvite' => $this->canInvite(),
-			'canUseTelephony' => \Bitrix\Main\Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
-			'shouldShowWhatsNew' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\WhatsNewFeature::class),
+			'restrictions' => [
+				'canEditProfile' => $USER->CanDoOperation('edit_own_profile'),
+				'canUseTimeMan' => $canUseTimeMan,
+				'canUseCheckIn' => $this->canUseCheckIn($context),
+				'canUseSupport' => $supportBotId > 0,
+				'canInvite' => $this->canInvite(),
+				'canUseTelephony' => \Bitrix\Main\Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
+				'shouldShowWhatsNew' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\WhatsNewFeature::class),
+				'canManageWorkTimeOnMobile' => $canManageWorkTimeOnMobile,
+				'canUseSecuritySettings' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\SecuritySettingsFeature::class),
+			],
 		];
 	}
 
@@ -145,9 +173,12 @@ class Menu extends Controller
 			&& \Bitrix\Intranet\Invitation::canCurrentUserInvite());
 	}
 
-	private function canUseTimeMan(Context $context, int $userId): bool
+	private function canUseTimeMan(Context $context): bool
 	{
-		return !$context->extranet && Loader::includeModule('timeman') && \CTimeMan::CanUse($userId);
+		return !$context->extranet
+			&& Loader::includeModule('timeman')
+			&& \CTimeMan::CanUse()
+		;
 	}
 
 	private function getCompany(Context $context): ?array
@@ -155,6 +186,7 @@ class Menu extends Controller
 		if (
 			!Loader::includeModule('intranet')
 			|| !Loader::includeModule('intranetmobile')
+			|| !Loader::includeModule('humanresources')
 			|| $context->extranet
 			|| $context->isCollaber
 		)
@@ -162,70 +194,30 @@ class Menu extends Controller
 			return null;
 		}
 
-		$users = \Bitrix\IntranetMobile\Provider\UserProvider::getActiveUsersByLimit(4);
-		$totalUsersCount = \Bitrix\IntranetMobile\Provider\UserProvider::getUsersCountWithLimit(104);
+		$departmentProvider = new \Bitrix\IntranetMobile\Provider\DepartmentProvider();
+
+		$departmentUserIds = $departmentProvider->getEmployeesFromUserDepartments($context->userId, 4);
+
+		if (count($departmentUserIds) < 4)
+		{
+			$allUserIds = $departmentProvider->getAllEmployees(0, 8);
+
+			$userIds = array_unique(array_merge($departmentUserIds, $allUserIds));
+			$userIds = array_slice($userIds, 0, 4);
+		}
+		else
+		{
+			$userIds = $departmentUserIds;
+		}
+
+		$users = UserRepository::getByIds($userIds);
+
+		$totalUsersCount = $departmentProvider->getTotalEmployeeCount();
 
 		return [
 			'users' => $users,
 			'totalUsersCount' => $totalUsersCount,
 			'canInvite' => true,
-		];
-	}
-
-	private function getLicense(Context $context): ?array
-	{
-		if (
-			!Loader::includeModule('bitrix24')
-			|| $context->extranet
-			|| $context->isCollaber
-		)
-		{
-			return null;
-		}
-
-		$isFreeLicense = \CBitrix24::isFreeLicense();
-		$isDemoLicense = \CBitrix24::IsDemoLicense();
-		$isAutoPay = \CBitrix24::IsLicensePaid() && \CBitrix24::isAutoPayLicense();
-		$isUnlimited = \CBitrix24::isLicenseDateUnlimited();
-
-		$licenseTill = (int)Option::get('main', '~controller_group_till', 0);
-		$currentDate = (new DateTime)->getTimestamp();
-		$daysLeft = $licenseTill > 0 ? (int)ceil(($licenseTill - $currentDate) / 86400) : 0;
-
-		$tillDate = $licenseTill > 0 ? $licenseTill : null;
-
-		$isExpired = !$isFreeLicense && !$isUnlimited && ($isAutoPay ? $daysLeft < 0 : $daysLeft <= 0);
-
-		$defaultAlmostExpired = !$isFreeLicense && !$isUnlimited && $daysLeft >= 0;
-		$portalZone = \CBitrix24::getPortalZone();
-		$isCIS = in_array($portalZone, ['ru', 'by', 'kz'], true);
-
-		$lastPaySystem = \Bitrix\Bitrix24\License::getCurrent()->getPurchaseHistory()->getLastPaySystem();
-
-		$isAlmostExpired = false;
-		if ($isCIS || $isDemoLicense)
-		{
-			$isAlmostExpired = $defaultAlmostExpired && !$isAutoPay && $daysLeft < 14;
-		}
-		elseif ($lastPaySystem === \Bitrix\Bitrix24\License\Orders\PaySystem::DIOCAL_OTHER && $isAutoPay)
-		{
-			$isAlmostExpired = $defaultAlmostExpired && $daysLeft < 2;
-		}
-		else
-		{
-			$isAlmostExpired = $defaultAlmostExpired && !$isAutoPay && $daysLeft < 2;
-		}
-
-		return [
-			'licenseName' => \CBitrix24::getLicenseName(),
-			'tillDate' => $tillDate,
-			'isDemo' => $isDemoLicense,
-			'isLicenseExpired' => $isExpired,
-			'isLicenseAlmostExpired' => $isAlmostExpired,
-			'type' => \CBitrix24::getLicenseType(),
-			'isFreeLicense' => $isFreeLicense,
-			'isEnterprise' => \CBitrix24::getLicenseFamily() === 'ent',
-			'isDemoTrialAvailable' => \Bitrix\Bitrix24\License::getCurrent()->getDemo()->isAvailable(),
 		];
 	}
 
@@ -252,5 +244,88 @@ class Menu extends Controller
 		}
 
 		return $runtimeInfo;
+	}
+
+	private function getAhaMoment(): ?array
+	{
+		return (new AhaMoment())->getMenuAhaMoment();
+	}
+
+	public function getInitialMenuDataAction(): array
+	{
+		if (!Loader::includeModule('mobileapp'))
+		{
+			return [];
+		}
+		$userId = (int)$this->getCurrentUser()?->getId();
+		if (!$userId)
+		{
+			return [];
+		}
+
+
+		$context = new Context();
+		$cache = new MenuListCache($context->userId);
+
+		return [
+			'restrictions' => [
+				'canInvite' => $this->canInvite(),
+				'canUseTimeMan' => $this->canUseTimeMan($context),
+			],
+			'ahaMoment' => (new AhaMoment())->getAvatarAhaMoment($userId),
+			'menuList' => (new MenuList($context, $cache))->build(false),
+		];
+	}
+
+	private function canManageWorkTimeOnMobile(int $userId, bool $forceRefresh = false): bool
+	{
+		$ttl = 60 * 60 * 24 * 7; // week
+		$cacheId = "canManage_workTime_on_mobile_{$userId}";
+		$cachePath = '/mobile/menu/canManageWorkTimeOnMobile/';
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+
+		if ($forceRefresh)
+		{
+			$cache->clean($cacheId, $cachePath);
+		}
+
+		if ($cache->initCache($ttl, $cacheId, $cachePath))
+		{
+			$vars = $cache->getVars();
+			if (isset($vars['result']))
+			{
+				return (bool)$vars['result'];
+			}
+
+			$cache->clean($cacheId, $cachePath);
+		}
+
+		$scheduleRepository = \Bitrix\Timeman\Service\DependencyManager::getInstance()->getScheduleRepository();
+		$schedules = $scheduleRepository->findSchedulesByUserId($userId);
+
+		if (empty($schedules))
+		{
+			$result = true;
+		}
+		else
+		{
+			$result = true;
+			foreach ($schedules as $schedule)
+			{
+				if (!Schedule::isDeviceAllowed(ScheduleTable::ALLOWED_DEVICES_MOBILE, $schedule))
+				{
+					$result = false;
+					break;
+				}
+			}
+		}
+
+		if ($cache->startDataCache())
+		{
+			$cache->endDataCache(['result' => $result]);
+		}
+
+
+		return $result;
 	}
 }

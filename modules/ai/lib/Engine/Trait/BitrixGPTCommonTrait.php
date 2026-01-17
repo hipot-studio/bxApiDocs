@@ -10,6 +10,7 @@ use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 
 trait BitrixGPTCommonTrait
 {
@@ -28,7 +29,7 @@ trait BitrixGPTCommonTrait
 
 	protected function getMessageLength(Message $message): int
 	{
-		return (new GPT($message->getContent()))->count();
+		return $this->getTokenizer()->count($message->getContent());
 	}
 
 	private function getPreparedMessages(): array
@@ -161,11 +162,17 @@ trait BitrixGPTCommonTrait
 		$params = parent::makeRequestParams($postParams);
 		$reasoningEffort = $params['reasoning_effort'] ?? null;
 		unset($params['reasoning_effort']);
+		$enableThinking = $this->reasoningMode || !empty($reasoningEffort);
 
 		$params['chat_template_kwargs'] = [
-			'enable_thinking' => !empty($reasoningEffort),
+			'enable_thinking' => $enableThinking,
 		];
 
 		return $params;
+	}
+
+	protected function getTokenizer(): GPT
+	{
+		return ServiceLocator::getInstance()->get(GPT::class);
 	}
 }

@@ -35,7 +35,7 @@ class UserFieldSynchronizer
 	public static function needForSynchronization($srcEntityTypeID, $dstEntityTypeID, $languageID = '', array $options = array())
 	{
 		$isRecycling = (isset($options['IS_RECYCLING']) && $options['IS_RECYCLING'] === true);
-		
+
 		$fieldsToCreate = self::getSynchronizationFields(
 			$srcEntityTypeID,
 			$dstEntityTypeID,
@@ -352,24 +352,29 @@ class UserFieldSynchronizer
 				'SHOW_IN_LIST' => $srcField['SHOW_IN_LIST'] ?? 'N'
 			);
 
-			if(isset($srcField['SETTINGS']))
+			if (isset($srcField['SETTINGS']))
 			{
 				$dstField['SETTINGS'] = $srcField['SETTINGS'];
 			}
 
-			if(isset($srcField['EDIT_FORM_LABEL']))
+			if (isset($srcField['EDIT_FORM_LABEL']))
 			{
 				$dstField['EDIT_FORM_LABEL'] = $srcField['EDIT_FORM_LABEL'];
 			}
 
-			if(isset($srcField['LIST_COLUMN_LABEL']))
+			if (isset($srcField['LIST_COLUMN_LABEL']))
 			{
 				$dstField['LIST_COLUMN_LABEL'] = $srcField['LIST_COLUMN_LABEL'];
 			}
 
-			if(isset($srcField['LIST_FILTER_LABEL']))
+			if (isset($srcField['LIST_FILTER_LABEL']))
 			{
 				$dstField['LIST_FILTER_LABEL'] = $srcField['LIST_FILTER_LABEL'];
+			}
+
+			if (isset($srcField['HELP_MESSAGE']))
+			{
+				$dstField['HELP_MESSAGE'] = $srcField['HELP_MESSAGE'];
 			}
 
 			$ID = $entity->Add($dstField);
@@ -503,7 +508,12 @@ class UserFieldSynchronizer
 		$srcFields = $USER_FIELD_MANAGER->GetUserFields($srcUfEntityID, 0, $languageID);
 		$dstFields = $USER_FIELD_MANAGER->GetUserFields($dstUfEntityID, 0, $languageID);
 
-		$map = array();
+		return self::getIntersectionFields($srcFields, $dstFields);
+	}
+
+	public static function getIntersectionFields(array $srcFields, array $dstFields): array
+	{
+		$map = [];
 		foreach($dstFields as $field)
 		{
 			$label = self::getFieldComplianceCode($field);
@@ -515,22 +525,23 @@ class UserFieldSynchronizer
 			$typeID = $field['USER_TYPE_ID'];
 			if(!isset($map[$typeID]))
 			{
-				$map[$typeID] = array();
+				$map[$typeID] = [];
 			}
 
 			$isMultiple = $field['MULTIPLE'] === 'Y' ? 'Y' : 'N';
 			if(!isset($map[$typeID][$isMultiple]))
 			{
-				$map[$typeID][$isMultiple] = array();
+				$map[$typeID][$isMultiple] = [];
 			}
 
 			if(!isset($map[$typeID][$isMultiple][$label]))
 			{
-				$map[$typeID][$isMultiple][$label] = array('NAME' => $field['FIELD_NAME'], 'IS_BUSY' => false);
+				$map[$typeID][$isMultiple][$label] = ['NAME' => $field['FIELD_NAME'], 'IS_BUSY' => false];
 			}
 		}
 
-		$results = array();
+		$results = [];
+
 		foreach($srcFields as $field)
 		{
 			$label = self::getFieldComplianceCode($field);
@@ -549,17 +560,18 @@ class UserFieldSynchronizer
 			if(isset($map[$typeID]) && isset($map[$typeID][$isMultiple]) && isset($map[$typeID][$isMultiple][$label])
 				&& !($map[$typeID][$label]['IS_BUSY'] ?? null))
 			{
-				$results[$label] = array(
+				$results[$label] = [
 					'LABEL' => $label,
 					'SRC_FIELD_NAME' => $field['FIELD_NAME'],
-					'DST_FIELD_NAME' => $map[$typeID][$isMultiple][$label]['NAME']
-				);
+					'DST_FIELD_NAME' => $map[$typeID][$isMultiple][$label]['NAME'],
+				];
 				$map[$typeID][$isMultiple][$label]['IS_BUSY'] = true;
 			}
 		}
 
 		return $results;
 	}
+
 	public static function getDifference($srcEntityTypeID, $dstEntityTypeID, $languageID = '')
 	{
 		if(!is_int($srcEntityTypeID))
@@ -599,34 +611,7 @@ class UserFieldSynchronizer
 		$srcFields = $USER_FIELD_MANAGER->GetUserFields($srcUfEntityID, 0, $languageID);
 		$dstFields = $USER_FIELD_MANAGER->GetUserFields($dstUfEntityID, 0, $languageID);
 
-		$srcMap = self::prepareFieldMap($srcFields);
-		$dstMap = self::prepareFieldMap($dstFields);
-
-		$result = array();
-		foreach($srcMap as $typeID => $fieldMapByMultiple)
-		{
-			foreach ($fieldMapByMultiple as $isMultiple => $fieldMap)
-			{
-				if (!isset($dstMap[$typeID][$isMultiple]))
-				{
-					foreach ($fieldMap as $label => $fieldName)
-					{
-						$result[$label] = array('LABEL' => $label, 'SRC_FIELD_NAME' => $fieldName);
-					}
-					continue;
-				}
-
-				$diffMap = array_diff_key($fieldMap, $dstMap[$typeID][$isMultiple]);
-				if (!empty($diffMap))
-				{
-					foreach ($diffMap as $label => $fieldName)
-					{
-						$result[$label] = array('LABEL' => $label, 'SRC_FIELD_NAME' => $fieldName);
-					}
-				}
-			}
-		}
-		return $result;
+		return self::getDifferenceFromOther($srcFields, $dstFields);
 	}
 	protected static function prepareFieldMap(array $fields)
 	{
@@ -777,5 +762,42 @@ class UserFieldSynchronizer
 		}
 
 		Main\Config\Option::set('crm', 'crm_uf_sync_history', serialize($ary), '');
+	}
+
+	private static function getDifferenceFromOther(array $srcFields, array $dstFields): array
+	{
+		$srcMap = self::prepareFieldMap($srcFields);
+		$dstMap = self::prepareFieldMap($dstFields);
+
+		$result = [];
+		foreach ($srcMap as $typeID => $fieldMapByMultiple)
+		{
+			foreach ($fieldMapByMultiple as $isMultiple => $fieldMap)
+			{
+				if (!isset($dstMap[$typeID][$isMultiple]))
+				{
+					foreach ($fieldMap as $label => $fieldName)
+					{
+						$result[$label] = [
+							'LABEL' => $label,
+							'SRC_FIELD_NAME' => $fieldName,
+						];
+					}
+					continue;
+				}
+
+				$diffMap = array_diff_key($fieldMap, $dstMap[$typeID][$isMultiple]);
+
+				foreach ($diffMap as $label => $fieldName)
+				{
+					$result[$label] = [
+						'LABEL' => $label,
+						'SRC_FIELD_NAME' => $fieldName,
+					];
+				}
+			}
+		}
+
+		return $result;
 	}
 }

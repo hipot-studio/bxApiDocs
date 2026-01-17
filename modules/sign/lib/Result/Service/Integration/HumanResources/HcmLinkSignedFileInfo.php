@@ -13,6 +13,7 @@ class HcmLinkSignedFileInfo extends SuccessResult
 		public DateTime $documentDate,
 		public string $documentName,
 		public string $fileName,
+		public ?string $uid = null,
 		public ?string $documentUid = null,
 	)
 	{

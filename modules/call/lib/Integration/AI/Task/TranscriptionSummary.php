@@ -3,30 +3,25 @@
 namespace Bitrix\Call\Integration\AI\Task;
 
 use Bitrix\Main\Result;
-use Bitrix\Main\Web\Json;
 use Bitrix\Call\Integration\AI\Outcome;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Integration\AI\Outcome\Transcription;
 
 class TranscriptionSummary extends AITask
 {
 	public const PROMPT_ID = 'meeting_summarization';
 
-	protected static string
-		$promptFields =<<<JSON
-			{
-				"call_summary": [
-					{
-						"timestamp": "string or null",
-						"title": "string or null",
-						"summary": "string or null"
-					}
-				]
-			}
-			JSON
-	;
+	/**
+	 * Outcome version for compatibility with previous variant.
+	 * @return int
+	 */
+	public function getVersion(): int
+	{
+		return 1;
+	}
 
 	/**
 	 * Provides payload for AI task.
@@ -43,6 +38,10 @@ class TranscriptionSummary extends AITask
 				->setOutcome($payload)
 				->setOutcomeId($payload->getId())
 			;
+			if ($payload->getLanguageId())
+			{
+				$this->task->setLanguageId($payload->getLanguageId());
+			}
 		}
 
 		return $this;
@@ -67,27 +66,27 @@ class TranscriptionSummary extends AITask
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
-		/** @var \Bitrix\Call\Integration\AI\Outcome\Transcription $transcription */
 		$transcription = $outcome->getSenseContent();
-		if ($transcription->isEmpty)
+		if (
+			!($transcription instanceof Transcription)
+			|| $transcription->isEmpty
+		)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
-		$mentionService = MentionService::getInstance();
-
-		$callId = $outcome->getCallId();
-		$content = '';
-		foreach ($transcription->transcriptions as $row)
+		if (
+			!empty($transcription->language)
+			&& $this->task->getLanguageId() !== $transcription->language
+		)
 		{
-			$userName = addslashes($mentionService->getAIMention($row->userId, $callId));
-			$text = addslashes($row->text);
-			// "00:00-00:45", "user", "phrase",
-			$content .= sprintf('"%s-%s", "%s", "%s"', $row->start, $row->end, $userName, $text). "\n";
+			$this->task->setLanguageId($transcription->language);
 		}
 
 		$payload = new \Bitrix\AI\Payload\Prompt(static::PROMPT_ID);
-		$payload->setMarkers(['transcripts' => $content, 'json_call' => static::getAIPromptFields()]);
+		$payload->setMarkers([
+			'transcripts' => $transcription->prepareTextForAi(),
+		]);
 
 		return $result->setData(['payload' => $payload]);
 	}
@@ -121,16 +120,6 @@ class TranscriptionSummary extends AITask
 		return SenseType::SUMMARY->value;
 	}
 
-	public static function getAIPromptFields(): array
-	{
-		static $fields;
-		if (empty($fields))
-		{
-			$fields = Json::decode(static::$promptFields);
-		}
-		return $fields;
-	}
-
 	public function filterResult(array $jsonData): array
 	{
 		$mentionService = MentionService::getInstance();
@@ -146,7 +135,7 @@ class TranscriptionSummary extends AITask
 	}
 
 	/**
-	 * Allows to output thw chat error message then task failed.
+	 * Allows outputting the chat error message then a task failed.
 	 * @return bool
 	 */
 	public function allowNotifyTaskFailed(): bool

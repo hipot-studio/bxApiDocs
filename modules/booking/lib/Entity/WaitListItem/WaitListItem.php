@@ -22,6 +22,7 @@ class WaitListItem implements
 	private ClientCollection $clientCollection;
 	private ExternalDataCollection $externalDataCollection;
 	private string|null $note = null;
+	private string|null $clientNote = null;
 	private bool|null $isDeleted = null;
 
 	public function __construct()
@@ -114,6 +115,18 @@ class WaitListItem implements
 		return $this;
 	}
 
+	public function getClientNote(): string|null
+	{
+		return $this->clientNote;
+	}
+
+	public function setClientNote(string|null $note): self
+	{
+		$this->clientNote = $note;
+
+		return $this;
+	}
+
 	public function isDeleted(): bool|null
 	{
 		return $this->isDeleted;
@@ -158,6 +171,7 @@ class WaitListItem implements
 			->setCreatedAt(isset($props['createdAt']) ? (int)$props['createdAt'] : null)
 			->setUpdatedAt(isset($props['updatedAt']) ? (int)$props['updatedAt'] : null)
 			->setNote(isset($props['note']) ? (string)$props['note'] : null)
+			->setClientNote(isset($props['clientNote']) ? (string)$props['clientNote'] : null)
 		;
 	}
 
@@ -171,6 +185,7 @@ class WaitListItem implements
 			'clients' => $this->clientCollection->toArray(),
 			'externalData' => $this->externalDataCollection->toArray(),
 			'note' => $this->note,
+			'clientNote' => $this->clientNote,
 			'isDeleted' => $this->isDeleted,
 		];
 	}

@@ -143,6 +143,10 @@ class Connector
 		$serviceLocator = ServiceLocator::getInstance();
 
 		$connectors = [];
+		if (\Bitrix\Main\Config\Option::get('imconnector', 'feature_max', 'Y') === 'Y')
+		{
+			$connectors[Library::ID_MAX_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_MAX');
+		}
 		$connectors[Library::ID_LIVE_CHAT_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_LIVECHAT');
 		$connectors[Library::ID_WHATSAPPBYTWILIO_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_WHATSAPPBYTWILIO');
 		$connectors[Library::ID_AVITO_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_AVITO');
@@ -168,6 +172,19 @@ class Connector
 			$connectors[Library::ID_FB_COMMENTS_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FACEBOOK_COMMENTS_PAGE' . self::META_RU_SUFFIX);
 			$connectors[Library::ID_FBINSTAGRAMDIRECT_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FBINSTAGRAMDIRECT' . self::META_RU_SUFFIX);
 			$connectors[Library::ID_FBINSTAGRAM_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FBINSTAGRAM' . self::META_RU_SUFFIX);
+
+			if (
+				\Bitrix\Main\Config\Option::get('imconnector', 'feature_wazzup', 'N') === 'Y'
+				||
+				(
+					\Bitrix\Main\Loader::includeModule('crm')
+					&& class_exists(\Bitrix\Crm\Feature\TelegramActivity::class)
+					&& \Bitrix\Crm\Feature::enabled(\Bitrix\Crm\Feature\TelegramActivity::class)
+				)
+			)
+			{
+				$connectors[Library::ID_WAZZUP_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_WAZZUP');
+			}
 		}
 		else
 		{
@@ -331,6 +348,7 @@ class Connector
 		$components = [];
 		$components[Library::ID_LIVE_CHAT_CONNECTOR] = 'bitrix:imconnector.livechat';
 		$components[Library::ID_WHATSAPPBYTWILIO_CONNECTOR] = 'bitrix:imconnector.whatsappbytwilio';
+		$components[Library::ID_WAZZUP_CONNECTOR] = 'bitrix:imconnector.wazzup';
 		$components[Library::ID_AVITO_CONNECTOR] = 'bitrix:imconnector.avito';
 		$components[Library::ID_VIBER_CONNECTOR] = 'bitrix:imconnector.viber';
 		$components[Library::ID_TELEGRAMBOT_CONNECTOR] = 'bitrix:imconnector.telegrambot';
@@ -346,6 +364,7 @@ class Connector
 		$components[Library::ID_NETWORK_CONNECTOR] = 'bitrix:imconnector.network';
 		$components[Library::ID_NOTIFICATIONS_CONNECTOR] = 'bitrix:imconnector.notifications';
 		$components[Library::ID_EDNA_WHATSAPP_CONNECTOR] = 'bitrix:imconnector.whatsappbyedna';
+		$components[Library::ID_MAX_CONNECTOR] = 'bitrix:imconnector.max';
 
 		$customComponents = CustomConnectors::getListComponentConnector();
 		if (!empty($customComponents))
@@ -922,6 +941,7 @@ class Connector
 			'webchat' => 'webchat',
 			'msteams' => 'envelope',
 			'whatsappbytwilio' => 'whatsapp',
+			Library::ID_WAZZUP_CONNECTOR => 'wazzup',
 			'avito' => 'avito',
 			'olx' => 'olx',
 			Library::ID_EDNA_WHATSAPP_CONNECTOR => 'edna',
@@ -936,7 +956,8 @@ class Connector
 			'botframework.facebookmessenger' => 'fb-messenger',
 			'botframework.webchat' => 'webchat',
 			'botframework.msteams' => 'envelope',
-			'botframework.directline' => 'directline'
+			'botframework.directline' => 'directline',
+			'max' => 'max',
 		];
 	}
 
@@ -1553,7 +1574,7 @@ class Connector
 	 * @param string $connectorId Connector ID.
 	 * @return array|null
 	 */
-	public static function getReplyLimit(string $connectorId): ?array
+	public static function getReplyLimit(string $connectorId, ?string $channel = null): ?array
 	{
 		$result = null;
 
@@ -1563,6 +1584,15 @@ class Connector
 		)
 		{
 			$result = Library::TIME_LIMIT_RESTRICTIONS[$connectorId];
+		}
+
+		if (
+			$channel
+			&& isset(Library::TIME_LIMIT_CHANNELS_RESTRICTIONS[$connectorId][$channel])
+			&& Library::TIME_LIMIT_CHANNELS_RESTRICTIONS[$connectorId][$channel]['LIMIT_START_DATE'] < (new DateTime())->getTimestamp()
+		)
+		{
+			$result = Library::TIME_LIMIT_CHANNELS_RESTRICTIONS[$connectorId][$channel];
 		}
 
 		return $result;

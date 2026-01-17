@@ -10,11 +10,11 @@ use Bitrix\Booking\Internals\Exception\Yandex\InternalErrorException;
 use Bitrix\Booking\Internals\Exception\Yandex\ResourceNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\ServiceNotFoundException;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
-use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
+use Bitrix\Booking\Internals\Integration\Catalog\SkuProviderConfig;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Collection\AvailableTimeSlotCollection;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Item\AvailableTimeSlot;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\AvailableTimeSlotCollection;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Item\AvailableTimeSlot;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
@@ -67,7 +67,10 @@ class AvailableTimeSlotsProvider
 
 		if (!empty($serviceIds))
 		{
-			$skus = $this->serviceSkuProvider->get($serviceIds);
+			$skus = $this->serviceSkuProvider->get(
+				$serviceIds,
+				new SkuProviderConfig(onlyActiveAndAvailable: true),
+			);
 			if (count($skus) !== count($serviceIds))
 			{
 				throw new ServiceNotFoundException();
@@ -76,7 +79,7 @@ class AvailableTimeSlotsProvider
 
 		$resourceCollection = $this->resourceRepository->getList(
 			filter: $this->makeResourceFilter($serviceIds, $resourceId),
-			select: new ResourceSelect(),
+			select: (new ResourceSelect())->prepareSelect(),
 		);
 		if ($resourceCollection->isEmpty())
 		{
@@ -97,6 +100,11 @@ class AvailableTimeSlotsProvider
 
 			foreach ($occurrencesDatePeriodCollection as $occurrenceDatePeriod)
 			{
+				if ($occurrenceDatePeriod->getDateFrom()->getTimestamp() < time())
+				{
+					continue;
+				}
+
 				$foundSlots[$occurrenceDatePeriod->getDateFrom()->format(DateTimeInterface::ATOM)] = true;
 			}
 		}
@@ -117,11 +125,8 @@ class AvailableTimeSlotsProvider
 	): ResourceFilter
 	{
 		$resourceFilter = [
-			'IS_MAIN' => true,
-			'LINKED_ENTITY' => [
-				'TYPE' => ResourceLinkedEntityType::Sku,
-				'ID' => $serviceIds,
-			],
+			'WITH_SKUS_YANDEX' => true,
+			'HAS_SKUS_YANDEX' => $serviceIds,
 		];
 		if ($resourceId !== null)
 		{

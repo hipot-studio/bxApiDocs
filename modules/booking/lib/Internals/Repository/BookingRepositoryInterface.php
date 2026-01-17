@@ -32,6 +32,7 @@ interface BookingRepositoryInterface
 		bool $withCounters = true,
 		bool $withClientsData = true,
 		bool $withExternalData = true,
+		bool $withSkus = true,
 	): Entity\Booking\Booking|null;
 
 	public function getByIdForManager(int $id): Entity\Booking\Booking|null;
@@ -39,4 +40,6 @@ interface BookingRepositoryInterface
 	public function save(Entity\Booking\Booking $booking): int;
 
 	public function remove(int $id): void;
+
+	public function withSkus(Entity\Booking\BookingCollection $collection): self;
 }

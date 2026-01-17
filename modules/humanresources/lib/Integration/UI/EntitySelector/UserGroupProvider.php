@@ -63,8 +63,8 @@ class UserGroupProvider extends BaseProvider
 					'id' => 'user-groups',
 					'title' => Loc::getMessage('HUMANRESOURCES_UI_ENTITYSELECTOR_USERGROUPPROVIDER_TAB_TITLE'),
 					'icon' => [
-						'default' => $this->getCityIcon(),
-						'selected' => $this->getSelectedCityIcon(),
+						'default' => 'o-company',
+						'selected' => 's-company',
 					],
 				],
 			),

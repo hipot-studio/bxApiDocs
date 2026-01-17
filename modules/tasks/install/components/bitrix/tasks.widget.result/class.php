@@ -36,6 +36,7 @@ use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Result\ResultManager;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class TasksWidgetResult extends CBitrixComponent implements Errorable, Controllerable
 {
@@ -180,16 +181,15 @@ class TasksWidgetResult extends CBitrixComponent implements Errorable, Controlle
 			return null;
 		}
 
-		$result = ResultTable::getByCommentId($commentId);
-		if (is_null($result))
+		$result = Container::getInstance()->getResultRepository()->getByCommentId($commentId);
+		if ($result === null)
 		{
 			return null;
 		}
 
 		if (
 			!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_READ, $result->getTaskId())
-			|| !ResultAccessController::can($this->userId, ActionDictionary::ACTION_TASK_REMOVE_RESULT,
-				$result->getId())
+			|| !ResultAccessController::can($this->userId, ActionDictionary::ACTION_RESULT_REMOVE, $result->getId())
 		)
 		{
 			return null;

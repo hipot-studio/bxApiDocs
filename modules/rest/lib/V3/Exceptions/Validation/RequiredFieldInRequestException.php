@@ -10,7 +10,7 @@ class RequiredFieldInRequestException extends RequestValidationException
 	public function __construct(string $field)
 	{
 		$message = new LocalizableMessage(
-			'REST_REQUIRED_FIELD_IN_REQUEST_EXCEPTION', ['#FIELD#' => $field],
+			'REST_V3_EXCEPTIONS_VALIDATION_REQUIREDFIELDINREQUESTEXCEPTION', ['#FIELD#' => $field],
 		);
 
 		parent::__construct([new Error($message, $field)]);

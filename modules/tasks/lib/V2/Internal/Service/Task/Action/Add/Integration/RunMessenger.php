@@ -50,7 +50,9 @@ class RunMessenger
 					return;
 				}
 
-				Locator::getMessenger()->registerTask($chatId, $messageId, $task);
+				Locator::getMessenger()
+					->withContextUser($this->config->getUserId())
+					->registerTask($chatId, $messageId, $task);
 			}
 		);
 	}

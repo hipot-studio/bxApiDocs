@@ -32,7 +32,7 @@ final class Factory
 			Badge::CALENDAR_SHARING_STATUS_TYPE => CalendarSharingStatus::class,
 			Badge::TASK_STATUS_TYPE => TaskStatus::class,
 			Badge::MAIL_MESSAGE_DELIVERY_STATUS_TYPE => MailMessageDeliveryStatus::class,
-			Badge::AI_CALL_FIELDS_FILLING_RESULT => AiCallFieldsFillingResult::class,
+			Badge::AI_FIELDS_FILLING_RESULT => AiCallFieldsFillingResult::class,
 			Badge::BIZPROC_WORKFLOW_STATUS_TYPE => BizprocWorkflowStatus::class,
 			Badge::WORKFLOW_COMMENT_STATUS_TYPE => WorkflowCommentStatus::class,
 			Badge::TODO_STATUS_TYPE => TodoStatus::class,

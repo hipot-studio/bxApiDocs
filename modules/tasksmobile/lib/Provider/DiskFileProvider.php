@@ -54,6 +54,7 @@ class DiskFileProvider
 				'ID' => $fileId,
 				'OBJECT_ID' => $attachedObject->getObjectId(),
 				'NAME' => $file->getName(),
+				'CREATOR' => $file->getCreatedBy(),
 				'TYPE' => TypeFile::getMimeTypeByFilename($file->getName()),
 				'URL' => $urlManager::getUrlUfController('show', ['attachedId' => $fileId]),
 				'PREVIEW_URL' => $urlManager::getUrlToActionShowUfFile($fileId, ['width' => 640, 'height' => 640]),

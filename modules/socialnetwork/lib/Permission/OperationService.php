@@ -13,6 +13,8 @@ use CSocNetFeaturesPerms;
 
 class OperationService
 {
+	private static array $groups = [];
+
 	public function filterUsersWithAccess(
 		int    $groupId,
 		array  $users,
@@ -125,17 +127,26 @@ class OperationService
 
 	private function getGroup(int $groupId): array
 	{
+		if (isset(static::$groups[$groupId]))
+		{
+			return static::$groups[$groupId];
+		}
+
 		$group = WorkgroupTable::getList([
-			                                 'select' => ['CLOSED', 'VISIBLE'],
-			                                 'filter' => ['ID' => $groupId],
-		                                 ])->fetch();
+			'select' => ['CLOSED', 'VISIBLE'],
+			'filter' => ['ID' => $groupId],
+		])->fetch();
 
 		if (!$group)
 		{
-			return [];
+			static::$groups[$groupId] = ['CLOSED' => 'Y', 'VISIBLE' => 'N'];
+
+			return static::$groups[$groupId];
 		}
 
-		return $group;
+		static::$groups[$groupId] = $group;
+
+		return static::$groups[$groupId];
 	}
 
 	private function isClosedGroup(array $group, string $feature, string $operation): bool

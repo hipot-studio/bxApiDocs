@@ -8,6 +8,7 @@ use Bitrix\Main\Cli\Command\Make\Templates\Tablet\FieldTemplate;
 use Bitrix\Main\Cli\Command\Make\Templates\TabletTemplate;
 use Bitrix\Main\Cli\Helper\PathGenerator;
 use Bitrix\Main\Cli\Helper\NamespaceGenerator;
+use Bitrix\Main\Cli\Helper\PathGenerator\LocalGenerator;
 use Bitrix\Main\Cli\Helper\Renderer;
 use Bitrix\Main\Loader;
 use Bitrix\Perfmon\BaseDatabase;
@@ -18,7 +19,6 @@ final class TabletService
 	private Renderer $renderer;
 	private PathGenerator $PathGenerator;
 	private NamespaceGenerator $NamespaceGenerator;
-	private string $defaultRootFolder;
 
 	public function __construct(string $defaultRootFolder = null)
 	{
@@ -54,9 +54,8 @@ final class TabletService
 			$this->getFieldsTempaltes($dto->tableName),
 		);
 
-		$this->PathGenerator = new PathGenerator(
+		$this->PathGenerator = new LocalGenerator(
 			$dto->psr4,
-			$dto->rootFolder ?: $this->defaultRootFolder,
 		);
 		$filePath = $this->PathGenerator->generatePathToClass($namespace, $className);
 

@@ -159,7 +159,7 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 				$form['PATH_TO_WEB_FORM_EDIT'] = '/crm/webform/edit/' . $form['ID'] . '/';
 			}
 
-			$form['PATH_TO_WEB_FORM_FILL'] = Script::getUrlContext($form, $this->arParams['PATH_TO_WEB_FORM_FILL']);
+			$form['PATH_TO_WEB_FORM_FILL'] = Script::getUrlContext($form, $this->arParams['PATH_TO_WEB_FORM_FILL'], true);
 
 			$form['PHONE_VERIFIED'] = !$this->isPhoneVerificationRequired($form['ID']);
 

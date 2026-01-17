@@ -5,6 +5,8 @@ namespace Bitrix\Crm\Integration\AI\Function\Deal\Category;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Deal\Dto\Category\CreateParameters;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Funnel\CreateEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -48,6 +50,12 @@ final class Create implements AIFunction
 			->setName($parameters->name)
 			->setSortAfterMaxCategory()
 			->save();
+
+		(new CreateEvent(section: Dictionary::SECTION_AI))
+			->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
+			->buildEvent()
+			->send()
+		;
 
 		if (!$result->isSuccess())
 		{

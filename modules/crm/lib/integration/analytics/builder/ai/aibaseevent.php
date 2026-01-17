@@ -2,6 +2,9 @@
 
 namespace Bitrix\Crm\Integration\Analytics\Builder\AI;
 
+use Bitrix\Crm\Activity\Provider\Call;
+use Bitrix\Crm\Activity\Provider\OpenLine;
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Main\Result;
@@ -19,6 +22,7 @@ abstract class AIBaseEvent extends AbstractBuilder
 	private ?int $operationTypeId = null;
 	private ?int $activityOwnerTypeId = null;
 	private ?int $activityId = null;
+	private ?string $activityProvider = null;
 
 	final public function setTool(string $tool): self
 	{
@@ -46,28 +50,28 @@ abstract class AIBaseEvent extends AbstractBuilder
 		if (!$this->createdTime || !$this->finishedTime)
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('createdTime || finishedTime'),
+				ErrorCode::getRequiredArgumentMissingError('createdTime || finishedTime'),
 			);
 		}
 
 		if ($this->operationTypeId <= 0)
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('operationTypeId'),
+				ErrorCode::getRequiredArgumentMissingError('operationTypeId'),
 			);
 		}
 
 		if (!CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityOwnerTypeId'),
+				ErrorCode::getRequiredArgumentMissingError('activityOwnerTypeId'),
 			);
 		}
 
 		if ($this->activityId <= 0)
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityId'),
+				ErrorCode::getRequiredArgumentMissingError('activityId'),
 			);
 		}
 
@@ -79,6 +83,11 @@ abstract class AIBaseEvent extends AbstractBuilder
 		$this->setSection(Dictionary::SECTION_CRM);
 
 		$this->setP2('stepNumber', (string)$this->operationTypeId);
+
+		if (isset($this->activityProvider))
+		{
+			$this->setP3('activityProvider', $this->activityProvider);
+		}
 
 		$durationInSeconds = $this->finishedTime->getTimestamp() - $this->createdTime->getTimestamp();
 		$this->setP4('stepDuration', (string)$durationInSeconds);
@@ -133,6 +142,18 @@ abstract class AIBaseEvent extends AbstractBuilder
 	final public function setActivityId(int $activityId): self
 	{
 		$this->activityId = $activityId;
+
+		return $this;
+	}
+
+	final public function setActivityProvider(string $activityProvider): self
+	{
+		$map = [
+			Call::getId() => 'call',
+			OpenLine::getId() => 'chat',
+		];
+
+		$this->activityProvider = $map[$activityProvider] ?? null;
 
 		return $this;
 	}

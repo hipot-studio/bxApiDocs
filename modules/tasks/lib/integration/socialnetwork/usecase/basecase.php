@@ -4,10 +4,12 @@ namespace Bitrix\Tasks\Integration\SocialNetwork\UseCase;
 
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Internals\Notification\Message;
-use Bitrix\Tasks\Internals\Notification\User;
 use CCrmActivity;
 use CCrmActivityType;
 use CSite;
+use CSocNetLog;
+use CSocNetLogRights;
+use CTaskTags;
 
 class BaseCase
 {
@@ -57,6 +59,65 @@ class BaseCase
 		self::$cache[$taskId] = $filter;
 
 		return self::$cache[$taskId];
+	}
+
+	protected function finalizeLogCreation(int $logId, Message $message): void
+	{
+		if ($logId <= 0)
+		{
+			return;
+		}
+
+		$task = $message->getMetaData()->getTask();
+
+		$this->updateTags($logId, $task->getId());
+
+		$this->updateRights($message, $logId);
+
+		CSocNetLog::sendEvent($logId, 'SONET_NEW_EVENT', $logId);
+	}
+
+	protected function updateTags(int $logId, int $taskId): void
+	{
+		$logFields = ['TMP_ID' => $logId];
+
+		$logFields['TAG'] = $this->getTagNames($taskId);
+
+		CSocNetLog::update($logId, $logFields);
+	}
+
+	protected function getTagNames(int $taskId): array
+	{
+		$tagNames = [];
+
+		$tagsResult = CTaskTags::getList([], ['TASK_ID' => $taskId]);
+
+		while ($row = $tagsResult->fetch())
+		{
+			$tagNames[] = $row['NAME'];
+		}
+
+		return $tagNames;
+	}
+
+	protected function updateRights(Message $message, int $logId): void
+	{
+		$metaData = $message->getMetaData();
+
+		$userRepository = $metaData->getUserRepository();
+
+		$task = $metaData->getTask();
+
+		$taskMembers = $userRepository->getRecepients($task, $message->getSender());
+
+		$rights = $this->recepients2Rights($taskMembers);
+
+		if ($task->getGroupId())
+		{
+			$rights = array_merge($rights, ['SG' . $task->getGroupId()]);
+		}
+
+		CSocNetLogRights::add($logId, $rights);
 	}
 
 	protected function getSiteIds(): array

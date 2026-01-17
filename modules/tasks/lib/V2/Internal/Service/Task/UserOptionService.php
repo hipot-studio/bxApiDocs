@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Tasks\Integration\Pull\PushCommand;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\UserOption\Option;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\TaskUserOptionRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Entity\Task\UserOption;
-use Bitrix\Tasks\V2\Internal\Service\CounterService;
+use Bitrix\Tasks\V2\Internal\Event;
+use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
+use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\EventService;
 use Bitrix\Tasks\V2\Internal\Service\PushService;
 
@@ -19,8 +21,9 @@ class UserOptionService
 	public function __construct(
 		private readonly TaskUserOptionRepositoryInterface $userOptionRepository,
 		private readonly PushService                       $pushService,
-		private readonly CounterService                    $counterService,
+		private readonly Counter\Service                   $counterService,
 		private readonly EventService                      $eventService,
+		private readonly EventDispatcher                   $eventDispatcher,
 	)
 	{
 
@@ -78,18 +81,20 @@ class UserOptionService
 			code: Option::MUTED,
 		);
 
-		$this->counterService->collect($entity->userId);
+		$this->counterService->collect($entity->taskId);
 
 		$this->add($entity);
 
-		$this->counterService->addEvent(
-			type: EventDictionary::EVENT_AFTER_TASK_MUTE,
-			parameters: [
-				'TASK_ID' => $entity->taskId,
-				'USER_ID' => $entity->userId,
-				'ADDED' => true,
-			]
-		);
+		$this->counterService->send(new Counter\Command\AfterTaskMute(
+			taskId: $entity->taskId,
+			userId: $entity->userId,
+			added: true,
+		));
+
+		$task = new Entity\Task(id: $taskId);
+		$user = new Entity\User(id: $userId);
+
+		$this->eventDispatcher->dispatch(new Event\Task\OnTaskMutedEvent($task, $user));
 	}
 
 	public function unmute(int $taskId, int $userId): void
@@ -100,18 +105,20 @@ class UserOptionService
 			code: Option::MUTED,
 		);
 
-		$this->counterService->collect($entity->userId);
+		$this->counterService->collect($entity->taskId);
 
 		$this->delete($entity);
 
-		$this->counterService->addEvent(
-			type: EventDictionary::EVENT_AFTER_TASK_MUTE,
-			parameters: [
-				'TASK_ID' => $entity->taskId,
-				'USER_ID' => $entity->userId,
-				'ADDED' => false,
-			]
-		);
+		$this->counterService->send(new Counter\Command\AfterTaskMute(
+			taskId: $entity->taskId,
+			userId: $entity->userId,
+			added: true,
+		));
+
+		$task = new Entity\Task(id: $taskId);
+		$user = new Entity\User(id: $userId);
+
+		$this->eventDispatcher->dispatch(new Event\Task\OnTaskUnmutedEvent($task, $user));
 	}
 
 	private function add(UserOption $userOption): void

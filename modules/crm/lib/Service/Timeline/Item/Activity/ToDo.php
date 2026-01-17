@@ -142,7 +142,13 @@ class ToDo extends Activity
 		$descriptionBlock = $this->buildDescriptionBlock();
 		if (isset($descriptionBlock))
 		{
-			$result['description'] = $descriptionBlock;
+			$result['description'] = $descriptionBlock->setScopeWeb();
+		}
+
+		$descriptionMobileBlock = $this->buildMobileDescriptionBlock();
+		if (isset($descriptionBlock))
+		{
+			$result['mobileDescription'] = $descriptionMobileBlock->setScopeMobile();
 		}
 
 		$locationBlock = $this->buildLocationBlock();
@@ -326,12 +332,12 @@ class ToDo extends Activity
 			->setFixedWidth(false)
 			->setAlignItems('center')
 			->setTitle($this->getDeadlineEditableDateTitle())
-			->setContentBlock($this->buildDeadlineEditableDateBlock())
+			->setContentBlock($this->buildDeadlineEditableDateBlock(true))
 			->setInline()
 		;
 	}
 
-	private function buildDeadlineEditableDateBlock(): ?EditableDate
+	private function buildDeadlineEditableDateBlock(bool $withAnalytics = false): ?EditableDate
 	{
 		$deadline = $this->getDeadline();
 		if (!isset($deadline))
@@ -347,6 +353,17 @@ class ToDo extends Activity
 				->addActionParamInt('ownerId', $this->getContext()->getIdentifier()->getEntityId())
 				->addActionParamInt('id', $this->getActivityId())
 			;
+
+			if ($withAnalytics)
+			{
+				$analytics = $this->createGeneralAnalytics()
+					?->setEvent(Dictionary::EDIT_EVENT)
+					->setElement(Dictionary::EDIT_BUTTON_ELEMENT)
+					->setP4(Dictionary::PARAM_CALENDAR_CUSTOM)
+				;
+
+				$updateDeadlineAction->setAnalytics($analytics);
+			}
 		}
 
 		return (new EditableDate())
@@ -515,7 +532,7 @@ class ToDo extends Activity
 		return (new ContentBlockWithTitle())
 			->setFixedWidth(false)
 			->setTitle(Loc::getMessage('CRM_TIMELINE_ITEM_TODO_PING_OFFSETS_TITLE'))
-			->setContentBlock($this->buildChangeableItemSelectorItem($emptyStateText, $selectorTitle))
+			->setContentBlock($this->buildChangeableItemSelectorItem($emptyStateText, $selectorTitle, false, true))
 			->setInline()
 		;
 	}
@@ -523,11 +540,23 @@ class ToDo extends Activity
 	private function buildChangeableItemSelectorItem(
 		$emptyStateText = null,
 		$selectorTitle = null,
-		bool $compactMode = false
+		bool $compactMode = false,
+		bool $withAnalytics = false,
 	): ?ItemSelector
 	{
 		$offsets = $this->getPingOffsets();
 		$identifier = $this->getContext()->getIdentifier();
+
+		$analytics = null;
+
+		if ($withAnalytics)
+		{
+			$analytics = $this->createGeneralAnalytics()
+				?->setEvent(Dictionary::EDIT_EVENT)
+				->setElement(Dictionary::EDIT_BUTTON_ELEMENT)
+				->setP2(Dictionary::PARAM_PING_CUSTOM)
+			;
+		}
 
 		$selector = (new ItemSelector())
 			->setEmptyState($emptyStateText)
@@ -541,6 +570,7 @@ class ToDo extends Activity
 					->addActionParamInt('ownerTypeId', $identifier->getEntityTypeId())
 					->addActionParamInt('ownerId', $identifier->getEntityId())
 					->addActionParamInt('id', $this->getActivityId())
+					->setAnalytics($analytics)
 			)
 		;
 
@@ -612,7 +642,12 @@ class ToDo extends Activity
 		;
 	}
 
-	private function buildDescriptionBlock(): ?ContentBlock
+	private function buildMobileDescriptionBlock(): ?ContentBlock
+	{
+		return $this->buildDescriptionBlock(true);
+	}
+
+	private function buildDescriptionBlock(bool $withAnalytics = false): ?ContentBlock
 	{
 		$description = (string)($this->getAssociatedEntityModel()?->get('DESCRIPTION') ?? '');
 		if ($description === '')
@@ -642,11 +677,23 @@ class ToDo extends Activity
 
 		if ($this->isScheduled())
 		{
+			$analytics = null;
+
+			if ($withAnalytics)
+			{
+				$analytics = $this->createGeneralAnalytics()
+					?->setEvent(Dictionary::EDIT_EVENT)
+					->setElement(Dictionary::EDIT_BUTTON_ELEMENT)
+					->setP5(Dictionary::PARAM_DESCRIPTION)
+				;
+			}
+
 			$editableDescriptionBlock->setAction(
 				(new Layout\Action\RunAjaxAction('crm.activity.todo.updateDescription'))
 					->addActionParamInt('ownerTypeId', $this->getContext()->getIdentifier()->getEntityTypeId())
 					->addActionParamInt('ownerId', $this->getContext()->getIdentifier()->getEntityId())
 					->addActionParamInt('id', $this->getActivityId())
+					->setAnalytics($analytics)
 			)
 			->setEditable(true);
 
@@ -1025,39 +1072,11 @@ class ToDo extends Activity
 	{
 		$action = parent::getCompleteAction();
 
-		$entityTypeId = $this->getContext()->getEntityTypeId();
-		$categoryId = $this->getContext()->getEntityCategoryId();
+		$analytics = $this->createGeneralAnalytics()
+			?->setEvent(Dictionary::COMPLETE_EVENT)
+			->setElement(Dictionary::COMPLETE_BUTTON_ELEMENT)
+		;
 
-		if ($entityTypeId === CCrmOwnerType::Contact && $categoryId !== 0)
-		{
-			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_CONTACT;
-		}
-		else if ($entityTypeId === CCrmOwnerType::Company && $categoryId !== 0)
-		{
-			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_COMPANY;
-		}
-		else
-		{
-			$entityTypeName = \Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($entityTypeId);
-
-			if ($entityTypeName === null)
-			{
-				return $action;
-			}
-
-			$section = $entityTypeName . '_section';
-		}
-
-		$analytics = new Layout\Action\Analytics([
-			'tool' => Dictionary::TOOL,
-			'category' => Dictionary::OPERATIONS_CATEGORY,
-			'event' => Dictionary::COMPLETE_EVENT,
-			'type' => Dictionary::TODO_TYPE,
-			'c_section' => $section,
-			'c_sub_section' => Dictionary::DETAILS_SUB_SECTION,
-			'c_element' => Dictionary::COMPLETE_BUTTON_ELEMENT,
-			'p1' => \Bitrix\Crm\Integration\Analytics\Dictionary::getCrmMode(),
-		]);
 		$action->setAnalytics($analytics);
 
 		return $action;
@@ -1081,5 +1100,48 @@ class ToDo extends Activity
 	private function hasOverlapEventTag()
 	{
 		return $this->getAssociatedEntityModel()?->get('SETTINGS')['TAGS']['OVERLAP_EVENT'] ?? false;
+	}
+
+	private function createGeneralAnalytics(): ?Layout\Action\Analytics
+	{
+		$entityTypeId = $this->getContext()->getEntityTypeId();
+		$categoryId = $this->getContext()->getEntityCategoryId();
+
+		if ($entityTypeId === CCrmOwnerType::Contact && $categoryId !== 0)
+		{
+			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_CONTACT;
+		}
+		else if ($entityTypeId === CCrmOwnerType::Company && $categoryId !== 0)
+		{
+			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_COMPANY;
+		}
+		else
+		{
+			$entityTypeName = \Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($entityTypeId);
+
+			if ($entityTypeName === null)
+			{
+				return null;
+			}
+
+			$section = $entityTypeName . '_section';
+
+			if (
+				$entityTypeName === mb_strtolower(CCrmOwnerType::CommonDynamicName)
+				&& Container::getInstance()->getFactory($entityTypeId)->isInCustomSection()
+			)
+			{
+				$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CUSTOM;
+			}
+		}
+
+		return new Layout\Action\Analytics([
+			'tool' => Dictionary::TOOL,
+			'category' => Dictionary::OPERATIONS_CATEGORY,
+			'type' => Dictionary::TODO_TYPE,
+			'c_section' => $section,
+			'c_sub_section' => Dictionary::DETAILS_SUB_SECTION,
+			'p1' => \Bitrix\Crm\Integration\Analytics\Dictionary::getCrmMode(),
+		]);
 	}
 }

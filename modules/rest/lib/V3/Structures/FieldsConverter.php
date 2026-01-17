@@ -19,7 +19,7 @@ class FieldsConverter
 					return DateTime::createFromPhp($correctDateTime);
 				}
 			}
-			else if ($fieldType === Date::class)
+			elseif ($fieldType === Date::class)
 			{
 				$correctDate = \DateTime::createFromFormat('Y-m-d', $value);
 				if ($correctDate !== false)

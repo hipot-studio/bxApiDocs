@@ -66,18 +66,32 @@ class ResourceTable extends DataManager
 	private static function getReferenceMap(): array
 	{
 		return [
-			(new Reference('TYPE', ResourceTypeTable::getEntity(), Join::on('this.TYPE_ID', 'ref.ID'))),
+			(new Reference('TYPE', ResourceTypeTable::class, Join::on('this.TYPE_ID', 'ref.ID'))),
 			(new OneToMany('SETTINGS', ResourceSettingsTable::class, 'RESOURCE'))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
-			(new Reference('DATA',  ResourceDataTable::getEntity(), Join::on('this.ID', 'ref.RESOURCE_ID'))),
+			(new Reference('DATA',  ResourceDataTable::class, Join::on('this.ID', 'ref.RESOURCE_ID'))),
 			(new Reference(
 				'NOTIFICATION_SETTINGS',
-				ResourceNotificationSettingsTable::getEntity(),
+				ResourceNotificationSettingsTable::class,
 				Join::on('this.ID', 'ref.RESOURCE_ID')
 			)),
 			(new OneToMany(
 				'ENTITIES',
 				ResourceLinkedEntityTable::class,
+				'RESOURCE',
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
+			(new OneToMany(
+				'SKUS',
+				ResourceSkuTable::class,
+				'RESOURCE',
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
+			(new OneToMany(
+				'SKUS_YANDEX',
+				ResourceSkuYandexTable::class,
 				'RESOURCE',
 			))
 				->configureJoinType(Join::TYPE_LEFT)

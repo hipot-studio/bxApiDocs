@@ -15,7 +15,7 @@ use Bitrix\Tasks\Flow\Provider\Exception\FlowNotFoundException;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
 use Bitrix\Tasks\Internals\Task\LogTable;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use InvalidArgumentException;
 use Psr\Container\NotFoundExceptionInterface;
 

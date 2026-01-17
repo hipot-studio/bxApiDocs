@@ -15,4 +15,9 @@ final class Phone extends Type
 	public const VALUE_TYPE_PAGER = 'PAGER';
 	public const VALUE_TYPE_MAILING = 'MAILING';
 	public const VALUE_TYPE_OTHER = 'OTHER';
+
+	public function formatValue(string $value): string
+	{
+		return \Bitrix\Main\PhoneNumber\Parser::getInstance()->parse($value)->format();
+	}
 }

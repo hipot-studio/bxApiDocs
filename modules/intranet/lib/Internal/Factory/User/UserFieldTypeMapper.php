@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Factory\User;
 
+use Bitrix\Intranet\Internal\Entity\User\Field\AddressField;
+use Bitrix\Intranet\Internal\Entity\User\Field\BooleanField;
+use Bitrix\Intranet\Internal\Entity\User\Field\DateTimeField;
 use Bitrix\Intranet\Internal\Entity\User\Field\EmailField;
+use Bitrix\Intranet\Internal\Entity\User\Field\FileField;
+use Bitrix\Intranet\Internal\Entity\User\Field\LinkField;
+use Bitrix\Intranet\Internal\Entity\User\Field\MoneyField;
+use Bitrix\Intranet\Internal\Entity\User\Field\NumberField;
 use Bitrix\Intranet\Internal\Entity\User\Field\PhoneField;
 use Bitrix\Intranet\Internal\Entity\User\Field\DateField;
 use Bitrix\Intranet\Internal\Entity\User\Field\SelectField;
 use Bitrix\Intranet\Internal\Entity\User\Field\StringField;
+use Bitrix\Intranet\Internal\Entity\User\Field\UserField;
 
 class UserFieldTypeMapper
 {
@@ -28,10 +36,18 @@ class UserFieldTypeMapper
 	{
 		return match($type)
 		{
-			'text', 'link', 'string', 'string_formatted' => StringField::class,
+			'text', 'string', 'string_formatted' => StringField::class,
 			'phone' => PhoneField::class,
-			'date', 'datetime' => DateField::class,
+			'date' => DateField::class,
+			'datetime' => DateTimeField::class,
 			'list', 'enumeration' => SelectField::class,
+			'boolean' => BooleanField::class,
+			'double' => NumberField::class,
+			'address' => AddressField::class,
+			'url', 'link' => LinkField::class,
+			'file' => FileField::class,
+			'money' => MoneyField::class,
+			'email' => EmailField::class,
 			default => null,
 		};
 	}
@@ -45,6 +61,8 @@ class UserFieldTypeMapper
 		{
 			'EMAIL' => EmailField::class,
 			'PERSONAL_PHONE', 'WORK_PHONE' => PhoneField::class,
+			'DEPARTMENT_HEAD' => UserField::class,
+			'PERSONAL_BIRTHDAY' => DateField::class,
 			default => null,
 		};
 	}

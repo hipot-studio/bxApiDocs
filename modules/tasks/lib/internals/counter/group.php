@@ -64,6 +64,7 @@ class Group
 		return [
 			'EXPIRED',
 			'NEW_COMMENTS',
+			'MENTIONED',
 		];
 	}
 
@@ -75,7 +76,8 @@ class Group
 	{
 		$counters = [
 			'EXPIRED' => 0,
-			'NEW_COMMENTS' => 0
+			'NEW_COMMENTS' => 0,
+			'MENTIONED' => 0,
 		];
 
 		$sql = "
@@ -103,6 +105,11 @@ class Group
 			{
 				$counters['NEW_COMMENTS'] += $row['CNT'];
 			}
+
+			if (CounterDictionary::COUNTER_MENTIONED === $row['TYPE'])
+			{
+				$counters['MENTIONED'] += $row['CNT'];
+			}
 		}
 
 		return [
@@ -117,6 +124,10 @@ class Group
 			'new_comments' => [
 				'counter' => $counters['NEW_COMMENTS'],
 				'code' => Counter\Type::TYPE_NEW_COMMENTS,
+			],
+			'mentioned' => [
+				'counter' => $counters['MENTIONED'],
+				'code' => Counter\Type::TYPE_MENTIONED,
 			],
 		];
 	}

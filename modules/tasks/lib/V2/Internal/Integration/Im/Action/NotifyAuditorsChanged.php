@@ -4,65 +4,50 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\Entity\Task;
-use Bitrix\Tasks\V2\Internal\Entity\User;
-use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
+use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 class NotifyAuditorsChanged
 {
 	public function __construct(
-		Task $task,
+		Entity\Task $task,
 		MessageSenderInterface $sender,
-		?User $triggeredBy = null,
-		?UserCollection $oldAuditors = null,
-		?UserCollection $newAuditors = null,
+		protected ?Entity\User $triggeredBy = null,
+		?Entity\UserCollection $oldAuditors = null,
+		?Entity\UserCollection $newAuditors = null,
+		?Entity\UserCollection $newAddMembers = null,
 	)
 	{
-		$oldAuditorsNames = [];
-		if ($oldAuditors !== null)
+		$auditorsToAdd = $newAuditors->diff($oldAuditors);
+
+		if (!$auditorsToAdd->isEmpty())
 		{
-			foreach ($oldAuditors as $user)
+			if ($auditorsToAdd->count() === 1 && $auditorsToAdd->getFirstEntity()?->getId() === $triggeredBy?->id)
 			{
-				$oldAuditorsNames[] = '[USER=' . $user->id . ']' . $user->name . '[/USER]';
+				$notification = new NotifyAuditorsAssignedSelf($triggeredBy, $auditorsToAdd);
 			}
-		}
-
-		$newAuditorsNames = [];
-		if ($newAuditors !== null)
-		{
-			foreach ($newAuditors as $user)
+			else
 			{
-				$newAuditorsNames[] = '[USER=' . $user->id . ']' . $user->name . '[/USER]';
+				$notification = new NotifyAuditorsAssigned($triggeredBy, $auditorsToAdd, $newAddMembers);
 			}
+
+			$sender->sendMessage(task: $task, notification: $notification);
 		}
 
-		$newDiff = array_diff($newAuditorsNames, $oldAuditorsNames);
-		$oldDiff = array_diff($oldAuditorsNames, $newAuditorsNames);
+		$auditorsToDelete = $oldAuditors->diff($newAuditors);
 
-		if (!empty($newDiff))
+		if (!$auditorsToDelete->isEmpty())
 		{
-			$code = 'TASKS_IM_TASK_AUDITORS_NEW_' . $triggeredBy?->getGender()->value;
+			if ($auditorsToDelete->count() === 1 && $auditorsToDelete->getFirstEntity()?->getId() === $triggeredBy?->id)
+			{
+				$notification = new NotifyAuditorsRemovedSelf($triggeredBy, $auditorsToDelete);
+			}
+			else
+			{
+				$notification = new NotifyAuditorsRemoved($triggeredBy, $auditorsToDelete);
+			}
 
-			$message = Loc::getMessage($code, [
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-				'#NEW_AUDITORS#' => implode(', ', $newDiff),
-			]);
-
-			$sender->sendMessage(task: $task, text: $message);
-		}
-
-		if (!empty($oldDiff))
-		{
-			$code = 'TASKS_IM_TASK_AUDITORS_REMOVE_' . $triggeredBy?->getGender()->value;
-
-			$message = Loc::getMessage($code, [
-				'#USER#' => '[USER=' . $triggeredBy?->id . ']' . $triggeredBy?->name . '[/USER]',
-				'#OLD_AUDITORS#' => implode(', ', $oldDiff),
-			]);
-
-			$sender->sendMessage(task: $task, text: $message);
+			$sender->sendMessage(task: $task, notification: $notification);
 		}
 	}
 }

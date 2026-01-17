@@ -23,6 +23,7 @@ class Priority extends BaseController
 		$result = (new SetHighTaskPriorityCommand(
 			taskId: $task->getId(),
 			userId: $this->userId,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -46,6 +47,7 @@ class Priority extends BaseController
 		$result = (new SetAverageTaskPriorityCommand(
 			taskId: $task->getId(),
 			userId: $this->userId,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())

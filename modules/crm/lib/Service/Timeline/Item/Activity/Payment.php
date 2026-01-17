@@ -62,12 +62,22 @@ class Payment extends Activity
 
 		$fields = $this->getAssociatedEntityModelFields();
 
+		$sum = $this->getPaymentSum($payment, $fields);
+		$currency = $this->getPaymentCurrency($payment, $fields);
+		if ($sum !== null && $currency)
+		{
+			$amountMoneyPill = (new ContentBlock\MoneyPill())
+				->setOpportunity($sum)
+				->setCurrencyId($currency)
+			;
+		}
+		else
+		{
+			$amountMoneyPill = new ContentBlock\Text();
+		}
+
 		$result = [
-			'amountMoneyPill' =>
-				(new ContentBlock\MoneyPill())
-					->setOpportunity($this->getPaymentSum($payment, $fields))
-					->setCurrencyId($this->getPaymentCurrency($payment, $fields))
-			,
+			'amountMoneyPill' => $amountMoneyPill,
 			'paymentDetails' => $this->getPaymentDetailsContentBlock($payment),
 		];
 
@@ -208,11 +218,19 @@ class Payment extends Activity
 
 		$sum = $this->getPaymentSum($payment, $fields);
 		$currency = $this->getPaymentCurrency($payment, $fields);
-		$amountBlock = (new Money())
-			->setOpportunity((float)$sum)
-			->setCurrencyId((string)$currency)
-			->setColor(ContentBlock\Text::COLOR_BASE_90)
-		;
+		if ($sum !== null && $currency)
+		{
+			$amountBlock = (new Money())
+				->setOpportunity($sum)
+				->setCurrencyId($currency)
+				->setColor(ContentBlock\Text::COLOR_BASE_90)
+			;
+		}
+		else
+		{
+			$amountBlock = new ContentBlock\Text();
+		}
+
 		$contentBlock = ContentBlockFactory::createLineOfTextFromTemplate(
 			$title,
 			[

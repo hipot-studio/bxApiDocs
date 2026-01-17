@@ -4,21 +4,28 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals;
 
-use Bitrix\Booking\Internals\Integration\Catalog\CatalogSkuDataLoader;
+use Bitrix\Booking\Internals\Integration\Catalog\SkuDataLoader;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
 use Bitrix\Booking\Internals\Integration\Crm\Contact\ContactService;
 use Bitrix\Booking\Internals\Integration\Crm\CrmDealDataLoader;
 use Bitrix\Booking\Internals\Integration\Crm\DealService;
+use Bitrix\Booking\Internals\Integration\Crm\ProductRowDataLoader;
 use Bitrix\Booking\Internals\Integration\Intranet\BookingTool;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
+use Bitrix\Booking\Internals\Repository\BookingSkuRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\DelayedTaskRepository;
+use Bitrix\Booking\Internals\Repository\ORM\Mapper\BookingSkuMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ClientTypeMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\WaitListItemMapper;
 use Bitrix\Booking\Internals\Repository\ORM\ResourceLinkedEntityRepository;
+use Bitrix\Booking\Internals\Repository\ORM\ResourceSkuRepository;
+use Bitrix\Booking\Internals\Repository\ORM\ResourceSkuYandexRepository;
 use Bitrix\Booking\Internals\Repository\WaitListItemRepositoryInterface;
 use Bitrix\Booking\Internals\Service\BookingService;
+use Bitrix\Booking\Internals\Service\BookingSkuService;
 use Bitrix\Booking\Internals\Service\ClientService;
+use Bitrix\Booking\Internals\Service\DealForBookingService;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
 use Bitrix\Booking\Internals\Service\EventForBookingService;
 use Bitrix\Booking\Internals\Service\ExternalDataService;
@@ -43,17 +50,22 @@ use Bitrix\Booking\Internals\Repository\ResourceSlotRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceTypeRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender;
+use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
 use Bitrix\Booking\Internals\Service\ProviderManager;
 use Bitrix\Booking\Internals\Service\ResourceService;
+use Bitrix\Booking\Internals\Service\ResourceAvatarService;
+use Bitrix\Booking\Internals\Service\ResourceSkuService;
+use Bitrix\Booking\Internals\Service\SkuService;
+use Bitrix\Booking\Internals\Service\Timezone;
 use Bitrix\Booking\Internals\Service\WaitListItemService;
 use Bitrix\Booking\Internals\Service\Yandex\AvailableTimeSlotsProvider;
 use Bitrix\Booking\Internals\Service\Yandex\ResourceProvider;
 use Bitrix\Booking\Internals\Service\Yandex\ServiceProvider;
-use Bitrix\Booking\Provider\BookingProvider;
 use Bitrix\Main\Access\BaseAccessController;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Booking\Internals\Service\Gis;
 use Bitrix\Booking\Internals\Service\Yandex;
 
 class Container
@@ -65,12 +77,18 @@ class Container
 
 	private static function getService(string $name): mixed
 	{
+		$locator = ServiceLocator::getInstance();
+
+		if ($locator->has($name))
+		{
+			return $locator->get($name);
+		}
+
 		$prefix = 'booking.';
 		if (mb_strpos($name, $prefix) !== 0)
 		{
 			$name = $prefix . $name;
 		}
-		$locator = ServiceLocator::getInstance();
 
 		return $locator->has($name)
 			? $locator->get($name)
@@ -173,6 +191,16 @@ class Container
 		return self::getService('booking.client.repository');
 	}
 
+	public static function getBookingSkuRepository(): BookingSkuRepositoryInterface
+	{
+		return self::getService('booking.sku.repository');
+	}
+
+	public static function getBookingSkuMapper(): BookingSkuMapper
+	{
+		return self::getService('booking.sku.mapper');
+	}
+
 	public static function getBookingExternalDataRepository(): BookingExternalDataRepository
 	{
 		return self::getService('booking.external.data.repository');
@@ -228,6 +256,11 @@ class Container
 		return self::getService('booking.internals.client.service');
 	}
 
+	public static function getBookingSkuService(): BookingSkuService
+	{
+		return self::getService('booking.internals.sku.service');
+	}
+
 	public static function getExternalDataService(): ExternalDataService
 	{
 		return self::getService('booking.internals.external.data.service');
@@ -236,6 +269,11 @@ class Container
 	public static function getResourceService(): ResourceService
 	{
 		return self::getService('booking.internals.resource.service');
+	}
+
+	public static function getResourceAvatarService(): ResourceAvatarService
+	{
+		return self::getService('booking.internals.resource.avatar.service');
 	}
 
 	public static function getWaitListItemService(): WaitListItemService
@@ -308,6 +346,16 @@ class Container
 		return self::getService('booking.internals.service.yandex.create.booking.service');
 	}
 
+	public static function getYandexUpdateBookingService(): Yandex\UpdateBookingService
+	{
+		return self::getService('booking.internals.service.yandex.update.booking.service');
+	}
+
+	public static function getYandexFindResourceService(): Yandex\FindResourceService
+	{
+		return self::getService('booking.internals.service.yandex.find.resource.service');
+	}
+
 	public static function getCrmContactService(): ContactService
 	{
 		return self::getService('booking.internals.integration.crm.contact.service');
@@ -353,7 +401,7 @@ class Container
 		return self::getService('booking.internals.service.yandex.company.feed.sender');
 	}
 
-	public static function getCatalogSkuDataLoader(): CatalogSkuDataLoader
+	public static function getSkuDataLoader(): SkuDataLoader
 	{
 		return self::getService('booking.internals.integration.catalog.sku.data.loader');
 	}
@@ -363,13 +411,78 @@ class Container
 		return self::getService('booking.internals.integration.crm.deal.data.loader');
 	}
 
-	public static function getBookingProvider(): BookingProvider
-	{
-		return self::getService('booking.booking.provider');
-	}
-
 	public static function getIntranetBookingTool(): BookingTool
 	{
 		return self::getService('booking.internals.integration.intranet.booking.tool');
+	}
+
+	public static function getResourceSkuRepository(): ResourceSkuRepository
+	{
+		return self::getService('booking.internals.repository.resource.sku');
+	}
+
+	public static function getResourceSkuYandexRepository(): ResourceSkuYandexRepository
+	{
+		return self::getService('booking.internals.repository.resource.sku.yandex');
+	}
+
+	public static function getResourceSkuService(): ResourceSkuService
+	{
+		return self::getService('booking.internals.service.resource.sku.service');
+	}
+
+	public static function getSkuService(): SkuService
+	{
+		return self::getService('booking.internals.service.sku.service');
+	}
+
+	public static function getYandexResourceSkuRelationsService(): Yandex\ResourceSkuRelationsService
+	{
+		return self::getService('booking.internals.service.yandex.resource.sku.relations.service');
+	}
+
+	public static function getYandexStatusService(): Yandex\StatusService
+	{
+		return self::getService('booking.internals.yandex.service.status');
+	}
+
+	public static function getYandexAvailabilityService(): Yandex\AvailabilityService
+	{
+		return self::getService(Yandex\AvailabilityService::class);
+	}
+
+	public static function getTimezoneService(): Timezone
+	{
+		return self::getService('booking.internals.service.timezone');
+	}
+
+	public static function getYandexIntegrationService(): Yandex\IntegrationService
+	{
+		return self::getService(Yandex\IntegrationService::class);
+	}
+
+	public static function getGisIntegrationService(): Gis\IntegrationService
+	{
+		return self::getService('booking.internals.service.gis.integration.service');
+	}
+
+	public static function getYandexCompanyFeedHashService(): Yandex\CompanyFeedHashService
+	{
+		return self::getService(Yandex\CompanyFeedHashService::class);
+	}
+
+	public static function getProductRowDataLoader(): ProductRowDataLoader
+	{
+		return self::getService(ProductRowDataLoader::class);
+	}
+
+	public static function getDealForBookingService(): DealForBookingService
+	{
+		return self::getService(DealForBookingService::class);
+	}
+
+	public static function getWhatsAppEmergencyService(): WhatsAppEmergencyService
+	{
+		return self::getService(WhatsAppEmergencyService::class);
 	}
 }

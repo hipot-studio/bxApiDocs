@@ -19,6 +19,7 @@ class File extends AbstractEntity
 		public readonly ?int $size = null,
 		public readonly ?string $subDir = null,
 		public readonly ?string $contentType = null,
+		public readonly ?array $file = null,
 	)
 	{
 	}

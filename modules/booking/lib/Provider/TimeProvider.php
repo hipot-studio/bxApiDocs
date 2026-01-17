@@ -66,14 +66,16 @@ class TimeProvider
 		array $resourceCollections,
 		BookingCollection $eventCollection,
 		DateTimeCollection $searchDates,
-		int|null $sizeInMinutes = null
+		int|null $sizeInMinutes = null,
+		bool $ignorePastTime = true,
 	): array
 	{
 		$request = new MultiResourceEachDayFirstOccurrenceRequest(
-			$resourceCollections,
-			$eventCollection,
-			$searchDates,
-			$sizeInMinutes,
+			resourceCollections: $resourceCollections,
+			eventCollection: $eventCollection,
+			searchDates: $searchDates,
+			sizeInMinutes: $sizeInMinutes,
+			ignorePastTime: $ignorePastTime,
 		);
 
 		$response = (new MultiResourceEachDayFirstOccurrenceHandler())($request);

@@ -40,9 +40,16 @@ class DashboardOwner extends Main\Update\Stepper
 			return self::FINISH_EXECUTION;
 		}
 
+		if (!SupersetInitializer::isSupersetExist())
+		{
+			self::setFinishStatus();
+
+			return self::FINISH_EXECUTION;
+		}
+
 		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_READY)
 		{
-			return self::CONTINUE_EXECUTION;
+			return self::FINISH_EXECUTION;
 		}
 
 		$adminUserId = $this->getAdminUserId();

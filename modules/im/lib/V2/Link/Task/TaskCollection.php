@@ -10,7 +10,7 @@ use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Tasks\Internals\SearchIndex;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 
 /**
  * @implements \IteratorAggregate<int,TaskItem>

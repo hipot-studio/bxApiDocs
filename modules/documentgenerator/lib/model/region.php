@@ -12,9 +12,9 @@ use Bitrix\Main\Orm\Event;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Region_Query query()
- * @method static EO_Region_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Region_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Region_Result getById($id)
- * @method static EO_Region_Result getList(array $parameters = array())
+ * @method static EO_Region_Result getList(array $parameters = [])
  * @method static EO_Region_Entity getEntity()
  * @method static \Bitrix\DocumentGenerator\Model\EO_Region createObject($setDefaultValues = true)
  * @method static \Bitrix\DocumentGenerator\Model\EO_Region_Collection createCollection()

@@ -8,6 +8,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Uri;
 
 Loader::requireModule('disk');
 
@@ -82,6 +83,11 @@ class AttachedObjectService
 					? $urlManager->getUrlForShowFile($fileModel)
 					: $urlManager::getUrlUfController('show', ['attachedId' => $id])
 				);
+			}
+
+			if (TypeFile::isImage($fileModel))
+			{
+				$data['PREVIEW_URL'] = (new Uri($data['VIEW_URL']))->addParams(['preview' => 'Y']);
 			}
 
 			$files[] = $data;

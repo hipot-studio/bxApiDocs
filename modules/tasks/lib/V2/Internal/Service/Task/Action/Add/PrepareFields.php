@@ -32,7 +32,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareStatus;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareTags;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareTitle;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ApplicationErrorTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\ApplicationErrorTrait;
 
 class PrepareFields
 {

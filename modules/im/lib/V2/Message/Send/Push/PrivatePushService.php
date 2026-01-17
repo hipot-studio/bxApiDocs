@@ -25,19 +25,21 @@ class PrivatePushService extends PushService
 	protected function getPullMessages(array $counters): array
 	{
 		$chat = $this->message->getChat();
-		$fromUserId = $this->message->getAuthorId();
-		$toUserId = $chat->getCompanion($fromUserId)->getId();
 		$basePullMessage = $this->getBasePullMessage();
 
-		if ($fromUserId === $toUserId)
-		{
-			return [$toUserId => $this->getPullMessage($basePullMessage, $toUserId, $toUserId, $counters)];
-		}
+		$memberIds = array_values($chat->getRelations()->getUserIds());
+		$firstUserId = $memberIds[0] ?? null;
+		$secondUserId = $memberIds[1] ?? null;
 
-		return [
-			$toUserId => $this->getPullMessage($basePullMessage, $toUserId, $fromUserId, $counters),
-			$fromUserId => $this->getPullMessage($basePullMessage, $fromUserId, $toUserId, $counters),
-		];
+		return match (count($memberIds))
+		{
+			1 => [$firstUserId => $this->getPullMessage($basePullMessage, $firstUserId, $firstUserId, $counters)],
+			2 => [
+				$firstUserId => $this->getPullMessage($basePullMessage, $firstUserId, $secondUserId, $counters),
+				$secondUserId => $this->getPullMessage($basePullMessage, $secondUserId, $firstUserId, $counters),
+			],
+			default => [],
+		};
 	}
 
 	protected function getBasePullMessage(): array

@@ -17,6 +17,7 @@ class AddConfig
 	private bool $skipBP;
 	private array $skipTimeZoneFields;
 	private bool $needCorrectDatePlan;
+	private bool $useConsistency;
 	private ?string $eventGuid;
 	private RuntimeData $runtime;
 	private ?Processor\Task\Result $shiftResult = null;
@@ -31,6 +32,7 @@ class AddConfig
 		bool $skipBP = false,
 		array $skipTimeZoneFields = [],
 		bool $needCorrectDatePlan = true,
+		bool $useConsistency = false,
 		?string $eventGuid = null,
 		RuntimeData $runtime = new RuntimeData()
 	) {
@@ -43,6 +45,7 @@ class AddConfig
 		$this->skipBP = $skipBP;
 		$this->skipTimeZoneFields = $skipTimeZoneFields;
 		$this->needCorrectDatePlan = $needCorrectDatePlan;
+		$this->useConsistency = $useConsistency;
 		$this->eventGuid = $eventGuid;
 		$this->runtime = $runtime;
 	}
@@ -91,6 +94,11 @@ class AddConfig
 	public function isNeedCorrectDatePlan(): bool
 	{
 		return $this->needCorrectDatePlan;
+	}
+
+	public function isUseConsistency(): bool
+	{
+		return $this->useConsistency;
 	}
 
 	public function getEventGuid(): ?string

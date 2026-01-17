@@ -4,6 +4,7 @@ namespace Bitrix\Mobile\Provider;
 
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\UserTable;
 use DateTimeZone;
 
@@ -27,6 +28,7 @@ class UserRepository
 			'LAST_ACTIVITY_DATE',
 			'PERSONAL_GENDER',
 			'TIME_ZONE',
+			'DATE_REGISTER',
 		];
 	}
 
@@ -121,6 +123,26 @@ class UserRepository
 			timezone: $timezone ?? null,
 			personalGender: $user['PERSONAL_GENDER'] ?? null,
 		);
+	}
+
+	/**
+	 * @throws LoaderException
+	 */
+	public static function isUserAlone(): bool
+	{
+		if (
+			!Loader::includeModule('intranet')
+			|| !Loader::includeModule('intranetmobile')
+			|| !Loader::includeModule('humanresources')
+		)
+		{
+			return false;
+		}
+
+		$departmentProvider = new \Bitrix\IntranetMobile\Provider\DepartmentProvider();
+		$userCount = $departmentProvider?->getTotalEmployeeCount();
+
+		return $userCount <= 1;
 	}
 
 	private static function isCollaber(int $userId): bool

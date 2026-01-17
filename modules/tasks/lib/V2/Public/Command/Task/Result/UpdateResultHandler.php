@@ -19,8 +19,15 @@ class UpdateResultHandler
 
 	public function __invoke(UpdateResultCommand $command): Entity\Result
 	{
-		return $this->consistencyResolver->resolve('task.result.update')->wrap(
-			fn (): Entity\Result => $this->resultService->update($command->result, $command->userId)
-		);
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.result.update')->wrap(
+				fn (): Entity\Result => $this->resultService->update($command->result, $command->userId)
+			);
+		}
+		else
+		{
+			return $this->resultService->update($command->result, $command->userId);
+		}
 	}
 }

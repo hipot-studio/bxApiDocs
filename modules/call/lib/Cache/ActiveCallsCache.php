@@ -3,7 +3,6 @@
 namespace Bitrix\Call\Cache;
 
 use Bitrix\Call\JwtCall;
-use Bitrix\Im\Call\Registry;
 use Bitrix\Im\Call\Util;
 use Bitrix\Im\V2\Call\CallFactory;
 use Bitrix\Main\Application;
@@ -48,7 +47,7 @@ class ActiveCallsCache
 	}
 
 	/**
-	 * Retrieves active calls for a specific user from cache or rebuilds if not cached
+	 * Retrieves active calls for a specific user from cache or rebuilds if not cached.
 	 *
 	 * @param int $userId User ID
 	 * @return array Array of active calls data for the user
@@ -65,7 +64,7 @@ class ActiveCallsCache
 	}
 
 	/**
-	 * Updates and rebuilds the active calls cache for a specific user
+	 * Updates and rebuilds the active calls cache for a specific user.
 	 *
 	 * @param int $userId User ID
 	 * @return array Updated active calls data for the user
@@ -95,7 +94,7 @@ class ActiveCallsCache
 	}
 
 	/**
-	 * Updates cache for all users participating in a specific call
+	 * Updates cache for all users participating in a specific call.
 	 *
 	 * @param int $callId Call ID
 	 * @return void
@@ -125,7 +124,7 @@ class ActiveCallsCache
 	}
 
 	/**
-	 * Builds array of active calls data for a specific user
+	 * Builds array of active calls data for a specific user.
 	 *
 	 * @param int $userId User ID
 	 * @return array Array of active calls with full data including tokens and user info
@@ -135,13 +134,21 @@ class ActiveCallsCache
 		$activeCalls = CallFactory::getUserActiveCalls($userId);
 		return array_reduce(
 			$activeCalls,
-			function ($result, $call) use ($userId) {
+			function ($result, $call) use ($userId)
+			{
 				$callInstance = CallFactory::getCallInstance($call['PROVIDER'], $call);
 				$callUsers = $callInstance->getUsers();
+
+				$callToken = '';
+				if ($call['CHAT_ID'] > 0)
+				{
+					$callToken = JwtCall::getCallToken($call['CHAT_ID']);
+				}
+
 				$result[$call['ID']] = array_merge(
 					$callInstance->toArray($userId),
 					[
-						'CALL_TOKEN' => JwtCall::getCallToken($call['CHAT_ID']),
+						'CALL_TOKEN' => $callToken,
 						'CONNECTION_DATA' => $callInstance->getConnectionData($userId),
 						'USERS' => $callUsers,
 						'LOG_TOKEN' => $callInstance->getLogToken($userId),
@@ -155,7 +162,7 @@ class ActiveCallsCache
 	}
 
 	/**
-	 * Clears active calls cache for a specific user
+	 * Clears active calls cache for a specific user.
 	 *
 	 * @param int $userId User ID
 	 * @return void
@@ -167,7 +174,7 @@ class ActiveCallsCache
 	}
 
 	/**
-	 * Clears cache for a specific call across all users
+	 * Clears cache for a specific call across all users.
 	 *
 	 * @param int $callId Call ID
 	 * @return void

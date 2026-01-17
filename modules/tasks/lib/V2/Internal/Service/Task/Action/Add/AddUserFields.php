@@ -5,29 +5,34 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add;
 
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\UserFieldTrait;
-use Bitrix\Tasks\Util\UserField\Task;
+use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
 
 class AddUserFields
 {
 	use ConfigTrait;
 	use UserFieldTrait;
 
-	public function __invoke(array $fields): void
+	public function __invoke(array $fields): bool
 	{
+		if (!$this->checkContainsUfKeys($fields))
+		{
+			return false;
+		}
+
 		$taskId = $fields['ID'];
 		$ufManager = $this->getUfManager();
 
-		$systemUserFields = [UserField::TASK_CRM, UserField::TASK_ATTACHMENTS];
-		$userFields = $ufManager->GetUserFields(Task::getEntityCode(), $taskId, false, $this->config->getUserId());
+		$userFields = $ufManager->GetUserFields(UserField::TASK, $taskId, false, $this->config->getUserId());
 
 		foreach ($fields as $key => $value)
 		{
 			if (
 				!array_key_exists($key, $userFields)
-				|| array_key_exists($key, $systemUserFields)
+				|| array_key_exists($key, UserField::TASK_SYSTEM_USER_FIELDS)
 				|| $userFields[$key]['USER_TYPE_ID'] !== 'boolean'
 			)
 			{
@@ -35,8 +40,8 @@ class AddUserFields
 			}
 
 			if (
-				$value
-				&& mb_strtolower($value) !== 'n'
+				$value === true
+				|| (is_string($value) && !in_array(mb_strtolower($value), ['0', 'n'], true))
 			)
 			{
 				$value = true;
@@ -49,6 +54,10 @@ class AddUserFields
 			$fields[$key] = $value;
 		}
 
-		$ufManager->Update(Task::getEntityCode(), $taskId, $fields, $this->config->getUserId());
+		$result = $ufManager->Update(UserField::TASK, $taskId, $fields, $this->config->getUserId());
+
+		Container::getInstance()->get(CrmItemRepositoryInterface::class)->invalidate($taskId);
+
+		return $result;
 	}
 }

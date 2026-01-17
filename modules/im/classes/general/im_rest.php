@@ -1,9 +1,11 @@
 <?php
 
 use Bitrix\Im\Chat;
+use Bitrix\Im\V2\Chat\NotifyChat;
 use Bitrix\Im\V2\Link\File\FileCollection;
 use Bitrix\Im\V2\Link\File\FileItem;
 use Bitrix\Im\V2\Link\File\SubtypeGroup;
+use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\Localization\Loc;
@@ -3923,9 +3925,22 @@ class CIMRestService extends IRestService
 	public static function notifyReadAll($arParams, $n, CRestServer $server)
 	{
 		$notify = new \CIMNotify();
-		$notify->MarkNotifyRead(0, true);
+		$readResult = $notify->ReadAllNotifications();
 
-		return true;
+		if (!$readResult->isSuccess())
+		{
+			return [
+				'result' => false,
+				'newCounter' => 0,
+			];
+		}
+
+		$newCounter = $readResult->getResult()['COUNTER'];
+
+		return [
+			'result' => true,
+			'newCounter' => $newCounter,
+		];
 	}
 
 	public static function notifyConfirm($arParams, $n, CRestServer $server): array
@@ -4254,11 +4269,6 @@ class CIMRestService extends IRestService
 			$arParams['FILE_TEMPLATE_ID'] = mb_substr((string)$arParams['FILE_TEMPLATE_ID'], 0, 255);
 		}
 
-		if (empty($arParams['TRANSCRIBABLE_FILE_IDS']) || !is_array($arParams['TRANSCRIBABLE_FILE_IDS']))
-		{
-			$arParams['TRANSCRIBABLE_FILE_IDS'] = [];
-		}
-
 		$result = CIMDisk::UploadFileFromDisk($chatId, array_values($files), $arParams['MESSAGE'], [
 			'LINES_SILENT_MODE' => $arParams['SILENT_MODE'],
 			'TEMPLATE_ID' => $arParams['TEMPLATE_ID']?:'',
@@ -4266,7 +4276,7 @@ class CIMRestService extends IRestService
 			'SYMLINK' => $arParams['SYMLINK']?:false,
 			'AS_FILE' => $arParams['AS_FILE'] ?? 'N',
 			'WAIT_FULL_EXECUTION' => 'N',
-			'TRANSCRIBABLE_FILE_IDS' => $arParams['TRANSCRIBABLE_FILE_IDS'],
+			'FILE_PARAMS' => $arParams['FILE_PARAMS'] ?? null,
 		]);
 		if (!$result)
 		{
@@ -7197,7 +7207,7 @@ class CIMRestService extends IRestService
 
 	public static function callUserUpdate($params, $n, \CRestServer $server)
 	{
-		if ($server->getAuthType() !== 'call')
+		if ($server->getAuthType() !== \Bitrix\Im\Call\Auth::AUTH_TYPE)
 		{
 			throw new \Bitrix\Rest\RestException(
 				"Access for this method allowed only by call authorization.",
@@ -7214,31 +7224,35 @@ class CIMRestService extends IRestService
 
 		/** @var \CUser $USER */
 		global $USER;
-
-		if ($USER->GetParam("NAME") == $params['NAME'])
+		if ($USER->GetParam("NAME") != $params['NAME'])
 		{
-			return;
-		}
-
-		$userManager = new \CUser;
-		$userManager->Update($USER->GetID(), [
-			'NAME' => $params['NAME']
-		]);
-
-		$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
-
-		if (\CModule::IncludeModule("pull"))
-		{
-			\Bitrix\Pull\Event::add(array_keys($relations), [
-				'module_id' => 'im',
-				'command' => 'callUserNameUpdate',
-				'params' => [
-					'userId' => $USER->GetID(),
-					'name' => $params['NAME']
-				],
-				'extra' => \Bitrix\Im\Common::getPullExtra()
+			$userManager = new \CUser;
+			$userManager->Update($USER->GetID(), [
+				'NAME' => $params['NAME']
 			]);
+
+			$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
+
+			if (\CModule::IncludeModule("pull"))
+			{
+				\Bitrix\Pull\Event::add(array_keys($relations), [
+					'module_id' => 'im',
+					'command' => 'callUserNameUpdate',
+					'params' => [
+						'userId' => $USER->GetID(),
+						'name' => $params['NAME']
+					],
+					'extra' => \Bitrix\Im\Common::getPullExtra()
+				]);
+			}
 		}
+
+		\Bitrix\Main\Loader::includeModule('call');
+		return [
+			'id' => $USER->GetID(),
+			'hash' => mb_substr($USER->GetParam('XML_ID'), mb_strlen(\Bitrix\Im\Call\Auth::AUTH_TYPE) + 1),
+			'userToken' => \Bitrix\Call\JwtCall::getUserJwt($USER->GetID()),
+		];
 	}
 
 	public static function callUserForceRename($params, $n, \CRestServer $server)

@@ -199,7 +199,7 @@ class MatchHashDedupeCache
 		}
 		else    // MYSQL
 		{
-			$varName = "@${tableName}_rn";
+			$varName = "@{$tableName}_rn";
 			$connection->queryExecute("SET $varName = 0");
 			$query =
 				/** @lang MySQL */

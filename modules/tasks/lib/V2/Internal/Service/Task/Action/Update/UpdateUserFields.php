@@ -2,14 +2,13 @@
 
 declare(strict_types=1);
 
-
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Control\Exception\TaskUpdateException;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
-use Bitrix\Tasks\V2\Internal\Service\Task\Trait\UserFieldTrait;
-use Bitrix\Tasks\Util\UserField\Task;
+use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
 
 class UpdateUserFields
 {
@@ -20,7 +19,11 @@ class UpdateUserFields
 	{
 		if ($this->checkContainsUfKeys($fields))
 		{
-			return $this->getUfManager()->Update(Task::getEntityCode(), $taskId, $fields, $this->config->getUserId());
+			$result = $this->getUfManager()->Update(UserField::TASK, $taskId, $fields, $this->config->getUserId());
+
+			Container::getInstance()->get(CrmItemRepositoryInterface::class)->invalidate($taskId);
+
+			return $result;
 		}
 
 		return false;

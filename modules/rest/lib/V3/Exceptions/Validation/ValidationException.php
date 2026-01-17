@@ -3,6 +3,7 @@
 namespace Bitrix\Rest\V3\Exceptions\Validation;
 
 use Bitrix\Main\Error;
+use Bitrix\Rest\V3\DefaultLanguage;
 use Bitrix\Rest\V3\Exceptions\RestException;
 use Bitrix\Rest\V3\Exceptions\SkipWriteToLogException;
 
@@ -21,23 +22,17 @@ abstract class ValidationException extends RestException implements SkipWriteToL
 		parent::__construct();
 	}
 
-	public function output($localErrorLanguage = null): array
+	public function output($responseLanguage = null): array
 	{
-		$out = parent::output($localErrorLanguage);
+		$out = parent::output($responseLanguage);
 
 		$validationItems = [];
 
 		foreach ($this->errors as $error)
 		{
 			$validationItem = [
-				'message' => $error->getLocalizableMessage()?->localize('en') ?? $error->getMessage(),
+				'message' => $error->getLocalizableMessage()?->localize($responseLanguage ?: DefaultLanguage::get()) ?? $error->getMessage(),
 			];
-
-			if (isset($localErrorLanguage))
-			{
-				$validationItem['localMessage'] = $error->getLocalizableMessage()?->localize($localErrorLanguage)
-					?? $error->getMessage();
-			}
 
 			if (!empty($error->getCode()))
 			{

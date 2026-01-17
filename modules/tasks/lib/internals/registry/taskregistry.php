@@ -167,6 +167,7 @@ class TaskRegistry
 
 		$res = \Bitrix\Tasks\Internals\TaskTable::query()
 			->addSelect('ID')
+			->addSelect('PARENT_ID')
 			->addSelect('TITLE')
 			->addSelect('GROUP_ID')
 			->addSelect('STAGE_ID')

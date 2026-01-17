@@ -1,10 +1,8 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\Filter;
 
-
 use Bitrix\Main\Type as MainType;
-
 
 class DateTime
 {

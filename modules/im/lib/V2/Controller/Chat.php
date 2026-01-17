@@ -17,7 +17,9 @@ use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Chat\OpenChat;
 use Bitrix\Im\V2\Chat\OpenLineChat;
 use Bitrix\Im\V2\Chat\Param\Params;
-use Bitrix\Im\V2\Chat\ExtendedType;
+use Bitrix\Im\V2\Chat\Type;
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
+use Bitrix\Im\V2\Common\FormatConverter;
 use Bitrix\Im\V2\Controller\Filter\DiskQuickAccessGrantor;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Chat\Update\UpdateFields;
@@ -27,7 +29,6 @@ use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckChatAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckFileAccess;
 use Bitrix\Im\V2\Controller\Filter\ExtendPullWatchPrefilter;
-use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Message;
@@ -35,7 +36,7 @@ use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Chat\Update\UpdateService;
 use Bitrix\Im\V2\Result;
-use Bitrix\Intranet\ActionFilter\IntranetUser;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
@@ -240,6 +241,24 @@ class Chat extends BaseController
 		);
 	}
 
+	public function getAutoWiredParameters()
+	{
+		return array_merge(
+			parent::getAutoWiredParameters(),
+			[
+				new ExactParameter(
+					Type::class,
+					'chatType',
+					function($className, string $type) {
+						$type = FormatConverter::normalizeToUpperSnakeCase($type);
+
+						return ServiceLocator::getInstance()->get(TypeRegistry::class)->getByExtendedType($type);
+					}
+				),
+			]
+		);
+	}
+
 	/**
 	 * @restMethod im.v2.Chat.shallowLoad
 	 */
@@ -348,13 +367,25 @@ class Chat extends BaseController
 	}
 
 	/**
+	 * @restMethod im.v2.Chat.readByType
+	 */
+	public function readByTypeAction(CurrentUser $user, Type $chatType): ?array
+	{
+		$readService = new Message\ReadService((int)$user->getId());
+		$readService->readAllByType($chatType);
+
+		return ['result' => true];
+	}
+
+	/**
 	 * @restMethod im.v2.Chat.readAll
 	 */
 	public function readAllAction(CurrentUser $user): ?array
 	{
-		\Bitrix\Im\V2\Chat::readAllChats((int)$user->getId());
+		$readService = new Message\ReadService((int)$user->getId());
+		$readService->readAll();
 
-		return [];
+		return ['result' => true];
 	}
 
 	/**
@@ -364,7 +395,7 @@ class Chat extends BaseController
 	{
 		Recent::unread($chat->getDialogId(), true);
 
-		return [];
+		return ['result' => true];
 	}
 
 	/**
@@ -822,10 +853,7 @@ class Chat extends BaseController
 
 	private function getValidatedEntityType(?string $entityType): ?string
 	{
-		$convertedEntityType = (string)(new Converter(Converter::TO_UPPER))->process($entityType);
-		$extendedType = ExtendedType::tryFrom($convertedEntityType);
-
-		return $extendedType?->isInternal() ? null : $convertedEntityType;
+		return ServiceLocator::getInstance()->get(TypeRegistry::class)->getValidatedEntityType($entityType);
 	}
 	//endregion
 	//endregion

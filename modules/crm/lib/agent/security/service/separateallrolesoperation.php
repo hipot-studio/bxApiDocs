@@ -73,7 +73,6 @@ final class SeparateAllRolesOperation
 			->setSelect(['*', 'PERMISSIONS'])
 			->where('IS_SYSTEM', 'N')
 			->where($nullOrEmpty('GROUP_CODE'))
-			->where($nullOrEmpty('CODE'))
 			->fetchCollection();
 
 		$roleCollection->fillRelations();

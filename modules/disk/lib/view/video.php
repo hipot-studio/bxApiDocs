@@ -104,31 +104,11 @@ class Video extends Base
 			{
 				$sizeType = $params['SIZE_TYPE'];
 			}
-			if(!empty($preview) && !empty($preview['WIDTH']) && !empty($preview['HEIGHT']) && isset($params['WIDTH']) && isset($params['HEIGHT']))
-			{
-				$sizes = $this->calculateSizes($preview, $params);
-				$params['WIDTH'] = $sizes['WIDTH'];
-				$params['HEIGHT'] = $sizes['HEIGHT'];
-			}
-			if(!isset($params['WIDTH']))
-			{
-				$params['WIDTH'] = $this->getJsViewerWidth();
-			}
-			if(!isset($params['HEIGHT']))
-			{
-				$params['HEIGHT'] = $this->getJsViewerHeight();
-			}
 		}
 
-		if ($params['WIDTH'] < 400)
-		{
-			$params['WIDTH'] = 400;
-		}
-
-		if ($params['HEIGHT'] < 130)
-		{
-			$params['HEIGHT'] = 130;
-		}
+		$sizes = $this->getSizes($params['WIDTH'] ?? null, $params['HEIGHT'] ?? null);
+		$params['WIDTH'] = $sizes['WIDTH'];
+		$params['HEIGHT'] = $sizes['HEIGHT'];
 
 		$autostart = 'Y';
 		if(isset($params['AUTOSTART']) && $params['AUTOSTART'] == 'N')
@@ -140,7 +120,7 @@ class Video extends Base
 			$params['PLAYER_ID'] = $params['ID'];
 		}
 		ob_start();
-		if($params['IS_MOBILE_APP'] === true)
+		if (isset($params['IS_MOBILE_APP']) && $params['IS_MOBILE_APP'] === true)
 		{
 			$this->renderForMobileApp($params);
 		}
@@ -149,6 +129,47 @@ class Video extends Base
 			$this->renderForDesktop($params, $autostart, $sizeType);
 		}
 		return ob_get_clean();
+	}
+
+	public function getSizes($maxWidth = null, $maxHeight = null): array
+	{
+		$maxSizes = ['WIDTH' => $maxWidth, 'HEIGHT' => $maxHeight];
+		$preview = $this->getPreviewData();
+
+		if (
+			!empty($preview)
+			&& !empty($preview['WIDTH'])
+			&& !empty($preview['HEIGHT'])
+			&& isset($maxSizes['WIDTH'])
+			&& isset($maxSizes['HEIGHT'])
+		)
+		{
+			$sizes = $this->calculateSizes($preview, $maxSizes);
+			$maxSizes['WIDTH'] = $sizes['WIDTH'];
+			$maxSizes['HEIGHT'] = $sizes['HEIGHT'];
+		}
+
+		if (!isset($maxSizes['WIDTH']))
+		{
+			$maxSizes['WIDTH'] = $this->getJsViewerWidth();
+		}
+
+		if (!isset($maxSizes['HEIGHT']))
+		{
+			$maxSizes['HEIGHT'] = $this->getJsViewerHeight();
+		}
+
+		if ($maxSizes['WIDTH'] < 400)
+		{
+			$maxSizes['WIDTH'] = 400;
+		}
+
+		if ($maxSizes['HEIGHT'] < 130)
+		{
+			$maxSizes['HEIGHT'] = 130;
+		}
+
+		return $maxSizes;
 	}
 
 	/**
@@ -403,6 +424,19 @@ class Video extends Base
 			$params['TYPE'] = $mimeTypes[$this->getExtension()];
 		}
 		return $params;
+	}
+
+	public function getSources(array $paths): array
+	{
+		$sources = [];
+
+		$paths = $this->normalizePaths(['PATH' => $paths]);
+		if (!empty($paths['TRACKS']))
+		{
+			$sources = $paths['TRACKS'];
+		}
+
+		return $sources;
 	}
 
 	/**

@@ -66,4 +66,8 @@ final class MyCompanyService
 		return null;
 	}
 
+	public function getCompanyName(int $companyId): ?string
+	{
+		return MyCompany::getById($companyId)?->name;
+	}
 }

@@ -27,9 +27,7 @@ class CompleteTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new CompleteTaskHandler($statusService);
+		$handler = Container::getInstance()->get(CompleteTaskHandler::class);
 
 		try
 		{

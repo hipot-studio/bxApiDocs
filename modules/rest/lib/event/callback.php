@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Rest\Event;
 
+use Bitrix\Main;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\EventTable;
 use Bitrix\Rest\Tools\Diagnostics\Event;
@@ -88,37 +89,42 @@ class Callback
 			}
 		}
 
-		if(array_key_exists('EVENT_REST', $event))
+		if (array_key_exists('EVENT_REST', $event))
 		{
-			$filter = [
-				'=EVENT_NAME' => mb_strtoupper($event['EVENT_REST']['EVENT']),
-			];
+			$query = EventTable::query()
+				->setSelect([
+					'ID',
+					'APP_ID',
+					'EVENT_NAME',
+					'EVENT_HANDLER',
+					'USER_ID',
+					'APPLICATION_TOKEN',
+					'CONNECTOR_ID',
+					'APP_CODE' => 'REST_APP.CLIENT_ID',
+					'APP_ACTIVE' => 'REST_APP.ACTIVE',
+					'APP_INSTALLED' => 'REST_APP.INSTALLED',
+				])
+				->where('EVENT_NAME', mb_strtoupper($event['EVENT_REST']['EVENT']))
+				->where(
+					(Main\ORM\Query\Query::filter()
+						->logic('or')
+						->where(
+							Main\ORM\Query\Query::filter()
+								->where('REST_APP.ACTIVE', '=', AppTable::ACTIVE)
+								->where('REST_APP.INSTALLED', '=', AppTable::INSTALLED)
+						)
+						->whereNull('REST_APP.CLIENT_ID')
+					)
+				)
+			;
 			if ($appHoldExceptId > 0)
 			{
-				$filter['=APP_ID'] = $appHoldExceptId;
+				$query->where('APP_ID', '=', $appHoldExceptId);
 			}
-
-			$dbRes = EventTable::getList(
-				[
-					'filter' => $filter,
-					'select' => [
-						'ID',
-						'APP_ID',
-						'EVENT_NAME',
-						'EVENT_HANDLER',
-						'USER_ID',
-						'APPLICATION_TOKEN',
-						'CONNECTOR_ID',
-						'APP_CODE' => 'REST_APP.CLIENT_ID',
-						'APP_ACTIVE' => 'REST_APP.ACTIVE',
-						'APP_INSTALLED' => 'REST_APP.INSTALLED',
-					],
-				]
-			);
 
 			$dataProcessed = !is_array($event['EVENT_REST']['HANDLER']) || !is_callable($event['EVENT_REST']['HANDLER']);
 			$call = array();
-			while ($handler = $dbRes->fetch())
+			foreach ($query->fetchAll() as $handler)
 			{
 				$handlerFound = true;
 
@@ -139,29 +145,6 @@ class Callback
 
 				if (!empty($handler['APP_CODE']))
 				{
-					if (
-						$handler['APP_ACTIVE'] !== AppTable::ACTIVE
-						|| $handler['APP_INSTALLED'] !== AppTable::INSTALLED
-					)
-					{
-						LoggerManager::getInstance()->getLogger()?->info(
-							"\n{delimiter}\n"
-							. "{date} - {host}\n{delimiter}\n"
-							. "Event {eventName} skipped because inactive app: \n"
-							. "{handler}", [
-							'RESPONSE_DATA' => $arguments,
-							'SCOPE' => $event['MODULE_ID'] ?? null,
-							'METHOD' => $event['EVENT'] ?? null,
-							'CLIENT_ID' => $handler['APP_CODE'],
-							'EVENT_ID' => $handler['ID'] ?? null,
-							'MESSAGE' => Event\LogType::SKIP_BY_APP_INACTIVE->value,
-							'eventName' => $event['EVENT'] ?? null,
-							'handler' => $handler,
-						]);
-
-						continue;
-					}
-
 					$appStatus = AppTable::getAppStatusInfo($handler['APP_CODE'], '');
 					if ($appStatus['PAYMENT_EXPIRED'] === 'Y')
 					{

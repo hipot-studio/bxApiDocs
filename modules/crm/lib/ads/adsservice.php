@@ -135,7 +135,7 @@ abstract class AdsService
 
 		$service = static::getService();
 		$types = $service->getTypes();
-		if (!Loader::includeModule('bitrix24') || in_array(\CBitrix24::getPortalZone(), ['ru', 'kz', 'by']))
+		if (!Loader::includeModule('bitrix24') || in_array(\CBitrix24::getPortalZone(), ['ru', 'kz', 'by', 'uz']))
 		{
 			return $types;
 		}

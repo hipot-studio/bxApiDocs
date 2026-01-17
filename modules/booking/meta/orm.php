@@ -159,6 +159,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection filter(callable $callback)
 	 */
 	class EO_ResourceLinkedEntity_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceLinkedEntityTable */
@@ -187,6 +189,172 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection wakeUpCollection($rows)
 	 */
 	class EO_ResourceLinkedEntity_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Booking\Internals\Model\BookingSkuTable:booking/lib/Internals/Model/BookingSkuTable.php */
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * EO_BookingSku
+	 * @see \Bitrix\Booking\Internals\Model\BookingSkuTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getBookingId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku setBookingId(\int|\Bitrix\Main\DB\SqlExpression $bookingId)
+	 * @method bool hasBookingId()
+	 * @method bool isBookingIdFilled()
+	 * @method bool isBookingIdChanged()
+	 * @method \int remindActualBookingId()
+	 * @method \int requireBookingId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku resetBookingId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku unsetBookingId()
+	 * @method \int fillBookingId()
+	 * @method \int getSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku setSkuId(\int|\Bitrix\Main\DB\SqlExpression $skuId)
+	 * @method bool hasSkuId()
+	 * @method bool isSkuIdFilled()
+	 * @method bool isSkuIdChanged()
+	 * @method \int remindActualSkuId()
+	 * @method \int requireSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku resetSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku unsetSkuId()
+	 * @method \int fillSkuId()
+	 * @method null|\int getProductRowId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku setProductRowId(null|\int|\Bitrix\Main\DB\SqlExpression $productRowId)
+	 * @method bool hasProductRowId()
+	 * @method bool isProductRowIdFilled()
+	 * @method bool isProductRowIdChanged()
+	 * @method null|\int remindActualProductRowId()
+	 * @method null|\int requireProductRowId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku resetProductRowId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku unsetProductRowId()
+	 * @method null|\int fillProductRowId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking getBooking()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking remindActualBooking()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking requireBooking()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku setBooking(\Bitrix\Booking\Internals\Model\EO_Booking $object)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku resetBooking()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku unsetBooking()
+	 * @method bool hasBooking()
+	 * @method bool isBookingFilled()
+	 * @method bool isBookingChanged()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking fillBooking()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku set($fieldName, $value)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku reset($fieldName)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Booking\Internals\Model\EO_BookingSku wakeUp($data)
+	 */
+	class EO_BookingSku {
+		/* @var \Bitrix\Booking\Internals\Model\BookingSkuTable */
+		static public $dataClass = '\Bitrix\Booking\Internals\Model\BookingSkuTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * EO_BookingSku_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getBookingIdList()
+	 * @method \int[] fillBookingId()
+	 * @method \int[] getSkuIdList()
+	 * @method \int[] fillSkuId()
+	 * @method null|\int[] getProductRowIdList()
+	 * @method null|\int[] fillProductRowId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking[] getBookingList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection getBookingCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking_Collection fillBooking()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Booking\Internals\Model\EO_BookingSku $object)
+	 * @method bool has(\Bitrix\Booking\Internals\Model\EO_BookingSku $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku getByPrimary($primary)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku[] getAll()
+	 * @method bool remove(\Bitrix\Booking\Internals\Model\EO_BookingSku $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection merge(?\Bitrix\Booking\Internals\Model\EO_BookingSku_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection filter(callable $callback)
+	 */
+	class EO_BookingSku_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Booking\Internals\Model\BookingSkuTable */
+		static public $dataClass = '\Bitrix\Booking\Internals\Model\BookingSkuTable';
+	}
+}
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_BookingSku_Result exec()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku fetchObject()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection fetchCollection()
+	 */
+	class EO_BookingSku_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku fetchObject()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection fetchCollection()
+	 */
+	class EO_BookingSku_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku createObject($setDefaultValues = true)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection createCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku wakeUpObject($row)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection wakeUpCollection($rows)
+	 */
+	class EO_BookingSku_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Booking\Internals\Model\OptionTable:booking/lib/Internals/Model/OptionTable.php */
 namespace Bitrix\Booking\Internals\Model {
@@ -310,6 +478,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Option_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Option_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Option|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Option_Collection filter(callable $callback)
 	 */
 	class EO_Option_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\OptionTable */
@@ -474,6 +644,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Favorites_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Favorites_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Favorites|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Favorites_Collection filter(callable $callback)
 	 */
 	class EO_Favorites_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\FavoritesTable */
@@ -651,6 +823,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingResource_Collection merge(?\Bitrix\Booking\Internals\Model\EO_BookingResource_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingResource|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingResource_Collection filter(callable $callback)
 	 */
 	class EO_BookingResource_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\BookingResourceTable */
@@ -814,6 +988,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Scorer_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Scorer_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Scorer|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Scorer_Collection filter(callable $callback)
 	 */
 	class EO_Scorer_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ScorerTable */
@@ -1037,6 +1213,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingClient_Collection merge(?\Bitrix\Booking\Internals\Model\EO_BookingClient_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingClient|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingClient_Collection filter(callable $callback)
 	 */
 	class EO_BookingClient_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\BookingClientTable */
@@ -1176,6 +1354,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ClientType_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ClientType_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ClientType|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ClientType_Collection filter(callable $callback)
 	 */
 	class EO_ClientType_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ClientTypeTable */
@@ -1354,6 +1534,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceType_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceType_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceType|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceType_Collection filter(callable $callback)
 	 */
 	class EO_ResourceType_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceTypeTable */
@@ -1541,6 +1723,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Journal_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Journal_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Journal|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Journal_Collection filter(callable $callback)
 	 */
 	class EO_Journal_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\JournalTable */
@@ -1664,6 +1848,16 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData resetDeletedAt()
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData unsetDeletedAt()
 	 * @method \Bitrix\Main\Type\DateTime fillDeletedAt()
+	 * @method null|\int getAvatarId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData setAvatarId(null|\int|\Bitrix\Main\DB\SqlExpression $avatarId)
+	 * @method bool hasAvatarId()
+	 * @method bool isAvatarIdFilled()
+	 * @method bool isAvatarIdChanged()
+	 * @method null|\int remindActualAvatarId()
+	 * @method null|\int requireAvatarId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData resetAvatarId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData unsetAvatarId()
+	 * @method null|\int fillAvatarId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1724,6 +1918,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \boolean[] fillIsDeleted()
 	 * @method \Bitrix\Main\Type\DateTime[] getDeletedAtList()
 	 * @method \Bitrix\Main\Type\DateTime[] fillDeletedAt()
+	 * @method null|\int[] getAvatarIdList()
+	 * @method null|\int[] fillAvatarId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1752,6 +1948,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceData_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceData_Collection filter(callable $callback)
 	 */
 	class EO_ResourceData_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceDataTable */
@@ -1877,6 +2075,28 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method void removeAllEntities()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Resource resetEntities()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Resource unsetEntities()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection getSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection requireSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection fillSkus()
+	 * @method bool hasSkus()
+	 * @method bool isSkusFilled()
+	 * @method bool isSkusChanged()
+	 * @method void addToSkus(\Bitrix\Booking\Internals\Model\EO_ResourceSku $resourceSku)
+	 * @method void removeFromSkus(\Bitrix\Booking\Internals\Model\EO_ResourceSku $resourceSku)
+	 * @method void removeAllSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource resetSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource unsetSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection getSkusYandex()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection requireSkusYandex()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection fillSkusYandex()
+	 * @method bool hasSkusYandex()
+	 * @method bool isSkusYandexFilled()
+	 * @method bool isSkusYandexChanged()
+	 * @method void addToSkusYandex(\Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex $resourceSkuYandex)
+	 * @method void removeFromSkusYandex(\Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex $resourceSkuYandex)
+	 * @method void removeAllSkusYandex()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource resetSkusYandex()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource unsetSkusYandex()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1942,6 +2162,12 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection[] getEntitiesList()
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection getEntitiesCollection()
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceLinkedEntity_Collection fillEntities()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection[] getSkusList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection getSkusCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection fillSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection[] getSkusYandexList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection getSkusYandexCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection fillSkusYandex()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1970,6 +2196,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Resource_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Resource_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource_Collection filter(callable $callback)
 	 */
 	class EO_Resource_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceTable */
@@ -2157,6 +2385,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_DelayedTask_Collection merge(?\Bitrix\Booking\Internals\Model\EO_DelayedTask_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_DelayedTask|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_DelayedTask_Collection filter(callable $callback)
 	 */
 	class EO_DelayedTask_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\DelayedTaskTable */
@@ -2230,6 +2460,16 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes resetEntityType()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes unsetEntityType()
 	 * @method \string fillEntityType()
+	 * @method \string getNoteType()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes setNoteType(\string|\Bitrix\Main\DB\SqlExpression $noteType)
+	 * @method bool hasNoteType()
+	 * @method bool isNoteTypeFilled()
+	 * @method bool isNoteTypeChanged()
+	 * @method \string remindActualNoteType()
+	 * @method \string requireNoteType()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes resetNoteType()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes unsetNoteType()
+	 * @method \string fillNoteType()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2280,6 +2520,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \string[] fillDescription()
 	 * @method \string[] getEntityTypeList()
 	 * @method \string[] fillEntityType()
+	 * @method \string[] getNoteTypeList()
+	 * @method \string[] fillNoteType()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2308,6 +2550,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Notes_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection filter(callable $callback)
 	 */
 	class EO_Notes_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\NotesTable */
@@ -2336,6 +2580,160 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection wakeUpCollection($rows)
 	 */
 	class EO_Notes_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Booking\Internals\Model\ResourceSkuTable:booking/lib/Internals/Model/ResourceSkuTable.php */
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * EO_ResourceSku
+	 * @see \Bitrix\Booking\Internals\Model\ResourceSkuTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getResourceId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku setResourceId(\int|\Bitrix\Main\DB\SqlExpression $resourceId)
+	 * @method bool hasResourceId()
+	 * @method bool isResourceIdFilled()
+	 * @method bool isResourceIdChanged()
+	 * @method \int remindActualResourceId()
+	 * @method \int requireResourceId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku resetResourceId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku unsetResourceId()
+	 * @method \int fillResourceId()
+	 * @method \int getSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku setSkuId(\int|\Bitrix\Main\DB\SqlExpression $skuId)
+	 * @method bool hasSkuId()
+	 * @method bool isSkuIdFilled()
+	 * @method bool isSkuIdChanged()
+	 * @method \int remindActualSkuId()
+	 * @method \int requireSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku resetSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku unsetSkuId()
+	 * @method \int fillSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource getResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource remindActualResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource requireResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku setResource(\Bitrix\Booking\Internals\Model\EO_Resource $object)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku resetResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku unsetResource()
+	 * @method bool hasResource()
+	 * @method bool isResourceFilled()
+	 * @method bool isResourceChanged()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource fillResource()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku set($fieldName, $value)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku reset($fieldName)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Booking\Internals\Model\EO_ResourceSku wakeUp($data)
+	 */
+	class EO_ResourceSku {
+		/* @var \Bitrix\Booking\Internals\Model\ResourceSkuTable */
+		static public $dataClass = '\Bitrix\Booking\Internals\Model\ResourceSkuTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * EO_ResourceSku_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getResourceIdList()
+	 * @method \int[] fillResourceId()
+	 * @method \int[] getSkuIdList()
+	 * @method \int[] fillSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource[] getResourceList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection getResourceCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource_Collection fillResource()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Booking\Internals\Model\EO_ResourceSku $object)
+	 * @method bool has(\Bitrix\Booking\Internals\Model\EO_ResourceSku $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku getByPrimary($primary)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku[] getAll()
+	 * @method bool remove(\Bitrix\Booking\Internals\Model\EO_ResourceSku $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection filter(callable $callback)
+	 */
+	class EO_ResourceSku_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Booking\Internals\Model\ResourceSkuTable */
+		static public $dataClass = '\Bitrix\Booking\Internals\Model\ResourceSkuTable';
+	}
+}
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ResourceSku_Result exec()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku fetchObject()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection fetchCollection()
+	 */
+	class EO_ResourceSku_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku fetchObject()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection fetchCollection()
+	 */
+	class EO_ResourceSku_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku createObject($setDefaultValues = true)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection createCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku wakeUpObject($row)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSku_Collection wakeUpCollection($rows)
+	 */
+	class EO_ResourceSku_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Booking\Internals\Model\ResourceTypeNotificationSettingsTable:booking/lib/Internals/Model/ResourceTypeNotificationSettingsTable.php */
 namespace Bitrix\Booking\Internals\Model {
@@ -2651,6 +3049,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceTypeNotificationSettings_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceTypeNotificationSettings_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceTypeNotificationSettings|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceTypeNotificationSettings_Collection filter(callable $callback)
 	 */
 	class EO_ResourceTypeNotificationSettings_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceTypeNotificationSettingsTable */
@@ -2851,6 +3251,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSettings_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceSettings_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSettings|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSettings_Collection filter(callable $callback)
 	 */
 	class EO_ResourceSettings_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceSettingsTable */
@@ -3051,6 +3453,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingMessage_Collection merge(?\Bitrix\Booking\Internals\Model\EO_BookingMessage_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingMessage|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingMessage_Collection filter(callable $callback)
 	 */
 	class EO_BookingMessage_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\BookingMessageTable */
@@ -3394,6 +3798,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceNotificationSettings_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceNotificationSettings_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceNotificationSettings|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceNotificationSettings_Collection filter(callable $callback)
 	 */
 	class EO_ResourceNotificationSettings_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\ResourceNotificationSettingsTable */
@@ -3595,6 +4001,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection merge(?\Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection filter(callable $callback)
 	 */
 	class EO_BookingExternalData_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\BookingExternalDataTable */
@@ -3807,6 +4215,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingMessageFailureLog_Collection merge(?\Bitrix\Booking\Internals\Model\EO_BookingMessageFailureLog_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingMessageFailureLog|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingMessageFailureLog_Collection filter(callable $callback)
 	 */
 	class EO_BookingMessageFailureLog_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\BookingMessageFailureLogTable */
@@ -4062,6 +4472,17 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method void removeAllClients()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Booking resetClients()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Booking unsetClients()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection getSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection requireSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection fillSkus()
+	 * @method bool hasSkus()
+	 * @method bool isSkusFilled()
+	 * @method bool isSkusChanged()
+	 * @method void addToSkus(\Bitrix\Booking\Internals\Model\EO_BookingSku $bookingSku)
+	 * @method void removeFromSkus(\Bitrix\Booking\Internals\Model\EO_BookingSku $bookingSku)
+	 * @method void removeAllSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking resetSkus()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking unsetSkus()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection getExternalData()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection requireExternalData()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection fillExternalData()
@@ -4105,6 +4526,16 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method bool isNoteFilled()
 	 * @method bool isNoteChanged()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes fillNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes getClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes remindActualClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes requireClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking setClientNote(\Bitrix\Booking\Internals\Model\EO_Notes $object)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking resetClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking unsetClientNote()
+	 * @method bool hasClientNote()
+	 * @method bool isClientNoteFilled()
+	 * @method bool isClientNoteChanged()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes fillClientNote()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4193,6 +4624,9 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingClient_Collection[] getClientsList()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingClient_Collection getClientsCollection()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingClient_Collection fillClients()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection[] getSkusList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection getSkusCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_BookingSku_Collection fillSkus()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection[] getExternalDataList()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection getExternalDataCollection()
 	 * @method \Bitrix\Booking\Internals\Model\EO_BookingExternalData_Collection fillExternalData()
@@ -4205,6 +4639,9 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes[] getNoteList()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Booking_Collection getNoteCollection()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection fillNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes[] getClientNoteList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking_Collection getClientNoteCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection fillClientNote()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4233,6 +4670,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Booking_Collection merge(?\Bitrix\Booking\Internals\Model\EO_Booking_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_Booking_Collection filter(callable $callback)
 	 */
 	class EO_Booking_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\BookingTable */
@@ -4261,6 +4700,160 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Booking_Collection wakeUpCollection($rows)
 	 */
 	class EO_Booking_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Booking\Internals\Model\ResourceSkuYandexTable:booking/lib/Internals/Model/ResourceSkuYandexTable.php */
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * EO_ResourceSkuYandex
+	 * @see \Bitrix\Booking\Internals\Model\ResourceSkuYandexTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getResourceId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex setResourceId(\int|\Bitrix\Main\DB\SqlExpression $resourceId)
+	 * @method bool hasResourceId()
+	 * @method bool isResourceIdFilled()
+	 * @method bool isResourceIdChanged()
+	 * @method \int remindActualResourceId()
+	 * @method \int requireResourceId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex resetResourceId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex unsetResourceId()
+	 * @method \int fillResourceId()
+	 * @method \int getSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex setSkuId(\int|\Bitrix\Main\DB\SqlExpression $skuId)
+	 * @method bool hasSkuId()
+	 * @method bool isSkuIdFilled()
+	 * @method bool isSkuIdChanged()
+	 * @method \int remindActualSkuId()
+	 * @method \int requireSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex resetSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex unsetSkuId()
+	 * @method \int fillSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource getResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource remindActualResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource requireResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex setResource(\Bitrix\Booking\Internals\Model\EO_Resource $object)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex resetResource()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex unsetResource()
+	 * @method bool hasResource()
+	 * @method bool isResourceFilled()
+	 * @method bool isResourceChanged()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource fillResource()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex set($fieldName, $value)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex reset($fieldName)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex wakeUp($data)
+	 */
+	class EO_ResourceSkuYandex {
+		/* @var \Bitrix\Booking\Internals\Model\ResourceSkuYandexTable */
+		static public $dataClass = '\Bitrix\Booking\Internals\Model\ResourceSkuYandexTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * EO_ResourceSkuYandex_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getResourceIdList()
+	 * @method \int[] fillResourceId()
+	 * @method \int[] getSkuIdList()
+	 * @method \int[] fillSkuId()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource[] getResourceList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection getResourceCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Resource_Collection fillResource()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex $object)
+	 * @method bool has(\Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex getByPrimary($primary)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex[] getAll()
+	 * @method bool remove(\Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection merge(?\Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection filter(callable $callback)
+	 */
+	class EO_ResourceSkuYandex_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Booking\Internals\Model\ResourceSkuYandexTable */
+		static public $dataClass = '\Bitrix\Booking\Internals\Model\ResourceSkuYandexTable';
+	}
+}
+namespace Bitrix\Booking\Internals\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ResourceSkuYandex_Result exec()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex fetchObject()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection fetchCollection()
+	 */
+	class EO_ResourceSkuYandex_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex fetchObject()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection fetchCollection()
+	 */
+	class EO_ResourceSkuYandex_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex createObject($setDefaultValues = true)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection createCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex wakeUpObject($row)
+	 * @method \Bitrix\Booking\Internals\Model\EO_ResourceSkuYandex_Collection wakeUpCollection($rows)
+	 */
+	class EO_ResourceSkuYandex_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Booking\Internals\Model\WaitListItemTable:booking/lib/Internals/Model/WaitListItemTable.php */
 namespace Bitrix\Booking\Internals\Model {
@@ -4348,6 +4941,16 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method bool isNoteFilled()
 	 * @method bool isNoteChanged()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes fillNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes getClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes remindActualClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes requireClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem setClientNote(\Bitrix\Booking\Internals\Model\EO_Notes $object)
+	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem resetClientNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem unsetClientNote()
+	 * @method bool hasClientNote()
+	 * @method bool isClientNoteFilled()
+	 * @method bool isClientNoteChanged()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes fillClientNote()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4409,6 +5012,9 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes[] getNoteList()
 	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem_Collection getNoteCollection()
 	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection fillNote()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes[] getClientNoteList()
+	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem_Collection getClientNoteCollection()
+	 * @method \Bitrix\Booking\Internals\Model\EO_Notes_Collection fillClientNote()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4437,6 +5043,8 @@ namespace Bitrix\Booking\Internals\Model {
 	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem_Collection merge(?\Bitrix\Booking\Internals\Model\EO_WaitListItem_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem|null find(callable $callback)
+	 * @method \Bitrix\Booking\Internals\Model\EO_WaitListItem_Collection filter(callable $callback)
 	 */
 	class EO_WaitListItem_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Booking\Internals\Model\WaitListItemTable */

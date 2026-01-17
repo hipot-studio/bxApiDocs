@@ -1,39 +1,45 @@
 <?php
+declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Chat\ExternalChat;
 
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\RegisterTypeEvent;
+use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Main\EventResult;
 
 class ExternalTypeRegistry
 {
-	private static self $instance;
-
 	/**
 	 * @var array<string, Config>
 	 */
+	private array $configs = [];
+	/**
+	 * @var array<string, Type>
+	 */
 	private array $registry = [];
 
-	private function __construct()
+	public function __construct()
 	{
 		$this->load();
 	}
 
-	public static function getInstance(): ExternalTypeRegistry
-	{
-		self::$instance ??= new self();
-
-		return self::$instance;
-	}
-
-	public function getConfigs(): array
+	/**
+	 * @return Type[]
+	 */
+	public function getTypes(): array
 	{
 		return $this->registry;
 	}
 
-	public function getConfigByType(string $type): ?Config
+	public function getConfigs(): array
 	{
-		return $this->registry[$type] ?? null;
+		return $this->configs;
+	}
+
+	public function getConfigByExtendedType(string $type): ?Config
+	{
+		return $this->configs[$type] ?? null;
 	}
 
 	private function load(): void
@@ -62,7 +68,13 @@ class ExternalTypeRegistry
 				continue;
 			}
 
-			$this->registry[$type] = $config;
+			$this->registerType(new Type(Chat::IM_TYPE_EXTERNAL, $type, $type), $config);
 		}
+	}
+
+	private function registerType(Type $type, Config $config): void
+	{
+		$this->registry[$type->extendedType] = $type;
+		$this->configs[$type->extendedType] = $config;
 	}
 }

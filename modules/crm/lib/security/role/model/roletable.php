@@ -2,12 +2,12 @@
 
 namespace Bitrix\Crm\Security\Role\Model;
 
+use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\StringField;
-use Bitrix\Main\ORM\Event;
-use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
 
 /**
  * Class RoleTable
@@ -127,7 +127,6 @@ class RoleTable extends DataManager
 		}
 
 		$fields = $event->getParameters()['fields'] ?? [];
-		$id = $event->getParameters()['id'] ?? 0;
 		$fields['ID'] = $id['ID'];
 
 		\Bitrix\Crm\Service\Container::getInstance()->getLogger('Permissions')->info(

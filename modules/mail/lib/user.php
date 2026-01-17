@@ -363,16 +363,26 @@ class User
 						$title = $CBXSanitizer->sanitizeHtml($title);
 					}
 
-					\CIMNotify::add(array(
+					$notifyTitleCallback = fn (?string $languageId = null) => Loc::getMessage(
+						'MAIL_USER_MESSAGE_FAILED_TITLE',
+						language: $languageId,
+					);
+
+					$notifyMessageCallback = fn (?string $languageId = null) => Loc::getMessage(
+						'MAIL_USER_MESSAGE_FAILED',
+						["#TITLE#" => $title],
+						$languageId,
+					);
+
+					\CIMNotify::add([
 						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 						"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
 						"NOTIFY_MODULE" => "mail",
 						"NOTIFY_EVENT" => "user_message_failed",
 						"TO_USER_ID" => $messageFields['USER_ID'],
-						"NOTIFY_MESSAGE" => Loc::getMessage("MAIL_USER_MESSAGE_FAILED", array(
-							"#TITLE#" => $title
-						))
-					));
+						"NOTIFY_TITLE" => $notifyTitleCallback,
+						"NOTIFY_MESSAGE" => $notifyMessageCallback,
+					]);
 				}
 				User\MessageTable::delete($messageId);
 				return;

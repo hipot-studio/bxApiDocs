@@ -4,6 +4,7 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\QuickAccess\ScopeTokenService;
 use Bitrix\Disk\Search\Reindex\BaseObjectIndex;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
 use Bitrix\Disk\Search\Reindex\HeadIndex;
@@ -98,6 +99,14 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private $collabService;
 	private bool $isUserCollaber = false;
 	private ?Cookie $readOnlyCollabFolderStateCookie = null;
+	private ScopeTokenService $scopeTokenService;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$this->scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
+	}
 
 	protected function processBeforeAction($actionName)
 	{
@@ -359,7 +368,6 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		if ($this->gridOptions->getViewMode() === FolderListOptions::VIEW_MODE_TILE)
 		{
-			$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
 			$isEnabledObjectLock = Configuration::isEnabledObjectLock();
 			$this->arResult['TILE_ITEMS'] = [];
 			foreach ($this->arResult['GRID']['ROWS'] as $row)
@@ -392,13 +400,13 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 				if ($object instanceof File && TypeFile::isImage($object))
 				{
-					$accessInfo = $scopeTokenService->grantAccessWithScope($object, $this->gridOptions->getGridId());
+					$accessInfo = $this->scopeTokenService->grantAccessWithScope($object, $this->gridOptions->getGridId());
 					$info['image'] = UrlManager::getInstance()->create('disk.api.file.showImage', [
 						'fileId' => $object->getId(),
 						'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
 						'width' => 400,
 						'height' => 400,
-						'_esd' => $accessInfo['encryptedScope'],
+						'_esd' => $accessInfo['encryptedScope'] ?? '',
 					]);
 				}
 				elseif ($object instanceof File && $object->getPreviewId())
@@ -1050,6 +1058,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			else
 			{
 				$sourceUri = new Uri($urlManager->getUrlForDownloadFile($object));
+
+				$accessInfo = $this->scopeTokenService->grantAccessWithScope($object, $this->gridOptions->getGridId());
+
+				$sourceUri->addParams(['_esd' => $accessInfo['encryptedScope'] ?? '']);
+
 				$fileData = [
 					'ID' => $object->getFileId(),
 					'CONTENT_TYPE' => $row['FILE_CONTENT_TYPE'],

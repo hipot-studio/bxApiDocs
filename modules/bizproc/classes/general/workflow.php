@@ -1,10 +1,23 @@
 <?php
 
+use Bitrix\Bizproc;
+use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
+use Bitrix\Main;
 
 /**
-* Workflow instance.
-*/
+ * Workflow instance.
+ *
+ * @method \CBPSchedulerService getSchedulerService()
+ * @method \CBPStateService getStateService()
+ * @method \CBPTrackingService getTrackingService()
+ * @method \CBPTaskService getTaskService()
+ * @method \CBPHistoryService getHistoryService()
+ * @method \CBPDocumentService getDocumentService()
+ * @method Bizproc\Service\Analytics getAnalyticsService()
+ * @method Bizproc\Service\User getUserService()
+ * @method Bizproc\Service\AiDescription getAiDescriptionService()
+ */
 class CBPWorkflow
 {
 	private bool $isNew = false;
@@ -56,6 +69,16 @@ class CBPWorkflow
 	public function getService($name)
 	{
 		return $this->runtime->getService($name);
+	}
+
+	public function __call($name, $arguments)
+	{
+		if (preg_match('|^get([a-z]+)service$|i', $name, $matches))
+		{
+			return $this->getService($matches[1]. 'Service');
+		}
+
+		throw new Main\SystemException("Unknown method `{$name}`");
 	}
 
 	public function getDocumentId()
@@ -222,6 +245,13 @@ class CBPWorkflow
 		$this->run();
 	}
 
+	public function save()
+	{
+		$this->persister->saveWorkflow($this->rootActivity, true);
+		//fix workflow links
+		$this->rootActivity->setWorkflow($this);
+	}
+
 	private function run(): void
 	{
 		try
@@ -229,11 +259,10 @@ class CBPWorkflow
 			$this->setWorkflowStatus(CBPWorkflowStatus::Running);
 			if ($this->isNew)
 			{
+				$this->initializeActivity($this->rootActivity);
 				$this->rootActivity->setReadOnlyData(
 					$this->rootActivity->pullProperties()
 				);
-
-				$this->initializeActivity($this->rootActivity);
 				$this->executeActivity($this->rootActivity);
 			}
 
@@ -255,12 +284,12 @@ class CBPWorkflow
 			$this->setWorkflowStatus(CBPWorkflowStatus::Suspended);
 		}
 
-		$this->persister->saveWorkflow($this->rootActivity, true);
+		$this->save();
 	}
 
 	public function isNew()
 	{
-		return $this->isNew;
+		return $this->isNew || ($this->getWorkflowStatus() === CBPWorkflowStatus::Created);
 	}
 
 	public function abandon(): void
@@ -333,16 +362,18 @@ class CBPWorkflow
 	}
 
 	/**
-	* Returns activity by its name.
-	*
-	* @param mixed $activityName - Activity name.
-	* @return CBPActivity - Returns activity object or null if activity is not found.
-	*/
+	 * Returns activity by its name.
+	 *
+	 * @param mixed $activityName - Activity name.
+	 *
+	 * @return CBPActivity - Returns activity object or null if activity is not found.
+	 * @throws CBPArgumentNullException
+	 */
 	public function getActivityByName($activityName)
 	{
-		if ($activityName == '')
+		if (empty($activityName))
 		{
-			throw new Exception('activityName');
+			throw new CBPArgumentNullException('activityName');
 		}
 
 		$activity = null;
@@ -375,28 +406,36 @@ class CBPWorkflow
 	}
 
 	/**
-	* Plans specified activity for execution.
-	*
-	* @param CBPActivity $activity - Activity object.
-	* @param mixed $eventParameters - Optional parameters.
-	*/
-	public function executeActivity(CBPActivity $activity, array $eventParameters = [])
+	 * Plans specified activity for execution.
+	 *
+	 * @param CBPActivity $activity - Activity object.
+	 * @param mixed $eventParameters - Optional parameters.
+	 *
+	 * @throws CBPInvalidOperationException
+	 */
+	public function executeActivity(CBPActivity $activity, array $eventParameters = []): ExecutionPayload
 	{
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Initialized)
 		{
-			throw new Exception("InvalidExecutionState");
+			throw new CBPInvalidOperationException('InvalidExecutionState');
 		}
 
+		$payload = new ExecutionPayload();
+
 		$activity->setStatus(CBPActivityExecutionStatus::Executing, $eventParameters);
-		$this->addItemToQueue([$activity, CBPActivityExecutorOperationType::Execute]);
+		$this->addItemToQueue([$activity, CBPActivityExecutorOperationType::Execute, $payload]);
+
+		return $payload;
 	}
 
 	/**
-	* Close specified activity.
-	*
-	* @param CBPActivity $activity - Activity object.
-	* @param mixed $arEventParameters - Optional parameters.
-	*/
+	 * Close specified activity.
+	 *
+	 * @param CBPActivity $activity - Activity object.
+	 * @param mixed $arEventParameters - Optional parameters.
+	 *
+	 * @throws CBPInvalidOperationException
+	 */
 	public function closeActivity(CBPActivity $activity, $arEventParameters = [])
 	{
 		switch ($activity->executionStatus)
@@ -417,7 +456,7 @@ class CBPWorkflow
 				return;
 		}
 
-		throw new Exception("InvalidClosingState");
+		throw new CBPInvalidOperationException('InvalidClosingState');
 	}
 
 	/**
@@ -489,31 +528,26 @@ class CBPWorkflow
 
 		try
 		{
-			$this->runQueuedItem($item[0], $item[1], (count($item) > 2 ? $item[2] : null));
+			$this->runQueuedItem($item[0], $item[1], $item[2] ?? null);
 		}
 		catch (Exception $e)
 		{
 			$this->faultActivity($item[0], $e);
-
-			if ($this->getWorkflowStatus() === CBPWorkflowStatus::Terminated)
-			{
-				return false;
-			}
 		}
 
-		return true;
+		return !$this->isFinished();
 	}
 
 	/**
 	 * @throws Exception
 	 */
-	private function runQueuedItem(CBPActivity $activity, $activityOperation, Exception $exception = null): void
+	private function runQueuedItem(CBPActivity $activity, $activityOperation, Exception|ExecutionPayload $payload = null): void
 	{
 		match ($activityOperation)
 		{
-			CBPActivityExecutorOperationType::Execute => $this->runExecuteActivityOperation($activity),
+			CBPActivityExecutorOperationType::Execute => $this->runExecuteActivityOperation($activity, $payload),
 			CBPActivityExecutorOperationType::Cancel => $this->runCancelActivityOperation($activity),
-			CBPActivityExecutorOperationType::HandleFault => $this->runHandleFaultActivityOperation($activity, $exception),
+			CBPActivityExecutorOperationType::HandleFault => $this->runHandleFaultActivityOperation($activity, $payload),
 		};
 	}
 
@@ -522,7 +556,7 @@ class CBPWorkflow
 	 * @return void
 	 * @throws Exception
 	 */
-	private function runExecuteActivityOperation(CBPActivity $activity): void
+	private function runExecuteActivityOperation(CBPActivity $activity, ExecutionPayload $payload = null): void
 	{
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Executing)
 		{
@@ -543,14 +577,25 @@ class CBPWorkflow
 				$activity->getTitle(),
 				''
 			);
-			$newStatus = $activity->execute();
+			$newStatus = $activity->executeWithPayload($payload ?? new ExecutionPayload());
 		}
 
 		if ($newStatus === CBPActivityExecutionStatus::Closed)
 		{
 			$this->closeActivity($activity);
+
+			return;
 		}
-		elseif ($newStatus !== CBPActivityExecutionStatus::Executing)
+
+		if ($newStatus === CBPActivityExecutionStatus::Cancelled)
+		{
+			$activity->setStatus(CBPActivityExecutionStatus::Canceling);
+			$this->closeActivity($activity);
+
+			return;
+		}
+
+		if ($newStatus !== CBPActivityExecutionStatus::Executing)
 		{
 			throw new Exception('InvalidExecutionStatus');
 		}
@@ -634,7 +679,7 @@ class CBPWorkflow
 
 		$this->setWorkflowStatus(CBPWorkflowStatus::Terminated);
 
-		$this->persister->SaveWorkflow($this->rootActivity, true);
+		$this->save();
 
 		/** @var CBPStateService $stateService */
 		$stateService = $this->GetService("StateService");

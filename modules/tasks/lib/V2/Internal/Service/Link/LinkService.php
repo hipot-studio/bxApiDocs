@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Link;
 
+use Bitrix\Tasks\Internals\Routes\RouteDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
@@ -20,6 +21,32 @@ class LinkService
 	)
 	{
 
+	}
+
+	public function getForumComments(int $taskId): string
+	{
+		return str_replace('#task_id#', (string)$taskId, RouteDictionary::PATH_TO_FORUM_COMMENTS);
+	}
+
+	public function getListTask(int $userId = 0, int $groupId = 0): string
+	{
+		$parameters = [
+			'entityType' => 'task',
+		];
+
+		if ($groupId > 0)
+		{
+			$parameters['context'] = 'group';
+			$parameters['ownerId'] = $groupId;
+		}
+		else
+		{
+			$parameters['ownerId'] = $userId;
+		}
+
+		return LinkBuilderFactory::getInstance()
+			->create(...$parameters)
+			?->makeEntitiesListPath();
 	}
 
 	public function getPublic(int $taskId): string

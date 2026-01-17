@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Controller;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
@@ -88,6 +89,7 @@ class Superset extends Controller
 
 		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
 		BIConnector\Access\Install\AccessInstaller::install();
+		\Bitrix\Main\Config\Option::set('biconnector', Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
 		SystemDashboardManager::actualizeSystemDashboards();
 
 		return true;

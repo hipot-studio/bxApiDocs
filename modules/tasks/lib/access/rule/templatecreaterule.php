@@ -1,28 +1,27 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage tasks
- * @copyright 2001-2021 Bitrix
- */
 
 namespace Bitrix\Tasks\Access\Rule;
 
-
+use Bitrix\Main\Access\Rule\AbstractRule;
 use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Tasks\Access\Rule\Traits\GroupTrait;
+use Bitrix\Tasks\Access\TemplateAccessController;
 
-class TemplateCreateRule extends \Bitrix\Main\Access\Rule\AbstractRule
+/**
+ * @property TemplateAccessController $controller
+ */
+class TemplateCreateRule extends AbstractRule
 {
 	use GroupTrait;
 
-	public function execute(AccessibleItem $template = null, $params = null): bool
+	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
-		if (!$template)
+		if (!$item instanceof TemplateModel)
 		{
 			$this->controller->addError(static::class, 'Incorrect template');
+
 			return false;
 		}
 
@@ -33,7 +32,7 @@ class TemplateCreateRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		/** @var null|TemplateModel $newTemplate */
 		$newTemplate = $params;
-		if ($newTemplate === null)
+		if (empty($newTemplate))
 		{
 			return (bool)$this->user->getPermission(PermissionDictionary::TEMPLATE_CREATE);
 		}

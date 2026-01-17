@@ -66,6 +66,11 @@ class StringLib extends BaseLib
 				'func' => 'callUrlencode',
 				'description' => Loc::getMessage('BIZPROC_CALC_FUNCTION_URLENCODE_DESCRIPTION'),
 			],
+			'jsonval' => [
+				'args' => true,
+				'func' => 'callJsonVal',
+				'description' => Loc::getMessage('BIZPROC_CALC_FUNCTION_JSON_VAL_DESCRIPTION'),
+			],
 		];
 	}
 
@@ -248,5 +253,45 @@ class StringLib extends BaseLib
 		}
 
 		return count($result) > 1 ? $result : ($result[0] ?? '');
+	}
+
+	public function callJsonVal(Arguments $args)
+	{
+		$path = $args->getFirstSingle();
+		$json = $args->getSecondSingle();
+
+		if (!is_string($path) || !is_string($json))
+		{
+			return null;
+		}
+
+		try
+		{
+			$data = Main\Web\Json::decode($json);
+		}
+		catch (\Exception $e)
+		{
+			return null;
+		}
+		if (!is_array($data))
+		{
+			return null;
+		}
+		$path = explode('.', $path);
+
+		$value = $data;
+		foreach ($path as $key)
+		{
+			if (is_array($value) && array_key_exists($key, $value))
+			{
+				$value = $value[$key];
+			}
+			else
+			{
+				return null;
+			}
+		}
+
+		return $value;
 	}
 }

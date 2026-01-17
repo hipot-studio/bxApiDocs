@@ -6,13 +6,13 @@ namespace Bitrix\Rest\Internal\Access;
 
 class UserAccessChecker
 {
-	public function __construct(private readonly int $userId)
+	public function __construct(private readonly UserContext $userContext)
 	{
 	}
 
 	public function canAuthorize(): bool
 	{
-		$user = \CUser::GetByID($this->userId)->fetch();
+		$user = $this->userContext->getData();
 
 		if (
 			!empty($user['CONFIRM_CODE'])

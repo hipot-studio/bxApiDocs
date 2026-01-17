@@ -40,6 +40,7 @@ class WaitListItemMapper
 		$this->setClientCollection($waitListItem, $entity);
 		$this->setExternalDataCollection($waitListItem, $entity);
 		$this->setNote($waitListItem, $entity);
+		$this->setClientNote($waitListItem, $entity);
 
 		return $waitListItem;
 	}

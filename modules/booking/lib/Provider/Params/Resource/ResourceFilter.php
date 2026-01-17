@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Provider\Params\Resource;
 
-use Bitrix\Booking\Internals\Model\ResourceLinkedEntityTable;
+use Bitrix\Booking\Internals\Model\ResourceSkuTable;
+use Bitrix\Booking\Internals\Model\ResourceSkuYandexTable;
 use Bitrix\Booking\Provider\Params\Filter;
 use Bitrix\Main\Application;
-use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 
@@ -16,15 +17,10 @@ class ResourceFilter extends Filter
 {
 	private array $filter;
 	private string $initAlias;
-	private Connection $connection;
-
-	public const LINKED_ENTITY_CONDITION_ALL = 'all';
-	public const LINKED_ENTITY_CONDITION_ANY = 'any';
 
 	public function __construct(array $filter = [])
 	{
 		$this->filter = $filter;
-		$this->connection = Application::getInstance()->getConnection();
 	}
 
 	public function prepareQuery(Query $query): void
@@ -104,71 +100,87 @@ class ResourceFilter extends Filter
 			$result->where('DATA.DESCRIPTION', '=', (string)$this->filter['DESCRIPTION']);
 		}
 
-		if (
-			isset($this->filter['LINKED_ENTITY']['TYPE'])
-			&& isset($this->filter['LINKED_ENTITY']['ID'])
-			&& is_array($this->filter['LINKED_ENTITY']['ID'])
-			&& !empty($this->filter['LINKED_ENTITY']['ID'])
-		)
-		{
-			$condition =
-				(
-					isset($this->filter['LINKED_ENTITY']['CONDITION'])
-					&& in_array(
-						$this->filter['LINKED_ENTITY']['CONDITION'],
-						[
-							self::LINKED_ENTITY_CONDITION_ALL,
-							self::LINKED_ENTITY_CONDITION_ANY,
-						],
-						true
-					)
-				)
-					? $this->filter['LINKED_ENTITY']['CONDITION']
-					: self::LINKED_ENTITY_CONDITION_ALL
-			;
-
-			$entityIds = array_unique(array_map('intval', $this->filter['LINKED_ENTITY']['ID']));
-
-			if ($condition === self::LINKED_ENTITY_CONDITION_ALL)
-			{
-				$resourceIds = array_column(
-					Application::getConnection()->query("
-						SELECT RESOURCE_ID
-						FROM " . ResourceLinkedEntityTable::getTableName() . "
-						WHERE
-							ENTITY_TYPE = 'sku'
-						  	AND ENTITY_ID IN (" . implode(', ', $entityIds) . ")
-						GROUP BY RESOURCE_ID
-						HAVING COUNT(1) = " . count($entityIds) . "
-					")->fetchAll(),
-					'RESOURCE_ID'
-				);
-
-				$result->whereIn('ID', empty($resourceIds) ? [0] : $resourceIds);
-			}
-			else
-			{
-				//@todo if/when needed
-			}
-		}
-
-		if (isset($this->filter['HAS_LINKED_ENTITIES_OF_TYPE']))
-		{
-			$result->where(
-				Query::filter()->whereExists(
-					new SqlExpression("
-					SELECT 1
-					FROM " . ResourceLinkedEntityTable::getTableName() . "
-					WHERE
-						RESOURCE_ID = " . $this->initAlias . ".ID
-						AND ENTITY_TYPE = '" . $this->connection->getSqlHelper()->forSql(
-							$this->filter['HAS_LINKED_ENTITIES_OF_TYPE']
-						) . "'
-				")
-				)
-			);
-		}
+		$this->applyServicesFilters($result);
 
 		return $result;
+	}
+
+	private function applyServicesFilters(ConditionTree $result): void
+	{
+		$this->applyWithSkusFilter($result, 'WITH_SKUS', ResourceSkuTable::class);
+		$this->applyHasSkusFilter($result, 'HAS_SKUS', ResourceSkuTable::class);
+
+		$this->applyWithSkusFilter($result, 'WITH_SKUS_YANDEX', ResourceSkuYandexTable::class);
+		$this->applyHasSkusFilter($result, 'HAS_SKUS_YANDEX', ResourceSkuYandexTable::class);
+	}
+
+	/**
+	 * @param ConditionTree $result
+	 * @param string $filterKey
+	 * @param class-string<DataManager> $tableClass
+	 * @return void
+	 */
+	private function applyWithSkusFilter(ConditionTree $result, string $filterKey, string $tableClass): void
+	{
+		if (!isset($this->filter[$filterKey]))
+		{
+			return;
+		}
+
+		$has = (bool)$this->filter[$filterKey];
+
+		$filter = Query::filter()->whereExists(
+			new SqlExpression("
+				SELECT 1
+				FROM " . $tableClass::getTableName() . "
+				WHERE
+					RESOURCE_ID = " . $this->initAlias . ".ID
+			")
+		);
+
+		if ($has)
+		{
+			$result->where($filter);
+		}
+		else
+		{
+			$result->whereNot($filter);
+		}
+	}
+
+	/**
+	 * @param ConditionTree $result
+	 * @param string $filterKey
+	 * @param class-string<DataManager> $tableClass
+	 * @return void
+	 */
+	private function applyHasSkusFilter(ConditionTree $result, string $filterKey, string $tableClass): void
+	{
+		$isFilterSet = (
+			isset($this->filter[$filterKey])
+			&& is_array($this->filter[$filterKey])
+			&& !empty($this->filter[$filterKey])
+		);
+
+		if (!$isFilterSet)
+		{
+			return;
+		}
+
+		$skuIds = array_unique(array_map('intval', $this->filter[$filterKey]));
+
+		$resourceIds = array_column(
+			Application::getConnection()->query("
+				SELECT RESOURCE_ID
+				FROM " . $tableClass::getTableName() . "
+				WHERE
+					SKU_ID IN (" . implode(', ', $skuIds) . ")
+				GROUP BY RESOURCE_ID
+				HAVING COUNT(1) = " . count($skuIds) . "
+			")->fetchAll(),
+			'RESOURCE_ID'
+		);
+
+		$result->whereIn('ID', empty($resourceIds) ? [0] : $resourceIds);
 	}
 }

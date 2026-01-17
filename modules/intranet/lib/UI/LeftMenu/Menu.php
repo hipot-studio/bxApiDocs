@@ -1,11 +1,14 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu;
 
+use Bitrix\Intranet\Integration\Templates\Air\AirTemplate;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Intranet\Portal\FirstPage;
 use Bitrix\Intranet\Site\FirstPage\MainFirstPage;
 use Bitrix\Intranet\UI\LeftMenu\MenuItem;
+use Bitrix\Intranet\UI\LeftMenu\Preset\Manager;
 use Bitrix\Intranet\UI\LeftMenu\Preset\Social;
+use Bitrix\Main\Loader;
 
 class Menu
 {
@@ -74,6 +77,20 @@ class Menu
 				'LINK' => $this->mainPage->getLink(),
 			]));
 		}
+	}
+
+	public static function getDefaultForCurrentUser(): self
+	{
+		$userId = \Bitrix\Intranet\CurrentUser::get()->getId();
+		$menu = new self(self::getDefaultMenuItems(), new User());
+		$isCollaber =
+			Loader::includeModule('extranet')
+			&& \Bitrix\Extranet\Service\ServiceContainer::getInstance()->getCollaberService()->isCollaberById($userId)
+		;
+		$activePreset = Manager::getPreset($isCollaber ? 'collab' : null);
+		$menu->applyPreset($activePreset);
+
+		return $menu;
 	}
 
 	protected function getSiteId()
@@ -308,10 +325,41 @@ class Menu
 		return 's1';
 	}
 
+	private static function getDefaultMenuItems(): array
+	{
+		global $APPLICATION;
+
+		$menuItems = $APPLICATION->includeComponent(
+			'bitrix:menu',
+			'left_vertical',
+			[
+				'ROOT_MENU_TYPE' => (
+				file_exists($_SERVER['DOCUMENT_ROOT'] . SITE_DIR . '.superleft.menu_ext.php')
+					? 'superleft'
+					: 'top'
+				),
+				'MENU_CACHE_TYPE' => 'Y',
+				'MENU_CACHE_TIME' => '604800',
+				'MENU_CACHE_USE_GROUPS' => 'N',
+				'MENU_CACHE_USE_USERS' => 'Y',
+				'CACHE_SELECTED_ITEMS' => 'N',
+				'MENU_CACHE_GET_VARS' => [],
+				'MAX_LEVEL' => '1',
+				'USE_EXT' => 'Y',
+				'DELAY' => 'N',
+				'ALLOW_MULTI_SELECT' => 'N',
+				'ADD_ADMIN_PANEL_BUTTONS' => 'N',
+				'RETURN' => 'Y',
+			],
+			false
+		);
+
+		return is_array($menuItems) ? $menuItems : [];
+	}
+
 	public static function isCollapsed(): bool
 	{
-		$requestUri = \Bitrix\Main\Context::getCurrent()->getRequest()->getRequestUri();
-		$isEmbeddedMessenger = str_starts_with($requestUri, SITE_DIR . 'online/');
+		$isEmbeddedMessenger = AirTemplate::isMessengerEmbedded();
 		$isSocialPreset = Preset\Manager::getPreset()->getCode() === Social::CODE;
 		$defaultValue = $isSocialPreset ? 'N' : 'Y';
 

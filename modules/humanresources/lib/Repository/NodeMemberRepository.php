@@ -3,6 +3,7 @@
 namespace Bitrix\HumanResources\Repository;
 
 use Bitrix\HumanResources\Access\AuthProvider\StructureAuthProvider;
+use Bitrix\HumanResources\Contract\Service\SemaphoreService;
 use Bitrix\HumanResources\Service\EventSenderService;
 use Bitrix\HumanResources\Contract\Repository\RoleRepository;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
@@ -51,6 +52,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	private readonly CacheManager $cacheManager;
 
 	private readonly StructureAuthProvider $structureAuthProvider;
+	private SemaphoreService $locker;
 
 	public function __construct(
 		?RoleRepository $roleRepository = null,
@@ -61,6 +63,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		$this->roleRepository = $roleRepository ?? Container::getRoleRepository();
 		$this->cacheManager = Container::getCacheManager();
 		$this->structureAuthProvider = $structureAuthProvider ?? Container::getStructureAuthProvider();
+		$this->locker = Container::getSemaphoreService();
 	}
 
 	private function convertModelToItem(Model\NodeMember $nodeMember): Item\NodeMember
@@ -214,6 +217,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			$connection->startTransaction();
 			foreach ($nodeMemberCollection as $nodeMember)
 			{
+				$this->locker->lock('hr-OnAfterUserAdd' . $nodeMember->entityId);
 				$this->create($nodeMember);
 			}
 			$connection->commitTransaction();

@@ -13,7 +13,7 @@ namespace Bitrix\Tasks\Integration\SocialServices;
 use Bitrix\Socialservices\Network;
 use Bitrix\Tasks\Util\Error\Collection;
 
-final class User extends \Bitrix\Tasks\Integration
+final class User extends \Bitrix\Tasks\Integration\Integration
 {
 	private static $network = null;
 	private static $networkUsers = array();

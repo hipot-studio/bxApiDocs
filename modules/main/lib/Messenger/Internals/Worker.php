@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Main\Messenger\Internals;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\LoaderException;
@@ -14,6 +15,22 @@ use Bitrix\Main\SystemException;
 
 final class Worker
 {
+	private bool $shuffle;
+
+	public function __construct(?bool $shuffle = null)
+	{
+		if ($shuffle === null)
+		{
+			$config = Configuration::getValue('messenger');
+
+			$this->shuffle = $config['shuffle'] ?? true;
+		}
+		else
+		{
+			$this->shuffle = $shuffle;
+		}
+	}
+
 	/**
 	 * @throws LoaderException
 	 * @throws ConfigurationException
@@ -28,6 +45,11 @@ final class Worker
 		if (!empty($options['queues']))
 		{
 			$queues = array_intersect_key($queues, array_combine($options['queues'], $options['queues']));
+		}
+
+		if ($this->shuffle)
+		{
+			shuffle($queues);
 		}
 
 		foreach ($queues as $queueConfig)

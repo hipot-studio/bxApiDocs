@@ -293,6 +293,7 @@ class Filter
 		$categories = [
 			\CTaskListState::VIEW_TASK_CATEGORY_EXPIRED,
 			\CTaskListState::VIEW_TASK_CATEGORY_NEW_COMMENTS,
+			\CTaskListState::VIEW_TASK_CATEGORY_MENTIONED,
 		];
 
 		foreach ($categories as $category)

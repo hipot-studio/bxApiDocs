@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Main\Page;
 
 class AssetLocation
@@ -9,5 +10,3 @@ class AssetLocation
 	const AFTER_JS = 'AFTER_JS';
 	const BODY_END = 'BODY_END';
 }
-
-?>

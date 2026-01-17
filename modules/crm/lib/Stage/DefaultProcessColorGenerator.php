@@ -7,11 +7,11 @@ use Generator;
 final class DefaultProcessColorGenerator
 {
 	public const START_COLORS = [
-		'#39A8EF',
-		'#2FC6F6',
-		'#55D0E0',
-		'#47E4C2',
-		'#FFA900',
+		'#1F86FF',
+		'#30AFFF',
+		'#00C0D5',
+		'#31C469',
+		'#FAAA08',
 	];
 
 	public const LOOPED_COLORS = [

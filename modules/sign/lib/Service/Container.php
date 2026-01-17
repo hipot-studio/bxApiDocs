@@ -13,6 +13,7 @@ use Bitrix\Sign\Connector;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Callback;
 use Bitrix\Sign\Contract;
+use Bitrix\Sign\Service\B2e\CompanyService;
 use Bitrix\Sign\Service\Providers\ProviderVisibilityService;
 use Bitrix\Sign\Service\Sign\Document\TemplateFolderService;
 use Bitrix\Sign\Service\Sign\Document\TemplateGridService;
@@ -564,5 +565,15 @@ class Container
 	public function getProviderVisibilityService(): ProviderVisibilityService
 	{
 		return static::getService('sign.service.provider.visibility');
+	}
+
+	public function getApiCompanyService(): Api\B2e\CompanyService
+	{
+		return static::getService('sign.service.api.b2e.company');
+	}
+
+	public function getCompanyService(): CompanyService
+	{
+		return static::getService('sign.service.b2e.company');
 	}
 }

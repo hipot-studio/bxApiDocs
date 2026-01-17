@@ -9,6 +9,7 @@ use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Type\NodeEntityType;
@@ -118,7 +119,7 @@ class NodeService implements Contract\Service\NodeService
 
 		if ($targetNode)
 		{
-			$lastSibling = $this->nodeRepository->getChildOf($targetNode)->getLast();
+			$lastSibling = InternalContainer::getNodeRepository()->getChildrenOfNode($targetNode)->getLast();
 		}
 
 		$lastSiblingSort = $lastSibling ? $lastSibling->sort : 0;
@@ -187,6 +188,11 @@ class NodeService implements Contract\Service\NodeService
 			if (!$targetNode)
 			{
 				throw (new UpdateFailedException())->addError(new Error("Parent node with id $node->parentId dont exist"));
+			}
+
+			if ($nodeEntity->type === NodeEntityType::DEPARTMENT && $targetNode->type === NodeEntityType::TEAM)
+			{
+				throw (new UpdateFailedException())->addError(new Error("Team can't be a parent for department"));
 			}
 
 			$isAncestor = $this->nodeRepository->isAncestor($node, $targetNode);

@@ -17,6 +17,12 @@ use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Integration\Disk\Rest\Attachment;
 use Bitrix\Tasks\Integration\Forum\Task\Comment;
 use Bitrix\Tasks\Util\Result;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\Exception\Rest\AddCommentAccessDeniedException;
+use Bitrix\Tasks\V2\Internal\Compatibility\Rest\Task\Chat\AddCommentFacade;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
+use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 
 /**
  * Class CTaskCommentItem
@@ -80,7 +86,71 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 
 		$resultData = $result->getData();
 
-		return (int)$resultData['ID'];
+		return (int)($resultData['ID'] ?? 0);
+	}
+
+	/**
+	 * @throws AddCommentAccessDeniedException
+	 * @throws CTaskAssertException
+	 * @throws ObjectException
+	 * @throws TasksException
+	 */
+	private static function addComment(int $executiveUserId, int $taskId, array $arFields): int
+	{
+		$taskParams = new TaskParams(
+			taskId: $taskId,
+			userId: $executiveUserId,
+			checkTaskAccess: false,
+		);
+
+		$taskProvider = Container::getInstance()->get(TaskProvider::class);
+		$taskV2 = $taskProvider->get($taskParams);
+
+		if (!$taskV2)
+		{
+			throw new AddCommentAccessDeniedException();
+		}
+
+		if (FormV2Feature::isOn('', $taskV2->group?->id))
+		{
+			return self::addCommentInChat($taskParams, $arFields);
+		}
+
+		$task = CTaskItem::getInstance($taskId, $executiveUserId);
+		return self::add($task, $arFields);
+	}
+
+	/**
+	 * @throws AddCommentAccessDeniedException
+	 * @throws TasksException
+	 */
+	private static function addCommentInChat(TaskParams $taskParams, array $fields): int
+	{
+		/** for admin access true in non exists task */
+		$canRead = TaskAccessController::can(
+			$taskParams->userId,
+			ActionDictionary::ACTION_TASK_READ,
+			$taskParams->taskId
+		);
+
+		if (!$canRead)
+		{
+			throw new AddCommentAccessDeniedException();
+		}
+
+		$facade = Container::getInstance()->get(AddCommentFacade::class);
+		$result = $facade->addComment($taskParams, $fields);
+
+		if (!$result->isSuccess())
+		{
+			$errorMessages = $result->getErrorMessages();
+			$errorFlag = TasksException::TE_ACTION_FAILED_TO_BE_PROCESSED
+				| TasksException::TE_FLAG_SERIALIZED_ERRORS_IN_MESSAGE;
+
+			throw new TasksException(serialize($errorMessages), $errorFlag);
+		}
+
+		return $result->getId() ?? 0;
 	}
 
 	/**
@@ -171,7 +241,7 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 		{
 			$taskData = $this->oTaskItem->getData();
 		}
-		catch (TasksException $e)
+		catch (TasksException)
 		{
 			return false;
 		}
@@ -332,11 +402,7 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 		CTaskAssert::assertLaxIntegers($taskId, $itemId);
 		CTaskAssert::assert(CModule::IncludeModule('forum'));
 
-		/** @noinspection PhpDeprecationInspection */
-		$rsData = CForumMessage::GetList(
-				array(),
-			array('ID' => (int) $itemId)
-		);
+		$rsData = CForumMessage::GetList([], ['ID' => (int) $itemId]);
 
 		if (is_object($rsData) && ($arData = $rsData->fetch()))
 			return ($arData);
@@ -410,8 +476,7 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 			if ($methodName === 'add')
 			{
 				[$taskId, $arFields] = $argsParsed;
-				$task = CTaskItem::getInstance($taskId, $executiveUserId);
-				$itemId = self::add($task, $arFields);
+				$itemId = self::addComment((int)$executiveUserId, (int)$taskId, $arFields);
 
 				$returnValue = $itemId;
 			}
@@ -509,7 +574,6 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 					.'not allowed $arHandler[\'EVENT_NAME\']: '
 					.$arHandler['EVENT_NAME']
 				);
-				break;
 		}
 
 		return ($arEventFields);

@@ -25,9 +25,9 @@ Loc::loadMessages(__FILE__);
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Template_Query query()
- * @method static EO_Template_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Template_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Template_Result getById($id)
- * @method static EO_Template_Result getList(array $parameters = array())
+ * @method static EO_Template_Result getList(array $parameters = [])
  * @method static EO_Template_Entity getEntity()
  * @method static \Bitrix\DocumentGenerator\Model\EO_Template createObject($setDefaultValues = true)
  * @method static \Bitrix\DocumentGenerator\Model\EO_Template_Collection createCollection()
@@ -254,7 +254,7 @@ class TemplateTable extends FileModel
 		}
 
 		TemplateProviderTable::deleteByTemplateId($id);
-		TemplateUserTable::delete($id);
+		TemplateUserTable::deleteByTemplateIds([$id]);
 		static::addToStack();
 
 		return parent::onBeforeDelete($event);

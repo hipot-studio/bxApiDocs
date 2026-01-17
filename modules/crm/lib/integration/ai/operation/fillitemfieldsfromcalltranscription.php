@@ -26,7 +26,8 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
-use Bitrix\Crm\Timeline\AI\Call\Controller;
+use Bitrix\Crm\Timeline\AI\Controller;
+use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Localization\Loc;
@@ -74,6 +75,45 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		return in_array($target->getEntityTypeId(), self::SUPPORTED_TARGET_ENTITY_TYPE_IDS, true);
 	}
 
+	protected static function checkPreviousJobs(ItemIdentifier $target, int $parentId): Main\Result
+	{
+		$activity = Container::getInstance()->getActivityBroker()->getById($target->getEntityId());
+		if (!Scenario::isScenarioWithSkipTranscription($activity['PROVIDER_ID']))
+		{
+			return parent::checkPreviousJobs($target, $parentId);
+		}
+
+		$result = new Main\Result();
+
+		$previousJob = self::findDuplicateJob($target, $parentId);
+		if (!$previousJob)
+		{
+			return $result; // new job
+		}
+
+		if ($previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_SUCCESS)
+		{
+			return $result; // success previous job
+		}
+
+		if ($previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_PENDING)
+		{
+			return $result->addError(ErrorCode::getJobAlreadyExistsError()); // previous job in progress
+		}
+
+		if (
+			$previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_ERROR
+			&& $previousJob->requireRetryCount() >= Result::MAX_RETRY_COUNT
+		)
+		{
+			return $result->addError(ErrorCode::getJobMaxRetriesExceededError());
+		}
+
+		$result->setData(['previousJob' => $previousJob]); // update only error jobs
+
+		return $result;
+	}
+
 	protected static function findDuplicateJob(ItemIdentifier $target, int $parentId): ?EO_Queue
 	{
 		if ($parentId <= 0)
@@ -94,7 +134,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		;
 	}
 
-	protected function getAIPayload(): \Bitrix\Main\Result
+	protected function getAIPayload(): Main\Result
 	{
 		return PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
 			->setMarkers([
@@ -353,7 +393,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 			else
 			{
 				AIManager::logger()->critical(
-					'{date}: {class}: Got error while trying to update operation status after item fields update for activity{activity}.'
+					'{date}: {class}: Got error while trying to update operation status after item fields update for activity: {activity}.'
 					. ' Target {target}, errors {errors}, result {result}' . PHP_EOL,
 					[
 						'class' => self::class,
@@ -440,7 +480,9 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 			Controller::getInstance()->onFinishFillingEntityFields(
 				$result->getTarget(),
 				$activityId,
-				[],
+				[
+					'JOB_ID' => $result->getJobId(),
+				],
 				$result->getUserId(),
 			);
 

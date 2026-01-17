@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Common\RegistryEntryImplementation;
 use Bitrix\Im\V2\Message\Reaction\ReactionItem;
 use Bitrix\Im\V2\RegistryEntry;
 use Bitrix\Im\V2\Rest\RestConvertible;
+use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Main\Validation\Validator\InArrayValidator;
@@ -160,13 +161,14 @@ final class AnchorItem implements RegistryEntry, ActiveRecord, RestConvertible
 
 	public function toRestFormat(array $option = []): ?array
 	{
+		$converter = new Converter(Converter::TO_CAMEL | Converter::LC_FIRST);
+
 		return [
 			'chatId' => $this->getChatId(),
 			'messageId' => $this->getMessageId(),
-			'userId' => $this->getUserId(),
 			'fromUserId' => $this->getFromUserId(),
-			'type' => $this->getType(),
-			'subType' => $this->getSubType(),
+			'type' => $converter->process($this->getType()),
+			'subType' => $converter->process($this->getSubType()),
 			'parentChatId' => $this->getParentChatId(),
 			'parentMessageId' => $this->getParentMessageId(),
 		];
@@ -242,7 +244,7 @@ final class AnchorItem implements RegistryEntry, ActiveRecord, RestConvertible
 
 		if ($this->type === self::REACTION)
 		{
-			return (new InArrayValidator(ReactionItem::ALLOWED_REACTION))->validate($this->subType);
+			return (new InArrayValidator(ReactionItem::getAllowedReactions()))->validate($this->subType);
 		}
 
 		return $result;

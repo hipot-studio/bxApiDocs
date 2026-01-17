@@ -13,33 +13,29 @@ use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\StringHelper;
-use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\Web\Json;
-use Bitrix\Rest\V3\Attributes\JsonArray;
-use Bitrix\Rest\V3\Attributes\OrmEntity;
+use Bitrix\Rest\V3\Attribute\OrmEntity;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
-use Bitrix\Rest\V3\Dto\PropertyHelper;
-use Bitrix\Rest\V3\Exceptions\ClassRequireAttributeException;
-use Bitrix\Rest\V3\Exceptions\Internal\OrmSaveException;
-use Bitrix\Rest\V3\Exceptions\InvalidPaginationException;
-use Bitrix\Rest\V3\Exceptions\InvalidSelectException;
-use Bitrix\Rest\V3\Exceptions\TooManyAttributesException;
-use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
+use Bitrix\Rest\V3\Exception\ClassRequireAttributeException;
+use Bitrix\Rest\V3\Exception\Internal\OrmSaveException;
+use Bitrix\Rest\V3\Exception\InvalidPaginationException;
+use Bitrix\Rest\V3\Exception\InvalidSelectException;
+use Bitrix\Rest\V3\Exception\TooManyAttributesException;
+use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Interaction\Request\ListRequest;
-use Bitrix\Rest\V3\Structures\Aggregation\AggregationResultStructure;
-use Bitrix\Rest\V3\Structures\Aggregation\AggregationSelectStructure;
-use Bitrix\Rest\V3\Structures\Aggregation\AggregationType;
-use Bitrix\Rest\V3\Structures\Aggregation\ResultItem;
-use Bitrix\Rest\V3\Structures\Filtering\Condition;
-use Bitrix\Rest\V3\Structures\Filtering\Expressions\ColumnExpression;
-use Bitrix\Rest\V3\Structures\Filtering\Expressions\Expression;
-use Bitrix\Rest\V3\Structures\Filtering\Expressions\LengthExpression;
-use Bitrix\Rest\V3\Structures\Filtering\FilterStructure;
-use Bitrix\Rest\V3\Structures\Ordering\OrderItem;
-use Bitrix\Rest\V3\Structures\Ordering\OrderStructure;
-use Bitrix\Rest\V3\Structures\PaginationStructure;
-use Bitrix\Rest\V3\Structures\SelectStructure;
+use Bitrix\Rest\V3\Structure\Aggregation\AggregationResultStructure;
+use Bitrix\Rest\V3\Structure\Aggregation\AggregationSelectStructure;
+use Bitrix\Rest\V3\Structure\Aggregation\AggregationType;
+use Bitrix\Rest\V3\Structure\Aggregation\ResultItem;
+use Bitrix\Rest\V3\Structure\Filtering\Condition;
+use Bitrix\Rest\V3\Structure\Filtering\Expressions\ColumnExpression;
+use Bitrix\Rest\V3\Structure\Filtering\Expressions\Expression;
+use Bitrix\Rest\V3\Structure\Filtering\Expressions\LengthExpression;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Ordering\OrderItem;
+use Bitrix\Rest\V3\Structure\Ordering\OrderStructure;
+use Bitrix\Rest\V3\Structure\PaginationStructure;
+use Bitrix\Rest\V3\Structure\SelectStructure;
 use Exception;
 use ReflectionClass;
 use ReflectionException;
@@ -55,7 +51,8 @@ class OrmRepository extends Repository
 	public function __construct(protected string $dtoClass)
 	{
 		$attributes = (new ReflectionClass($this->dtoClass))
-			->getAttributes(OrmEntity::class);
+			->getAttributes(OrmEntity::class)
+		;
 
 		$attributesCount = count($attributes);
 
@@ -63,7 +60,7 @@ class OrmRepository extends Repository
 		{
 			throw new TooManyAttributesException($this->dtoClass, OrmEntity::class, 1);
 		}
-		else if ($attributesCount < 1)
+		if ($attributesCount < 1)
 		{
 			throw new ClassRequireAttributeException($this->dtoClass, OrmEntity::class);
 		}
@@ -197,7 +194,8 @@ class OrmRepository extends Repository
 	 */
 	protected function mapObjectToDto(EntityObject $object, string $dtoClass): Dto
 	{
-		$dto = new $dtoClass();
+		/** @var Dto $dto */
+		$dto = $dtoClass::create();
 
 		foreach ($object->collectValues() as $key => $value)
 		{
@@ -212,10 +210,7 @@ class OrmRepository extends Repository
 				continue;
 			}
 			$dtoProperty = self::mapOrmFieldToDtoProperty($key);
-			if (property_exists($dto, $dtoProperty))
-			{
-				$dto->{$dtoProperty} = $value;
-			}
+			$dto->{$dtoProperty} = $value;
 		}
 
 		return $dto;
@@ -500,7 +495,7 @@ class OrmRepository extends Repository
 		{
 			if (isset($row['ID']))
 			{
-				$ids[] = (int) $row['ID'];
+				$ids[] = (int)$row['ID'];
 			}
 		}
 

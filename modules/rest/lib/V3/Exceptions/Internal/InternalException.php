@@ -21,6 +21,6 @@ class InternalException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_INTERNAL_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_INTERNALEXCEPTION';
 	}
 }

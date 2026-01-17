@@ -2,28 +2,25 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\SystemException;
-use Bitrix\Rest\V3\Attributes\OrmEntity;
 use Bitrix\Rest\V3\Dto\Dto;
-use Bitrix\Rest\V3\Exceptions\InvalidJsonException;
-use Bitrix\Rest\V3\Exceptions\Validation\RequiredFieldInRequestException;
+use Bitrix\Rest\V3\Exception\InvalidJsonException;
+use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
+use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Relation;
-use Bitrix\Rest\V3\Structures\Structure;
+use Bitrix\Rest\V3\Structure\Structure;
 use ReflectionClass;
 use ReflectionNamedType;
 
 abstract class Request
 {
-	protected ?string $ormEntityClass = null;
-
 	/**
 	 * @var Relation[]
 	 */
 	protected array $relations = [];
 
-	public function __construct(protected string $dtoClass)
+	public function __construct(protected string $dtoClass, protected array $options = [])
 	{
 
 	}
@@ -52,17 +49,21 @@ abstract class Request
 	 * @throws SystemException
 	 * @see Dto
 	 */
-	public static function create(HttpRequest $httpRequest, string $dtoClass): self
+	public static function create(HttpRequest $httpRequest, string $dtoClass, array $options = []): self
 	{
-		$request = new static($dtoClass);
+		$request = new static($dtoClass, $options);
+
+		/** @var Dto $dto */
+		$dto = $dtoClass::create();
+		Structure::addDto($dto);
 
 		// input data
 		try
 		{
 			$httpRequest->decodeJsonStrict();
-			$input = $httpRequest->getJsonList();
+			$input = $httpRequest->getJsonList()->getValues();
 		}
-		catch (ArgumentException)
+		catch (SystemException)
 		{
 			throw new InvalidJsonException();
 		}
@@ -90,8 +91,14 @@ abstract class Request
 					// field not found, but it is required
 					throw new RequiredFieldInRequestException($propertyName);
 				}
-
-				continue;
+				if ($propertyName === 'select' && $request->getOptions()['scope'] && !empty($request->getOptions()['scope']->fields))
+				{
+					$input[$propertyName] = $request->getOptions()['scope']->fields;
+				}
+				else
+				{
+					continue;
+				}
 			}
 
 			if (is_subclass_of($propertyType, Structure::class))
@@ -104,7 +111,15 @@ abstract class Request
 				$value = $input[$propertyName];
 			}
 
-			$request->{$propertyName} = $value;
+			try
+			{
+				$request->{$propertyName} = $value;
+			}
+			catch (\TypeError $exception)
+			{
+				throw new InvalidRequestFieldTypeException($propertyName, $propertyType);
+			}
+
 		}
 
 		return $request;
@@ -115,8 +130,8 @@ abstract class Request
 		return $this->dtoClass;
 	}
 
-	public function getOrmEntityClass(): ?string
+	public function getOptions(): array
 	{
-		return $this->ormEntityClass;
+		return $this->options;
 	}
 }

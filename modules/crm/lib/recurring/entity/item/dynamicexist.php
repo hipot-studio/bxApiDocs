@@ -2,8 +2,8 @@
 
 namespace Bitrix\Crm\Recurring\Entity\Item;
 
-use Bitrix\Crm\Automation\Starter;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Model\Dynamic\RecurringTable;
 use Bitrix\Crm\Recurring\Calculator;
 use Bitrix\Crm\Recurring\Entity;
@@ -18,10 +18,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\Result;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
-use CCrmBizProcEventType;
-use CCrmBizProcHelper;
 use CCrmOwnerType;
 use Exception;
 
@@ -87,24 +84,17 @@ class DynamicExist extends DynamicEntity
 		$factory = $this->getControllerInstance();
 		$this->prepareTemplateItemBeforeExpose($factory);
 
-		try
-		{
-			$exposeResult = $this->copyTemplateItem($factory);
+		$exposeResult = $this->copyTemplateItem($factory);
 
-			if ($exposeResult->isSuccess())
-			{
-				$item = $exposeResult->getCopy();
-				$result->setId($item->getId());
-				$result->setData(['item' => $item]);
-			}
-			else
-			{
-				$result->addErrors($exposeResult->getErrors());
-			}
-		}
-		catch (SystemException $exception)
+		if ($exposeResult->isSuccess())
 		{
-			$result->addError(new Error($exception->getMessage(), $exception->getCode()));
+			$item = $exposeResult->getCopy();
+			$result->setId($item->getId());
+			$result->setData(['item' => $item]);
+		}
+		else
+		{
+			$result->addErrors($exposeResult->getErrors());
 		}
 
 		return $result;
@@ -198,6 +188,9 @@ class DynamicExist extends DynamicEntity
 			'LIMIT_REPEAT',
 			'LIMIT_DATE',
 			'START_DATE',
+			'IS_SEND_EMAIL',
+			'EMAIL_IDS',
+			'CATEGORY_ID',
 		];
 	}
 
@@ -257,18 +250,6 @@ class DynamicExist extends DynamicEntity
 
 	private function onAfterExpose(int $newId, Item $item): void
 	{
-		$entityTypeId = $this->entityTypeId;
-
-		CCrmBizProcHelper::AutoStartWorkflows(
-			$entityTypeId,
-			$newId,
-			CCrmBizProcEventType::Create,
-			$errors,
-		);
-
-		$starter = new Starter($entityTypeId, $newId);
-		$starter->runOnAdd();
-
 		$eventParams = [
 			'ID' => $this->id,
 			'RECURRING_ID' => $this->templateId,
@@ -280,7 +261,7 @@ class DynamicExist extends DynamicEntity
 		$fields = $item->getCompatibleData();
 		$fields['RECURRING_ID'] = $this->templateId;
 
-		DynamicRecurringController::getInstance($entityTypeId)->onExpose(
+		DynamicRecurringController::getInstance($this->entityTypeId)->onExpose(
 			$newId,
 			['FIELDS' => $fields],
 		);
@@ -408,6 +389,8 @@ class DynamicExist extends DynamicEntity
 			$result->addError(new Error($e->getMessage()));
 		}
 
+		Entity\DynamicRecurringDocumentTable::deleteByItemIdentifier(new ItemIdentifier($this->entityTypeId, $this->id));
+
 		if ($result->isSuccess())
 		{
 			(new Event(
@@ -418,5 +401,49 @@ class DynamicExist extends DynamicEntity
 		}
 
 		return $result;
+	}
+
+	public function getPreparedEmailData(): array
+	{
+		$result = [];
+		if ($this->canSendEmail())
+		{
+			$emailTemplateId = (int)$this->getCalculateParameter('EMAIL_TEMPLATE_ID');
+			$emailDocumentId = (int)$this->getCalculateParameter('EMAIL_DOCUMENT_ID');
+
+			$result = [
+				'EMAIL_IDS' => $this->recurringFields['EMAIL_IDS'],
+				'EMAIL_TEMPLATE_ID' => $emailTemplateId > 0 ? $emailTemplateId : null,
+				'EMAIL_DOCUMENT_ID' => $emailDocumentId > 0 ? $emailDocumentId : null,
+			];
+		}
+
+		return $result;
+	}
+
+	public function canSendEmail(): bool
+	{
+		return $this->recurringFields['IS_SEND_EMAIL'] === 'Y' && !empty($this->recurringFields['EMAIL_IDS']);
+	}
+
+	public static function loadByItemIdentifier(ItemIdentifier $itemIdentifier): ?self
+	{
+		$fieldsRaw = RecurringTable::getList([
+			'filter' => [
+				'=ENTITY_TYPE_ID' => $itemIdentifier->getEntityTypeId(),
+				'=ITEM_ID' => $itemIdentifier->getEntityId(),
+			],
+			'limit' => 1
+		]);
+
+		if ($fields = $fieldsRaw->fetch())
+		{
+			$dynamicObject = new self($fields['ID']);
+			$dynamicObject->initFields($fields);
+
+			return $dynamicObject;
+		}
+
+		return null;
 	}
 }

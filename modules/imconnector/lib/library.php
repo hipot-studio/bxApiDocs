@@ -38,9 +38,11 @@ class Library
 		ID_NOTIFICATIONS_CONNECTOR = 'notifications',
 		ID_EDNA_WHATSAPP_CONNECTOR = 'whatsappbyedna',
 		ID_WHATSAPPBYTWILIO_CONNECTOR = 'whatsappbytwilio',
+		ID_WAZZUP_CONNECTOR = 'wazzup',
 		ID_VKGROUP_CONNECTOR = 'vkgroup',
 		ID_OK_CONNECTOR = 'ok',
 		ID_AVITO_CONNECTOR = 'avito',
+		ID_MAX_CONNECTOR = 'max',
 		ID_TELEGRAMBOT_CONNECTOR = 'telegrambot';
 
 	// Rest
@@ -188,6 +190,16 @@ class Library
 		],
 	];
 
+	public const TIME_LIMIT_CHANNELS_RESTRICTIONS = [
+		self::ID_WAZZUP_CONNECTOR => [
+			'wapi' => [
+				'LIMIT_START_DATE' => 1575158401,
+				'BLOCK_DATE' => 86400,
+				'BLOCK_REASON' => self::BLOCK_REASON_DEFAULT
+			]
+		],
+	];
+
 	public const RU_RESTRICTED_META_CONNECTORS = [
 		self::ID_FB_MESSAGES_CONNECTOR,
 		self::ID_FB_COMMENTS_CONNECTOR,
@@ -201,6 +213,7 @@ class Library
 		self::ID_IMESSAGE_CONNECTOR,
 		self::ID_VKGROUP_CONNECTOR,
 		self::ID_OK_CONNECTOR,
+		self::ID_MAX_CONNECTOR,
 	];
 
 	public const CONNECTOR_PER_REGION_LIMITATION = [
@@ -218,6 +231,14 @@ class Library
 		],
 		self::ID_OLX_CONNECTOR => [
 			'allow' => ['ua', 'pl'],
+			'deny' => [],
+		],
+		self::ID_WAZZUP_CONNECTOR => [
+			'allow' => ['ru'],
+			'deny' => [],
+		],
+		self::ID_MAX_CONNECTOR => [
+			'allow' => ['ru', 'by','az', 'am', 'kz', 'kg', 'md', 'tj', 'uz'],
 			'deny' => [],
 		],
 	];

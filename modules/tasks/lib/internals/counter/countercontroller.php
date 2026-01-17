@@ -15,6 +15,7 @@ use Bitrix\Tasks\Internals\Counter\Processor\ProjectProcessor;
 use Bitrix\Tasks\Internals\Counter\Processor\UserProcessor;
 use Bitrix\Tasks\Internals\Counter\Push\PushSender;
 use Bitrix\Tasks\Internals\Registry\UserRegistry;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class CounterController
 {
@@ -61,6 +62,7 @@ class CounterController
 		$projectCounters = [
 			CounterDictionary::COUNTER_GROUP_COMMENTS,
 			CounterDictionary::COUNTER_GROUP_EXPIRED,
+			CounterDictionary::COUNTER_MENTIONED,
 		];
 
 		if (in_array($counter, $projectCounters))
@@ -73,6 +75,11 @@ class CounterController
 		elseif($this->userId)
 		{
 			UserProcessor::getInstance($this->userId)->recount($counter, $taskIds);
+		}
+
+		if (CounterDictionary::COUNTER_MENTIONED === $counter && $this->userId)
+		{
+			Container::getInstance()->getMentionedCollector()->recount($this->userId, $taskIds);
 		}
 	}
 

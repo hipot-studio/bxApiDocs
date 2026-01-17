@@ -10,6 +10,7 @@ use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingFromWaitListItemException;
 use Bitrix\Booking\Internals\Exception\Booking\UpdateBookingException;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Repository\WaitListItemRepositoryInterface;
@@ -20,6 +21,7 @@ use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\ResourceService;
 use Bitrix\Booking\Provider\WaitListItemProvider;
+use Bitrix\Booking\Service\BookingFeature;
 
 class CreateBookingFromWaitListItemCommandHandler
 {
@@ -48,6 +50,8 @@ class CreateBookingFromWaitListItemCommandHandler
 
 	public function __invoke(CreateBookingFromWaitListItemCommand $command): Entity\Booking\Booking
 	{
+		$this->checkFeatures($command);
+
 		return $this->transactionHandler->handle(
 			fn: function () use ($command) {
 				$waitListItem = $this->waitListItemProvider->getById(
@@ -66,6 +70,7 @@ class CreateBookingFromWaitListItemCommandHandler
 					datePeriod: $command->datePeriod,
 					createdBy: $command->createdBy,
 					name: $command->name,
+					source: $command->source,
 				);
 
 				$commandResources = $newBooking->getResourceCollection();
@@ -83,6 +88,13 @@ class CreateBookingFromWaitListItemCommandHandler
 
 				$this->bookingService->checkBookingBeforeCreating($newBooking);
 				$intersectionResult = $this->bookingService->checkIntersection($newBooking, $command->allowOverbooking);
+				if (!$intersectionResult->isSuccess())
+				{
+					throw new CreateBookingFromWaitListItemException(
+						'Some resources are unavailable for the requested time range: '
+						. implode(',', $intersectionResult->getBookingCollection()->getEntityIds())
+					);
+				}
 
 				$bookingEntity = $this->bookingService->create($newBooking, $command->createdBy);
 
@@ -149,5 +161,21 @@ class CreateBookingFromWaitListItemCommandHandler
 	protected function getJournalService(): JournalServiceInterface
 	{
 		return $this->journalService;
+	}
+
+	private function checkFeatures(CreateBookingFromWaitListItemCommand $command): void
+	{
+		if (!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_BOOKING))
+		{
+			throw new Exception('Feature is not available');
+		}
+
+		if (
+			!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+			&& count($command->resources) > 1
+		)
+		{
+			throw new Exception('Multi-resource booking feature is not available');
+		}
 	}
 }

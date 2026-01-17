@@ -16,6 +16,11 @@ class Analytic
 	 */
 	public static function isEnable()
 	{
+		if (\Bitrix\Report\VisualConstructor\Helper\Db::isPgSqlDb())
+		{
+			return false;
+		}
+
 		if (Loader::includeModule('crm'))
 		{
 			return Container::getInstance()->getUserPermissions()->entityType()->canReadSomeItemsInCrm();

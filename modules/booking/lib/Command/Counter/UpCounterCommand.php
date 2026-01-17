@@ -15,6 +15,7 @@ class UpCounterCommand extends AbstractCommand
 	public function __construct(
 		public readonly int $entityId,
 		public readonly CounterDictionary $type,
+		public readonly int|null $userId = null,
 	)
 	{
 	}
@@ -23,7 +24,8 @@ class UpCounterCommand extends AbstractCommand
 	{
 		return [
 			'entityId' => $this->entityId,
-			'type'     => $this->type->value,
+			'type' => $this->type->value,
+			'userId' => $this->userId,
 		];
 	}
 

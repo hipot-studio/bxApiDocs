@@ -2,14 +2,12 @@
 
 namespace Bitrix\Tasks\Integration\UI\EntitySelector;
 
-use Bitrix\Main\Text\Emoji;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 use Bitrix\Tasks\Util\User;
 use Bitrix\UI\EntitySelector\Dialog;
-use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\SearchQuery;
 
 class TaskWithIdProvider extends TaskProvider
@@ -37,18 +35,11 @@ class TaskWithIdProvider extends TaskProvider
 					Status::IN_PROGRESS,
 				],
 			]);
-			foreach ($taskItems as $item)
-			{
-				/** @var Item $item */
-				$item->addTab('recents');
-				$dialog->addItem($item);
 
-				if ($dialog->getItemCollection()->count() >= static::$maxCount)
-				{
-					break;
-				}
-			}
+			$dialog->addItems($taskItems);
 		}
+
+		$this->addTab($dialog);
 	}
 
 	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
@@ -96,7 +87,7 @@ class TaskWithIdProvider extends TaskProvider
 		$filter['META::ID_OR_NAME'] = $searchQuery;
 	}
 
-	protected static function getSupertitleByStatus(int $status): string
+	protected static function getSupertitleByStatus(int $status): ?string
 	{
 		return ($status === Status::COMPLETED) ? Status::getMessage($status) : '';
 	}

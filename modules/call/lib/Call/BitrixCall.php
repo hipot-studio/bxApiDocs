@@ -13,6 +13,12 @@ use Bitrix\Call\ControllerClient;
 
 class BitrixCall extends Call
 {
+	public const
+		ROOM_TYPE_SMALL = 1,
+		ROOM_TYPE_BIG = 3,
+		ROOM_TYPE_1TO1 = 4
+	;
+
 	protected $provider = parent::PROVIDER_BITRIX;
 
 	/**

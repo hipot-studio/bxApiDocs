@@ -148,17 +148,8 @@ final class TrackService
 
 				return $result->addError($error);
 			}
-			/*
-			if (!CallAISettings::isAutoStartRecordingEnable())
-			{
-				if (!CallAISettings::isBaasServiceHasPackage())
-				{
-					$log && $logger->error('Unable process track. It is not enough baas packages. TrackId:'.$track->getId());
 
-					return $result->addError(new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR, 'It is not enough baas packages'));
-				}
-			}
-			*/
+			//todo: Unable process track if it is not enough baas packages. Throw AI_NOT_ENOUGH_BAAS_ERROR
 
 			$log && $logger->info('Start AI processing. TrackId:'.$track->getId());
 
@@ -276,6 +267,7 @@ final class TrackService
 		if ($result->isSuccess())
 		{
 			$log && $logger->info("File successfully saved. TrackId:".$track->getId()." FileId:".$track->getFileId()." DiskFileId:".$track->getDiskFileId());
+			$this->fireTrackDownloadedEvent($track);
 		}
 		else
 		{
@@ -349,6 +341,53 @@ final class TrackService
 	}
 
 	/**
+	 * Check and send audio record message after successful download
+	 * Event handler for call:onCallTrackDownloaded
+	 * @param Event $event
+	 * @return void
+	 */
+	public static function onCallTrackDownloaded(Event $event): void
+	{
+		$track = $event->getParameter('track');
+		if (!($track instanceof \Bitrix\Call\Track))
+		{
+			return;
+		}
+
+		// Only process track pack type
+		if ($track->getType() !== \Bitrix\Call\Track::TYPE_RECORD)
+		{
+			return;
+		}
+
+		if ($log = CallAISettings::isLoggingEnable())
+		{
+			$logger = Logger::getInstance();
+			$logger->info("Checking AI tasks after track download. TrackId: {$track->getId()}, CallId: {$track->getCallId()}");
+		}
+
+		$aiService = AI\CallAIService::getInstance();
+		$aiResult = $aiService->checkCallAiTask($track->getCallId());
+		if (!$aiResult->isSuccess() && !$aiService->hasExpectationAgent($track->getCallId()))
+		{
+			$log && $logger->info("AI task failed and no expectation agent found for call #{$track->getCallId()}");
+
+			if (!Loader::includeModule('im'))
+			{
+				$log && $logger->error("Cannot load IM module");
+				return;
+			}
+
+			$call = Registry::getCallWithId($track->getCallId());
+			if ($call)
+			{
+				NotifyService::getInstance()->sendAudioRecordMessage($call);
+				$log && $logger->info("Audio record message sent for call #{$track->getCallId()}");
+			}
+		}
+	}
+
+	/**
 	 * @return HttpClient
 	 */
 	protected function instanceHttpClient(): HttpClient
@@ -387,6 +426,19 @@ final class TrackService
 	protected function fireTrackErrorEvent(Call\Track $track, \Bitrix\Main\Error $error): Event
 	{
 		$event = new Event('call', 'onCallTrackError', ['track' => $track, 'error' => $error]);
+		$event->send();
+
+		return $event;
+	}
+
+	/**
+	 * @event call:onCallTrackDownloaded
+	 * @param Call\Track $track
+	 * @return Event
+	 */
+	protected function fireTrackDownloadedEvent(Call\Track $track): Event
+	{
+		$event = new Event('call', 'onCallTrackDownloaded', ['track' => $track]);
 		$event->send();
 
 		return $event;

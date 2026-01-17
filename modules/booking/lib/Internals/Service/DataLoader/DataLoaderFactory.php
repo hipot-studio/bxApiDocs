@@ -14,7 +14,6 @@ class DataLoaderFactory
 	{
 		return match ($type)
 		{
-			CatalogSkuItemType::class => Container::getCatalogSkuDataLoader(),
 			CrmDealItemType::class => Container::getCrmDealDataLoader(),
 			default => null,
 		};
@@ -37,7 +36,6 @@ class DataLoaderFactory
 	private function getTypes(): array
 	{
 		return [
-			CatalogSkuItemType::class,
 			CrmDealItemType::class,
 		];
 	}

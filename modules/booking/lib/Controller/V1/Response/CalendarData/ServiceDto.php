@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1\Response\CalendarData;
 
-use Bitrix\Booking\Entity\ExternalData\ExternalDataItem;
+use Bitrix\Booking\Entity\Sku\Sku;
 use Bitrix\Main\Type\Contract\Arrayable;
 
 class ServiceDto implements Arrayable
@@ -17,14 +17,12 @@ class ServiceDto implements Arrayable
 	{
 	}
 
-	public static function fromEntity(ExternalDataItem $externalDataItem): self
+	public static function fromEntity(Sku $sku): self
 	{
-		$serviceData = $externalDataItem->getData();
-
 		return new self(
-			id: (int)$externalDataItem->getValue(),
-			name: $serviceData['data']['name'],
-			permissions: $serviceData['permissions'],
+			id: $sku->getId(),
+			name: $sku->getName(),
+			permissions: $sku->getPermissions(),
 		);
 	}
 

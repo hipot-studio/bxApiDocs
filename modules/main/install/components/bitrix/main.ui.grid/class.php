@@ -1987,7 +1987,9 @@ class CMainUIGrid extends CBitrixComponent
 				$cellClass .= " {$row["columnClasses"][$columnId]}";
 			}
 
-			$cellAttributes = [];
+			$cellAttributes = [
+				'data-column-id' => $columnId,
+			];
 			$cellStyle = "";
 			if (
 				$this->arParams["ENABLE_COLLAPSIBLE_ROWS"]

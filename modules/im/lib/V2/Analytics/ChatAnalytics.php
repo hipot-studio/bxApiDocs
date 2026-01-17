@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Analytics\Event\ChatEvent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
+use Bitrix\ImBot\Bot\Support24;
 use Bitrix\Main\Loader;
 
 class ChatAnalytics extends AbstractAnalytics
@@ -59,7 +60,10 @@ class ChatAnalytics extends AbstractAnalytics
 				->createChatEvent(self::ADD_USER)
 				?->send()
 			;
-			(new CopilotAnalytics($this->chat))->addAddUser();
+			if ($this->chat instanceof Chat\CopilotChat)
+			{
+				(new CopilotAnalytics($this->chat))->addAddUser();
+			}
 		});
 	}
 
@@ -75,7 +79,10 @@ class ChatAnalytics extends AbstractAnalytics
 				->createChatEvent(self::DELETE_USER)
 				?->send()
 			;
-			(new CopilotAnalytics($this->chat))->addDeleteUser();
+			if ($this->chat instanceof Chat\CopilotChat)
+			{
+				(new CopilotAnalytics($this->chat))->addDeleteUser();
+			}
 		});
 	}
 
@@ -187,12 +194,12 @@ class ChatAnalytics extends AbstractAnalytics
 		string $eventName,
 	): ?ChatEvent
 	{
-		if (!$this->isChatTypeAllowed($this->chat))
+		if (!$this->isChatTypeAllowed($this->chat, $eventName))
 		{
 			return null;
 		}
 
-		return (new ChatEvent($eventName, $this->chat, $this->userId));
+		return (new ChatEvent($eventName, $this->chat, $this->getContext()->getUserId()));
 	}
 
 	protected function isFirstTimeEvent(string $eventName): bool
@@ -238,5 +245,27 @@ class ChatAnalytics extends AbstractAnalytics
 		}
 
 		return self::$blockSingleUserEvents[$this->chat->getId()] ?? false;
+	}
+
+	protected function getUnavailableChatTypesForEvent(?string $event = null): array
+	{
+		$unavailableTypes = match ($event)
+		{
+			self::SUBMIT_CREATE_NEW => [Chat\PrivateChat::class, Chat\ExternalChat::class],
+			default => [],
+		};
+
+		return array_merge(parent::getUnavailableChatTypesForEvent($event), $unavailableTypes);
+	}
+
+	protected function getUnavailableChatEntityTypesForEvent(?string $event = null): array
+	{
+		$unavailableEntityTypes = match ($event)
+		{
+			self::SUBMIT_CREATE_NEW => ['SUPPORT24_QUESTION'] /** @see Support24::CHAT_ENTITY_TYPE */,
+			default => [],
+		};
+
+		return array_merge(parent::getUnavailableChatEntityTypesForEvent($event), $unavailableEntityTypes);
 	}
 }

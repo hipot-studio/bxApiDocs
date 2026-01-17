@@ -23,8 +23,6 @@ final class HumanResources
 
 	public function isUsed(): bool
 	{
-		return Loader::includeModule('humanresources')
-			&& Storage::instance()->isCompanyStructureConverted(false)
-		;
+		return Loader::includeModule('humanresources') && Storage::instance()->isCompanyStructureConverted(false);
 	}
 }

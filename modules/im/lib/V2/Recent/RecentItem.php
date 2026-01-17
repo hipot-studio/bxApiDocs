@@ -34,7 +34,7 @@ class RecentItem implements RestConvertible
 			->setCounter($counter)
 			->setUnread($entity->getUnread())
 			->setPinned($entity->getPinned())
-			->setLastReadMessageId($entity->getRelation()->getLastId())
+			->setLastReadMessageId((int)$entity->getRelation()?->getLastId())
 			->setDateUpdate($entity->getDateUpdate())
 			->setDateLastActivity($entity->getDateLastActivity())
 		;

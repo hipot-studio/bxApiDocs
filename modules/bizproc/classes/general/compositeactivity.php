@@ -2,19 +2,22 @@
 
 abstract class CBPCompositeActivity extends CBPActivity
 {
+	/**
+	 * @var CBPActivity[] $arActivities
+	 */
 	protected $arActivities = array();
 	protected $readOnlyData = [];
 
 	public function setWorkflow(CBPWorkflow $workflow)
 	{
-		parent::SetWorkflow($workflow);
+		parent::setWorkflow($workflow);
 		foreach ($this->arActivities as $activity)
 		{
-			if (!method_exists($activity, 'SetWorkflow'))
+			if (!method_exists($activity, 'setWorkflow'))
 			{
 				throw new Exception('ActivitySetWorkflow');
 			}
-			$activity->SetWorkflow($workflow);
+			$activity->setWorkflow($workflow);
 		}
 	}
 
@@ -55,7 +58,10 @@ abstract class CBPCompositeActivity extends CBPActivity
 		/** @var CBPActivity $activity */
 		foreach ($this->arActivities as $activity)
 		{
-			$result = array_merge($result, $activity->pullProperties());
+			foreach ($activity->pullProperties() as $activityId => $props)
+			{
+				$result[$activityId] = $props;
+			}
 		}
 
 		return $result;

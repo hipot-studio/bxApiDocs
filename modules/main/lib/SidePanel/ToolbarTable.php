@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Main\SidePanel;
 
@@ -13,6 +13,7 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserTable;
+use Bitrix\Main\ORM\Data\AddStrategy;
 
 /**
  * Class ToolbarTable
@@ -32,6 +33,8 @@ use Bitrix\Main\UserTable;
  */
 class ToolbarTable extends Data\DataManager
 {
+	use AddStrategy\Trait\MergeByDefaultTrait;
+
 	/**
 	 * @inheritdoc
 	 */
@@ -79,5 +82,13 @@ class ToolbarTable extends Data\DataManager
 				['join_type' => Join::TYPE_INNER]
 			)),
 		];
+	}
+
+	protected static function getMergeStrategy(): AddStrategy\Contract\AddStrategy
+	{
+		return new AddStrategy\Merge(
+			self::getEntity(),
+			['USER_ID', 'CONTEXT'],
+		);
 	}
 }

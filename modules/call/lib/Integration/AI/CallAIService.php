@@ -24,7 +24,7 @@ use Bitrix\Call\Analytics\FollowUpAnalytics;
 
 final class CallAIService
 {
-	private const DELAY_WAIT_FOR_RESULT = 900; // 15 minutes
+	private const DELAY_WAIT_FOR_RESULT = 43200; // 12 hours
 	private const FINISH_TASK_DEPTH_DAYS = 60;
 
 	private static ?CallAIService $service = null;
@@ -94,7 +94,6 @@ final class CallAIService
 		$task = new Task\TranscribeCallRecord();
 		$task
 			->setPayload($track)
-			->setLanguageId($this->getLanguageId())
 			->save()
 		;
 
@@ -123,11 +122,12 @@ final class CallAIService
 			$taskClass = $taskSenseType->getTaskClass();
 
 			$task = new $taskClass();
-			$dbResult = $task
-				->setPayload($outcome)
-				->setLanguageId($this->getLanguageId())
-				->save()
-			;
+			$task->setPayload($outcome);
+			if ($outcome->getLanguageId())
+			{
+				$task->setLanguageId($outcome->getLanguageId());
+			}
+			$dbResult = $task->save();
 			if ($dbResult->isSuccess())
 			{
 				$tasks[] = $task;
@@ -151,8 +151,14 @@ final class CallAIService
 		{
 			$taskToLaunch = [
 				SenseType::OVERVIEW,
-				SenseType::INSIGHTS,
 				SenseType::SUMMARY,
+			];
+		}
+		if ($outcome->getType() == SenseType::OVERVIEW->value)
+		{
+			$taskToLaunch = [
+				SenseType::INSIGHTS,
+				SenseType::EVALUATION,
 			];
 		}
 
@@ -200,16 +206,14 @@ final class CallAIService
 		$engine = $task->getAIEngine($context);
 		$call = Registry::getCallWithId($task->getCallId());
 
-		if (
-			$payload instanceof \Bitrix\AI\Payload\IPayload
-			&& method_exists($payload, 'setCost')
-		)
+		if ($payload instanceof \Bitrix\AI\Payload\IPayload)
 		{
 			$payload->setCost($task->getCost());
 
+			// b24 only
 			if (
 				Loader::includeModule('bitrix24')
-				&& CallAISettings::isAutoStartRecordingEnable()
+				&& CallAISettings::isCopilotAutostartFeatureEnable()
 			)
 			{
 				if ($call->autoStartRecording())
@@ -251,6 +255,7 @@ final class CallAIService
 					'Launch AI task: '.$task->getType()
 					. ' Engine: '. $engine->getCode()
 					. ' Payload: '. $task->decodePayload($payload->pack())
+					. ' Language: '. ($context->getLanguage()?->getCode() ?? '')
 					. ($payload instanceof \Bitrix\AI\Payload\Prompt ? ' Prompt code: '. $payload->getPromptCode() : '')
 				);
 
@@ -259,7 +264,7 @@ final class CallAIService
 					->setHistoryState(false)
 					->onSuccess(
 						function (\Bitrix\AI\Result $result, ?string $queueHash = null)
-						use (&$hash, &$task, &$logger)
+						use (&$task, &$logger)
 						{
 							$task
 								->setHash($queueHash)
@@ -278,7 +283,7 @@ final class CallAIService
 							$task
 								->setStatus($task::STATUS_FAILED)
 								->setErrorCode($error->getCode())
-								->setErrorMessage($error->getDescription() ?: $error->getMessage())
+								->setErrorMessage($error->getMessage(). ($error->getDescription() ? '; '.$error->getDescription() : ''))
 								->save();
 
 							$result->addError($error);
@@ -292,7 +297,17 @@ final class CallAIService
 		{
 			$log && $logger->error('AI processing has failed. Task Id:'.$task->getId().' Error: '.$result->getError()?->getMessage());
 
-			(new FollowUpAnalytics($call))->addAITaskFailed($task, $result->getError()?->getCode() ?? '');
+			$errorCode = $result->getError()?->getCode() ?? '';
+			(new FollowUpAnalytics($call))
+				->addAITaskFailed($task, $errorCode)
+				->sendTelemetry(
+					source: $task,
+					status: 'error',
+					errorCode: $errorCode,
+					event: 'task_launch_error',
+					error: $result->getError()
+				)
+			;
 
 			$this->fireCallAiFailedEvent($task, $result->getError());
 		}
@@ -300,7 +315,14 @@ final class CallAIService
 		{
 			$log && $logger->info('New AI task has been set. TaskId:'.$task->getId().' Hash: '.$task->getHash());
 
-			(new FollowUpAnalytics($call))->addAITaskLunch($task);
+			(new FollowUpAnalytics($call))
+				->addAITaskLunch($task)
+				->sendTelemetry(
+					source: $task,
+					status: 'success',
+					event: 'task_launch_success'
+				)
+			;
 		}
 
 		return $result;
@@ -361,7 +383,6 @@ final class CallAIService
 				$task = new $taskClass();
 				$dbResult = $task
 					->setPayload($transcribe)
-					->setLanguageId($this->getLanguageId())
 					->save()
 				;
 				if ($dbResult->isSuccess())
@@ -470,6 +491,7 @@ final class CallAIService
 			}
 			$logger->info(
 				"AI outcome. Type: {$outcome->getType()}"
+				. ($outcome->hasLanguageId() ? "\nLanguage: " . $outcome->getLanguageId() : '')
 				. ($outcome->hasContent() ? "\nContent: " . $outcome->getContent() : '')
 				. ($propsLog ?: '')
 			);
@@ -485,6 +507,17 @@ final class CallAIService
 		{
 			$log && $logger->info('Processing AI result has been canceled by event');
 			return;
+		}
+
+		$call = Registry::getCallWithId($task->getCallId());
+		if ($call)
+		{
+			(new FollowUpAnalytics($call))
+				->sendTelemetry(
+					source: $task,
+					status: 'success',
+					event: 'task_outcome'
+				);
 		}
 
 		$nextTaskResult = $service->buildTasksByOutcome($outcome);
@@ -547,7 +580,7 @@ final class CallAIService
 		$task
 			->setStatus(AITask::STATUS_FAILED)
 			->setDateFinished(new DateTime)
-			->setErrorMessage($error->getDescription() ?: $error->getMessage())
+			->setErrorMessage($error->getMessage(). ($error->getDescription() ? '; '.$error->getDescription() : ''))
 			->setErrorCode($error->getCode())
 			->save()
 		;
@@ -560,12 +593,22 @@ final class CallAIService
 				. ' TaskId:' . $task->getId()
 				. ' Hash: ' . $hash
 				. ' Code: ' . $error->getCode()
-				. ' Error: ' . ($error->getDescription() ?: $error->getMessage())
+				. ' Error: ' . $error->getMessage()
+				. ($error->getDescription() ? ' Desc: '.$error->getDescription() : '')
 			);
 		}
 
 		$call = Registry::getCallWithId($task->getCallId());
-		(new FollowUpAnalytics($call))->addAITaskFailed($task, $error->getCode() ?? '');
+		(new FollowUpAnalytics($call))
+			->addAITaskFailed($task, $error->getCode() ?? '')
+			->sendTelemetry(
+					source: $task,
+					status: 'failed',
+					errorCode: $error->getCode(),
+					event: 'task_failed',
+					error: $error
+				)
+		;
 
 		$service = self::getInstance();
 		$service->fireCallAiFailedEvent($task, $error);
@@ -594,15 +637,6 @@ final class CallAIService
 		}
 
 		return $checkResult;
-	}
-
-	/**
-	 * Detects user language.
-	 * @return string|null
-	 */
-	protected function getLanguageId(): ?string
-	{
-		return Loader::includeModule('ai') ? \Bitrix\AI\Facade\User::getUserLanguage() : null;
 	}
 
 	/**
@@ -679,6 +713,16 @@ final class CallAIService
 	//region Expectation
 
 	/**
+	 * Gets agent name for expectation task.
+	 * @param int $callId
+	 * @return string
+	 */
+	private function getExpectationAgentName(int $callId): string
+	{
+		return CallAIService::class . "::expectCallAiTask({$callId});";
+	}
+
+	/**
 	 * Adds agent to checkup ai tasks.
 	 * @param int $callId
 	 * @return void
@@ -687,7 +731,7 @@ final class CallAIService
 	{
 		/** @see self::expectCallAiTask */
 		\CAgent::AddAgent(
-			"Bitrix\\Call\\Integration\\AI\\CallAIService::expectCallAiTask({$callId});",
+			$this->getExpectationAgentName($callId),
 			'call',
 			'N',
 			self::DELAY_WAIT_FOR_RESULT,
@@ -705,9 +749,51 @@ final class CallAIService
 	{
 		/** @see self::expectCallAiTask */
 		\CAgent::RemoveAgent(
-			"Bitrix\\Call\\Integration\\AI\\CallAIService::expectCallAiTask({$callId});",
+			$this->getExpectationAgentName($callId),
 			'call'
 		);
+	}
+
+	/**
+	 * Updates agent expectation time when tracks are received.
+	 * @param int $callId
+	 * @return void
+	 */
+	public function updateExpectationTime(int $callId): void
+	{
+		$agentName = $this->getExpectationAgentName($callId);
+
+		// Remove existing agent
+		\CAgent::RemoveAgent($agentName, 'call');
+
+		// Add agent with new execution time
+		\CAgent::AddAgent(
+			$agentName,
+			'call',
+			'N',
+			self::DELAY_WAIT_FOR_RESULT,
+			'',
+			'Y',
+			\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + self::DELAY_WAIT_FOR_RESULT, 'FULL')
+		);
+	}
+
+	/**
+	 * Checks if expectation agent exists for specific call.
+	 * @param int $callId
+	 * @return bool
+	 */
+	public function hasExpectationAgent(int $callId): bool
+	{
+		$agents = \CAgent::GetList(
+			[],
+			[
+				'MODULE_ID' => 'call',
+				'NAME' => "Bitrix\\Call\\Integration\\AI\\CallAIService::expectCallAiTask({$callId}%"
+			]
+		);
+
+		return $agents->Fetch() !== false;
 	}
 
 	/**
@@ -721,7 +807,7 @@ final class CallAIService
 		Loader::includeModule('im');
 
 		$call = Registry::getCallWithId($callId);
-		if (!$call)
+		if (!$call || !$call->isAiAnalyzeEnabled())
 		{
 			return '';
 		}
@@ -734,10 +820,12 @@ final class CallAIService
 		{
 			$notifyService->sendTaskFailedMessage($result->getError(), $call);
 		}
+		/*
 		elseif ($result->getData()['wait_more'] === true)
 		{
 			$notifyService->sendTaskWaitMessage($call);
 		}
+		*/
 
 		if ($result->getData()['repeat'] === true)
 		{
@@ -768,8 +856,7 @@ final class CallAIService
 
 		// Check all followup tasks
 		$taskCompleted = 0;
-		$waitForTasks = [SenseType::OVERVIEW, SenseType::INSIGHTS, SenseType::SUMMARY, SenseType::TRANSCRIBE];
-		/** @var SenseType $senseType */
+		$waitForTasks = SenseType::cases();
 		foreach ($waitForTasks as $senseType)
 		{
 			$taskOutcome = Outcome::getOutcomeForCall($callId, $senseType);

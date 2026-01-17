@@ -13,9 +13,9 @@ use Bitrix\Main\Entity;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_UserSignature_Query query()
- * @method static EO_UserSignature_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_UserSignature_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_UserSignature_Result getById($id)
- * @method static EO_UserSignature_Result getList(array $parameters = array())
+ * @method static EO_UserSignature_Result getList(array $parameters = [])
  * @method static EO_UserSignature_Entity getEntity()
  * @method static \Bitrix\Mail\Internals\Entity\UserSignature createObject($setDefaultValues = true)
  * @method static \Bitrix\Mail\Internals\EO_UserSignature_Collection createCollection()

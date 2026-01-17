@@ -55,6 +55,16 @@ final class Value implements Arrayable, \JsonSerializable
 		return $this;
 	}
 
+	public function getTypeCaption(): ?string
+	{
+		if (!$this->typeId)
+		{
+			return null;
+		}
+
+		return TypeRepository::getTypeCaption($this->typeId);
+	}
+
 	public function getValueType(): ?string
 	{
 		return $this->valueType;
@@ -67,6 +77,16 @@ final class Value implements Arrayable, \JsonSerializable
 		return $this;
 	}
 
+	public function getValueTypeCaption(): ?string
+	{
+		if (!$this->typeId || !$this->valueType)
+		{
+			return null;
+		}
+
+		return TypeRepository::getValueTypeCaption($this->typeId, $this->valueType);
+	}
+
 	public function getValue(): ?string
 	{
 		return $this->value;
@@ -77,6 +97,26 @@ final class Value implements Arrayable, \JsonSerializable
 		$this->value = $value;
 
 		return $this;
+	}
+
+	public function getValueFormatted(): ?string
+	{
+		if (!$this->value || !$this->typeId)
+		{
+			return null;
+		}
+
+		return TypeRepository::getType($this->typeId)?->formatValue($this->value);
+	}
+
+	public function getComplexId(): ?string
+	{
+		if (!$this->typeId || !$this->valueType)
+		{
+			return null;
+		}
+
+		return $this->typeId . '_' . $this->valueType;
 	}
 
 	public function getValueExtra(): ?ValueExtra
@@ -135,8 +175,12 @@ final class Value implements Arrayable, \JsonSerializable
 		return [
 			'id' => $this->getId(),
 			'typeId' => $this->getTypeId(),
+			'typeCaption' => $this->getTypeCaption(),
 			'valueType' => $this->getValueType(),
+			'valueTypeCaption' => $this->getValueTypeCaption(),
+			'complexId' => $this->getComplexId(),
 			'value' => $this->getValue(),
+			'valueFormatted' => $this->getValueFormatted(),
 			'valueExtra' => $this->getValueExtra(),
 		];
 	}

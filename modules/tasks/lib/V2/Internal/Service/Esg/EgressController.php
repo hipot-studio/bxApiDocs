@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Esg;
 
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\CreateChatForExistingTaskHandler;
+use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\DeleteTaskHandler;
+use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\ElapsedTimeHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\SaveCheckListHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\StartTimerHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\StopTimerHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\TaskAddHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\TaskUpdateHandler;
+use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\TaskUpdateUserFieldsHandler;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Public\Command\CheckList\SaveCheckListCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\DeleteTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Tracking\AddElapsedTimeCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StartTimerCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StopTimerCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
@@ -22,11 +27,14 @@ class EgressController implements EgressInterface
 {
 	public function __construct(
 		private readonly CreateChatForExistingTaskHandler $createChatForExistingTaskHandler,
-		private readonly TaskAddHandler              $taskAddHandler,
-		private readonly TaskUpdateHandler           $taskUpdateHandler,
-		private readonly SaveCheckListHandler        $checkListHandler,
-		private readonly StartTimerHandler           $startTimerHandler,
-		private readonly StopTimerHandler            $stopTimerHandler,
+		private readonly TaskAddHandler $taskAddHandler,
+		private readonly TaskUpdateHandler $taskUpdateHandler,
+		private readonly SaveCheckListHandler $checkListHandler,
+		private readonly StartTimerHandler $startTimerHandler,
+		private readonly StopTimerHandler $stopTimerHandler,
+		private readonly DeleteTaskHandler $deleteTaskHandler,
+		private readonly TaskUpdateUserFieldsHandler $taskUpdateUserFieldsHandler,
+		private readonly ElapsedTimeHandler $elapsedTimeHandler,
 	)
 	{
 	}
@@ -39,8 +47,15 @@ class EgressController implements EgressInterface
 			$command instanceof SaveCheckListCommand => $this->checkListHandler->handle($command),
 			$command instanceof StartTimerCommand => $this->startTimerHandler->handle($command),
 			$command instanceof StopTimerCommand => $this->stopTimerHandler->handle($command),
+			$command instanceof DeleteTaskCommand => $this->deleteTaskHandler->handle($command),
+			$command instanceof AddElapsedTimeCommand => $this->elapsedTimeHandler->handle($command),
 			default => '',
 		};
+	}
+
+	public function processUserFields(UpdateTaskCommand $command): void
+	{
+		$this->taskUpdateUserFieldsHandler->handle($command);
 	}
 
 	public function processAddTaskCommand(AddTaskCommand $command): Task

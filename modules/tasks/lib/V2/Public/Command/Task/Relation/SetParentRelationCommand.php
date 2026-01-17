@@ -20,6 +20,7 @@ class SetParentRelationCommand extends AbstractCommand
 		public readonly int $userId,
 		#[PositiveNumber]
 		public readonly int $parentId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -28,10 +29,7 @@ class SetParentRelationCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$parentService = Container::getInstance()->getParentService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new SetParentRelationHandler($parentService, $consistencyResolver);
+		$handler = Container::getInstance()->get(SetParentRelationHandler::class);
 
 		try
 		{

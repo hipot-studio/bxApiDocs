@@ -7,8 +7,10 @@ namespace Bitrix\Disk\QuickAccess;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
+use Bitrix\Disk\QuickAccess\FileInfo\ProviderFactory;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
 use Bitrix\Disk\TypeFile;
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\HttpResponse;
@@ -43,15 +45,17 @@ class ScopeTokenService
 
 	/**
 	 * @param ScopeStorage $storage The scope-based storage
+	 * @param ProviderFactory $fileInfoProviderFactory Provider factory for register own file providers
 	 * @param HttpRequest $httpRequest Current HTTP request
 	 * @param HttpResponse $httpResponse HTTP response to send cookies with
 	 * @param string|null $signerKey Key for signing tokens
 	 */
 	public function __construct(
-		public readonly ScopeStorage  $storage,
-		private readonly HttpRequest  $httpRequest,
+		public readonly ScopeStorage $storage,
+		public readonly ProviderFactory $fileInfoProviderFactory,
+		private readonly HttpRequest $httpRequest,
 		private readonly HttpResponse $httpResponse,
-		private readonly ?string      $signerKey
+		private readonly ?string $signerKey
 	)
 	{
 		$this->fastDownload = $this->isFastDownloadEnabled();
@@ -67,6 +71,14 @@ class ScopeTokenService
 			$this->userToken = $userToken;
 			$this->tryCleanupExpiredScopes();
 		}
+	}
+
+	/**
+	 * @return ProviderFactory
+	 */
+	public function getFileInfoProviderFactory(): ProviderFactory
+	{
+		return $this->fileInfoProviderFactory;
 	}
 
 	/**
@@ -112,22 +124,6 @@ class ScopeTokenService
 	}
 
 	/**
-	 * Get or create a Signer instance
-	 *
-	 * @return Signer
-	 */
-	private function getSigner(): Signer
-	{
-		if ($this->signer === null)
-		{
-			$this->signer = new Signer();
-			$this->signer->setKey(hash('sha512', $this->signerKey));
-		}
-
-		return $this->signer;
-	}
-
-	/**
 	 * Retrieve and validate user token from cookie
 	 *
 	 * @return string|null Raw user token or null if not found or invalid
@@ -158,6 +154,22 @@ class ScopeTokenService
 	}
 
 	/**
+	 * Get or create a Signer instance
+	 *
+	 * @return Signer
+	 */
+	private function getSigner(): Signer
+	{
+		if ($this->signer === null)
+		{
+			$this->signer = new Signer();
+			$this->signer->setKey(hash('sha512', $this->signerKey));
+		}
+
+		return $this->signer;
+	}
+
+	/**
 	 * Generate a cookie with the signed user token
 	 *
 	 * @param string $token The raw token to sign and set
@@ -177,28 +189,13 @@ class ScopeTokenService
 	}
 
 	/**
-	 * Ensures the user token exists, creating it if necessary
-	 *
-	 * @return void
-	 */
-	private function ensureUserToken(): void
-	{
-		if (!isset($this->userToken))
-		{
-			[$this->userToken, $signedToken] = $this->generateUserToken();
-			$cookie = $this->generateCookieWithUserToken($signedToken);
-			$this->httpResponse->addCookie($cookie);
-		}
-	}
-
-	/**
 	 * Grants access for current user to the given file within the specified scope
 	 *
-	 * @param AttachedObject|BaseObject $object File object
+	 * @param AttachedObject|BaseObject|int $object File object or file ID
 	 * @param string $scope Scope identifier (e.g. 'chat_123')
 	 * @return array|null Result information or null if failed
 	 */
-	public function grantAccessWithScope(AttachedObject|BaseObject $object, string $scope): ?array
+	public function grantAccessWithScope(mixed $object, string $scope): ?array
 	{
 		if (!$this->isReady())
 		{
@@ -253,180 +250,25 @@ class ScopeTokenService
 	}
 
 	/**
-	 * Returns the encrypted scope for the given file object. Will be used as _esd={} in URL.
+	 * Ensures the user token exists, creating it if necessary
 	 *
-	 * @param AttachedObject|BaseObject $object File object
-	 * @param string $scope Scope identifier (e.g. 'chat_123')
-	 * @return string|null Encrypted scope or null if failed
+	 * @return void
 	 */
-	public function getEncryptedScopeForObject(AttachedObject|BaseObject $object, string $scope): ?string
+	private function ensureUserToken(): void
 	{
-		if (!$this->isReady())
+		if (!isset($this->userToken))
 		{
-			return null;
+			[$this->userToken, $signedToken] = $this->generateUserToken();
+			$cookie = $this->generateCookieWithUserToken($signedToken);
+			$this->httpResponse->addCookie($cookie);
 		}
-
-		$fileInfo = $this->extractFileInfo($object);
-		if (empty($fileInfo) || !isset($fileInfo['id']))
-		{
-			return null;
-		}
-
-		$fileId = $fileInfo['id'];
-		if (!isset($this->savedFileMetadata[$fileId]))
-		{
-			if (!$this->storage->saveFileMetadata($fileId, $fileInfo))
-			{
-				return null;
-			}
-			
-			$this->savedFileMetadata[$fileId] = true;
-		}
-
-		return $this->encryptScopeData($scope, $fileId, $object->getName());
-	}
-
-	/**
-	 * Extract file information for quick access
-	 *
-	 * @param AttachedObject|BaseObject $attachedObject The object to extract info from
-	 * @return array|null File information or null if extraction failed
-	 */
-	private function extractFileInfo(AttachedObject|BaseObject $attachedObject): ?array
-	{
-		if (!$this->fastDownload)
-		{
-			return null;
-		}
-
-		$fileObject = $this->extractFileObject($attachedObject);
-
-		if (!$fileObject instanceof File)
-		{
-			return null;
-		}
-
-		$fileData = $fileObject->getFile();
-
-		if (!$fileData)
-		{
-			return null;
-		}
-
-		if (!$this->isMediaFile($attachedObject, $fileData))
-		{
-			return null;
-		}
-
-		$previewFileData = [];
-		if (TypeFile::isVideo($fileObject))
-		{
-			$previewFileData = $fileObject->getView()->getPreviewData();
-		}
-
-		$infoForAccelRedirect = $this->getInfoForAccelRedirect($fileData);
-
-		if ($infoForAccelRedirect === null)
-		{
-			return null;
-		}
-
-		if (!empty($previewFileData) && is_array($previewFileData) && isset($previewFileData['ID']))
-		{
-			$infoForAccelRedirect['preview'] = $this->getInfoForAccelRedirect($previewFileData);
-		}
-		else
-		{
-			$infoForAccelRedirect['preview'] = $infoForAccelRedirect;
-		}
-
-		return $infoForAccelRedirect;
-	}
-
-	private function extractFileObject(AttachedObject|BaseObject $attachedObject): ?BaseObject
-	{
-		if ($attachedObject instanceof AttachedObject)
-		{
-			if ($attachedObject->isSpecificVersion())
-			{
-				return $attachedObject->getVersion()?->getObject();
-			}
-
-			return $attachedObject->getFile();
-		}
-
-		return $attachedObject;
-	}
-
-	/**
-	 * Check if the object is an image or media file like video/audio
-	 *
-	 * @param AttachedObject|BaseObject $attachedObject The object to check
-	 * @param array $fileData File data
-	 * @return bool True if the object is an image or media file, false otherwise
-	 */
-	private function isMediaFile(AttachedObject|BaseObject $attachedObject, array $fileData): bool
-	{
-		if (TypeFile::isVideo($attachedObject))
-		{
-			return true;
-		}
-
-		if (!TypeFile::isImage($attachedObject))
-		{
-			return false;
-		}
-
-		return \CFile::IsImage($attachedObject->getName(), $fileData['CONTENT_TYPE']);
-	}
-
-	/**
-	 * Get information for X-Accel-Redirect
-	 *
-	 * @param array $fileData File data
-	 * @return array|null Information for redirect or null if failed
-	 */
-	private function getInfoForAccelRedirect(array $fileData): ?array
-	{
-		if (!$this->fastDownload)
-		{
-			return null;
-		}
-
-		$cloudHandlerId = (int)($fileData['HANDLER_ID'] ?? 0);
-		$fromClouds = $cloudHandlerId > 0;
-
-		$filename = $fileData['SRC'];
-		$filenameEncoded = Uri::urnEncode($filename, 'UTF-8');
-
-		if ($fromClouds)
-		{
-			$filenameDisableProto = preg_replace('~^(https?)(\://)~i', '\\1.', $filenameEncoded);
-			$cloudUploadPath = Option::get('main', 'bx_cloud_upload', '/upload/bx_cloud_upload/');
-			$filePath = rawurlencode($cloudUploadPath . $filenameDisableProto);
-		}
-		else
-		{
-			$filePath = $filenameEncoded;
-		}
-
-		return [
-			'handlerId' => $fileData['HANDLER_ID'] ?? 0,
-			'width' => $fileData['WIDTH'],
-			'height' => $fileData['HEIGHT'],
-			'path' => $filePath,
-			'dir' => $fileData['SUBDIR'],
-			'filename' => $fileData['FILE_NAME'],
-			'contentType' => TypeFile::normalizeMimeType($fileData['CONTENT_TYPE'], $filePath),
-			'expirationTime' => time() + ScopeStorage::DEFAULT_FILE_METADATA_TTL,
-			'id' => (int)$fileData['ID'],
-		];
 	}
 
 	/**
 	 * Generate a secure user token
 	 *
 	 * @return array{string, string} Generated raw token and its signed value
+	 * @throws ArgumentTypeException
 	 */
 	private function generateUserToken(): array
 	{
@@ -434,6 +276,46 @@ class ScopeTokenService
 		$signedValue = $this->getSigner()->sign($randValue);
 
 		return [$randValue, $signedValue];
+	}
+
+	/**
+	 * Returns the encrypted scope for the given file object or fileId. Will be used as _esd={} in URL.
+	 *
+	 * @param AttachedObject|BaseObject|int $file File object or file ID
+	 * @param string $scope Scope identifier (e.g. 'chat_123')
+	 * @return string|null Encrypted scope or null if failed
+	 */
+	public function getEncryptedScopeForObject(mixed $file, string $scope): ?string
+	{
+		if (!$this->isReady())
+		{
+			return null;
+		}
+
+		$provider = $this->fileInfoProviderFactory->createProvider($file);
+		if (!isset($provider))
+		{
+			return null;
+		}
+
+		$fileId = $provider->getId();
+		if (!isset($this->savedFileMetadata[$fileId]))
+		{
+			$fileInfo = $provider->getFileInfo();
+			if ($fileInfo === null)
+			{
+				return null;
+			}
+
+			if (!$this->storage->saveFileMetadata($fileId, $fileInfo->toArray()))
+			{
+				return null;
+			}
+			
+			$this->savedFileMetadata[$fileId] = true;
+		}
+
+		return $this->encryptScopeData($scope, $fileId, $provider->getName());
 	}
 
 	/**
@@ -474,5 +356,12 @@ class ScopeTokenService
 
 		$this->cleanupTriggered = true;
 		$this->storage->cleanupExpiredScopes($this->userToken);
+	}
+
+	public function getTokenScopeByAttachedObject(AttachedObject $attachedModel): string
+	{
+		$entityType = str_replace('\\', '', $attachedModel->getEntityType());
+
+		return $entityType . '_' . $attachedModel->getEntityId();
 	}
 }

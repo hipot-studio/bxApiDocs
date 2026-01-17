@@ -21,6 +21,7 @@ class AddItemsCommand extends AbstractCommand
 		public readonly int $userId,
 		#[CrmItems]
 		public readonly array $crmItemIds,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -30,8 +31,7 @@ class AddItemsCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$itemService = Container::getInstance()->getCrmItemService();
-		$handler = new AddItemsHandler($itemService);
+		$handler = Container::getInstance()->get(AddItemsHandler::class);
 
 		try
 		{

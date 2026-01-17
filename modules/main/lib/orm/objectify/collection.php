@@ -12,6 +12,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Result;
 use Bitrix\Main\ORM\Entity;
+use Bitrix\Main\ORM\exception\CollectionFilterException;
 use Bitrix\Main\ORM\Fields\Relations\Relation;
 use Bitrix\Main\ORM\Fields\ScalarField;
 use Bitrix\Main\ORM\Query\Query;
@@ -1063,7 +1064,7 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 		if (get_class($this) !== get_class($collection))
 		{
 			throw new ArgumentException(
-				'Invalid object class ' . get_class($collection) . ' for merge, ' . get_class($this) . ' expected .'
+				'Invalid object class ' . get_class($collection) . ' for merge, ' . get_class($this) . ' expected.'
 			);
 		}
 
@@ -1078,5 +1079,42 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 	public function isEmpty(): bool
 	{
 		return $this->count() === 0;
+	}
+
+	public function find(callable $callback): ?EntityObject
+	{
+		foreach ($this as $key => $item)
+		{
+			if ($callback($item, $key))
+			{
+				return $item;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @throws CollectionFilterException
+	 */
+	public function filter(callable $callback): static
+	{
+		if ($this->sysIsChanged())
+		{
+			throw new CollectionFilterException();
+		}
+
+		$collection = new static();
+		foreach ($this as $key => $item)
+		{
+			if ($callback($item, $key))
+			{
+				$collection->add($item);
+			}
+		}
+
+		$collection->sysResetChanges();
+
+		return $collection;
 	}
 }

@@ -120,20 +120,34 @@ final class JobRepository
 	/**
 	 * @return Result<SummarizeCallTranscriptionPayload>|null
 	 */
-	public function getSummarizeCallTranscriptionResultByActivity(int $activityId): ?Result
+	public function getSummarizeCallTranscriptionResultByActivity(int $activityId, ?int $jobId = null): ?Result
 	{
-		if (array_key_exists($activityId, $this->summarizeCache))
+		$cacheKey = sprintf('%d-%d', $activityId, $jobId ?? 0);
+		if (array_key_exists($cacheKey, $this->summarizeCache))
 		{
-			return is_object($this->summarizeCache[$activityId]) ? clone $this->summarizeCache[$activityId] : null;
+			return is_object($this->summarizeCache[$cacheKey])
+				? clone $this->summarizeCache[$cacheKey]
+				: null
+			;
 		}
 
 		if ($activityId > 0)
 		{
-			$job = QueueTable::query()
+			$query = QueueTable::query()
 				->setSelect(['*'])
 				->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
 				->where('ENTITY_ID', $activityId)
 				->where('TYPE_ID', SummarizeCallTranscription::TYPE_ID)
+				// select last job
+				->addOrder('ID', 'DESC')
+			;
+
+			if (isset($jobId))
+			{
+				$query->where('ID', $jobId);
+			}
+
+			$job = $query
 				->setLimit(1)
 				->fetchObject()
 			;

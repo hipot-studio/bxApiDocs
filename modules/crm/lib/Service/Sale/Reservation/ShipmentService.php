@@ -232,7 +232,7 @@ class ShipmentService
 
 			if (isset($rowReserve['DATE_RESERVE_END']))
 			{
-				$reserveInfo->setDateReserveEnd((string)$rowReserve['DATE_RESERVE_END']);
+				$reserveInfo->setDateReserveEnd($rowReserve['DATE_RESERVE_END']);
 			}
 		}
 

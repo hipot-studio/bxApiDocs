@@ -317,4 +317,64 @@ final class MimeType
 
 		return $ct;
 	}
+
+	public static function isValid(string $mimeType): bool
+	{
+		$pattern = '~^[a-z0-9]{1}[\w!#$&-^]+/[a-z0-9]{1}[\w!#$&-^.+]+$~i';
+
+		return (bool) preg_match($pattern, $mimeType);
+	}
+
+	public static function getFromBase64($base64String): string
+	{
+		$cleanBase64 = preg_replace('/^data:.*?;base64,/', '', $base64String);
+
+		$data = base64_decode($cleanBase64);
+
+		if ($data === false)
+		{
+			return 'application/octet-stream';
+		}
+
+		$firstBytes = substr($data, 0, 8);
+		$hex = bin2hex($firstBytes);
+
+		if (str_starts_with($hex, '89504e470d0a1a0a'))
+		{
+			return 'image/png';
+		}
+		if (str_starts_with($hex, 'ffd8ff'))
+		{
+			return 'image/jpeg';
+		}
+		if (str_starts_with($hex, '47494638'))
+		{
+			return 'image/gif';
+		}
+		if (str_starts_with($hex, '424d'))
+		{
+			return 'image/bmp';
+		}
+		if (str_starts_with($hex, '52494646') && substr($data, 8, 4) === 'WEBP')
+		{
+			return 'image/webp';
+		}
+		if (str_starts_with($hex, '25504446'))
+		{
+			return 'application/pdf';
+		}
+		if (str_starts_with($hex, '504b0304'))
+		{
+			return 'application/zip';
+		}
+		if (str_starts_with($hex, '494433'))
+		{
+			return 'audio/mpeg';
+		}
+		if (str_starts_with($hex, '66747970') || str_starts_with($hex, '0000001866747970'))
+		{
+			return 'video/mp4';
+		}
+		return 'application/octet-stream';
+	}
 }

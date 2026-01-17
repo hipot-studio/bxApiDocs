@@ -11,7 +11,7 @@ final class Scrum extends Base
 	protected const ITEM = 'SCRUM';
 	protected const LIST = 'ITEMS';
 
-	protected const VIEWED_TYPE = Comments\Viewed\Enum::PROJECT;
+	protected const VIEWED_TYPE = 2;
 
 	/**
 	 * @param $fields
@@ -22,27 +22,6 @@ final class Scrum extends Base
 	{
 		$fields['GROUP_ID'] = ($fields['GROUP_ID'] ?? null);
 		$fields['ROLE'] = ($fields['ROLE'] ?? null);
-
-		if (Comments\Viewed\Group::isOn())
-		{
-			$r = (new Comments\Viewed\Group())->markAsRead(
-				$fields['GROUP_ID'],
-				Comments\Viewed\Group::ROLE_ALL,
-				Comments\Viewed\Enum::resolveTypeById(Comments\Viewed\Enum::SCRUM)
-			);
-
-			if ($r->isSuccess() === false)
-			{
-				$this->addErrors($r->getErrors());
-				return null;
-			}
-
-			$params = Comments\Viewed\Event::prepare($fields);
-			Comments\Viewed\Event::addByTypeCounterService(Comments\Viewed\Enum::SCRUM,  $params);
-			Comments\Viewed\Event::addByTypePushService(Comments\Viewed\Enum::SCRUM, $params);
-
-			return true;
-		}
 
 		return $this->forward(new Comment(), 'readAll', ['groupId' => $fields['GROUP_ID']]);
 	}

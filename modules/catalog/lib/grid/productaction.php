@@ -3,6 +3,7 @@
 namespace Bitrix\Catalog\Grid;
 
 use Bitrix\Main;
+use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Iblock;
 use Bitrix\Catalog;
@@ -317,6 +318,7 @@ class ProductAction
 				'MEASURE',
 				'PURCHASING_PRICE',
 				'PURCHASING_CURRENCY',
+				'BOOKING_SERVICES_ONLY',
 			];
 			$baseTypes = [
 				Catalog\ProductTable::TYPE_PRODUCT,
@@ -538,7 +540,18 @@ class ProductAction
 			return $result;
 		}
 
-		$convertResult = self::convertCatalogType($products, $type);
+		$beforeEventResult = self::emitEventBeforeConvert($products, $type);
+		if (!$beforeEventResult->isSuccess())
+		{
+			$result->addErrors($beforeEventResult->getErrors());
+		}
+		$validProductIds = $beforeEventResult->getData()['PRODUCT_IDS'];
+		if (empty($validProductIds))
+		{
+			return $result;
+		}
+
+		$convertResult = self::convertCatalogType($validProductIds, $type);
 		if (!$convertResult->isSuccess())
 		{
 			$result->addErrors($convertResult->getErrors());
@@ -918,5 +931,86 @@ class ProductAction
 		}
 
 		return new Main\Result();
+	}
+
+	private static function emitEventBeforeConvert(array $productIdList, int $type): Main\Result
+	{
+		$result = new Main\Result();
+
+		$event = new Event(
+			moduleId: 'catalog',
+			type: 'onBeforeConvertProductsType',
+			parameters: [
+				'PRODUCT_IDS' => $productIdList,
+				'TYPE' => $type,
+			],
+		);
+		$event->send();
+
+		$handlerErrorIds = [];
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() === Main\EventResult::SUCCESS)
+			{
+				continue;
+			}
+
+			$errorProductIds = $eventResult->getParameters()['ERROR_PRODUCT_IDS'] ?? [];
+			if (!is_array($errorProductIds) || empty($errorProductIds))
+			{
+				continue;
+			}
+
+			$handlerErrorIds[] = $errorProductIds;
+
+			$handlerError = $eventResult->getParameters()['ERROR'] ?? null;
+			if ($handlerError instanceof Main\Error)
+			{
+				$result->addError($handlerError);
+			}
+		}
+
+		$errorsIds = array_unique(array_merge(...$handlerErrorIds));
+
+		if (!empty($errorsIds) && $result->isSuccess())
+		{
+			$names = self::getNamesByIds($errorsIds);
+			$result->addError(
+				new Main\Error(
+					message: Loc::getMessage(
+						'BX_CATALOG_PRODUCT_ACTION_ERR_CANNOT_CHANGE_TYPE',
+						[
+							'#NAMES#' => implode(', ', $names),
+						]
+					),
+					customData: $errorsIds,
+				),
+			);
+		}
+
+		$result->setData(['PRODUCT_IDS' => array_diff($productIdList, $errorsIds)]);
+
+		return $result;
+	}
+
+	private static function getNamesByIds(array $productIds): array
+	{
+		$iterator = Iblock\ElementTable::getList([
+			'select' => [
+				'ID',
+				'NAME',
+			],
+			'filter' => [
+				'@ID' => $productIds,
+			],
+		]);
+
+		$names = [];
+		while ($row = $iterator->fetch())
+		{
+			$names[] = '[' . $row['ID'] . '] ' . $row['NAME'];
+		}
+
+		return $names;
 	}
 }

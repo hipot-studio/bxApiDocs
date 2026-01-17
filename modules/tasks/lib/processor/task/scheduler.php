@@ -94,6 +94,11 @@ final class Scheduler extends \Bitrix\Tasks\Processor\Processor
 					$processorSettings['MODE'] = ($settings['MODE'] ?? null);
 				}
 
+				if (isset($settings['INHERIT_FOR']))
+				{
+					$processorSettings['INHERIT_FOR'] = $settings['INHERIT_FOR'];
+				}
+
 				$nextProcessor->processTask($impact, $result, $processorSettings);
 			}
 

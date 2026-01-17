@@ -225,11 +225,7 @@ class Event extends \IRestService
 
 			foreach($scopeList as $scope)
 			{
-				if(
-					isset($serviceDescription[$scope])
-					&& is_array($serviceDescription[$scope][\CRestUtil::EVENTS])
-					&& array_key_exists($eventName, $serviceDescription[$scope][\CRestUtil::EVENTS])
-				)
+				if (!empty($serviceDescription[$scope][\CRestUtil::EVENTS][$eventName]))
 				{
 					$eventInfo = $serviceDescription[$scope][\CRestUtil::EVENTS][$eventName];
 					if(is_array($eventInfo))

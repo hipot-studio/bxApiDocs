@@ -218,6 +218,8 @@ trait AnnotationTrait
 			$code[] = "\t * @method {$collectionClass} merge(?{$collectionClass} \$collection)";
 			$code[] = "\t * @method bool isEmpty()";
 			$code[] = "\t * @method array collectValues(int \$valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int \$fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool \$recursive = false)";
+			$code[] = "\t * @method {$objectClass}|null find(callable \$callback)";
+			$code[] = "\t * @method {$collectionClass} filter(callable \$callback)";
 		}
 
 		// xTODO we can put path to the original file here

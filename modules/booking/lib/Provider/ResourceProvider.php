@@ -32,7 +32,7 @@ class ResourceProvider
 			offset: $gridParams->offset,
 			filter: $gridParams->filter,
 			sort: $gridParams->getSort(),
-			select: $gridParams->getSelect() ?: new ResourceSelect(),
+			select: $gridParams->getSelect() ?: (new ResourceSelect())->prepareSelect(),
 			userId: $userId,
 		);
 	}
@@ -92,6 +92,20 @@ class ResourceProvider
 
 			$resource->setCounter($resourceCounter);
 		}
+
+		return $this;
+	}
+
+	public function withSkus(ResourceCollection $collection): self
+	{
+		$this->repository->withSkus($collection);
+
+		return $this;
+	}
+
+	public function withSkusYandex(ResourceCollection $collection): self
+	{
+		$this->repository->withSkusYandex($collection);
 
 		return $this;
 	}

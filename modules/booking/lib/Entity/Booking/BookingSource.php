@@ -12,4 +12,6 @@ enum BookingSource: string
 
 	case Internal = 'internal';
 	case Yandex = 'yandex';
+	case CrmForm = 'crm_form';
+	case Rest = 'rest';
 }

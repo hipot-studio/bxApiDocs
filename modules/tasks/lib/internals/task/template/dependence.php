@@ -1,23 +1,15 @@
-<?
-/**
- * Class DependenceTable
- *
- * @package Bitrix\Tasks
- **/
+<?php
 
 namespace Bitrix\Tasks\Internals\Task\Template;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
-//Loc::loadMessages(__FILE__);
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Tasks\Internals\DataBase\Tree;
+use Bitrix\Tasks\Internals\Task\TemplateTable;
 
 /**
  * Class DependenceTable
- * @package Bitrix\Tasks\Internals\Task\Template
- *
- * Note: \Bitrix\Tasks\Internals\DataBase\Tree is deprecated,
- * @see \Bitrix\Tasks\Internals\Helper\Task\Template\Dependence instead.
- * Therefore, use this class ONLY as a datamanager class for table b_tasks_template_dep!
  *
  * DO NOT WRITE ANYTHING BELOW THIS
  *
@@ -32,68 +24,46 @@ use Bitrix\Main,
  * @method static \Bitrix\Tasks\Internals\Task\Template\EO_Dependence wakeUpObject($row)
  * @method static \Bitrix\Tasks\Internals\Task\Template\EO_Dependence_Collection wakeUpCollection($rows)
  */
-class DependenceTable extends \Bitrix\Tasks\Internals\DataBase\Tree
+class DependenceTable extends Tree
 {
-	/**
-	 * Returns DB table name for entity.
-	 *
-	 * @return string
-	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_tasks_template_dep';
 	}
 
-	public static function getIDColumnName()
+	public static function getIDColumnName(): string
 	{
 		return 'TEMPLATE_ID';
 	}
 
-	public static function getPARENTIDColumnName()
+	public static function getPARENTIDColumnName(): string
 	{
 		return 'PARENT_TEMPLATE_ID';
 	}
 
-	/**
-	 * @return static
-	 */
-	public static function getClass()
+	public static function getClass(): string
 	{
-		return get_called_class();
+		return static::class;
 	}
 
-	/**
-	 * Returns entity map definition.
-	 *
-	 * @return array
-	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
-		return array_merge(array(
-			'TEMPLATE_ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-			),
-			'PARENT_TEMPLATE_ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-			),
+		$map = [
+			(new IntegerField('TEMPLATE_ID'))
+				->configurePrimary(),
 
-			// reference
-			'TEMPLATE' => array(
-				'data_type' => '\Bitrix\Tasks\Template',
-				'reference' => array(
-					'=this.TEMPLATE_ID' => 'ref.ID'
-				),
-				'join_type' => 'inner'
-			),
-			'PARENT_TEMPLATE' => array(
-				'data_type' => '\Bitrix\Tasks\Template',
-				'reference' => array(
-					'=this.PARENT_TEMPLATE_ID' => 'ref.ID'
-				),
-				'join_type' => 'inner'
-			),
-		), parent::getMap('\Bitrix\Tasks\Internals\Task\Template\Dependence'));
+			(new IntegerField('PARENT_TEMPLATE_ID'))
+				->configurePrimary(),
+
+			(new Reference('TEMPLATE', TemplateTable::getEntity(), Join::on('this.TEMPLATE_ID', 'ref.ID')))
+				->configureJoinType(Join::TYPE_INNER),
+
+			(new Reference('PARENT_TEMPLATE', TemplateTable::getEntity(), Join::on('this.PARENT_TEMPLATE_ID', 'ref.ID')))
+				->configureJoinType(Join::TYPE_INNER),
+		];
+
+		$parentMap = parent::getMap(self::class);
+
+		return array_merge($map, $parentMap);
 	}
 }

@@ -24,6 +24,10 @@ class DtoCollection implements \IteratorAggregate, \Countable, Arrayable, \JsonS
 
 	public function add(Dto $dto): void
 	{
+		if (!($dto instanceof $this->type))
+		{
+			throw new SystemException('Item must be instance of ' . $this->type);
+		}
 		$this->items[] = $dto;
 	}
 

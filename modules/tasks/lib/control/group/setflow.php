@@ -9,7 +9,7 @@ class SetFlow
 	public function runBatch(int $userId, array $taskIds, int $flowId): array
 	{
 		$result = [];
-		$control = new Task($userId);
+		$control = (new Task($userId))->useConsistency();
 
 		foreach ($taskIds as $id)
 		{

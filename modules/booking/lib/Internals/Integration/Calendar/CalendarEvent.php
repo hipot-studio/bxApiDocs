@@ -24,6 +24,7 @@ class CalendarEvent
 
 	public function __construct(
 		Mappers\Event|null $eventMapper = null,
+		private readonly CalendarSectionProvider $calendarSectionProvider = new CalendarSectionProvider(),
 	)
 	{
 		if ($eventMapper)
@@ -107,12 +108,11 @@ class CalendarEvent
 
 		$eventFields = $this->eventMapper->convertToArray($event);
 
-		$dateFrom = $this->prepareDate($newDatePeriod->getDateFrom());
-		$dateTo = $this->prepareDate($newDatePeriod->getDateTo());
+		$datePeriod = $this->prepareDatePeriod($newDatePeriod);
 
 		$eventFields['NAME'] = $this->createEventName($resource, $client);
-		$eventFields['TZ_FROM'] = $dateFrom->getTimezone()->getName();
-		$eventFields['TZ_TO'] = $dateTo->getTimezone()->getName();
+		$eventFields['TZ_FROM'] = $datePeriod->getDateFrom()->getTimezone()->getName();
+		$eventFields['TZ_TO'] = $datePeriod->getDateTo()->getTimezone()->getName();
 		if ($locationId)
 		{
 			$eventFields['LOCATION'] = $this->prepareLocation($locationId);
@@ -129,7 +129,7 @@ class CalendarEvent
 		}
 
 		$event = (new EventBuilderFromArray($eventFields))->build();
-		$this->setDatesToEvent($event, $newDatePeriod);
+		$this->setDatesToEvent($event, $datePeriod);
 		$this->eventMapper->update($event);
 		$this->setEventAccepted($eventId, $userIds);
 	}
@@ -181,13 +181,12 @@ class CalendarEvent
 			'HIDE_GUESTS' => false,
 		];
 
-		$dateFrom = $this->prepareDate($datePeriod->getDateFrom());
-		$dateTo = $this->prepareDate($datePeriod->getDateTo());
+		$datePeriod = $this->prepareDatePeriod($datePeriod);
 
 		$eventData = [
 			'NAME' => (string)($params['eventName'] ?? ''),
-			'TZ_FROM' => $dateFrom->getTimezone()->getName(),
-			'TZ_TO' => $dateTo->getTimezone()->getName(),
+			'TZ_FROM' => $datePeriod->getDateFrom()->getTimezone()->getName(),
+			'TZ_TO' => $datePeriod->getDateTo()->getTimezone()->getName(),
 			'SKIP_TIME' => 'N',
 			'ACCESSIBILITY' => 'busy',
 			'IMPORTANCE' => 'normal',
@@ -213,7 +212,7 @@ class CalendarEvent
 			;
 		}
 
-		$section = \CCalendarSect::GetSectionForOwner(Dictionary::CALENDAR_TYPE['user'], $hostId);
+		$section = $this->calendarSectionProvider->getSectionForUser($hostId);
 
 		$eventData = [
 			...$eventData,
@@ -302,6 +301,14 @@ class CalendarEvent
 	private function prepareLocation(int $locationId): string
 	{
 		return 'calendar_' . $locationId;
+	}
+
+	private function prepareDatePeriod(DatePeriod $datePeriod): DatePeriod
+	{
+		return new DatePeriod(
+			dateFrom: $this->prepareDate($datePeriod->getDateFrom()),
+			dateTo: $this->prepareDate($datePeriod->getDateTo()),
+		);
 	}
 
 	private function prepareDate(\DateTimeImmutable $date): \DateTimeImmutable

@@ -41,6 +41,9 @@ class ParameterTable extends TaskDataManager
 	public const PARAM_SUBTASKS_AUTOCOMPLETE = 2;
 	public const PARAM_RESULT_REQUIRED = 3;
 	public const PARAM_ALLOW_CHANGE_DATE_PLAN = 4;
+	public const PARAM_MAX_DEADLINE_CHANGE_DATE = 5;
+	public const PARAM_MAX_DEADLINE_CHANGES = 6;
+	public const PARAM_REQUIRE_DEADLINE_CHANGE_REASON = 7;
 
 	public const PREFIX_PARAM = 'PARAM_';
 
@@ -54,6 +57,9 @@ class ParameterTable extends TaskDataManager
 			self::PARAM_SUBTASKS_AUTOCOMPLETE,
 			self::PARAM_RESULT_REQUIRED,
 			self::PARAM_ALLOW_CHANGE_DATE_PLAN,
+			self::PARAM_MAX_DEADLINE_CHANGE_DATE,
+			self::PARAM_MAX_DEADLINE_CHANGES,
+			self::PARAM_REQUIRE_DEADLINE_CHANGE_REASON,
 		];
 	}
 

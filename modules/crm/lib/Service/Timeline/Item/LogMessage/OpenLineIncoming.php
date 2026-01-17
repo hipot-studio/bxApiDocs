@@ -20,7 +20,7 @@ class OpenLineIncoming extends LogMessage
 
 	public function getIconCode(): ?string
 	{
-		return Icon::OPENLINE_INCOMING_MESSAGE;
+		return Icon::IM;
 	}
 
 	public function getTitle(): ?string

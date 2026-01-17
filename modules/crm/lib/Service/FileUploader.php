@@ -4,10 +4,8 @@ namespace Bitrix\Crm\Service;
 
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Field;
-use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Bitrix\Main\UI\FileInputUtility;
 use Bitrix\Main\UserField\File\ManualUploadRegistry;
 
 class FileUploader
@@ -15,13 +13,10 @@ class FileUploader
 	protected $files = [];
 	/** @var \CFile */
 	protected $cfile = \CFile::class;
-	/** @var FileInputUtility */
-	protected $fileInputUtility;
 
 	public function __construct()
 	{
 		$this->registerShutdownFunction();
-		$this->fileInputUtility = FileInputUtility::instance();
 	}
 
 	protected function registerShutdownFunction(): void
@@ -107,12 +102,23 @@ class FileUploader
 	public function saveFileTemporary(Field $field, array $fileData): ?int
 	{
 		$fileId = $this->saveFile($field, $fileData);
+		if ($fileId) // fileId can be null if only old file was deleted and new file is not set
+		{
+			$this->markFileAsTemporary($fileId);
+		}
+
+		return $fileId;
+	}
+
+	/**
+	 * Mark $fileId as temporary file that should be deleted if not bound to any \Bitrix\Crm\Item during the hit.
+	 */
+	public function markFileAsTemporary(int $fileId): void
+	{
 		if ($fileId > 0)
 		{
 			$this->files[$fileId] = $fileId;
 		}
-
-		return $fileId;
 	}
 
 	protected function saveFile(Field $field, array $fileData): ?int
@@ -147,28 +153,7 @@ class FileUploader
 			return;
 		}
 
-		if ($this->isFileInputUtilityAccessible())
-		{
-			$controlId = $this->fileInputUtility->getUserFieldCid($field->getUserField());
-
-			$this->fileInputUtility->registerControl($controlId, $controlId);
-			$this->fileInputUtility->registerFile($controlId, $fileId);
-		}
-
-		if (class_exists('\Bitrix\Main\UserField\File\ManualUploadRegistry'))
-		{
-			ManualUploadRegistry::getInstance()->registerFile($field->getUserField(), $fileId);
-		}
-	}
-
-	private function isFileInputUtilityAccessible(): bool
-	{
-		if (method_exists($this->fileInputUtility, 'isAccessible'))
-		{
-			return $this->fileInputUtility->isAccessible();
-		}
-
-		return Application::getInstance()->getSession()->isAccessible();
+		ManualUploadRegistry::getInstance()->registerFile($field->getUserField(), $fileId);
 	}
 
 	/**

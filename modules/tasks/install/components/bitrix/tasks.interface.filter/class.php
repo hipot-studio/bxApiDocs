@@ -4,9 +4,11 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\WorkgroupTable;
+use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Helper\Filter;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Scrum\Service\SprintService;
@@ -14,6 +16,7 @@ use Bitrix\Tasks\TourGuide\PresetsMoved;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\FilterLimit;
 use Bitrix\Tasks\Ui\Filter\Task;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
+use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 
 Loader::includeModule('socialnetwork');
@@ -59,6 +62,17 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 	{
 		$this->arResult['showPresetTourGuide'] = $this->showPresetTourGuide();
 		$this->arResult['roles'] = $this->prepareRoles();
+		$this->arResult['relationToId'] = (int)$this->request->get('relationToId');
+		$this->arResult['relationType'] = $this->request->get('relationType');
+		if ($this->arResult['relationToId'])
+		{
+			$taskRightService = ServiceLocator::getInstance()->get(TaskRightService::class);
+			$this->arResult['canEditRelation'] = $taskRightService->can(
+				$this->userId,
+				$this->arResult['relationToId'],
+				ActionDictionary::ACTION_TASK_EDIT,
+			);
+		}
 
 		return parent::executeComponent();
 	}

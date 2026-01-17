@@ -10,7 +10,7 @@ namespace Bitrix\Tasks\Integration;
 
 use Bitrix\Tasks\Integration\Disk;
 
-abstract class Mail extends \Bitrix\Tasks\Integration
+abstract class Mail extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'mail';
 

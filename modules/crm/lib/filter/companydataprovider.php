@@ -104,6 +104,7 @@ class CompanyDataProvider extends EntityDataProvider implements FactoryOptionabl
 				'CREATED_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -111,6 +112,7 @@ class CompanyDataProvider extends EntityDataProvider implements FactoryOptionabl
 				'MODIFY_BY_ID',
 				[
 					'type' => 'entity_selector',
+					'default' => true,
 					'partial' => true,
 				]
 			),
@@ -449,15 +451,14 @@ class CompanyDataProvider extends EntityDataProvider implements FactoryOptionabl
 			$isEnableAllUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 			$isEnableOtherUsers = in_array($fieldID, ['ASSIGNED_BY_ID', 'ACTIVITY_RESPONSIBLE_IDS'], true);
 
-			return $this->getUserEntitySelectorParams(
+			return $this->getDepartmentSelectorParams(
 				EntitySelector::CONTEXT,
 				[
 					'fieldName' => $fieldID,
 					'referenceClass' => $referenceClass,
 					'isEnableAllUsers' => $isEnableAllUsers,
 					'isEnableOtherUsers' => $isEnableOtherUsers,
-					'isEnableStructureNode' => true,
-				]
+				],
 			);
 		}
 		elseif($fieldID === 'ACTIVITY_COUNTER' && !$this->settings->isMyCompanyMode())

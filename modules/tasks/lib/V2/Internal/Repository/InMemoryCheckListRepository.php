@@ -10,12 +10,24 @@ class InMemoryCheckListRepository implements CheckListRepositoryInterface
 {
 	private CheckListRepositoryInterface $checkListRepository;
 
+	private array $cache = [];
 	private array $idsCache = [];
 	private array $attachmentCache = [];
 
 	public function __construct(CheckListRepository $checkListRepository)
 	{
 		$this->checkListRepository = $checkListRepository;
+	}
+
+	public function getByEntity(int $entityId, Entity\CheckList\Type $type): Entity\CheckList
+	{
+		$key = "{$entityId}_{$type->name}";
+		if (!isset($this->cache[$key]))
+		{
+			$this->cache[$key] = $this->checkListRepository->getByEntity($entityId, $type);
+		}
+
+		return $this->cache[$key];
 	}
 
 	public function getIdsByEntity(int $entityId, Entity\CheckList\Type $type): array

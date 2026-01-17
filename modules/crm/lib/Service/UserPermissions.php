@@ -7,9 +7,7 @@ use Bitrix\Crm\EO_Status_Collection;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Security\AttributesProvider;
 use Bitrix\Crm\Security\EntityPermission\MyCompany;
-use Bitrix\Crm\Security\Role\Manage\Entity;
 use Bitrix\Crm\Security\Role\PermissionsManager;
-use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\PermIdentifier;
 use Bitrix\Crm\Service\UserPermissions\Admin;
 use Bitrix\Crm\Service\UserPermissions\AutomatedSolution;
 use Bitrix\Crm\Service\UserPermissions\Automation;
@@ -26,6 +24,7 @@ use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Type;
 use Bitrix\Crm\Service\UserPermissions\Exclusion;
 use Bitrix\Crm\Service\UserPermissions\InventoryManagementContractor;
 use Bitrix\Crm\Service\UserPermissions\Kanban;
+use Bitrix\Crm\Service\UserPermissions\MessageSender;
 use Bitrix\Crm\Service\UserPermissions\Permission;
 use Bitrix\Crm\Service\UserPermissions\Product;
 use Bitrix\Crm\Service\UserPermissions\RepeatSale;
@@ -83,6 +82,7 @@ class UserPermissions
 	protected ?SaleTarget $saleTargetPermissions = null;
 	protected ?RepeatSale $repeatSalePermissions = null;
 	protected ?InventoryManagementContractor $inventoryManagementContractorPermissions = null;
+	protected ?MessageSender $messageSender = null;
 
 	/**
 	 * @deprecated
@@ -459,6 +459,23 @@ class UserPermissions
 		}
 
 		return $this->inventoryManagementContractorPermissions;
+	}
+
+	/**
+	 * Manage permissions for sending messages and configuring channels
+	 * @return MessageSender
+	 */
+	public function messageSender(): MessageSender
+	{
+		if (!$this->messageSender)
+		{
+			$this->messageSender = new MessageSender(
+				$this->entityType(),
+				$this->item(),
+			);
+		}
+
+		return $this->messageSender;
 	}
 
 	public function getAttributesProvider(): AttributesProvider

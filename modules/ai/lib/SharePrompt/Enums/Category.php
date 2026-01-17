@@ -19,8 +19,10 @@ enum Category: string
 	case CRM_COMMENT_FIELD = 'crm_comment_field';
 	case CRM_TIMELINE_COMMENT = 'crm_timeline_comment';
 	case CRM_CALL_ASSESSMENT = 'crm_call_assessment';
+	case CRM_MESSAGE_EDITOR = 'crm_message_editor';
 	case CHAT = 'chat';
 	case SYSTEM = 'system';
 	case LIST = 'list';
 	case PRODUCT_DESCRIPTION = 'product_description';
+	case TASKS_RESULTS = 'tasks_results';
 }

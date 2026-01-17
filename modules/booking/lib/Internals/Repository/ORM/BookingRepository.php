@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Repository\ORM;
 
+use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Exception\Booking\RemoveBookingException;
-use Bitrix\Booking\Internals\Exception\Note\CreateNoteException;
-use Bitrix\Booking\Internals\Exception\Note\RemoveNoteException;
 use Bitrix\Booking\Internals\Model\BookingTable;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
-use Bitrix\Booking\Internals\Model\EO_Booking;
-use Bitrix\Booking\Internals\Model\NotesTable;
+use Bitrix\Booking\Internals\Model\Enum\NoteType;
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\BookingMapper;
+use Bitrix\Booking\Internals\Repository\ORM\Trait\NoteTrait;
+use Bitrix\Booking\Internals\Service\BookingSkuService;
 use Bitrix\Booking\Provider\BookingProvider;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
@@ -26,11 +27,13 @@ use Bitrix\Main\ORM\Query\QueryHelper;
 
 class BookingRepository implements BookingRepositoryInterface
 {
-	private BookingMapper $mapper;
+	use NoteTrait;
 
-	public function __construct(BookingMapper $mapper)
+	public function __construct(
+		private readonly BookingMapper $mapper,
+		private readonly BookingSkuService $bookingSkuService,
+	)
 	{
-		$this->mapper = $mapper;
 	}
 
 	public function getQuery(FilterInterface|null $filter = null): Query
@@ -145,6 +148,7 @@ class BookingRepository implements BookingRepositoryInterface
 		bool $withCounters = true,
 		bool $withClientsData = true,
 		bool $withExternalData = true,
+		bool $withSkus = true,
 	): Entity\Booking\Booking|null
 	{
 		// todo: needs refactoring, repository should not know about providers
@@ -158,7 +162,9 @@ class BookingRepository implements BookingRepositoryInterface
 					'CLIENTS',
 					'RESOURCES',
 					'EXTERNAL_DATA',
+					'SKUS',
 					'NOTE',
+					'CLIENT_NOTE',
 				])
 			),
 			userId: $userId
@@ -179,17 +185,26 @@ class BookingRepository implements BookingRepositoryInterface
 			$provider->withExternalData($collection);
 		}
 
+		if ($withSkus)
+		{
+			$this->withSkus($collection);
+		}
+
 		return $collection->getFirstCollectionItem();
 	}
 
 	public function getByIdForManager(int $id): Entity\Booking\Booking|null
 	{
-		$select = new BookingSelect(['RESOURCES', 'NOTE']);
+		$select = new BookingSelect([
+			'RESOURCES',
+			'NOTE',
+			'CLIENT_NOTE',
+			'SKUS',
+		]);
 
 		$ormBooking = BookingTable::query()
 			->setSelect(array_merge(['*'], $select->prepareSelect()))
 			->where('ID', '=', $id)
-			->setLimit(1)
 			->exec()
 			->fetchObject()
 		;
@@ -199,7 +214,10 @@ class BookingRepository implements BookingRepositoryInterface
 			return null;
 		}
 
-		return $this->mapper->convertFromOrm($ormBooking);
+		$booking = $this->mapper->convertFromOrm($ormBooking);
+		$this->withSkus(new BookingCollection($booking));
+
+		return $booking;
 	}
 
 	public function save(Entity\Booking\Booking $booking): int
@@ -211,7 +229,21 @@ class BookingRepository implements BookingRepositoryInterface
 			throw new CreateBookingException($result->getErrors()[0]->getMessage());
 		}
 
-		$this->handleNote($ormBooking, $booking->getNote(), $result->getId());
+		$this->handleNote(
+			$ormBooking,
+			$booking->getNote(),
+			$result->getId(),
+			EntityType::Booking,
+			NoteType::Manager,
+		);
+
+		$this->handleNote(
+			$ormBooking,
+			$booking->getClientNote(),
+			$result->getId(),
+			EntityType::Booking,
+			NoteType::Client,
+		);
 
 		return $result->getId();
 	}
@@ -225,33 +257,15 @@ class BookingRepository implements BookingRepositoryInterface
 		}
 	}
 
-	private function handleNote(EO_Booking $ormBooking, string|null $noteDescription, int $bookingId): void
+	public function withSkus(BookingCollection $collection): self
 	{
-		$note = $ormBooking->fillNote() ?? NotesTable::createObject();
-		if (empty($noteDescription) && $note->getId())
-		{
-			$noteDeleteResult = $note->delete();
-			if (!$noteDeleteResult->isSuccess())
-			{
-				throw new RemoveNoteException($noteDeleteResult->getErrors()[0]->getMessage());
-			}
+		$skuCollections = array_map(
+			static fn(Booking $booking) => $booking->getSkuCollection(),
+			$collection->getCollectionItems(),
+		);
 
-			return;
-		}
+		$this->bookingSkuService->loadForCollection(...$skuCollections);
 
-		if ($noteDescription === null)
-		{
-			return;
-		}
-
-		$note->setDescription($noteDescription);
-		$note->setEntityType(EntityType::Booking->value);
-		$note->setEntityId($bookingId);
-		$noteSaveResult = $note->save();
-
-		if (!$noteSaveResult->isSuccess())
-		{
-			throw new CreateNoteException($noteSaveResult->getErrors()[0]->getMessage());
-		}
+		return $this;
 	}
 }

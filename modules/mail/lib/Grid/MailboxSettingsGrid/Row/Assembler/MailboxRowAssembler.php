@@ -23,11 +23,13 @@ class MailboxRowAssembler extends RowAssembler
 			new Field\JsFields\EmailWithCounterFieldAssembler(['EMAIL'], $this->settings),
 			new Field\JsFields\LastSyncFieldAssembler(['LAST_SYNC'], $this->settings),
 			new Field\JsFields\CRMStatusFieldAssembler(['CRM_ENABLED_STATUS'], $this->settings),
-			new Field\JsFields\UsersWithAvatarsFieldAssembler(['USERS_WITH_ACCESS'], 'USERS_DATA', $this->settings),
-			new Field\JsFields\UsersWithAvatarsFieldAssembler(['CRM_LEAD_RESP'], 'CRM_LEAD_RESP_DATA', $this->settings),
+			new Field\JsFields\DiskAmountFieldAssembler(['VOLUME_MB'], $this->settings),
+			new Field\JsFields\EntitiesWithAvatarsFieldAssembler(['USERS_WITH_ACCESS'], 'ENTITIES_DATA', $this->settings),
+			new Field\JsFields\EntitiesWithAvatarsFieldAssembler(['CRM_LEAD_RESP'], 'CRM_LEAD_RESP_DATA', $this->settings),
 			new Field\JsFields\DailySentCountFieldAssembler(['DAILY_SENT_COUNT'], $this->settings),
 			new Field\JsFields\MonthlySentCountFieldAssembler(['MONTHLY_SENT_COUNT'], $this->settings),
 			new Field\JsFields\ActionFieldAssembler(['ACTION'], $this->settings),
+			new Field\JsFields\MailboxNameFieldAssembler(['MAILBOX_NAME'], $this->settings),
 		];
 	}
 }

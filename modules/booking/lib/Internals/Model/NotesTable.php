@@ -54,6 +54,10 @@ final class NotesTable extends DataManager
 			(new StringField('ENTITY_TYPE'))
 				->addValidator(new LengthValidator(1, 255))
 				->configureRequired(),
+
+			(new StringField('NOTE_TYPE'))
+				->addValidator(new LengthValidator(1, 255))
+				->configureRequired(),
 		];
 	}
 }

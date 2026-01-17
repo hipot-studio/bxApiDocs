@@ -103,7 +103,7 @@ class CBPTaskService extends CBPRuntimeService
 		$taskId = (array)$taskId;
 		$taskId = array_map('intval', $taskId);
 		$taskId = array_filter($taskId);
-		if (sizeof($taskId) < 1)
+		if (count($taskId) < 1)
 		{
 			throw new Exception("taskId");
 		}
@@ -319,7 +319,7 @@ class CBPTaskService extends CBPRuntimeService
 			}
 			$removedUsers[] = $arRes["USER_ID"];
 		}
-		$DB->Query("DELETE FROM b_bp_task_user WHERE TASK_ID = ".intval($id)." ",);
+		$DB->Query("DELETE FROM b_bp_task_user WHERE TASK_ID = ".intval($id)." ");
 
 		self::onTaskChange(
 			$id,
@@ -468,7 +468,7 @@ class CBPTaskService extends CBPRuntimeService
 		}
 		self::cleanCountersCache($users);
 
-		if (!empty($taskData['USERS_REMOVED']) || !empty($taskData['USERS_ADDED']))
+		if (!empty($taskData['USERS_REMOVED']) || !empty($taskData['USERS_ADDED']) || !empty($taskData['USERS_STATUSES']))
 		{
 			unset(self::$taskUsers[$taskId]);
 		}

@@ -96,7 +96,7 @@ class UserPause
 		}, $users);
 
 		$userCollection = new UserCollection($userIds);
-		$users = (new RestAdapter($userCollection))->toRestFormat();
+		$users = $userCollection->toRestFormat();
 
 		$result = [];
 		foreach ($users as $user)
@@ -152,7 +152,7 @@ class UserPause
 			if (!isset($result[$row['USER_ID']]))
 			{
 				$user = User::getInstance($row['USER_ID']);
-				$result[$row['USER_ID']]['user'] = (new RestAdapter($user))->toRestFormat();
+				$result[$row['USER_ID']]['user'] = $user->toRestFormat();
 			}
 
 			if ($row['DATA'] === 'Y')

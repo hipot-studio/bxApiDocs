@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\BizProc\FieldType;
 
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingType;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\InvoiceSettings;
 use Bitrix\Main,
@@ -196,5 +197,13 @@ class Crm extends UserFieldBase
 		}
 
 		return $value;
+	}
+
+	public static function getAiSettingType(): SettingType
+	{
+		return new SettingType(
+			name: 'crm',
+			description: 'The values are references to entities in Bitrix24 CRM and have the form "{entityType}_{entityId}", where {entityType} is the string abbreviation type of entity, for example: L - lead, D - deal, C - Contact, CO - Company;  {entityId} is the numeric identifier of the crm entity in Bitrix24, for example "L_1" for the crm lead with ID 1',
+		);
 	}
 }

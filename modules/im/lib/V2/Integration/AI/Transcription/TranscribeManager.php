@@ -11,16 +11,23 @@ use Bitrix\AI\Payload\Audio;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Im\Model\FileTranscriptionTable;
 use Bitrix\Im\V2\Analytics\FileAnalytics;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\File\FileItem;
+use Bitrix\Im\V2\Integration\AI\CopilotError;
 use Bitrix\Im\V2\Integration\AI\Transcription\Item\Status;
 use Bitrix\Im\V2\Integration\AI\Transcription\Item\TranscribeFileItem;
 use Bitrix\Im\V2\Integration\AI\Transcription\Result\TranscribeResult;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Pull\Event\FileTranscriptionEvent;
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
 
 final class TranscribeManager
@@ -31,16 +38,19 @@ final class TranscribeManager
 	public const MAX_TRANSCRIPTION_CHARS = 20000;
 	public const MAX_TRANSCRIBABLE_FILE_SIZE = 26214400;
 	private const MODULE_ID = 'im';
+	private const LOCK_TIMEOUT = 3;
 
 	private int $fileId;
 	private int $diskFileId;
 	private int $chatId;
+	private int $messageId;
 
-	public function __construct(int $fileId, int $diskFileId, int $chatId)
+	public function __construct(int $fileId, int $diskFileId, int $chatId, int $messageId)
 	{
 		$this->fileId = $fileId;
 		$this->diskFileId = $diskFileId;
 		$this->chatId = $chatId;
+		$this->messageId = $messageId;
 	}
 
 	public function transcribeFile(): TranscribeResult
@@ -52,24 +62,34 @@ final class TranscribeManager
 			return $result;
 		}
 
-		$fileTranscription = $this->getFileTranscription();
-		if (isset($fileTranscription))
-		{
-			$this->sendTranscribeEvent($fileTranscription, $this->getContext()->getUserId());
-			$result->setFileItem($fileTranscription);
+		Application::getConnection()->lock($this->getLockName(), self::LOCK_TIMEOUT);
 
-			return $result;
+		try
+		{
+			$fileTranscription = $this->getFileTranscription();
+			if (isset($fileTranscription))
+			{
+				$this->sendTranscribeEvent($fileTranscription, $this->getContext()->getUserId());
+				$result->setFileItem($fileTranscription);
+
+				return $result;
+			}
+
+			if ($this->hasPending())
+			{
+				$fileTranscription = $this->createPendingFileItem();
+				$result->setFileItem($fileTranscription);
+
+				return $result;
+			}
+
+			TranscribeQueueManager::getInstance()->add($this->fileId, $this->chatId);
+		}
+		finally
+		{
+			Application::getConnection()->unlock($this->getLockName());
 		}
 
-		if ($this->hasPending())
-		{
-			$fileTranscription = $this->createPendingFileItem();
-			$result->setFileItem($fileTranscription);
-
-			return $result;
-		}
-
-		TranscribeQueueManager::getInstance()->add($this->fileId, $this->chatId);
 		$result = $this->sendAiQuery();
 
 		if ($result->isSuccess())
@@ -90,28 +110,92 @@ final class TranscribeManager
 	{
 		$transcribeFileItem = $transcribeResult->getFileItem();
 
-		if ($transcribeFileItem->status === Status::Success)
+		Application::getConnection()->lock($this->getLockName(), self::LOCK_TIMEOUT);
+
+		try
 		{
-			try
+			if ($transcribeFileItem->status === Status::Success)
 			{
 				$this->saveFileTranscription($transcribeFileItem);
 			}
-			catch (\Exception $exception)
-			{
-				$this->sendTranscribeEvent($this->createErrorFileItem());
-				throw $exception;
-			}
-		}
 
-		$queueManager = TranscribeQueueManager::getInstance();
-		$chatIds = $queueManager->fetchChatIds($transcribeFileItem->fileId);
-		$queueManager->delete($transcribeFileItem->fileId);
+			$queueManager = TranscribeQueueManager::getInstance();
+			$chatIds = $queueManager->fetchChatIds($transcribeFileItem->fileId);
+			$queueManager->delete($transcribeFileItem->fileId);
+		}
+		catch (\Exception $exception)
+		{
+			$this->sendTranscribeEvent($this->createErrorFileItem());
+			throw $exception;
+		}
+		finally
+		{
+			Application::getConnection()->unlock($this->getLockName());
+		}
 
 		$this->sendTranscribeEvent($transcribeFileItem, null, $chatIds);
 		(new FileAnalytics(Chat::getInstance($this->chatId)))->addFinishTranscript($transcribeResult);
 	}
 
-	protected function getFileTranscription(): ?TranscribeFileItem
+	/**
+	 * @param FileItem[] $fileItems
+	 * @return TranscribeFileItem[]
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getCompletedTranscriptions(array $fileItems): array
+	{
+		$fileIds = [];
+		$fileItemsByOriginalId = [];
+
+		foreach ($fileItems as $fileItem)
+		{
+			if ($fileItem->isTranscribable())
+			{
+				$originalFileId = $fileItem->getOriginalFileId();
+				$fileIds[] = $originalFileId;
+				$fileItemsByOriginalId[$originalFileId] = $fileItem;
+			}
+		}
+
+		if (empty($fileIds))
+		{
+			return [];
+		}
+
+		$query = FileTranscriptionTable::query()
+			->setSelect(['FILE_ID', 'TEXT'])
+			->whereIn('FILE_ID', $fileIds)
+			->fetchAll()
+		;
+
+		$transcriptionMap = [];
+		foreach ($query as $row)
+		{
+			if ((string)$row['TEXT'] === '')
+			{
+				continue;
+			}
+			$fileId = (int)$row['FILE_ID'];
+			$fileItem = $fileItemsByOriginalId[$fileId] ?? null;
+			if (!$fileItem)
+			{
+				continue;
+			}
+			$transcriptionMap[$fileId] = TranscribeFileItem::create(
+				$fileId,
+				$fileItem->getDiskFileId(),
+				$fileItem->getChatId() ?? 0,
+				Status::Success,
+				(string)$row['TEXT']
+			);
+		}
+
+		return $transcriptionMap;
+	}
+
+	public function getFileTranscription(): ?TranscribeFileItem
 	{
 		$query = FileTranscriptionTable::query()
 			->setSelect(['TEXT'])
@@ -153,6 +237,7 @@ final class TranscribeManager
 			'chatId' => $this->chatId,
 			'fileId' => $this->fileId,
 			'diskFileId' => $this->diskFileId,
+			'messageId' => $this->messageId,
 		];
 
 		$fileId = $this->fileId;
@@ -178,10 +263,26 @@ final class TranscribeManager
 		$engine = $this->getEngine($context);
 		if ($engine)
 		{
+			$markers = ['type' => $fileType];
+			if (
+				Features::isTranscriptionEmotionsAvailable()
+				&& (new Restriction())->isTranscriptionEmotionsActive()
+			)
+			{
+				$markers['detectEmotions'] = true;
+			}
+
 			$engine
-				->setPayload((new Audio($fileUri->getUri()))->setMarkers(['type' => $fileType]))
+				->setPayload((new Audio($fileUri->getUri()))->setMarkers($markers))
 				->onError(function (Error $processingError) use(&$result) {
-					$result->addError($processingError);
+					if ($processingError->getCode() === CopilotError::LIMIT_IS_EXCEEDED_BAAS)
+					{
+						$result->addError(new CopilotError(CopilotError::LIMIT_IS_EXCEEDED_BAAS));
+					}
+					else
+					{
+						$result->addError(new CopilotError(CopilotError::TRANSCRIPTION_SERVICE_ERROR));
+					}
 				})
 				->completionsInQueue()
 			;
@@ -246,5 +347,10 @@ final class TranscribeManager
 			$status,
 			$transcriptText
 		);
+	}
+
+	protected function getLockName(): string
+	{
+		return "chat_file_transcribe_{$this->fileId}";
 	}
 }

@@ -303,7 +303,7 @@ class Device
 			$message = Loc::getMessage('main_device_message', $replace, $lang);
 			$pushMessage = Loc::getMessage('main_device_push_message', null, $lang);
 
-			$infoBotId = Marta::getBotId();
+			$infoBotId = Marta::getBotIdOrRegister();
 			if ($infoBotId)
 			{
 				$chat = User::getInstance($user['ID'])->getChatWith($infoBotId);

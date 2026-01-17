@@ -75,7 +75,7 @@ final class ResourceSettingsTable extends DataManager
 		return [
 			(new Reference(
 				'RESOURCE',
-				ResourceTable::getEntity(),
+				ResourceTable::class,
 				Join::on('this.RESOURCE_ID', 'ref.ID')
 			))->configureJoinType(Join::TYPE_LEFT),
 		];

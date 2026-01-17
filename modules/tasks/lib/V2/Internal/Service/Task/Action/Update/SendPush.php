@@ -70,7 +70,8 @@ class SendPush
 		if (isset($after['STAGE']) || $after['GROUP_ID'] !== $before['GROUP_ID'])
 		{
 			$stageId = (int)$fullTaskData['STAGE_ID'];
-			if ($stageId > 0)
+			$scrumTaskService = new \Bitrix\Tasks\Scrum\Service\TaskService();
+			if ($stageId > 0 && !$scrumTaskService->isInBacklog($taskId, $after['GROUP_ID']))
 			{
 				$params['AFTER']['STAGE_INFO'] = Container::getInstance()->getStageRepository()->getById($stageId)?->toArray();
 				$params['AFTER']['STAGE'] = $params['AFTER']['STAGE_INFO']['title'] ?? null;

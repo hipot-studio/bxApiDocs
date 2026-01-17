@@ -308,14 +308,6 @@ class CCrmDocumentLead extends CCrmDocument
 				"Editable" => false,
 				"Required" => false,
 			],
-			'WEBFORM_ID' => [
-				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
-				'Type' => 'select',
-				'Options' => static::getWebFormSelectOptions(),
-				'Filterable' => false,
-				'Editable' => false,
-				'Required' => false,
-			],
 			'IS_RETURN_CUSTOMER' => [
 				'Name' => GetMessage('CRM_DOCUMENT_LEAD_IS_RETURN_CUSTOMER'),
 				'Type' => 'bool',
@@ -346,6 +338,35 @@ class CCrmDocumentLead extends CCrmDocument
 				'Required' => false,
 			],
 		];
+
+		if (!class_exists(\Bitrix\Bizproc\BaseType\EntitySelector::class))
+		{
+			$arResult['WEBFORM_ID'] = [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'select',
+				'Options' => static::getWebFormSelectOptions(),
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+			];
+		}
+		else
+		{
+			$arResult['WEBFORM_ID'] = [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'entityselector',
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+				'Settings' => [
+					'entity' => [
+						'id' => 'web_form',
+						'dynamicLoad' => true,
+						'dynamicSearch' => true,
+					],
+				],
+			];
+		}
 
 		$arResult += static::getCommunicationFields();
 

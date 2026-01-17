@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Model\BookingExternalDataTable;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 
@@ -32,7 +33,11 @@ class BookingExternalDataRepository
 
 		if (!empty($data))
 		{
-			BookingExternalDataTable::addMulti($data, true);
+			$result = BookingExternalDataTable::addMulti($data, true);
+			if (!$result->isSuccess())
+			{
+				throw new Exception($result->getErrors()[0]->getMessage());
+			}
 		}
 	}
 

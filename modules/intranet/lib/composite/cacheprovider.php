@@ -32,7 +32,8 @@ class CacheProvider extends StaticCacheProvider
 		global $USER;
 		if ($USER->IsAuthorized())
 		{
-			\CHTMLPagesCache::setUserPrivateKey(self::getUserPrefix($USER->GetID()), 0);
+			$expire = time() + 60 * 60 * 24 * 30 * 12;
+			\CHTMLPagesCache::setUserPrivateKey(self::getUserPrefix($USER->GetID()), $expire);
 		}
 	}
 

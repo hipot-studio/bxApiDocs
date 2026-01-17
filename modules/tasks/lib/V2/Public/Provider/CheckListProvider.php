@@ -5,20 +5,22 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Provider;
 
 use Bitrix\Tasks\CheckList\CheckListFacade;
+use Bitrix\Tasks\CheckList\Node\Nodes;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\CheckListUserOptionRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
+use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListTreeService;
 
 class CheckListProvider
 {
 	public function __construct(
 		private readonly CheckListMapper $checkListMapper,
+		private readonly CheckListTreeService $treeService,
 		private readonly CheckListUserOptionRepositoryInterface $checkListUserOptionRepository,
 	)
 	{
-
 	}
 
 	public function getByEntity(int $entityId, int $userId, Entity\CheckList\Type $type): Entity\CheckList
@@ -37,7 +39,35 @@ class CheckListProvider
 
 		$items = $this->fillVisibilityStateForItems($userId, $items);
 
+		$items = $this->treeService->buildTree($items);
+
 		return $this->checkListMapper->mapToEntity($items);
+	}
+
+	public function merge(int $entityId, int $userId, array $checkLists, Entity\CheckList\Type $type): ?Nodes
+	{
+		$result = null;
+
+		if ($type === Entity\CheckList\Type::Task)
+		{
+			$result = TaskCheckListFacade::merge($entityId, $userId, $checkLists);
+		}
+		elseif ($type === Entity\CheckList\Type::Template)
+		{
+			$result = TemplateCheckListFacade::merge($entityId, $userId, $checkLists);
+		}
+
+		if (
+			!$result
+			|| !$result->isSuccess()
+		)
+		{
+			return null;
+		}
+
+		$traversedItems = $result->getData()['TRAVERSED_ITEMS'] ?? [];
+
+		return Nodes::createFromArray($traversedItems);
 	}
 
 	private function fillVisibilityStateForItems(int $currentUserId, array $items): array
@@ -55,8 +85,8 @@ class CheckListProvider
 			$itemIds,
 			[
 				Entity\CheckList\Option::COLLAPSED,
-				Entity\CheckList\Option::EXPANDED
-			]
+				Entity\CheckList\Option::EXPANDED,
+			],
 		);
 
 		return array_map(
@@ -69,7 +99,7 @@ class CheckListProvider
 
 				return $item;
 			},
-			$items
+			$items,
 		);
 	}
 }

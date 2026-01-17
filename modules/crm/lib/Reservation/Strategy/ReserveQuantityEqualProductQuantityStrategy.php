@@ -3,74 +3,74 @@
 namespace Bitrix\Crm\Reservation\Strategy;
 
 use Bitrix\Crm\ProductRowTable;
-use Bitrix\Crm\ProductType;
+use Bitrix\Crm\Reservation\Tools\DateTimeComparator;
 use Bitrix\Crm\Reservation\Internals\ProductRowReservationTable;
 use Bitrix\Crm\Reservation\Strategy\Reserve\ReservationResult;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Result;
-use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 use CCrmOwnerTypeAbbr;
-
-Loc::loadMessages(__FILE__);
 
 /**
  * Automatic reservation of the quantity equal to the quantity of product in the deal.
  * As soon as the user manually changes product quantity, the automation is disabled.
  */
-class ReserveQuantityEqualProductQuantityStrategy implements Strategy
+class ReserveQuantityEqualProductQuantityStrategy extends ReserveStrategy
 {
-	public int $defaultStoreId;
-	public ?Date $defaultDateReserveEnd;
-
 	/**
 	 * @inheritDoc
 	 */
-	public function reservation(int $ownerTypeId, int $ownerId): ReservationResult
+	public function reservation(int $entityTypeId, int $entityId): ReservationResult
 	{
 		$result = new ReservationResult();
 
-		$rows = $this->getProductRows($ownerTypeId, $ownerId);
+		$rows = $this->getProductRows($entityTypeId, $entityId);
 		foreach ($rows as $row)
 		{
 			$rowId = (int)$row['ID'];
 			$quantity = (float)$row['QUANTITY'];
 			if ($row['RESERVE_ID'])
 			{
+				$saveResult = new ReservationResult();
+				$updateFields = [];
+				if ($row['RESERVE_DATE_RESERVE_END'] === null)
+				{
+					$updateFields['DATE_RESERVE_END'] = $this->getDefaultDateReserveEnd();
+				}
 				$reserveInfo = $result->addReserveInfo(
 					$rowId,
 					$quantity,
 					0
 				);
 				$reserveInfo->setStoreId($row['RESERVE_STORE_ID']);
-				$reserveInfo->setDateReserveEnd((string)$row['RESERVE_DATE_RESERVE_END']);
+				$reserveInfo->setDateReserveEnd(
+					$row['RESERVE_DATE_RESERVE_END'] ?? $this->getDefaultDateReserveEnd()
+				);
 
-				if ($row['RESERVE_IS_AUTO'] !== 'Y')
+				if ($row['RESERVE_IS_AUTO'] === 'Y')
 				{
-					continue;
+					$reserveQuantity = (float)$row['RESERVE_QUANTITY'];
+					if ($reserveQuantity !== $quantity)
+					{
+						$updateFields['RESERVE_QUANTITY'] = $quantity;
+						$reserveInfo->setDeltaReserveQuantity($quantity - $reserveQuantity);
+					}
 				}
 
-				$reserveQuantity = (float)$row['RESERVE_QUANTITY'];
-				if ($reserveQuantity === $quantity)
+				if (!empty($updateFields))
 				{
-					continue;
+					$updateFields['ID'] = $row['RESERVE_ID'];
+					$saveResult = $this->saveCrmReserve($updateFields);
 				}
-
-				$saveResult = $this->saveCrmReserve([
-					'ID' => $row['RESERVE_ID'],
-					'RESERVE_QUANTITY' => $quantity,
-				]);
-
-				$reserveInfo->setDeltaReserveQuantity($quantity - $reserveQuantity);
 			}
 			else
 			{
 				$saveResult = $this->saveCrmReserve([
 					'ROW_ID' => $rowId,
 					'RESERVE_QUANTITY' => $quantity,
-					'STORE_ID' => $this->defaultStoreId,
-					'DATE_RESERVE_END' => $this->defaultDateReserveEnd,
+					'STORE_ID' => $this->getDefaultStoreId(),
+					'DATE_RESERVE_END' => $this->getDefaultDateReserveEnd(),
 					'IS_AUTO' => 'Y',
 				]);
 
@@ -79,8 +79,8 @@ class ReserveQuantityEqualProductQuantityStrategy implements Strategy
 					$quantity,
 					$quantity
 				);
-				$reserveInfo->setStoreId($this->defaultStoreId);
-				$reserveInfo->setDateReserveEnd((string)$this->defaultDateReserveEnd);
+				$reserveInfo->setStoreId($this->getDefaultStoreId());
+				$reserveInfo->setDateReserveEnd($this->getDefaultDateReserveEnd());
 			}
 
 			$result->addErrors($saveResult->getErrors());
@@ -92,7 +92,7 @@ class ReserveQuantityEqualProductQuantityStrategy implements Strategy
 	/**
 	 * @inheritDoc
 	 */
-	public function reservationProductRow(int $productRowId, float $quantity, int $storeId, ?Date $dateReserveEnd): ReservationResult
+	public function reservationProductRow(int $productRowId, float $quantity, int $storeId, DateTime $dateReserveEnd): ReservationResult
 	{
 		$result = new ReservationResult();
 
@@ -102,6 +102,7 @@ class ReserveQuantityEqualProductQuantityStrategy implements Strategy
 			$result->addError(
 				new Error(Loc::getMessage('CRM_RESERVATION_STRATEGY_RESERVE_QUANTITY_EQUAL_PRODUCT_QUANTITY_STRATEDY_PRODUCT_NOT_FOUND'))
 			);
+
 			return $result;
 		}
 
@@ -113,6 +114,7 @@ class ReserveQuantityEqualProductQuantityStrategy implements Strategy
 			$result->addError(
 				new Error(Loc::getMessage('CRM_RESERVATION_STRATEGY_RESERVE_QUANTITY_EQUAL_PRODUCT_QUANTITY_STRATEGY_PRODUCT_NOT_SUPPORT_RESERVATION'))
 			);
+
 			return $result;
 		}
 
@@ -131,16 +133,13 @@ class ReserveQuantityEqualProductQuantityStrategy implements Strategy
 			$quantity
 		);
 		$reserveInfo->setStoreId($storeId);
-		$reserveInfo->setDateReserveEnd($dateReserveEnd ? (string)$dateReserveEnd : null);
+		$reserveInfo->setDateReserveEnd($dateReserveEnd);
 
 		$isAutoReservation = $productRowQuantity === $quantity;
 		$existReserve = $this->getReserve($productRowId);
 		if ($existReserve)
 		{
-			$existDateReserveEndFormatted = $existReserve['DATE_RESERVE_END']?->format('d.m.Y');
-			$newDateReserveEndFormatted = $dateReserveEnd?->format('d.m.Y');
-
-			if ($existDateReserveEndFormatted !== $newDateReserveEndFormatted)
+			if (!DateTimeComparator::areEqual($existReserve['DATE_RESERVE_END'], $dateReserveEnd))
 			{
 				$reserveInfo->setChanged();
 			}
@@ -221,81 +220,5 @@ class ReserveQuantityEqualProductQuantityStrategy implements Strategy
 				'!=PRODUCT_ID' => 0,
 			],
 		])->fetchAll();
-	}
-
-	/**
-	 * Get product row.
-	 *
-	 * @param int $rowId
-	 *
-	 * @return array|null
-	 */
-	protected function getProductRow(int $rowId): ?array
-	{
-		return ProductRowTable::getRow([
-			'select' => [
-				'ID',
-				'QUANTITY',
-				'TYPE',
-				'PRODUCT_ID',
-			],
-			'filter' => [
-				'=ID' => $rowId,
-			],
-		]);
-	}
-
-	/**
-	 * Save reserve.
-	 *
-	 * @param array $fields
-	 *
-	 * @return Result
-	 */
-	protected function saveCrmReserve(array $fields): Result
-	{
-		$id = $fields['ID'] ?? null;
-		if (isset($id))
-		{
-			unset($fields['ID']);
-
-			return ProductRowReservationTable::update($id, $fields);
-		}
-
-		return ProductRowReservationTable::add($fields);
-	}
-
-	/**
-	 * Get reserve by row id.
-	 *
-	 * @param int $productRowId
-	 *
-	 * @return array|null
-	 */
-	protected function getReserve(int $productRowId): ?array
-	{
-		return ProductRowReservationTable::getRow([
-			'select' => [
-				'ID',
-				'IS_AUTO',
-				'STORE_ID',
-				'RESERVE_QUANTITY',
-				'DATE_RESERVE_END',
-			],
-			'filter' => [
-				'=ROW_ID' => $productRowId,
-			],
-		]);
-	}
-
-	/**
-	 * Checks product's type and returns true if type equals TYPE_SERVICE
-	 *
-	 * @param int $type
-	 * @return bool
-	 */
-	private function isServiceProduct(int $type): bool
-	{
-		return $type === ProductType::TYPE_SERVICE;
 	}
 }

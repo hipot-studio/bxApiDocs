@@ -3,6 +3,8 @@
 namespace Bitrix\Intranet\Public\Provider\Portal;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
+use Bitrix\Main\Web\Uri;
 
 class DomainProvider
 {
@@ -20,5 +22,12 @@ class DomainProvider
 		}
 
 		return $hostName;
+	}
+
+	public function getUri(): Uri
+	{
+		$baseUrl = (Context::getCurrent()->getRequest()->isHttps() ? 'https://' : 'http://') . $this->getHostName();
+
+		return new Uri($baseUrl);
 	}
 }

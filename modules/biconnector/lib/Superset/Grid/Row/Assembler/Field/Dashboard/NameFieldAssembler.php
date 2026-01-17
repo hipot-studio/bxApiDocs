@@ -59,9 +59,11 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			Extension::load('ui.icons.disk');
 			$classTypePrefix = 'group';
 
+			$ormFilter = $this->getSettings()->getOrmFilter();
 			$eventGroup = Json::encode([
 				'ID' => (int)$value['ID'],
 				'TITLE' => $value['TITLE'],
+				'IS_FILTERED' => isset($ormFilter['GROUPS.ID']) && in_array((int)$value['ID'], $ormFilter['GROUPS.ID']),
 			]);
 
 			$iconClass =

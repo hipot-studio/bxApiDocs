@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Catalog\Grid\Menu\ProductGridCreateButton;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -45,6 +46,8 @@ class CatalogProductGridComponent extends \CBitrixComponent
 	protected const ERROR_CODE_ACCESS = -3;
 	protected const ACCESS_LEVEL_IBLOCK = 'iblock_admin_display';
 	protected const DOM_ID_MASK = '/[^a-zA-Z0-9_]/';
+	private const BOOKING_PRESET_ID = 'booking_services';
+	private const AVAILABLE_PRESET_IDS = [self::BOOKING_PRESET_ID];
 
 	protected Catalog\Access\AccessController $accessController;
 
@@ -72,6 +75,7 @@ class CatalogProductGridComponent extends \CBitrixComponent
 	protected array $selectedVariationMap;
 
 	private string $productNavString;
+	private ProductGridCreateButton $productGridCreateButton;
 
 	public function __construct($component = null)
 	{
@@ -506,6 +510,14 @@ class CatalogProductGridComponent extends \CBitrixComponent
 		}
 
 		$this->grid = new ProductGrid($settings);
+		$elementSettings = (new Iblock\Grid\Entity\ElementSettings([
+			'ID' => $this->getGridId(),
+			'IBLOCK_ID' => $this->getIblockId(),
+		]))->setNewCardEnabled($this->arParams['USE_NEW_CARD'] === 'Y');
+		$this->productGridCreateButton = new ProductGridCreateButton(
+			$elementSettings,
+			$this->catalogType,
+		);
 
 		if ($this->isUsedGridFilter())
 		{
@@ -521,13 +533,13 @@ class CatalogProductGridComponent extends \CBitrixComponent
 						$this->grid->getFilter()->getEntityDataProvider()->getSettings()->getID()
 					);
 
-					$presetId = $options->getCurrentFilterId();
-					if ($presetId !== \Bitrix\Main\UI\Filter\Options::TMP_FILTER)
+					$presetId = $this->getPresetIdFromRequest() ?: $options->getCurrentFilterId();
+					if (!in_array($presetId, self::AVAILABLE_PRESET_IDS, true))
 					{
 						$presetId = \Bitrix\Main\UI\Filter\Options::TMP_FILTER;
-						$options->setCurrentFilterPresetId($presetId);
-						$options->setCurrentPreset($presetId);
 					}
+					$options->setCurrentFilterPresetId($presetId);
+					$options->setCurrentPreset($presetId);
 
 					$settings = $options->getFilterSettings($presetId);
 					$settings['fields'] = [
@@ -535,7 +547,10 @@ class CatalogProductGridComponent extends \CBitrixComponent
 					];
 
 					$options->setFilterSettings($presetId, $settings, true, false);
-					$options->save();
+					if ($presetId === \Bitrix\Main\UI\Filter\Options::TMP_FILTER)
+					{
+						$options->save();
+					}
 				}
 			}
 		}
@@ -593,6 +608,20 @@ class CatalogProductGridComponent extends \CBitrixComponent
 			return;
 		}
 
+		$presets = [];
+		if (Main\ModuleManager::isModuleInstalled('booking'))
+		{
+			$presets[self::BOOKING_PRESET_ID] = [
+				'id' => self::BOOKING_PRESET_ID,
+				'name' => Loc::getMessage('CATALOG_PRODUCT_GRID_PRESET_BOOKING_SERVICES'),
+				'default' => false,
+				'fields' => [
+					'TYPE' => Catalog\ProductTable::TYPE_SERVICE,
+					'BOOKING_SERVICES_ONLY' => 'Y',
+				],
+			];
+		}
+
 		// toolbar
 		$options = \Bitrix\Main\Filter\Component\ComponentParams::get(
 			$this->grid->getFilter(),
@@ -603,6 +632,7 @@ class CatalogProductGridComponent extends \CBitrixComponent
 				'CONFIG' => [
 					'popupWidth' => 800,
 				],
+				'FILTER_PRESETS' => $presets,
 			]
 		);
 		\Bitrix\UI\Toolbar\Facade\Toolbar::addFilter($options);
@@ -1378,84 +1408,105 @@ class CatalogProductGridComponent extends \CBitrixComponent
 		$this->initToolbarSettings();
 	}
 
-	private function getCreateButtonMenuItemsForNewCard(): array
+	private function getCreateButtonMenuItemsForNewCard(array $menuCreateBtnItems): array
 	{
+		if (empty($menuCreateBtnItems))
+		{
+			return [];
+		}
+
 		$options = [
 			'IBLOCK_SECTION_ID' => $this->getSelectedSectionId(),
 		];
 
-		return [
-			[
-				'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_PRODUCT_TEXT'),
-				'href' => $this->getUrlBuilder()->getProductDetailUrl(0, $options),
-			],
-			[
-				'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SERVICE_TEXT'),
-				'href' => $this->getUrlBuilder()->getProductDetailUrl(0, $options + [
-					'productTypeId' => ProductTable::TYPE_SERVICE,
-				]),
-			],
-			[
-				'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SECTION_TEXT'),
-				'href' => $this->getUrlBuilder()->getSectionDetailUrl(0, $options),
-			],
-		];
+		$resultMenuItems = [];
+		foreach ($menuCreateBtnItems as $menuItem)
+		{
+			$resultMenuItems[] = match ($menuItem)
+			{
+				ProductGridCreateButton::BTN_PRODUCT => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_PRODUCT_TEXT'),
+					'href' => $this->getUrlBuilder()->getProductDetailUrl(0, $options),
+				],
+				ProductGridCreateButton::BTN_SERVICE => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SERVICE_TEXT'),
+					'href' => $this->getUrlBuilder()->getProductDetailUrl(
+						0,
+						$options + ['productTypeId' => ProductTable::TYPE_SERVICE],
+					),
+				],
+				ProductGridCreateButton::BTN_SECTION => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SECTION_TEXT'),
+					'href' => $this->getUrlBuilder()->getSectionDetailUrl(0, $options),
+				],
+			};
+		}
+
+		return $resultMenuItems;
 	}
 
-	private function getCreateButtonMenuItemsForOldCard(): array
+	private function getCreateButtonMenuItemsForOldCard(array $menuCreateBtnItems): array
 	{
+		if (empty($menuCreateBtnItems))
+		{
+			return [];
+		}
+
 		$options = [
 			'IBLOCK_SECTION_ID' => $this->getSelectedSectionId(),
 		];
 
-		$result = [
-			[
-				'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_PRODUCT_TEXT'),
-				'href' => $this->getUrlBuilder()->getElementDetailUrl(0, $options),
-			],
-		];
+		$result = [];
 
-		if ($this->catalogType === CCatalogSku::TYPE_FULL)
+		foreach ($menuCreateBtnItems as $menuItem)
 		{
-			$result[] = [
-				'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SKU_TEXT'),
-				'href' => $this->getUrlBuilder()->getElementDetailUrl(0, $options + [
-					'PRODUCT_TYPE' => CCatalogAdminTools::TAB_SKU,
-				]),
-			];
-		}
-
-		$result[] = [
-			'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SERVICE_TEXT'),
-			'href' => $this->getUrlBuilder()->getElementDetailUrl(0, $options + [
-				'PRODUCT_TYPE' => CCatalogAdminTools::TAB_SERVICE,
-			]),
-		];
-
-		if (Feature::isProductSetsEnabled())
-		{
-			if ($this->catalogType !== CCatalogSku::TYPE_OFFERS)
+			$result[] = match ($menuItem)
 			{
-				$result[] = [
+				ProductGridCreateButton::BTN_PRODUCT => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_PRODUCT_TEXT'),
+					'href' => $this->getUrlBuilder()->getElementDetailUrl(0, $options),
+				],
+				ProductGridCreateButton::BTN_SERVICE => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SERVICE_TEXT'),
+					'href' => $this->getUrlBuilder()->getElementDetailUrl(
+						0,
+						$options + [
+							'PRODUCT_TYPE' => CCatalogAdminTools::TAB_SERVICE,
+						],
+					),
+				],
+				ProductGridCreateButton::BTN_SKU => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SKU_TEXT'),
+					'href' => $this->getUrlBuilder()->getElementDetailUrl(
+						0,
+						$options + [
+							'PRODUCT_TYPE' => CCatalogAdminTools::TAB_SKU,
+						],
+					),
+				],
+				ProductGridCreateButton::BTN_SET => [
 					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SET_TEXT'),
-					'href' => $this->getUrlBuilder()->getElementDetailUrl(0, $options + [
-						'PRODUCT_TYPE' => CCatalogAdminTools::TAB_SET,
+					'href' => $this->getUrlBuilder()->getElementDetailUrl(
+						0,
+						$options + [
+							'PRODUCT_TYPE' => CCatalogAdminTools::TAB_SET,
+						],
+					),
+				],
+				ProductGridCreateButton::BTN_GROUP => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_GROUP_TEXT'),
+					'href' => $this->getUrlBuilder()->getElementDetailUrl(
+						0,
+						$options + [
+						'PRODUCT_TYPE' => CCatalogAdminTools::TAB_GROUP,
 					]),
-				];
-			}
-
-			$result[] = [
-				'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_GROUP_TEXT'),
-				'href' => $this->getUrlBuilder()->getElementDetailUrl(0, $options + [
-					'PRODUCT_TYPE' => CCatalogAdminTools::TAB_GROUP,
-				]),
-			];
+				],
+				ProductGridCreateButton::BTN_SECTION => [
+					'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SECTION_TEXT'),
+					'href' => $this->getUrlBuilder()->getSectionDetailUrl(0, $options),
+				],
+			};
 		}
-
-		$result[] = [
-			'text' => Loc::getMessage('CATALOG_PRODUCT_GRID_CMP_TOOLBAR_BUTTONS_ADD_SECTION_TEXT'),
-			'href' => $this->getUrlBuilder()->getSectionDetailUrl(0, $options),
-		];
 
 		return $result;
 	}
@@ -1473,47 +1524,58 @@ class CatalogProductGridComponent extends \CBitrixComponent
 
 		if (empty($productLimits))
 		{
-			$createButton = new CreateButton();
+			$createBtnItems = $this->productGridCreateButton
+				->getButtonIds($this->arParams['CREATE_BTN_ITEMS'] ?? null)
+			;
+			$isSingleCreateItem = count($createBtnItems) === 1;
 
+			$createButton = $isSingleCreateItem ? new UI\Buttons\CreateButton() : new CreateButton();
 			// flag create button for js ext `catalog.iblock-product-list`
 			$createButton->addDataAttribute('grid-create-button', $this->getGridId());
 			$createButton->addDataAttribute('toolbar-collapsed-icon', UI\Buttons\Icon::ADD);
 
-			$menuItems = [];
 			if ($this->allowAdd())
 			{
 				if ($this->arParams['USE_NEW_CARD'] === 'Y')
 				{
-					$menuItems = $this->getCreateButtonMenuItemsForNewCard();
+					$menuItems = $this->getCreateButtonMenuItemsForNewCard($createBtnItems);
 				}
 				else
 				{
-					$menuItems = $this->getCreateButtonMenuItemsForOldCard();
+					$menuItems = $this->getCreateButtonMenuItemsForOldCard($createBtnItems);
+				}
+
+				if (empty($menuItems) && !$isSingleCreateItem)
+				{
+					$createButton->setDisabled();
+					$createButton->getAttributeCollection()['id'] = 'create_new_product_button_access_denied';
+				}
+				else if ($isSingleCreateItem)
+				{
+					$createButton->setLink($menuItems[0]['href']);
+				}
+				else
+				{
+					$createButton->getMainButton()->setLink(
+						$menuItems[0]['href']
+					);
+					$createButton->setMenu([
+						'items' => $menuItems,
+						'closeByEsc' => true,
+						'angle' => true,
+						'offsetLeft' => 20,
+					]);
+					$createButton->getAttributeCollection()->addJsonOption(
+						'menuTarget',
+						\Bitrix\UI\Buttons\Split\Type::MENU
+					);
 				}
 			}
-
-			if (empty($menuItems))
+			else
 			{
 				$createButton->setDisabled();
 				$createButton->getAttributeCollection()['id'] = 'create_new_product_button_access_denied';
 			}
-			else
-			{
-				$createButton->getMainButton()->setLink(
-					$menuItems[0]['href']
-				);
-				$createButton->setMenu([
-					'items' => $menuItems,
-					'closeByEsc' => true,
-					'angle' => true,
-					'offsetLeft' => 20,
-				]);
-				$createButton->getAttributeCollection()->addJsonOption(
-					'menuTarget',
-					\Bitrix\UI\Buttons\Split\Type::MENU
-				);
-			}
-
 		}
 		else
 		{
@@ -1631,5 +1693,21 @@ class CatalogProductGridComponent extends \CBitrixComponent
 			null,
 			$navComponentParameters
 		);
+	}
+
+	private function getPresetIdFromRequest(): string|null
+	{
+		$queryPresetId = $this->request->get('preset_id');
+
+		switch ($queryPresetId)
+		{
+			case self::BOOKING_PRESET_ID:
+				if (!Loader::includeModule('booking'))
+				{
+					return null;
+				}
+		}
+
+		return $this->request->get('apply_filter') && $this->request->get('with_preset') ? $queryPresetId : null;
 	}
 }

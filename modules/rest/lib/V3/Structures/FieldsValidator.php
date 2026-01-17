@@ -7,14 +7,9 @@ use Bitrix\Main\Type\DateTime;
 
 class FieldsValidator
 {
-	public static function validateReflectionPropertyAndValue(\ReflectionProperty $property, mixed $value): bool
+	public static function validateTypeAndValue(?string $type, mixed $value): bool
 	{
-		if ($property->getType() === null)
-		{
-			return true;
-		}
-
-		return match ($property->getType()->getName())
+		return match ($type)
 		{
 			'int' => is_int($value),
 			'float' => is_float($value),
@@ -24,6 +19,7 @@ class FieldsValidator
 			DateTime::class => $value instanceof DateTime,
 			Date::class => $value instanceof Date,
 			default => false,
+			null => true
 		};
 	}
 }

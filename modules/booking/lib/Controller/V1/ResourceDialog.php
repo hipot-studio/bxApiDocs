@@ -41,12 +41,16 @@ class ResourceDialog extends BaseController
 	{
 		try
 		{
-			return $this->resourceProvider->getList(
+			$resourceCollection = $this->resourceProvider->getList(
 				gridParams: new Provider\Params\GridParams(
 					filter: new Provider\Params\Resource\ResourceFilter(['IS_MAIN' => true]),
 				),
 				userId: $this->userId,
 			);
+
+			$this->resourceProvider->withSkus($resourceCollection);
+
+			return $resourceCollection;
 		}
 		catch (Exception $e)
 		{
@@ -66,6 +70,30 @@ class ResourceDialog extends BaseController
 				$resources = $this->getResources([
 					'MODULE_ID' => 'booking',
 					'ID' => $ids,
+				]);
+			}
+
+			return $this->prepareResponse($resources, $dateTs);
+		}
+		catch (Exception $e)
+		{
+			$this->addError(ErrorBuilder::buildFromException($e));
+
+			return null;
+		}
+	}
+
+	public function loadBySkuIdsAction(array $ids, int $dateTs): ResourceDialogResponse|null
+	{
+		try
+		{
+			$resources = new Entity\Resource\ResourceCollection();
+			if (!empty($ids))
+			{
+				$resources = $this->getResources([
+					'MODULE_ID' => 'booking',
+					'WITH_SKUS' => true,
+					'HAS_SKUS' => $ids,
 				]);
 			}
 
@@ -146,13 +174,17 @@ class ResourceDialog extends BaseController
 	{
 		$limit = $limit ?? $this->resourcesLimit;
 
-		return $this->resourceProvider->getList(
+		$resourceCollection = $this->resourceProvider->getList(
 			gridParams: new Provider\Params\GridParams(
 				limit: $limit,
 				filter: new Provider\Params\Resource\ResourceFilter($filter),
 			),
 			userId: $this->userId,
 		);
+
+		$this->resourceProvider->withSkus($resourceCollection);
+
+		return $resourceCollection;
 	}
 
 	private function prepareResponse(
@@ -200,6 +232,8 @@ class ResourceDialog extends BaseController
 					'RESOURCES',
 					'EXTERNAL_DATA',
 					'NOTE',
+					'CLIENT_NOTE',
+					'SKUS',
 				]),
 			),
 			userId: $userId,
@@ -209,6 +243,7 @@ class ResourceDialog extends BaseController
 			->withCounters($bookings, $userId)
 			->withClientsData($bookings)
 			->withExternalData($bookings)
+			->withSkus($bookings)
 		;
 
 		return $bookings;

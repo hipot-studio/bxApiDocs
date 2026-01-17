@@ -1,11 +1,16 @@
 <?php
 namespace Bitrix\Bizproc\BaseType;
 
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingType;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Automation;
+use COption;
+use CSite;
+use CUser;
+use phpDocumentor\Reflection\Types\This;
 
 /**
  * Class User
@@ -13,7 +18,6 @@ use Bitrix\Bizproc\Automation;
  */
 class User extends Base
 {
-
 	/**
 	 * @return string
 	 */
@@ -29,11 +33,19 @@ class User extends Base
 	public static function getFormats()
 	{
 		$formats = parent::getFormats();
-		$formats['friendly'] = array(
-			'callable' =>'formatValueFriendly',
-			'separator' => ', ',
-		);
-		return $formats;
+
+		$userSpecificFormats = [
+			'friendly' => [
+				'callable' => 'formatValueFriendly',
+				'separator' => ', ',
+			],
+			'bbcode' => [
+				'callable' => 'formatValueBbcode',
+				'separator' => ', ',
+			],
+		];
+
+		return array_merge($formats, $userSpecificFormats);
 	}
 
 	/**
@@ -75,9 +87,50 @@ class User extends Base
 	protected static function formatValueFriendly(FieldType $fieldType, $value)
 	{
 		if (!is_array($value))
-			$value = array($value);
+		{
+			$value = [$value];
+		}
 
 		return \CBPHelper::usersArrayToString($value, null, $fieldType->getDocumentType(), false);
+	}
+
+	protected static function formatValueBbcode(FieldType $fieldType, $value)
+	{
+		if (!is_array($value))
+		{
+			$value = [$value];
+		}
+
+		if (!Main\Loader::includeModule('im'))
+		{
+			return self::formatValueFriendly($fieldType, $value);
+		}
+
+		$formatFunction = static function(array $arUser) {
+			if (empty($arUser['ID']))
+			{
+				return '';
+			}
+
+			$userId = (int)$arUser['ID'];
+			$nameTemplate = COption::GetOptionString("bizproc", "name_template", CSite::GetNameFormat(false), SITE_ID);
+			$innerText = (string)CUser::FormatName(
+				$nameTemplate,
+				$arUser,
+				true,
+				false,
+			);
+
+			return \Bitrix\Im\V2\Message\Text\BbCode\User::build($userId, $innerText)->compile();
+		};
+
+		return \CBPHelper::usersArrayToString(
+			$value,
+			null,
+			$fieldType->getDocumentType(),
+			false,
+			$formatFunction,
+		);
 	}
 
 	/**
@@ -493,5 +546,13 @@ HTML;
 	private static function canUseHumanResources(): bool
 	{
 		return Main\Loader::includeModule('humanresources');
+	}
+
+	public static function getAiSettingType(): SettingType
+	{
+		return new SettingType(
+			name: static::getType(),
+			description: 'The values are references to users in Bitrix24 and have the form "user_{number}", where {number} is the numeric identifier of the user in Bitrix24, for example "user_1" for the user with ID 1',
+		);
 	}
 }

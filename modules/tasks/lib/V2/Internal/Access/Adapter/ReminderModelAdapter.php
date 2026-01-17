@@ -31,6 +31,6 @@ class ReminderModelAdapter implements EntityModelAdapterInterface
 
 	public function create(): ?ReminderModel
 	{
-		return ReminderModel::createFromId($this->entity->getId());
+		return ReminderModel::createFromId((int)$this->entity->getId());
 	}
 }

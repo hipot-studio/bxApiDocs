@@ -44,7 +44,7 @@ class CatalogStoreEnableWizardComponent extends CBitrixComponent implements Cont
 			'analytics' => [
 				'tool' => 'inventory',
 				'category' => 'enable_wizard',
-				'type' => count(self::getModesOptions()) > 1 ? 'slider_1С' : 'slider_B24',
+				'type' => count(self::getModesOptions()) > 1 ? 'slider_1C' : 'slider_B24',
 				'c_section' => $request->get('analyticsContextSection'),
 				'p1' => 'mode_' . ($currentMode ?? 'None'),
 			],

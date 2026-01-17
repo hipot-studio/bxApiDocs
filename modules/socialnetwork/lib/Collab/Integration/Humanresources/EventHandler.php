@@ -81,4 +81,31 @@ class EventHandler
 			->handleMemberDeleted($member)
 		;
 	}
+
+	public static function onMemberUpdated(Event $event): void
+	{
+		/** @var NodeMember $member */
+		$member = $event->getParameter('member');
+		/** @var NodeMember|null $previousMember */
+		$previousMember = $event->getParameter('previousMember');
+
+		if ($previousMember === null
+			|| $member->entityType !== MemberEntityType::USER
+			|| $previousMember->entityType !== MemberEntityType::USER
+			|| $member->nodeId === $previousMember->nodeId
+		)
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()
+			->get(StructureService::class)
+			->handleMemberAdded($member)
+		;
+
+		ServiceLocator::getInstance()
+			->get(StructureService::class)
+			->handleMemberDeleted($previousMember)
+		;
+	}
 }

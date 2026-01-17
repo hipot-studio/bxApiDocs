@@ -1,7 +1,13 @@
 <?php
 namespace Bitrix\Timeman\Service\Worktime;
 
+use Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStartWorktimeTrigger;
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Enum\Scenario;
+use Bitrix\Bizproc\Starter\Result\StartResult;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\ORM\Objectify\Values;
@@ -51,7 +57,7 @@ class WorktimeService extends BaseService
 		WorktimeActionList $actionList,
 		WorktimeRepository $worktimeRepository,
 		WorktimeNotificationService $notificationService,
-		WorktimeLiveFeedManager $liveFeedManager
+		WorktimeLiveFeedManager $liveFeedManager,
 	)
 	{
 		$this->worktimeManagerFactory = $recordFactory;
@@ -109,16 +115,13 @@ class WorktimeService extends BaseService
 		return $this->processWorktimeAction($this->recordForm,
 			function () use ($recordForm) {
 				$actionList = $this->buildActionList($recordForm->userId);
-				$continueActions = array_merge(
-					$actionList->getContinueActions(),
-					$actionList->getReopenActions()
+
+				return $this->checkActionEligibility(
+					array_merge(
+						$actionList->getContinueActions(),
+						$actionList->getReopenActions()
+					)
 				);
-				if (empty($continueActions))
-				{
-					$continueActions[] = WorktimeAction::createContinueAction($recordForm->userId);
-					$this->actionList->fillActions($continueActions);
-				}
-				return $this->checkActionEligibility($continueActions);
 			}
 		);
 	}
@@ -132,13 +135,9 @@ class WorktimeService extends BaseService
 		}
 		return $this->processWorktimeAction($this->recordForm,
 			function () use ($recordForm) {
-				$pauseActions = $this->buildActionList($recordForm->userId)->getPauseActions();
-				if (empty($pauseActions))
-				{
-					$pauseActions[] = WorktimeAction::createPauseAction($recordForm->userId);
-					$this->actionList->fillActions($pauseActions);
-				}
-				return $this->checkActionEligibility($pauseActions);
+				return $this->checkActionEligibility(
+					$this->buildActionList($recordForm->userId)->getPauseActions()
+				);
 			}
 		);
 	}
@@ -159,13 +158,9 @@ class WorktimeService extends BaseService
 		}
 		return $this->processWorktimeAction($this->recordForm,
 			function () use ($recordForm) {
-				$stopActions = $this->buildActionList($recordForm->userId)->getStopActions();
-				if (empty($stopActions))
-				{
-					$stopActions[] = WorktimeAction::createStopAction($recordForm->userId);
-					$this->actionList->fillActions($stopActions);
-				}
-				return $this->checkActionEligibility($stopActions);
+				return $this->checkActionEligibility(
+					$this->buildActionList($recordForm->userId)->getStopActions()
+				);
 			}
 		);
 	}
@@ -183,13 +178,9 @@ class WorktimeService extends BaseService
 		}
 		return $this->processWorktimeAction($this->recordForm,
 			function () use ($recordForm) {
-				$editActions = $this->buildActionList($recordForm->userId)->getEditActions();
-				if (empty($editActions))
-				{
-					$editActions[] = WorktimeAction::createEditAction($recordForm->userId);
-					$this->actionList->fillActions($editActions);
-				}
-				return $this->checkActionEligibility($editActions);
+				return $this->checkActionEligibility(
+					$this->buildActionList($recordForm->editedBy)->getEditActions()
+				);
 			}
 		);
 	}
@@ -256,9 +247,10 @@ class WorktimeService extends BaseService
 			$this->safeRun($this->save($actualRecord, $worktimeEvents));
 			// we need ID, so we save and then updating if needed
 			$this->runAfterRecordSave($actualRecord, $actionListResult->getSchedule(), $actionListResult->getShift(), $recordForm->getFirstEventName());
-			
-			// clear orm cache for findLatestRecord
-			(\Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable::getEntity())->cleanCache();
+
+			if ($actionListResult->getWorktimeAction()->isStart()) {
+				$this->addStartWorkTimeTrigger($actualRecord->getUserId());
+			}
 
 			if ($actionListResult->getSchedule())
 			{
@@ -311,8 +303,6 @@ class WorktimeService extends BaseService
 	 */
 	private function buildActionList($userId, $userDate = null)
 	{
-		(\Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable::getEntity())->cleanCache();
-
 		return $this->actionList->buildPossibleActionsListForUser($userId, $userDate);
 	}
 
@@ -481,5 +471,26 @@ class WorktimeService extends BaseService
 	private function runBeforeRecordSave(WorktimeRecord $actualRecord)
 	{
 		$this->getWorktimeManager()->onBeforeRecordSave($actualRecord, $this->liveFeedManager);
+	}
+
+	private function addStartWorkTimeTrigger(int $userId): ?StartResult
+	{
+		if (
+			!Loader::includeModule('bizproc')
+			|| !class_exists(\Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStartWorktimeTrigger::class)
+		)
+		{
+			return null;
+		}
+
+		$fields = [
+			TimemanStartWorktimeTrigger::FIELD_USER_ID => $userId,
+		];
+
+		return Starter::getByScenario(Scenario::onEvent)
+			->setContext(new ContextDto('timeman'))
+			->addEvent('StartWorkTimeTrigger', [], $fields)
+			->start()
+		;
 	}
 }

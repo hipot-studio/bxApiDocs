@@ -48,6 +48,9 @@ class AnchorTable extends DataManager
 
 			(new Reference('MESSAGE', MessageTable::getEntity(), Join::on('this.MESSAGE_ID', 'ref.ID')))
 				->configureJoinType(Join::TYPE_INNER),
+
+			(new Reference('CHAT', ChatTable::getEntity(), Join::on('this.CHAT_ID', 'ref.ID')))
+				->configureJoinType(Join::TYPE_INNER),
 		];
 	}
 }

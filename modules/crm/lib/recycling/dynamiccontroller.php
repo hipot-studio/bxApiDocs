@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Recycling;
 
 use Bitrix\Crm;
+use Bitrix\Crm\Model\Dynamic\RecurringTable;
 use Bitrix\Main;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -142,16 +143,67 @@ class DynamicController extends BaseController
 		}
 
 		$slots = array_merge($slots, $this->prepareActivityData($entityId, $params));
+		$slots = array_merge($slots, $this->prepareRecurringData($item, $params));
 
 		return [
 			'TITLE' => $item->getHeading(),
-			'SLOTS' => $slots
+			'SLOTS' => $slots,
+		];
+	}
+
+	protected function prepareRecurringData(Crm\Item $item, array $params = []): array
+	{
+		if (!$this->getFactory()?->isRecurringSupported())
+		{
+			return [];
+		}
+
+		if (!$item->getIsRecurring())
+		{
+			return [];
+		}
+
+		$recurring = Crm\Service\Container::getInstance()
+			->getRecurringBroker($item->getEntityTypeId())
+			?->getById($item->getId())
+		;
+
+		if (!$recurring)
+		{
+			return [];
+		}
+
+		$data = $recurring->collectValues();
+		$result = [];
+		foreach ($data as $key => $value)
+		{
+			if ($value instanceof Main\Type\DateTime)
+			{
+				$value = $value->disableUserTime()->toString();
+			}
+			elseif ($value instanceof Main\Type\Date)
+			{
+				$value = $value->toString();
+			}
+
+			$result[$key] = $value;
+		}
+
+		return [
+			'RECURRING' => $result,
 		];
 	}
 
 	protected function filterEntityDataFields(array $fields): array
 	{
 		$allowedFieldNames = $this->getFieldNames();
+		foreach ($allowedFieldNames as $key => $allowedFieldName)
+		{
+			if (str_starts_with($allowedFieldName, 'UF_')) // remove user fields from own entity fields
+			{
+				unset($allowedFieldNames[$key]);
+			}
+		}
 
 		return array_filter(
 			$fields,
@@ -191,6 +243,7 @@ class DynamicController extends BaseController
 			$this->entityTypeId
 		);
 		$recyclingEntity->setTitle($entityData['TITLE']);
+		$recyclingEntity->setUserFieldEntityId(\CCrmOwnerType::ResolveUserFieldEntityID($this->entityTypeId));
 
 		$slots = (
 		isset($entityData['SLOTS']) && is_array($entityData['SLOTS'])
@@ -253,7 +306,6 @@ class DynamicController extends BaseController
 		$this->suspendWaitings($entityID, $recyclingEntityID);
 		$this->suspendChats($entityID, $recyclingEntityID);
 		$this->suspendProductRows($entityID, $recyclingEntityID);
-		$this->suspendScoringHistory($entityID, $recyclingEntityID);
 		$this->suspendCustomRelations($entityID, $recyclingEntityID);
 		$this->suspendBadges($entityID, $recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemMoveToBin(
@@ -285,6 +337,13 @@ class DynamicController extends BaseController
 		if(!(is_array($fields) && !empty($fields)))
 		{
 			return null;
+		}
+
+		$userFields = $this->restoreUserFieldsFromRecycleBin($params['UF'] ?? []);
+
+		if(!empty($userFields))
+		{
+			$fields = array_merge($fields, $userFields);
 		}
 
 		unset($fields['ID'], $fields['COMPANY_ID'], $fields['CONTACT_ID'], $fields['CONTACT_IDS'], $fields['PRODUCT_ROWS']);
@@ -331,6 +390,7 @@ class DynamicController extends BaseController
 			Crm\EntityRequisite::setLinks($requisiteLinks);
 		}
 		$this->recoverActivities($recyclingEntityID, $entityID, $newEntityID, $params, $relationMap);
+		$this->recoverRecurring($recyclingEntityID, $entityID, $newEntityID, $params, $relationMap);
 
 		//region Relation
 		Relation::unregisterRecycleBin($recyclingEntityID);
@@ -338,6 +398,46 @@ class DynamicController extends BaseController
 		//endregion
 
 		return $newEntityID;
+	}
+
+	private function recoverRecurring(
+		int $recyclingEntityId,
+		int $entityId,
+		int $newEntityId,
+		array $params,
+		RelationMap $relationMap,
+	): void
+	{
+		$recurringData = $params['SLOTS']['RECURRING'] ?? null;
+		if (empty($recurringData) || !is_array($recurringData))
+		{
+			return;
+		}
+
+		$recurringData['ITEM_ID'] = $newEntityId;
+		unset($recurringData['UPDATED_AT']);
+
+		if (!empty($recurringData['LAST_EXECUTION']))
+		{
+			$recurringData['LAST_EXECUTION'] = new Main\Type\Date($recurringData['LAST_EXECUTION']);
+		}
+
+		if (!empty($recurringData['NEXT_EXECUTION']))
+		{
+			$recurringData['NEXT_EXECUTION'] = new Main\Type\Date($recurringData['NEXT_EXECUTION']);
+		}
+
+		if (!empty($recurringData['START_DATE']))
+		{
+			$recurringData['START_DATE'] = new Main\Type\Date($recurringData['START_DATE']);
+		}
+
+		if (!empty($recurringData['CREATED_AT']))
+		{
+			$recurringData['CREATED_AT'] = new Main\Type\DateTime($recurringData['CREATED_AT']);
+		}
+
+		RecurringTable::add($recurringData);
 	}
 
 	protected function recoverDependenceElements(int $recyclingEntityID, int $newEntityID): void
@@ -351,7 +451,6 @@ class DynamicController extends BaseController
 		$this->recoverWaitings($recyclingEntityID, $newEntityID);
 		$this->recoverChats($recyclingEntityID, $newEntityID);
 		$this->recoverProductRows($recyclingEntityID, $newEntityID);
-		$this->recoverScoringHistory($recyclingEntityID, $newEntityID);
 		$this->recoverCustomRelations($recyclingEntityID, $newEntityID);
 		$this->recoverBadges($recyclingEntityID, $newEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemRestoreFromRecycleBin(
@@ -454,7 +553,6 @@ class DynamicController extends BaseController
 		$this->eraseSuspendedObservers($recyclingEntityID);
 		$this->eraseSuspendedWaitings($recyclingEntityID);
 		$this->eraseSuspendedChats($recyclingEntityID);
-		$this->eraseSuspendedScoringHistory($recyclingEntityID);
 		$this->eraseSuspendedCustomRelations($recyclingEntityID);
 		$this->eraseSuspendedBadges($recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemDelete(

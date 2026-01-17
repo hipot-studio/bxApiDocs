@@ -754,6 +754,7 @@ class ActivityController extends EntityController
 				Activity\Provider\OpenLine::getId(),
 				Activity\Provider\Sms::getId(),
 				Activity\Provider\WhatsApp::getId(),
+				Activity\Provider\Telegram::getId(),
 				Activity\Provider\Notification::getId(),
 				Activity\Provider\RestApp::getId(),
 				Activity\Provider\Visit::getId(),
@@ -1042,7 +1043,7 @@ class ActivityController extends EntityController
 		elseif (
 			in_array(
 				$providerID,
-				[Activity\Provider\Sms::getId(), Activity\Provider\Whatsapp::getId()],
+				[Activity\Provider\Sms::getId(), Activity\Provider\WhatsApp::getId(), Activity\Provider\Telegram::getId()],
 				true
 			)
 		)

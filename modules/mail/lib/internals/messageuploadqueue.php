@@ -14,9 +14,9 @@ use Bitrix\Main\ORM\Query\Join;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_MessageUploadQueue_Query query()
- * @method static EO_MessageUploadQueue_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_MessageUploadQueue_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_MessageUploadQueue_Result getById($id)
- * @method static EO_MessageUploadQueue_Result getList(array $parameters = array())
+ * @method static EO_MessageUploadQueue_Result getList(array $parameters = [])
  * @method static EO_MessageUploadQueue_Entity getEntity()
  * @method static \Bitrix\Mail\Internals\EO_MessageUploadQueue createObject($setDefaultValues = true)
  * @method static \Bitrix\Mail\Internals\EO_MessageUploadQueue_Collection createCollection()

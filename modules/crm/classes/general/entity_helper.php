@@ -491,14 +491,17 @@ class CCrmEntityHelper
 
 		if ($provider instanceof EntityDataProvider)
 		{
-			$provider->applyCounterFilter($entityTypeId, $arFilter, $extras);
-
-			$provider->applyActivityResponsibleFilter($entityTypeId, $arFilter);
-
-			$provider->applyActivityFastSearchFilter($entityTypeId, $arFilter);
+			self::applyFilterDataProviderSubQueryFilter($arFilter, $provider, $entityTypeId, $extras);
 		}
 
 		unset($filterFactory, $provider);
+	}
+
+	public static function applyFilterDataProviderSubQueryFilter(array &$arFilter, EntityDataProvider $provider, int $entityTypeId, array $extras): void
+	{
+		$provider->applyCounterFilter($entityTypeId, $arFilter, $extras);
+		$provider->applyActivityResponsibleFilter($entityTypeId, $arFilter);
+		$provider->applyActivityFastSearchFilter($entityTypeId, $arFilter);
 	}
 
 	public static function prepareObserversFieldFilter(int $entityTypeId, string $tableAlias, array $observerIds): string

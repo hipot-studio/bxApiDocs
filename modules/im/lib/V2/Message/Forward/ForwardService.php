@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Entity\File\ParamCollection;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
+use Bitrix\Im\V2\Integration\AI\Transcription\TranscriptionCopyManager;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Result;
@@ -28,6 +29,7 @@ class ForwardService
 		Message\Params::FORWARD_USER_ID => Message\Params::FORWARD_USER_ID,
 		Message\Params::FORWARD_CHAT_TITLE => Message\Params::FORWARD_CHAT_TITLE,
 		Message\Params::REPLY_ID => Message\Params::REPLY_ID,
+		Message\Params::STICKER_PARAMS => Message\Params::STICKER_PARAMS,
 	];
 
 	private Chat $toChat;
@@ -44,21 +46,34 @@ class ForwardService
 	public function createMessages(MessageCollection $forwardingMessages): Result
 	{
 		$result = new Result();
-
+		$fileCopyMap = new FileCopyMap();
+		$messageConfigs = [];
 		$uuidMap = [];
+
 		foreach ($forwardingMessages as $forwardingMessage)
 		{
 			if ($this->canForward($forwardingMessage))
 			{
-				$forwardMessageResult = $this->createForwardMessage($forwardingMessage);
-				if ($forwardMessageResult->hasResult())
+				$messageConfigs[] = $this->buildForwardMessageConfig($forwardingMessage, $fileCopyMap);
+			}
+		}
+
+		ParamCollection::copyParams($fileCopyMap);
+		(new TranscriptionCopyManager($fileCopyMap))->copy();
+
+		foreach ($messageConfigs as $messageConfig)
+		{
+			$forwardMessageResult = $this->createForwardMessage($messageConfig);
+			if ($forwardMessageResult->hasResult())
+			{
+				$messageMap = $forwardMessageResult->getResult();
+				if (!empty($messageMap['uuid']))
 				{
-					$messageMap = $forwardMessageResult->getResult();
 					$uuidMap[$messageMap['uuid']] = $messageMap['id'];
 				}
-
-				$result->addErrors($forwardMessageResult->getErrors());
 			}
+
+			$result->addErrors($forwardMessageResult->getErrors());
 		}
 
 		return $result->setResult($uuidMap);
@@ -78,30 +93,8 @@ class ForwardService
 		return Chat::getInstance($chatId)->getExtendedType();
 	}
 
-	/**
-	 * @param Message $forwardingMessage
-	 * @return Result<Message>
-	 */
-	private function createForwardMessage(Message $forwardingMessage): Result
+	private function createForwardMessage(array $messageConfig): Result
 	{
-		$paramsResult = $this->createParamsForForwardMessage($forwardingMessage);
-		if (!$paramsResult->hasResult())
-		{
-			return $paramsResult;
-		}
-
-		$messageConfig = [
-			'MESSAGE_TYPE' => $this->toChat->getType(),
-			'MESSAGE' => $forwardingMessage->getMessage() !== '' ? $forwardingMessage->getMessage() : null,
-			'PARAMS' => $paramsResult->getResult()['PARAMS'] ?? [],
-			'TO_CHAT_ID' =>  $this->toChat->getChatId(),
-			'FROM_USER_ID' => $this->getContext()->getUserId(),
-			'URL_PREVIEW' => 'N',
-			'TEMPLATE_ID' => $forwardingMessage->getForwardUuid() ?? '',
-			'FILE_MODELS' => $paramsResult->getResult()['FILE_MODELS'] ?? [],
-			'WAIT_FULL_EXECUTION' => 'N',
-		];
-
 		$result = new Result();
 
 		$messageId = \CIMMessenger::Add($messageConfig); //TODO replace with $chat->sendMessage
@@ -111,16 +104,30 @@ class ForwardService
 		}
 
 		return $result->setResult([
-			'uuid' => $forwardingMessage->getForwardUuid(),
-			'id' => $messageId
+			'uuid' => $messageConfig['TEMPLATE_ID'] ?: null,
+			'id' => $messageId,
 		]);
 	}
 
-	/**
-	 * @param Message $forwardingMessage
-	 * @return Result<array>
-	 */
-	private function createParamsForForwardMessage(Message $forwardingMessage): Result
+	private function buildForwardMessageConfig(Message $forwardingMessage, FileCopyMap $fileCopyMap): array
+	{
+		$paramsResult = $this->buildForwardParams($forwardingMessage, $fileCopyMap);
+		$params = $paramsResult->getResult();
+
+		return [
+			'MESSAGE_TYPE' => $this->toChat->getType(),
+			'MESSAGE' => $forwardingMessage->getMessage() !== '' ? $forwardingMessage->getMessage() : null,
+			'PARAMS' => $params['PARAMS'] ?? [],
+			'TO_CHAT_ID' =>  $this->toChat->getChatId(),
+			'FROM_USER_ID' => $this->getContext()->getUserId(),
+			'URL_PREVIEW' => 'N',
+			'TEMPLATE_ID' => $forwardingMessage->getForwardUuid() ?? '',
+			'FILE_MODELS' => $params['FILE_MODELS'] ?? [],
+			'WAIT_FULL_EXECUTION' => 'N',
+		];
+	}
+
+	private function buildForwardParams(Message $forwardingMessage, FileCopyMap $fileCopyMap): Result
 	{
 		$result = new Result();
 
@@ -143,19 +150,17 @@ class ForwardService
 		if ($forwardingMessage->getParams()->isSet(Message\Params::FILE_ID))
 		{
 			$newFileIds = [];
-			$copyFileMap = [];
 			foreach ($forwardingMessage->getFiles() as $file)
 			{
 				$copy = $file->getCopyToChat($this->toChat);
 				if ($copy instanceof FileItem)
 				{
 					$newFileIds[] = $copy->getId();
-					$copyFileMap[$file->getId()] = $copy->getId();
 					$diskFiles[] = $copy->getDiskFile();
+					$fileCopyMap->addFileIdMapping($copy, $file);
 				}
 			}
 
-			ParamCollection::copyParams($copyFileMap);
 			$newParams[Message\Params::FILE_ID] = $newFileIds;
 		}
 

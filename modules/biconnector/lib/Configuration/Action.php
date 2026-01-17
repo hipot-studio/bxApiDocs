@@ -157,13 +157,12 @@ class Action
 			}
 			else
 			{
-				foreach ($importResult->getErrors() as $error)
-				{
-					$result['ERROR_EXCEPTION'] = [
-						'code' => $error->getCode(),
-						'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_DASHBOARD_IMPORT_ERROR'),
-					];
-				}
+				$error = $importResult->getError();
+				return [
+					'ERROR_EXCEPTION' => [
+						'message' => $error->getMessage(),
+					],
+				];
 			}
 		}
 

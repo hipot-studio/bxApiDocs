@@ -1,12 +1,13 @@
 <?php
+
 namespace Bitrix\Main\Rest;
 
 class Smile extends \IRestService
 {
-	public static function getList($arParams, $n, \CRestServer $server)
+	public static function getList($params, $n, \CRestServer $server)
 	{
 		$options = [];
-		if (isset($arParams['FULL_TYPINGS']) && $arParams['FULL_TYPINGS'] === 'Y')
+		if (isset($params['FULL_TYPINGS']) && $params['FULL_TYPINGS'] === 'Y')
 		{
 			$options['FULL_TYPINGS'] = 'Y';
 		}

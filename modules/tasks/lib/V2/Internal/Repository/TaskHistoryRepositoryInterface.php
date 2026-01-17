@@ -8,5 +8,5 @@ use Bitrix\Tasks\V2\Internal\Entity\HistoryLogCollection;
 
 interface TaskHistoryRepositoryInterface
 {
-	public function tail(int $taskId, int $offset = 0): HistoryLogCollection;
+	public function tail(int $taskId, int $offset = 0, int $limit = 50): HistoryLogCollection;
 }

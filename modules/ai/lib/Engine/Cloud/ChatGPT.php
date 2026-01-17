@@ -2,14 +2,11 @@
 
 namespace Bitrix\AI\Engine\Cloud;
 
-use Bitrix\AI\Context\Message;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IContext;
 use Bitrix\AI\Engine\IQueueOptional;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Quality;
-use Bitrix\AI\Result;
-use Bitrix\AI\Tokenizer\GPT;
 use Bitrix\Main\Application;
 
 final class ChatGPT extends CloudEngine implements IContext, IQueueOptional

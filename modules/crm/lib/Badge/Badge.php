@@ -21,7 +21,7 @@ abstract class Badge
 	public const CALENDAR_SHARING_STATUS_TYPE = 'calendar_sharing_status';
 	public const TASK_STATUS_TYPE = 'task_status';
 	public const MAIL_MESSAGE_DELIVERY_STATUS_TYPE = 'mail_message_delivery_status';
-	public const AI_CALL_FIELDS_FILLING_RESULT = 'ai_call_fields_filling_result';
+	public const AI_FIELDS_FILLING_RESULT = 'ai_call_fields_filling_result';
 	public const TODO_STATUS_TYPE = 'todo_status';
 	public const BIZPROC_WORKFLOW_STATUS_TYPE = 'workflow_status';
 	public const WORKFLOW_COMMENT_STATUS_TYPE = 'workflow_comment_status';

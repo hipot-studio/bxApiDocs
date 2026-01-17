@@ -81,11 +81,14 @@ class Title extends Content
 		$checkListComplete = (int) ($row['CHECK_LIST']['COMPLETE'] ?? 0);
 		$checkListWork = (int) ($row['CHECK_LIST']['WORK'] ?? 0);
 		$checkListAll = ($checkListComplete + $checkListWork);
+		$isRegular = ($row['REPLICATE'] ?? '') === 'Y' || (int)($row['FORKED_BY_TEMPLATE_ID'] ?? 0) > 0;
 
 		$filesIcon = "<div class='task-attachment-counter ui-label ui-label-sm ui-label-light'><span class='ui-label-inner'>{$countFiles}</span></div>";
 		$checkListIcon = "<div class='task-checklist-counter ui-label ui-label-sm ui-label-light'><span class='ui-label-inner'>{$checkListComplete}/{$checkListAll}</span></div>";
+		$regularIcon = "<div class='task-regular-icon ui-icon-set --o-repeat'></div>";
 
 		$postfixIcons = "<span class='task-title-indicators'>{$priorityLayout}"
+			. ($isRegular ? $regularIcon : '')
 			.($countFiles > 0 ? $filesIcon : '')
 			.($checkListAll > 0 ? $checkListIcon : '')
 			."</span>";

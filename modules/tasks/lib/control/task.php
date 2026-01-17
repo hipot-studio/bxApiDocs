@@ -143,6 +143,7 @@ class Task
 	private $occurUserId;
 
 	private array $skipTimeZoneFields = [];
+	private bool $useConsistency = false;
 
 	public function __construct(private int $userId)
 	{
@@ -252,6 +253,12 @@ class Task
 		return $this;
 	}
 
+	public function useConsistency(): static
+	{
+		$this->useConsistency = true;
+		return $this;
+	}
+
 	public function getLegacyOperationResultData(): ?array
 	{
 		return $this->legacyOperationResultData;
@@ -272,7 +279,7 @@ class Task
 	{
 		$this->reset();
 
-		if (FormV2Feature::isOn('create'))
+		if (FormV2Feature::isOn('create', (int)($fields['GROUP_ID'] ?? null)))
 		{
 			$config = new AddConfig(
 				userId: $this->userId,
@@ -284,6 +291,7 @@ class Task
 				skipBP: $this->skipBP,
 				skipTimeZoneFields: $this->skipTimeZoneFields,
 				needCorrectDatePlan: $this->needCorrectDatePlan,
+				useConsistency: $this->useConsistency,
 				eventGuid: $this->eventGuid
 			);
 
@@ -295,7 +303,6 @@ class Task
 			$entity = $service->add(
 				task: $entity,
 				config: $config,
-				useConsistency: false
 			);
 
 			return $mapper->mapToObject($entity);
@@ -400,6 +407,7 @@ class Task
 				skipComments: $this->skipComments,
 				skipPush: $this->skipPush,
 				skipBP: $this->skipBP,
+				useConsistency: $this->useConsistency,
 				eventGuid: $this->eventGuid
 			);
 
@@ -415,7 +423,6 @@ class Task
 				$entity = $service->update(
 					task: $entity,
 					config: $config,
-					useConsistency: false
 				);
 			}
 			catch (WrongTaskIdException|TaskNotExistsException)
@@ -547,7 +554,8 @@ class Task
 				byPassParameters: $this->byPassParams,
 				skipExchangeSync: $this->skipExchangeSync,
 				eventGuid: $this->eventGuid,
-				skipBP: $this->skipBP
+				skipBP: $this->skipBP,
+				useConsistency: $this->useConsistency,
 			);
 
 			$service = Container::getInstance()->getDeleteTaskService();
@@ -557,7 +565,6 @@ class Task
 				$service->delete(
 					taskId: $taskId,
 					config: $config,
-					useConsistency: false
 				);
 			}
 			catch (WrongTaskIdException|TaskNotExistsException|TaskStopDeleteException)
@@ -875,6 +882,15 @@ class Task
 
 		$before['GROUP_ID'] = (int)$this->sourceTaskData['GROUP_ID'];
 		$after['GROUP_ID'] = (int)$taskData['GROUP_ID'];
+
+		if (isset($after['STAGE']))
+		{
+			$stageId = (int)($taskData['STAGE_ID'] ?? 0);
+			if ($stageId > 0)
+			{
+				$after['STAGE_INFO'] = Container::getInstance()->getStageRepository()->getById($stageId)?->toArray();
+			}
+		}
 
 		$lastResult = ResultManager::getLastResult($this->taskId);
 		$isLastResultOpened = $lastResult && (int)$lastResult['STATUS'] === ResultTable::STATUS_OPENED;
@@ -1847,7 +1863,7 @@ class Task
 		if (!$isDeferred)
 		{
 			$commentPoster->disableDeferredPostMode();
-			$commentPoster->postComments();
+			$commentPoster->postComments(['fromWorkFlow' => $this->fromWorkFlow]);
 			$commentPoster->clearComments();
 		}
 	}
@@ -1991,10 +2007,12 @@ class Task
 
 	private function addLog(): void
 	{
+		$occurredUserId = $this->getOccurUserId();
+
 		$arLogFields = [
 			"TASK_ID" => $this->taskId,
-			"USER_ID" => $this->getOccurUserId(),
-			"CREATED_DATE" => UI::formatDateTime(Util\User::getTime()),
+			"USER_ID" => $occurredUserId,
+			"CREATED_DATE" => UI::formatDateTime(Util\User::getTime($occurredUserId)),
 			"FIELD" => "NEW",
 		];
 		$log = new CTaskLog();
@@ -2023,26 +2041,6 @@ class Task
 				'SPAWNED_BY_WORKFLOW' => $this->fromWorkFlow,
 			]
 		);
-	}
-
-	/**
-	 * @throws Exception
-	 */
-	private function sendRegularTaskReplicatedNotifications(array $fields): void
-	{
-		if (!$fields['IS_REGULAR'])
-		{
-			return;
-		}
-
-		$task = TaskRegistry::getInstance()->getObject($this->taskId, true);
-		if (!$task)
-		{
-			return;
-		}
-		$controller = new Controller();
-		$controller->onRegularTaskReplicated($task, ['SPAWNED_BY_AGENT' => $this->fromAgent]);
-		$controller->push();
 	}
 
 	/**
@@ -2389,7 +2387,7 @@ class Task
 	private function save(array $data): ?TaskObject
 	{
 		$handler = new TaskFieldHandler($this->userId, $data);
-		$data = $handler->getFieldsToDb();
+		$data = $handler->skipTimeZoneFields(...$this->skipTimeZoneFields)->getFieldsToDb();
 
 		$result = TaskTable::update($this->taskId, $data);
 
@@ -2706,7 +2704,13 @@ class Task
 	private function prepareFields(array $fields): ?array
 	{
 		$taskData = $this->getFullTaskData() ?? [];
-		$handler = new TaskFieldHandler($this->userId, $fields, $taskData);
+
+		$handler =
+			(new TaskFieldHandler($this->userId, $fields, $taskData))
+				->skipTimeZoneFields(...$this->skipTimeZoneFields)
+				->setFromWorkFlow($this->fromWorkFlow)
+				->setFromAgent($this->fromAgent)
+		;
 
 		$handler
 			->prepareFlow()
@@ -2730,6 +2734,10 @@ class Task
 			->prepareDates()
 			->prepareId()
 			->prepareIntegration();
+
+		$this->skipTimeZoneFields = array_unique(
+			array_merge($this->skipTimeZoneFields, $handler->getSkipTimeZoneFields())
+		);
 
 		$handler = new TariffFieldHandler($handler->getFields());
 

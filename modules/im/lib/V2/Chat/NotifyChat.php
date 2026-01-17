@@ -28,7 +28,14 @@ class NotifyChat extends Chat
 
 	protected function checkAccessInternal(int $userId): Result
 	{
-		return (new Result())->addError(new ChatError(ChatError::ACCESS_DENIED));
+		$result = new Result();
+
+		if ($this->authorId !== $userId)
+		{
+			$result->addError(new ChatError(ChatError::ACCESS_DENIED));
+		}
+
+		return $result;
 	}
 
 	/**
@@ -58,6 +65,12 @@ class NotifyChat extends Chat
 			}
 
 			$params['AUTHOR_ID'] = $params['TO_USER_ID'];
+		}
+
+		$params['AUTHOR_ID'] = (int)$params['AUTHOR_ID'];
+		if ($params['AUTHOR_ID'] < 0)
+		{
+			return $result->addError(new ChatError(ChatError::WRONG_RECIPIENT));
 		}
 
 		$result->setResult($params);
@@ -97,12 +110,11 @@ class NotifyChat extends Chat
 			return $result->addError(new ChatError(ChatError::WRONG_RECIPIENT));
 		}
 
-		$blockedExternalAuthId = \Bitrix\Im\Model\UserTable::filterExternalUserTypes(['replica']);
-		$res = \Bitrix\Im\Model\UserTable::getById($params['TO_USER_ID']);
+		$user = \Bitrix\Im\V2\Entity\User\User::getInstance($params['TO_USER_ID']);
 		if (
-			!($userData = $res->fetch())
-			|| $userData['ACTIVE'] == 'N'
-			|| in_array($userData['EXTERNAL_AUTH_ID'], $blockedExternalAuthId, true)
+			!$user->isExist()
+			|| !$user->isActive()
+			|| !$user->isInternalType(skipTypes: ['replica'])
 		)
 		{
 			return $result->addError(new ChatError(ChatError::WRONG_RECIPIENT));
@@ -147,12 +159,11 @@ class NotifyChat extends Chat
 			return $result->addErrors($paramsResult->getErrors());
 		}
 
-		$blockedExternalAuthId = \Bitrix\Im\Model\UserTable::filterExternalUserTypes(['replica']);
-		$res = \Bitrix\Im\Model\UserTable::getById($params['AUTHOR_ID']);
+		$user = \Bitrix\Im\V2\Entity\User\User::getInstance($params['AUTHOR_ID']);
 		if (
-			!($userData = $res->fetch())
-			|| $userData['ACTIVE'] == 'N'
-			|| in_array($userData['EXTERNAL_AUTH_ID'], $blockedExternalAuthId, true)
+			!$user->isExist()
+			|| !$user->isActive()
+			|| !$user->isInternalType(skipTypes: ['replica'])
 		)
 		{
 			return $result->addError(new ChatError(ChatError::WRONG_RECIPIENT));

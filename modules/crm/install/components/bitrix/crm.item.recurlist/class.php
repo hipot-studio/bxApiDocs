@@ -18,6 +18,7 @@ class CrmItemRecurListComponent extends CBitrixComponent
 		$templatePage = '';
 		if (!Container::getInstance()->getFactory($entityTypeId)?->isRecurringEnabled())
 		{
+			$this->arResult['entityTypeId'] = (int)$entityTypeId;
 			$templatePage = 'error';
 		}
 

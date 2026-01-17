@@ -88,6 +88,13 @@ class JournalRepository implements JournalRepositoryInterface
 		]);
 	}
 
+	public function setStatus(int $id, JournalStatus $status): void
+	{
+		JournalTable::update($id, [
+			'STATUS' => $status->value,
+		]);
+	}
+
 	private function mapRowToEntity(array $row): JournalEvent
 	{
 		return new JournalEvent(

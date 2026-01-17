@@ -7,6 +7,9 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Crm;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics;
+use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Integration\Sender\Rc;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -304,6 +307,7 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 		$this->arResult['categories'] = $this->getCategories();
 		$this->arResult['stages'] = $this->getStages();
 		$this->arResult['tunnelScheme'] = $this->getTunnelScheme();
+		$this->arResult['analyticsLabels'] = $this->getAnalyticsLabels();
 
 		$this->arResult['isCategoryEditable'] = $this->isCategoryEditable();
 		$this->arResult['isCategoryCreatable'] = $this->isCategoryCreatable();
@@ -702,8 +706,11 @@ HTML;
 			return null;
 		}
 
+		$stage = $this->getStageById($id);
+		$this->sendStagePullEvent('STAGE_ADDED', $stage);
+
 		return [
-			'stage' => $this->getStageById($id),
+			'stage' => $stage,
 		];
 	}
 
@@ -754,6 +761,8 @@ HTML;
 
 			$response['success'] = true;
 			$response['stage'] = $this->getStageById($id);
+
+			$this->sendStagePullEvent('STAGE_UPDATED', $response['stage']);
 		}
 		else
 		{
@@ -784,6 +793,8 @@ HTML;
 				$this->addErrors($result->getErrors());
 			}
 
+			$this->sendStagePullEvent('STAGE_DELETED', $stage->collectValues());
+
 			return;
 		}
 		$this->addError(new Error(Loc::getMessage('CRM_SALES_TUNNELS_STAGE_NOT_FOUND')));
@@ -808,6 +819,60 @@ HTML;
 			return null;
 		}
 		return $this->getCategories();
+	}
+
+	protected function sendStagePullEvent(string $eventName, array $stage): void
+	{
+		$allowedEvents = [
+			'STAGE_ADDED',
+			'STAGE_UPDATED',
+			'STAGE_DELETED',
+		];
+
+		if (!in_array($eventName, $allowedEvents, true))
+		{
+			return;
+		}
+
+		$entityTypeName = $this->factory->getEntityName();
+		$item =
+			Crm\Kanban\Entity::getInstance($entityTypeName)
+				?->createPullStage($stage)
+		;
+
+		switch ($eventName)
+		{
+			case 'STAGE_ADDED':
+				PullManager::getInstance()->sendStageAddedEvent(
+					$item,
+					[
+						'TYPE' => $entityTypeName,
+						'CATEGORY_ID' => (int)($stage['CATEGORY_ID'] ?? 0),
+					],
+				);
+
+				break;
+			case 'STAGE_UPDATED':
+				PullManager::getInstance()->sendStageUpdatedEvent(
+					$item,
+					[
+						'TYPE' => $entityTypeName,
+						'CATEGORY_ID' => (int)($stage['CATEGORY_ID'] ?? 0),
+					],
+				);
+
+				break;
+			case 'STAGE_DELETED':
+				PullManager::getInstance()->sendStageDeletedEvent(
+					$item,
+					[
+						'TYPE' => $entityTypeName,
+						'CATEGORY_ID' => (int)($stage['CATEGORY_ID'] ?? 0),
+					],
+				);
+
+				break;
+		}
 	}
 
 	protected function getToolbarParameters(): array
@@ -847,5 +912,42 @@ HTML;
 				],
 			],
 		);
+	}
+
+	// Return array signature is synchronized with template .default/src/type/analytics-labels.js
+	private function getAnalyticsLabels(): array
+	{
+		$funnelSubSection = Dictionary::SUB_SECTION_FUNNEL;
+		$kanbanSubSection = Dictionary::SUB_SECTION_KANBAN;
+
+		$createFunnel = (new FunnelAnalytics\Funnel\CreateEvent(subSection: $funnelSubSection))->buildData();
+		$renameFunnel = (new FunnelAnalytics\Funnel\RenameEvent(subSection: $funnelSubSection))->buildData();
+		$deleteFunnel = (new FunnelAnalytics\Funnel\DeleteEvent(subSection: $funnelSubSection))->buildData();
+
+		$createStage = (new FunnelAnalytics\Stage\CreateEvent(subSection: $funnelSubSection))->buildData();
+		$renameStage = (new FunnelAnalytics\Stage\RenameEvent(subSection: $funnelSubSection))->buildData();
+		$deleteStage = (new FunnelAnalytics\Stage\DeleteEvent(subSection: $funnelSubSection))->buildData();
+		$updateStage = (new FunnelAnalytics\Stage\UpdateEvent(subSection: $funnelSubSection))->buildData();
+
+		$createTunnel = (new FunnelAnalytics\Tunnel\CreateEvent(subSection: $funnelSubSection))->buildData();
+		$deleteTunnel = (new FunnelAnalytics\Tunnel\DeleteEvent(subSection: $funnelSubSection))->buildData();
+
+		$openSlider = (new FunnelAnalytics\Funnel\OpenSliderEvent(subSection: $kanbanSubSection))->buildData();
+
+		return [
+			'createFunnelLabel' => $createFunnel,
+			'renameFunnelLabel' => $renameFunnel,
+			'deleteFunnelLabel' => $deleteFunnel,
+
+			'createStageLabel' => $createStage,
+			'renameStageLabel' => $renameStage,
+			'deleteStageLabel' => $deleteStage,
+			'updateStageLabel' => $updateStage,
+
+			'createTunnelLabel' => $createTunnel,
+			'deleteTunnelLabel' => $deleteTunnel,
+
+			'openSliderLabel' => $openSlider,
+		];
 	}
 }

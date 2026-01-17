@@ -88,8 +88,19 @@ class CurrentUser
 
 	public function getDateRegister(): ?DateTime
 	{
-		return isset($this->userFields['DATE_REGISTER']) ? DateTime::createFromText($this->userFields['DATE_REGISTER'])
-			: null;
+		if (!isset($this->userFields['DATE_REGISTER']))
+		{
+			return null;
+		}
+
+		try
+		{
+			return new DateTime($this->userFields['DATE_REGISTER']);
+		}
+		catch (Main\ObjectException)
+		{
+			return null;
+		}
 	}
 
 	public function getPersonalPhotoId(): ?int

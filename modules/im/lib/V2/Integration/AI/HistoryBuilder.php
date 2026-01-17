@@ -289,7 +289,7 @@ class HistoryBuilder implements Contract\MemoryBuilder
 
 	protected function getReply(V2\Message $message): ?Message
 	{
-		$replyId = $message->getParams()->get(Params::REPLY_ID)->getValue();
+		$replyId = $message->getReplyId();
 
 		if (!$replyId)
 		{

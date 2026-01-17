@@ -38,7 +38,7 @@ class Message extends BaseController
 			return null;
 		}
 
-		$booking = $this->bookingRepository->getList(
+		$bookingCollection = $this->bookingRepository->getList(
 			limit: 1,
 			filter: new BookingFilter([
 				'ID' => $bookingId,
@@ -49,9 +49,16 @@ class Message extends BaseController
 				'EXTERNAL_DATA',
 				'CLIENTS',
 				'RESOURCES',
+				'SKUS',
 			]))->prepareSelect(),
-		)->getFirstCollectionItem();
+		);
 
+		if (!$bookingCollection->isEmpty())
+		{
+			$this->bookingRepository->withSkus($bookingCollection);
+		}
+
+		$booking = $bookingCollection->getFirstCollectionItem();
 		if (!$booking)
 		{
 			$this->addError(new Error(Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_ERROR')));

@@ -22,9 +22,9 @@ class AuthorizationRepository
 		$this->managedCache = Application::getInstance()->getManagedCache();
 	}
 
-	public function saveAuthorization(int $userId, int $applicationId, Main\Type\DateTime $time): void
+	public function saveAuthorization(int $userId, string $applicationType, int $applicationId, Main\Type\DateTime $time): void
 	{
-		$cacheId = $this->getCacheId($userId, $applicationId, $time);
+		$cacheId = $this->getCacheId($userId, $applicationType, $applicationId, $time);
 		$cacheIsSet = $this->managedCache->read(static::CACHE_TTL, $cacheId) === true;
 
 		if ($cacheIsSet)
@@ -43,6 +43,8 @@ class AuthorizationRepository
 				$userId,
 				json_encode([
 					'userId' => $userId,
+					'method' => 'rest',
+					'applicationType' => $applicationType,
 					'applicationId' => $applicationId,
 					'timePeriod' => $time->format('Y-m-d H'),
 				])
@@ -66,8 +68,8 @@ class AuthorizationRepository
 		$connection->unlock(self::LOCK_NAME . '_ ' . $userId);
 	}
 
-	private function getCacheId(int $userId, int $applicationId, Main\Type\DateTime $time): string
+	private function getCacheId(int $userId, string $applicationType, int $applicationId, Main\Type\DateTime $time): string
 	{
-		return static::CACHE_ID . '_' . $userId . '_' . $applicationId . '_' . $time->format('Y-m-d H');
+		return static::CACHE_ID . '_' . $userId . '_' . $applicationType . '_' . $applicationId . '_' . $time->format('Y-m-d H');
 	}
 }

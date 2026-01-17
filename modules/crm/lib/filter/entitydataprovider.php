@@ -9,9 +9,12 @@ use Bitrix\Crm\Filter\FieldsTransform\UserBasedField;
 use Bitrix\Crm\Search\SearchContentBuilderFactory;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\CounterSettings;
+use Bitrix\HumanResources\Integration\UI\DepartmentProvider;
+use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderSelectMode;
 use Bitrix\Main;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\LoaderException;
 
 abstract class EntityDataProvider extends Main\Filter\EntityDataProvider
 {
@@ -176,6 +179,80 @@ abstract class EntityDataProvider extends Main\Filter\EntityDataProvider
 		}
 
 		return self::QUERY_APPROACH_BUILDER;
+	}
+
+	/**
+	 * Returns params for entity-selector with 'departments' tab and default users tabs
+	 * @param string $context
+	 * @param array $userSelectorOptions
+	 * @return array[]
+	 * @throws LoaderException
+	 */
+	protected function getDepartmentSelectorParams(string $context, array $userSelectorOptions = []): array
+	{
+		if (!Main\Loader::includeModule('humanresources'))
+		{
+			return [];
+		}
+
+		if ($this->isDepartmentSelectorDisabled())
+		{
+			$userSelectorOptions['isEnableAllUsers'] = false;
+			$userSelectorOptions['isEnableOtherUsers'] = false;
+
+			return $this->getUserEntitySelectorParams($context, $userSelectorOptions);
+		}
+
+		$entities[] = [
+			'id' => DepartmentProvider::ENTITY_ID,
+			'options' => [
+				'selectMode' => DepartmentProviderSelectMode::UsersAndDepartments->value,
+				'allowFlatDepartments' => true,
+			],
+		];
+
+		$userSelectorOptions['isEnableStructureNode'] = false;
+		$userSelectorParams = $this->getUserEntitySelectorParams($context, $userSelectorOptions);
+		$userSelectorEntities = $userSelectorParams['params']['dialogOptions']['entities'];
+		$entities = array_merge($entities, $userSelectorEntities);
+
+		return [
+			'params' => [
+				'multiple' => 'Y',
+				'addEntityIdToResult' => 'Y',
+				'dialogOptions' => [
+					'height' => 300,
+					'context' => $context,
+					'entities' => $entities,
+					'showAvatars' => true,
+					'dropdownMode' => false,
+				],
+			],
+		];
+	}
+
+	protected function isDepartmentSelectorDisabled(): bool
+	{
+		$settings = $this->getSettings();
+		$disabledInSettings = false;
+		$disabledInParentSettings = false;
+
+		if (method_exists($settings, 'isDepartmentSelectorDisabled'))
+		{
+			$disabledInSettings = $settings->isDepartmentSelectorDisabled();
+		}
+
+		if (method_exists($settings, 'getParentEntityDataProvider'))
+		{
+			$parentSettings = $settings->getParentEntityDataProvider();
+
+			if (method_exists($parentSettings, 'isDepartmentSelectorDisabled'))
+			{
+				$disabledInParentSettings = $parentSettings->isDepartmentSelectorDisabled();
+			}
+		}
+
+		return $disabledInSettings || $disabledInParentSettings;
 	}
 
 	protected function applySettingsDependantFilter(array &$filterFields): void

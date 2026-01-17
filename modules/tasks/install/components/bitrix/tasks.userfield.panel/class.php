@@ -53,7 +53,7 @@ class TasksUserFieldPanelComponent extends TasksBaseComponent
 				'+prefilters' => [
 					new \Bitrix\Tasks\Action\Filter\BooleanFilter(),
 				],
-			]
+			],
 		];
 	}
 
@@ -61,6 +61,16 @@ class TasksUserFieldPanelComponent extends TasksBaseComponent
 	{
 		parent::__construct($component);
 		$this->init();
+	}
+
+	public function getSignature()
+	{
+		if ($this->arParams['SIGNATURE'] ?? null)
+		{
+			return $this->arParams['SIGNATURE'];
+		}
+
+		return parent::getSignature();
 	}
 
 	protected function init()
@@ -150,7 +160,7 @@ class TasksUserFieldPanelComponent extends TasksBaseComponent
 			$userFieldLabels = $userField['EDIT_FORM_LABEL'] ?? [];
 
 			$editFormLabel = array(
-				LANGUAGE_ID => $label
+				LANGUAGE_ID => $label,
 			);
 
 			foreach (static::getLanguages() as $languageId)
@@ -197,7 +207,7 @@ class TasksUserFieldPanelComponent extends TasksBaseComponent
 			}
 
 			$editFormLabel = array(
-				LANGUAGE_ID => $label
+				LANGUAGE_ID => $label,
 			);
 
 			foreach (static::getLanguages() as $languageId)
@@ -826,7 +836,7 @@ if(CModule::IncludeModule('tasks'))
 				{
 					$rules[$v['ID']] = array('VALUE' => array(
 						'D' => array('VALUE' => 'boolean', 'DEFAULT' => true),
-						'S' => array('VALUE' => 'integer', 'DEFAULT' => 0)
+						'S' => array('VALUE' => 'integer', 'DEFAULT' => 0),
 					), 'DEFAULT' => array());
 				}
 			}

@@ -3,10 +3,6 @@
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Config;
-use Bitrix\Catalog\StoreTable;
-use Bitrix\Catalog\ProductTable;
-use Bitrix\Catalog\StoreProductTable;
-use Bitrix\Catalog\v2\Product\Product;
 use Bitrix\Catalog\Component\StoreAmount;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Errorable;
@@ -14,8 +10,7 @@ use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\PageNavigation;
-use Bitrix\Main\Grid\Options;
-use Bitrix\Main\Entity;
+use Bitrix\Catalog\Store\EnableWizard\Manager;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -405,15 +400,18 @@ class CatalogProductStoreAmountComponent
 			]);
 		}
 
-		$headers[] = [
-			'id' => 'AMOUNT',
-			'name' => Loc::getMessage('STORE_LIST_GRID_HEADER_AMOUNT'),
-			'title' => Loc::getMessage('STORE_LIST_GRID_HEADER_AMOUNT'),
-			'sort' => 'AMOUNT',
-			'type' => 'money',
-			'width' => $defaultWidth,
-			'default' => true
-		];
+		if (!Manager::isOnecMode())
+		{
+			$headers[] = [
+				'id' => 'AMOUNT',
+				'name' => Loc::getMessage('STORE_LIST_GRID_HEADER_AMOUNT'),
+				'title' => Loc::getMessage('STORE_LIST_GRID_HEADER_AMOUNT'),
+				'sort' => 'AMOUNT',
+				'type' => 'money',
+				'width' => $defaultWidth,
+				'default' => true
+			];
+		}
 
 		$this->headers = $headers;
 		return $this->headers;
@@ -472,7 +470,11 @@ class CatalogProductStoreAmountComponent
 	 */
 	protected function prepareRow(array $productStore): array
 	{
-		$reservedQuantity = '<a class="main-grid-cell-content-store-amount-reserved-quantity">';
+		$reservedQuantity =
+			!Manager::isOnecMode()
+				? '<a class="main-grid-cell-content-store-amount-reserved-quantity">'
+				: ''
+		;
 		$commonQuantity = '';
 		$quantity = '';
 		$amount = '';
@@ -495,7 +497,10 @@ class CatalogProductStoreAmountComponent
 			$quantity .= $currentQuantity . '<br>';
 		}
 
-		$reservedQuantity .= '</a>';
+		if (!Manager::isOnecMode())
+		{
+			$reservedQuantity .= '</a>';
+		}
 
 		foreach ($productStore['AMOUNT'] as $storeAmount)
 		{

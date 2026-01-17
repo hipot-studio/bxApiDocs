@@ -14,12 +14,16 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
 use Bitrix\Tasks\Scrum\Utility\SprintRanges;
 use Bitrix\Tasks\Scrum\Utility\StoryPoints;
 use Bitrix\Tasks\Scrum\Utility\TimeHelper;
 use Bitrix\Tasks\Util;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\StageCollection;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\StageMapper;
 
 class SprintService implements Errorable
 {
@@ -437,7 +441,7 @@ class SprintService implements Errorable
 		$queryObject = EntityTable::getList([
 			'filter' => [
 				'GROUP_ID' => (int) $groupId,
-				'=STATUS' => EntityForm::SPRINT_ACTIVE
+				'=STATUS' => EntityForm::SPRINT_ACTIVE,
 			],
 		]);
 		if ($sprintData = $queryObject->fetch())
@@ -446,6 +450,19 @@ class SprintService implements Errorable
 		}
 
 		return $sprint;
+	}
+
+	public function getActiveSprintStages(int $groupId): StageCollection
+	{
+		$stages = [];
+
+		$sprint = $this->getActiveSprintByGroupId($groupId);
+		if ($sprint->isActiveSprint())
+		{
+			$stages = StagesTable::getActiveSprintStages($sprint->getId(), true);
+		}
+
+		return Container::getInstance()->get(StageMapper::class)->mapToCollection($stages);
 	}
 
 	/**
@@ -468,7 +485,7 @@ class SprintService implements Errorable
 				'order' => [
 					'SORT' => 'ASC',
 					'DATE_END' => 'DESC',
-				]
+				],
 			]);
 			while ($sprintData = $queryObject->fetch())
 			{
@@ -501,7 +518,7 @@ class SprintService implements Errorable
 			],
 			'order' => [
 				'DATE_START' => 'ASC',
-			]
+			],
 		]);
 		while ($sprintData = $queryObject->fetch())
 		{
@@ -585,7 +602,7 @@ class SprintService implements Errorable
 			],
 			'order' => [
 				'DATE_START' => 'DESC',
-			]
+			],
 		]);
 		if ($data = $queryObject->fetch())
 		{
@@ -621,7 +638,7 @@ class SprintService implements Errorable
 				'order' => [
 					'SORT' => 'ASC',
 					'DATE_END' => 'DESC',
-				]
+				],
 			]);
 			while ($sprintData = $queryObject->fetch())
 			{
@@ -658,10 +675,10 @@ class SprintService implements Errorable
 				'filter' => [
 					'GROUP_ID'=> (int) $groupId,
 					'=ENTITY_TYPE' => EntityForm::SPRINT_TYPE,
-					'=STATUS' => EntityForm::SPRINT_COMPLETED
+					'=STATUS' => EntityForm::SPRINT_COMPLETED,
 				],
 				'order' => ['DATE_END' => 'DESC'],
-				'limit' => 1
+				'limit' => 1,
 			]);
 			if ($sprintData = $queryObject->fetch())
 			{
@@ -686,7 +703,7 @@ class SprintService implements Errorable
 		{
 			$queryObject = EntityTable::getList([
 				'filter' => [
-					'ID' => (int) $sprintId
+					'ID' => (int) $sprintId,
 				],
 			]);
 			if ($sprintData = $queryObject->fetch())
@@ -787,7 +804,7 @@ class SprintService implements Errorable
 				$expression = new SqlExpression('(CASE '.implode(' ', $whens).' END)');
 
 				EntityTable::updateMulti($sprintIds, [
-					'SORT' => $expression
+					'SORT' => $expression,
 				]);
 			}
 		}
@@ -863,7 +880,7 @@ class SprintService implements Errorable
 			{
 				$info['weekendInfo'][$dayNumber] = [
 					'weekendNumber' => $dayNumber,
-					'previousWeekday' => ($weekDayNumber ? $weekDayNumber : 1)
+					'previousWeekday' => ($weekDayNumber ? $weekDayNumber : 1),
 				];
 			}
 			else
@@ -914,7 +931,7 @@ class SprintService implements Errorable
 
 			$sprintDayRanges[$dayNumber] = [
 				'start' => strtotime('today', $dayTime),
-				'end' => strtotime('tomorrow', $dayTime) - 1
+				'end' => strtotime('tomorrow', $dayTime) - 1,
 			];
 		}
 
@@ -932,7 +949,7 @@ class SprintService implements Errorable
 
 			$taskCompleteTimeDayRanges[$completedTaskId] = [
 				'start' => strtotime('today', $taskClosedTime),
-				'end' => strtotime('tomorrow', $taskClosedTime) - 1
+				'end' => strtotime('tomorrow', $taskClosedTime) - 1,
 			];
 		}
 

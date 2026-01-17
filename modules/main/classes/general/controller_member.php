@@ -1106,7 +1106,7 @@ class __CControllerPacket
 		$hash = implode("|", func_get_args());
 		$md5hash = md5($hash);
 
-		if ($md5hash != $this->hash)
+		if (!hash_equals($this->hash, $md5hash))
 		{
 			if (is_object($APPLICATION))
 			{

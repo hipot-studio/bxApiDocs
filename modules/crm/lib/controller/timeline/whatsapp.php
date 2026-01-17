@@ -43,7 +43,7 @@ final class WhatsApp extends Base
 
 			return null;
 		}
-		
+
 		$itemIdentifier = new ItemIdentifier($entityTypeId, $entityId);
 
 		if (!$provider['canUse'])
@@ -63,54 +63,7 @@ final class WhatsApp extends Base
 
 	private function updateAnalyticsParams(string $ednaManageUrl, int $entityTypeId, ?int $categoryId): string
 	{
-		$section = null;
-
-		if ($entityTypeId === \CCrmOwnerType::Lead)
-		{
-			$section = Dictionary::SECTION_LEAD;
-		}
-
-		if ($entityTypeId === \CCrmOwnerType::Deal)
-		{
-			$section = Dictionary::SECTION_DEAL;
-		}
-
-		if ($entityTypeId === \CCrmOwnerType::Company)
-		{
-			$section = Dictionary::SECTION_COMPANY;
-		}
-
-		if ($entityTypeId === \CCrmOwnerType::Contact)
-		{
-			$section = Dictionary::SECTION_CONTACT;
-		}
-
-		if ($entityTypeId === \CCrmOwnerType::SmartInvoice)
-		{
-			$section = Dictionary::SECTION_SMART_INVOICE;
-		}
-
-		if ($entityTypeId === \CCrmOwnerType::Quote)
-		{
-			$section = Dictionary::SECTION_QUOTE;
-		}
-
-		if ($entityTypeId === \CCrmOwnerType::SmartDocument)
-		{
-			$section = Dictionary::SECTION_CONTACT;
-		}
-
-		if (\CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId))
-		{
-			$section = Dictionary::SECTION_DYNAMIC;
-		}
-
-		$section = Dictionary::getSectionByCategoryId($entityTypeId, $categoryId) ?? $section;
-
-		if (!$section)
-		{
-			return $ednaManageUrl;
-		}
+		$section = Dictionary::getSectionByEntityType($entityTypeId, $categoryId);
 
 		$current = new Uri($ednaManageUrl);
 		$current->addParams([

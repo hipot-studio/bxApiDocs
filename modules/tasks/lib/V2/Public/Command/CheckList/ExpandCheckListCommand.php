@@ -25,19 +25,17 @@ class ExpandCheckListCommand extends AbstractCommand
 	{
 		$result = new Result();
 
+		$handler = Container::getInstance()->get(ExpandCheckListCommandHandler::class);
+
 		try
 		{
-			$service = Container::getInstance()->getCheckListUserOptionService();
-
-			$handler = new ExpandCheckListCommandHandler($service);
-
 			$handler($this);
+
+			return $result;
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

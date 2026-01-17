@@ -18,6 +18,7 @@ class SetHighTaskPriorityCommand extends AbstractCommand
 		public readonly int $taskId,
 		#[PositiveNumber]
 		public readonly int $userId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -27,9 +28,7 @@ class SetHighTaskPriorityCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$updateTaskService = Container::getInstance()->getUpdateTaskService();
-
-		$handler = new SetHighTaskPriorityHandler($updateTaskService);
+		$handler = Container::getInstance()->get(SetHighTaskPriorityHandler::class);
 
 		try
 		{

@@ -59,6 +59,11 @@ final class Analytics
 		return self::menuOpen('groups', 'groups');
 	}
 
+	public static function extranet(): array
+	{
+		return self::menuOpen('groups', 'extranet');
+	}
+
 	public static function signDocuments(): array
 	{
 		return self::menuOpen('sign', 'documents');
@@ -93,4 +98,5 @@ final class Analytics
 	{
 		return self::menuOpen('landing', 'kb', 'open_start_page');
 	}
+
 }

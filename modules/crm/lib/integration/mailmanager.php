@@ -97,12 +97,7 @@ final class MailManager implements ICanSendMessage
 
 	private static function getFromList(int $userId): array
 	{
-		$userData = \Bitrix\Main\UserTable::getList([
-			'select' => ['ID', 'TITLE', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'LOGIN', 'EMAIL'],
-			'filter' => array('=ID' => $userId),
-		])->fetch();
-
-		$userNameFormatted = \CUser::formatName(\CSite::getNameFormat(), $userData, true, false);
+		$userBroker = Container::getInstance()->getUserBroker();
 
 		$fromList = [];
 		foreach (\Bitrix\Mail\MailboxTable::getUserMailboxes($userId) as $mailbox)
@@ -112,7 +107,7 @@ final class MailManager implements ICanSendMessage
 				continue;
 			}
 
-			$mailboxName = trim($mailbox['USERNAME']) ?: $userNameFormatted;
+			$mailboxName = trim($mailbox['USERNAME']) ?: $userBroker->getName($userId);
 
 			$id = (int)$mailbox['ID'];
 			$email = (string)$mailbox['EMAIL'];
@@ -154,7 +149,7 @@ final class MailManager implements ICanSendMessage
 			return $result->addError(
 				new Error(
 					Loc::getMessage('CRM_INTEGRATION_MAIL_MANAGER_ERROR_NO_FROM'),
-					Channel\ErrorCode::NOT_CONNECTED
+					Channel\ErrorCode::NO_FROM
 				)
 			);
 		}

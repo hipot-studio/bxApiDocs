@@ -34,7 +34,10 @@ class StopTimerHandler
 		$this->chatNotification->notify(
 			type: NotificationType::TaskTimerStopped,
 			task: $task,
-			args: ['triggeredBy' => $triggeredBy],
+			args: [
+				'triggeredBy' => $triggeredBy,
+				'seconds' => $command->seconds,
+			],
 		);
 	}
 }

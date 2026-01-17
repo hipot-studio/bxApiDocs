@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Main\Controller\SidePanel;
 
 use Bitrix\Main\Engine\ActionFilter;

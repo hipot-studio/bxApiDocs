@@ -24,8 +24,7 @@ class ExternalChatRelations extends ChatRelations
 			return $userIds;
 		}
 
-		$result = $event->getResult();
-		$usersWithAccess = $result->getResult()['userIds'] ?? [];
+		$usersWithAccess = $event->getUsersWithAccess();
 		self::deleteUsersWithoutAccess($this->chatId, $userIds, $usersWithAccess);
 
 		return $usersWithAccess;

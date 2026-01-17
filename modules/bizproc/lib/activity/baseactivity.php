@@ -382,4 +382,10 @@ abstract class BaseActivity extends \CBPActivity
 	{
 		return [];
 	}
+
+	final protected function setProperty(string $key, mixed $value = null): void
+	{
+		$this->arProperties[$key] = $value;
+		$this->preparedProperties[$key] = $value;
+	}
 }

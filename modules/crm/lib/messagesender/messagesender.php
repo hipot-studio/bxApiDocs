@@ -17,14 +17,18 @@ final class MessageSender
 	 * @param array $options
 	 * @return Result
 	 */
-	public static function send(array $sendersOptions, array $options = []): Result
+	public static function send(array $sendersOptions, array $options = [], ?string $currentSenderCode = null): Result
 	{
 		if (!$sendersOptions)
 		{
 			return (new Result())->addError(new Error('Sender options have not been specified'));
 		}
 
-		$currentSender = SenderPicker::getCurrentSender();
+		$currentSender =
+			$currentSenderCode
+				? SenderPicker::getSenderByCode($currentSenderCode)
+				: SenderPicker::getCurrentSender()
+		;
 		if ($currentSender && isset($sendersOptions[$currentSender::getSenderCode()]))
 		{
 			$sender = $currentSender;

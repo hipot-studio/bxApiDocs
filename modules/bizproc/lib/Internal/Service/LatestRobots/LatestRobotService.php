@@ -59,7 +59,7 @@ final class LatestRobotService
 
 	private function prepareRawRobots(array $rawRobotList): array
 	{
-		return array_column($rawRobotList, 'ROBOT_CODE');
+		return array_map(static fn(mixed $robot) => strtolower($robot['ROBOT_CODE']), $rawRobotList);
 	}
 
 	/**

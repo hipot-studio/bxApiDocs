@@ -47,6 +47,13 @@ abstract class Common
 		return $this->id;
 	}
 
+	public function setId(string $id): void
+	{
+		unset(static::$instance[$this->id]);
+		$this->id = $id;
+		static::$instance[$this->id] = $this;
+	}
+
 	public function getListStateInstance(): ?CTaskListState
 	{
 		static $instance = null;
@@ -120,9 +127,7 @@ abstract class Common
 
 	protected function resolveChangedContext(): void
 	{
-		unset(static::$instance[$this->id]);
-		$this->id = static::getDefaultId($this->groupId, $this->scope, $this->context);
 		$this->setGanttMode($this->context === FilterRegistry::FILTER_GANTT);
-		static::$instance[$this->id] = $this;
+		$this->setId(static::getDefaultId($this->groupId, $this->scope, $this->context));
 	}
 }

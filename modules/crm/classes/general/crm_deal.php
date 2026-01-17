@@ -3728,15 +3728,6 @@ class CAllCrmDeal
 			self::PullChange('UPDATE', array('ID' => $ID));
 
 			$stageSemanticsId = ($arFields['STAGE_SEMANTIC_ID'] ?? null) ?: $arRow['STAGE_SEMANTIC_ID'];
-			if (!$isSystemAction)
-			{
-				if(Crm\Ml\Scoring::isMlAvailable() && !Crm\PhaseSemantics::isFinal($stageSemanticsId))
-				{
-					Crm\Ml\Scoring::queuePredictionUpdate(CCrmOwnerType::Deal, $ID, [
-						'EVENT_TYPE' => Crm\Ml\Scoring::EVENT_ENTITY_UPDATE
-					]);
-				}
-			}
 
 			if ($bResult)
 			{
@@ -3954,7 +3945,6 @@ class CAllCrmDeal
 				\Bitrix\Crm\Timeline\TimelineEntry::deleteByOwner(CCrmOwnerType::Deal, $ID);
 				\Bitrix\Crm\Pseudoactivity\WaitEntry::deleteByOwner(CCrmOwnerType::Deal, $ID);
 				\Bitrix\Crm\Observer\ObserverManager::deleteByOwner(CCrmOwnerType::Deal, $ID);
-				\Bitrix\Crm\Ml\Scoring::onEntityDelete(CCrmOwnerType::Deal, $ID);
 
 				self::getCommentsAdapter()->performDelete((int)$ID, $arOptions);
 

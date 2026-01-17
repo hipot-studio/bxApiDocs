@@ -34,6 +34,7 @@ class UpdateTags
 
 		$tag = new Tag($this->config->getUserId());
 		$tag->set((int)$fullTaskData['ID'], $parsedTags, $oldGroupId, $newGroupId);
+
 		Container::getInstance()->getTaskTagRepository()->invalidate((int)$fullTaskData['ID']);
 	}
 }

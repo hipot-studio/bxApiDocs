@@ -2,158 +2,91 @@
 
 namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar;
 
-use Bitrix\Crm\Integration\SmsManager;
-use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\MessageSender\Channel\Correspondents\ToRepository;
 use Bitrix\Crm\Multifield\Type\Phone;
-use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Factory;
-use Bitrix\Crm\Service\UserPermissions;
-use Bitrix\Main\PhoneNumber\Parser;
-use CCrmEntitySelectorHelper;
-use CCrmFieldMulti;
 use CCrmOwnerType;
 
 final class Communications
 {
-	private Factory $factory;
-	private UserPermissions $userPermissions;
+	private ?ToRepository $toRepository;
+
+	public const PHONE_TYPE = 'phone';
+	public const EMAIL_TYPE = 'email';
+
+	public static function createFromItemIdentifier(ItemIdentifier $itemIdentifier): self
+	{
+		return new self($itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
+	}
 
 	public function __construct(private readonly int $entityTypeId, private readonly int $entityId)
 	{
-		$this->factory = Container::getInstance()->getFactory($entityTypeId);
-		$this->userPermissions = Container::getInstance()->getUserPermissions();
-	}
-
-	public function get(): array
-	{
-		$result = SmsManager::getEntityPhoneCommunications($this->entityTypeId, $this->entityId);
-		$fieldsToSelect = [
-			Item::FIELD_NAME_ID,
-			Item::FIELD_NAME_CONTACT_BINDINGS,
-			Item::FIELD_NAME_COMPANY,
-			Item\Contact::FIELD_NAME_COMPANY_BINDINGS,
-		];
-
-		$fieldsToSelect = array_filter($fieldsToSelect, fn($field) => $this->factory->isFieldExists($field));
-
-		$item = $this->factory->getItem($this->entityId, $fieldsToSelect);
-		if (!$item)
+		$item = ItemIdentifier::createByParams($this->entityTypeId, $this->entityId);
+		if ($item)
 		{
-			return $result;
+			$this->toRepository = ToRepository::create($item);
 		}
-
-		$this->addPhonesFromContacts($result, $item);
-		$this->addPhonesFromCompanies($result, $item);
-		$this->addPhonesFromCompany($result, $item);
-
-		return $result;
-	}
-
-	private function addPhonesFromContacts(array &$communications, Item $item): void
-	{
-		if (!$item->hasField(Item::FIELD_NAME_CONTACT_BINDINGS))
+		else
 		{
-			return;
-		}
-
-		$contacts = $item->getContacts();
-		foreach ($contacts as $contact)
-		{
-			if ($this->userPermissions->item()->canRead(CCrmOwnerType::Contact, $contact->getId()))
-			{
-				$this->appendClientPhones(
-					CCrmOwnerType::Contact,
-					$communications,
-					$contact
-				);
-			}
+			$this->toRepository = null;
 		}
 	}
 
-	private function addPhonesFromCompanies(array &$communications, Item $item): void
+	public function setCheckPermissions(bool $checkPermissions): self
 	{
-		if (
-			$item->getEntityTypeId() !== CCrmOwnerType::Contact
-			|| !$item->hasField(Item\Contact::FIELD_NAME_COMPANY_BINDINGS)
-		)
-		{
-			return;
-		}
+		$this->toRepository?->setCheckPermissions($checkPermissions);
 
-		$companies = $item->getCompanies();
-		foreach ($companies as $company)
-		{
-			if ($this->userPermissions->item()->canRead(CCrmOwnerType::Company, $company->getId()))
-			{
-				$this->appendClientPhones(
-					CCrmOwnerType::Company,
-					$communications,
-					$company
-				);
-			}
-		}
+		return $this;
 	}
 
-	private function addPhonesFromCompany(array &$communications, Item $item): void
+	public function get(string $type = Phone::ID): array
 	{
-		if (!$item->hasField(Item::FIELD_NAME_COMPANY))
+		if ($this->toRepository === null)
 		{
-			return;
+			return [];
 		}
 
-		$company = $item->getCompany();
-		if (!$company)
+		$key = $type === Phone::ID ? 'phones' : 'emails';
+		$captions = [];
+		$communications = [];
+		foreach ($this->toRepository->getListByType($type) as $to)
 		{
-			return;
-		}
+			$addressSource = $to->getAddressSource();
+			$hash = $addressSource->getHash();
+			$entityTypeId = $addressSource->getEntityTypeId();
+			$entityId = $addressSource->getEntityId();
 
-		if ($this->userPermissions->item()->canRead(CCrmOwnerType::Company, $company->getId()))
-		{
-			$this->appendClientPhones(
-				CCrmOwnerType::Company,
-				$communications,
-				$company
+			$captions[$hash] ??= CCrmOwnerType::GetCaption(
+				$entityTypeId,
+				$entityId,
 			);
-		}
-	}
+			if (empty($captions[$hash]))
+			{
+				continue;
+			}
 
-	private function appendClientPhones(int $entityTypeId, array &$communications, object $client): void
-	{
-		$clientId = $client->getId();
-		$clientTypeName = CCrmOwnerType::ResolveName($entityTypeId);
-		$clientInfo = CCrmEntitySelectorHelper::PrepareEntityInfo($clientTypeName, $clientId);
-
-		if (isset($clientInfo['ADVANCED_INFO']['MULTI_FIELDS']))
-		{
-			$communication = [
-				'entityId' => $clientId,
+			$communications[$hash] ??= [
 				'entityTypeId' => $entityTypeId,
-				'entityTypeName' => $clientTypeName,
-				'caption' => (
-				$entityTypeId === CCrmOwnerType::Contact
-					? $client->getFormattedName()
-					: $client->getTitle()
-				),
+				'entityTypeName' => CCrmOwnerType::ResolveName($entityTypeId),
+				'entityId' => $entityId,
+				'caption' => $captions[$hash],
 			];
 
-			$multiFieldEntityTypes = CCrmFieldMulti::GetEntityTypes();
-			foreach ($clientInfo['ADVANCED_INFO']['MULTI_FIELDS'] as $mf)
-			{
-				if ($mf['TYPE_ID'] !== Phone::ID)
-				{
-					continue;
-				}
-
-				$communication['phones'][] = [
-					'value' => $mf['VALUE'],
-					'valueFormatted' => Parser::getInstance()?->parse($mf['VALUE'])->format(),
-					'type' => $mf['VALUE_TYPE'],
-					'typeLabel' => $multiFieldEntityTypes[Phone::ID][$mf['VALUE_TYPE']]['SHORT'],
-					'id' => $mf['ENTITY_ID'],
-				];
-			}
-
-			$communications[] = $communication;
+			$address = $to->getAddress();
+			$communications[$hash][$key][] = [
+				'value' => $address->getValue(),
+				'valueFormatted' => $address->getValueFormatted(),
+				'type' => $address->getValueType(),
+				'typeLabel' => $address->getValueTypeCaption(),
+				'id' => $address->getId(),
+			];
 		}
+
+		$notEmptyItems = array_filter(
+			$communications,
+			static fn(array $communication) => !empty($communication[$key]),
+		);
+
+		return array_values($notEmptyItems);
 	}
 }

@@ -15,6 +15,7 @@ class Member implements Contract\Item
 		int $party,
 		Member\Channel $channel,
 		public string $uid,
+		public int $userId,
 		public ?string $name,
 		public ?string $role = null,
 		public ?string $sesSigningLogin = null,

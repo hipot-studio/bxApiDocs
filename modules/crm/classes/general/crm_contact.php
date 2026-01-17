@@ -369,9 +369,6 @@ class CAllCrmContact
 			),
 			'ORIGIN_VERSION' => array(
 				'TYPE' => 'string'
-			),
-			'FACE_ID' => array(
-				'TYPE' => 'integer'
 			)
 		);
 
@@ -463,7 +460,6 @@ class CAllCrmContact
 			'ORIGINATOR_ID' => ['FIELD' => $tableAliasName . '.ORIGINATOR_ID', 'TYPE' => 'string'], //EXTERNAL SYSTEM THAT OWNS THIS ITEM
 			'ORIGIN_ID' => ['FIELD' => $tableAliasName . '.ORIGIN_ID', 'TYPE' => 'string'], //ITEM ID IN EXTERNAL SYSTEM
 			'ORIGIN_VERSION' => ['FIELD' => $tableAliasName . '.ORIGIN_VERSION', 'TYPE' => 'string'], //ITEM VERSION IN EXTERNAL SYSTEM
-			'FACE_ID' => ['FIELD' => $tableAliasName . '.FACE_ID', 'TYPE' => 'int'],
 
 			'CATEGORY_ID' => ['FIELD' => $tableAliasName . '.CATEGORY_ID', 'TYPE' => 'int'],
 		];
@@ -1493,28 +1489,6 @@ class CAllCrmContact
 			{
 				$arFields['PHOTO']['MODULE_ID'] = 'crm';
 				CFile::SaveForDB($arFields, 'PHOTO', 'crm');
-			}
-			elseif (!empty($arFields['FACE_ID']) && Main\Loader::includeModule('faceid'))
-			{
-				// Set photo from FaceId module
-				$face = \Bitrix\Faceid\FaceTable::getRowById($arFields['FACE_ID']);
-				if (!empty($face))
-				{
-					$file = \CFile::MakeFileArray($face['FILE_ID']);
-
-					$io = \CBXVirtualIo::GetInstance();
-					$filePath = $io->GetPhysicalName($file['tmp_name']);
-					$binaryImageContent = $io->GetFile($filePath)->GetContents();
-
-					$arFields['PHOTO'] = array(
-						'name' => 'face_'.$arFields['FACE_ID'].'.jpg',
-						'type' => 'image/jpeg',
-						'content' => $binaryImageContent
-					);
-
-					$arFields['PHOTO']['MODULE_ID'] = 'crm';
-					CFile::SaveForDB($arFields, 'PHOTO', 'crm');
-				}
 			}
 
 			$arFields['FULL_NAME'] = self::GetFullName($arFields);

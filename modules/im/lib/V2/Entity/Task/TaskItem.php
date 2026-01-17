@@ -12,7 +12,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 
 class TaskItem implements RestEntity, PopupDataAggregatable
 {

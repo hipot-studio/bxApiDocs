@@ -135,8 +135,7 @@ class BookingMessageTemplateBasedCreator extends BookingMessageCreator
 			'CONFIRMATION_LINK' => $this->getConfirmationLink(),
 			'DELAYED_CONFIRMATION_LINK' => $this->getDelayedConfirmationLink(),
 			'FEEDBACK_LINK' => $this->getFeedbackLink(),
-			//@todo needs to be removed after we fix issue with edna template
-			'SOME_TEXT' => ' ',
+			'SOME_TEXT' => $this->getServices(),
 		];
 	}
 

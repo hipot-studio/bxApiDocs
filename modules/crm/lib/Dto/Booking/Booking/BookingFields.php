@@ -9,6 +9,7 @@ use Bitrix\Crm\Dto\Booking\DatePeriod;
 use Bitrix\Crm\Dto\Booking\EntityFieldsInterface;
 use Bitrix\Crm\Dto\Booking\ExternalData;
 use Bitrix\Crm\Dto\Booking\Resource;
+use Bitrix\Crm\Dto\Booking\Sku;
 
 class BookingFields implements EntityFieldsInterface
 {
@@ -16,6 +17,7 @@ class BookingFields implements EntityFieldsInterface
 	 * @param Resource[] $resources
 	 * @param Client[] $clients
 	 * @param ExternalData[] $externalData
+	 * @param Sku[] $skus
 	 */
 	public function __construct(
 		public readonly int $id,
@@ -25,6 +27,7 @@ class BookingFields implements EntityFieldsInterface
 		public readonly array $resources,
 		public readonly array $clients,
 		public readonly array $externalData,
+		public readonly array $skus,
 		public readonly string|null $name,
 		public readonly int|null $createdBy,
 		public readonly string|null $note,
@@ -44,6 +47,12 @@ class BookingFields implements EntityFieldsInterface
 			externalData: array_map(
 				static fn ($externalData) => ExternalData::mapFromArray($externalData),
 				$params['externalData'],
+			),
+			skus: array_filter(
+				array_map(
+					static fn (array $sku) => isset($sku['name']) ? Sku::mapFromArray($sku) : null,
+					$params['skus'] ?? []
+				)
 			),
 			name: $params['name'] ?? null,
 			createdBy: $params['createdBy'] ?? null,
@@ -81,6 +90,7 @@ class BookingFields implements EntityFieldsInterface
 				static fn (ExternalData $externalData) => $externalData->toArray(),
 				$this->externalData,
 			),
+			'skus' => array_map(static fn (Sku $sku) => $sku->toArray(), $this->skus),
 			'name' => $this->name,
 			'createdBy' => $this->createdBy,
 			'note' => $this->note,

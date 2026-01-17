@@ -6,7 +6,6 @@ use Bitrix\Booking\Command\WaitListItem\AddWaitListItemCommand;
 use Bitrix\Booking\Command\WaitListItem\CreateWaitListItemFromBookingCommand;
 use Bitrix\Booking\Command\WaitListItem\UpdateWaitListItemCommand;
 use Bitrix\Booking\Command\WaitListItem\RemoveWaitListItemCommand;
-use Bitrix\Booking\Controller\V1\Filter\AllowByFeature;
 use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
@@ -16,18 +15,6 @@ use Bitrix\Main\Engine\CurrentUser;
 
 class WaitListItem extends BaseController
 {
-	/**
-	 * @return \Bitrix\Main\Engine\ActionFilter\Base[]
-	 */
-	public function getDefaultPreFilters(): array
-	{
-		$prefilters = parent::getDefaultPreFilters();
-
-		$prefilters[] = new AllowByFeature();
-
-		return $prefilters;
-	}
-
 	public function addAction(CurrentUser $currentUser, array $waitListItem): Entity\WaitListItem\WaitListItem|null
 	{
 		try

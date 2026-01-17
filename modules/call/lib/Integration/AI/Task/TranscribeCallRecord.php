@@ -10,22 +10,14 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 
 class TranscribeCallRecord extends AITask
 {
-	public const SETTINGS_ENGINE_CODE = 'transcribe_track';
-
-	protected static string
-		$promptFields =<<<JSON
-			{
-				"transcriptions": [
-					{
-						"start_time_formatted": "string",
-						"end_time_formatted": "string",
-						"user_id": "int",
-						"text": "string"
-					}
-				]
-			}
-			JSON
-	;
+	/**
+	 * Outcome version for compatibility with previous variant.
+	 * @return int
+	 */
+	public function getVersion(): int
+	{
+		return 1;
+	}
 
 	/**
 	 * Provides payload for AI task.
@@ -69,7 +61,7 @@ class TranscribeCallRecord extends AITask
 		}
 		else
 		{
-			$url = $track->getUrl();
+			$url = $track->getUrl(true, false, true);
 		}
 
 		$payload = new \Bitrix\AI\Payload\Audio($url);
@@ -93,6 +85,10 @@ class TranscribeCallRecord extends AITask
 		return 7;
 	}
 
+	/**
+	 * Allows outputting the chat error message then a task failed.
+	 * @return bool
+	 */
 	public function allowNotifyTaskFailed(): bool
 	{
 		return true;
@@ -124,6 +120,11 @@ class TranscribeCallRecord extends AITask
 		foreach ($jsonData['transcriptions'] as &$row)
 		{
 			$row['text'] = $mentionService->replaceAiMentions($row['text']);
+		}
+
+		if (!empty($jsonData['language']))
+		{
+			$this->task->setLanguageId($jsonData['language']);//will be saved into Outcome in AITask::buildOutcome
 		}
 
 		return $jsonData;

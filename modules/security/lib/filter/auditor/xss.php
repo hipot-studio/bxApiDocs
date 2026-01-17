@@ -173,6 +173,7 @@ class Xss
 					"/{$_Al}(o{$_M}n{$_M}(?:[a-z]{$_M})*?)(([a-z]{$_M}){3}{$_WS_OPT}=)/is",
 					"/{$_Al}(s{$_M}e{$_M}e{$_M})(k{$_M}S{$_M}e{$_M}g{$_M}m{$_M}e{$_M}n{$_M}t{$_M}T{$_M}i{$_M}m{$_M}e{$_WS_OPT}=)/is",
 					"/{$_Al}(F{$_M}S{$_M}C{$_M})(o{$_M}m{$_M}m{$_M}a{$_M}n{$_M}d{$_WS_OPT}=)/is",
+					"/{$_Al}(s{$_M}r{$_M})(c{$_M}d{$_M}o{$_M}c{$_M}{$_WS_OPT}=)/is",
 				),
 				'replace' => $replacePattern
 			),

@@ -32,9 +32,7 @@ class UpdatePlanCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$updateTaskService = Container::getInstance()->getUpdateTaskService();
-
-		$handler = new UpdatePlanHandler($updateTaskService);
+		$handler = Container::getInstance()->get(UpdatePlanHandler::class);
 
 		try
 		{

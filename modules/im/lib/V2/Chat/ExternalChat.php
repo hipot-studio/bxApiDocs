@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\Config;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterCreateEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterMuteEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeCreateEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeUsersAddEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterDeleteMessagesEvent;
@@ -14,17 +15,21 @@ use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadAllMessagesEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadMessagesEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterSendMessageEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterUpdateMessageEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\ExternalError;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Counter\CounterType;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\ExternalChatRelations;
+use Bitrix\Im\V2\Relation\RelationChangeSet;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Chat\Add\AddResult;
+use Bitrix\Main\DI\ServiceLocator;
 
 class ExternalChat extends GroupChat
 {
@@ -34,14 +39,13 @@ class ExternalChat extends GroupChat
 	{
 		$beforeCreateEvent = new BeforeCreateEvent($params);
 		$beforeCreateEvent->send();
-		$eventResult = $beforeCreateEvent->getResult();
 
-		if (!$eventResult->isSuccess())
+		if ($beforeCreateEvent->isCancelled())
 		{
-			return (new AddResult())->addErrors($eventResult->getErrors());
+			return (new AddResult())->addError(new ExternalError(ExternalError::FROM_EVENT));
 		}
 
-		$params = $eventResult->getResult()['fields'] ?? $params;
+		$params = $beforeCreateEvent->getNewFields() ?? $params;
 
 		$addResult = parent::add($params, $context);
 
@@ -122,7 +126,7 @@ class ExternalChat extends GroupChat
 	{
 		$event = new BeforeUsersAddEvent($this, $userIds, $config);
 		$event->send();
-		if (!$event->getResult()->isSuccess())
+		if ($event->isCancelled())
 		{
 			return $this;
 		}
@@ -133,10 +137,23 @@ class ExternalChat extends GroupChat
 		return parent::addUsers($userIds, $config);
 	}
 
+	protected function processUpdateStateOnRelationsChanged(RelationChangeSet $changes): Result
+	{
+		(new Chat\ExternalChat\Event\AfterUsersAddEvent($this, $changes))->send();
+
+		return parent::processUpdateStateOnRelationsChanged($changes);
+	}
+
 	public function getConfig(): Config
 	{
-		$this->config ??=
-			ExternalTypeRegistry::getInstance()->getConfigByType($this->getExtendedType(false))
+		if (isset($this->config))
+		{
+			return $this->config;
+		}
+
+		$registry = ServiceLocator::getInstance()->get(ExternalTypeRegistry::class);
+		$this->config =
+			$registry->getConfigByExtendedType($this->getExtendedType(false))
 			?? new Config()
 		;
 
@@ -146,6 +163,20 @@ class ExternalChat extends GroupChat
 	protected function needToSendMessageUserDelete(): bool
 	{
 		return false;
+	}
+
+	protected function onAfterMute(bool $isMuted, int $userId): Result
+	{
+		(new AfterMuteEvent($this, $isMuted, $userId))->send();
+
+		return parent::onAfterMute($isMuted, $userId);
+	}
+
+	protected function onBeforeMessageSend(Message $message, SendingConfig $config): Result
+	{
+		(new Chat\ExternalChat\Event\BeforeMessageSendEvent($this, $message))->send();
+
+		return parent::onBeforeMessageSend($message, $config);
 	}
 
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void

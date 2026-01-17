@@ -24,8 +24,15 @@ class DeleteDependenceHandler
 			dependentId: $command->dependentId,
 		);
 
-		$this->consistencyResolver->resolve('task.gantt.delete.dependence')->wrap(
-			fn() => $this->ganttDependenceService->delete($entity)
-		);
+		if ($command->useConsistency)
+		{
+			$this->consistencyResolver->resolve('task.gantt.delete.dependence')->wrap(
+				fn() => $this->ganttDependenceService->delete($entity),
+			);
+		}
+		else
+		{
+			$this->ganttDependenceService->delete($entity);
+		}
 	}
 }

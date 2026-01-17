@@ -121,7 +121,7 @@ class Details
 	public static function prepareEntityData($entityTypeId, $entityId, array &$data, bool $isRequired = false)
 	{
 		ob_start();
-		/** @var \CALLMain {$GLOBALS['APPLICATION']} */
+		/** @var \CMain {$GLOBALS['APPLICATION']} */
 		$componentResult = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:crm.tracking.entity.details',
 			'view',
@@ -135,7 +135,7 @@ class Details
 		$data[self::SourceId . '_VIEW_HTML'] = ob_get_clean();
 
 		ob_start();
-		/** @var \CALLMain {$GLOBALS['APPLICATION']} */
+		/** @var \CMain {$GLOBALS['APPLICATION']} */
 		$componentResult = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:crm.tracking.entity.details',
 			'edit',

@@ -26,8 +26,15 @@ class AddDependenceHandler
 			creatorId: $command->userId
 		);
 
-		$this->consistencyResolver->resolve('task.gantt.add.dependence')->wrap(
-			fn() => $this->ganttDependenceService->add($entity)
-		);
+		if ($command->useConsistency)
+		{
+			$this->consistencyResolver->resolve('task.gantt.add.dependence')->wrap(
+				fn() => $this->ganttDependenceService->add($entity),
+			);
+		}
+		else
+		{
+			$this->ganttDependenceService->add($entity);
+		}
 	}
 }

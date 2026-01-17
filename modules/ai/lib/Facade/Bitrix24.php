@@ -5,6 +5,7 @@ namespace Bitrix\AI\Facade;
 use Bitrix\AI\Config;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\IO\File;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
@@ -204,5 +205,10 @@ class Bitrix24
 		$userLanguage = User::getUserLanguage();
 
 		return $languages[$userLanguage] ?? $languages['en'];
+	}
+
+	public static function isMarketAvailable(): bool
+	{
+		return (Option::get('baas', 'services_on_market', 'N') !== 'N')  && (self::getPortalZone() === 'ru');
 	}
 }

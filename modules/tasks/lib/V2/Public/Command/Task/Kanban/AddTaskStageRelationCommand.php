@@ -22,13 +22,13 @@ class AddTaskStageRelationCommand extends AbstractCommand
 	{
 
 	}
+
 	protected function executeInternal(): Result
 	{
-		$taskStageService = Container::getInstance()->getTaskStageService();
-
-		$handler = new AddTaskStageRelationHandler($taskStageService);
-
 		$result = new Result();
+
+		$handler = Container::getInstance()->get(AddTaskStageRelationHandler::class);
+
 		try
 		{
 			$id = $handler($this);

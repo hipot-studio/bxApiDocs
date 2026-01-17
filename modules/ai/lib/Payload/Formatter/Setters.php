@@ -39,6 +39,11 @@ class Setters extends Formatter implements IFormatter
 				{
 					$this->engine->setResponseJsonMode((bool)$paramValue);
 				}
+				elseif ($paramKey === 'reasoning_effort')
+				{
+					$this->engine->setParameters([$paramKey => $paramValue]);
+					$this->engine->setReasoningMode(!empty($paramValue));
+				}
 				else
 				{
 					$this->engine->setParameters([$paramKey => $paramValue]);

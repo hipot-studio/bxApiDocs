@@ -1,4 +1,5 @@
-<?
+<?php
+
 namespace Bitrix\Main\SidePanel;
 
 use Bitrix\Main\Data\Cache;

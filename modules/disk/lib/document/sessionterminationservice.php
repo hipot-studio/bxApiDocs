@@ -6,5 +6,5 @@ namespace Bitrix\Disk\Document;
 
 interface SessionTerminationService
 {
-	public function terminateAllSessions(): void;
+	public function terminateSessionsWithInsufficientRights(): void;
 }

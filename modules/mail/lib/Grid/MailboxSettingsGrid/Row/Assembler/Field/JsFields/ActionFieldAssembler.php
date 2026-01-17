@@ -17,6 +17,7 @@ class ActionFieldAssembler extends JsExtensionFieldAssembler
 		return [
 			'url' => $url,
 			'hasError' => $rawValue['HAS_ERROR'] ?? null,
+			'canEdit' => $rawValue['CAN_EDIT'] ?? false,
 		];
 	}
 

@@ -11,6 +11,7 @@ use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\IM;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\Integration\Ui\Article\ArticleDictionary;
 use Bitrix\UI;
 
 Loc::loadMessages(__FILE__);
@@ -58,7 +59,7 @@ class FilterLimit extends Limit
 
 		$prefix = 'TASKS_RESTRICTION_B24_RESTRICTION_LIMIT_FILTER_STUB';
 
-		$helpdeskUrl = UI\Util::getArticleUrlByCode('9745327');
+		$helpdeskUrl = UI\Util::getArticleUrlByCode(ArticleDictionary::TASK_AND_CRM_SEARCH_RESTRICTIONS_ARTICLE_CODE);
 		$helpdeskLink = '<a href="'.$helpdeskUrl.'">'.Loc::getMessage("{$prefix}_HELPDESK_LINK").'</a>';
 
 		$params['TITLE'] = $params['TITLE'] ?? Loc::getMessage("{$prefix}_TITLE_V2");
@@ -90,7 +91,7 @@ class FilterLimit extends Limit
 		{
 			$limit = static::getLimit();
 			$prefix = 'TASKS_RESTRICTION_B24_RESTRICTION_LIMIT_FILTER_NOTIFICATION';
-			$helpdeskUrl = UI\Util::getArticleUrlByCode('9745327');
+			$helpdeskUrl = UI\Util::getArticleUrlByCode(ArticleDictionary::TASK_AND_CRM_SEARCH_RESTRICTIONS_ARTICLE_CODE);
 			$helpdeskLink = '<a href="'.$helpdeskUrl.'">'.Loc::getMessage("{$prefix}_HELPDESK_LINK").'</a>';
 			$message = Loc::getMessage($prefix, [
 				'#COUNT#' => $warningCount,

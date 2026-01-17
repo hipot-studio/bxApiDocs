@@ -2,9 +2,12 @@
 
 namespace Bitrix\Im\V2\Message\Send;
 
+use Bitrix\Im\Bot;
 use Bitrix\Im\Text;
 use Bitrix\Im\V2\Anchor\AnchorFeature;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
+use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Chat;
@@ -49,6 +52,7 @@ class MentionService
 		}
 
 		$this->processMessageAnchors($message);
+		$this->processBotExternalMention($message);
 
 		$chat = $this->getChat($message);
 		if ($this->canMention($message, $chat))
@@ -271,6 +275,40 @@ class MentionService
 		{
 			CIMNotify::DeleteBySubTag('IM_MESS_' . $message->getChatId() . '_' . $userId);
 		}
+	}
+
+	private function processBotExternalMention(Message $message): void
+	{
+		$mentionedBotIds = $this->getExternalMentionedBotIds($message);
+		if (empty($mentionedBotIds))
+		{
+			return;
+		}
+
+		$messageEvent = new Message\Send\Event\MessageEventLegacy($message);
+		$fields = $messageEvent->getFields();
+		$fields['EXTERNAL_MENTIONED_BOTS'] = $mentionedBotIds;
+
+		Bot::onExternalMention($message->getId(), $fields);
+	}
+
+	private function getExternalMentionedBotIds(Message $message): array
+	{
+		$mentionedUsers = $message->getMentionedUserIds();
+		if (empty($mentionedUsers))
+		{
+			return [];
+		}
+
+		$mentionedBots = UserCollection::filterUserIds($mentionedUsers, static fn (User $user): bool => $user->isBot());
+		if (empty($mentionedBots))
+		{
+			return [];
+		}
+
+		$botInChat = $message->getChat()->getBotInChat();
+
+		return array_diff_key($mentionedBots, $botInChat);
 	}
 
 	private function processMessageAnchors(Message $message): void

@@ -13,6 +13,7 @@ trait AudioCommonTrait
 			'audioUrl' => $payloadData['file'] ?? null,
 			'audioContentType' => $payloadData['fields']['type'] ?? null,
 			'prompt' => $payloadData['fields']['prompt'] ?? null,
+			'detectEmotions' => $payloadData['fields']['detectEmotions'] ?? null,
 		];
 	}
 
@@ -28,6 +29,7 @@ trait AudioCommonTrait
 			'audioUrl' => $postParams['audioUrl'] ?? '',
 			'audioContentType' => $postParams['audioContentType'] ?? '',
 			'prompt' => $postParams['prompt'] ?? '',
+			'detectEmotions' => $postParams['detectEmotions'] ?? null,
 		];
 	}
 

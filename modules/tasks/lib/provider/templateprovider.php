@@ -18,7 +18,7 @@ use Bitrix\Tasks\Internals\Task\Template\TemplateTagTable;
 use Bitrix\Tasks\Util\User;
 use \CDBResult;
 use \CUserTypeSQL;
-use Bitrix\Tasks\Template\DependencyTable;
+use Bitrix\Tasks\Internals\Task\Template\DependenceTable;
 use \CTasks;
 
 class TemplateProvider
@@ -44,10 +44,12 @@ class TemplateProvider
 		$strSqlOrder = '',
 		$strSqlSelect;
 
-	public function __construct(\CDatabase $db, \CUserTypeManager $userFieldManager)
+	public function __construct(?\CDatabase $db = null, ?\CUserTypeManager $userFieldManager = null)
 	{
-		$this->db = $db;
-		$this->userFieldManager = $userFieldManager;
+		global $DB, $USER_FIELD_MANAGER;
+
+		$this->db = $db ?? $DB;
+		$this->userFieldManager = $userFieldManager ?? $USER_FIELD_MANAGER;
 	}
 
 	public function getList($arOrder = [], $arFilter = [], $arSelect = [], $arParams = [], $arNavParams = []): CDBResult
@@ -108,8 +110,8 @@ class TemplateProvider
 	{
 		$this->configure([], [], [], $arParams, []);
 
-		$tableName = DependencyTable::getTableName();
-		$parentIdColumnName = DependencyTable::getPARENTIDColumnName();
+		$tableName = DependenceTable::getTableName();
+		$parentIdColumnName = DependenceTable::getPARENTIDColumnName();
 
 		if (!$this->userId)
 		{
@@ -247,10 +249,31 @@ class TemplateProvider
 		)
 		{
 			$nTopCount = (int) ($this->arNavParams['NAV_PARAMS']['nTopCount'] ?? 0);
+			$limit = (int)($this->arNavParams['NAV_PARAMS']['LIMIT'] ?? 0);
+			$skipLimit = (bool)($this->arNavParams['NAV_PARAMS']['SKIP_LIMIT'] ?? false);
 
 			if ($nTopCount > 0)
 			{
 				$query = $this->db->TopSql($query, $nTopCount);
+				$res = $this->db->Query($query);
+
+				$res->SetUserFields($this->userFieldManager->GetUserFields("TASKS_TASK_TEMPLATE"));
+			}
+			elseif ($limit)
+			{
+				$query .= " LIMIT {$limit}";
+				$offset = (int)($this->arNavParams['NAV_PARAMS']['OFFSET'] ?? 0);
+				if ($offset > 0)
+				{
+					$query .= " OFFSET {$offset}";
+				}
+
+				$res = $this->db->Query($query);
+
+				$res->SetUserFields($this->userFieldManager->GetUserFields("TASKS_TASK_TEMPLATE"));
+			}
+			elseif ($skipLimit)
+			{
 				$res = $this->db->Query($query);
 
 				$res->SetUserFields($this->userFieldManager->GetUserFields("TASKS_TASK_TEMPLATE"));
@@ -434,7 +457,7 @@ class TemplateProvider
 		}
 		else
 		{
-			$treeJoin = "LEFT JOIN ". DependencyTable::getTableName() ." TD on TT.ID = TD.TEMPLATE_ID".($includeSubtree ? "" : " AND TD.DIRECT = 1");
+			$treeJoin = "LEFT JOIN ". DependenceTable::getTableName() ." TD on TT.ID = TD.TEMPLATE_ID".($includeSubtree ? "" : " AND TD.DIRECT = 1");
 		}
 
 		$temporalTableName = \Bitrix\Tasks\Internals\DataBase\Helper::getTemporaryTableNameSql();
@@ -446,7 +469,7 @@ class TemplateProvider
 
 			".($selectBaseTemplateId ? "
 			LEFT JOIN
-				". DependencyTable::getTableName() ." TDD ON TT.ID = TDD.TEMPLATE_ID AND TDD.DIRECT = 1
+				". DependenceTable::getTableName() ." TDD ON TT.ID = TDD.TEMPLATE_ID AND TDD.DIRECT = 1
 			" : "
 			")."
 
@@ -455,7 +478,7 @@ class TemplateProvider
 					SELECT TTI.ID, COUNT(TDDC.TEMPLATE_ID) AS TEMPLATE_CHILDREN_COUNT
 					from
 						b_tasks_template TTI
-						INNER JOIN ". DependencyTable::getTableName() ." TDDC ON TTI.ID = TDDC.PARENT_TEMPLATE_ID AND TDDC.DIRECT = 1
+						INNER JOIN ". DependenceTable::getTableName() ." TDDC ON TTI.ID = TDDC.PARENT_TEMPLATE_ID AND TDDC.DIRECT = 1
 					GROUP BY TTI.ID
 				) ".$temporalTableName." on ".$temporalTableName.".ID = TT.ID
 			" : "
@@ -465,7 +488,7 @@ class TemplateProvider
 				b_user CU ON CU.ID = TT.CREATED_BY
 			LEFT JOIN
 				b_user RU ON RU.ID = TT.RESPONSIBLE_ID
-			INNER JOIN
+			LEFT JOIN
 				 " . ScenarioTable::getTableName() . " TS ON TS.TEMPLATE_ID = TT.ID
 
 			". $this->obUserFieldsSql->GetJoin("TT.ID");
@@ -504,7 +527,10 @@ class TemplateProvider
 			$this->arSelect = array_diff(array_merge($defaultSelect, $this->arSelect), array("*"));
 		}
 
-		$this->arSelect = array_merge($this->arSelect, $alwaysSelect);
+		if (!isset($this->arParams['SKIP_ALWAYS_SELECT']) || $this->arParams['SKIP_ALWAYS_SELECT'] === false)
+		{
+			$this->arSelect = array_merge($this->arSelect, $alwaysSelect);
+		}
 
 		if (!in_array("ID", $this->arSelect))
 		{
@@ -580,7 +606,7 @@ class TemplateProvider
 			'REPLICATE_PARAMS' 			=> ['FIELD' => 'TT.REPLICATE_PARAMS', 'DEFAULT' => true],
 
 			// virtual
-			'BASE_TEMPLATE_ID' 			=> ['FIELD' => 'CASE WHEN TDD.' . DependencyTable::getPARENTIDColumnName() . ' IS NULL THEN 0 ELSE TDD.' . DependencyTable::getPARENTIDColumnName() . ' END', 'DEFAULT' => false],
+			'BASE_TEMPLATE_ID' 			=> ['FIELD' => 'CASE WHEN TDD.' . DependenceTable::getPARENTIDColumnName() . ' IS NULL THEN 0 ELSE TDD.' . DependenceTable::getPARENTIDColumnName() . ' END', 'DEFAULT' => false],
 			'TEMPLATE_CHILDREN_COUNT' 	=> ['FIELD' => 'CASE WHEN TEMPLATE_CHILDREN_COUNT IS NULL THEN 0 ELSE TEMPLATE_CHILDREN_COUNT END', 'DEFAULT' => false],
 
 			// additional
@@ -705,8 +731,8 @@ class TemplateProvider
 
 				case "BASE_TEMPLATE_ID":
 
-					$parentColumnName = DependencyTable::getPARENTIDColumnName();
-					$columnName = DependencyTable::getIDColumnName();
+					$parentColumnName = DependenceTable::getPARENTIDColumnName();
+					$columnName = DependenceTable::getIDColumnName();
 
 					$val = (string) $val;
 					if($val === '' || $val === '0')
@@ -724,7 +750,7 @@ class TemplateProvider
 
 					if($excludeSubtree)
 					{
-						$this->arSqlSearch[] = "TT.ID NOT IN (SELECT " . $columnName . " FROM ". DependencyTable::getTableName() ." WHERE " . $parentColumnName . " = '" . intval($val) . "')";
+						$this->arSqlSearch[] = "TT.ID NOT IN (SELECT " . $columnName . " FROM ". DependenceTable::getTableName() ." WHERE " . $parentColumnName . " = '" . intval($val) . "')";
 					}
 					else
 					{
@@ -754,7 +780,7 @@ class TemplateProvider
 			$this->userId = (int) $arParams['USER_ID'];
 		}
 
-		if (!isset($arFilter['SCENARIO']) || !ScenarioTable::isValidScenario($arFilter['SCENARIO']))
+		if (isset($arFilter['SCENARIO']) && !ScenarioTable::isValidScenario($arFilter['SCENARIO']))
 		{
 			$this->arFilter['SCENARIO'] = ScenarioTable::SCENARIO_DEFAULT;
 		}

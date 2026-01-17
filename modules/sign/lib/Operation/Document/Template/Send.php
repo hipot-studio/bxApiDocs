@@ -273,17 +273,7 @@ final class Send implements Contract\Operation
 
 	private function configureAndStart(Document $newDocument): Main\Result
 	{
-		$configureResult = (new Operation\ConfigureFillAndStart($newDocument->uid))->launch();
-
-		if (!$configureResult->isSuccess())
-		{
-			return $configureResult;
-		}
-
-		if ($configureResult instanceof Operation\Result\ConfigureResult && !$configureResult->completed)
-		{
-			Container::instance()->getDocumentAgentService()->addConfigureAndStartAgent($newDocument->uid);
-		}
+		Container::instance()->getDocumentAgentService()->addConfigureAndStartAgent($newDocument->uid);
 
 		return new Main\Result();
 	}

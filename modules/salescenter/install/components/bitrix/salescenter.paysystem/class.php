@@ -894,8 +894,9 @@ class SalesCenterPaySystemComponent extends CBitrixComponent implements Main\Eng
 
 		if (class_exists($handler))
 		{
+			$handlerCode = $handler::getCode();
 			$commonSettingsTitle = Loc::getMessage(
-				'SALESCENTER_SP_CASHBOX_COMMON_SETTINGS_'.mb_strtoupper($handler::getCode())
+				'SALESCENTER_SP_CASHBOX_COMMON_SETTINGS_'.mb_strtoupper($handlerCode)
 			);
 			if (!$commonSettingsTitle)
 			{
@@ -931,7 +932,21 @@ class SalesCenterPaySystemComponent extends CBitrixComponent implements Main\Eng
 					$hint = '';
 					if ($group === 'VAT')
 					{
-						$warning = Loc::getMessage('SALESCENTER_SP_CASHBOX_VAT_ATTENTION');
+						$warning = [Loc::getMessage('SALESCENTER_SP_CASHBOX_VAT_ATTENTION')];
+
+						$vat22CashboxCode = match (true)
+						{
+							$handlerCode === 'cashboxrobokassa' => 'vat22',
+							$handlerCode === 'cashboxyookassa' => '11',
+							default => null,
+						};
+						if ($vat22CashboxCode)
+						{
+							$warning[] = Loc::getMessage(
+								'SALESCENTER_SP_CASHBOX_VAT_22_ATTENTION',
+								['#CODE#' => $vat22CashboxCode],
+							);
+						}
 						$hint = Loc::getMessage('SALESCENTER_SP_CASHBOX_VAT_HINT');
 					}
 

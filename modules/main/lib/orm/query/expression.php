@@ -40,7 +40,15 @@ class Expression
 	public function count($columnName)
 	{
 		$alias = $this->alias ?: static::getTmpName('COUNT');
-		return new ExpressionField($alias, 'COUNT(%s)', $columnName);
+
+		$expression = 'COUNT(%s)';
+		if ($columnName === '*')
+		{
+			$expression = 'COUNT(*)';
+			$columnName = null;
+		}
+
+		return new ExpressionField($alias, $expression, $columnName);
 	}
 
 	/**

@@ -39,11 +39,6 @@ class DocumentRepository
 		DocumentScenario::DSS_SECOND_PARTY_MANY_MEMBERS => 101,
 	];
 
-	private const SCHEME_TYPE_TO_ID_MAP = [
-		SchemeType::DEFAULT => 0,
-		SchemeType::ORDER => 1,
-	];
-
 	/**
 	 * @param Item\Document $item
 	 *
@@ -398,12 +393,12 @@ class DocumentRepository
 
 	public function getSchemeIdByType(?string $scheme): int
 	{
-		return self::SCHEME_TYPE_TO_ID_MAP[$scheme] ?? 0;
+		return SchemeType::SCHEME_TYPE_TO_ID_MAP[$scheme] ?? 0;
 	}
 
 	private function getSchemeTypeById(int $schemeId): string
 	{
-		$schemeIdToTypeMap = array_flip(self::SCHEME_TYPE_TO_ID_MAP);
+		$schemeIdToTypeMap = array_flip(SchemeType::SCHEME_TYPE_TO_ID_MAP);
 		return $schemeIdToTypeMap[$schemeId] ?? SchemeType::DEFAULT;
 	}
 
@@ -431,7 +426,6 @@ class DocumentRepository
 	public function getLastCompanyProvidersByUser(
 		int $userId,
 		array $companyUids = [],
-		?DateTime $fromDate = null,
 	): Item\ProviderDateCollection
 	{
 		if ($userId < 1)
@@ -446,14 +440,12 @@ class DocumentRepository
 				new \Bitrix\Main\Entity\ExpressionField('LAST_USED', 'MAX(DATE_CREATE)'),
 			])
 			->where('CREATED_BY_ID', $userId)
+			->where('DATE_CREATE', '>', (new DateTime())->add('-30 days'))
 			->whereNotNull('PROVIDER_CODE')
+			->whereNotNull('COMPANY_UID')
+			->whereNotNull('COMPANY_ENTITY_ID')
 			->setGroup(['COMPANY_UID', 'COMPANY_ENTITY_ID'])
 		;
-
-		if ($fromDate)
-		{
-			$query->where('DATE_CREATE', '>', $fromDate);
-		}
 
 		if ($companyUids)
 		{
@@ -769,6 +761,20 @@ class DocumentRepository
 		return $models === null
 			? new Item\DocumentCollection()
 			: $this->extractItemCollectionByModelCollection($models)
+		;
+	}
+
+	/**
+	 * @param string[] $scenarios
+	 */
+	public function countByScenarios(array $scenarios): int
+	{
+		$scenarioIds = array_map([$this, 'getScenarioIdByName'], $scenarios);
+
+		return (int)Internal\DocumentTable::query()
+			->addSelect('ID')
+			->whereIn('SCENARIO', $scenarioIds)
+			->queryCountTotal()
 		;
 	}
 }

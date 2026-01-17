@@ -957,7 +957,7 @@ final class CallList
 			\Bitrix\Crm\Filter\Factory::getSettingsByGridId($entityTypeId, (string)$gridId)
 		);
 
-		return $filterFactory->getFilterValue($filter);
+		return $filterFactory->getFilterValue($entityTypeId, $filter);
 	}
 
 	/**

@@ -35,17 +35,25 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 	protected string $path = '';
 
 	abstract public function getConnectionName(): string;
+
 	abstract public static function getConnectionClass();
 
 	abstract public function set($key, $ttl, $value);
+
 	abstract public function get($key);
+
 	abstract public function del($key);
 
-	abstract public function setNotExists($key, $ttl , $value);
+	abstract public function setNotExists($key, $ttl, $value);
+
 	abstract public function checkInSet($key, $value): bool;
+
 	abstract public function addToSet($key, $value);
+
 	abstract public function getSet($key): array;
+
 	abstract public function delFromSet($key, $member);
+
 	abstract public function deleteBySet($key, $prefix = '');
 
 	/**
@@ -118,7 +126,8 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 		{
 			$config['servers'][] = [
 				'host' => $cacheConfig[$type]['host'],
-				'port' => (int)($cacheConfig[$type]['port'] ?? 0)
+				'port' => (int)($cacheConfig[$type]['port'] ?? 0),
+				'password' => $cacheConfig[$type]['password'] ?? null,
 			];
 		}
 
@@ -295,7 +304,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 
 	protected function getInitDirKey($baseDirVersion, $baseDir, $initDir): string
 	{
-		return $this->sid . '|BDV:' . $baseDirVersion  . '|IDH:' . sha1($baseDir . '|' . $initDir);
+		return $this->sid . '|BDV:' . $baseDirVersion . '|IDH:' . sha1($baseDir . '|' . $initDir);
 	}
 
 	protected function getBaseDirKey($baseDir): string
@@ -440,7 +449,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 		$keyPrefix = $this->getKeyPrefix($baseDirVersion, $initDirVersion);
 		$key = $keyPrefix . '|' . $filename;
 
-		$exp = $this->ttlMultiplier * (int) $ttl;
+		$exp = $this->ttlMultiplier * (int)$ttl;
 
 		if ($this->useLock)
 		{
@@ -503,7 +512,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 		if ($filename <> '')
 		{
 			$key = $keyPrefix . '|' . $filename;
-			$this->delFromSet($initListKey . '|' . $this->getPartition($filename), $filename);
+			$this->delFromSet($initListKey . '|' . $this->getPartition($filename), $key);
 
 			if ($this->useLock && $cachedData = $this->get($key))
 			{
@@ -534,7 +543,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			$this->addCleanPath([
 				'PREFIX' => $keyPrefix,
 				'CLEAN_FROM' => $cleanFrom,
-				'CLUSTER_GROUP' => static::$clusterGroup
+				'CLUSTER_GROUP' => static::$clusterGroup,
 			]);
 
 			$this->set($this->sid . '|needClean', 3600, 'Y');
@@ -558,8 +567,8 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 					{
 						$this->addCleanPath([
 							'PREFIX' => $path,
-							'CLEAN_FROM' =>  (new DateTime()),
-							'CLUSTER_GROUP' => static::$clusterGroup
+							'CLEAN_FROM' => (new DateTime()),
+							'CLUSTER_GROUP' => static::$clusterGroup,
 						]);
 					}
 
@@ -594,7 +603,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			return;
 		}
 
-		$count = (int) $this->get($this->sid . '|delCount');
+		$count = (int)$this->get($this->sid . '|delCount');
 		if ($count < 1)
 		{
 			$count = 1;
@@ -605,7 +614,8 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			->where('CLEAN_FROM', '<=', new DateTime())
 			->where('CLUSTER_GROUP', static::$clusterGroup)
 			->setLimit($count + $delta)
-			->exec();
+			->exec()
+		;
 
 		while ($path = $paths->fetch())
 		{

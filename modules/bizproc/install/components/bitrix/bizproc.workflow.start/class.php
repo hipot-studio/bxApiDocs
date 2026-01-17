@@ -11,6 +11,11 @@ use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRe
 use Bitrix\Bizproc\Api\Service\WorkflowService;
 use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
+use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
+use Bitrix\Bizproc\Starter\Dto\EventDto;
+use Bitrix\Bizproc\Starter\Enum\Face;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -38,6 +43,8 @@ class BizprocWorkflowStart extends \CBitrixComponent
 				? (int)$arParams['AUTO_EXECUTE_TYPE']
 				: null
 		;
+
+		$arParams['ACTION'] = $arParams['ACTION'] ?? null;
 
 		$arParams['SET_TITLE'] = (($arParams['SET_TITLE'] ?? 'Y') === 'N' ? 'N' : 'Y');
 
@@ -191,7 +198,9 @@ class BizprocWorkflowStart extends \CBitrixComponent
 			}
 
 			$templateId = (int)$this->arParams['TEMPLATE_ID'];
-			$template = $this->getTemplateById($templateId);
+			$triggerType = $this->arParams['TRIGGER_TYPE'] ?? null;
+
+			$template = $this->getTemplateById($templateId, $triggerType);
 			if (!$template)
 			{
 				$this->arResult = ['errors' => [$this->getErrorByCode('template_not_found')]];
@@ -218,6 +227,7 @@ class BizprocWorkflowStart extends \CBitrixComponent
 				'documentType' => $this->getComplexDocumentType(),
 				'signedDocumentType' => CBPDocument::signDocumentType($this->getComplexDocumentType()),
 				'signedDocumentId' => CBPDocument::signDocumentType($this->getComplexDocumentId()),
+				'triggerType' => $triggerType,
 			];
 
 			return;
@@ -267,7 +277,9 @@ class BizprocWorkflowStart extends \CBitrixComponent
 			}
 
 			$templateId = (int)$this->arParams['TEMPLATE_ID'];
-			$template = $this->getTemplateById($templateId);
+			$triggerType = $this->arParams['TRIGGER_TYPE'] ?? null;
+
+			$template = $this->getTemplateById($templateId, $triggerType);
 			if (!$template)
 			{
 				$this->arResult = ['errors' => [$this->getErrorByCode('template_not_found')]];
@@ -294,17 +306,23 @@ class BizprocWorkflowStart extends \CBitrixComponent
 		$this->arResult = ['errors' => [$this->getErrorByCode('access_denied')]];
 	}
 
-	private function getTemplateById(int $templateId): bool|array
+	private function getTemplateById(int $templateId, ?string $triggerType = null): bool|array
 	{
+		$filter = [
+			'ID' => $templateId,
+			'ACTIVE' => 'Y',
+			'IS_SYSTEM' => 'N',
+			'<AUTO_EXECUTE' => CBPDocumentEventType::Automation,
+		];
+
+		if (!$triggerType)
+		{
+			$filter['DOCUMENT_TYPE'] = $this->getComplexDocumentType();
+		}
+
 		return CBPWorkflowTemplateLoader::getList(
 			[],
-			[
-				'ID' => $templateId,
-				'DOCUMENT_TYPE' => $this->getComplexDocumentType(),
-				'ACTIVE' => 'Y',
-				'IS_SYSTEM' => 'N',
-				'<AUTO_EXECUTE' => CBPDocumentEventType::Automation,
-			],
+			$filter,
 			false,
 			false,
 			['ID', 'NAME', 'DESCRIPTION', 'PARAMETERS', 'CONSTANTS'],
@@ -457,6 +475,60 @@ class BizprocWorkflowStart extends \CBitrixComponent
 	{
 		$currentUserId = $this->getCurrentUserId();
 
+		$triggerType = $this->arParams['TRIGGER_TYPE'] ?? null;
+		if (is_string($triggerType))
+		{
+			// todo: metadata: startDuration
+			$starter =
+				(new StarterService())
+					->getStarterForManualEventScenario(
+						templateIds: [$templateId],
+						context: new ContextDto(
+							'bizproc',
+							Face::WEB,
+						),
+						events: [
+							new EventDto(
+								code: $triggerType,
+								documents: [
+									new DocumentDto(
+										$this->getComplexDocumentId(),
+										$this->getComplexDocumentType(),
+									),
+								],
+								eventType: CBPDocumentEventType::Manual,
+								userId: $currentUserId,
+							),
+						],
+						userId: $currentUserId,
+						parameters: $workflowParameters,
+					)
+			;
+
+			$result = $starter?->start();
+			$errors = [];
+			if ($result && !$result->isSuccess())
+			{
+				foreach ($result->getErrors() as $error)
+				{
+					$errors[] = $this->createStartWorkflowError($error->jsonSerialize());
+				}
+			}
+
+			$workflowIds = $result?->getWorkflowIds();
+
+			return ['errors' => $errors, 'workflowId' => $workflowIds[0] ?? null];
+		}
+
+		$preparedParameters = array_merge(
+			$workflowParameters,
+			[
+				CBPDocument::PARAM_TAGRET_USER => 'user_' . $currentUserId,
+				CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => CBPDocumentEventType::Manual,
+			],
+		);
+
+		// backward compatibility
 		$response =
 			(new WorkflowService())
 				->startWorkflow(
@@ -465,13 +537,7 @@ class BizprocWorkflowStart extends \CBitrixComponent
 						targetUserId: $currentUserId,
 						templateId: $templateId,
 						complexDocumentId: $this->getComplexDocumentId(),
-						parameters: array_merge(
-							$workflowParameters,
-							[
-								CBPDocument::PARAM_TAGRET_USER => 'user_' . $currentUserId,
-								CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => CBPDocumentEventType::Manual,
-							],
-						),
+						parameters: $preparedParameters,
 						startDuration: 0, // todo start duration
 						checkAccess: false, // checked earlier
 					)

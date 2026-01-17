@@ -4,8 +4,8 @@ namespace Bitrix\Tasks\FileUploader;
 
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
-use Bitrix\Tasks\Internals\Task\Result\ResultTable;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\FileOwnershipCollection;
 use Bitrix\UI\FileUploader\UploaderController;
@@ -41,10 +41,13 @@ class TaskResultController extends UploaderController
 	{
 		['commentId' => $commentId] = $this->getOptions();
 
-		if (
-			!$commentId
-			|| !($result = ResultTable::getByCommentId($commentId))
-		)
+		if (!$commentId)
+		{
+			return true;
+		}
+
+		$result = Container::getInstance()->getResultRepository()->getByCommentId($commentId);
+		if ($result === null)
 		{
 			return true;
 		}

@@ -15,7 +15,7 @@ class Base extends \Bitrix\Bizproc\Automation\Trigger\BaseTrigger
 	protected $inputData;
 
 	/**
-	 * @param int $documentType Target entity id
+	 * @param string $documentType Target entity id
 	 * @return bool
 	 */
 	public static function isSupported($documentType)

@@ -36,11 +36,21 @@ final class MultiplePlaceholderProvider extends PlaceholderProvider
 
 	public function isAvailable(): bool
 	{
+		if (!DocumentGeneratorManager::getInstance()->isEnabled())
+		{
+			return false;
+		}
+
 		return count($this->entityTypeIds) > 0;
 	}
 
 	protected function makeItems(): array
 	{
+		if (!DocumentGeneratorManager::getInstance()->isEnabled())
+		{
+			return [];
+		}
+
 		$dgManager = DocumentGeneratorManager::getInstance();
 		$dpManager = DataProviderManager::getInstance();
 

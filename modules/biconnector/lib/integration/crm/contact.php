@@ -297,7 +297,7 @@ class Contact
 				//FACE_ID INT(18) NULL,
 				'FACE_ID' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'C.FACE_ID',
+					'FIELD_NAME' => 'NULL',
 					'FIELD_TYPE' => 'int',
 				],
 				//TODO:SEARCH_CONTENT MEDIUMTEXT NULL,

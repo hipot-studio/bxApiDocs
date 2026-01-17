@@ -14,6 +14,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Error;
 use Bitrix\Tasks\Util\Calendar;
+use Bitrix\Tasks\V2\Internal\Integration\Ui\Article\ArticleDictionary;
 
 final class TemplateHelper
 {
@@ -264,7 +265,7 @@ final class TemplateHelper
 
 			if ($error->getCode() === 'SAVE_ERROR.TEMPLATE_CREATE_TASK_NOT_ACCESSIBLE')
 			{
-				$message = str_replace('#LINK_START#', '<a href="'.\Bitrix\UI\Util::getArticleUrlByCode('11705476').'" class="tasks-permission-header-link">', $message);
+				$message = str_replace('#LINK_START#', '<a href="'.\Bitrix\UI\Util::getArticleUrlByCode(ArticleDictionary::TASK_ACCESS_RIGHTS_ARTICLE_CODE).'" class="tasks-permission-header-link">', $message);
 				$message = str_replace('#LINK_END#', '</a>', $message);
 			}
 

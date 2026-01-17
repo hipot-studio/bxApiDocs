@@ -1,12 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter;
 
+use Bitrix\Bizproc\Activity\Mixins\ApplyRulesChecker;
+use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
-use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable;
+use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable;
 
 final class ProcessStarter extends BaseTypeStarter
 {
+	use ApplyRulesChecker;
+
 	protected function checkFeature(?ModuleSettings $moduleSettings = null): bool
 	{
 		return \CBPRuntime::isFeatureEnabled();
@@ -19,34 +25,40 @@ final class ProcessStarter extends BaseTypeStarter
 
 	protected function runManualScenario(): bool
 	{
-		return $this->runMultiWorkflows([
+		$startParameters = [
 			\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => \CBPDocumentEventType::Manual,
 			\CBPDocument::PARAM_TAGRET_USER => $this->getTargetUserForStartParameters(),
 			\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => false,
 			\CBPDocument::PARAM_DOCUMENT_TYPE => $this->getDocumentTypeForStartParameters(),
-		]);
+		];
+
+		return $this->runMultiWorkflows($startParameters);
 	}
 
 	protected function runOnAddScenario(): bool
 	{
-		return $this->runMultiWorkflows([
+		$startParameters = [
 			\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => \CBPDocumentEventType::Create,
 			\CBPDocument::PARAM_TAGRET_USER => $this->getTargetUserForStartParameters(),
 			\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => false,
 			\CBPDocument::PARAM_DOCUMENT_TYPE => $this->getDocumentTypeForStartParameters(),
-		]);
+		];
+
+		return $this->runMultiWorkflows($startParameters);
 	}
 
 	protected function runOnUpdateScenario(): bool
 	{
-		return $this->runMultiWorkflows([
+		$startParameters = [
 			\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => \CBPDocumentEventType::Edit,
 			\CBPDocument::PARAM_TAGRET_USER => $this->getTargetUserForStartParameters(),
 			\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => (
 				$this->document?->hasChangedFields() ? $this->document->getChangedFieldNames() : false
 			),
 			\CBPDocument::PARAM_DOCUMENT_TYPE => $this->getDocumentTypeForStartParameters(),
-		]);
+		];
+
+		return $this->runMultiWorkflows($startParameters);
 	}
 
 	protected function runEventScenario(): bool
@@ -54,55 +66,105 @@ final class ProcessStarter extends BaseTypeStarter
 		$result = true;
 		foreach ($this->events as $event)
 		{
-			$document = $event->getDocument();
-			if (!$document || !$document->getType())
+			$startParameters = [
+				\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => $event->getEventType(),
+				\CBPDocument::PARAM_TAGRET_USER => $event->getUserId() > 0 ? 'user_' . $event->getUserId() : null,
+				\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => false,
+				\CBPDocument::PARAM_DOCUMENT_TYPE => $event->getDocument()?->complexType ?: null,
+				\CBPDocument::PARAM_TRIGGER_EVENT_DATA => $event->getParameters() ?? [],
+			];
+
+			if (!$this->runEvent($event, $startParameters))
 			{
+				$result = false;
+			}
+		}
+
+		return $result;
+	}
+
+	private function runEvent(Event $event, array $startParameters): bool
+	{
+		$document = $event->getDocument();
+		if ($document && !$document->getType())
+		{
+			return true;  // nothing to run
+		}
+
+		$code = $event->getCode();
+		if (!$code || !$event->isProcessTrigger())
+		{
+			return true; // automation trigger
+		}
+
+		[$moduleId, $entity, $documentType] = $document?->complexType ?? Workflow::getComplexType();
+
+		$query =
+			WorkflowTemplateTriggerTable::query()
+				->setSelect(['TEMPLATE_ID', 'APPLY_RULES', 'TRIGGER_NAME'])
+				->where('TRIGGER_TYPE', $code)
+				->setGroup(['TEMPLATE_ID', 'TEMPLATE.PARAMETERS'])
+				->where('MODULE_ID', $moduleId)
+				->where('ENTITY', $entity)
+				->where('DOCUMENT_TYPE', $documentType)
+		;
+
+		if ($this->templateIds)
+		{
+			if (count($this->templateIds) === 1)
+			{
+				$query->where('TEMPLATE_ID', current($this->templateIds));
+			}
+			else
+			{
+				$query->whereIn('TEMPLATE_ID', $this->templateIds);
+			}
+		}
+
+		$triggers = $query->exec();
+
+		$result = true;
+		while ($trigger = $triggers->fetch())
+		{
+			$workflowId = \CBPRuntime::generateWorkflowId();
+			$complexId = $document->complexId ?? Workflow::getComplexId($workflowId);
+
+			$templateId = (int)$trigger['TEMPLATE_ID'];
+			$applyResult = $this->checkApplyRules(
+				$code,
+				$trigger['APPLY_RULES'] ?? [],
+				$event->getParameters(),
+				$templateId,
+				$complexId
+			);
+
+			if (!$applyResult->isSuccess())
+			{
+				$this->errorCollection->add($applyResult->getErrors());
+
 				continue;
 			}
 
-			// region temporary
-			$code = $event->getCode();
-			$triggers =
-				WorkflowTemplateSettingsTable::query()
-					->setSelect(['TEMPLATE.ID', 'TEMPLATE.PARAMETERS'])
-					->where('NAME', "TRIGGER_$code")
-					->where('VALUE', 'Y')
-					->where('TEMPLATE.MODULE_ID', $document->getModuleId())
-					->where('TEMPLATE.ENTITY', $document->getEntity())
-					->where('TEMPLATE.DOCUMENT_TYPE', $document->getType())
-					->exec()
-					->fetchCollection()
-			;
-			// endregion
+			$startParameters[\CBPDocument::PARAM_TRIGGER_EVENT] = $trigger['TRIGGER_NAME'];
+			$startParameters[\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID] = $workflowId;
 
-			foreach ($triggers as $trigger)
+			if (\CBPHelper::isEqualDocumentEntity($complexId, Workflow::getComplexType()))
 			{
-				$template = $trigger->getTemplate();
-				if ($template)
-				{
-					// no parameters, no check constants
-					$workflowId = $this->startWorkflow(
-						$template->getId(),
-						$document->complexId,
-						[
-							\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => \CBPDocumentEventType::None, // new type: event?
-							\CBPDocument::PARAM_TAGRET_USER => 0, // no user or user from trigger settings, not current
-							\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => false,
-							\CBPDocument::PARAM_DOCUMENT_TYPE => $document->complexType ?: null,
-						]
-					);
+				$startParameters[\CBPDocument::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT] = true;
+			}
 
-					// no meta data
+			// no parameters, no check constants
+			$workflowId = $this->startWorkflow($templateId, $complexId, $startParameters);
 
-					if (!$workflowId)
-					{
-						$result = false;
-					}
-					else
-					{
-						$this->isTriggerApplied = true;
-					}
-				}
+			// no meta data
+
+			if (!$workflowId)
+			{
+				$result = false;
+			}
+			else
+			{
+				$this->isTriggerApplied = true;
 			}
 		}
 
@@ -124,15 +186,15 @@ final class ProcessStarter extends BaseTypeStarter
 			return [];
 		}
 
-		// todo: static cache?
-		$complexDocumentType = $this->document?->complexType;
-		if (!$complexDocumentType)
+		$document = $this->document;
+		if ($document && !$document->complexType)
 		{
 			return []; // no document, no templates for now
 		}
 
-		$filter = ['DOCUMENT_TYPE' => $complexDocumentType, 'ACTIVE' => 'Y'];
+		$complexDocumentType = $this->document?->complexType ?? Workflow::getComplexType();
 
+		$filter = ['DOCUMENT_TYPE' => $complexDocumentType, 'ACTIVE' => 'Y'];
 		switch ($this->config->scenario)
 		{
 			case Scenario::onManual:

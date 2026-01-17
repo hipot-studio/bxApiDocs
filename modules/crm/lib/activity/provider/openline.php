@@ -6,28 +6,34 @@ use Bitrix\Call\Error;
 use Bitrix\Crm\Activity\CommunicationStatistics;
 use Bitrix\Crm\Activity\StatisticsMark;
 use Bitrix\Crm\Badge;
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Communication\Channel\Event\ChannelEventRegistrar;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Settings\Crm;
 use Bitrix\Crm\Timeline\Entity\TimelineTable;
 use Bitrix\Crm\Timeline\LogMessageEntry;
 use Bitrix\Crm\Timeline\LogMessageType;
 use Bitrix\Main;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
+use CCrmActivity;
 use CCrmActivityNotifyType;
 use CCrmActivityType;
+use CCrmContentType;
 use CCrmOwnerType;
+use CTextParser;
 
 Loc::loadMessages(__FILE__);
 
 class OpenLine extends Base implements EventRegistrarInterface
 {
-	const ACTIVITY_PROVIDER_ID = 'IMOPENLINES_SESSION';
+	public const ACTIVITY_PROVIDER_ID = 'IMOPENLINES_SESSION';
 
-	static $isActive;
-	static $activeLine = 0;
+	public const CHAT_MESSAGE_COPILOT_PROCESSING_LIMIT = 1000;
+
+	public static $isActive;
+	public static int $activeLine = 0;
 
 	public static function getId()
 	{
@@ -84,13 +90,18 @@ class OpenLine extends Base implements EventRegistrarInterface
 
 	/**
 	 * Returns supported provider's types
+	 *
 	 * @return array
+	 *
+	 * @throws LoaderException
 	 */
 	public static function getTypes()
 	{
 		$types = array();
 		if (!Main\Loader::includeModule('imopenlines'))
+		{
 			return $types;
+		}
 
 		$orm = \Bitrix\ImOpenLines\Model\ConfigTable::getList(Array(
 			'filter' => Array(
@@ -150,8 +161,10 @@ class OpenLine extends Base implements EventRegistrarInterface
 	 */
 	public static function renderView(array $activity)
 	{
-		if(!Main\ModuleManager::isModuleInstalled('imopenlines'))
+		if (!Main\ModuleManager::isModuleInstalled('imopenlines'))
+		{
 			return '';
+		}
 
 		$closeSliderOnClick = '';
 		if (isset($activity['__template']) && $activity['__template'] === 'slider')
@@ -179,7 +192,9 @@ class OpenLine extends Base implements EventRegistrarInterface
 	public static function getResultSources()
 	{
 		if (!Main\Loader::includeModule('imconnector'))
-			return Array();
+		{
+			return [];
+		}
 
 		return \Bitrix\ImConnector\Connector::getListConnector();
 	}
@@ -218,6 +233,23 @@ class OpenLine extends Base implements EventRegistrarInterface
 					'ASSOCIATED_ENTITY_ID' => $activityFields['ID'],
 				]);
 			}
+		}
+	}
+
+	public static function onAfterUpdate(
+		int $id,
+		array $changedFields,
+		array $oldFields,
+		array $newFields,
+		array $params = null
+	): void
+	{
+		$prevIsCompleted = ($oldFields['COMPLETED'] ?? '') === 'Y';
+		$curIsCompleted = ($newFields['COMPLETED'] ?? '')  === 'Y';
+		$isCompleted = !$prevIsCompleted && $curIsCompleted;
+		if ($isCompleted)
+		{
+			\Bitrix\Crm\Integration\AI\EventHandler::onAfterOpenLineActivityComplete($changedFields, $newFields);
 		}
 	}
 
@@ -272,12 +304,113 @@ class OpenLine extends Base implements EventRegistrarInterface
 
 	public static function hasPlanner(array $activity): bool
 	{
-		return !Crm::isUniversalActivityScenarioEnabled();
+		return false;
 	}
 
 	public static function getMoveBindingsLogMessageType(): ?string
 	{
 		return LogMessageType::OPEN_LINE_MOVED;
+	}
+
+	public static function getMessagesForCopilot(int $activityId, int $limit = 100): string
+	{
+		static $messagesForCopilot = [];
+
+		if (isset($messagesForCopilot[$activityId]))
+		{
+			return $messagesForCopilot[$activityId];
+		}
+
+		$messagesForCopilot[$activityId] = '';
+
+		if ($activityId <= 0)
+		{
+			return $messagesForCopilot[$activityId];
+		}
+
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+		if (!is_array($activity))
+		{
+			return $messagesForCopilot[$activityId];
+		}
+
+		$userCode = (string)($activity['PROVIDER_PARAMS']['USER_CODE'] ?? '');
+		if ($userCode === '')
+		{
+			return $messagesForCopilot[$activityId];
+		}
+
+		$data = OpenLineManager::getMessageData($userCode, $limit);
+		if (
+			empty($data)
+			|| empty($data['messages'])
+			|| !is_array($data['messages'])
+		)
+		{
+			return $messagesForCopilot[$activityId];
+		}
+
+		$messages = array_filter(
+			$data['messages'],
+			static fn($item) => is_array($item) && (int)($item['author_id'] ?? 0) > 0
+		);
+		if (empty($messages))
+		{
+			return $messagesForCopilot[$activityId];
+		}
+
+		$userMap = array_column($data['users'] ?? [], 'name', 'id');
+
+		$result = [];
+		foreach ($messages as $message)
+		{
+			$author = $userMap[$message['author_id']] ?? '';
+			$datePart = isset($message['date']) ? ' [' . $message['date'] . ']:' : '';
+			$textPart = isset($message['text']) ? trim($message['text']) : '';
+			$result[] = sprintf("%s%s\n%s", $author, $datePart, $textPart);
+		}
+
+		$result = array_reverse($result);
+
+		$text = trim(implode(' ', $result));
+		$text = TextHelper::cleanTextByType($text, CCrmContentType::BBCode);
+		$text = preg_replace('/\s+/', ' ', $text);
+
+		$messagesForCopilot[$activityId] = CTextParser::cleanTag(trim($text));
+
+		return $messagesForCopilot[$activityId];
+	}
+
+	public static function isCopilotProcessingAvailable(int $activityId, string $messages = ''): bool
+	{
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+		if (!is_array($activity))
+		{
+			return false;
+		}
+
+		if (empty($messages))
+		{
+			$messages = self::getMessagesForCopilot($activityId);
+		}
+
+		$currentVolume = mb_strlen($messages, 'UTF-8');
+		$lastVolume = $activity['SETTINGS']['LAST_MESSAGES_VOLUME'] ?? 0;
+
+		return $currentVolume >= $lastVolume + self::CHAT_MESSAGE_COPILOT_PROCESSING_LIMIT;
+	}
+
+	public static function getChatName(string $userCode): string
+	{
+		$provider = CCrmActivity::GetProviderById(self::getId());
+		$sourceList = $provider::getResultSources();
+		$connectorType = OpenLineManager::getLineConnectorType($userCode);
+
+		return sprintf(
+			'%s "%s"',
+			$sourceList[$connectorType] ?? $sourceList['livechat'],
+			OpenLineManager::getChatTitle($userCode)
+		);
 	}
 
 	public function createActivityFromChannelEvent(ChannelEventRegistrar $eventRegistrar): Main\Result
@@ -319,7 +452,7 @@ class OpenLine extends Base implements EventRegistrarInterface
 		$channelEventPropertiesCollection = $eventRegistrar->getPropertiesCollection();
 		if ($channelEventPropertiesCollection->has('SESSION_ID'))
 		{
-			$sessionId = $channelEventPropertiesCollection->getByCode('SESSION_ID')->getValue();
+			$sessionId = $channelEventPropertiesCollection->getByCode('SESSION_ID')?->getValue();
 		}
 
 		if (empty($sessionId))

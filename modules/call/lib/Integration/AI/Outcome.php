@@ -15,6 +15,10 @@ class Outcome extends EO_CallOutcome
 {
 	private ?EO_CallOutcomeProperty_Collection $propertyCollection = null;
 
+	/**
+	 * Returns class name for specific sense type.
+	 * @return class-string<Outcome\AISenseContent>|null
+	 */
 	public function getSenseContentClass(): ?string
 	{
 		return match ($this->getType())
@@ -23,11 +27,16 @@ class Outcome extends EO_CallOutcome
 			SenseType::SUMMARY->value => Outcome\Summary::class,
 			SenseType::OVERVIEW->value => Outcome\Overview::class,
 			SenseType::INSIGHTS->value => Outcome\Insights::class,
+			SenseType::EVALUATION->value => Outcome\Evaluation::class,
 			default => null
 		};
 	}
 
-	public function getSenseContent(): mixed
+	/**
+	 * Returns specific sense content.
+	 * @return Outcome\AISenseContent|string|null
+	 */
+	public function getSenseContent(): Outcome\AISenseContent|string|null
 	{
 		$class = $this->getSenseContentClass();
 		if ($class)

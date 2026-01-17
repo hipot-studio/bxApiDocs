@@ -8,6 +8,7 @@ use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Query\Join;
 
 /**
  * Class RolePermissionTable
@@ -16,86 +17,93 @@ use Bitrix\Main\ORM\Fields\StringField;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_RolePermission_Query query()
- * @method static EO_RolePermission_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_RolePermission_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_RolePermission_Result getById($id)
- * @method static EO_RolePermission_Result getList(array $parameters = array())
+ * @method static EO_RolePermission_Result getList(array $parameters = [])
  * @method static EO_RolePermission_Entity getEntity()
- * @method static \Bitrix\DocumentGenerator\Model\EO_RolePermission createObject($setDefaultValues = true)
- * @method static \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection createCollection()
- * @method static \Bitrix\DocumentGenerator\Model\EO_RolePermission wakeUpObject($row)
- * @method static \Bitrix\DocumentGenerator\Model\EO_RolePermission_Collection wakeUpCollection($rows)
+ * @method static \Bitrix\DocumentGenerator\Model\RolePermission createObject($setDefaultValues = true)
+ * @method static \Bitrix\DocumentGenerator\Model\RolePermissionCollection createCollection()
+ * @method static \Bitrix\DocumentGenerator\Model\RolePermission wakeUpObject($row)
+ * @method static \Bitrix\DocumentGenerator\Model\RolePermissionCollection wakeUpCollection($rows)
  */
 class RolePermissionTable extends DataManager
 {
-	/**
-	 * @inheritdoc
-	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_documentgenerator_role_permission';
 	}
 
-	/**
-	 * @inheritdoc
-	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return [
-			new IntegerField('ID', [
-				'primary' => true,
-				'autocomplete' => true,
-			]),
-			new IntegerField('ROLE_ID', [
-				'required' => true,
-			]),
-			new StringField('ENTITY', [
-				'required' => true,
-			]),
-			new StringField('ACTION', [
-				'required' => true,
-			]),
-			new StringField('PERMISSION'),
+			(new IntegerField('ID'))
+				->configurePrimary()
+				->configureAutocomplete(),
+
+			(new IntegerField('ROLE_ID'))
+				->configureRequired(),
+
+			(new StringField('ENTITY'))
+				->configureRequired(),
+
+			(new StringField('ACTION'))
+				->configureRequired(),
+
+			(new StringField('PERMISSION'))
+				->configureRequired(),
+
 			new Reference(
 				'ROLE_ACCESS',
-				'Bitrix\DocumentGenerator\Model\RoleAccess',
-				['=this.ROLE_ID' => 'ref.ROLE_ID'],
-				['join_type' => 'INNER']
+				RoleAccess::class,
+				Join::on('this.ROLE_ID', 'ref.ROLE_ID'),
+				['join_type' => Join::TYPE_INNER],
 			),
+
 			new Reference(
 				'ROLE',
-				'Bitrix\ImOpenLines\Model\Role',
-				['=this.ROLE_ID' => 'ref.ID'],
-				['join_type' => 'INNER']
+				Role::class,
+				Join::on('this.ROLE_ID', 'ref.ID'),
+				['join_type' => Join::TYPE_INNER],
 			),
 		];
 	}
 
-	/**
-	 * @param $roleId
-	 * @return DeleteResult
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 */
-	public static function deleteByRoleId($roleId)
+	public static function deleteByRoleId(mixed $roleId): DeleteResult
 	{
 		$result = new DeleteResult();
+
 		$roleId = (int)$roleId;
-		if($roleId <= 0)
+		if ($roleId <= 0)
 		{
 			return $result->addError(new Error('roleId should be more than zero'));
 		}
 
 		$rolePermissions = static::getList(['select' => ['ID'], 'filter' => ['ROLE_ID' => $roleId]]);
-		while($rolePermission = $rolePermissions->fetch())
+		while ($rolePermission = $rolePermissions->fetch())
 		{
 			$rolePermissionDeleteResult = static::delete($rolePermission['ID']);
-			if(!$rolePermissionDeleteResult->isSuccess())
+			if (!$rolePermissionDeleteResult->isSuccess())
 			{
 				$result->addErrors($rolePermissionDeleteResult->getErrors());
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @return class-string<RolePermission>
+	 */
+	public static function getObjectClass(): string
+	{
+		return RolePermission::class;
+	}
+
+	/**
+	 * @return class-string<RolePermissionCollection>
+	 */
+	public static function getCollectionClass(): string
+	{
+		return RolePermissionCollection::class;
 	}
 }

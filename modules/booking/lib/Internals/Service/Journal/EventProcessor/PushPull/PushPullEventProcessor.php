@@ -6,22 +6,13 @@ namespace Bitrix\Booking\Internals\Service\Journal\EventProcessor\PushPull;
 
 use Bitrix\Booking\Internals\Integration\Pull\PushEvent;
 use Bitrix\Booking\Internals\Integration\Pull\PushService;
-use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
-use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
+use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 
-class PushPullEventProcessor implements EventProcessor
+class PushPullEventProcessor extends AbstractEventProcessor
 {
-	public function process(JournalEventCollection $eventCollection): void
-	{
-		foreach ($eventCollection as $event)
-		{
-			$this->processEvent($event);
-		}
-	}
-
-	private function processEvent(JournalEvent $event): void
+	public function processOne(JournalEvent $event): void
 	{
 		$commandType = $this->getCommandForEventType($event->type);
 

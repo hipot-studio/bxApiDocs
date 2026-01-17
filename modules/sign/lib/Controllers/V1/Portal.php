@@ -20,6 +20,7 @@ class Portal extends \Bitrix\Sign\Engine\Controller
 			'smsAllowed' => Restriction::isSmsAllowed(),
 			'newDocAllowed' => Restriction::isNewDocAllowed(),
 			'availableOnTariff' => Restriction::isSignAvailable(),
+			'b2bPhoneVerificationRequired' => Restriction::isPhoneVerificationRequiredForB2b(),
 		];
 	}
 

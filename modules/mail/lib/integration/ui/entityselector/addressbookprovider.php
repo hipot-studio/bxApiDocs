@@ -194,8 +194,8 @@ class AddressBookProvider extends BaseProvider
 			'title' => Loc::getMessage("ADDRESS_BOOK_PROVIDER_TAB_TITLE_MSGVER_1"),
 			'header' => Loc::getMessage("ADDRESS_BOOK_PROVIDER_TAB_HEADER_MSGVER_1"),
 			'icon' => [
-				'default' => self::getTabIcon(),
-				'selected' => str_replace('959CA4', 'FFF', self::getTabIcon()),
+				'default' => 'o-contact',
+				'selected' => 'o-contact',
 			],
 		]));
 	}

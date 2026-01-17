@@ -9,6 +9,7 @@ use Bitrix\Booking\Entity;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Booking\UpdateBookingException;
+use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
 use Bitrix\Booking\Internals\Service\BookingService;
@@ -18,6 +19,7 @@ use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\ResourceService;
+use Bitrix\Booking\Service\BookingFeature;
 
 class AddBookingCommandHandler
 {
@@ -44,6 +46,8 @@ class AddBookingCommandHandler
 
 	public function __invoke(AddBookingCommand $command): Entity\Booking\Booking
 	{
+		$this->checkFeatures($command);
+
 		$this->transactionHandler->handle(
 			fn: function () use ($command) {
 				$commandResources = clone $command->booking->getResourceCollection();
@@ -65,14 +69,22 @@ class AddBookingCommandHandler
 		try
 		{
 			$this->bookingService->checkBookingBeforeCreating($command->booking);
-			$intersectionResult = $this->bookingService->checkIntersection(
-				booking: $command->booking,
-				allowOverbooking: $command->allowOverbooking,
-			);
 		}
 		catch (\Throwable $exception)
 		{
 			throw new CreateBookingException($exception->getMessage());
+		}
+
+		$intersectionResult = $this->bookingService->checkIntersection(
+			booking: $command->booking,
+			allowOverbooking: $command->allowOverbooking,
+		);
+		if (!$intersectionResult->isSuccess())
+		{
+			throw new CreateBookingException(
+				'Some resources are unavailable for the requested time range: '
+				. implode(',', $intersectionResult->getBookingCollection()->getEntityIds())
+			);
 		}
 
 		$booking = $this->transactionHandler->handle(
@@ -134,5 +146,21 @@ class AddBookingCommandHandler
 	protected function getJournalService(): JournalServiceInterface
 	{
 		return $this->journalService;
+	}
+
+	private function checkFeatures(AddBookingCommand $command): void
+	{
+		if (!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_BOOKING))
+		{
+			throw new Exception('Feature is not available');
+		}
+
+		if (
+			!BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTI_RESOURCE_BOOKING)
+			&& $command->booking->getResourceCollection()->count() > 1
+		)
+		{
+			throw new Exception('Multi-resource booking feature is not available');
+		}
 	}
 }

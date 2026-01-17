@@ -17,7 +17,7 @@ use CCrmOwnerType;
  */
 abstract class SynchronizeReserves extends Action
 {
-	private ReservationResult $reservationResult;
+	protected ReservationResult $reservationResult;
 	private array $processedRowsIds = [];
 
 	/**
@@ -61,72 +61,11 @@ abstract class SynchronizeReserves extends Action
 				continue;
 			}
 
-			$oldValues = $productReservation->collectValues(Values::ACTUAL);
-			$oldStoreId = (int)$oldValues['STORE_ID'];
-			$oldDateReserveEnd = $oldValues['DATE_RESERVE_END'] ? (string)$oldValues['DATE_RESERVE_END'] : null;
-			$oldReserveQuantity = (float)$oldValues['RESERVE_QUANTITY'];
-
-			$isNotSavedOnSale = $productReservation->getReserveId() === null;
-
-			$newValues = $productReservation->collectValues(Values::CURRENT);
-			if (empty($newValues))
-			{
-				$reserveInfo = $this->reservationResult->addReserveInfo(
-					$rowId,
-					$oldReserveQuantity,
-					0
-				);
-				$reserveInfo->setStoreId($oldStoreId ?: null);
-				$reserveInfo->setDateReserveEnd($oldDateReserveEnd ?: null);
-
-				if ($isNotSavedOnSale)
-				{
-					$reserveInfo->setDeltaReserveQuantity($oldReserveQuantity);
-				}
-			}
-			else
-			{
-				$newStoreId =
-					array_key_exists('STORE_ID', $newValues)
-						? (int)$newValues['STORE_ID']
-						: $oldStoreId
-				;
-				$newReserveQuantity =
-					array_key_exists('RESERVE_QUANTITY', $newValues)
-						? (float)$newValues['RESERVE_QUANTITY']
-						: $oldReserveQuantity
-				;
-				$newDateReserveEnd =
-					array_key_exists('DATE_RESERVE_END', $newValues)
-						? ($newValues['DATE_RESERVE_END'] ? (string)$newValues['DATE_RESERVE_END'] : null)
-						: $oldDateReserveEnd
-				;
-
-				$reserveInfo = $this->reservationResult->addReserveInfo(
-					$rowId,
-					$newReserveQuantity,
-					$newReserveQuantity - $oldReserveQuantity
-				);
-				$reserveInfo->setStoreId($newStoreId ?: null);
-				$reserveInfo->setDateReserveEnd($newDateReserveEnd ?: null);
-
-				if ($newStoreId !== $oldStoreId)
-				{
-					$reserveInfo->setDeltaReserveQuantity($reserveInfo->getReserveQuantity());
-					$reserveInfo->setChanged();
-				}
-				elseif ($newDateReserveEnd !== $oldDateReserveEnd)
-				{
-					$reserveInfo->setChanged();
-				}
-			}
-
-			if ($isNotSavedOnSale)
-			{
-				$reserveInfo->setChanged();
-			}
+			$this->fillReservationResultRow($rowId, $productReservation);
 		}
 	}
+
+	abstract protected function fillReservationResultRow(int $rowId, ProductRowReservation $productReservation): void;
 
 	/**
 	 * Save reserve infos.

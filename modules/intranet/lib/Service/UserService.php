@@ -203,4 +203,20 @@ class UserService
 
 		return $actionRuleSet[$action->value];
 	}
+
+	public function handleAuthorizeById(int $userId): void
+	{
+		$this->logAuthTimeForNonMobile($userId);
+		$this->logFirstTimeAuthForMobile($userId);
+	}
+
+	public function isFirstAdmin(int $userId): bool
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			return $userId === (int)\CBitrix24::getPortalCreatorId();
+		}
+
+		return false;
+	}
 }

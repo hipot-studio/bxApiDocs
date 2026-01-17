@@ -84,7 +84,6 @@ class RegularTaskReplicator extends AbstractReplicator
 		$this->repeater->setAdditionalData([static::getPayloadKey() => $this->copiedTaskId]);
 
 		$this->currentResults[] = $this->repeater->repeatTask();
-		$this->currentResults[] = $this->sendRegularTaskReplicatedNotifications();
 
 		return $this->replicationResult
 			->merge(...$this->currentResults)
@@ -94,27 +93,6 @@ class RegularTaskReplicator extends AbstractReplicator
 	public function isDebug(): bool
 	{
 		return Option::get('tasks', static::DEBUG_KEY, 'Y') === 'Y';
-	}
-
-	protected function sendRegularTaskReplicatedNotifications(): Result
-	{
-		$result = new Result();
-
-		$task = TaskRegistry::getInstance()->getObject($this->copiedTaskId, true);
-		try
-		{
-			(new Controller())
-				->onRegularTaskReplicated($task)
-				->push();
-		}
-		catch (Exception $exception)
-		{
-			$result->addError(Error::createFromThrowable($exception));
-		}
-		finally
-		{
-			return $result;
-		}
 	}
 
 	public static function getPayloadKey(): string

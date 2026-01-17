@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector;
 use Bitrix\BIConnector\DataSourceConnector\FieldCollection;
 use Bitrix\BIConnector\DataSourceConnector\FieldDto;
 use Bitrix\BIConnector\DataSourceConnector\Connector;
+use Bitrix\Main\Context;
 use Bitrix\Main\Result;
 
 abstract class Service
@@ -15,7 +16,6 @@ abstract class Service
 	public static $dateFormats = [];
 	protected $languageMap = null;
 	protected $languageId = 'en';
-	protected bool $isBreakableLimitPrinting = false;
 
 	/**
 	 * Creates new service instance.
@@ -513,6 +513,22 @@ abstract class Service
 		}
 	}
 
+	protected function formatLimitValue(int $value): string
+	{
+		$culture = Context::getCurrent()?->getCulture();
+		if (isset($culture) && $value >= 10000)
+		{
+			return number_format(
+				(float)$value,
+				0,
+				$culture->getNumberDecimalSeparator(),
+				$culture->getNumberThousandsSeparator(),
+			);
+		}
+
+		return (string)$value;
+	}
+
 	/**
 	 * Retruns array of data source description including metadata and sql.
 	 * This will be used to process "data" and "explain" service commands.
@@ -531,21 +547,6 @@ abstract class Service
 		}
 
 		return $connector->getFormattedData($parameters, static::$dateFormats);
-	}
-
-	public function enableBreakingLimitPrinting(): static
-	{
-		$this->isBreakableLimitPrinting = true;
-
-		return $this;
-	}
-
-	/**
-	 * @return bool
-	 */
-	protected function isBreakableOverlimitPrinting(): bool
-	{
-		return $this->isBreakableLimitPrinting;
 	}
 
 	/**

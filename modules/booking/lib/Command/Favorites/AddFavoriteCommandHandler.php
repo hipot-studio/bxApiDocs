@@ -31,7 +31,7 @@ class AddFavoriteCommandHandler
 					'ID' => $command->resourcesIds,
 					'IS_MAIN' => true,
 				]),
-				select: new ResourceSelect(),
+				select: (new ResourceSelect())->prepareSelect(),
 			)
 			->getEntityIds()
 		;

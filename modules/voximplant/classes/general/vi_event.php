@@ -98,6 +98,15 @@ class CVoxImplantEvent
 		$error = false;
 		if ($arFields["ID"] > 0)
 		{
+			// Skip query if user is being updated from imconnector module (Open Line)
+			if (
+				(isset($arFields['UF_CONNECTOR_MD5']) && !empty($arFields['UF_CONNECTOR_MD5']))
+				|| (isset($arFields['EXTERNAL_AUTH_ID']) && $arFields['EXTERNAL_AUTH_ID'] == 'imconnector')
+			)
+			{
+				return !$error;
+			}
+
 			$arPhones = Array();
 			$arCorrectPhones = Array();
 			$dbViPhone = VI\PhoneTable::getList(Array(

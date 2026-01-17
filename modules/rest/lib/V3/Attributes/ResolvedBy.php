@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Attributes;
 
-use Bitrix\Rest\V3\Controllers\RestController;
+use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Exceptions\InvalidClassInstanceProvidedException;
 
 #[\Attribute]

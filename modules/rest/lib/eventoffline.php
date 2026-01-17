@@ -112,7 +112,7 @@ class EventOfflineTable extends Main\Entity\DataManager
 		$tableName = static::getTableName();
 		$dateTime = $connection->getSqlHelper()->addSecondsToDateTime('-' . static::PROCESS_ID_LIFETIME);
 
-		$sql = "DELETE FROM {$tableName} WHERE PROCESS_ID<>'' AND TIMESTAMP_X<{$dateTime}";
+		$sql = "DELETE FROM {$tableName} WHERE TIMESTAMP_X<{$dateTime}";
 
 		$connection->query($sql);
 

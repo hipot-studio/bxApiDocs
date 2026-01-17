@@ -15,6 +15,7 @@ class Options
 	private $restrictedValueHtmlReplacer;
 	private bool $showOnlyText = false;
 	private bool $useRawValue = false;
+	private array $filterFields = [];
 
 	public static function createFromArray(array $options)
 	{
@@ -153,6 +154,18 @@ class Options
 	public function useRawValue(bool $useRawValue): Options
 	{
 		$this->useRawValue = $useRawValue;
+
+		return $this;
+	}
+
+	public function getFilterFields(): array
+	{
+		return $this->filterFields;
+	}
+
+	public function setFilterFields(array $filterFields): Options
+	{
+		$this->filterFields = $filterFields;
 
 		return $this;
 	}

@@ -31,7 +31,7 @@ class TaskDeadlineRule extends AbstractRule
 		}
 
 		if (
-			$item->isAllowedChangeDeadline()
+			$item->isAllowedChangeDeadline($this->user->getUserId(), $params)
 			&& $item->isMember($this->user->getUserId(), RoleDictionary::ROLE_RESPONSIBLE)
 		)
 		{
@@ -44,7 +44,7 @@ class TaskDeadlineRule extends AbstractRule
 		}
 
 		if (
-			$item->isAllowedChangeDeadline()
+			$item->isAllowedChangeDeadline($this->user->getUserId(), $params)
 			&& array_intersect($item->getMembers(RoleDictionary::ROLE_RESPONSIBLE), $this->user->getAllSubordinates())
 		)
 		{

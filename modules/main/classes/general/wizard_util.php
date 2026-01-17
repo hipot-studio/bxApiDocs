@@ -1,4 +1,5 @@
 <?php
+
 class CWizardUtil
 {
 	public static function GetRepositoryPath()

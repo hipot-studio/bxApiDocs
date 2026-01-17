@@ -24,6 +24,18 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 
 	private bool $isMenuMode = false;
 
+	public function onPrepareComponentParams($arParams)
+	{
+		if (!is_array($arParams))
+		{
+			$arParams = [];
+		}
+
+		$arParams['NEED_SHOW_SETTINGS'] = $this->request->get('needShowSettings') === 'Y';
+
+		return parent::onPrepareComponentParams($arParams);
+	}
+
 	public function executeComponent()
 	{
 		$this->errorCollection = new ErrorCollection();

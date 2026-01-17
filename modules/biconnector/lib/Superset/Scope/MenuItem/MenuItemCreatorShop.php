@@ -30,7 +30,7 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 		if (!empty($menuItems))
 		{
 			$menuItems[] = [
-				'is_delimiter' => true,
+				"is_delimiter" => true,
 				'items_id' => 'BIC_DASBOARDS_DELIMITER',
 			];
 

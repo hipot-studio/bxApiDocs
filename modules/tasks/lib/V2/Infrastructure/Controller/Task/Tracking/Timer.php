@@ -13,6 +13,8 @@ use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 use Bitrix\Tasks\V2\Internal\Access\Task\Tracking;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
+use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 
 class Timer extends BaseController
 {
@@ -25,6 +27,7 @@ class Timer extends BaseController
 		#[Permission\Read]
 		#[Tracking\Permission\Track]
 		Entity\Task $task,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
 		$userId = $this->userId;
@@ -38,6 +41,7 @@ class Timer extends BaseController
 			syncPlan: true,
 			canStart: $accessController->checkByItemId(ActionDictionary::ACTION_TASK_START, $taskId),
 			canRenew: $accessController->checkByItemId(ActionDictionary::ACTION_TASK_RENEW, $taskId),
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -47,7 +51,7 @@ class Timer extends BaseController
 			return null;
 		}
 
-		return $result->getObject();
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 
 	/**
@@ -57,14 +61,19 @@ class Timer extends BaseController
 		#[Permission\Read]
 		#[Tracking\Permission\Track]
 		Entity\Task $task,
+		TaskProvider $taskProvider,
 	): ?Entity\EntityInterface
 	{
 		$userId = $this->userId;
 		$taskId = $task->getId();
 
+		$accessController = $this->getAccessController(Type::Task, $this->getAccessContext());
+
 		$result = (new StopTimerCommand(
 			userId: $userId,
 			taskId: $taskId,
+			canStop: $accessController->checkByItemId(ActionDictionary::ACTION_TASK_PAUSE, $taskId),
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -74,6 +83,6 @@ class Timer extends BaseController
 			return null;
 		}
 
-		return $result->getObject();
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
 	}
 }

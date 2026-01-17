@@ -4,6 +4,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Security;
 use Bitrix\Rest\Public;
+use Bitrix\Rest;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -278,6 +279,11 @@ class CRestUtil
 
 	public static function ConvertDateTime($dt)
 	{
+		if ($dt instanceof \Bitrix\Main\Type\DateTime && !$dt->isUserTimeEnabled())
+		{
+			return $dt->format('c');
+		}
+
 		return $dt ? date('c', MakeTimeStamp($dt) - CTimeZone::GetOffset()) : '';
 	}
 
@@ -549,9 +555,19 @@ class CRestUtil
 		return false;
 	}
 
-	public static function makeAuth($res, $application_id = null)
+	public static function makeAuth($authToken, $applicationType = null, ?int $applicationId = null): bool
 	{
-		return (new Public\Command\Auth\AuthorizeUserCommand((int)($res['user_id'] ?? 0), $application_id))
+		if (is_integer($applicationType) && $applicationId === null)
+		{
+			$applicationType = Rest\OAuth\Auth::AUTH_TYPE;
+			$applicationId = (int) $applicationType;
+		}
+
+		return (new Public\Command\Auth\AuthorizeUserCommand(
+			(int)($authToken['user_id'] ?? 0),
+			$applicationType,
+			$applicationId,
+		))
 			->run()
 			->isSuccess()
 		;
@@ -589,24 +605,38 @@ class CRestUtil
 		return $hasAccess;
 	}
 
-	public static function updateAppStatus(array $tokenInfo)
+	public static function updateAppStatus(array $tokenInfo): ?Main\Result
 	{
-		if(array_key_exists('status', $tokenInfo) && array_key_exists('client_id', $tokenInfo))
+		if (
+			array_key_exists('status', $tokenInfo)
+			&& array_key_exists('client_id', $tokenInfo)
+			&& ($appInfo = Rest\AppTable::getByClientId($tokenInfo['client_id']))
+		)
 		{
-			$appInfo = \Bitrix\Rest\AppTable::getByClientId($tokenInfo['client_id']);
-			if($appInfo)
+			$updateFields = [];
+			if (!empty($tokenInfo['status']) && $tokenInfo['status'] !== $appInfo['STATUS'])
 			{
-				$dateFinish = $appInfo['DATE_FINISH'] ? $appInfo['DATE_FINISH']->getTimestamp() : '';
-
-				if($tokenInfo['status'] !== $appInfo['STATUS'] || $tokenInfo['date_finish'] != $dateFinish)
+				$updateFields['STATUS'] = $tokenInfo['status'];
+			}
+			if (isset($tokenInfo['date_finish']))
+			{
+				$willingToUpdateDateFinish = (int)$tokenInfo['date_finish'];
+				$currentDateFinish = $appInfo['DATE_FINISH'] ? $appInfo['DATE_FINISH']->getTimestamp() : 0;
+				if ($willingToUpdateDateFinish !== $currentDateFinish)
 				{
-					\Bitrix\Rest\AppTable::update($appInfo['ID'], array(
-						'STATUS' => $tokenInfo['status'],
-						'DATE_FINISH' => $tokenInfo['date_finish'] ? \Bitrix\Main\Type\DateTime::createFromTimestamp($tokenInfo['date_finish']) : '',
-					));
+					$updateFields['DATE_FINISH'] = $willingToUpdateDateFinish > 0 ?
+						\Bitrix\Main\Type\DateTime::createFromTimestamp($willingToUpdateDateFinish) :
+						''
+					;
 				}
 			}
+			if (!empty($updateFields))
+			{
+				return Rest\AppTable::update($appInfo['ID'], $updateFields);
+			}
 		}
+
+		return null;
 	}
 
 	public static function saveFile($fileContent, $fileName = "")

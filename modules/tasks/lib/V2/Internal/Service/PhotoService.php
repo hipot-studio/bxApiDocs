@@ -9,18 +9,10 @@ use CFile;
 
 class PhotoService
 {
-	public function resize(Entity\File $photo, int $width = 102, int $height = 100): ?Entity\File
+	public function resize(Entity\File $photo, int $width = 100, int $height = 100): ?Entity\File
 	{
-		$photoData = [
-			'SRC' => $photo->src,
-			'FILE_NAME' => $photo->name,
-			'WIDTH' => $photo->width,
-			'HEIGHT' => $photo->height,
-			'SUBDIR' => $photo->subDir,
-		];
-
 		$resizedPhoto = CFile::resizeImageGet(
-			$photoData,
+			$photo->file,
 			['width' => $width, 'height' => $height],
 			BX_RESIZE_IMAGE_EXACT,
 			false,
@@ -33,10 +25,6 @@ class PhotoService
 			return null;
 		}
 
-		$photoData = array_change_key_case($photoData);
-
-		$newPhotoData = array_merge($photoData, $resizedPhoto);
-
-		return Entity\File::mapFromArray($newPhotoData);
+		return Entity\File::mapFromArray($resizedPhoto);
 	}
 }

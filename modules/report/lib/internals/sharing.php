@@ -42,7 +42,8 @@ class SharingTable extends Entity\DataManager
 		$fieldsMap = array(
 			'ID' => array(
 				'data_type' => 'integer',
-				'primary' => true
+				'primary' => true,
+				'autocomplete' => true,
 			),
 			'REPORT_ID' => array(
 				'data_type' => 'integer',

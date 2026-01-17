@@ -28,10 +28,7 @@ class DelegateCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$memberService = Container::getInstance()->getMemberService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new DelegateHandler($memberService, $consistencyResolver);
+		$handler = Container::getInstance()->get(DelegateHandler::class);
 
 		try
 		{

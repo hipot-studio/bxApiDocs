@@ -188,6 +188,7 @@ class MiniProfileService
 			role: (new \Bitrix\Intranet\User($userId))->getUserRole()?->value,
 			url: $this->userService->getDetailUrl($userId),
 			avatar: $this->getAvatarUrl($userModel, self::AVATAR_SIZE),
+			personalGender: $userModel->getPersonalGender(),
 		);
 	}
 
@@ -268,6 +269,7 @@ class MiniProfileService
 				'PERSONAL_PHOTO',
 				'ACTIVE',
 				'LAST_ACTIVITY_DATE',
+				'PERSONAL_GENDER',
 			],
 		])->fetchObject();
 	}

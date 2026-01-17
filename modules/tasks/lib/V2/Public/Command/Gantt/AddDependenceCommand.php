@@ -23,6 +23,7 @@ class AddDependenceCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $userId,
 		public readonly LinkType $linkType,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -31,10 +32,7 @@ class AddDependenceCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$ganttDependenceService = Container::getInstance()->getGanttDependenceService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new AddDependenceHandler($ganttDependenceService, $consistencyResolver);
+		$handler = Container::getInstance()->get(AddDependenceHandler::class);
 
 		try
 		{

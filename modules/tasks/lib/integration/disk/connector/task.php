@@ -6,12 +6,21 @@
 
 namespace Bitrix\Tasks\Integration\Disk\Connector;
 
+use Bitrix\Disk\Uf\FileUserType;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 use Bitrix\Disk\Ui;
 use Bitrix\Disk\Uf\StubConnector;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotification;
+use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
+use Bitrix\Tasks\V2\Internal\Repository\UserRepository;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
+use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 
 Loc::loadMessages(__FILE__);
 
@@ -134,9 +143,21 @@ class Task extends StubConnector
 
 	public function addComment($authorId, array $data)
 	{
+		if (!Loader::includeModule('disk'))
+		{
+			return;
+		}
+
+		if (FormV2Feature::isOn())
+		{
+			$this->addMessageToChat($authorId, $data);
+
+			return;
+		}
+
 		$fields = array(
 			"ANCILLARY" => true,
-			"POST_MESSAGE" => $data['text']
+			"POST_MESSAGE" => $data['text'],
 		);
 		if(!empty($data['fileId']))
 		{
@@ -153,6 +174,62 @@ class Task extends StubConnector
 		{
 			\CTaskCommentItem::add($task, $fields);
 		}
+	}
+
+	protected function addMessageToChat($authorId, array $data)
+	{
+		if (!$this->canRead($authorId))
+		{
+			return;
+		}
+
+		$taskProvider = Container::getInstance()->get(TaskProvider::class);
+		$userRepository = Container::getInstance()->get(UserRepository::class);
+		$chatNotification = Container::getInstance()->get(ChatNotification::class);
+
+		$task = $taskProvider->get(TaskParams::mapFromIds($this->entityId, $authorId));
+
+		if (!$task)
+		{
+			return;
+		}
+
+		$fileIds = [];
+		if (!empty($data['fileId']))
+		{
+			$fileIds[] = $data['fileId'];
+		}
+		elseif (!empty($data['versionId']))
+		{
+			$versionId = str_starts_with($data['versionId'], 'n')
+				? (int)substr($data['versionId'], 1)
+				: (int)$data['versionId']
+			;
+
+			if ($versionId > 0)
+			{
+				$version = \Bitrix\Disk\Version::loadById($versionId);
+
+				if ($version?->getObjectId())
+				{
+					$fileIds[] = FileUserType::NEW_FILE_PREFIX . $version->getFileId();
+				}
+			}
+		}
+
+		$triggeredBy = $userRepository
+			->getByIds([$authorId])
+			->findOneById($authorId)
+		;
+
+		$chatNotification->notify(
+			type: NotificationType::TaskAttachmentChanged,
+			task: $task,
+			args: [
+				'triggeredBy' => $triggeredBy,
+				'fileIds' => $fileIds,
+			],
+		);
 	}
 
 	/**
@@ -172,15 +249,15 @@ class Task extends StubConnector
 		$res = \Bitrix\Disk\Internals\AttachedObjectTable::getList(array(
 			'select' => array(
 				'TASK_ID' => 'ENTITY_ID',
-				new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(ENTITY_ID)')
+				new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(ENTITY_ID)'),
 			),
 			'filter' => array(
 				'=ENTITY_TYPE' => self::className(),
-				'ENTITY_ID' => $id
+				'ENTITY_ID' => $id,
 			),
 			'group' => array(
-				'ENTITY_ID'
-			)
+				'ENTITY_ID',
+			),
 		));
 		while ($row = $res->fetch())
 		{
@@ -228,11 +305,11 @@ class Task extends StubConnector
 				//'>=FILE.HEIGHT' => $height
 			),
 			'order' => array(
-				'ID' => 'ASC'
+				'ID' => 'ASC',
 			),
 			'group' => array(
-				'ENTITY_ID'
-			)
+				'ENTITY_ID',
+			),
 		));
 		while ($row = $res->fetch())
 		{

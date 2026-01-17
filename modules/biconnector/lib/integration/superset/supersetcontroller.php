@@ -60,6 +60,7 @@ final class SupersetController
 		if (!$user)
 		{
 			$result->addError(new Main\Error("User with id \"{$userId}\" not found"));
+
 			return $result;
 		}
 
@@ -80,11 +81,19 @@ final class SupersetController
 		}
 
 		$data = $response->getData();
+		$clientId = $data['client_id'] ?? null;
 
-		$addResult = SupersetUserTable::addClientId($user->id, $data['client_id']);
+		if (empty($clientId))
+		{
+			$result->addError(new Main\Error('Superset proxy returned a success response but without a client_id.'));
+
+			return $result;
+		}
+
+		$addResult = SupersetUserTable::addClientId($user->id, $clientId);
 		if ($addResult->isSuccess())
 		{
-			$user->clientId = (string)$data['client_id'];
+			$user->clientId = (string)$clientId;
 			$user->updated = true;
 
 			$result->setData([

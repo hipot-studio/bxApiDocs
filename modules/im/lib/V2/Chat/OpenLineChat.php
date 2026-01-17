@@ -363,7 +363,7 @@ class OpenLineChat extends EntityChat
 			return new Result();
 		}
 
-		foreach ($this->getRelationsForSendMessage() as $relation)
+		foreach ($this->getUsersToNotify() as $relation)
 		{
 			ImOpenLines\Recent::setRecent(
 				$relation->getUserId(),
@@ -547,6 +547,11 @@ class OpenLineChat extends EntityChat
 	}
 
 	protected function sendNotificationUserDelete(int $userId, DeleteUserConfig $config): void
+	{
+		return;
+	}
+
+	protected function transcribeFilesAfterMessageSend(Message $message): void
 	{
 		return;
 	}

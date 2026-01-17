@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Conversion;
 
+use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Crm;
 use Bitrix\Crm\Conversion\Exception\AutocreationDisabledException;
 use Bitrix\Crm\Conversion\Exception\CreationFailedException;
@@ -20,6 +21,7 @@ use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Settings\ConversionSettings;
 use Bitrix\Crm\Tracking;
 use Bitrix\Main;
+use Bitrix\Main\Loader;
 
 class EntityConverter
 {
@@ -364,6 +366,13 @@ class EntityConverter
 				// but no rows were transferred to dst
 				$destinationItem->setOpportunity($destinationItem->getDefaultValue(Item::FIELD_NAME_OPPORTUNITY));
 			}
+
+			if ($srcHasProducts && $dstHasProducts && !$destinationItem->getIsManualOpportunity())
+			{
+				$accounting = Container::getInstance()->getAccounting();
+				$price = $accounting->calculateByItem($destinationItem)->getPrice();
+				$destinationItem->setOpportunity($price);
+			}
 		}
 
 		$categoryId = $configItem->getInitData()['categoryId'] ?? null;
@@ -427,6 +436,11 @@ class EntityConverter
 		}
 
 		$notConvertedProductRowsArrays = \CCrmProductRow::GetDiff([$srcProductRows->toArray()], $alreadyConvertedProductRows);
+		$notConvertedProductRowsArrays = $this->prepareProductRowsPrices(
+			$destinationFactory->getEntityTypeId(),
+			$notConvertedProductRowsArrays,
+			$this->sourceItem->get('CURRENCY_ID') ?? null,
+		);
 
 		$notConvertedProductRows = [];
 		foreach ($notConvertedProductRowsArrays as $notConvertedProductRowsArray)
@@ -1084,6 +1098,27 @@ class EntityConverter
 		);
 	}
 	//endregion
+
+	protected function prepareProductRowsPrices(int $entityTypeId, array $productRows, ?string $currencyId = null): array
+	{
+		if (
+			!$this->config->isPermissionCheckEnabled()
+			|| !Loader::includeModule('catalog')
+			|| AccessController::getCurrent()->checkByValue(
+				\Bitrix\Catalog\Access\ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+				$entityTypeId,
+			)
+		)
+		{
+			return $productRows;
+		}
+
+		return Container::getInstance()->getProductRowChecker()->updateCatalogPrices(
+			$productRows,
+			$currencyId,
+		);
+	}
+
 	/**
 	 * Finalization phase. Called for every entity.
 	 * Uses for calling common conversion code for every converted entity.
@@ -1220,7 +1255,7 @@ class EntityConverter
 			Crm\Timeline\TimelineType::MARK,
 			Crm\Timeline\TimelineType::COMMENT,
 			Crm\Timeline\TimelineType::LOG_MESSAGE,
-			Crm\Timeline\TimelineType::AI_CALL_PROCESSING,
+			Crm\Timeline\TimelineType::AI_PROCESSING,
 		];
 	}
 

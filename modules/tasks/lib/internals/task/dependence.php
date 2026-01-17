@@ -1,11 +1,9 @@
-<?
+<?php
 
 namespace Bitrix\Tasks\Internals\Task;
 
-use Bitrix\Main;
-
-//Bitrix\Main\Localization\Loc;
-//Loc::loadMessages(__FILE__);
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\IntegerField;
 
 /**
  * Class DependenceTable
@@ -33,60 +31,30 @@ use Bitrix\Main;
  * @method static \Bitrix\Tasks\Internals\Task\EO_Dependence_Collection wakeUpCollection($rows)
  */
 
-class DependenceTable extends Main\Entity\DataManager
+class DependenceTable extends DataManager
 {
-	private static $tableName = '';
-
-	/**
-	 * Returns DB table name for entity.
-	 *
-	 * @return string
-	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
-		if(static::$tableName != '')
-		{
-			return static::$tableName;
-		}
-
 		return 'b_tasks_task_dep';
 	}
 
-	public static function setTableName($tableName)
+	public static function getClass(): string
 	{
-		static::$tableName = trim((string) $tableName);
+		return static::class;
 	}
 
-	/**
-	 * @return static
-	 */
-	public static function getClass()
+	public static function getMap(): array
 	{
-		return get_called_class();
-	}
+		return [
+			(new IntegerField('TASK_ID'))
+				->configurePrimary(),
 
-	/**
-	 * Returns entity map definition.
-	 *
-	 * @return array
-	 */
-	public static function getMap()
-	{
-		return array(
-			'TASK_ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-				//'title' => Loc::getMessage('TASK_DEP_ENTITY_TASK_ID_FIELD'),
-			),
-			'PARENT_TASK_ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-				//'title' => Loc::getMessage('TASK_DEP_ENTITY_PARENT_TASK_ID_FIELD'),
-			),
-			'DIRECT' => array(
-				'data_type' => 'integer',
-				//'title' => Loc::getMessage('TASK_DEP_ENTITY_DIRECT_FIELD'),
-			),
-		);
+			(new IntegerField('PARENT_TASK_ID'))
+				->configurePrimary(),
+
+			(new IntegerField('DIRECT'))
+				->configureNullable()
+				->configureDefaultValue(0),
+		];
 	}
 }

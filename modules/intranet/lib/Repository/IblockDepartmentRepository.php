@@ -40,8 +40,9 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 		$departmentResult = \CIBlockSection::GetList(
 			['ID' => 'ASC'],
 			['ID' => $departmentId],
-			['ID', 'NAME', 'XML_ID', 'MODIFIED_BY', 'CREATED_BY', 'TIMESTAMP_X', 'DATE_CREATE', 'IBLOCK_SECTION_ID'],
-			['nTopCount' => 1]
+			false,
+			[],
+			['nTopCount' => 1],
 		);
 		if ($departmentData = $departmentResult->Fetch())
 		{

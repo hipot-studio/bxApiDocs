@@ -18,8 +18,13 @@ use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\UI\Buttons;
+use Bitrix\UI\Buttons\AirButtonStyle;
+use Bitrix\UI\Buttons\Color;
+use Bitrix\UI\Buttons\Icon;
+use Bitrix\UI\Buttons\JsCode;
 use Bitrix\UI\Toolbar;
 
 if (!Loader::includeModule('crm'))
@@ -29,7 +34,14 @@ if (!Loader::includeModule('crm'))
 
 class CrmAutomatedSolutionListComponent extends Base
 {
+	private const NOT_ORM_FIELDS = [
+		'LAST_ACTIVITY_TIME',
+		'TYPE_IDS',
+		'PERMISSIONS',
+	];
+
 	public const TOOLBAR_SETTINGS_BUTTON_ID = 'automated_solution-list-toolbar-settings-button';
+	public const TOOLBAR_MARKETPLACE_BUTTON_ID = 'automated_solution-list-toolbar-marketplace-button';
 
 	private AutomatedSolutionManager $manager;
 	private SummaryFactory $summaryFactory;
@@ -82,6 +94,21 @@ class CrmAutomatedSolutionListComponent extends Base
 				'text' => Loc::getMessage('CRM_COMMON_ACTION_CREATE'),
 				'link' => $createUrl->getUri(),
 			]);
+			$marketUrl = \Bitrix\Crm\Integration\Market\Router::getCategoryPath('automated_solutions_seats');
+
+			$marketButton = new Buttons\Button([
+				'text' => Loc::getMessage('CRM_AUTOMATED_SOLUTION_LIST_MARKET'),
+				'color' => Color::SECONDARY,
+				'useAirDesign' => true,
+				'icon' => Icon::MARKET,
+				'style' => AirButtonStyle::FILLED,
+				'onclick' => new JsCode(
+					"BX.SidePanel.Instance.open('" . $marketUrl . "')",
+				),
+			]);
+			$marketButton->addAttribute('id', static::TOOLBAR_MARKETPLACE_BUTTON_ID);
+
+			$buttons[Toolbar\ButtonLocation::RIGHT][] = $marketButton;
 		}
 
 		$settingsItems = $this->getSettingsItems();
@@ -171,13 +198,39 @@ class CrmAutomatedSolutionListComponent extends Base
 
 		$grid->processRequest();
 
-		$grid->setRawRows(
-			$this->getRawRows($grid->getOrmParams()),
-		);
+		$ormParams = $grid->getOrmParams();
+		$ormParams['select'][] = 'SOURCE_ID';
+		if (!in_array('PERMISSIONS', $ormParams['select'], true))
+		{
+			$ormParams['select'][] = 'PERMISSIONS';
+		}
 
-		return \Bitrix\Main\Grid\Component\ComponentParams::get($grid, [
+		$rawRows = $this->getRawRows($ormParams);
+		$grid->setRawRows($rawRows);
+
+		$params =  [
 			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => true,
-		]);
+		];
+
+		if (empty($rawRows))
+		{
+			$params['STUB'] = [
+				'title' => Loc::getMessage('CRM_AUTOMATED_SOLUTION_STUB_TITLE'),
+				'description' => Loc::getMessage('CRM_AUTOMATED_SOLUTION_STUB_DESCRIPTION'),
+			];
+		}
+		else
+		{
+			foreach ($rawRows as $rawRow)
+			{
+				if (AutomatedSolutionTable::isImportedFromMarketplace((int)$rawRow['SOURCE_ID']))
+				{
+					$this->arResult['hasImportedAutomatedSolution'] = true;
+				}
+			}
+		}
+
+		return \Bitrix\Main\Grid\Component\ComponentParams::get($grid, $params);
 	}
 
 	private function getGrid(): Grid\AutomatedSolutionGrid
@@ -198,24 +251,40 @@ class CrmAutomatedSolutionListComponent extends Base
 	{
 		$isSelectLastActivityTime = in_array('LAST_ACTIVITY_TIME', $ormParams['select'], true);
 		$isSelectTypeIds = $isSelectLastActivityTime || in_array('TYPE_IDS', $ormParams['select'], true);
+		$isSelectPermissions = in_array('PERMISSIONS', $ormParams['select'], true);
 
 		// remove not-orm fields
-		$ormParams['select'] = array_diff($ormParams['select'], ['LAST_ACTIVITY_TIME', 'TYPE_IDS']);
+		$ormParams['select'] = array_diff($ormParams['select'], self::NOT_ORM_FIELDS);
 
 		$rows = AutomatedSolutionTable::getList($ormParams)->fetchAll();
 
-		return $this->enrichRawRows($rows, $isSelectLastActivityTime, $isSelectTypeIds);
+		return $this->enrichRawRows($rows, $isSelectLastActivityTime, $isSelectTypeIds, $isSelectPermissions);
 	}
 
-	private function enrichRawRows(array $rawRows, bool $isSelectLastActivityTime, bool $isSelectTypeIds): array
+	private function enrichRawRows(
+		array $rawRows,
+		bool $isSelectLastActivityTime,
+		bool $isSelectTypeIds,
+		bool $isSelectPermissions,
+	): array
 	{
+		if ($isSelectPermissions)
+		{
+			foreach ($rawRows as &$row)
+			{
+				$automatedSolution = $this->manager->getAutomatedSolution($row['ID']);
+				$row['PERMISSIONS'] = $automatedSolution['CODE'];
+			}
+			unset($row);
+		}
+
 		if (!$isSelectLastActivityTime && !$isSelectTypeIds)
 		{
 			return $rawRows;
 		}
 
 		$automatedSolutionIds = array_column($rawRows, 'ID');
-		\Bitrix\Main\Type\ArrayHelper::normalizeArrayValuesByInt($automatedSolutionIds);
+		Collection::normalizeArrayValuesByInt($automatedSolutionIds);
 
 		$solutionIdToTypeIdsMap = $this->manager->getBoundTypeIdsForMultipleAutomatedSolutions($automatedSolutionIds);
 		foreach ($rawRows as &$row)
@@ -224,6 +293,7 @@ class CrmAutomatedSolutionListComponent extends Base
 
 			$row['TYPE_IDS'] = $typeIds;
 		}
+		unset($row);
 
 		if (!$isSelectLastActivityTime)
 		{

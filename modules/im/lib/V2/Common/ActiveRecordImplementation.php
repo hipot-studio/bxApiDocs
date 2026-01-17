@@ -389,7 +389,10 @@ trait ActiveRecordImplementation
 		{
 			$this->updateState();
 
-			$this->setPrimaryId((int)$saveResult->getId());
+			if ($saveResult->getPrimary())
+			{
+				$this->setPrimaryId((int)$saveResult->getId());
+			}
 
 			if (
 				$this instanceof RegistryEntry

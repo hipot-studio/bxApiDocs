@@ -9,4 +9,5 @@ use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFileCollection;
 interface DiskFileRepositoryInterface
 {
 	public function getByIds(array $ids): DiskFileCollection;
+	public function getObjectIdsByAttachmentIds(array $attachmentIds): array;
 }

@@ -6,6 +6,7 @@ use Bitrix\Im\Text;
 use Bitrix\Im\User;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
@@ -103,7 +104,12 @@ class MobilePush
 	{
 		$pushUserSkip = [];
 		$pushUserSend = [];
-		$activeUserRelations = $this->message->getChat()->getRelationsForSendMessage();
+		$activeUserRelations = [];
+
+		if ($this->config->addRecent())
+		{
+			$activeUserRelations = $this->message->getChat()->getUsersToNotify();
+		}
 
 		foreach ($activeUserRelations as $relation)
 		{
@@ -111,6 +117,7 @@ class MobilePush
 			{
 				continue;
 			}
+
 			if ($relation->getNotifyBlock() && !$this->importantPush)
 			{
 				$pushUserSkip[] = $relation->getUserId();
@@ -300,6 +307,11 @@ class MobilePush
 	private function prepareMessageForPush(array $message): string
 	{
 		Message::loadPhrases();
+
+		if (!empty($message['message']['params']['STICKER_PARAMS']))
+		{
+			return StickerService::getPlaceholder();
+		}
 
 		$messageText = $message['message']['text'];
 		if (isset($message['message']['text_push']) && $message['message']['text_push'])
@@ -559,6 +571,10 @@ class MobilePush
 				{
 					$file['status'] = $value['status'];
 				}
+				if ($value['isVideoNote'])
+				{
+					$file['isVideoNote'] = 'Y';
+				}
 
 				$result['files'][$key] = $file;
 			}
@@ -645,6 +661,7 @@ class MobilePush
 			'urlShow' => 87,
 			'width' => 88,
 			'height' => 89,
+			'isVideoNote' => 801,
 		];
 
 		return $this->changeKeysPushEvent($result, $indexToNameMap);

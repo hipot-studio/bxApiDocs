@@ -133,7 +133,11 @@ class StatusFieldAssembler extends FieldAssembler
 			case self::DASHBOARD_STATUS_COMPUTED_NOT_FOUND:
 			case self::DASHBOARD_STATUS_COMPUTED_NOT_AVAILABLE:
 			case self::DASHBOARD_STATUS_COMPUTED_NOT_LOAD:
-			$statusText = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_{$status}");
+				$statusText = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_{$status}");
+				if ($status === self::DASHBOARD_STATUS_COMPUTED_NOT_AVAILABLE)
+				{
+					$statusText = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_NOT_LOAD");
+				}
 
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">

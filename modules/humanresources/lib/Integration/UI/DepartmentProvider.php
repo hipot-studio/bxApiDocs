@@ -169,6 +169,7 @@ class DepartmentProvider extends BaseStructureProvider
 					'title' => $node->name,
 					'customData' => [
 						'accessCode' => $this->getSimpleNodeAccessCodeString($node),
+						'nodeEntityType' => $this->getNodeEntityType($node),
 					],
 				],
 			);
@@ -188,6 +189,7 @@ class DepartmentProvider extends BaseStructureProvider
 							),
 							'customData' => [
 								'accessCode' => $this->getSimpleNodeAccessCodeString($node) ?? '',
+								'nodeEntityType' => $this->getNodeEntityType($node),
 							],
 						],
 					),
@@ -283,6 +285,7 @@ class DepartmentProvider extends BaseStructureProvider
 					'tabs' => DepartmentProviderTabId::Recent,
 					'customData' => [
 						'accessCode' => $this->getSimpleNodeAccessCodeString($node),
+						'nodeEntityType' => $this->getNodeEntityType($node),
 					],
 				],
 			);
@@ -395,6 +398,7 @@ class DepartmentProvider extends BaseStructureProvider
 						'subdepartmentsCount' => $childDepartmentCount,
 						'usersCount' => $usersCount,
 						'accessCode' => $this->getSimpleNodeAccessCodeString($node),
+						'nodeEntityType' => $this->getNodeEntityType($node),
 					],
 					'nodeOptions' => [
 						'dynamic' => !$this->providerOptions->isFlatMode && (!is_bool($forceDynamic) || $forceDynamic),
@@ -457,7 +461,10 @@ class DepartmentProvider extends BaseStructureProvider
 							'title' => $nodeTitle,
 							'renderMode' => 'override',
 						],
-						'customData' => ['accessCode' => $this->getSimpleNodeAccessCodeString($node)],
+						'customData' => [
+							'accessCode' => $this->getSimpleNodeAccessCodeString($node),
+							'nodeEntityType' => $this->getNodeEntityType($node),
+						],
 					],
 				),
 			);
@@ -499,6 +506,7 @@ class DepartmentProvider extends BaseStructureProvider
 						],
 						'customData' => [
 							'accessCode' => $this->getRecursiveAccessCodeString($node),
+							'nodeEntityType' => $this->getNodeEntityType($node),
 						],
 					],
 				),
@@ -527,6 +535,7 @@ class DepartmentProvider extends BaseStructureProvider
 							],
 							'customData' => [
 								'accessCode' => $this->addFlatModeValuePostfix($this->getSimpleNodeAccessCodeString($node) ?? ''),
+								'nodeEntityType' => $this->getNodeEntityType($node),
 							],
 						],
 					),
@@ -550,6 +559,7 @@ class DepartmentProvider extends BaseStructureProvider
 							],
 							'customData' => [
 								'accessCode' => $this->addFlatModeValuePostfix($this->getSimpleNodeAccessCodeString($node) ?? ''),
+								'nodeEntityType' => $this->getNodeEntityType($node),
 							],
 						],
 					),
@@ -659,6 +669,7 @@ class DepartmentProvider extends BaseStructureProvider
 						'searchable' => $availableInRecentTab,
 						'customData' => [
 							'accessCode' => $this->getSimpleNodeAccessCodeString($node),
+							'nodeEntityType' => $this->getNodeEntityType($node),
 						],
 					],
 				);
@@ -874,6 +885,11 @@ class DepartmentProvider extends BaseStructureProvider
 		};
 
 		return $accessCodeType->buildAccessCode($node->id ?? 0);
+	}
+
+	private function getNodeEntityType(Node $node): string
+	{
+		return mb_strtolower($node->type?->value ?? '');
 	}
 
 	/**

@@ -47,7 +47,7 @@ class CompleteDeal extends Base
 
 	public function getPath()
 	{
-		return '/crm/deal/list/?STAGE_SEMANTIC_ID=' . Crm\PhaseSemantics::SUCCESS;
+		return SITE_DIR . 'crm/deal/list/?STAGE_SEMANTIC_ID=' . Crm\PhaseSemantics::SUCCESS;
 	}
 
 	public function query()

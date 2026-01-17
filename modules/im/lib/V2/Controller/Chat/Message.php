@@ -14,7 +14,7 @@ use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Message\Forward\ForwardService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\PushFormat;
-use Bitrix\Im\V2\Message\Send\SendingService;
+use Bitrix\Im\V2\Message\Send\FieldsValidationService;
 use Bitrix\Im\V2\Message\Update\UpdateService;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\MessageCollection;
@@ -47,6 +47,8 @@ class Message extends BaseController
 		'BOT_ID',
 		'COPILOT',
 		'SILENT_CONNECTOR',
+		'STICKER_PARAMS',
+		'AI_ASSISTANT',
 	];
 
 	public function getPrimaryAutoWiredParameter()
@@ -173,12 +175,12 @@ class Message extends BaseController
 			'LAST_ID' => isset($filter['lastId']) ? (int)$filter['lastId'] : null,
 			'MESSAGE_ID' => $message->getId(),
 		];
-		$viewOrder = ['ID' => $order['id'] ?? 'ASC'];
-		$viewLimit = $this->getLimit($limit);
+		$viewOrder = ['ID' => $order['id'] ?? 'DESC'];
+		$limit = $this->getLimit($limit);
 
-		$views = ViewCollection::find($viewFilter, $viewOrder, $viewLimit);
+		$views = ViewCollection::find($viewFilter, $viewOrder, $limit);
 
-		return $this->toRestFormat($views);
+		return $this->toRestFormatWithPaginationData([$views], $limit, $views->count());
 	}
 
 	/**
@@ -342,7 +344,7 @@ class Message extends BaseController
 
 		$fields['message'] = $this->getRawValue('fields')['message'] ?? $fields['message'] ?? null;
 		$fields = $this->prepareFields($fields, self::ALLOWED_FIELDS_SEND);
-		$result = (new SendingService())->prepareFields($chat, $fields, $forwardMessages, $restServer);
+		$result = (new FieldsValidationService($chat, $fields, $restServer))->prepareFields($forwardMessages);
 
 		if (!$result->isSuccess())
 		{

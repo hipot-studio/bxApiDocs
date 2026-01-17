@@ -8,7 +8,7 @@ use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Flow\Internal\FlowTaskTable;
 use Bitrix\Tasks\Flow\Task\Status;
 use Bitrix\Tasks\Internals\TaskTable;
-use Bitrix\Tasks\MemberTable;
+use Bitrix\Tasks\Internals\Task\MemberTable;
 
 final class TaskProvider
 {

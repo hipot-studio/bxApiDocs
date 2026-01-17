@@ -8,6 +8,8 @@ use Bitrix\Main\ObjectNotFoundException;
 
 class Dispatcher
 {
+	protected const MAX_HELP_MESSAGE_LENGTH = 250;
+
 	/**
 	 * @var Dispatcher
 	 */
@@ -89,6 +91,20 @@ class Dispatcher
 		return true;
 	}
 
+	protected function isRestrictedType($fieldInfo): bool
+	{
+		if (!is_array($fieldInfo))
+		{
+			$this->addError(Loc::getMessage('MAIN_UF_DISPATCHER_ERROR_FORMAT'));
+		}
+
+		$restrictedTypes = [
+			'string_formatted',
+		];
+
+		return isset($fieldInfo['USER_TYPE_ID']) && in_array($fieldInfo['USER_TYPE_ID'], $restrictedTypes, true);
+	}
+
 	public function createField($fieldInfo)
 	{
 		if(!$this->validateFieldChangeRequest($fieldInfo))
@@ -96,6 +112,12 @@ class Dispatcher
 			return false;
 		}
 
+		if ($this->isRestrictedType($fieldInfo))
+		{
+			return false;
+		}
+
+		$fieldInfo = $this->prepareFieldInfo($fieldInfo);
 		$fieldId = $this->createNewField($fieldInfo);
 
 		if($fieldId)
@@ -129,6 +151,13 @@ class Dispatcher
 		}
 
 		$currentFieldInfo = $this->getUserFieldInfo($fieldInfo['ENTITY_ID'], $fieldInfo['FIELD']);
+		if ($currentFieldInfo === null)
+		{
+			return true;
+		}
+
+		$fieldInfo['USER_TYPE_ID'] = $currentFieldInfo['USER_TYPE_ID'];
+		$fieldInfo = $this->prepareFieldInfo($fieldInfo);
 
 		$fieldId = $this->updateField($fieldInfo);
 		if($fieldId)
@@ -146,6 +175,7 @@ class Dispatcher
 				'FIELD' => $fieldInfo['FIELD'],
 				'VALUE' => $fieldInfo['VALUE'],
 				'CONTEXT' => $fieldInfo['CONTEXT'] ?? null,
+				'ADDITIONAL' => $fieldInfo['ADDITIONAL'] ?? [],
 			];
 
 			$addFieldInfo['SIGNATURE'] = $this->getSignature($addFieldInfo);
@@ -214,6 +244,21 @@ class Dispatcher
 
 			$this->validateFieldList[$fieldInfo['ENTITY_ID']][$fieldInfo['ENTITY_VALUE_ID']][$fieldInfo['FIELD']] = $fieldInfo['VALUE'] ?? null;
 		}
+	}
+
+	protected function prepareFieldInfo(array $fieldInfo): array
+	{
+		if (isset($fieldInfo['HELP_MESSAGE']) && is_array($fieldInfo['HELP_MESSAGE']))
+		{
+			$fieldInfo['HELP_MESSAGE'] = array_map(
+				static function ($item) {
+					return mb_substr($item, 0, self::MAX_HELP_MESSAGE_LENGTH);
+				},
+				$fieldInfo['HELP_MESSAGE'],
+			);
+		}
+
+		return $fieldInfo;
 	}
 
 	protected function processValidate()

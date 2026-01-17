@@ -1,115 +1,79 @@
 <?php
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\SystemException;
 
 class CBPActivityExecutionStatus
 {
-	const Initialized = 0;
-	const Executing = 1;
-	const Canceling = 2;
-	const Closed = 3;
-	const Faulting = 4;
+	public const Initialized = 0;
+	public const Closed = 3;
+	public const Cancelled = 5;
 
-	public static function out($v)
+	public const Executing = 1;
+	public const Canceling = 2;
+	public const Faulting = 4;
+
+	public static function out($v): string
 	{
-		$result = "";
-
-		switch ($v)
+		return match ($v)
 		{
-			case self::Initialized:
-				$result = "Initialized";
-				break;
-			case self::Executing:
-				$result = "Executing";
-				break;
-			case self::Canceling:
-				$result = "Canceling";
-				break;
-			case self::Closed:
-				$result = "Closed";
-				break;
-			case self::Faulting:
-				$result = "Faulting";
-				break;
-			default:
-				throw new Exception("UnknownActivityExecutionStatus");
-		}
+			self::Initialized => 'Initialized',
+			self::Executing => 'Executing',
+			self::Canceling => 'Canceling',
+			self::Closed => 'Closed',
+			self::Faulting => 'Faulting',
+			self::Cancelled => 'Cancelled',
+			default => throw new SystemException('UnknownActivityExecutionStatus'),
+		};
+	}
 
-		return $result;
+	public static function isInProgress(int $status): bool
+	{
+		return $status === self::Executing || $status === self::Canceling || $status === self::Faulting;
 	}
 }
 
 class CBPActivityExecutionResult
 {
-	const None = 0;
-	const Succeeded = 1;
-	const Canceled = 2;
-	const Faulted = 3;
-	const Uninitialized = 4;
+	public const None = 0;
+	public const Succeeded = 1;
+	public const Canceled = 2;
+	public const Faulted = 3;
+	public const Uninitialized = 4;
 
-	public static function out($v)
+	public static function out($v): string
 	{
-		$result = "";
-
-		switch ($v)
+		return match ($v)
 		{
-			case self::None:
-				$result = "None";
-				break;
-			case self::Succeeded:
-				$result = "Succeeded";
-				break;
-			case self::Canceled:
-				$result = "Canceled";
-				break;
-			case self::Faulted:
-				$result = "Faulted";
-				break;
-			case self::Uninitialized:
-				$result = "Uninitialized";
-				break;
-			default:
-				throw new Exception("UnknownActivityExecutionResult");
-		}
-
-		return $result;
+			self::None => 'None',
+			self::Succeeded => 'Succeeded',
+			self::Canceled => 'Canceled',
+			self::Faulted => 'Faulted',
+			self::Uninitialized => 'Uninitialized',
+			default => throw new SystemException('UnknownActivityExecutionResult'),
+		};
 	}
 }
 
 class CBPWorkflowStatus
 {
-	const Created = 0;
-	const Running = 1;
-	const Completed = 2;
-	const Suspended = 3;
-	const Terminated = 4;
+	public const Created = 0;
+	public const Running = 1;
+	public const Completed = 2;
+	public const Suspended = 3;
+	public const Terminated = 4;
 
-	public static function out($v)
+	public static function out($v): string
 	{
-		$result = "";
-
-		switch ($v)
+		return match ($v)
 		{
-			case self::Created:
-				$result = "Created";
-				break;
-			case self::Running:
-				$result = "Running";
-				break;
-			case self::Completed:
-				$result = "Completed";
-				break;
-			case self::Suspended:
-				$result = "Suspended";
-				break;
-			case self::Terminated:
-				$result = "Terminated";
-				break;
-			default:
-				throw new Exception("UnknownWorkflowStatus");
-		}
-
-		return $result;
+			self::Created => 'Created',
+			self::Running => 'Running',
+			self::Completed => 'Completed',
+			self::Suspended => 'Suspended',
+			self::Terminated => 'Terminated',
+			default => throw new SystemException('UnknownWorkflowStatus'),
+		};
 	}
 
 	public static function isFinished(int $status): bool
@@ -120,86 +84,45 @@ class CBPWorkflowStatus
 
 class CBPActivityExecutorOperationType
 {
-	const Execute = 0;
-	const Cancel = 1;
-	const HandleFault = 2;
+	public const Execute = 0;
+	public const Cancel = 1;
+	public const HandleFault = 2;
 
-	public static function out($v)
+	public static function out($v): string
 	{
-		$result = "";
-
-		switch ($v)
+		return match ($v)
 		{
-			case self::Execute:
-				$result = "Execute";
-				break;
-			case self::Cancel:
-				$result = "Running";
-				break;
-			case self::HandleFault:
-				$result = "HandleFault";
-				break;
-			default:
-				throw new Exception("UnknownActivityExecutorOperationType");
-		}
-
-		return $result;
+			self::Execute => 'Execute',
+			self::Cancel => 'Running',
+			self::HandleFault => 'HandleFault',
+			default => throw new SystemException('UnknownActivityExecutorOperationType'),
+		};
 	}
 }
 
 class CBPDocumentEventType
 {
-	const None = 0;
-	const Create = 1;
-	const Edit = 2;
-	const Delete = 4;
-	const Automation = 8;
-	const Manual = 16;
-	const Script = 32;
-	const Debug = 64;
+	public const None = 0;
+	public const Create = 1;
+	public const Edit = 2;
+	public const Delete = 4;
+	public const Automation = 8;
+	public const Manual = 16;
+	public const Script = 32;
+	public const Debug = 64;
+	public const Trigger = 128;
 
-	public static function out($v)
+	public static function out($v): string
 	{
+		$constants = (new ReflectionClass(__CLASS__))->getConstants();
 		$result = [];
 
-		if ($v == self::None)
+		foreach ($constants as $name => $value)
 		{
-			$result[] = "None";
-		}
-
-		if (($v & self::Create) != 0)
-		{
-			$result[] = "Create";
-		}
-
-		if (($v & self::Edit) != 0)
-		{
-			$result[] = "Edit";
-		}
-
-		if (($v & self::Delete) != 0)
-		{
-			$result[] = "Delete";
-		}
-
-		if (($v & self::Automation) != 0)
-		{
-			$result[] = "Automation";
-		}
-
-		if (($v & self::Manual) != 0)
-		{
-			$result[] = "Manual";
-		}
-
-		if (($v & self::Script) != 0)
-		{
-			$result[] = "Script";
-		}
-
-		if (($v & self::Debug) != 0)
-		{
-			$result[] = "Debug";
+			if (($v & $value) !== 0)
+			{
+				$result[] = $name;
+			}
 		}
 
 		return implode(', ', $result);
@@ -208,47 +131,41 @@ class CBPDocumentEventType
 
 class CBPCanUserOperateOperation
 {
-	const ViewWorkflow = 0;
-	const StartWorkflow = 1;
-	const CreateWorkflow = 4;
-	const CreateAutomation = 5;
-	const WriteDocument = 2;
-	const ReadDocument = 3;
-	const DebugAutomation = 6;
+	public const ViewWorkflow = 0;
+	public const StartWorkflow = 1;
+	public const CreateWorkflow = 4;
+	public const CreateAutomation = 5;
+	public const WriteDocument = 2;
+	public const ReadDocument = 3;
+	public const DebugAutomation = 6;
 }
 
 class CBPSetPermissionsMode
 {
-	const Hold = 1;
-	const Rewrite = 2;
-	const Clear = 3;
+	public const Hold = 1;
+	public const Rewrite = 2;
+	public const Clear = 3;
 
-	const ScopeWorkflow = 1;
-	const ScopeDocument = 2;
+	public const ScopeWorkflow = 1;
+	public const ScopeDocument = 2;
 
-	public static function outMode($v)
+	public static function outMode($v): string
 	{
-		$result = "";
-		switch ($v)
+		return match ((int)$v)
 		{
-			case self::Rewrite:
-				$result = "Rewrite";
-				break;
-			case self::Clear:
-				$result = "Clear";
-				break;
-			default:
-				$result = "Hold";
-		}
-		return $result;
+			self::Rewrite => 'Rewrite',
+			self::Clear => 'Clear',
+			default => 'Hold',
+		};
 	}
 
-	public static function outScope($v)
+	public static function outScope($v): string
 	{
-		if ($v == self::ScopeDocument)
+		if ((int)$v === self::ScopeDocument)
 		{
 			return "ScopeDocument";
 		}
+
 		return "ScopeWorkflow";
 	}
 }
@@ -262,7 +179,7 @@ class CBPTaskStatus
 	public const Timeout = 4;
 	public const CompleteCancel = 5;
 
-	public static function isSuccess(int $status)
+	public static function isSuccess(int $status): bool
 	{
 		return $status === self::CompleteYes || $status === self::CompleteOk;
 	}
@@ -276,27 +193,17 @@ class CBPTaskUserStatus
 	public const Ok = 3;
 	public const Cancel = 4;
 
-	public static function resolveStatus($name)
+	public static function resolveStatus($name): ?int
 	{
-		switch (mb_strtolower((string)$name))
+		return match (mb_strtolower((string)$name))
 		{
-			case '0':
-			case 'waiting':
-				return self::Waiting;
-			case '1':
-			case 'yes':
-				return self::Yes;
-			case '2':
-			case 'no':
-				return self::No;
-			case '3':
-			case 'ok':
-				return self::Ok;
-			case '4':
-			case 'cancel':
-				return self::Cancel;
-		}
-		return null;
+			'0', 'waiting' => self::Waiting,
+			'1', 'yes' => self::Yes,
+			'2', 'no' => self::No,
+			'3', 'ok' => self::Ok,
+			'4', 'cancel' => self::Cancel,
+			default => null,
+		};
 	}
 
 	public static function isPositive(int $status): bool
@@ -312,10 +219,10 @@ class CBPTaskUserStatus
 
 class CBPTaskChangedStatus
 {
-	const Add = 1;
-	const Update = 2;
-	const Delegate = 3;
-	const Delete = 4;
+	public const Add = 1;
+	public const Update = 2;
+	public const Delegate = 3;
+	public const Delete = 4;
 }
 
 class CBPTaskDelegationType
@@ -325,7 +232,7 @@ class CBPTaskDelegationType
 	public const None = 2;
 	public const ExactlyNone = 3; // not public type
 
-	public static function getSelectList()
+	public static function getSelectList(): array
 	{
 		return [
 			self::Subordinate => Loc::getMessage('BPCG_CONSTANTS_DELEGATION_TYPE_SUBORDINATE'),

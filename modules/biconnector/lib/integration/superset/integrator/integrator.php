@@ -63,6 +63,7 @@ final class Integrator
 	private const PROXY_ACTION_GET_UNUSED_ELEMENTS = '/unusedElements/get';
 	private const PROXY_ACTION_DELETE_UNUSED_ELEMENTS = '/unusedElements/delete';
 	private const PROXY_ACTION_GET_DASHBOARD_DATASETS = '/dashboard/datasets';
+	private const PROXY_ACTION_DATASET_INIT_REQUIRED_DATASET = '/dataset/initRequiredDataset';
 
 	static private self $instance;
 
@@ -727,6 +728,7 @@ final class Integrator
 				->setParams([
 					'filePath' => $filePath,
 					'currency' => CultureFormatter::getPortalCurrencySymbol(),
+					'langCode' => CultureFormatter::getLanguageCode(),
 					'appCode' => $appCode,
 				])
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
@@ -1193,6 +1195,20 @@ final class Integrator
 				->setParams($parameters)
 				->perform()
 			;
+	}
+
+	/**
+	 * Inits a server-side scenario to create or update required system datasets (e.g., for filters).
+	 *
+	 * @return IntegratorResponse
+	 */
+	public function initRequiredDataset(): IntegratorResponse
+	{
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_DATASET_INIT_REQUIRED_DATASET)
+				->perform()
+		;
 	}
 
 	// endregion

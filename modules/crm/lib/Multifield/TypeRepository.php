@@ -12,28 +12,32 @@ final class TypeRepository
 {
 	public static function isTypeDefined(mixed $typeId): bool
 	{
-		foreach (self::getAll() as $type)
-		{
-			if ((string)$typeId === $type::ID)
-			{
-				return true;
-			}
-		}
-
-		return false;
+		return self::getType($typeId) !== null;
 	}
 
 	public static function getTypeCaption(mixed $typeId): string
+	{
+		$type = self::getType($typeId);
+
+		return (string)$type?->getCaption();
+	}
+
+	public static function getValueTypeCaption(mixed $typeId, mixed $valueType): string
+	{
+		return (string)self::getType($typeId)?->getValueTypeCaption((string)$valueType);
+	}
+
+	public static function getType(mixed $typeId): ?Type
 	{
 		foreach (self::getAll() as $type)
 		{
 			if ((string)$typeId === $type::ID)
 			{
-				return $type::getCaption();
+				return $type;
 			}
 		}
 
-		return '';
+		return null;
 	}
 
 	/**

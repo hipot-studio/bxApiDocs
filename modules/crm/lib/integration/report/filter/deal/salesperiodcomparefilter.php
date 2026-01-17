@@ -48,7 +48,8 @@ class SalesPeriodCompareFilter extends Report\Filter\Base
 					'categoryAccess' => [
 						'READ' => \CCrmDeal::getPermittedToReadCategoryIDs($userPermissions),
 					],
-					'flags' => DealSettings::FLAG_NONE
+					'flags' => DealSettings::FLAG_NONE,
+					'disableDepartmentSelector' => true,
 				]
 			)
 		);

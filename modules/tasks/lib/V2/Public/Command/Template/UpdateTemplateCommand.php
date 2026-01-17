@@ -6,34 +6,45 @@ namespace Bitrix\Tasks\V2\Public\Command\Template;
 
 use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
-use Bitrix\Tasks\Control\Exception\TemplateUpdateException;
+use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Exception;
 
 class UpdateTemplateCommand extends AbstractCommand
 {
 	public function __construct(
 		#[Validatable]
 		public readonly Entity\Template $template,
-		public readonly int             $updatedBy,
+		public readonly UpdateConfig $config,
 	)
 	{
 
 	}
 
+	protected function validateInternal(): ValidationResult
+	{
+		return new ValidationResult();
+	}
+
 	protected function executeInternal(): Result
 	{
+		$result = new Result();
+
+		$handler = Container::getInstance()->get(UpdateTemplateHandler::class);
+
 		try
 		{
-			$handler = new UpdateTemplateHandler(Container::getInstance()->getTemplateRepository());
+			$template = $handler($this);
 
-			return (new Result())->setObject($handler($this));
+			return $result->setObject($template);
 		}
-		catch (TemplateUpdateException $e)
+		catch (Exception $e)
 		{
-			return (new Result())->addError(new Error('Failed updating template'));
+			return $result->addError(Error::createFromThrowable($e));
 		}
 	}
 }

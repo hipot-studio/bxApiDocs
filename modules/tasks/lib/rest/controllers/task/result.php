@@ -15,6 +15,7 @@ use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Ui\Avatar;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class Result extends Base
 {
@@ -353,8 +354,8 @@ class Result extends Base
 
 		try
 		{
-			$result = ResultTable::getByCommentId($commentId);
-			if (is_null($result))
+			$result = Container::getInstance()->getResultRepository()->getByCommentId($commentId);
+			if ($result === null)
 			{
 				return null;
 			}

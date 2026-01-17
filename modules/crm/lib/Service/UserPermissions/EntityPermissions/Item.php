@@ -19,6 +19,8 @@ use Bitrix\Crm\Service\UserPermissions\Helper\Stage;
 
 class Item
 {
+	use UserPermissions\AutomatedSolutionEntityLockedTrait;
+
 	public function __construct(
 		private readonly PermissionsManager $permissionsManager,
 		private readonly Admin $admin,
@@ -104,6 +106,11 @@ class Item
 			return $this->saleEntityItem->canUpdate($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 		}
 
+		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
+		{
+			return false;
+		}
+
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_UPDATE);
 	}
 
@@ -123,6 +130,11 @@ class Item
 			return $this->saleEntityItem->canDelete($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 		}
 
+		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
+		{
+			return false;
+		}
+
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_DELETE);
 	}
 
@@ -139,6 +151,11 @@ class Item
 
 	public function canAddItem(\Bitrix\Crm\Item $item): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($item->getEntityTypeId()))
+		{
+			return false;
+		}
+
 		return $this->checkItemPermissions($item, UserPermissions::OPERATION_ADD);
 	}
 
@@ -146,23 +163,53 @@ class Item
 	{
 		$itemId = ItemIdentifier::createByParams($item->getEntityTypeId(), $item->getId(), $item->getCategoryIdForPermissions());
 
-		return $itemId && $this->canUpdateItemIdentifier($itemId);
+		if (!$itemId)
+		{
+			return false;
+		}
+
+		if ($this->isAutomatedSolutionEntityLocked($itemId->getEntityTypeId()))
+		{
+			return false;
+		}
+
+		return $this->canUpdateItemIdentifier($itemId);
 	}
 
 	public function canDeleteItem(\Bitrix\Crm\Item $item): bool
 	{
 		$itemId = ItemIdentifier::createByParams($item->getEntityTypeId(), $item->getId(), $item->getCategoryIdForPermissions());
 
-		return $itemId && $this->canDeleteItemIdentifier($itemId);
+		if (!$itemId)
+		{
+			return false;
+		}
+
+		if ($this->isAutomatedSolutionEntityLocked($itemId->getEntityTypeId()))
+		{
+			return false;
+		}
+
+		return $this->canDeleteItemIdentifier($itemId);
 	}
 
 	public function canImportItem(\Bitrix\Crm\Item $item): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($item->getEntityTypeId()))
+		{
+			return false;
+		}
+
 		return $this->checkItemPermissions($item, UserPermissions::OPERATION_IMPORT);
 	}
 
 	public function canChangeStage(ItemIdentifier $itemIdentifier, string $fromStageId, string $toStageId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
+		{
+			return false;
+		}
+
 		if ((new ApproveCustomPermsToExistRole())->hasWaitingPermission(new Transition()))
 		{
 			return true;
@@ -197,6 +244,11 @@ class Item
 
 	public function canChangeStageToAny(int $entityTypeId): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
+		{
+			return false;
+		}
+
 		$isEntityAdmin = $this->entityAdmin->isAdminForEntity($entityTypeId);
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 
@@ -205,6 +257,11 @@ class Item
 
 	public function canAddOnlySelfAssignedItems(\Bitrix\Crm\Item $item): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($item->getEntityTypeId()))
+		{
+			return false;
+		}
+
 		$itemPermissionAttributes = $this->prepareItemPermissionAttributes($item);
 
 		return $this->permissionsManager

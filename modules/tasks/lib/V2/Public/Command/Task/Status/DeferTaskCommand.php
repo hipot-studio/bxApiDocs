@@ -27,9 +27,7 @@ class DeferTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new DeferTaskHandler($statusService);
+		$handler = Container::getInstance()->get(DeferTaskHandler::class);
 
 		try
 		{

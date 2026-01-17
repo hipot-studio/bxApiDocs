@@ -74,10 +74,17 @@ trait HasPaymentDetailsContentBlock
 
 		$sum = $this->getAssociatedEntityModel()->get('RAW_SUM');
 		$currency = $this->getAssociatedEntityModel()->get('RAW_CURRENCY');
-		$amountBlock = (new ContentBlock\Money())
-			->setOpportunity((float)$sum)
-			->setCurrencyId((string)$currency)
-		;
+		if ($sum && $currency)
+		{
+			$amountBlock = (new ContentBlock\Money())
+				->setOpportunity((float)$sum)
+				->setCurrencyId((string)$currency)
+			;
+		}
+		else
+		{
+			$amountBlock = new ContentBlock\Text();
+		}
 
 		return ContentBlockFactory::createLineOfTextFromTemplate(
 			$title,

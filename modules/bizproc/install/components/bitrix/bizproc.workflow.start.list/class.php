@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
@@ -13,6 +14,7 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Errorable;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\Main\Loader;
@@ -22,12 +24,13 @@ use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 
 class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Controllerable
 {
+	private const SHOW_IN_STARTER = 'show_in_starter';
 	private string $gridId = 'bizproc_workflow_start_list';
 	private string $filterId = 'bizproc_workflow_start_list_filter';
 
 	private ErrorCollection $errorCollection;
 
-	private ?int $categoryId;
+	private ?int $categoryId = null;
 
 	public function __construct($component = null)
 	{
@@ -89,7 +92,7 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		return $this;
 	}
 
-	public function getErrorByCode($code): ?Error
+	public function getErrorByCode($code): \Bitrix\Main\Error
 	{
 		return $this->errorCollection->getErrorByCode($code);
 	}
@@ -140,7 +143,10 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		$this->fillGridData();
 
 		$this->arResult['canEdit'] = $this->checkRightsEdit();
-		$this->arResult['bizprocEditorUrl'] = CBPDocumentService::getBizprocEditorUrl($this->getComplexDocumentType()) ?? '';
+		$this->arResult['bizprocEditorUrl'] = CBPRuntime::getRuntime()->getDocumentService()
+			->getBizprocEditorUrl($this->getComplexDocumentType()) ?? ''
+		;
+		$this->arResult['bizprocNewEditorUrl'] = '/bizprocdesigner/editor?ID=#ID#';
 
 		$this->arResult['signedDocumentType'] = CBPDocument::signDocumentType($this->getComplexDocumentType());
 		$this->arResult['signedDocumentId'] = CBPDocument::signDocumentType($this->getComplexDocumentId());
@@ -282,22 +288,38 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 
 	private function fillGridData()
 	{
-		$defaultFilter = [
-			'=MODULE_ID' => $this->arResult['documentType'][0],
-			'=ENTITY' => $this->arResult['documentType'][1],
-			'=DOCUMENT_TYPE' => $this->arResult['documentType'][2],
-			'=ACTIVE' => 'Y',
-			'=IS_SYSTEM' => 'N',
-			'<AUTO_EXECUTE' => CBPDocumentEventType::Automation,
-		];
-		$filter = array_merge($this->getUserFilter(), $defaultFilter);
+		$documentType = $this->arResult['documentType'];
+		$templateSection = $this->prepareSection($documentType);
+		$conditionTree = new ConditionTree();
+		$conditionTree
+			->where('MODULE_ID', $documentType[0])
+			->where('ENTITY', $documentType[1])
+			->where('DOCUMENT_TYPE', $documentType[2])
+			->where('ACTIVE', 'Y')
+			->where('IS_SYSTEM', 'N')
+			->where('AUTO_EXECUTE', '<', CBPDocumentEventType::Automation)
+		;
+		$this->getUserFilter($conditionTree);
 
 		$order = array_merge(['PIN.ID' => 'DESC'], $this->getGridOrder());
-
 		$result = \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::query()
-			->setSelect(['ID', 'NAME', 'DESCRIPTION'])
-			->setFilter($filter)
+			->setSelect(['ID', 'NAME', 'DESCRIPTION', 'TYPE'])
+			->registerRuntimeField(
+				'SECTION',
+				new \Bitrix\Main\ORM\Fields\Relations\Reference(
+					'SECTION',
+					WorkflowTemplateSectionTable::class,
+					\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.TEMPLATE_ID')
+				)
+			)
+			->where(
+				\Bitrix\Main\ORM\Query\Query::filter()
+					->logic('or')
+					->where('SECTION.SECTION_ID', $templateSection)
+					->where($conditionTree)
+			)
 		;
+
 
 		$result->registerRuntimeField(
 			'PIN',
@@ -320,25 +342,58 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 				WorkflowTemplateSettingsTable::class,
 				\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.TEMPLATE_ID')
 					->where('ref.NAME', WorkflowTemplateSettingsTable::SHOW_CATEGORY_PREFIX . $this->categoryId)
-					->whereIn('ref.VALUE', ['N', null])
 				,
 				['join_type' => 'LEFT']
 			));
+
+			$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->filterId);
+			$fields = $filterOptions->getFilter($this->getFilterFields());
+
+			if (empty($fields) && $filterOptions->getCurrentFilterId() === 'default_filter')
+			{
+				$fields['SYSTEM_PRESET'] = self::SHOW_IN_STARTER;
+			}
+
+			if (($fields['SYSTEM_PRESET'] ?? '') === self::SHOW_IN_STARTER)
+			{
+				$result->where(
+					\Bitrix\Main\ORM\Query\Query::filter()
+						->logic('or')
+						->where('SECTION.PATH', $this->categoryId)
+						->whereNull('SECTION.PATH')
+						->where('SECTION.PATH', '')
+				);
+			}
 		}
 
 		$resultCollection = $result->fetchCollection();
-		$jsHandlerStart = "BX.Bizproc.Component.WorkflowStartList.Instance.startWorkflow(event, '%s');";
+
+		$jsHandlerStart = "BX.Bizproc.Component.WorkflowStartList.Instance.startWorkflow(event, '%s', '%s');";
 
 		$gridData = [];
+		$sectionsService = new \Bitrix\Bizproc\Internal\Service\Trigger\SectionService();
 		foreach ($resultCollection as $template)
 		{
 			$instancesView = new \Bitrix\Bizproc\UI\WorkflowTemplateInstancesView($template->getId());
+
+			$triggerType = $sectionsService->getTriggerTypeByTemplateAndSectionString(
+				$template->getId(),
+				$templateSection,
+				$this->categoryId	,
+			);
+			$triggerType ??= '';
 			$gridData[] = [
 				'id' => $template->getId(),
 				'columns' => [
 					'PIN' => '',
-					'NAME' => $this->renderTemplateName($template, sprintf($jsHandlerStart, $template->getId())),
-					'START' => $this->renderStartButton(sprintf($jsHandlerStart, $template->getId()), $template->getId()),
+					'NAME' => $this->renderTemplateName(
+						$template,
+						sprintf($jsHandlerStart, $template->getId(), $triggerType),
+					),
+					'START' => $this->renderStartButton(
+						sprintf($jsHandlerStart, $template->getId(), $triggerType),
+						$template->getId(),
+					),
 					'IN_PROGRESS' => $this->renderInProgress($instancesView),
 					'LAST_ACTION' => \CBPViewHelper::formatDateTime($instancesView->getLastActivity()),
 				],
@@ -348,7 +403,7 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 				'actions' => [
 					[
 						'text' => Loc::getMessage('BIZPROC_WORKFLOW_START_LIST_GRID_ROW_ACTION_EDIT'),
-						'onclick' => "BX.Bizproc.Component.WorkflowStartList.Instance.editTemplate(event, {$template->getId()});",
+						'onclick' => "BX.Bizproc.Component.WorkflowStartList.Instance.editTemplate(event, {$template->getId()}, '{$template->getType()}');",
 					],
 				],
 				'cellActions' => [
@@ -473,36 +528,35 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		return ['SORT' => 'ASC'];
 	}
 
-	private function getUserFilter(): array
+	private function getUserFilter(ConditionTree $conditionTree): ConditionTree
 	{
 		$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->filterId);
 		$fields = $filterOptions->getFilter($this->getFilterFields());
-		$filter = [];
 
 		if (isset($this->categoryId))
 		{
 			if (empty($fields) && $filterOptions->getCurrentFilterId() === 'default_filter')
 			{
-				$fields['SYSTEM_PRESET'] = 'show_in_starter';
+				$fields['SYSTEM_PRESET'] = self::SHOW_IN_STARTER;
 			}
 
 			if (isset($fields['SYSTEM_PRESET']))
 			{
-				$filter['!=SETTINGS.VALUE'] = 'N';
+				$conditionTree->whereNot('SETTINGS.VALUE', 'N');
 			}
 		}
 
 		if (isset($fields['NAME']))
 		{
-			$filter['%NAME'] = $fields['NAME'];
+			$conditionTree->whereLike('NAME', '%' . $fields['NAME'] . '%');
 		}
 
 		if ($filterOptions->getSearchString())
 		{
-			$filter[] = ['%NAME' => $filterOptions->getSearchString()];
+			$conditionTree->whereLike('NAME', '%' . $filterOptions->getSearchString() . '%');
 		}
 
-		return $filter;
+		return $conditionTree;
 	}
 
 	private function addToolbar(): void
@@ -602,7 +656,7 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 				'type' => 'list',
 				'items' => [
 					'' => Loc::getMessage('BIZPROC_WORKFLOW_START_LIST_SYSTEM_PRESET_ITEM') ?? '',
-					'show_in_starter' => Loc::getMessage('BIZPROC_WORKFLOW_START_LIST_SYSTEM_PRESET_NAME') ?? '',
+					self::SHOW_IN_STARTER => Loc::getMessage('BIZPROC_WORKFLOW_START_LIST_SYSTEM_PRESET_NAME') ?? '',
 				],
 			];
 		}
@@ -615,9 +669,9 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		if (isset($this->categoryId))
 		{
 			return [
-				'show_in_starter' => [
+				self::SHOW_IN_STARTER => [
 					'name' => Loc::getMessage('BIZPROC_WORKFLOW_START_LIST_SYSTEM_PRESET_NAME') ?? '',
-					'fields' => ['SYSTEM_PRESET' => 'show_in_starter'],
+					'fields' => ['SYSTEM_PRESET' => self::SHOW_IN_STARTER],
 					'default' => true,
 				],
 			];
@@ -634,5 +688,10 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 	private function getComplexDocumentId(): ?array
 	{
 		return CBPDocument::unSignDocumentType($this->arParams['~signedDocumentId']);
+	}
+
+	private function prepareSection(mixed $documentType): string
+	{
+		return $documentType[0] . '|' . $documentType[2];
 	}
 }

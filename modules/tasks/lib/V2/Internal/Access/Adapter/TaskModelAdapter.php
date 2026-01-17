@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Access\Adapter;
 
 use Bitrix\Tasks\Access\Model;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskStatusMapper;
 
@@ -32,12 +33,17 @@ class TaskModelAdapter implements EntityModelAdapterInterface
 
 	private function transformEntity(Entity\EntityInterface $entity): array
 	{
+		if (!$entity instanceof Entity\Task)
+		{
+			return [];
+		}
+
 		$data['ID'] = (int)$entity->getId();
 
 		$status = $entity->status;
 		if ($status !== null)
 		{
-			$data['STATUS'] = (new TaskStatusMapper())->mapFromEnum($status);
+			$data['STATUS'] = Container::getInstance()->get(TaskStatusMapper::class)->mapFromEnum($status);
 		}
 
 		$data['GROUP_ID'] = (int)$entity->group?->getId();
@@ -77,6 +83,6 @@ class TaskModelAdapter implements EntityModelAdapterInterface
 
 	public function create(): ?Model\TaskModel
 	{
-		return Model\TaskModel::createFromId($this->entity->getId());
+		return Model\TaskModel::createFromId((int)$this->entity->getId());
 	}
 }

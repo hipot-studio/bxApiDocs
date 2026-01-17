@@ -154,6 +154,7 @@ class EntityLink implements RestConvertible
 		return [
 			'type' => $this->getRestType(),
 			'url' => $this->url,
+			'id' => $this->entityId,
 		];
 	}
 
@@ -166,6 +167,7 @@ class EntityLink implements RestConvertible
 		return [
 			'TYPE' => $this->getRestType(),
 			'URL' => $this->url,
+			'ID' => $this->entityId,
 		];
 	}
 }

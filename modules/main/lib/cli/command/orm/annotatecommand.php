@@ -84,6 +84,10 @@ class AnnotateCommand extends Command implements AnnotationInterface
 						'clean', 'c', InputOption::VALUE_NONE,
 						'Clean current entity map.'
 					),
+					new InputOption(
+						'inside', null, InputOption::VALUE_NONE,
+						'Save file with annotations inside module folder. Work only run for one module!',
+					),
 				))
 			)
 		;
@@ -144,9 +148,25 @@ class AnnotateCommand extends Command implements AnnotationInterface
 
 		// output file path
 		$filePath = $input->getArgument('output');
-		$filePath = ($filePath[0] == '/')
-			? $filePath // absolute
-			: getcwd().'/'.$filePath; // relative
+
+		// auto create file inside module
+		if ($input->getOption('inside') && count($inputModules) === 1)
+		{
+			$moduleId = $inputModules[0];
+			$filePath = Application::getDocumentRoot() . "/local/modules/{$moduleId}/meta/orm.php";
+			if (!file_exists($filePath))
+			{
+				$file = new \Bitrix\Main\IO\File($filePath);
+				$file->getDirectory()->create();
+			}
+		}
+		else
+		{
+			$filePath = ($filePath[0] == '/')
+				? $filePath // absolute
+				: getcwd().'/'.$filePath // relative
+			;
+		}
 
 		// handle entities
 		$annotations = [];

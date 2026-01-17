@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Main\Composite;
 
 use Bitrix\Main\Application;
@@ -104,7 +105,7 @@ class AppCache
 		if ($this->isSided)
 		{
 			$curManifestId = $this->getManifestID($this->pageURI, $this->receivedCacheParams);
-			if ($curManifestId != $manifestId)
+			if ($curManifestId !== $manifestId)
 			{
 				self::removeManifestById($curManifestId);
 			}
@@ -112,12 +113,12 @@ class AppCache
 
 		$currentHashSum = md5(serialize($files["FULL_FILE_LIST"]) . serialize($this->fallbackPages) . serialize($this->network) . serialize($this->excludeImagePatterns));
 		$manifestCache = $this->readManifestCache($manifestId);
-		if (!$manifestCache || $manifestCache["FILE_HASH"] != $currentHashSum || self::$debug)
+		if (!$manifestCache || $manifestCache["FILE_HASH"] !== $currentHashSum || self::$debug)
 		{
 			$this->isModified = true;
 			$this->setFiles($files["FULL_FILE_LIST"]);
 			$this->setNetworkFiles(Array("*"));
-			$arFields = array(
+			$fields = array(
 				"ID" => $manifestId,
 				"TEXT" => $this->getManifestContent(),
 				"FILE_HASH" => $currentHashSum,
@@ -130,15 +131,15 @@ class AppCache
 
 			if (!self::$debug)
 			{
-				$this->writeManifestCache($arFields);
+				$this->writeManifestCache($fields);
 			}
 			else
 			{
-				$jsFields = json_encode($arFields);
+				$jsFields = json_encode($fields);
 				$fileCount = count($this->files);
 				$params = json_encode($this->params);
 				$fileCountImages = 0;
-				foreach ($arFields["FILE_DATA"]["CSS_FILE_IMAGES"] as $file=>$images)
+				foreach ($fields["FILE_DATA"]["CSS_FILE_IMAGES"] as $file=>$images)
 				{
 					if (is_array($images))
 					{
@@ -279,9 +280,9 @@ JS;
 	public function getFilesFromContent($content)
 	{
 		$files = Array();
-		$arFilesByType = Array();
-		$arExtensions = Array("js", "css");
-		$extension_regex = "(?:" . implode("|", $arExtensions) . ")";
+		$filesByType = Array();
+		$extensions = Array("js", "css");
+		$extensionRegex = "(?:" . implode("|", $extensions) . ")";
 		$findImageRegexp = "/
 				((?i:
 					href=
@@ -293,7 +294,7 @@ JS;
 				))                                                   #attribute
 				(\"|')                                               #open_quote
 				([^?'\"]+\\.)                                        #href body
-				(" . $extension_regex . ")                           #extentions
+				(" . $extensionRegex . ")                           #extentions
 				(|\\?\\d+|\\?v=\\d+)                                 #params
 				(\\2)                                                #close_quote
 			/x";
@@ -313,13 +314,13 @@ JS;
 		{
 			$fileData["FULL_FILE_LIST"][] = $files[] = $link[$i] . $extension[$i] . $params[$i];
 			$fileData["FILE_TIMESTAMPS"][$link[$i] . $extension[$i]] = $params[$i];
-			$arFilesByType[$extension[$i]][] = $link[$i] . $extension[$i];
+			$filesByType[$extension[$i]][] = $link[$i] . $extension[$i];
 		}
 
 		$manifestCache = $this->readManifestCache($this->getCurrentManifestID());
 		$excludePatternsHash = md5(serialize($this->excludeImagePatterns));
 
-		if (array_key_exists("css", $arFilesByType))
+		if (array_key_exists("css", $filesByType))
 		{
 			$findImageRegexp = '#([;\s:]*(?:url|@import)\s*\(\s*)(\'|"|)(.+?)(\2)\s*\)#si';
 			if(!empty($this->excludeImagePatterns))
@@ -327,12 +328,12 @@ JS;
 				$findImageRegexp = '#([;\s:]*(?:url|@import)\s*\(\s*)(\'|"|)((?:(?!'.implode("|",$this->excludeImagePatterns).').)+?)(\2)\s*\)#si';
 			}
 
-			$cssCount = count($arFilesByType["css"]);
+			$cssCount = count($filesByType["css"]);
 			for ($j = 0; $j < $cssCount; $j++)
 			{
-				$cssFilePath = $arFilesByType["css"][$j];
+				$cssFilePath = $filesByType["css"][$j];
 				if ($manifestCache["FILE_DATA"]["FILE_TIMESTAMPS"][$cssFilePath] != $fileData["FILE_TIMESTAMPS"][$cssFilePath]
-					||$excludePatternsHash != $manifestCache["EXCLUDE_PATTERNS_HASH"]
+					|| $excludePatternsHash !== $manifestCache["EXCLUDE_PATTERNS_HASH"]
 				)
 				{
 
@@ -466,15 +467,15 @@ JS;
 		return $this->pageURI;
 	}
 
-	public function setFiles($arFiles)
+	public function setFiles($files)
 	{
 		if (!empty($this->files))
 		{
-			$this->files = array_merge($this->files, $arFiles);
+			$this->files = array_merge($this->files, $files);
 		}
 		else
 		{
-			$this->files = $arFiles;
+			$this->files = $files;
 		}
 	}
 
@@ -528,12 +529,11 @@ JS;
 
 	private function getManifestDescription()
 	{
-
 		$manifestParams = "";
-		$arCacheParams = $this->params;
-		if (!empty($arCacheParams))
+		$cacheParams = $this->params;
+		if (!empty($cacheParams))
 		{
-			foreach ($arCacheParams as $key => $value)
+			foreach ($cacheParams as $key => $value)
 			{
 				$manifestParams .= "#" . $key . "=" . $value . "\n";
 			}
@@ -548,14 +548,14 @@ JS;
 		return $desc;
 	}
 
-	private function writeManifestCache($arFields)
+	private function writeManifestCache($fields)
 	{
 		$cache = new \CPHPCache();
-		$manifestId = $arFields["ID"];
+		$manifestId = $fields["ID"];
 		$this->removeManifestById($manifestId);
 		$cachePath = self::getCachePath($manifestId);
 		$cache->StartDataCache(3600 * 24 * 365, $manifestId, $cachePath);
-		$cache->EndDataCache($arFields);
+		$cache->EndDataCache($fields);
 
 		return true;
 	}
@@ -594,13 +594,13 @@ JS;
 	}
 
 
-	private static function getManifestID($pageURI, $arParams)
+	private static function getManifestID($pageURI, $params)
 	{
 		$id = $pageURI;
-		if (!empty($arParams))
+		if (!empty($params))
 		{
 			$strCacheParams = "";
-			foreach ($arParams as $key => $value)
+			foreach ($params as $key => $value)
 			{
 				$strCacheParams .= $key . "=" . $value;
 			}

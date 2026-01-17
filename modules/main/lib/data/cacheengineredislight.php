@@ -2,6 +2,8 @@
 
 namespace Bitrix\Main\Data;
 
+use Bitrix\Main\Type\DateTime;
+
 class CacheEngineRedisLight extends CacheEngineRedis
 {
 	public function __construct(array $options = [])
@@ -22,21 +24,15 @@ class CacheEngineRedisLight extends CacheEngineRedis
 		$keyPrefix = $this->getKeyPrefix($baseDirVersion, $initDir);
 		$initListKey = $keyPrefix . '|' . self::BX_INIT_DIR_LIST;
 
-		if ($filename <> '')
+		if ($filename != '')
 		{
 			$key = $keyPrefix . '|' . $filename;
 			$this->del($key);
-			$this->delFromSet($initListKey, $filename);
+			$this->delFromSet($initListKey, $key);
 		}
 		elseif ($initDir != '')
 		{
-			$initDirList = $keyPrefix . '|' . static::BX_INIT_DIR_LIST;
-			$keys = $this->getSet($initDirList);
-			if (!empty($keys))
-			{
-				$this->del($keys);
-				$this->delFromSet($initListKey, $keys);
-			}
+			$this->deleteBySet($initListKey);
 		}
 		else
 		{
@@ -51,11 +47,10 @@ class CacheEngineRedisLight extends CacheEngineRedis
 				$paths = $this->getSet($baseList);
 				foreach ($paths as $path)
 				{
-					$this->addCleanPath(
-						[
+					$this->addCleanPath([
 						'PREFIX' => $path,
-						'CLEAN_FROM' =>  (new \Bitrix\Main\Type\DateTime()),
-						'CLUSTER_GROUP' => static::$clusterGroup
+						'CLEAN_FROM' => (new DateTime()),
+						'CLUSTER_GROUP' => static::$clusterGroup,
 					]);
 				}
 
@@ -79,7 +74,7 @@ class CacheEngineRedisLight extends CacheEngineRedis
 		$keyPrefix = $this->getKeyPrefix($baseDirVersion, $initDir);
 		$key = $keyPrefix . '|' . $filename;
 
-		$exp = $this->ttlMultiplier * (int) $ttl;
+		$exp = $this->ttlMultiplier * (int)$ttl;
 		$this->set($key, $exp, $vars);
 		$initListKey = $keyPrefix . '|' . self::BX_INIT_DIR_LIST;
 		$this->addToSet($initListKey, $key);

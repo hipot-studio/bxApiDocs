@@ -23,6 +23,8 @@ class FeedbackFormProvider
 		'os_version' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
 		'region_model' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
 		'phone_model' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
+		'contextId' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
+		'message' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
 	];
 
 	public const FORMS = [

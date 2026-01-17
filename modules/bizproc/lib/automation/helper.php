@@ -206,7 +206,7 @@ class Helper
 
 	public static function convertExpressions($source, array $documentType, $useTilda = true)
 	{
-		if (!$source)
+		if (!$source || !is_string($source))
 		{
 			return $source;
 		}

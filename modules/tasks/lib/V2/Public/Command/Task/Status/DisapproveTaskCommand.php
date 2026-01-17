@@ -27,9 +27,7 @@ class DisapproveTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new DisapproveTaskHandler($statusService);
+		$handler = Container::getInstance()->get(DisapproveTaskHandler::class);
 
 		try
 		{

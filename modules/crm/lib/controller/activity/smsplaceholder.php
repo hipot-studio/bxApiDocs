@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\Provider\Sms\PlaceholderContext;
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderManager;
 use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Format\PlaceholderFormatter;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Engine\ActionFilter;
@@ -114,13 +115,13 @@ class SmsPlaceholder extends Base
 		return (new PlaceholderManager())->delete($templateId, $placeholderId, $context);
 	}
 
-	public function previewAction(int $entityTypeId, int $entityId, string $message, ?int $entityCategoryId = null): ?array
+	public function previewAction(int $entityTypeId, int $entityId, string $message, ?int $entityCategoryId = null, bool $isDisplayFormat = false): ?array
 	{
 		$docGen = DocumentGeneratorManager::getInstance();
 
 		if (!$docGen->isEnabled())
 		{
-			$this->addError(new Error('Module "documentgenerator" is not installed'));
+			$this->addError(ErrorCode::getModuleNotInstalledError('documentgenerator'));
 
 			return null;
 		}
@@ -139,10 +140,15 @@ class SmsPlaceholder extends Base
 			return null;
 		}
 
+		if ($isDisplayFormat)
+		{
+			$message = PlaceholderFormatter::convertToExternalFormat($entityTypeId, $message);
+		}
+
 		$htmlMessage = $docGen->replacePlaceholdersInText(
 			$entityTypeId,
 			$entityId,
-			$message,
+			PlaceholderFormatter::escapeUnknownPlaceholdersInExternal($entityTypeId, $message),
 			' '
 		);
 

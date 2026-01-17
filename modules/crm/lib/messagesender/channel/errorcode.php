@@ -15,6 +15,7 @@ final class ErrorCode
 	public const UNUSABLE_CHANNEL = 'UNUSABLE_CHANNEL';
 
 	public const NO_RECEIVERS = 'NO_RECEIVERS';
+	public const NO_FROM = 'NO_FROM';
 
 	public static function getNotEnoughModulesError(): Error
 	{
@@ -44,6 +45,11 @@ final class ErrorCode
 	public static function getNoReceiversError(): Error
 	{
 		return new Error(Loc::getMessage('CRM_MESSAGESENDER_ERROR_NO_RECEIVERS'), self::NO_RECEIVERS);
+	}
+
+	public static function getNoFromError(): Error
+	{
+		return new Error('No from in channel', self::NO_FROM);
 	}
 
 	private function __construct()

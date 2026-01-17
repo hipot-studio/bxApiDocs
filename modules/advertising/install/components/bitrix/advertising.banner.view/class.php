@@ -1,6 +1,5 @@
 <?php
 
-use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
@@ -14,7 +13,7 @@ class AdvertisingBannerView extends \CBitrixComponent
 {
 	public function onPrepareComponentParams($params)
 	{
-		if (is_array($params['FILES']) && $params['CASUAL_PROPERTIES']['TYPE'] == 'template')
+		if (isset($params['FILES']) && is_array($params['FILES']) && $params['CASUAL_PROPERTIES']['TYPE'] == 'template')
 		{
 			foreach ($params['FILES'] as $name => $id)
 			{

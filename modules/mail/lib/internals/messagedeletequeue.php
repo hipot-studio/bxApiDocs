@@ -13,9 +13,9 @@ use Bitrix\Mail;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_MessageDeleteQueue_Query query()
- * @method static EO_MessageDeleteQueue_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_MessageDeleteQueue_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_MessageDeleteQueue_Result getById($id)
- * @method static EO_MessageDeleteQueue_Result getList(array $parameters = array())
+ * @method static EO_MessageDeleteQueue_Result getList(array $parameters = [])
  * @method static EO_MessageDeleteQueue_Entity getEntity()
  * @method static \Bitrix\Mail\Internals\EO_MessageDeleteQueue createObject($setDefaultValues = true)
  * @method static \Bitrix\Mail\Internals\EO_MessageDeleteQueue_Collection createCollection()

@@ -27,10 +27,33 @@ class Task extends BaseController
 		#[Permission\Read]
 		Entity\Task $task,
 		TaskProvider $taskProvider,
+		TaskParams $taskSelect,
+		bool $view = true,
 	): ?Entity\Task
 	{
 		return $taskProvider->get(
-			new TaskParams(taskId: $task->getId(), userId: $this->userId, checkTaskAccess: false)
+			new TaskParams(
+				taskId: $task->getId(),
+				userId: $this->userId,
+				group: $taskSelect->group,
+				flow: $taskSelect->flow,
+				stage: $taskSelect->stage,
+				members: $taskSelect->members,
+				checkLists: $taskSelect->checkLists,
+				tags: $taskSelect->tags,
+				crm: $taskSelect->crm,
+				subTasks: $taskSelect->subTasks,
+				relatedTasks: $taskSelect->relatedTasks,
+				gantt: $taskSelect->gantt,
+				placements: $taskSelect->placements,
+				favorite: $taskSelect->favorite,
+				options: $taskSelect->options,
+				parameters: $taskSelect->parameters,
+				results: $taskSelect->results,
+				userFields: $taskSelect->userFields,
+				checkTaskAccess: false,
+				view: $view,
+			),
 		);
 	}
 
@@ -43,10 +66,15 @@ class Task extends BaseController
 		TaskProvider $taskProvider,
 	): ?Arrayable
 	{
+		$config = new AddConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new AddTaskCommand(
 			task: $task,
-			config: new AddConfig($this->userId))
-		)->run();
+			config: $config,
+		))->run();
 
 		if (!$result->isSuccess())
 		{
@@ -67,10 +95,15 @@ class Task extends BaseController
 		TaskProvider $taskProvider,
 	): ?Arrayable
 	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new UpdateTaskCommand(
 			task: $task,
-			config: new UpdateConfig($this->userId))
-		)->run();
+			config: $config
+		))->run();
 
 		if (!$result->isSuccess())
 		{
@@ -90,10 +123,15 @@ class Task extends BaseController
 		Entity\Task $task
 	): ?bool
 	{
+		$config = new DeleteConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
 		$result = (new DeleteTaskCommand(
 			taskId: $task->getId(),
-			config: new DeleteConfig($this->userId))
-		)->run();
+			config: $config,
+		))->run();
 
 		if (!$result->isSuccess())
 		{

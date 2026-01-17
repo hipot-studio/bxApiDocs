@@ -72,6 +72,31 @@ class FieldType
 	public const TIME = 'time';
 
 	/**
+	 * type CUSTOM
+	 */
+	public const CUSTOM = 'custom';
+
+	/**
+	 * type DOCUMENT
+	 */
+	public const DOCUMENT = 'document';
+
+	/**
+	 * type JSON
+	 */
+	public const JSON = 'json';
+
+	/**
+	 * type RULES
+	 */
+	public const RULES = 'rules';
+
+	/**
+	 * type RULES
+	 */
+	public const ENTITYSELECTOR = 'entityselector';
+
+	/**
 	 * Control render mode - Bizproc Designer
 	 */
 	public const RENDER_MODE_DESIGNER = 1;
@@ -492,6 +517,7 @@ class FieldType
 			static::TEXT => BaseType\Text::class,
 			static::USER => BaseType\User::class,
 			static::INTERNALSELECT => BaseType\InternalSelect::class,
+			static::ENTITYSELECTOR => BaseType\EntitySelector::class,
 			static::TIME => BaseType\Time::class,
 		);
 	}

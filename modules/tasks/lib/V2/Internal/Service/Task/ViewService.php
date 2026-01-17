@@ -7,13 +7,13 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Integration\Forum\Task\UserTopic;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Task\Event\View\OnTaskFirstViewEvent;
+use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\Entity\Task\View;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\TimeLineService;
 use Bitrix\Tasks\V2\Internal\Repository\ViewRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\CounterService;
+use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\EventService;
 use Bitrix\Tasks\V2\Internal\Service\PushService;
 
@@ -22,7 +22,7 @@ class ViewService
 	public function __construct(
 		private readonly ViewRepositoryInterface $viewRepository,
 		private readonly PushService $pushService,
-		private readonly CounterService $counterService,
+		private readonly Counter\Service $counterService,
 		private readonly TimeLineService $timeLineService,
 		private readonly EventService $eventService,
 	)
@@ -30,13 +30,16 @@ class ViewService
 
 	}
 
-	public function set(View $view, bool $sendPush, bool $updateTopicLastVisit): void
+	public function set(View $view, bool $sendPush = true, bool $updateTopicLastVisit = false): void
 	{
 		$this->counterService->collect($view->taskId);
 
 		$this->viewTask($view);
 
-		$this->sendPush($view, $sendPush);
+		if (!FormV2Feature::isOn())
+		{
+			$this->sendPush($view, $sendPush);
+		}
 
 		$this->updateTopic($view, $updateTopicLastVisit);
 
@@ -46,10 +49,10 @@ class ViewService
 			'isRealView' => $view->isRealView,
 		]);
 
-		$this->counterService->addEvent(EventDictionary::EVENT_AFTER_TASK_VIEW, [
-			'TASK_ID' => $view->taskId,
-			'USER_ID' => $view->userId,
-		]);
+		$this->counterService->send(new Counter\Command\AfterTaskView(
+			taskId: $view->taskId,
+			userId: $view->userId,
+		));
 
 		$this->timeLineService->viewComments($view->taskId, $view->userId);
 	}

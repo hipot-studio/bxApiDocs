@@ -491,9 +491,19 @@ class CheckList extends CompositeTreeItem
 			}
 		}
 
-		foreach ($fields['MEMBERS'] as $userId => $data)
+		foreach ($fields['MEMBERS'] as $data)
 		{
-			$checkListMemberDataController::add(['ITEM_ID' => $id, 'USER_ID' => $userId, 'TYPE' => $data['TYPE']]);
+			$userId = (int)($data['ID'] ?? 0);
+			if ($userId <= 0)
+			{
+				continue;
+			}
+
+			$checkListMemberDataController::add([
+				'ITEM_ID' => $id,
+				'USER_ID' => $userId,
+				'TYPE' => $data['TYPE'],
+			]);
 		}
 
 		if (!empty($fields['ATTACHMENTS']) && ModuleManager::isModuleInstalled('disk'))
@@ -587,23 +597,16 @@ class CheckList extends CompositeTreeItem
 		/** @var DataManager $memberDataController */
 		$memberDataController = $this->checkListMemberDataController;
 
-		foreach ($oldMembers as $userId => $data)
-		{
-			$oldMembers[$userId] = $data['TYPE'];
-		}
+		$oldMembersMap = $this->createUniqueMembersMap($oldMembers);
+		$newMembersMap = $this->createUniqueMembersMap($newMembers);
 
-		foreach ($newMembers as $userId => $data)
-		{
-			$newMembers[$userId] = $data['TYPE'];
-		}
-
-		$toDelete = array_diff_assoc($oldMembers, $newMembers);
-		$toCreate = array_diff_assoc($newMembers, $oldMembers);
+		$toDelete = array_diff_assoc($oldMembersMap, $newMembersMap);
+		$toCreate = array_diff_assoc($newMembersMap, $oldMembersMap);
 		$toChange = array_intersect_key($toCreate, $toDelete);
 
-		foreach (array_keys($toChange) as $userId)
+		foreach (array_keys($toChange) as $compositeKey)
 		{
-			unset($toDelete[$userId], $toCreate[$userId]);
+			unset($toDelete[$compositeKey], $toCreate[$compositeKey]);
 		}
 
 		if (!empty($toDelete) || !empty($toChange))
@@ -614,11 +617,12 @@ class CheckList extends CompositeTreeItem
 			])->fetchAll();
 		}
 
-		foreach ($toDelete as $userId => $type)
+		foreach ($toDelete as $compositeKey => $type)
 		{
+			list($userId, $userType) = explode('|', $compositeKey);
 			foreach ($oldTableMembers as $key => $member)
 			{
-				if ($member['USER_ID'] == $userId && $member['TYPE'] === $type)
+				if ($member['USER_ID'] == $userId && $member['TYPE'] === $userType)
 				{
 					$memberDataController::delete($member['ID']);
 					unset($oldTableMembers[$key]);
@@ -627,23 +631,42 @@ class CheckList extends CompositeTreeItem
 			}
 		}
 
-		foreach ($toCreate as $userId => $type)
+		foreach ($toCreate as $compositeKey => $type)
 		{
-			$memberDataController::addInsertIgnore(['ITEM_ID' => $id, 'USER_ID' => $userId, 'TYPE' => $type]);
+			list($userId, $userType) = explode('|', $compositeKey);
+			$memberDataController::addInsertIgnore([
+				'ITEM_ID' => $id,
+				'USER_ID' => $userId,
+				'TYPE' => $userType
+			]);
 		}
 
-		foreach ($toChange as $userId => $type)
+		foreach ($toChange as $compositeKey => $newType)
 		{
+			list($userId, ) = explode('|', $compositeKey);
+
 			foreach ($oldTableMembers as $key => $member)
 			{
-				if ($member['USER_ID'] == $userId && $member['TYPE'] === $oldMembers[$userId])
+				if ($member['USER_ID'] == $userId)
 				{
-					$memberDataController::update($member['ID'], ['TYPE' => $type]);
+					$memberDataController::update($member['ID'], ['TYPE' => $newType]);
 					unset($oldTableMembers[$key]);
 					break;
 				}
 			}
 		}
+	}
+
+	private function createUniqueMembersMap(array $members): array
+	{
+		$map = [];
+		foreach ($members as $member)
+		{
+			$compositeKey = $member['ID'] . '|' . $member['TYPE'];
+			$map[$compositeKey] = $member['TYPE'];
+		}
+
+		return $map;
 	}
 
 	/**
@@ -653,20 +676,28 @@ class CheckList extends CompositeTreeItem
 	 */
 	private function getChangedMembers($oldField, $newField)
 	{
-		$oldMembers = [];
-		$newMembers = [];
-
-		foreach ($newField as $userId => $data)
+		if (count($oldField) !== count($newField))
 		{
-			$newMembers[$userId] = $data['TYPE'];
+			return true;
 		}
 
-		foreach ($oldField as $userId => $data)
+		$oldMap = [];
+		foreach ($oldField as $item)
 		{
-			$oldMembers[$userId] = $data['TYPE'];
+			$key = $item['ID'] . '|' . $item['TYPE'];
+			$oldMap[$key] = true;
 		}
 
-		return array_diff_assoc($newMembers, $oldMembers) || array_diff_assoc($oldMembers, $newMembers);
+		foreach ($newField as $item)
+		{
+			$key = $item['ID'] . '|' . $item['TYPE'];
+			if (!isset($oldMap[$key]))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

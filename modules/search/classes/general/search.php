@@ -2632,14 +2632,16 @@ class CAllSearch extends CDBResult
 		$DB = CDatabase::GetModuleConnection('search');
 		$index_id = intval($index_id);
 
+		$arToDelete = [];
 		$arToInsert = [];
 		foreach ($arGroups as $group_code)
 		{
 			if ($group_code <> '')
 			{
-				$arToInsert[$group_code] = $group_code;
+				$arToInsert[$group_code] = '(' . $index_id . ", '" . $DB->ForSQL($group_code) . "')";
 			}
 		}
+		ksort($arToInsert);
 
 		//Read database
 		$rs = $DB->Query('
@@ -2655,23 +2657,26 @@ class CAllSearch extends CDBResult
 			}
 			else
 			{
-				$DB->Query('
-					DELETE FROM b_search_content_right
-					WHERE
-					SEARCH_CONTENT_ID = ' . $index_id . "
-					AND GROUP_CODE = '" . $DB->ForSQL($group_code) . "'
-				"); //And this should be deleted
+				$arToDelete[] = "'" . $DB->ForSQL($group_code) . "'";  //And this should be deleted
 			}
 		}
 
-		foreach ($arToInsert as $group_code)
+		if ($arToDelete)
+		{
+			$DB->Query('
+				DELETE FROM b_search_content_right
+				WHERE SEARCH_CONTENT_ID = ' . $index_id . '
+				AND GROUP_CODE IN (' . implode(',', $arToDelete) . ')
+			');
+		}
+
+		if ($arToInsert)
 		{
 			$DB->Query('
 				INSERT INTO b_search_content_right
 				(SEARCH_CONTENT_ID, GROUP_CODE)
-				VALUES
-				(' . $index_id . ", '" . $DB->ForSQL($group_code, 100) . "')
-			", true);
+				VALUES ' . implode(',', $arToInsert)
+			);
 		}
 	}
 

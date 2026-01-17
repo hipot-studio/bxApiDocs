@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Broker;
 
+use Bitrix\Crm\DealRecurTable;
 use Bitrix\Crm\Model\Dynamic\RecurringTable;
 use Bitrix\Crm\Service\Broker;
 use Bitrix\Crm\Service\Container;
@@ -23,12 +24,25 @@ class Recurring extends Broker
 	{
 		$this->check();
 
+		$entityTypeId = $this->factory->getEntityTypeId();
+		$limit = 1;
+
+		if ($entityTypeId === \CCrmOwnerType::Deal)
+		{
+			return DealRecurTable::getList([
+				'filter' => [
+					'=DEAL_ID' => $id,
+				],
+				'limit' => $limit,
+			])->fetchObject();
+		}
+
 		return RecurringTable::getList([
 			'filter' => [
-				'=ENTITY_TYPE_ID' => $this->factory->getEntityTypeId(),
+				'=ENTITY_TYPE_ID' => $entityTypeId,
 				'=ITEM_ID' => $id,
 			],
-			'limit' => 1,
+			'limit' => $limit,
 		])->fetchObject();
 	}
 
@@ -36,12 +50,27 @@ class Recurring extends Broker
 	{
 		$this->check();
 
-		$collection = RecurringTable::getList([
-			'filter' => [
-				'=ENTITY_TYPE_ID' => $this->factory->getEntityTypeId(),
-				'@ITEM_ID' => $ids,
-			],
-		])->fetchCollection();
+		$entityTypeId = $this->factory->getEntityTypeId();
+
+		if ($entityTypeId === \CCrmOwnerType::Deal)
+		{
+			$list = DealRecurTable::getList([
+				'filter' => [
+					'@ITEM_ID' => $ids,
+				],
+			]);
+		}
+		else
+		{
+			$list = RecurringTable::getList([
+				'filter' => [
+					'=ENTITY_TYPE_ID' => $this->factory->getEntityTypeId(),
+					'@ITEM_ID' => $ids,
+				],
+			]);
+		}
+
+		$collection = $list->fetchCollection();
 
 		$items = [];
 		foreach ($collection as $item)
@@ -54,7 +83,7 @@ class Recurring extends Broker
 
 	private function check(): void
 	{
-		if (!$this->factory->isRecurringAvailable())
+		if (!$this->factory->isRecurringSupported())
 		{
 			throw new RuntimeException('Entity type ' . $this->factory->getEntityName() . ' does not support recurring mode');
 		}

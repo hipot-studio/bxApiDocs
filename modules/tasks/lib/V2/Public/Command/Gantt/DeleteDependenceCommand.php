@@ -18,6 +18,7 @@ class DeleteDependenceCommand extends AbstractCommand
 		public readonly int $taskId,
 		#[PositiveNumber]
 		public readonly int $dependentId,
+		public readonly bool $useConsistency = false,
 	)
 	{
 	}
@@ -26,10 +27,7 @@ class DeleteDependenceCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$ganttDependenceService = Container::getInstance()->getGanttDependenceService();
-		$consistencyResolver = Container::getInstance()->getConsistencyResolver();
-
-		$handler = new DeleteDependenceHandler($ganttDependenceService, $consistencyResolver);
+		$handler = Container::getInstance()->get(DeleteDependenceHandler::class);
 
 		try
 		{

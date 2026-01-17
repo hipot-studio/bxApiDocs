@@ -12,9 +12,9 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_MessageAccess_Query query()
- * @method static EO_MessageAccess_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_MessageAccess_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_MessageAccess_Result getById($id)
- * @method static EO_MessageAccess_Result getList(array $parameters = array())
+ * @method static EO_MessageAccess_Result getList(array $parameters = [])
  * @method static EO_MessageAccess_Entity getEntity()
  * @method static \Bitrix\Mail\Internals\EO_MessageAccess createObject($setDefaultValues = true)
  * @method static \Bitrix\Mail\Internals\EO_MessageAccess_Collection createCollection()

@@ -3,6 +3,8 @@
 namespace Bitrix\Security;
 
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
 
 /**
  * Class RedirectRuleTable
@@ -20,7 +22,7 @@ use Bitrix\Main\ORM\Query\Query;
  * @method static \Bitrix\Security\RedirectRule wakeUpObject($row)
  * @method static \Bitrix\Security\RedirectRules wakeUpCollection($rows)
  */
-class RedirectRuleTable extends \Bitrix\Main\Entity\DataManager
+class RedirectRuleTable extends DataManager
 {
 	public static function getTableName()
 	{
@@ -30,15 +32,15 @@ class RedirectRuleTable extends \Bitrix\Main\Entity\DataManager
 	public static function getMap()
 	{
 		return [
-			(new \Bitrix\Main\Entity\EnumField('IS_SYSTEM'))
+			(new Fields\EnumField('IS_SYSTEM'))
 				->configureValues(['Y', 'N'])
 				->configureDefaultValue('Y'),
-			(new \Bitrix\Main\Entity\IntegerField('SORT'))
+			(new Fields\IntegerField('SORT'))
 				->configureDefaultValue(500),
-			(new \Bitrix\Main\Entity\StringField('URL'))
+			(new Fields\StringField('URL'))
 				->configurePrimary()
 				->configureSize(250),
-			(new \Bitrix\Main\Entity\StringField('PARAMETER_NAME'))
+			(new Fields\StringField('PARAMETER_NAME'))
 				->configurePrimary()
 				->configureSize(250)
 		];

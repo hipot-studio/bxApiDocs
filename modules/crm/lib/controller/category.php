@@ -3,9 +3,12 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\Category\Entity;
+use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Funnel;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -291,5 +294,53 @@ class Category extends Base
 		$defaultCategory->setIsDefault(false);
 
 		return $defaultCategory->save();
+	}
+
+	protected function processAfterAction(Action $action, $result): void
+	{
+		parent::processAfterAction($action, $result);
+
+		$this->sendRestAnalyticsEvent($action);
+	}
+
+	protected function sendRestAnalyticsEvent(Action $action): void
+	{
+		if (!($this->getScope() === self::SCOPE_REST))
+		{
+			return;
+		}
+
+		$section = Dictionary::SECTION_REST;
+		$status = empty($action->getErrors()) ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR;
+
+		switch ($action->getName())
+		{
+			case 'add':
+				(new Funnel\CreateEvent(section: $section))
+					->setStatus($status)
+					->buildEvent()
+					->send()
+				;
+
+				break;
+			case 'update':
+				(new Funnel\RenameEvent(section: $section))
+					->setStatus($status)
+					->buildEvent()
+					->send()
+				;
+
+				break;
+			case 'delete':
+				(new Funnel\DeleteEvent(section: $section))
+					->setStatus($status)
+					->buildEvent()
+					->send()
+				;
+
+				break;
+			default:
+				return;
+		}
 	}
 }

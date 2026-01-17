@@ -14,6 +14,7 @@ use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 use Bitrix\Booking\Internals\Model\ResourceLinkedEntityData\CalendarData;
 use Bitrix\Booking\Internals\Repository\ORM\BookingExternalDataRepository;
+use Bitrix\Booking\Service\BookingFeature;
 
 class EventForBookingService
 {
@@ -29,6 +30,11 @@ class EventForBookingService
 
 	public function onBookingCreated(Booking $booking): void
 	{
+		if (!$this->isFeatureEnabled())
+		{
+			return;
+		}
+
 		if ($this->getLinkedEvent($booking))
 		{
 			return;
@@ -62,6 +68,11 @@ class EventForBookingService
 
 	public function onBookingUpdated(Booking $prevBooking, Booking $currentBooking): void
 	{
+		if (!$this->isFeatureEnabled())
+		{
+			return;
+		}
+		
 		$linkedEvent = $this->getLinkedEvent($prevBooking);
 		if (!$linkedEvent)
 		{
@@ -106,6 +117,11 @@ class EventForBookingService
 
 	public function onBookingDeleted(Booking $booking): void
 	{
+		if (!$this->isFeatureEnabled())
+		{
+			return;
+		}
+
 		$linkedEvent = $this->getLinkedEvent($booking);
 		if (!$linkedEvent)
 		{
@@ -118,6 +134,11 @@ class EventForBookingService
 
 	public function onResourceIntegrationUpdated(Booking $booking): void
 	{
+		if (!$this->isFeatureEnabled())
+		{
+			return;
+		}
+
 		$linkedEvent = $this->getLinkedEvent($booking);
 		if (!$linkedEvent)
 		{
@@ -156,6 +177,11 @@ class EventForBookingService
 			locationId: $calendarIntegrationConfig->getLocationId(),
 			reminders: $calendarIntegrationConfig->getReminders(),
 		);
+	}
+
+	private function isFeatureEnabled(): bool
+	{
+		return BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_CALENDAR_INTEGRATION);
 	}
 
 	private function getLinkedEvent(Booking $booking): ExternalDataItem|null

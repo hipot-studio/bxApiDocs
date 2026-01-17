@@ -286,7 +286,7 @@ class ItemAttributes
 	 *
 	 * @return $this
 	 */
-	public function setAttribute($name, $value = null)
+	public function setAttribute($name, $value = '')
 	{
 		$this->attributes[$name] = $value;
 

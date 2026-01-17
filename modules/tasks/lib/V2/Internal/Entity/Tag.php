@@ -13,7 +13,7 @@ class Tag extends AbstractEntity
 
 	public function __construct(
 		public readonly ?int $id = null,
-		#[NotEmpty]
+		#[NotEmpty(allowZero: true)]
 		public readonly ?string $name = null,
 		public readonly ?User $owner = null,
 		public readonly ?Group $group = null,

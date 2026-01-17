@@ -19,6 +19,22 @@ class ElapsedTimeRepository implements ElapsedTimeRepositoryInterface
 
 	}
 
+	public function getById(int $id): ?Entity\Task\ElapsedTime
+	{
+		$elapsedTime = ElapsedTimeTable::query()
+			->setSelect(['*'])
+			->where('ID', $id)
+			->fetch()
+		;
+
+		if (empty($elapsedTime))
+		{
+			return null;
+		}
+
+		return $this->elapsedTimeMapper->mapToEntity($elapsedTime);
+	}
+
 	public function save(Entity\Task\ElapsedTime $elapsedTime): int
 	{
 		if ($elapsedTime->getId())
@@ -52,6 +68,11 @@ class ElapsedTimeRepository implements ElapsedTimeRepositoryInterface
 		}
 
 		return (int)$data['SUM'];
+	}
+
+	public function getCount(int $taskId): int
+	{
+		return ElapsedTimeTable::getCount(['TASK_ID' => $taskId]);
 	}
 
 	private function add(Entity\Task\ElapsedTime $elapsedTime): int

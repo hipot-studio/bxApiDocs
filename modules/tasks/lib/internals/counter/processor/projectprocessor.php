@@ -24,6 +24,7 @@ use Bitrix\Tasks\Internals\Counter\Exception\UnknownCounterException;
 use Bitrix\Tasks\Internals\Counter\Provider\GroupProvider;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class ProjectProcessor
 {
@@ -154,7 +155,7 @@ class ProjectProcessor
 			$groupIds = $allowedGroupIds;
 		}
 
-		return (new ProjectCollector())->recount($counter, [$userId], $taskIds, $groupIds);
+		return Container::getInstance()->getCounterProjectCollector()->recount($counter, [$userId], $taskIds, $groupIds);
 	}
 
 	/**
@@ -172,7 +173,7 @@ class ProjectProcessor
 		}
 
 		$counters = [];
-		$collector = new ProjectCollector();
+		$collector = Container::getInstance()->getCounterProjectCollector();
 
 		$groupUsers = GroupProvider::getInstance()->getGroupUsers($groupIds);
 		foreach ($groupUsers as $groupId => $userIds)
@@ -197,7 +198,7 @@ class ProjectProcessor
 	private function recountForProjects(string $counter, array $groupIds): array
 	{
 		$counters = [];
-		$collector = new ProjectCollector();
+		$collector = Container::getInstance()->getCounterProjectCollector();
 
 		$groupUsers = GroupProvider::getInstance()->getGroupUsers($groupIds);
 		foreach ($groupUsers as $groupId => $userIds)

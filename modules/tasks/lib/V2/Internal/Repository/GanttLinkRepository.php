@@ -7,13 +7,16 @@ namespace Bitrix\Tasks\V2\Internal\Repository;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLink;
+use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLinkCollection;
 use Bitrix\Tasks\V2\Internal\Exception\Task\TreeLinkException;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Task\Gantt\GanttLinkMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Task\Gantt\LinkTypeMapper;
 use Exception;
 
 class GanttLinkRepository implements GanttLinkRepositoryInterface
 {
 	public function __construct(
+		private readonly GanttLinkMapper $ganttLinkMapper,
 		private readonly LinkTypeMapper $linkTypeMapper
 	)
 	{
@@ -23,7 +26,7 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 	public function getLinkTypes(int $taskId, array $dependentIds): array
 	{
 		$rows = ProjectDependenceTable::query()
-			->setSelect(['TASK_ID', 'TYPE'])
+			->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE'])
 			->where('TASK_ID', $taskId)
 			->whereIn('DEPENDS_ON_ID', $dependentIds)
 			->fetchAll();
@@ -36,10 +39,26 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 		$result = [];
 		foreach ($rows as $row)
 		{
-			$result[(int)$row['TASK_ID']] = $this->linkTypeMapper->mapToEnum((int)$row['TYPE']);
+			$result[(int)$row['DEPENDS_ON_ID']][(int)$row['TASK_ID']] = $this->linkTypeMapper->mapToEnum((int)$row['TYPE']);
 		}
 
 		return $result;
+	}
+
+	public function getTaskLinks(int $taskId): GanttLinkCollection
+	{
+		$rows = ProjectDependenceTable::query()
+			->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE', 'CREATOR_ID'])
+			->where('TASK_ID', $taskId)
+			->exec()
+			->fetchAll();
+
+		if (empty($rows))
+		{
+			return new GanttLinkCollection();
+		}
+
+		return $this->ganttLinkMapper->mapToCollection($rows);
 	}
 
 	public function update(GanttLink $ganttLink): void

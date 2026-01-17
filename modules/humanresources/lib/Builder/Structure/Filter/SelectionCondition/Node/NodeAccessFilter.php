@@ -28,16 +28,18 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 	private StructureAccessService $structureAccessService;
 	private NodeEntityTypeCollection $nodeEntityTypes;
 
+	private const DEFAULT_ALLOWED_LEVELS = [
+		PermissionVariablesDictionary::VARIABLE_ALL,
+		PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+		PermissionVariablesDictionary::VARIABLE_SELF_TEAMS,
+		PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
+		PermissionVariablesDictionary::VARIABLE_SELF_TEAMS_SUB_TEAMS,
+	];
+
 	public function __construct(
-		readonly public StructureAction $action,
+		public readonly StructureAction $action,
 		public ?int $userId = null,
-		public array $allowedLevels = [
-			PermissionVariablesDictionary::VARIABLE_ALL,
-			PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
-			PermissionVariablesDictionary::VARIABLE_SELF_TEAMS,
-			PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
-			PermissionVariablesDictionary::VARIABLE_SELF_TEAMS_SUB_TEAMS,
-		],
+		public ?array $allowedLevels = self::DEFAULT_ALLOWED_LEVELS,
 	)
 	{
 		$this->structureAccessService = new StructureAccessService();
@@ -47,6 +49,11 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 			$this->structureAccessService->setUserId($this->userId);
 		}
 		$this->nodeEntityTypes = new NodeEntityTypeCollection();
+
+		if (is_null($this->allowedLevels))
+		{
+			$this->allowedLevels = self::DEFAULT_ALLOWED_LEVELS;
+		}
 	}
 
 	/**
@@ -157,20 +164,40 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 	{
 		$departmentCondition = new ConditionTree();
 		$isEmployee = Container::instance()->getUserService()->isEmployee($this->structureAccessService->getUserId());
-		$permissionValue = $this->structureAccessService->getPermissionValue()->getFirst()->value;
+		$userPermissionValue = $this->structureAccessService->getPermissionValue()->getFirst()->value;
 
-		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_ALL)
+		$effectivePermission = $userPermissionValue;
+		if (!empty($this->allowedLevels))
+		{
+			$departmentPermissionVariableIds = PermissionVariablesDictionary::getVariableIds();
+
+			$departmentAllowedLevels = array_intersect($this->allowedLevels, $departmentPermissionVariableIds);
+
+			if (!empty($departmentAllowedLevels))
+			{
+				$allowedMaxLevel = max($departmentAllowedLevels);
+				$effectivePermission = min($userPermissionValue, $allowedMaxLevel);
+			}
+		}
+
+		if ($effectivePermission === PermissionVariablesDictionary::VARIABLE_ALL)
 		{
 			return $departmentCondition->where($this->getFieldByQueryContext('TYPE'), NodeEntityType::DEPARTMENT->value);
 		}
 
-		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_NONE
+		if (
+			$effectivePermission === PermissionVariablesDictionary::VARIABLE_NONE
 			|| !$isEmployee
-			|| !in_array($permissionValue,
-				array_intersect([
-					PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
-					PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
-				], $this->allowedLevels), true
+			|| !in_array(
+				$effectivePermission,
+				array_intersect(
+					[
+						PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS,
+						PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS,
+					],
+					$this->allowedLevels,
+				),
+				true,
 			)
 		)
 		{
@@ -188,12 +215,12 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 			->where($this->getFieldByQueryContext('TYPE'), NodeEntityType::DEPARTMENT->value)
 		;
 
-		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS)
+		if ($effectivePermission === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS)
 		{
 			$departmentCondition->whereIn($this->getFieldByQueryContext('CHILD_NODES.PARENT_ID'), $userNodeIds);
 		}
 
-		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS)
+		if ($effectivePermission === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS)
 		{
 			$departmentCondition->whereIn($this->getFieldByQueryContext('ID'), $userNodeIds);
 		}

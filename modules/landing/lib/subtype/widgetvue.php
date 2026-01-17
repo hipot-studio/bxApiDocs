@@ -235,24 +235,14 @@ class WidgetVue
 
 	private static function getLangPhrases(array $params): array
 	{
-		$phrases = '{}';
-
 		$lang = Loc::getCurrentLang();
 		$defaultLang = 'en';
 
-		if (is_array($params['lang']))
-		{
-			if (
-				isset($params['lang'][$lang])
-				|| isset($params['lang'][$defaultLang])
-			)
-			{
-				$lang = isset($params['lang'][$lang]) ? $lang : $defaultLang;
-				$phrases = $params['lang'][$lang];
-			}
-		}
+		$phrases = $params['lang'][$lang]
+			?? $params['lang'][$defaultLang]
+			?? [];
 
-		return $phrases;
+		return is_array($phrases) ? $phrases : [];
 	}
 
 	private static function getLoaderString(Block $block): string

@@ -6,6 +6,7 @@ use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Background\BackgroundId;
 use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
+use Bitrix\Im\V2\Entity\User\UserBot;
 use Bitrix\Im\V2\Message;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -444,7 +445,7 @@ class Bot
 				$connection->query("UPDATE b_user SET PERSONAL_PHOTO = null WHERE ID = ".(int)$botId);
 			}
 
-			if ($previousBotAvatar > 0)
+			if ($previousBotAvatar > 0 && $previousBotAvatar !== $botAvatar)
 			{
 				\CFile::Delete($previousBotAvatar);
 			}
@@ -628,6 +629,58 @@ class Bot
 			],
 			'extra' => \Bitrix\Im\Common::getPullExtra()
 		]);
+	}
+
+	public static function onExternalMention(int $messageId, array $messageFields): bool
+	{
+		$messageFields = self::addAdditionalParams($messageFields);
+		$messageFields['DIALOG_ID'] = self::getDialogId($messageFields);
+		$messageFields = self::removeFieldsToEvent($messageFields);
+		$messageFields['MESSAGE_ORIGINAL'] = $messageFields['MESSAGE'] ?? '';
+		$messageFieldsForEvents = $messageFields;
+		$bots = [];
+
+		foreach ($messageFields['EXTERNAL_MENTIONED_BOTS'] as $botId)
+		{
+			/** @var UserBot $bot */
+			$bot = UserBot::getInstance($botId);
+			if (!$bot->isExist())
+			{
+				continue;
+			}
+
+			$botData = $bot->getBotData()->getBotData();
+			if (empty($botData))
+			{
+				continue;
+			}
+
+			$bots[$botId] = $botData;
+
+			if (!$botData['MODULE_ID'] || !\Bitrix\Main\Loader::includeModule($botData['MODULE_ID']))
+			{
+				continue;
+			}
+
+			$messageFields['BOT_ID'] = $botData['BOT_ID'];
+
+			if ($botData["METHOD_EXTERNAL_MENTION"] && class_exists($botData["CLASS"]) && method_exists($botData["CLASS"], $botData["METHOD_EXTERNAL_MENTION"]))
+			{
+				call_user_func_array(array($botData["CLASS"], $botData["METHOD_EXTERNAL_MENTION"]), Array($messageId, $messageFields));
+			}
+			else if (class_exists($botData["CLASS"]) && method_exists($botData["CLASS"], "onExternalMention"))
+			{
+				call_user_func_array(array($botData["CLASS"], "onExternalMention"), Array($messageId, $messageFields));
+			}
+		}
+
+		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotExternalMention") as $event)
+		{
+			$eventParams = [$bots, $messageId, $messageFieldsForEvents];
+			\ExecuteModuleEventEx($event, $eventParams);
+		}
+
+		return true;
 	}
 
 	public static function onMessageAdd($messageId, $messageFields)

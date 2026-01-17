@@ -27,5 +27,10 @@ final class Dictionary
 	public const DETAILS_SUB_SECTION = Analytics\Dictionary::SUB_SECTION_DETAILS;
 	public const NOTIFICATION_POPUP_SUB_SECTION = 'notification_popup';
 	public const COMPLETE_BUTTON_ELEMENT = 'complete_button';
+	public const EDIT_BUTTON_ELEMENT = 'edit_button';
 	public const CHECKBOX_ELEMENT = 'checkbox';
+
+	public const PARAM_DESCRIPTION = 'description';
+	public const PARAM_PING_CUSTOM = 'ping_custom';
+	public const PARAM_CALENDAR_CUSTOM = 'calendarCustom';
 }

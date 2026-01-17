@@ -12,6 +12,13 @@ use Bitrix\Tasks\V2\Internal\Entity\User;
 
 class RelationTaskMapper
 {
+	public function __construct(
+		private readonly TaskStatusMapper $taskStatusMapper,
+	)
+	{
+
+	}
+
 	public function mapToEntity(
 		array $task,
 		?User $responsible = null,
@@ -25,6 +32,7 @@ class RelationTaskMapper
 			title: $task['TITLE'] ?? '',
 			responsible: $responsible,
 			deadlineTs: ($task['DEADLINE'] ?? null) instanceof DateTime ? $task['DEADLINE']->getTimestamp() : null,
+			status: $this->taskStatusMapper->mapToEnum((int)($task['STATUS'] ?? 0)),
 			rights: $rights,
 		);
 	}

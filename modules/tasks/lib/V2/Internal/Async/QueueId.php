@@ -15,4 +15,9 @@ enum QueueId: string
 	case RecountSort = 'recount_task_sort';
 
 	case AddFlowStages = 'add_flow_stages';
+	case EventDispatcher = 'event_dispatcher';
+	case ReadSystemMessage = 'read_system_message';
+
+	case MigrateRecentTasks = 'migrate_recent_tasks';
+	case ReadAllMessages = 'read_all_messages';
 }

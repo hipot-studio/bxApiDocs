@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Command\CheckList;
 
 use Bitrix\Main\Error;
+use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
@@ -15,8 +16,11 @@ class SaveCheckListCommand extends AbstractCommand
 {
 	public function __construct(
 		public readonly Entity\Task $task,
-		public readonly int         $updatedBy,
+		#[PositiveNumber]
+		public readonly int $updatedBy,
 		public readonly ?Entity\Task $taskBeforeUpdate = null,
+		public readonly bool $useConsistency = false,
+		public readonly bool $skipNotification = false,
 	)
 	{
 
@@ -26,13 +30,7 @@ class SaveCheckListCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$handler = new SaveCheckListCommandHandler(
-			checkListService: Container::getInstance()->getCheckListService(),
-			consistencyResolver: Container::getInstance()->getConsistencyResolver(),
-			egressController: Container::getInstance()->getEgressController(),
-			taskRepository: Container::getInstance()->getTaskRepository(),
-			checkListProvider: Container::getInstance()->getCheckListProvider(),
-		);
+		$handler = Container::getInstance()->get(SaveCheckListCommandHandler::class);
 
 		try
 		{

@@ -9,6 +9,7 @@ use Bitrix\Intranet\Internal\Entity\User\Field\Field;
 use Bitrix\Intranet\Internal\Entity\User\Field\MultipleField;
 use Bitrix\Intranet\Internal\Entity\User\Field\SingleField;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Type\Contract\Arrayable;
 
 class UserFieldFactory
 {
@@ -18,9 +19,9 @@ class UserFieldFactory
 	{
 	}
 
-	public static function createByDefault(): UserFieldFactory
+	public static function createByDefault(): self
 	{
-		return new UserFieldFactory(
+		return new self(
 			new UserFieldTypeMapper(),
 		);
 	}
@@ -54,6 +55,7 @@ class UserFieldFactory
 					'title' => $fieldInfo['title'],
 					'editable' => $fieldInfo['editable'] ?? false,
 					'showAlways' => $fieldInfo['showAlways'] ?? false,
+					'isVisible' => (($fieldInfo['showAlways'] ?? false) || ($fieldInfo['isVisible'] ?? false)),
 					'data' => $fieldInfo['data'] ?? [],
 					'multiple' => $isMultiple,
 				],
@@ -61,28 +63,19 @@ class UserFieldFactory
 			);
 		}
 
-		$singleField = $this->createSingleFieldByArray($fieldInfo, $value);
-
-		if (isset($fieldInfo['multiple']) && $fieldInfo['multiple'])
-		{
-			return new MultipleField($singleField);
-		}
-
-		return $singleField;
-	}
-
-	/**
-	 * @throws ArgumentException
-	 * @throws UserFieldTypeException
-	 */
-	protected function createSingleFieldByArray(array $fieldInfo, mixed $value): SingleField
-	{
 		$fieldClassName = $this->typeMapper->getClassByFieldInfo($fieldInfo);
 
 		if (!isset($fieldClassName))
 		{
 			$type = $fieldInfo['type'];
 			throw new UserFieldTypeException("Wrong user field type: $type");
+		}
+
+		if (isset($fieldInfo['multiple']) && $fieldInfo['multiple'])
+		{
+			return new MultipleField(
+				$fieldClassName::createByData($fieldInfo, $value)
+			);
 		}
 
 		return $fieldClassName::createByData($fieldInfo, $value);

@@ -21,7 +21,9 @@ interface Field extends EntityInterface, Arrayable
 
 	public function isShowAlways(): bool;
 
-	public function isValid(mixed $value = null): bool;
+	public function isVisible(): bool;
+
+	public function isValid(mixed $value): bool;
 
 	public function isMultiple(): bool;
 }

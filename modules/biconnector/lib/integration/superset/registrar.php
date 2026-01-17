@@ -29,10 +29,10 @@ final class Registrar
 		return self::$instance;
 	}
 
-	public function clear(): void
+	public function clear(string $reason = ''): void
 	{
 		$this->setRegisterStage(0);
-		$this->config->clearConfig();
+		$this->config->clearConfig($reason);
 	}
 
 	public function isComplete(): bool
@@ -105,7 +105,7 @@ final class Registrar
 		else
 		{
 			$this->setRegisterStage(0);
-			$this->config->clearConfig();
+			$this->config->clearConfig(__CLASS__ . '::' . __FUNCTION__);
 		}
 
 		return $result;

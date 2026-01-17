@@ -29,12 +29,10 @@ class AddTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
+		$handler = Container::getInstance()->get(AddTaskHandler::class);
+
 		try
 		{
-			$addTaskService = Container::getInstance()->getAddTaskService();
-
-			$handler = new AddTaskHandler($addTaskService);
-
 			$task = $handler($this);
 
 			return $result->setObject($task);

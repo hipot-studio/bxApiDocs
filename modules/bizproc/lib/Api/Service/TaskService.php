@@ -348,6 +348,7 @@ class TaskService
 		}
 
 		$task['saveVariables'] = $task['PARAMETERS']['SaveVariables'] ?? false;
+		$task['commentRequired'] = $task['PARAMETERS']['CommentRequired'] ?? 'N';
 		$controls = \CBPDocument::getTaskControls($task, $request->userId);
 
 		$task['BUTTONS'] = $controls['BUTTONS'] ?? null;

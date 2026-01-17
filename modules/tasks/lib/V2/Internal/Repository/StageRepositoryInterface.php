@@ -8,7 +8,9 @@ use Bitrix\Tasks\V2\Internal\Entity;
 
 interface StageRepositoryInterface
 {
-	public function getByGroupId(int $groupId): ?Entity\StageCollection;
+	public function getByGroupId(int $groupId): Entity\StageCollection;
 
 	public function getById(int $id): ?Entity\Stage;
+
+	public function getFirstIdByGroupId(int $groupId): ?int;
 }

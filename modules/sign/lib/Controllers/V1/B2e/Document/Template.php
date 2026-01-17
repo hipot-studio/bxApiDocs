@@ -182,7 +182,7 @@ class Template extends Controller
 			$companyEntityIds = $companies->getIds();
 			if (!in_array($companyEntityId, $companyEntityIds, true))
 			{
-				$result = (new Operation\Document\Template\CompleteOnboardingTemplateFilling($template))->launch();
+				$result = (new Operation\Document\Template\CompleteOnboardingTemplateFilling($template, $createdById))->launch();
 				if (!$result->isSuccess())
 				{
 					$this->addErrors($result->getErrors());
@@ -634,6 +634,13 @@ class Template extends Controller
 			];
 		}
 
+		if ($result->getErrorCollection()->getErrorByCode('COMPANY_DOESNT_EXIST'))
+		{
+			$this->addErrorByMessage(Main\Localization\Loc::getMessage('SIGN_CONTROLLERS_V1_B2E_DOCUMENT_TEMPLATE_ERROR_COMPANY_DOESNT_EXIST'));
+
+			return [];
+		}
+
 		$this->addErrorsFromResult($result);
 
 		return [];
@@ -706,7 +713,15 @@ class Template extends Controller
 
 	public function installOnboardingTemplateAction(): array
 	{
-		$result = (new GetOrInstallOnboardingTemplate())->launch();
+		$createdById = (int)CurrentUser::get()->getId();
+		if ($createdById < 1)
+		{
+			$this->addErrorByMessage('User not found');
+
+			return [];
+		}
+
+		$result = (new GetOrInstallOnboardingTemplate($createdById))->launch();
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());

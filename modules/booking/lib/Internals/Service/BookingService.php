@@ -12,6 +12,7 @@ use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Internals\Service\Overbooking\IntersectionResult;
 use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
 use Bitrix\Booking\Provider\BookingProvider;
+use Bitrix\Booking\Service\BookingFeature;
 
 class BookingService
 {
@@ -19,8 +20,11 @@ class BookingService
 		private readonly BookingRepositoryInterface $bookingRepository,
 		private readonly ResourceService $resourceService,
 		private readonly ClientService $clientService,
+		private readonly BookingSkuService $skuService,
 		private readonly ExternalDataService $externalDataService,
 		private readonly OverlapPolicy $overbookingOverlapPolicy,
+		private readonly DealForBookingService $dealForBookingService,
+		private readonly BookingAutoConfirmService $bookingAutoConfirmService = new BookingAutoConfirmService(),
 	)
 	{
 	}
@@ -51,6 +55,17 @@ class BookingService
 			EntityType::Booking,
 		);
 
+		$bookingEntity->setSkuCollection($newBooking->getSkuCollection());
+		$this->skuService->handleSkuRelations($bookingEntity, new Entity\Booking\BookingSkuCollection());
+
+		try
+		{
+			$this->dealForBookingService->createAndLinkDeal($bookingEntity, $userId);
+			(new BookingProvider())->withExternalData(new Entity\Booking\BookingCollection($bookingEntity));
+		}
+		catch (\Throwable $e)
+		{}
+
 		return $bookingEntity;
 	}
 
@@ -60,6 +75,7 @@ class BookingService
 		array $datePeriod,
 		int $createdBy,
 		string|null $name = null,
+		Entity\Booking\BookingSource|null $source = null,
 	): Entity\Booking\Booking
 	{
 		$booking = new Entity\Booking\Booking();
@@ -78,6 +94,10 @@ class BookingService
 			->setDatePeriodFromArray($datePeriod)
 			->setNote($waitListItem->getNote())
 		;
+		if ($source)
+		{
+			$booking->setSource($source);
+		}
 
 		return $booking;
 	}
@@ -96,15 +116,12 @@ class BookingService
 			throw new Exception('Date period is not specified');
 		}
 
-		if ($booking->isAutoConfirmed())
+		if ($this->bookingAutoConfirmService->shouldAutoConfirm($booking))
 		{
 			$booking->setConfirmed(true);
 		}
 	}
 
-	/**
-	 * @throws Exception
-	 */
 	public function checkBookingBeforeUpdating(
 		Entity\Booking\Booking $bookingBefore,
 		Entity\Booking\Booking $bookingAfter,
@@ -112,6 +129,34 @@ class BookingService
 	{
 		$this->ensureNewResourcesAreNotDeleted($bookingBefore, $bookingAfter);
 		$this->ensureDateChangeIsValidForDeletedResources($bookingBefore, $bookingAfter);
+	}
+
+	public function checkIntersection(Entity\Booking\Booking $booking, bool $allowOverbooking): IntersectionResult
+	{
+		if ($allowOverbooking)
+		{
+			$intersectionResult = $this->overbookingOverlapPolicy->getIntersectionsList(
+				$booking,
+				$this->bookingRepository->getIntersectionsList($booking)
+			);
+		}
+		else
+		{
+			$intersectingBookings = $this->bookingRepository->getIntersectionsList($booking);
+
+			$intersectionResult = (new IntersectionResult($intersectingBookings))
+				->setIsSuccess($intersectingBookings->isEmpty());
+		}
+
+		if (
+			!$intersectionResult->getBookingCollection()->isEmpty()
+			&& !BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_OVERBOOKING)
+		)
+		{
+			$intersectionResult->setIsSuccess(false);
+		}
+
+		return $intersectionResult;
 	}
 
 	/**
@@ -157,33 +202,5 @@ class BookingService
 		{
 			throw new Exception('There is a deleted resource at the time of booking completed');
 		}
-	}
-
-	public function checkIntersection(Entity\Booking\Booking $booking, bool $allowOverbooking): IntersectionResult
-	{
-		if ($allowOverbooking)
-		{
-			$intersectionResult = $this->overbookingOverlapPolicy->getIntersectionsList(
-				$booking,
-				$this->bookingRepository->getIntersectionsList($booking)
-			);
-		}
-		else
-		{
-			$intersectingBookings = $this->bookingRepository->getIntersectionsList($booking);
-			$intersectionResult = (new IntersectionResult($intersectingBookings))
-				->setIsSuccess($intersectingBookings->isEmpty());
-		}
-
-		if (!$intersectionResult->isSuccess())
-		{
-			throw new Exception(
-				'Some resources are unavailable for the requested time range: '
-				. implode(',', $intersectionResult->getBookingCollection()->getEntityIds()),
-				Exception::CODE_BOOKING_INTERSECTION
-			);
-		}
-
-		return $intersectionResult;
 	}
 }

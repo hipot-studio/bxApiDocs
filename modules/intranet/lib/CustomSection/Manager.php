@@ -149,9 +149,14 @@ class Manager
 	{
 		foreach ($this->repo->getCustomSections() as $customSection)
 		{
-			if ($this->isCustomSectionAvailable($customSection))
+			if ($customSection && $this->isCustomSectionAvailable($customSection))
 			{
 				$customSectionDescription = $this->compileLeftMenuSectionDescription($customSection);
+				if (empty($customSectionDescription))
+				{
+					continue;
+				}
+
 				$customSectionPages = $this->compileLeftMenuSectionPages($customSection);
 
 				$superLeftMenuSections[] = $customSectionDescription;
@@ -242,6 +247,11 @@ class Manager
 			?? $this->getLastOpenedPage($customSection->getCode(), $availablePages)
 			?? $this->getPageWithMinSort($availablePages)
 		;
+
+		if ($page === null)
+		{
+			return [];
+		}
 
 		return [
 			$customSection->getTitle(),
@@ -422,7 +432,7 @@ class Manager
 	 *
 	 * @return CustomSectionPage
 	 */
-	protected function getPageWithMinSort(array $pages): CustomSectionPage
+	protected function getPageWithMinSort(array $pages): ?CustomSectionPage
 	{
 		$pageWithMinSort = reset($pages);
 
@@ -434,7 +444,7 @@ class Manager
 			}
 		}
 
-		return $pageWithMinSort;
+		return $pageWithMinSort ?: null;
 	}
 
 	/**

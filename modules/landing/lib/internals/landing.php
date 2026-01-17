@@ -81,7 +81,7 @@ class LandingTable extends Entity\DataManager
 				'default_value' => 'Y'
 			)),
 			'DELETED' => new Entity\StringField('DELETED', array(
-				'title' => Loc::getMessage('LANDING_TABLE_FIELD_SITE_DELETED'),
+				'title' => Loc::getMessage('LANDING_TABLE_FIELD_LANDING_DELETED'),
 				'default_value' => 'N'
 			)),
 			'PUBLIC' => new Entity\StringField('PUBLIC', array(

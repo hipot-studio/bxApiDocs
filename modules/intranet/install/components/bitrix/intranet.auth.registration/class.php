@@ -35,7 +35,11 @@ class AuthRegistrationComponent extends \CBitrixComponent
 			if (CurrentUser::get()->isAuthorized())
 			{
 				$user = (new UserRepository())->getUserById(CurrentUser::get()->getId());
-				$invitationLinkFacade->processAuthUser($user);
+
+				if ($user)
+				{
+					$invitationLinkFacade->processAuthUser($user);
+				}
 
 				LocalRedirect('/');
 			}

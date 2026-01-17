@@ -6,6 +6,10 @@ namespace Bitrix\Booking\Entity\WaitListItem;
 
 use Bitrix\Booking\Entity\BaseEntityCollection;
 
+/**
+ * @method WaitListItem|null getFirstCollectionItem()
+ * @method \ArrayIterator<WaitListItem> getIterator()
+ */
 class WaitListItemCollection extends BaseEntityCollection
 {
 	public function __construct(WaitListItem ...$waitListItems)

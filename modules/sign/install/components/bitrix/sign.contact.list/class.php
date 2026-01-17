@@ -12,14 +12,13 @@ Loc::loadMessages(__FILE__);
 
 class SignContactListComponent extends SignBaseComponent
 {
-	private function prepareResult()
-	{
-		$this->arResult['MENU_ITEMS'] = $this->arParams['MENU_ITEMS'] ?? [];
-	}
-
-	public function executeComponent(): void
+	protected function exec(): void
 	{
 		$this->prepareResult();
-		$this->includeComponentTemplate();
+	}
+
+	private function prepareResult(): void
+	{
+		$this->arResult['MENU_ITEMS'] = $this->arParams['MENU_ITEMS'] ?? [];
 	}
 }

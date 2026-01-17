@@ -1,21 +1,19 @@
 <?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
 	die();
+}
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ObjectNotFoundException;
-
 use Bitrix\ImConnector\Output;
 use Bitrix\ImConnector\Status;
 use Bitrix\ImConnector\Library;
 use Bitrix\ImConnector\Connector;
-
-use Bitrix\Catalog\v2\IoC\ServiceContainer;
-use Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade;
 
 
 class ImConnectorFacebook extends CBitrixComponent
@@ -76,7 +74,6 @@ class ImConnectorFacebook extends CBitrixComponent
 		$this->arResult['IFRAME'] = $this->request->get('IFRAME') === 'Y';
 		$this->arResult['MENU_TAB'] = (htmlspecialcharsbx($this->request->get('MENU_TAB')) ?: 'connector');
 		$this->arResult['CONFIG_MENU'] = $this->getPagesMenu();
-		$this->arResult['CATALOG_AUTH'] = $this->getCatalogAuth();
 	}
 
 	/**
@@ -103,32 +100,6 @@ class ImConnectorFacebook extends CBitrixComponent
 		{
 			$this->status->setError(false);
 			$this->arResult['ERROR_STATUS'] = false;
-		}
-	}
-
-	private function saveCatalogPermissionData(array $formData): void
-	{
-		if (!isset($formData['PERMISSIONS']['CATALOG']))
-		{
-			$formData['PERMISSIONS']['CATALOG'] = 'N';
-		}
-
-		$currentStatusData = $this->status->getData();
-		if (
-			!is_array($currentStatusData)
-			|| !isset($currentStatusData['CATALOG'])
-			|| ($currentStatusData['CATALOG'] !== $formData['PERMISSIONS']['CATALOG']))
-		{
-			$dataToSave = [
-				'CATALOG' => $formData['PERMISSIONS']['CATALOG'],
-			];
-
-			if (is_array($currentStatusData))
-			{
-				$dataToSave = array_merge($currentStatusData, $dataToSave);
-			}
-			$this->status->setData($dataToSave);
-			$this->arResult['DATA_STATUS'] = $this->status->getData();
 		}
 	}
 
@@ -300,7 +271,6 @@ class ImConnectorFacebook extends CBitrixComponent
 				if ($infoOAuth->isSuccess())
 				{
 					$this->arResult['FORM'] = $infoOAuth->getData();
-					$this->saveCatalogPermissionData($this->arResult["FORM"]);
 
 					if (!empty($this->arResult['FORM']['PAGE']))
 					{
@@ -394,15 +364,6 @@ class ImConnectorFacebook extends CBitrixComponent
 			],
 		];
 
-		if ($this->isCatalogExportAvailable())
-		{
-			$menuList['catalog'] = [
-				'PAGE' => 'catalog.php',
-				'NAME' => Loc::getMessage("IMCONNECTOR_COMPONENT_FACEBOOK_MENU_TAB_CATALOG"),
-				'ACTIVE' => $this->arResult['MENU_TAB'] === 'catalog',
-			];
-		}
-
 		$menuItemBase = Library::getCurrentUri();
 		$uri = new Uri($menuItemBase);
 		if ($this->request['IFRAME'] === 'Y')
@@ -452,70 +413,5 @@ class ImConnectorFacebook extends CBitrixComponent
 				return false;
 			}
 		}
-	}
-
-	private function getCatalogAuth(): array
-	{
-		$result = [];
-
-		if ($this->isCatalogExportAvailable())
-		{
-			$result['HAS_AUTH'] = $this->hasCatalogExportAuth();
-			//$result['PAGE_ID'] = $this->getPageId();
-		}
-
-		return $result;
-	}
-
-	private function getFacebookFacade(): ?FacebookFacade
-	{
-		static $facade = null;
-
-		if ($facade === null)
-		{
-			if (Loader::includeModule('catalog') && Loader::includeModule('crm'))
-			{
-				try
-				{
-					$iblockId = CCrmCatalog::EnsureDefaultExists();
-					$facade = ServiceContainer::get('integration.seo.facebook.facade', compact('iblockId'));
-				}
-				catch (ObjectNotFoundException $exception)
-				{
-				}
-			}
-		}
-
-		return $facade;
-	}
-
-	private function isCatalogExportAvailable(): bool
-	{
-		if ($facebookFacade = $this->getFacebookFacade())
-		{
-			return $facebookFacade->isExportAvailable();
-		}
-
-		return false;
-	}
-
-	private function hasCatalogExportAuth(): bool
-	{
-		if ($facebookFacade = $this->getFacebookFacade())
-		{
-			return $facebookFacade->hasAuth();
-		}
-
-		return false;
-	}
-
-	private function getPageId(): ?string
-	{
-		if ($facebookFacade = $this->getFacebookFacade())
-		{
-			return $facebookFacade->getPageId();
-		}
-
-		return null;
 	}
 }

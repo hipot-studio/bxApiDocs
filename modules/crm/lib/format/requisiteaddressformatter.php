@@ -50,6 +50,9 @@ class RequisiteAddressFormatter extends EntityAddressFormatter
 			case 122:              // us
 				$format = EntityAddressFormatter::USA;
 				break;
+			case 13:               // uz
+				$format = EntityAddressFormatter::UZ;
+				break;
 			default:
 				$format = EntityAddressFormatter::Undefined;
 		}

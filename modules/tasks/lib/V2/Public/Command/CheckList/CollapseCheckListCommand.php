@@ -25,19 +25,17 @@ class CollapseCheckListCommand extends AbstractCommand
 	{
 		$result = new Result();
 
+		$handler = Container::getInstance()->get(CollapseCheckListCommandHandler::class);
+
 		try
 		{
-			$service = Container::getInstance()->getCheckListUserOptionService();
-
-			$handler = new CollapseCheckListCommandHandler($service);
-
 			$handler($this);
+
+			return $result;
 		}
 		catch (Exception $e)
 		{
 			return $result->addError(Error::createFromThrowable($e));
 		}
-
-		return $result;
 	}
 }

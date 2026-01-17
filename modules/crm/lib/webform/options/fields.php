@@ -94,6 +94,9 @@ final class Fields
 				'visible' => true,
 				'required' => $field['REQUIRED'] === 'Y',
 				'multiple' => $field['MULTIPLE'] === 'Y',
+				// valueType currently not used. Use this value on frontend to select specific value type
+				// (e.g. MOBILE or WORK for phone)
+				'valueType' => $field['VALUE_TYPE'] ?? null,
 			];
 			if ($this->editMode)
 			{

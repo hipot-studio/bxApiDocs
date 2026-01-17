@@ -27,6 +27,11 @@ abstract class AbstractContainer
 		return $this->get(Logger::class);
 	}
 
+	/**
+	 * @template T of object
+	 * @param class-string<T>|string $idOrClass
+	 * @return T
+	 */
 	public function get(string $idOrClass): object
 	{
 		return $this->locator->get($idOrClass);

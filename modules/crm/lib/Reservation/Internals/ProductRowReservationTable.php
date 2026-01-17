@@ -6,7 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\BooleanField;
-use Bitrix\Main\ORM\Fields\DateField;
+use Bitrix\Main\ORM\Fields\DateTimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\FloatField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -90,7 +90,7 @@ class ProductRowReservationTable extends DataManager
 					'title' => Loc::getMessage('PRODUCT_ROW_RESERVE_ENTITY_BASKET_RESERVATION_ID_FIELD'),
 				]
 			),
-			new DateField(
+			new DateTimeField(
 				'DATE_RESERVE_END',
 				[
 					'title' => Loc::getMessage('PRODUCT_ROW_RESERVE_ENTITY_DATE_RESERVE_END'),

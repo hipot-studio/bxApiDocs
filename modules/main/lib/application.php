@@ -574,7 +574,7 @@ abstract class Application
 			return;
 		}
 
-		$worker = new Worker();
+		$worker = new Worker($config['shuffle'] ?? true);
 
 		$this->addBackgroundJob([$worker, 'process']);
 	}

@@ -5,9 +5,12 @@ namespace Bitrix\Main\Data;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Data\LocalStorage\Storage;
 
+/**
+ * @property \Redis $engine
+ */
 class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngineInterface
 {
-	public function getConnectionName() : string
+	public function getConnectionName(): string
 	{
 		return 'cache.redis';
 	}
@@ -65,17 +68,14 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		return $config;
 	}
 
-	public function set($key, $ttl, $value) : bool
+	public function set($key, $ttl, $value): bool
 	{
-		$ttl = (int) $ttl;
+		$ttl = (int)$ttl;
 		if ($ttl > 0)
 		{
 			return self::$engine->setex($key, $ttl, $value);
 		}
-		else
-		{
-			return self::$engine->set($key, $value);
-		}
+		return self::$engine->set($key, $value);
 	}
 
 	public function get($key)
@@ -90,7 +90,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 
 	public function setNotExists($key, $ttl, $value)
 	{
-		$ttl = (int) $ttl;
+		$ttl = (int)$ttl;
 		if (self::$engine->setnx($key, $value))
 		{
 			if ($ttl > 0)
@@ -102,7 +102,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		return false;
 	}
 
-	public function checkInSet($key, $value) : bool
+	public function checkInSet($key, $value): bool
 	{
 		return self::$engine->sIsMember($key, $value);
 	}
@@ -112,7 +112,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		self::$engine->sAdd($key, $value);
 	}
 
-	public function getSet($key) : array
+	public function getSet($key): array
 	{
 		$list = self::$engine->sMembers($key);
 		if (!is_array($list))
@@ -127,7 +127,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		$list = self::$engine->sMembers($key);
 		self::$engine->del($key);
 
-		if (is_array($list)  && !empty($list))
+		if (is_array($list) && !empty($list))
 		{
 			self::$engine->del($list);
 		}
@@ -164,7 +164,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 			return;
 		}
 
-		$count = (int) self::$engine->get($this->sid . '|delCount');
+		$count = (int)self::$engine->get($this->sid . '|delCount');
 		if ($count < 1)
 		{
 			$count = 1;

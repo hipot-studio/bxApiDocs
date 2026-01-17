@@ -11,6 +11,7 @@ class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
 	private CrmItemRepositoryInterface $crmItemRepository;
 
 	private array $idCache = [];
+	private array $templateIdCache = [];
 	private CrmItemCollection $itemCache;
 
 	public function __construct(CrmItemRepository $crmItemRepository)
@@ -29,6 +30,15 @@ class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
 		return $this->idCache[$taskId];
 	}
 
+	public function getIdsByTemplateId(int $templateId): array
+	{
+		if (!isset($this->templateIdCache[$templateId]))
+		{
+			$this->templateIdCache[$templateId] = $this->crmItemRepository->getIdsByTemplateId($templateId);
+		}
+
+		return $this->templateIdCache[$templateId];
+	}
 
 	public function getIdsByTaskIds(array $taskIds): array
 	{
@@ -79,5 +89,10 @@ class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
 		$this->itemCache->merge($crmItems);
 
 		return $crmItems;
+	}
+
+	public function invalidate(int $taskId): void
+	{
+		unset($this->idCache[$taskId]);
 	}
 }

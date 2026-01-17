@@ -31,10 +31,12 @@ class Shop extends Social
 			'menu_bi_constructor',
 			'menu_company',
 			'menu_bizproc_sect',
+			'menu_ai_agents',
 			'menu_automation',
 			'menu_marketplace_group' => [
 				'menu_marketplace_sect',
 				'menu_devops_sect',
+				'menu_mcp_integrations',
 			],
 		],
 		'hidden' => [

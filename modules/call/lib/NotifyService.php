@@ -33,7 +33,8 @@ class NotifyService
 		MESSAGE_TYPE_AI_FAILED = 'AI_FAILED',
 		MESSAGE_TYPE_AI_INFO = 'AI_INFO',
 		MESSAGE_TYPE_AI_WAIT = 'AI_WAIT',
-		MESSAGE_TYPE_AI_DESTROY = 'AI_DESTROY'
+		MESSAGE_TYPE_AI_DESTROY = 'AI_DESTROY',
+		MESSAGE_TYPE_AUDIO_RECORD = 'AUDIO_RECORD'
 	;
 
 	public const ADMIN_NOTIFICATION_TAG = 'call_registration';
@@ -79,11 +80,13 @@ class NotifyService
 						->enableSkipCounterIncrements()
 						->enableSkipUrlIndex()
 					;
-					$this->sendMessageDeferred($chat, $message, $sendingConfig);
+					$context = (new Context())->setUser($call->getInitiatorId());
+					$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 
 					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode() ?? 'UNDEFINED');
 				}
 			}
+			$this->sendAudioRecordMessage($call);
 		}
 	}
 
@@ -112,6 +115,8 @@ class NotifyService
 					(new FollowUpAnalytics($call))->addFollowUpErrorMessage($error->getCode() ?? 'UNDEFINED');
 				}
 			}
+
+			$this->sendAudioRecordMessage($call);
 		}
 	}
 
@@ -137,7 +142,8 @@ class NotifyService
 					->enableSkipCounterIncrements()
 					->enableSkipUrlIndex()
 				;
-				$this->sendMessageDeferred($chat, $message, $sendingConfig);
+				$context = (new Context())->setUser($call->getInitiatorId());
+				$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 			}
 		}
 	}
@@ -252,6 +258,35 @@ class NotifyService
 		}
 
 		return $result;
+	}
+
+	public function sendAudioRecordMessage(Call $call): void
+	{
+		// Check if audio record message was already sent
+		if (isset($this->shownMessage[self::MESSAGE_TYPE_AUDIO_RECORD][$call->getId()]))
+		{
+			return;
+		}
+		$this->shownMessage[self::MESSAGE_TYPE_AUDIO_RECORD][$call->getId()] = true;
+
+		$chat = Chat::getInstance($call->getChatId());
+
+		if ($chat->getId() > 0)
+		{
+			// Check if audio record message already exists in chat
+			if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AUDIO_RECORD, 10) === null)
+			{
+				$messages = ChatMessage::generateAudioRecordMessages($call, $chat);
+				if (!empty($messages))
+				{
+					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+					foreach ($messages as $message)
+					{
+						$this->sendMessageDeferred($chat, $message, $sendingConfig);
+					}
+				}
+			}
+		}
 	}
 
 	public function addAdminNotify(string $message): void

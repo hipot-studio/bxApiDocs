@@ -110,6 +110,7 @@ class Notification
 
 	public function getGenderMessage(string $postfix = ''): string
 	{
+		// @see self::getNeuturalMessage use another concat arg order!
 		$message = Loc::getMessage(
 						$this->locKey . '_' . $this->getSender()->getGender() . $postfix . '_MSGVER_1',
 						null,

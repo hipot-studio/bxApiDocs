@@ -21,6 +21,11 @@ class BeforeCreateEvent extends Event
 		return $this->parameters['fields'];
 	}
 
+	public function getNewFields(): ?array
+	{
+		return $this->getParameterFromResult('fields');
+	}
+
 	protected function getActionName(): string
 	{
 		return 'BeforeCreate';

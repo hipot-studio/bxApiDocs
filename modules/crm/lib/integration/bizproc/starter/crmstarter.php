@@ -238,7 +238,17 @@ final class CrmStarter
 		}
 
 		$events = [
-			new EventDto(FieldChangedTrigger::getCode(), [$this->document], ['CHANGED_FIELDS' => $changedFields]),
+			new EventDto(FieldChangedTrigger::getCode(), [$this->document], ['CHANGED_FIELDS' => $changedFields]), // automation
+			new EventDto(
+				'CrmEntityFieldChangedTrigger',
+				[$this->document],
+				[
+					'Fields' => $changedFields,
+					'Document' => CCrmBizProcHelper::resolveDocumentId(
+						$this->document->entityTypeId, $this->document->entityId
+					),
+				],
+			), // process
 		];
 
 		$responsibleKey = (

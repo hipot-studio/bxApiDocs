@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Integration\Catalog;
 
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Main\Loader;
 use Bitrix\Catalog;
 use Bitrix\Crm;
@@ -46,11 +48,18 @@ class ServiceSkuProvider
 
 		$result = [];
 
+		$filter = [
+			'TYPE' => Catalog\ProductTable::TYPE_SERVICE,
+			'ID' => $ids,
+		];
+		if ($skuProviderConfig?->onlyActiveAndAvailable)
+		{
+			$filter['ACTIVE'] = 'Y';
+			$filter['ACTIVE_DATE'] = 'Y';
+			$filter['AVAILABLE'] = 'Y';
+		}
 		$products = $productRepository->getEntitiesBy([
-			'filter' => [
-				'TYPE' => Catalog\ProductTable::TYPE_SERVICE,
-				'ID' => $ids,
-			],
+			'filter' => $filter,
 		]);
 
 		$product2SectionMap = [];
@@ -81,7 +90,7 @@ class ServiceSkuProvider
 				{
 					$resultItem
 						->setPrice($basePrice->getPrice())
-						->setCurrency($basePrice->getCurrency())
+						->setCurrencyId($basePrice->getCurrency())
 					;
 				}
 			}
@@ -108,6 +117,26 @@ class ServiceSkuProvider
 		}
 
 		return $result;
+	}
+
+	public function checkCatalogReadAccess(int $userId): bool
+	{
+		if (!Loader::includeModule('catalog'))
+		{
+			return false;
+		}
+
+		return AccessController::getInstance($userId)->check(ActionDictionary::ACTION_CATALOG_READ);
+	}
+
+	public function checkCatalogProductCreateAccess(int $userId): bool
+	{
+		if (!Loader::includeModule('catalog'))
+		{
+			return false;
+		}
+
+		return AccessController::getInstance($userId)->check(ActionDictionary::ACTION_PRODUCT_ADD);
 	}
 
 	/**

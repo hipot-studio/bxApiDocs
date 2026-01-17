@@ -27,9 +27,7 @@ class StartTaskCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$statusService = Container::getInstance()->getStatusService();
-
-		$handler = new StartTaskHandler($statusService);
+		$handler = Container::getInstance()->get(StartTaskHandler::class);
 
 		try
 		{

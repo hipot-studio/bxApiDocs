@@ -7,27 +7,22 @@ namespace Bitrix\Booking\Internals\Service\Journal\EventProcessor\ResourceType;
 use Bitrix\Booking\Command\ResourceType\AddResourceTypeCommand;
 use Bitrix\Booking\Command\ResourceType\RemoveResourceTypeCommand;
 use Bitrix\Booking\Command\ResourceType\UpdateResourceTypeCommand;
-use Bitrix\Booking\Internals\Service\Enum\EventType;
-use Bitrix\Booking\Internals\Service\Journal\EventProcessor\EventProcessor;
+use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
-use Bitrix\Booking\Internals\Service\Journal\JournalEventCollection;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Main\Event;
 
-class ResourceTypeEventProcessor implements EventProcessor
+class ResourceTypeEventProcessor extends AbstractEventProcessor
 {
-    public function process(JournalEventCollection $eventCollection): void
+    public function processOne(JournalEvent $event): void
     {
-        foreach ($eventCollection as $event)
-        {
-            match ($event->type)
-            {
-                JournalType::ResourceTypeAdded => $this->processResourceTypeAddedEvent($event),
-                JournalType::ResourceTypeUpdated => $this->processResourceTypeUpdatedEvent($event),
-                JournalType::ResourceTypeDeleted => $this->processResourceTypeDeletedEvent($event),
-                default => '',
-            };
-        }
+		match ($event->type)
+		{
+			JournalType::ResourceTypeAdded => $this->processResourceTypeAddedEvent($event),
+			JournalType::ResourceTypeUpdated => $this->processResourceTypeUpdatedEvent($event),
+			JournalType::ResourceTypeDeleted => $this->processResourceTypeDeletedEvent($event),
+			default => '',
+		};
     }
 
     public function processResourceTypeAddedEvent(JournalEvent $event): void

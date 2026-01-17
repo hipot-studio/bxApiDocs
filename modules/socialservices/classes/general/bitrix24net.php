@@ -84,6 +84,17 @@ class CSocServBitrix24Net extends CSocServAuth
 
 	protected $entityOAuth = null;
 
+	public static function testConnection()
+	{
+		$http = new HttpClient();
+		$http->get(static::NETWORK_URL . '/oauth/token/');
+
+		return [
+			'status' => $http->getStatus(),
+			'response' => (string)$http->getResponse()->getBody(),
+		];
+	}
+
 	public function GetSettings()
 	{
 		return array(

@@ -2,7 +2,10 @@
 namespace Bitrix\Sign;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Bitrix24\PhoneVerify;
 use Bitrix\Main\Loader;
+use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Type\DocumentScenario;
 
 class Restriction
 {
@@ -15,7 +18,7 @@ class Restriction
 		'sign_available' => 'sign',
 		'sms_allowed' => 'sign_sms_allowed',
 		'new_docs_allowed' => 'sign_document_month_allowed',
-		'crm_integration' => 'sign_integration_crm'
+		'crm_integration' => 'sign_integration_crm',
 	];
 
 	/**
@@ -95,6 +98,33 @@ class Restriction
 		])->fetch();
 
 		if (($row['CNT'] ?? null) && $row['CNT'] >= $monthAllowed)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	public static function isPhoneVerificationRequiredForB2b(): bool
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return false;
+		}
+
+		if (!\CBitrix24::isFreeLicense() && !\CBitrix24::isDemoLicense())
+		{
+			return false;
+		}
+
+		if ((new PhoneVerify())->isVerified())
+		{
+			return false;
+		}
+
+		$documentService = Container::instance()->getDocumentService();
+		$docsLimit = Config\Storage::instance()->getMaxB2bDocumentsSignedWithoutRestriction();
+		if (!$documentService->hasMoreThan($docsLimit, DocumentScenario::SCENARIO_TYPE_B2B))
 		{
 			return false;
 		}

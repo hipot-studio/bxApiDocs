@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Integration\Crm;
 
-use Bitrix\Booking\Command\Booking\UpdateBookingCommand;
 use Bitrix\Booking\Entity\Booking\Booking;
-use Bitrix\Booking\Entity\ExternalData\ItemType\CatalogSkuItemType;
-use Bitrix\Booking\Entity\ExternalData\ItemType\CrmDealItemType;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
-use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use CCrmDeal;
 use CCrmOwnerType;
+use Bitrix\Crm\ProductType;
 
 class DealService
 {
@@ -23,59 +21,131 @@ class DealService
 		$this->serviceSkuProvider = $serviceSkuProvider;
 	}
 
-	public function createDealForBooking(Booking $booking): void
+	public function addProductsToDeal(int $dealId, array $skuIds): array
 	{
-		if (!Loader::includeModule('crm'))
+		if (!$this->isAvailable())
+		{
+			return [];
+		}
+
+		$skus = $this->serviceSkuProvider->get($skuIds);
+		$skuProductMap = [];
+		foreach ($skus as $sku)
+		{
+			// set price to 0 if null to avoid validation errors CCrmProductRow::Add
+			$price = $sku->getPrice() ?? 0.0;
+
+			$fields = [
+				'OWNER_ID' => $dealId,
+				'OWNER_TYPE' => \CCrmOwnerTypeAbbr::Deal,
+				'PRODUCT_ID' => $sku->getId(),
+				'PRODUCT_NAME' => $sku->getName(),
+				'PRICE' => $price,
+				'PRICE_ACCOUNT' => $price,
+				'PRICE_EXCLUSIVE' => $price,
+				'PRICE_NETTO' => $price,
+				'PRICE_BRUTTO' => $price,
+				'QUANTITY' => 1,
+				'TYPE' => ProductType::TYPE_SERVICE,
+			];
+			$productRowId = \CCrmProductRow::Add($fields, false);
+			if (!$productRowId)
+			{
+				//TODO: log error
+				continue;
+			}
+
+			$skuProductMap[$sku->getId()] = ['productRowId' => $productRowId];
+		}
+
+		return $skuProductMap;
+	}
+
+	public function createDealForBooking(Booking $booking, int $userId): int|null
+	{
+		if (!$this->isAvailable())
+		{
+			return null;
+		}
+
+		// if userId is 0, then it's system action - allow to create deal
+		if (
+			$userId
+			&& !Container::getInstance()
+				->getUserPermissions($userId)
+				->entityType()
+				->canAddItems(CCrmOwnerType::Deal)
+		)
+		{
+			return null;
+		}
+
+		$crmClient = $this->getCrmClientFromBooking($booking);
+		$clientTypeCode = null;
+		$clientId = null;
+		if ($crmClient)
+		{
+			[$clientType, $clientId] = $crmClient;
+			$clientTypeCode = $clientType->getCode();
+		}
+
+		return $this->createDeal($clientTypeCode, $clientId);
+	}
+
+	public function deleteProductsFromDeal(array $skuIds): void
+	{
+		if (!$this->isAvailable())
 		{
 			return;
 		}
 
+		foreach ($skuIds as $skuId)
+		{
+			\CCrmProductRow::Delete($skuId, false);
+		}
+	}
+
+	private function isAvailable(): bool
+	{
+		return Loader::includeModule('crm');
+	}
+
+	private function getCrmClientFromBooking(Booking $booking): array|null
+	{
 		$client = $booking->getClientCollection()->getPrimaryClient();
+		if (!$client)
+		{
+			return null;
+		}
 		$clientType = $client->getType();
 
 		if (!($clientType && $clientType->getModuleId() === 'crm'))
 		{
-			return;
+			return null;
 		}
 
 		$clientId = (int)$client->getId();
 		$clientTypeCode = $clientType->getCode();
-		if (
-			!(
-				in_array($clientTypeCode, [CCrmOwnerType::CompanyName, CCrmOwnerType::ContactName], true)
-				&& $clientId
-			)
-		)
+		if (!in_array($clientTypeCode, [CCrmOwnerType::CompanyName, CCrmOwnerType::ContactName], true))
 		{
-			return;
+			return null;
 		}
 
-		$dealId = $this->createDeal($clientTypeCode, $clientId);
-		if (!$dealId)
-		{
-			return;
-		}
-
-		$this->addProductsToDeal(
-			$dealId,
-			$booking->getExternalDataCollection()->filterByType((new CatalogSkuItemType())->buildFilter())->getValues()
-		);
-
-		$this->attachBookingToDeal($dealId, $booking);
+		return [$clientType, $clientId];
 	}
 
-	private function createDeal(string $clientTypeCode, int $clientId): int|null
+	private function createDeal(string|null $clientTypeCode = null, int|null $clientId = null): int|null
 	{
 		$fields = [
 			'SOURCE_ID' => 'BOOKING',
 			'TYPE_ID' => 'SERVICES',
 		];
 
-		if ($clientTypeCode === CCrmOwnerType::CompanyName)
+		if ($clientId && $clientTypeCode === CCrmOwnerType::CompanyName)
 		{
 			$fields['COMPANY_ID'] = $clientId;
 		}
-		elseif ($clientTypeCode === CCrmOwnerType::ContactName)
+		elseif ($clientId && $clientTypeCode === CCrmOwnerType::ContactName)
 		{
 			$fields['CONTACT_IDS'] = [$clientId];
 		}
@@ -89,36 +159,5 @@ class DealService
 		);
 
 		return $dealId > 0 ? $dealId : null;
-	}
-
-	private function addProductsToDeal(int $dealId, array $skuIds): void
-	{
-		$dealProducts = [];
-		$skus = $this->serviceSkuProvider->get($skuIds);
-		foreach ($skus as $sku)
-		{
-			$dealProducts[] = [
-				'PRODUCT_ID' => $sku->getId(),
-				'PRODUCT_NAME' => $sku->getName(),
-				'PRICE' => $sku->getPrice(),
-				'QUANTITY' => 1,
-			];
-		}
-		if (!empty($dealProducts))
-		{
-			CCrmDeal::SaveProductRows($dealId, $dealProducts, false);
-		}
-	}
-
-	private function attachBookingToDeal(int $dealId, Booking $booking): void
-	{
-		$booking->getExternalDataCollection()->add(
-			(new CrmDealItemType())->createItem()->setValue((string)$dealId)
-		);
-
-		(new UpdateBookingCommand(
-			updatedBy: (int)CurrentUser::get()->getId(),
-			booking: $booking,
-		))->run();
 	}
 }

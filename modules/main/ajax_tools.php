@@ -21,7 +21,7 @@ class CAjax
 		$trace_current = $trace_count - 1;
 		for ($i = 0; $i < $trace_count; $i++)
 		{
-			if (strtolower($aTrace[$i]['function']) == 'includecomponent' && (($c = strtolower($aTrace[$i]['class'])) == 'callmain' || $c == 'cmain'))
+			if (strtolower($aTrace[$i]['function']) == 'includecomponent' && strtolower($aTrace[$i]['class']) == 'cmain')
 			{
 				$trace_current = $i;
 				break;

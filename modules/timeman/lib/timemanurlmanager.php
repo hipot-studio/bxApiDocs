@@ -16,34 +16,34 @@ class TimemanUrlManager
 		return [
 			static::URI_SCHEDULE_CREATE => [
 				'name' => static::URI_SCHEDULE_CREATE,
-				'uri' => '/timeman/schedules/add/',
+				'uri' => SITE_DIR . 'timeman/schedules/add/',
 			],
 			static::URI_SETTINGS_PERMISSIONS => [
 				'name' => static::URI_SETTINGS_PERMISSIONS,
-				'uri' => '/timeman/settings/permissions/',
+				'uri' => SITE_DIR . 'timeman/settings/permissions/',
 			],
 			static::URI_SHIFT_CREATE => [
 				'name' => static::URI_SHIFT_CREATE,
-				'uri' => '/timeman/schedules/#SCHEDULE_ID#/shifts/add/',
+				'uri' => SITE_DIR . 'timeman/schedules/#SCHEDULE_ID#/shifts/add/',
 				'requiredParams' => ['SCHEDULE_ID',],
 			],
 			static::URI_RECORD_REPORT => [
 				'name' => static::URI_RECORD_REPORT,
-				'uri' => '/timeman/worktime/records/#RECORD_ID#/report/',
+				'uri' => SITE_DIR . 'timeman/worktime/records/#RECORD_ID#/report/',
 				'requiredParams' => ['RECORD_ID',],
 			],
 			static::URI_SCHEDULE_UPDATE => [
 				'name' => static::URI_SCHEDULE_UPDATE,
-				'uri' => '/timeman/schedules/#SCHEDULE_ID#/update/',
+				'uri' => SITE_DIR . 'timeman/schedules/#SCHEDULE_ID#/update/',
 				'requiredParams' => ['SCHEDULE_ID',],
 			],
 			static::URI_WORKTIME_STATS => [
 				'name' => static::URI_WORKTIME_STATS,
-				'uri' => '/timeman/timeman.php',
+				'uri' => SITE_DIR . 'timeman/timeman.php',
 			],
 			static::URI_SCHEDULE_SHIFTPLAN => [
 				'name' => static::URI_SCHEDULE_SHIFTPLAN,
-				'uri' => '/timeman/schedules/#SCHEDULE_ID#/shiftplan/',
+				'uri' => SITE_DIR . 'timeman/schedules/#SCHEDULE_ID#/shiftplan/',
 				'requiredParams' => ['SCHEDULE_ID',],
 			],
 		];

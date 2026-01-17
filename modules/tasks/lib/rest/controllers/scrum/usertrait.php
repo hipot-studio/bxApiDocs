@@ -9,6 +9,9 @@
 namespace Bitrix\Tasks\Rest\Controllers\Scrum;
 
 use Bitrix\Main\UserTable;
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\TaskModel;
+use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 
 trait UserTrait
@@ -17,9 +20,20 @@ trait UserTrait
 	 * @param int $groupId
 	 * @return bool
 	 */
-	private function checkAccess(int $groupId): bool
+	private function checkAccess(int $groupId, int $taskId = 0): bool
 	{
-		return Group::canReadGroupTasks($this->getUserId(), $groupId);
+		$userId = $this->getUserId();
+
+		$canReadGroupTasks = Group::canReadGroupTasks($userId, $groupId);
+		if ($taskId && !$canReadGroupTasks)
+		{
+			$accessController = TaskAccessController::getInstance($userId);
+			$model = TaskModel::createFromId($taskId);
+
+			return $accessController->check(ActionDictionary::ACTION_TASK_READ, $model);
+		}
+
+		return $canReadGroupTasks;
 	}
 
 	private function existsUser(int $userId): bool

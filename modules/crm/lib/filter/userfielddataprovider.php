@@ -52,14 +52,15 @@ class UserFieldDataProvider extends EntityUFDataProvider
 	public function prepareFieldData($fieldID): ?array
 	{
 		$userFields = $this->getUserFields();
-		if(!isset($userFields[$fieldID]))
+		if (!isset($userFields[$fieldID]))
 		{
 			return null;
 		}
 
 		$userField = $userFields[$fieldID];
 
-		if($userField['USER_TYPE']['USER_TYPE_ID'] === 'crm')
+		$userTypeId = $userField['USER_TYPE']['USER_TYPE_ID'] ?? null;
+		if ($userTypeId === 'crm')
 		{
 			$settings = (
 				isset($userField['SETTINGS']) && is_array($userField['SETTINGS'])
@@ -71,6 +72,20 @@ class UserFieldDataProvider extends EntityUFDataProvider
 			return [
 				'params' => ElementType::getDestSelectorParametersForFilter($settings, $isMultiple),
 			];
+		}
+
+		if ($userTypeId === 'iblock_element' || $userTypeId === 'iblock_section')
+		{
+			if (
+				method_exists($this->settings, 'isSkipLoadItemsForPartialFields')
+				&& $this->settings->isSkipLoadItemsForPartialFields()
+			)
+			{
+				return [
+					'params' => ['multiple' => 'Y'],
+					'items' => [],
+				];
+			}
 		}
 
 		return parent::prepareFieldData($fieldID);

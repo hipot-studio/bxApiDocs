@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Main\Grid\Uf;
 
@@ -161,7 +161,8 @@ class Base
 				'sort' => $uf['MULTIPLE'] == 'N' ? $FIELD_NAME : false,
 				'default' => $uf['SHOW_IN_LIST'] == 'Y',
 				'editable' => $editable,
-				'type' => $type
+				'type' => $type,
+				'hint' => $uf['HELP_MESSAGE'] ?? null,
 			);
 
 			if ($import)

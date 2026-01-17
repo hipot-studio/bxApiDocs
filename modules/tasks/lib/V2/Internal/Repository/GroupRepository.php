@@ -6,8 +6,11 @@ namespace Bitrix\Tasks\V2\Internal\Repository;
 
 use Bitrix\Main\Type\Collection;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Tasks\Integration\Extranet\User;
+use Bitrix\Tasks\Integration\SocialNetwork\Collab\Provider\CollabDefaultProvider;
 use Bitrix\Tasks\Integration\SocialNetwork\GroupProvider;
 use Bitrix\Tasks\Integration\Socialnetwork\Internals\Registry\GroupRegistry;
+use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\GroupMapper;
 use CSocNetGroup;
@@ -30,18 +33,7 @@ class GroupRepository implements GroupRepositoryInterface
 			return null;
 		}
 
-		if ($workgroup->getImageId() > 0)
-		{
-			$image = $this->fileRepository->getById($workgroup->getImageId());
-		}
-		else
-		{
-			$image = new Entity\File(
-				src: $workgroup->getAvatarUrl(),
-			);
-		}
-
-		return $this->groupMapper->mapToEntity($workgroup, $image);
+		return $this->groupMapper->mapToEntity($workgroup, $this->getImage($workgroup));
 	}
 
 	public function getMembers(int $id): Entity\UserCollection
@@ -84,32 +76,66 @@ class GroupRepository implements GroupRepositoryInterface
 
 		Collection::normalizeArrayValuesByInt($imageIds, false);
 
-		$images = null;
+		//preload
 		if (!empty($imageIds))
 		{
-			$images = $this->fileRepository->getByIds($imageIds);
+			$this->fileRepository->getByIds($imageIds);
 		}
 
 		$entities = [];
 		foreach ($groups as $group)
 		{
 			$workgroup = new Workgroup($group);
-			if ($workgroup->getImageId() > 0)
-			{
-				$image = $images?->findOneById((int)$group['IMAGE_ID']);
-			}
-			else
-			{
-				$image = new Entity\File(
-					src: $workgroup->getAvatarUrl(),
-				);
-			}
 
-			$entity = $this->groupMapper->mapToEntity($workgroup, $image);
+			$entity = $this->groupMapper->mapToEntity($workgroup, $this->getImage($workgroup));
 
 			$entities[] = $entity;
 		}
 
 		return new Entity\GroupCollection(...$entities);
+	}
+
+	public function getGroupIdsByTaskIds(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		$recordset = TaskTable::query()
+			->setSelect(['ID', 'GROUP_ID'])
+			->whereIn('ID', array_map('intval', $taskIds))
+			->fetchAll();
+
+		return array_column($recordset, 'GROUP_ID', 'ID');
+	}
+
+	public function getDefaultCollab(int $userId): ?Entity\Group
+	{
+		$isCollaber = User::isCollaber($userId);
+		if (!$isCollaber)
+		{
+			return null;
+		}
+
+		$defaultCollab = CollabDefaultProvider::getInstance()?->getCollab($userId);
+		if ($defaultCollab === null)
+		{
+			return null;
+		}
+
+		return $this->groupMapper->mapToEntity($defaultCollab, $this->getImage($defaultCollab));
+	}
+
+	private function getImage(Workgroup $workgroup): ?Entity\File
+	{
+		if ($workgroup->getImageId() > 0)
+		{
+			return $this->fileRepository->getById($workgroup->getImageId());
+		}
+
+		return new Entity\File(
+			src: $workgroup->getAvatarUrl(),
+		);
 	}
 }

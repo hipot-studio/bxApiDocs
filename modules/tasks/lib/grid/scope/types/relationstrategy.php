@@ -10,6 +10,10 @@ class RelationStrategy implements ScopeStrategyInterface
 	public function apply(array &$gridHeaders, array $parameters = []): void
 	{
 		$defaultFields = ['TITLE', 'RESPONSIBLE_NAME', 'DEADLINE', 'ORIGINATOR_NAME'];
+		if (($parameters['relationType'] ?? null) === 'gantt')
+		{
+			$defaultFields = ['TITLE', 'RESPONSIBLE_NAME', 'LINK_TYPE', 'START_DATE_PLAN', 'END_DATE_PLAN'];
+		}
 
 		foreach ($gridHeaders as $name => $header)
 		{

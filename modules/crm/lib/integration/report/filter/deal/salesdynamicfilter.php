@@ -27,7 +27,8 @@ class SalesDynamicFilter extends BaseFilter
 					'categoryAccess' => array(
 						'READ' => \CCrmDeal::getPermittedToReadCategoryIDs($userPermissions),
 					),
-					'flags' => DealSettings::FLAG_NONE
+					'flags' => DealSettings::FLAG_NONE,
+					'disableDepartmentSelector' => true,
 				)
 			)
 		);

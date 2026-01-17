@@ -37,9 +37,10 @@ class BatchRequestItem
 		return $this->response;
 	}
 
-	public function setResponse(Response $response): BatchRequestItem
+	public function setResponse(Response $response): self
 	{
 		$this->response = $response;
+
 		return $this;
 	}
 }

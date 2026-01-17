@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call\Controller;
 
+use Bitrix\Call\Cache\ExternalAccessTokenManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Response\BFile;
@@ -170,11 +171,11 @@ class Track extends Engine\Controller
 			return null;
 		}
 
-		$error = CallAISettings::isAIAvailableInCall();
-		if ($error)
+		$aiAvailability = CallAISettings::checkAIAvailabilityInCall();
+		if (!$aiAvailability->isSuccess())
 		{
-			$this->addError($error);
-			NotifyService::getInstance()->sendCallError($error, $call);
+			$this->addError($aiAvailability->getError());
+			NotifyService::getInstance()->sendCallError($aiAvailability->getError(), $call);
 
 			return null;
 		}
@@ -262,12 +263,38 @@ class Track extends Engine\Controller
 		$callId = (int)$params['callId'];
 		$trackId = (int)$params['trackId'];
 		$forceDownload = (bool)($params['forceDownload'] ?? false);
+		$token = strval($params['token']) ?? '';
 
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
 		{
 			$this->addError(new Error("call_not_found", "Call not found"));
 			return null;
+		}
+
+		if (!empty($token))
+		{
+			$tokenData = ExternalAccessTokenManager::validateToken($token);
+			if (!$tokenData || $tokenData['track_id'] != $trackId || $tokenData['call_id'] != $callId)
+			{
+				$this->addError(new Error("invalid_token", "Invalid or expired token"));
+				return null;
+			}
+			ExternalAccessTokenManager::revokeToken($token);
+		}
+		else
+		{
+			$currentUserId = $this->getCurrentUser()?->getId();
+			if (!$currentUserId)
+			{
+				$this->addError(new Error("access_denied", "User not found"));
+				return null;
+			}
+
+			if (!$this->checkCallAccess($call, $currentUserId))
+			{
+				return null;
+			}
 		}
 
 		$track = TrackCollection::getTrackById($callId, $trackId);

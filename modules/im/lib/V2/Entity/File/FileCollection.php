@@ -10,6 +10,7 @@ use Bitrix\Im\Model\EO_FileTemporary;
 use Bitrix\Im\Model\EO_FileTemporary_Collection;
 use Bitrix\Im\V2\Entity\EntityCollection;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
+use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Registry;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Result;
@@ -276,9 +277,27 @@ class FileCollection extends EntityCollection implements DateFilterable
 		return $this->getAny()?->getChatId();
 	}
 
-	public function toRestFormat(array $option = []): array
+	public function loadParams(): void
 	{
 		ParamCollection::loadByFileIds($this->getIds());
+	}
+
+	public function fillTranscriptions(): self
+	{
+		$this->loadParams();
+		$transcriptions = TranscribeManager::getCompletedTranscriptions((array)$this);
+		foreach ($this as $file)
+		{
+			$transcription = $transcriptions[$file->getOriginalFileId()] ?? null;
+			$file->setCompletedTranscription($transcription);
+		}
+
+		return $this;
+	}
+
+	public function toRestFormat(array $option = []): array
+	{
+		$this->loadParams();
 
 		return parent::toRestFormat($option);
 	}

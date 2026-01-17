@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Format\TextHelper;
-use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
@@ -13,7 +12,9 @@ use Bitrix\Crm\RepeatSale\Segment\Entity\RepeatSaleSegment;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
-use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotButtonTrait;
+use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
+use Bitrix\Crm\Service\Timeline\Item\Interfaces\HasCopilot;
+use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
@@ -25,9 +26,9 @@ use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Main\Localization\Loc;
 use CCrmContentType;
 
-final class RepeatSale extends Activity
+final class RepeatSale extends Activity implements HasCopilot
 {
-	use CopilotButtonTrait;
+	use CopilotHelper;
 
 	private const HELPDESK_CODE_COPILOT_WARNING = '20412666';
 	private const HELPDESK_CODE_REPEAT_SALE = '25376986';
@@ -103,7 +104,7 @@ final class RepeatSale extends Activity
 
 		return array_merge($buttons, [
 			'scheduleButton' => $scheduleButton,
-			'aiButton' => $this->getAIButton(),
+			'aiButton' => $this->getCopilotButton(),
 		]);
 	}
 
@@ -123,6 +124,22 @@ final class RepeatSale extends Activity
 	public function needShowNotes(): bool
 	{
 		return true;
+	}
+
+	public function getCopilotButton(): ?BaseButton
+	{
+		$isButtonVisible = $this->isCopilotScope()
+			&& $this->hasUpdatePermission()
+			&& $this->isItemHashValid($this->getActivityId(), $this->getContext())
+			&& $this->getSegment() !== null
+		;
+
+		if (!$isButtonVisible)
+		{
+			return null;
+		}
+
+		return $this->createCopilotButton();
 	}
 
 	private function buildDescriptionBlock(): ?ContentBlock
@@ -296,28 +313,6 @@ final class RepeatSale extends Activity
 				'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp(self::HELPDESK_CODE_REPEAT_SALE) . '" target="blank">',
 				'[/helpdesklink]' => '</a>',
 			]
-		);
-	}
-
-	private function getAIButton(): ?Activity\RepeatSale\CopilotButton
-	{
-		$activityId = $this->getActivityId();
-
-		$isButtonVisible = AIManager::isAiCallProcessingEnabled()
-			&& $this->hasUpdatePermission()
-			&& $this->isItemHashValid($activityId, $this->getContext())
-			&& $this->getSegment() !== null
-		;
-
-		if (!$isButtonVisible)
-		{
-			return null;
-		}
-
-		return new Activity\RepeatSale\CopilotButton(
-			$this->getContext(),
-			$this->getAssociatedEntityModel(),
-			$activityId
 		);
 	}
 }

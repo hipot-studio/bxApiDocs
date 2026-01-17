@@ -4,13 +4,13 @@ namespace Bitrix\Crm\Service\Factory;
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\CategoryIdentifier;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\InvoiceTable;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
+use Bitrix\Crm\Recurring\Manager;
 use Bitrix\Crm\Relation;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Security\Role\RolePermission;
@@ -57,15 +57,7 @@ class SmartInvoice extends Dynamic
 
 	public function isRecurringEnabled(): bool
 	{
-		return $this->isRecurringAvailable();
-	}
-
-	public function isRecurringAvailable(): bool
-	{
-		return
-			Feature::enabled(Feature\RecurringSmartInvoice::class)
-			&& Option::get('crm', '~is_recurring_column_alter_success_' . $this->getEntityTypeId(), 'Y') !== 'N'
-		;
+		return $this->isRecurringSupported() && Manager::isAllowedExpose(Manager::DYNAMIC);
 	}
 
 	protected function getFieldTitlesMap(): array
@@ -74,7 +66,6 @@ class SmartInvoice extends Dynamic
 
 		$map[Item::FIELD_NAME_BEGIN_DATE] = Loc::getMessage('CRM_TYPE_SMART_INVOICE_FIELD_BEGIN_DATE');
 		$map[Item::FIELD_NAME_CLOSE_DATE] = Loc::getMessage('CRM_TYPE_SMART_INVOICE_FIELD_CLOSE_DATE');
-		$map[Item::FIELD_NAME_RECURRING] = Loc::getMessage('CRM_TYPE_SMART_INVOICE_FIELD_RECURRING');
 
 		return $map;
 	}

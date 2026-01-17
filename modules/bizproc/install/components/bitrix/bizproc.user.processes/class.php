@@ -399,13 +399,13 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 		/** @var \Bitrix\Main\UI\PageNavigation $pageNav */
 		$pageNav = $this->arResult['pageNavigation'];
 
-		$workflowsResponse = $this->fetchWorkflows($pageNav->getLimit(), $pageNav->getOffset());
+		$workflowsResponse = $this->fetchWorkflows($pageNav->getLimit() + 1, $pageNav->getOffset());
 
 		$workflowViews = [];
 		if ($workflowsResponse->isSuccess())
 		{
 			$workflowViews = $this->getWorkflowsViewData($workflowsResponse);
-			$pageNav->setRecordCount($workflowsResponse->getTotalCount());
+			$pageNav->setRecordCount($pageNav->getOffset() + $workflowsResponse->getTotalCount());
 		}
 		else
 		{
@@ -426,7 +426,7 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 		$workflowsRequest->setOrder($sortingPayload['sort'] ?? $defaultSorting);
 	}
 
-	private function fetchWorkflows(int $limit, int $offset, bool $shouldCountTotal = true): GetListResponse
+	private function fetchWorkflows(int $limit, int $offset): GetListResponse
 	{
 		$workflowStateService = new WorkflowStateService();
 
@@ -435,10 +435,6 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 			->setLimit($limit)
 			->setOffset($offset)
 		;
-		if ($shouldCountTotal)
-		{
-			$workflowsRequest->countTotal();
-		}
 
 		$this->setFilterToRequest($workflowsRequest);
 

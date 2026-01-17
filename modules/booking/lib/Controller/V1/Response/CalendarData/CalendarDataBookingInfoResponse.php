@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Controller\V1\Response\CalendarData;
 
 use Bitrix\Booking\Entity\Booking\Booking;
-use Bitrix\Booking\Entity\ExternalData\ExternalDataItem;
-use Bitrix\Booking\Entity\ExternalData\ItemType\CatalogSkuItemType;
 use Bitrix\Booking\Entity\Resource\Resource;
+use Bitrix\Booking\Entity\Sku\Sku;
 use Bitrix\Main\Type\Contract\Arrayable;
 
 class CalendarDataBookingInfoResponse implements \JsonSerializable, Arrayable
@@ -38,10 +37,8 @@ class CalendarDataBookingInfoResponse implements \JsonSerializable, Arrayable
 				$booking->getResourceCollection()->getCollectionItems()
 			),
 			services: array_map(
-				static fn(ExternalDataItem $externalDataItem) => ServiceDto::fromEntity($externalDataItem),
-				$booking->getExternalDataCollection()
-					->filterByType((new CatalogSkuItemType())->buildFilter())
-					->getCollectionItems(),
+				static fn(Sku $sku) => ServiceDto::fromEntity($sku),
+				$booking->getSkuCollection()->getCollectionItems(),
 			),
 			client: $client ? ClientDto::fromEntity($client) : null,
 			note: $booking->getNote(),

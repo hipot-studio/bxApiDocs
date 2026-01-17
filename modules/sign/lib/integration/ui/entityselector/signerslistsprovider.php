@@ -66,7 +66,7 @@ class SignersListsProvider extends EntitySelector\BaseProvider
 					'id' => 'signers-list',
 					'title' => Loc::getMessage('SIGN_INTEGRATION_UI_ENTITYSELECTOR_SIGNERSLISTS_TAB'),
 					'icon' => [
-						'default' => $this->getTabIconDefault(),
+						'default' => 'o-autofill',
 					],
 				],
 			),

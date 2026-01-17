@@ -7,6 +7,7 @@ use Bitrix\AI\Context\Language;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\AI\Tuning\Manager;
+use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
@@ -294,7 +295,8 @@ class AIManager
 			return $result->addError(ErrorCode::getNotFoundError());
 		}
 
-		if (!TranscribeCallRecording::isSuitableTarget(new ItemIdentifier(CCrmOwnerType::Activity, $activityId)))
+		$itemIdentifier = new ItemIdentifier(CCrmOwnerType::Activity, $activityId);
+		if (!TranscribeCallRecording::isSuitableTarget($itemIdentifier))
 		{
 			return $result->addError(ErrorCode::getNotSuitableTargetError());
 		}
@@ -321,17 +323,16 @@ class AIManager
 			return $result->addError(ErrorCode::getFileNotFoundError());
 		}
 
-		$operation = new TranscribeCallRecording(
-			new ItemIdentifier(CCrmOwnerType::Activity, $activityId),
+		return (new TranscribeCallRecording(
+			$itemIdentifier,
 			$storageTypeId,
 			$storageElementId,
 			$userId,
-		);
-
-		$operation->setIsManualLaunch($isManualLaunch);
-		$operation->setScenario($scenario);
-
-		return $operation->launch();
+		))
+			->setIsManualLaunch($isManualLaunch)
+			->setScenario($scenario)
+			->launch()
+		;
 	}
 
 	public static function launchExtractScoringCriteria(int $entityId, string $prompt, ?int $userId = null, bool $isManualLaunch = true): Result
@@ -353,16 +354,15 @@ class AIManager
 			return $result->addError(new Error('Prompt cannot be empty', ErrorCode::INVALID_ARG_VALUE));
 		}
 
-		$operation = new ExtractScoringCriteria(
+		return (new ExtractScoringCriteria(
 			new ItemIdentifier(CCrmOwnerType::CopilotCallAssessment, $entityId),
 			$prompt,
-			$userId,
-		);
-
-		$operation->setIsManualLaunch($isManualLaunch);
-		$operation->setScenario(Scenario::EXTRACT_SCORING_CRITERIA_SCENARIO);
-
-		return $operation->launch();
+			$userId
+		))
+			->setIsManualLaunch($isManualLaunch)
+			->setScenario(Scenario::EXTRACT_SCORING_CRITERIA_SCENARIO)
+			->launch()
+		;
 	}
 
 	public static function launchFillRepeatSaleTips(int $activityId, ?int $userId = null, bool $isManualLaunch = false): Result
@@ -379,15 +379,51 @@ class AIManager
 			return $result->addError(ErrorCode::getNotFoundError());
 		}
 
-		$operation = new FillRepeatSaleTips(
+		return (new FillRepeatSaleTips(
 			new ItemIdentifier(CCrmOwnerType::Activity, $activityId),
 			$userId,
-		);
+		))
+			->setIsManualLaunch($isManualLaunch)
+			->setScenario(Scenario::REPEAT_SALE_TIPS_SCENARIO)
+			->launch()
+		;
+	}
 
-		$operation->setIsManualLaunch($isManualLaunch);
-		$operation->setScenario(Scenario::REPEAT_SALE_TIPS_SCENARIO);
+	public static function launchSummarizeData(int $activityId, ?int $userId = null, bool $isManualLaunch = true): Result
+	{
+		$result = new Result(SummarizeCallTranscription::TYPE_ID);
 
-		return $operation->launch();
+		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
+		{
+			return $result->addError(ErrorCode::getAINotAvailableError());
+		}
+
+		if ($activityId <= 0)
+		{
+			return $result->addError(ErrorCode::getNotFoundError());
+		}
+
+		$itemIdentifier = new ItemIdentifier(CCrmOwnerType::Activity, $activityId);
+		if (!SummarizeCallTranscription::isSuitableTarget($itemIdentifier))
+		{
+			return $result->addError(ErrorCode::getNotSuitableTargetError());
+		}
+
+		$messages = OpenLine::getMessagesForCopilot($activityId);
+		if (!OpenLine::isCopilotProcessingAvailable($activityId, $messages))
+		{
+			return $result->addError(ErrorCode::getNotEnoughMessagesError());
+		}
+
+		return (new SummarizeCallTranscription(
+			$itemIdentifier,
+			$messages,
+			$userId
+		))
+			->setIsManualLaunch($isManualLaunch)
+			->setScenario(Scenario::FILL_FIELDS_SCENARIO)
+			->launch()
+		;
 	}
 	// endregion
 

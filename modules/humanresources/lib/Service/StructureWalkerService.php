@@ -7,16 +7,16 @@ use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Contract\Repository\StructureRepository;
-use Bitrix\HumanResources\Item\Collection\NodeRelationCollection;
-use Bitrix\HumanResources\Repository\NodeRelationRepository;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\EventName;
-use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
+use Bitrix\HumanResources\Item\Collection\NodeRelationCollection;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Model\NodeMemberTable;
 use Bitrix\HumanResources\Model\NodePathTable;
+use Bitrix\HumanResources\Repository\NodeRelationRepository;
 use Bitrix\HumanResources\Repository\RoleRepository;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main;
@@ -205,15 +205,17 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 	 */
 	private function moveChildNodes(Node $node): array
 	{
-		$children = $this->nodeRepository->getChildOf(
-			node: $node,
-			activeFilter: NodeActiveFilter::ALL,
-		);
+		$children = InternalContainer::getNodeRepository()->getChildrenOfNode($node);
 		$childIds = [];
-
 		$parent = $this->nodeRepository->getById($node->parentId);
 
-		$lastSibling = $this->nodeRepository->getChildOf($parent)->getLast();
+		if (!$parent)
+		{
+			// if there is no parent that means the node is broken, so we move children to root node
+			$parent = $this->nodeRepository->getRootNodeByStructureId($node->structureId);
+		}
+
+		$lastSibling = InternalContainer::getNodeRepository()->getChildrenOfNode($parent)->getLast();
 		$lastSiblingSort = $lastSibling ? $lastSibling->sort : 0;
 
 		foreach ($children as $child)

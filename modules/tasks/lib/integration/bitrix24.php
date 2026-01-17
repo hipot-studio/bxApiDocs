@@ -14,7 +14,7 @@ use Bitrix\Main\ModuleManager;
 use \Bitrix\Tasks\Util;
 use \Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit;
 
-abstract class Bitrix24 extends \Bitrix\Tasks\Integration
+abstract class Bitrix24 extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'bitrix24';
 

@@ -25,11 +25,13 @@ class CounterDictionary
 	public const LEFT_MENU_TASKS = 'tasks_total';
 
 	public const
+		COUNTER_MENTIONED						= 'mentioned',
 		COUNTER_TOTAL							= 'total',
 		COUNTER_MEMBER_TOTAL					= 'member_total',
 
 		COUNTER_NEW_COMMENTS					= 'new_comments',
 		COUNTER_MUTED_NEW_COMMENTS				= 'muted_new_comments',
+		COUNTER_NEW_COMMENTS_TOTAL				= 'new_comments_total',
 		COUNTER_EXPIRED							= 'expired',
 		COUNTER_MUTED_EXPIRED					= 'muted_expired',
 		COUNTER_EFFECTIVE						= 'effective',
@@ -93,7 +95,8 @@ class CounterDictionary
 		MemberTable::MEMBER_TYPE_RESPONSIBLE 	=> self::COUNTER_MY_EXPIRED,
 		MemberTable::MEMBER_TYPE_ORIGINATOR 	=> self::COUNTER_ORIGINATOR_EXPIRED,
 		MemberTable::MEMBER_TYPE_ACCOMPLICE 	=> self::COUNTER_ACCOMPLICES_EXPIRED,
-		MemberTable::MEMBER_TYPE_AUDITOR 		=> self::COUNTER_AUDITOR_EXPIRED
+		// MemberTable::MEMBER_TYPE_AUDITOR 		=> self::COUNTER_AUDITOR_EXPIRED
+		// According to the new role model, the auditor is removed from the deadline recipients
 	];
 
 	public const MAP_MUTED_EXPIRED = [

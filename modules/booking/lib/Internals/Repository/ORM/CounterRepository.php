@@ -22,9 +22,12 @@ class CounterRepository implements CounterRepositoryInterface
 	{
 		return match ($type)
 		{
-			CounterDictionary::BookingDelayed => $this->getBookingDelayed($userId, $entityId),
-			CounterDictionary::BookingUnConfirmed => $this->getBookingUnConfirmed($userId, $entityId),
-			CounterDictionary::Total => $this->getTotal($userId),
+			CounterDictionary::BookingDelayed,
+			CounterDictionary::BookingUnConfirmed,
+			CounterDictionary::BookingNewYandexMaps,
+				=> $this->getValue($userId, $entityId, $type),
+			CounterDictionary::Total
+				=> $this->getTotal($userId),
 			default => 0,
 		};
 	}
@@ -64,23 +67,26 @@ class CounterRepository implements CounterRepositoryInterface
 
 	public function down(int $entityId, CounterDictionary $type, int|null $userId = null): void
 	{
-		$this->downMultiple([$entityId], [$type], $userId);
+		$this->downMultiple([$entityId], [$type], [$userId]);
 	}
 
 	/**
 	 * @param int[] $entityIds
 	 * @param CounterDictionary[] $types
 	 */
-	public function downMultiple(array $entityIds, array $types, int|null $userId = null): void
+	public function downMultiple(array $entityIds, array $types, array $userIds = []): void
 	{
-		if (empty($entityIds) && empty($types) && $userId === null)
+		if (empty($entityIds) && empty($types) && empty($userIds))
 		{
 			return;
 		}
 
-		if ($userId !== null)
+		if (!empty($userIds))
 		{
-			unset($this->cache[$userId]);
+			foreach ($userIds as $userId)
+			{
+				unset($this->cache[$userId]);
+			}
 		}
 		else
 		{
@@ -103,22 +109,24 @@ class CounterRepository implements CounterRepositoryInterface
 			$filter['=TYPE'] = array_map(static fn (CounterDictionary $type) => $type->value, $types);
 		}
 
-		if ($userId)
+		if (!empty($userIds))
 		{
-			$filter['=USER_ID'] = $userId;
+			$filter['=USER_ID'] = $userIds;
 		}
 
 		$this->deleteByFilter($filter);
 	}
 
-	public function getUsersByCounterType(array $entityIds, array $types): array
+	public function getUserIdsByCounterType(array $entityIds, array $types): array
 	{
+		$result = [];
+
 		if (empty($entityIds) || empty($types))
 		{
-			return [];
+			return $result;
 		}
 
-		return ScorerTable::query()
+		$list = ScorerTable::query()
 			->setSelect(['USER_ID'])
 			->setDistinct()
 			->whereIn('TYPE', array_map(static fn (CounterDictionary $type) => $type->value, $types))
@@ -126,6 +134,13 @@ class CounterRepository implements CounterRepositoryInterface
 			->exec()
 			->fetchAll()
 		;
+
+		foreach ($list as $item)
+		{
+			$result[] = (int)$item['USER_ID'];
+		}
+
+		return $result;
 	}
 
 	public function getList(int $userId): array
@@ -134,6 +149,7 @@ class CounterRepository implements CounterRepositoryInterface
 			'total' => $this->get($userId, CounterDictionary::Total),
 			'unConfirmed' => $this->get($userId, CounterDictionary::BookingUnConfirmed),
 			'delayed' => $this->get($userId, CounterDictionary::BookingDelayed),
+			'newYandexMaps' => $this->get($userId, CounterDictionary::BookingNewYandexMaps),
 		];
 	}
 
@@ -144,11 +160,14 @@ class CounterRepository implements CounterRepositoryInterface
 
 	private function getTotal(int $userId): int
 	{
-		return $this->get($userId, CounterDictionary::BookingUnConfirmed)
-			+ $this->get($userId, CounterDictionary::BookingDelayed);
+		return (
+			$this->get($userId, CounterDictionary::BookingUnConfirmed)
+			+ $this->get($userId, CounterDictionary::BookingDelayed)
+			+ $this->get($userId, CounterDictionary::BookingNewYandexMaps)
+		);
 	}
 
-	private function getBookingUnConfirmed(int $userId, int $entityId): int
+	private function getValue(int $userId, int $entityId, CounterDictionary $type): int
 	{
 		$counters = $this->getByUser($userId);
 
@@ -157,29 +176,23 @@ class CounterRepository implements CounterRepositoryInterface
 			return 0;
 		}
 
+		$map = $this->getCounterTypeToMetaKeyMap();
+
 		if ($entityId === 0)
 		{
-			return $counters['META']['BOOKING_UNCONFIRMED_TOTAL'];
+			return $counters['META'][$map[$type->value]];
 		}
 
-		return $this->getValueByEntity($counters, $entityId, CounterDictionary::BookingUnConfirmed);
+		return $this->getValueByEntity($counters, $entityId, $type);
 	}
 
-	private function getBookingDelayed(int $userId, int $entityId): int
+	private function getCounterTypeToMetaKeyMap(): array
 	{
-		$counters = $this->getByUser($userId);
-
-		if (empty($counters))
-		{
-			return 0;
-		}
-
-		if ($entityId === 0)
-		{
-			return $counters['META']['BOOKING_DELAYED_TOTAL'];
-		}
-
-		return $this->getValueByEntity($counters, $entityId, CounterDictionary::BookingDelayed);
+		return [
+			CounterDictionary::BookingUnConfirmed->value => 'BOOKING_UNCONFIRMED_TOTAL',
+			CounterDictionary::BookingDelayed->value => 'BOOKING_DELAYED_TOTAL',
+			CounterDictionary::BookingNewYandexMaps->value => 'BOOKING_NEW_YANDEX_MAPS',
+		];
 	}
 
 	private function preComputeCounters(int $userId): array
@@ -188,6 +201,7 @@ class CounterRepository implements CounterRepositoryInterface
 			'TOTAL' => 0,
 			'BOOKING_UNCONFIRMED_TOTAL' => 0,
 			'BOOKING_DELAYED_TOTAL' => 0,
+			'BOOKING_NEW_YANDEX_MAPS' => 0,
 		];
 
 		if (empty($this->cache[$userId]))
@@ -197,6 +211,7 @@ class CounterRepository implements CounterRepositoryInterface
 
 		foreach ($this->cache[$userId] as $counter)
 		{
+			//@todo use map!
 			if ($counter['TYPE'] === CounterDictionary::BookingUnConfirmed->value)
 			{
 				$meta['BOOKING_UNCONFIRMED_TOTAL'] += (int)$counter['VALUE'];
@@ -205,6 +220,11 @@ class CounterRepository implements CounterRepositoryInterface
 			if ($counter['TYPE'] === CounterDictionary::BookingDelayed->value)
 			{
 				$meta['BOOKING_DELAYED_TOTAL'] += (int)$counter['VALUE'];
+			}
+
+			if ($counter['TYPE'] === CounterDictionary::BookingNewYandexMaps->value)
+			{
+				$meta['BOOKING_NEW_YANDEX_MAPS'] += (int)$counter['VALUE'];
 			}
 		}
 

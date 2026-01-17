@@ -182,7 +182,8 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		));
 		$APPLICATION->setTitle(htmlspecialcharsbx($message['SUBJECT']) ?: Loc::getMessage('MAIL_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER'));
 		$this->arResult['MESSAGE_UID_KEY'] = $message['UID'] . '-' . $message['MAILBOX_ID'];
-		$this->arResult['COPILOT_PARAMS'] = $this->prepareCopilotParams($USER->getId());
+		$this->arResult['COPILOT_PARAMS'] = $this->prepareCopilotParams();
+		$this->arResult['ANALYTICS'] = $this->arParams['ANALYTICS'];
 
 		$this->includeComponentTemplate();
 	}
@@ -380,7 +381,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		$this->markMessageAsSeen($this->arResult['MESSAGE']);
 		ob_start();
 
-		$this->arResult['COPILOT_PARAMS'] = $this->prepareCopilotParams(Main\Engine\CurrentUser::get()->getId());
+		$this->arResult['COPILOT_PARAMS'] = $this->prepareCopilotParams();
 		$this->includeComponentTemplate('logitem');
 
 		return ob_get_clean();

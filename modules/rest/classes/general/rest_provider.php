@@ -55,6 +55,16 @@ class CRestProvider extends IRestService
 		"ent8000" => "ent8000",
 		"ent9000" => "ent9000",
 		"ent10000" => "ent10000",
+		"entholding1000" => "entholding1000",
+		"entholding2000" => "entholding2000",
+		"entholding3000" => "entholding3000",
+		"entholding4000" => "entholding4000",
+		"entholding5000" => "entholding5000",
+		"entholding6000" => "entholding6000",
+		"entholding7000" => "entholding7000",
+		"entholding8000" => "entholding8000",
+		"entholding9000" => "entholding9000",
+		"entholding10000" => "entholding10000",
 	);
 
 	protected static $arApp = null;

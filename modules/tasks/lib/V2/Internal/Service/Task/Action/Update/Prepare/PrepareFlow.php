@@ -25,14 +25,18 @@ class PrepareFlow implements PrepareFieldInterface
 		$flowId = (int)($fields['FLOW_ID'] ?? $fullTaskData['FLOW_ID']);
 		$handler = new FlowFieldHandler($flowId, $this->config->getUserId());
 
+		$skipTimeZoneFields = $this->config->getSkipTimeZoneFields();
+
 		try
 		{
-			$handler->modify($fields, $fullTaskData);
+			$handler->modify($fields, $skipTimeZoneFields, $fullTaskData);
 		}
 		catch (FlowTaskException|FlowNotFoundException $e)
 		{
 			throw new TaskFieldValidateException($e->getMessage());
 		}
+
+		$this->config->setSkipTimeZoneFields($skipTimeZoneFields);
 
 		return $fields;
 	}

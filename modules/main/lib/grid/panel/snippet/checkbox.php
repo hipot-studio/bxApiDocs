@@ -1,11 +1,9 @@
-<?
+<?php
 
 namespace Bitrix\Main\Grid\Panel\Snippet;
 
-
 use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Types;
-
 
 /**
  * Group action panel checkbox

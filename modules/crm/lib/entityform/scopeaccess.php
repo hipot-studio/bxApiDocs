@@ -95,4 +95,9 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 			->getUserPermissions($this->userId)
 			->isAdminForEntity($parseResult->entityTypeId(), $parseResult->categoryId());
 	}
+
+	public function canUseOnAddOnUpdateSegregation(): bool
+	{
+		return true;
+	}
 }

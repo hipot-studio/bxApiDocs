@@ -8,8 +8,6 @@
 
 namespace Bitrix\Tasks\Integration;
 
-use Bitrix\Tasks\Integration;
-
 abstract class Calendar extends Integration
 {
 	const MODULE_NAME = 'calendar';

@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Interaction\Response;
 
-use Bitrix\Rest\V3\Structures\Aggregation\AggregationResultStructure;
+use Bitrix\Rest\V3\Structure\Aggregation\AggregationResultStructure;
 
 class AggregateResponse extends Response
 {

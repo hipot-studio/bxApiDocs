@@ -2,8 +2,6 @@
 
 namespace Bitrix\Main\Engine\Response\Render;
 
-use CMain;
-
 /**
  * Response with component on site template.
  *
@@ -16,6 +14,7 @@ final class Component extends Base
 		private string $template,
 		private array $params = [],
 		bool $withSiteTemplate = true,
+		private ?string $siteTemplateId = null,
 	)
 	{
 		parent::__construct($withSiteTemplate);
@@ -23,16 +22,15 @@ final class Component extends Base
 
 	protected function renderContent(): void
 	{
-		global $APPLICATION;
+		$component = new \CBitrixComponent();
+		if ($component->initComponent($this->name))
+		{
+			if (isset($this->siteTemplateId))
+			{
+				$component->setSiteTemplateId($this->siteTemplateId);
+			}
 
-		/**
-		 * @var CMain $APPLICATION
-		 */
-
-		$APPLICATION->IncludeComponent(
-			$this->name,
-			$this->template,
-			$this->params
-		);
+			$component->includeComponent($this->template, $this->params, null);
+		}
 	}
 }

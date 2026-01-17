@@ -46,6 +46,18 @@ class CopyFilesOnItemClone
 		}
 	}
 
+	public function cloneValue(Field $field, int $existedFileId): ?int
+	{
+		$newFileId = \CFile::CloneFile($existedFileId);
+		if ($newFileId)
+		{
+			$this->fileUploader->registerFileId($field, $newFileId);
+			$this->fileUploader->markFileAsTemporary($newFileId);
+		}
+
+		return $newFileId;
+	}
+
 	private function iterateOverUFFileFields(Item &$item, Factory $factory): \Generator
 	{
 		foreach ($item->getData() as $fieldName => $value)
@@ -76,13 +88,10 @@ class CopyFilesOnItemClone
 		$newFileIds = [];
 		foreach ($value as $singleValue)
 		{
-			$newFileId = \CFile::CloneFile($singleValue);
+			$newFileId = $this->cloneValue($field, $singleValue);
 			if ($newFileId)
 			{
 				$newFileIds[] = $newFileId;
-				$this->fileUploader->registerFileId($field, $newFileId);
-
-				$this->addFileToNotUsedCleanQueue($newFileId);
 			}
 		}
 
@@ -96,34 +105,16 @@ class CopyFilesOnItemClone
 			return;
 		}
 
-		$newFileId = \CFile::CloneFile($value);
-
+		$newFileId = $this->cloneValue($field, $value);
 		if ($newFileId)
 		{
-			$this->fileUploader->registerFileId($field, $newFileId);
-
 			$item->set($field->getName(), $newFileId);
-
-			$this->addFileToNotUsedCleanQueue($newFileId);
 		}
-	}
-
-	/**
-	 * Add fileId to the cleanup queue. If the entity copy operation is completed successfully, then the file ID must be
-	 * removed from this queue, otherwise the copy of the file will be deleted.
-	 * @see \Bitrix\Crm\Agent\Files\CleanUnusedFilesAfterCopy
-	 * @param int $fileId
-	 * @return void
-	 */
-	private function addFileToNotUsedCleanQueue(int $fileId): void
-	{
-		$this->multiValueStoreService->add(self::CLEAN_FILE_QUEUE_KEY, $fileId);
 	}
 
 	/**
 	 * Remove file from cleanup queue.
 	 * @param int $fileId
-	 * @see self::addFileToNotUsedCleanQueue
 	 */
 	public static function removeFileFromNotUsedCleanQueue(int $fileId): void
 	{

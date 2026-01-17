@@ -1,8 +1,12 @@
 <?php
 
+use Bitrix\Mail\Helper\Message;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Mail;
+use Bitrix\Mail\Helper\LicenseManager;
+use Bitrix\Mail\Helper\Config\Feature;
+
 
 \Bitrix\Main\UI\Extension::load('mail.messagegrid');
 
@@ -81,6 +85,8 @@ class CMailClientComponent extends CBitrixComponent
 				'config_dirs' => 'config/dirs',
 				'addressbook' => 'addressbook',
 				'mbx_list' => 'mailbox-list',
+				'massconnect' => 'massconnect',
+				'config_permissions' => 'permissions',
 			);
 		}
 		else
@@ -97,6 +103,8 @@ class CMailClientComponent extends CBitrixComponent
 				'config_dirs' => 'page=config_dirs',
 				'addressbook' => 'page=addressbook',
 				'mbx_list' => 'page=mailbox-list',
+				'massconnect' => 'page=massconnect',
+				'config_permissions' => 'page=permissions',
 			);
 		}
 
@@ -127,9 +135,34 @@ class CMailClientComponent extends CBitrixComponent
 		if (empty($componentPage) || !array_key_exists($componentPage, $defaultUrlTemplates))
 			$componentPage = 'home';
 
-		if ($componentPage === 'mbx_list' && !(Main\Config\Option::get('mail', 'enable_mailbox_list_grid_page', 'N') === 'Y'))
+		$gridPages = ['mbx_list', 'massconnect', 'config_permissions'];
+		if (in_array($componentPage, $gridPages, true) && !Feature::isMailboxGridAvailable())
 		{
 			$componentPage = 'home';
+		}
+
+		if ($componentPage === 'mbx_list' && !LicenseManager::isMailboxManagementEnabled())
+		{
+			$this->arParams['MAIL_SLIDER_CODE'] = 'limit_v2_mail_mailboxes_management_grid';
+			$this->includeComponentTemplate('hidden_module');
+
+			return;
+		}
+
+		if ($componentPage === 'massconnect' && !LicenseManager::isMailboxesMassConnectEnabled())
+		{
+			$this->arParams['MAIL_SLIDER_CODE'] = 'limit_v2_mail_mailbox_massconnect';
+			$this->includeComponentTemplate('hidden_module');
+
+			return;
+		}
+
+		if ($componentPage === 'config_permissions' && !LicenseManager::isAccessRightsEnabled())
+		{
+			$this->arParams['MAIL_SLIDER_CODE'] = 'limit_v2_mail_access_rights';
+			$this->includeComponentTemplate('hidden_module');
+
+			return;
 		}
 
 		$this->arResult['VARIABLES'] = $variables;
@@ -162,6 +195,12 @@ class CMailClientComponent extends CBitrixComponent
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/mail.contact.avatar/templates/.default/style.css');
 
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/main.interface.buttons/templates/.default/style.css');
+
+		$requestSource = $_REQUEST['source'] ?? null;
+		if ($validSource = Message::getValidatedSource($componentPage, $requestSource))
+		{
+			$this->arResult['ANALYTICS']['SOURCE'] = $validSource;
+		}
 
 		$this->includeComponentTemplate($componentPage);
 	}

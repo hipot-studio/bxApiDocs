@@ -7,12 +7,12 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\ParentTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use CTasks;
+use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
 class ParentService
 {
 	public function __construct(
-		private readonly UpdateService $updateService,
+		private readonly UpdateTaskService $updateService,
 		private readonly ParentTaskRepositoryInterface $parentTaskRepository,
 	)
 	{
@@ -26,9 +26,7 @@ class ParentService
 
 		$config = new UpdateConfig(userId: $userId);
 
-		[$task] = $this->updateService->update(task: $entity, config: $config);
-
-		return $task;
+		return $this->updateService->update(task: $entity, config: $config);;
 	}
 
 	public function deleteParent(int $taskId, int $userId): Entity\Task
@@ -38,9 +36,7 @@ class ParentService
 		);
 		$config = new UpdateConfig(userId: $userId);
 
-		[$task] = $this->updateService->update(task: $entity, config: $config);
-
-		return $task;
+		return $this->updateService->update(task: $entity, config: $config);;
 	}
 
 	public function isDescendantOf(int $descendantId, int $ancestorId): bool
@@ -86,6 +82,16 @@ class ParentService
 		}
 
 		return $this->parentTaskRepository->getParentId($taskId);
+	}
+
+	public function getParentIds(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		return $this->parentTaskRepository->getParentIds($taskIds);
 	}
 }
 

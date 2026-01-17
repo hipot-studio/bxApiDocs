@@ -1,11 +1,10 @@
-<?
+<?php
 
 namespace Bitrix\Main\Grid\Panel\Snippet;
 
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
-
 
 /**
  * Control change actions

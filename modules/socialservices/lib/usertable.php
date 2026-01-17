@@ -1,10 +1,9 @@
-<?
+<?php
+
 namespace Bitrix\Socialservices;
 
-use \Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Event;
-use Bitrix\Socialservices\EncryptedToken\FieldValue;
-
+use Bitrix\Main\ORM\Data\DataManager;
 
 /**
  * Class UserTable
@@ -22,7 +21,7 @@ use Bitrix\Socialservices\EncryptedToken\FieldValue;
  * @method static \Bitrix\Socialservices\EO_User wakeUpObject($row)
  * @method static \Bitrix\Socialservices\EO_User_Collection wakeUpCollection($rows)
  */
-class UserTable extends Entity\DataManager
+class UserTable extends DataManager
 {
 	const ALLOW = 'Y';
 	const DISALLOW = 'N';

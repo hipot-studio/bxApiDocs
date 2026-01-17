@@ -2,10 +2,11 @@
 
 namespace Bitrix\BIConnector;
 
-use Bitrix\Main\Config\Configuration;
+use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Type\Date;
 
 abstract class LimitManager
 {
@@ -15,21 +16,22 @@ abstract class LimitManager
 	public const AUTO_RELEASE_DAYS_SUPERSET = 1;
 	public const LOCK_DURATION_DAYS_SUPERSET = 1.5;
 
-	protected const FIRST_OVER_LIMIT_OPTION_NAME = 'over_limit_ts';
-	protected const LAST_OVER_LIMIT_OPTION_NAME = 'last_limit_ts';
-	protected const LOCK_OPTION_NAME = 'disable_data_connection';
+	protected const DEPRECATED_LOCK_OPTION_NAME = 'disable_data_connection';
 
-	protected const FIRST_OVER_LIMIT_OPTION_NAME_SUPERSET = 'over_limit_ts_superset';
-	protected const LAST_OVER_LIMIT_OPTION_NAME_SUPERSET = 'last_limit_ts_superset';
-	protected const LOCK_OPTION_NAME_SUPERSET = 'disable_data_connection_superset';
-	protected const LOCK_DATE_OPTION_NAME_SUPERSET = 'disable_data_connection_ts_superset';
+	protected const OPTION_GRACE_PERIOD_DAYS = 'biconnector_grace_period_days';
+	protected const OPTION_PREFIX_OVER_LIMIT = 'over_limit_ts';
+	protected const OPTION_PREFIX_LAST_LIMIT = 'last_limit_ts';
+	protected const OPTION_PREFIX_LOCK_DATE = 'lock_date_ts';
+	protected const OPTION_PREFIX_LOCK = 'disable_data_connection';
+	protected const LOCKED_SERVICES_OPTION_NAME = 'disable_data_connection_services'; // JSON array of service IDs
 
-	protected bool $isSuperset = false;
+	protected bool $softMode = false;
+	protected ?Service $service = null;
 
 	/**
 	 * @return LimitManager
 	 */
-	public static function getInstance(): LimitManager
+	public static function getInstance(): self
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
@@ -52,29 +54,53 @@ abstract class LimitManager
 	public function fixLimit(int $rowsCount): bool
 	{
 		$limit = $this->getLimit();
-		if ($limit > 0 && $rowsCount > $limit)
+		$exceeded = ($limit > 0 && $rowsCount > $limit);
+		$now = DateTime::createFromTimestamp(time());
+
+		if ($this->isSoftMode())
 		{
-			$this->setLastOverLimitDate();
-			$firstOverLimitDate = $this->getFirstOverLimitDate();
-			if (!$firstOverLimitDate)
+			$this->isDataConnectionDisabled()
+				? $this->enableDataConnection()
+				: $this->clearOverLimitTimestamps()
+			;
+
+			return true;
+		}
+
+		if ($exceeded)
+		{
+			$this->setLastOverLimitDate($now);
+			$first = $this->getFirstOverLimitDate();
+			if ($first === null)
 			{
-				$this->setFirstOverLimitDate();
+				$this->setFirstOverLimitDate($now);
 			}
-			elseif (new DateTime() > $firstOverLimitDate->add("{$this->getGracePeriodDays()} days"))
+			else
 			{
-				if (!$this->isDataConnectionDisabled())
+				$graceEnd = clone $first;
+				$graceEnd->add($this->getGracePeriodDays() . ' days');
+				if ($now > $graceEnd && !$this->isDataConnectionDisabled())
 				{
-					$this->setDisabledDataConnection();
+					$this->disableDataConnection();
 				}
 			}
 
 			return true;
 		}
 
-		$lastOverLimitDate = $this->getLastOverLimitDate();
-		if (new DateTime() > $lastOverLimitDate?->add($this->getAutoReleaseDays() * 24 . ' hours'))
+		$last = $this->getLastOverLimitDate();
+		if (empty($last))
 		{
-			$this->clearOverLimitTimestamps();
+			return false;
+		}
+
+		$last->add($this->getAutoReleaseDays() * 24 . ' hours');
+		if ($now > $last)
+		{
+			$this->isDataConnectionDisabled()
+				? $this->enableDataConnection()
+				: $this->clearOverLimitTimestamps()
+			;
 		}
 
 		return false;
@@ -91,28 +117,28 @@ abstract class LimitManager
 	 *
 	 * @return int
 	 */
-	abstract public function getLimit();
+	abstract public function getLimit(): int;
 
 	/**
 	 * Returns a date when data export will be disabled.
 	 *
-	 * @return \Bitrix\Main\Type\Date
+	 * @return Date
 	 */
-	abstract public function getLimitDate();
+	abstract public function getLimitDate(): Date;
 
 	/**
 	 * Returns true if there is nothing to worry about.
 	 *
 	 * @return bool
 	 */
-	abstract public function checkLimitWarning();
+	abstract public function checkLimitWarning(): bool;
 
 	/**
 	 * Returns true if data export and some functions is not disabled.
 	 *
 	 * @return bool
 	 */
-	abstract public function checkLimit();
+	abstract public function checkLimit(): bool;
 
 	/**
 	 * Event OnAfterSetOption_~controller_group_name handler.
@@ -121,24 +147,15 @@ abstract class LimitManager
 	 *
 	 * @return void
 	 */
-	abstract public function licenseChange(\Bitrix\Main\Event $event);
+	abstract public function licenseChange(\Bitrix\Main\Event $event): void;
 
 	/**
-	 * Sets superset key to use the proper limits.
-	 *
-	 * @param string $supersetKey
-	 * @return $this
+	 * Set service to manage limits for.
+	 * If not set, common BI limits are used.
 	 */
-	public function setSupersetKey(string $supersetKey): LimitManager
+	public function setService(Service $service): self
 	{
-		$configParams = Configuration::getValue('biconnector');
-		if (
-			isset($configParams['superset_key'])
-			&& $configParams['superset_key'] === $supersetKey
-		)
-		{
-			$this->setIsSuperset();
-		}
+		$this->service = $service;
 
 		return $this;
 	}
@@ -150,7 +167,7 @@ abstract class LimitManager
 	 */
 	public function isSuperset(): bool
 	{
-		return $this->isSuperset;
+		return $this->service instanceof ApacheSuperset;
 	}
 
 	/**
@@ -159,25 +176,42 @@ abstract class LimitManager
 	 * @see LimitManager::setSupersetKey
 	 *
 	 * @return $this
+	 * @deprecated
 	 */
 	public function setIsSuperset(): self
 	{
-		$this->isSuperset = true;
-		$unlockDate = $this->getSupersetUnlockDate();
-		if (
-			$unlockDate !== null
-			&& new DateTime() > $unlockDate
-		)
+		if (!$this->service instanceof \Bitrix\BIConnector\Services\ApacheSuperset)
 		{
-			$this->clearOverLimitTimestamps();
-			$this->setDisabledDataConnection(false);
+			$this->service = \Bitrix\BIConnector\Manager::getInstance()->createService(\Bitrix\BIConnector\Services\ApacheSuperset::getServiceId());
+		}
+
+		if ($this->isDataConnectionDisabled())
+		{
+			$this->enableDataConnection();
 		}
 
 		return $this;
 	}
 
+	public function enableSoftMode(): self
+	{
+		$this->softMode = true;
+
+		return $this;
+	}
+
+	public function isSoftMode(): bool
+	{
+		return $this->isSuperset() || $this->softMode;
+	}
+
 	protected function isDataConnectionDisabled(): bool
 	{
+		if (!$this->isSuperset() && Option::get('biconnector', self::DEPRECATED_LOCK_OPTION_NAME, 'N') === 'Y')
+		{
+			return true;
+		}
+
 		return Option::get('biconnector', $this->getLockOptionName(), 'N') === 'Y';
 	}
 
@@ -205,7 +239,12 @@ abstract class LimitManager
 
 	protected function getGracePeriodDays(): int
 	{
-		return $this->isSuperset() ? self::GRACE_PERIOD_DAYS_SUPERSET : self::GRACE_PERIOD_DAYS;
+		if ($this->isSuperset())
+		{
+			return self::GRACE_PERIOD_DAYS_SUPERSET;
+		}
+
+		return Option::get('biconnector', self::OPTION_GRACE_PERIOD_DAYS, self::GRACE_PERIOD_DAYS);
 	}
 
 	protected function getAutoReleaseDays(): int
@@ -219,7 +258,8 @@ abstract class LimitManager
 		{
 			return null;
 		}
-		$time = (int)Option::get('biconnector', self::LOCK_DATE_OPTION_NAME_SUPERSET);
+
+		$time = (int)Option::get('biconnector', $this->getLockDateOptionName());
 		if ($time)
 		{
 			return DateTime::createFromTimestamp($time);
@@ -228,6 +268,7 @@ abstract class LimitManager
 		return null;
 	}
 
+	/** @deprecated  */
 	public function getSupersetUnlockDate(): ?DateTime
 	{
 		if (!$this->isSuperset())
@@ -247,7 +288,7 @@ abstract class LimitManager
 		return $lockDate->add(self::LOCK_DURATION_DAYS_SUPERSET * 24 . " hours");
 	}
 
-	protected function setFirstOverLimitDate(DateTime $date = null): void
+	protected function setFirstOverLimitDate(?DateTime $date = null): void
 	{
 		if (!$date)
 		{
@@ -257,7 +298,7 @@ abstract class LimitManager
 		Option::set('biconnector', $this->getFirstOverLimitOptionName(), $date->getTimestamp());
 	}
 
-	protected function setLastOverLimitDate(DateTime $date = null): void
+	protected function setLastOverLimitDate(?DateTime $date = null): void
 	{
 		if (!$date)
 		{
@@ -267,13 +308,49 @@ abstract class LimitManager
 		Option::set('biconnector', $this->getLastOverLimitOptionName(), $date->getTimestamp());
 	}
 
-	protected function setDisabledDataConnection(bool $disabled = true): void
+	protected function disableDataConnection(): void
 	{
-		$optionValue = $disabled ? 'Y' : 'N';
-		Option::set('biconnector', $this->getLockOptionName(), $optionValue);
+		if (!$this->service)
+		{
+			return;
+		}
+
+		Option::set('biconnector', $this->getLockOptionName(), 'Y');
 		if ($this->isSuperset())
 		{
-			Option::set('biconnector', self::LOCK_DATE_OPTION_NAME_SUPERSET, time());
+			Option::set('biconnector', $this->getLockDateOptionName(), time());
+		}
+
+		$serviceId = $this->service::getServiceId();
+		$locked = $this->getLockedServicesList();
+		if (!empty($serviceId) && !in_array($serviceId, $locked, true))
+		{
+			$locked[] = $serviceId;
+			$this->setLockedServicesList($locked);
+		}
+	}
+
+	protected function enableDataConnection(): void
+	{
+		if (!$this->isSuperset())
+		{
+			Option::delete('biconnector', ['name' => self::DEPRECATED_LOCK_OPTION_NAME]);
+		}
+
+		if (!$this->service)
+		{
+			return;
+		}
+
+		Option::delete('biconnector', ['name' => $this->getLockOptionName()]);
+		$this->clearOverLimitTimestamps();
+
+		$serviceId = $this->service::getServiceId();
+		$locked = $this->getLockedServicesList();
+		if (!empty($serviceId) && in_array($serviceId, $locked, true))
+		{
+			$newLockedList = array_values(array_filter($locked, static fn($id) => $id !== $serviceId));
+			$this->setLockedServicesList($newLockedList);
 		}
 	}
 
@@ -281,27 +358,65 @@ abstract class LimitManager
 	{
 		Option::delete('biconnector', ['name' => $this->getFirstOverLimitOptionName()]);
 		Option::delete('biconnector', ['name' => $this->getLastOverLimitOptionName()]);
+		Option::delete('biconnector', ['name' => $this->getLockDateOptionName()]);
 	}
 
 	protected function getFirstOverLimitOptionName(): string
 	{
-		return $this->isSuperset()
-			? self::FIRST_OVER_LIMIT_OPTION_NAME_SUPERSET
-			: self::FIRST_OVER_LIMIT_OPTION_NAME;
+		return $this->buildServiceOptionName(self::OPTION_PREFIX_OVER_LIMIT);
 	}
 
 	protected function getLastOverLimitOptionName(): string
 	{
-		return $this->isSuperset()
-			? self::LAST_OVER_LIMIT_OPTION_NAME_SUPERSET
-			: self::LAST_OVER_LIMIT_OPTION_NAME;
+		return $this->buildServiceOptionName(self::OPTION_PREFIX_LAST_LIMIT);
 	}
 
 	protected function getLockOptionName(): string
 	{
-		return $this->isSuperset()
-			? self::LOCK_OPTION_NAME_SUPERSET
-			: self::LOCK_OPTION_NAME;
+		return $this->buildServiceOptionName(self::OPTION_PREFIX_LOCK);
+	}
+
+	protected function getLockDateOptionName(): string
+	{
+		return $this->buildServiceOptionName(self::OPTION_PREFIX_LOCK_DATE);
+	}
+
+	protected function buildServiceOptionName(string $prefix): string
+	{
+		if ($this->service)
+		{
+			return $prefix . '_' . $this->service::getServiceId();
+		}
+
+		return $prefix;
+	}
+
+	protected function getLockedServicesList(): array
+	{
+		$value = Option::get('biconnector', self::LOCKED_SERVICES_OPTION_NAME, '[]');
+		try
+		{
+			$decoded = \Bitrix\Main\Web\Json::decode($value);
+
+			return is_array($decoded) ? $decoded : [];
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+	}
+
+	protected function setLockedServicesList(array $list): void
+	{
+		$list = array_values(array_unique(array_filter($list, 'is_string')));
+		if (empty($list))
+		{
+			Option::delete('biconnector', ['name' => self::LOCKED_SERVICES_OPTION_NAME]);
+
+			return;
+		}
+
+		Option::set('biconnector', self::LOCKED_SERVICES_OPTION_NAME, \Bitrix\Main\Web\Json::encode($list));
 	}
 
 	/**
@@ -314,5 +429,15 @@ abstract class LimitManager
 	public static function onBitrix24LicenseChange(\Bitrix\Main\Event $event)
 	{
 		static::getInstance()->licenseChange($event);
+	}
+
+	/**
+	 * Release current data connection lock and clear over-limit state.
+	 * Can be used by services that switch to soft-limit (v2) mode.
+	 */
+	public function releaseLock(): void
+	{
+		$this->enableSoftMode();
+		$this->enableDataConnection();
 	}
 }

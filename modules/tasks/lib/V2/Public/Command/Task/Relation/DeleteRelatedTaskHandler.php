@@ -19,9 +19,16 @@ class DeleteRelatedTaskHandler
 
 	public function __invoke(DeleteRelatedTaskCommand $command): Task
 	{
-		return $this->consistencyResolver->resolve('task.related.delete')->wrap(
-			fn (): Task => $this->relatedTaskService->delete($command->taskId, [$command->relatedTaskId], $command->userId),
-		);
+		if ($command->useConsistency)
+		{
+			return $this->consistencyResolver->resolve('task.related.delete')->wrap(
+				fn (): Task => $this->relatedTaskService->delete($command->taskId, [$command->relatedTaskId], $command->userId),
+			);
+		}
+		else
+		{
+			return $this->relatedTaskService->delete($command->taskId, [$command->relatedTaskId], $command->userId);
+		}
 	}
 }
 

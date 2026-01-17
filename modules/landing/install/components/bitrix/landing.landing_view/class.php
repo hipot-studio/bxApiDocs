@@ -1343,14 +1343,20 @@ class LandingViewComponent extends LandingBaseComponent
 				);
 
 				// params for analytics
-				$category =
-					$this->arResult['SPECIAL_TYPE'] === Site\Type::PSEUDO_SCOPE_CODE_FORMS
-						? Metrika\Categories::CrmForms
-						: Metrika\Categories::getBySiteType($this->arParams['TYPE'])
-				;
+				if ($this->arResult['SPECIAL_TYPE'] === Site\Type::PSEUDO_SCOPE_CODE_FORMS)
+				{
+					$tools =Metrika\Tools::CrmForms;
+					$category = Metrika\Categories::CrmForms;
+				}
+				else
+				{
+					$tools = Metrika\Tools::getBySiteType($this->arParams['TYPE']);
+					$category = Metrika\Categories::getBySiteType($this->arParams['TYPE']);
+				}
 				$metrika = new Metrika\Metrika(
 					$category,
 					Metrika\Events::openMarket,
+					$tools,
 				);
 				$metrikaStyle = clone $metrika;
 

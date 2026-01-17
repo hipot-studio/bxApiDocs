@@ -10,18 +10,14 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Integration\Forum\Task\UserTopic;
-use Bitrix\Tasks\Integration\Pull\PushCommand;
-use Bitrix\Tasks\Integration\Pull\PushService;
-use Bitrix\Tasks\Internals\Counter\CounterService;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Counter\Role;
 use Bitrix\Tasks\Internals\Registry\UserRegistry;
 use Bitrix\Tasks\Internals\Task\ViewedTable;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Pull;
+use Bitrix\Tasks\V2\Internal\Service\Counter;
+use Bitrix\Tasks\V2\Internal\Service\ReadAllMessages\ReadAllMessagesQuery;
 
-/**
- * @deprecated Use more perf service
- * @see Group
- */
 class Task
 {
 	/**
@@ -63,27 +59,24 @@ class Task
 			$userJoin .= " AND TM.TYPE = '". $memberRole ."'";
 		}
 
-		$this->markAsRead($currentUserId, $userJoin, $groupCondition);
+		$this->markAsRead($currentUserId, $userJoin, $groupCondition, $groupId);
 
-
-		CounterService::addEvent(
-			EventDictionary::EVENT_AFTER_COMMENTS_READ_ALL,
-			[
-				'USER_ID' => $currentUserId,
-				'GROUP_ID' => $groupId,
-				'ROLE' => $memberRole
-			]
+		Container::getInstance()->get(Counter\Service::class)->send(
+			new Counter\Command\AfterCommentsReadAll(
+				userId: $currentUserId,
+				groupId: $groupId,
+				role: $memberRole,
+			),
 		);
 
-		PushService::addEvent($currentUserId, [
-			'module_id' => 'tasks',
-			'command' => PushCommand::COMMENTS_VIEWED,
-			'params' => [
-				'USER_ID' => $currentUserId,
-				'GROUP_ID' => $groupId,
-				'ROLE' => $role,
-			]
-		]);
+		Container::getInstance()->get(Pull\Push\Service::class)->send(
+			recipients: $currentUserId,
+			payload: new Pull\Push\CommentsViewed(
+				userId: $currentUserId,
+				groupId: $groupId,
+				role: $memberRole,
+			),
+		);
 
 		return true;
 	}
@@ -120,24 +113,22 @@ class Task
 
 		$userJoin = '';
 
-		$this->markAsRead($currentUserId, $userJoin, $groupCondition);
+		$this->markAsRead($currentUserId, $userJoin, $groupCondition, $groupId);
 
-		CounterService::addEvent(
-			EventDictionary::EVENT_AFTER_PROJECT_READ_ALL,
-			[
-				'USER_ID' => $currentUserId,
-				'GROUP_ID' => $groupId
-			]
+		Container::getInstance()->get(Counter\Service::class)->send(
+			new Counter\Command\AfterProjectReadAll(
+				userId: $currentUserId,
+				groupId: $groupId,
+			),
 		);
 
-		PushService::addEvent($currentUserId, [
-			'module_id' => 'tasks',
-			'command' => PushCommand::PROJECT_COMMENTS_VIEWED,
-			'params' => [
-				'USER_ID' => $currentUserId,
-				'GROUP_ID' => $groupId,
-			]
-		]);
+		Container::getInstance()->get(Pull\Push\Service::class)->send(
+			recipients: $currentUserId,
+			payload: new Pull\Push\ProjectCommentsViewed(
+				userId: $currentUserId,
+				groupId: $groupId,
+			),
+		);
 
 		return true;
 	}
@@ -168,25 +159,23 @@ class Task
 
 		$userJoin = '';
 
-		$this->markAsRead($currentUserId, $userJoin, $groupCondition);
+		$this->markAsRead($currentUserId, $userJoin, $groupCondition, $groupId);
 
-		CounterService::addEvent(
-			EventDictionary::EVENT_AFTER_SCRUM_READ_ALL,
-			[
-				'USER_ID' => $currentUserId,
-				'GROUP_ID' => $groupId
-			]
+		Container::getInstance()->get(Counter\Service::class)->send(
+			new Counter\Command\AfterScrumReadAll(
+				userId: $currentUserId,
+				groupId: $groupId,
+			),
 		);
 
-		PushService::addEvent($currentUserId, [
-			'module_id' => 'tasks',
-			'command' => PushCommand::SCRUM_COMMENTS_VIEWED,
-			'params' => [
-				'USER_ID' => $currentUserId,
-				'GROUP_ID' => $groupId,
-			]
-		]);
-
+		Container::getInstance()->get(Pull\Push\Service::class)->send(
+			recipients: $currentUserId,
+			payload: new Pull\Push\ScrumCommentsViewed(
+				userId: $currentUserId,
+				groupId: $groupId,
+			),
+		);
+	
 		return true;
 	}
 
@@ -197,9 +186,14 @@ class Task
 	 * @throws ArgumentTypeException
 	 * @throws SqlQueryException
 	 */
-	private function markAsRead(int $userId, string $userJoin, string $groupCondition = ''): void
+	private function markAsRead(int $userId, string $userJoin, string $groupCondition = '', ?int $groupId = null): void
 	{
 		UserTopic::onReadAll($userId, $userJoin, $groupCondition);
 		ViewedTable::readAll($userId, $userJoin, $groupCondition);
+
+		Container::getInstance()->get(ReadAllMessagesQuery::class)->execute(
+			userId: $userId,
+			groupId: $groupId,
+		);
 	}
 }

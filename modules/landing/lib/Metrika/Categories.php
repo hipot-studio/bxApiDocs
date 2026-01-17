@@ -15,6 +15,7 @@ enum Categories: string
 	case ExternalPictureEditor = 'external_picture_editor';
 	case SiteGeneration = 'site_generation';
 	case BlockEdition = 'block_edition';
+	case WidgetList = 'widget_list';
 
 	public static function getBySiteType(string $siteType): Categories
 	{

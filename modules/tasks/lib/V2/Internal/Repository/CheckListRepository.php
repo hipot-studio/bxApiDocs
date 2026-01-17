@@ -6,17 +6,35 @@ namespace Bitrix\Tasks\V2\Internal\Repository;
 
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\Type\Collection;
-use Bitrix\Tasks\CheckList\CheckListFacade;
-use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
-use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
+use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListFacadeResolver;
+use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListTreeService;
 
 class CheckListRepository implements CheckListRepositoryInterface
 {
+	public function __construct(
+		private readonly CheckListMapper $checkListMapper,
+		private readonly CheckListTreeService $treeService,
+		private readonly CheckListFacadeResolver $facadeResolver,
+	)
+	{
+	}
+
+	public function getByEntity(int $entityId, Entity\CheckList\Type $type): Entity\CheckList
+	{
+		$facade = $this->facadeResolver->resolveByType($type);
+
+		$items = $facade::getByEntityId($entityId);
+
+		$items = $this->treeService->buildTree($items);
+
+		return $this->checkListMapper->mapToEntity($items);
+	}
+
 	public function getIdsByEntity(int $entityId, Entity\CheckList\Type $type): array
 	{
-		/** @var CheckListFacade $facade */
-		$facade = $this->getFacade($type);
+		$facade = $this->facadeResolver->resolveByType($type);
 
 		/** @var DataManager $dataTable */
 		$dataTable = $facade::getCheckListDataController();
@@ -45,8 +63,7 @@ class CheckListRepository implements CheckListRepositoryInterface
 			return [];
 		}
 
-		/** @var CheckListFacade $facade */
-		$facade = $this->getFacade($type);
+		$facade = $this->facadeResolver->resolveByType($type);
 
 		/** @var DataManager $dataTable */
 		$dataTable = $facade::getCheckListDataController();
@@ -65,14 +82,5 @@ class CheckListRepository implements CheckListRepositoryInterface
 		Collection::normalizeArrayValuesByInt($attachments, false);
 
 		return $attachments;
-	}
-
-	private function getFacade(Entity\CheckList\Type $type): string
-	{
-		return match ($type)
-		{
-			Entity\CheckList\Type::Task => TaskCheckListFacade::class,
-			Entity\CheckList\Type::Template => TemplateCheckListFacade::class,
-		};
 	}
 }

@@ -94,10 +94,10 @@ abstract class BaseTypeStarter
 
 	public function run(): StartResult
 	{
-		$result = $this->runEventScenario();
+		$this->runEventScenario();
 		if ($this->config->scenario === Scenario::onEvent)
 		{
-			return $result ? $this->getSuccessResult() : $this->getFailedResult();
+			return !$this->getErrors() ? $this->getSuccessResult() : $this->getFailedResult();
 		}
 
 		if ($this->config->checkFeature && !$this->checkFeature())
@@ -210,7 +210,7 @@ abstract class BaseTypeStarter
 			return null;
 		}
 
-		$templateId = $template['ID'];
+		$templateId = (int)$template['ID'];
 		if (!$this->checkConstantsTuned($templateId))
 		{
 			return null;
@@ -279,7 +279,7 @@ abstract class BaseTypeStarter
 		return
 			(new StartResult())
 				->addErrors($this->getErrors())
-				->setWorkflowIds($this->unsetWorkflowIds())
+				->setWorkflowIds(array_keys($this->unsetWorkflowIds()))
 				->setTriggerApplied($this->isTriggerApplied)
 		;
 	}

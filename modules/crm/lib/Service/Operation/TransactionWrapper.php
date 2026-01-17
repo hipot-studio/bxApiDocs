@@ -134,7 +134,8 @@ final class TransactionWrapper
 			$scope = (
 				$this->operation->getContext()->getScope() === Context::SCOPE_AUTOMATION
 					? CrmStarter::AUTOMATION_SCOPE
-					: '')
+					: ''
+			)
 			;
 			if ($this->operation->getContext()->getScope() === Context::SCOPE_REST)
 			{
@@ -200,7 +201,7 @@ final class TransactionWrapper
 		}
 
 		$userId = (
-			in_array($this->operation->getContext()->getScope(), [Context::SCOPE_AUTOMATION, Context::SCOPE_REST], true)
+			$this->operation->getContext()->getScope() === Context::SCOPE_AUTOMATION
 				? 0
 				: $this->operation->getContext()->getUserId()
 		);

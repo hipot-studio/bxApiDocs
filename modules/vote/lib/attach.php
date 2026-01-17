@@ -80,33 +80,26 @@ class AttachTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('V_TABLE_FIELD_ID'),
 			),
 			'OBJECT_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_OBJECT_ID'),
 			),
 			'MODULE_ID' => array(
 				'data_type' => 'string',
 				'size' => 32,
-				'title' => Loc::getMessage('V_TABLE_FIELD_MODULE_ID')
 			),
 			'ENTITY_TYPE' => array(
 				'data_type' => 'string',
 				'size' => 100,
-				'title' => Loc::getMessage('V_TABLE_FIELD_ENTITY_TYPE')
 			),
 			'ENTITY_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_OBJECT_ID'),
 			),
 			'CREATE_TIME' => array(
 				'data_type' => 'datetime',
-				'title' => Loc::getMessage('V_TABLE_FIELD_TIMESTAMP_X'),
 			),
 			'CREATED_BY' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('V_TABLE_FIELD_AUTHOR_ID'),
 			),
 			'UID' => [
 				'data_type' => 'string',

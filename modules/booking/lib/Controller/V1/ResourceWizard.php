@@ -11,6 +11,7 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Integration;
+use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuCreator;
 use Bitrix\Booking\Internals\Integration\Notifications\TemplateRepository;
 use Bitrix\Booking\Internals\Integration\Notifications\LegalEntityProvider;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSenderPicker;
@@ -38,7 +39,7 @@ class ResourceWizard extends BaseController
 		$this->notificationsLegalEntityProvider = new LegalEntityProvider();
 	}
 
-	public function getAction(): ResourceWizardResponseResponse|null
+	public function getAction(CurrentUser $currentUser): ResourceWizardResponseResponse|null
 	{
 		BookingFeature::turnOnTrialIfPossible();
 
@@ -52,6 +53,9 @@ class ResourceWizard extends BaseController
 				companyScheduleUrl: $this->getCompanyScheduleUrl(),
 				weekStart: $this->getWeekStart(),
 				isChannelChoiceAvailable: $this->notificationsLegalEntityProvider->isRu() === true,
+				// TODO: remove after frontend start using MainPage.get.catalogSkuEntityOptions
+				catalogSkuEntityOptions: (new ServiceSkuCreator())
+					->getEntitySelectorEntityOptions((int)$currentUser->getId()),
 			);
 		}
 		catch (Exception $e)
@@ -68,6 +72,7 @@ class ResourceWizard extends BaseController
 		$messageSender = MessageSenderPicker::pickCurrent();
 
 		return [
+			'showLicenseWarning' => !$messageSender->checkLicense(),
 			'senders' => [
 				[
 					'moduleId' => $messageSender->getModuleId(),

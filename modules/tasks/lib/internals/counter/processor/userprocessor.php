@@ -21,6 +21,7 @@ use Bitrix\Tasks\Internals\Counter\CounterDictionary;
 use Bitrix\Tasks\Internals\Counter\CounterState;
 use Bitrix\Tasks\Internals\Counter\CounterTable;
 use Bitrix\Tasks\Internals\Counter\CounterController;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class UserProcessor
 {
@@ -66,6 +67,7 @@ class UserProcessor
 
 		$coverTypes = $types;
 		$coverTypes[] = CounterDictionary::COUNTER_GROUP_COMMENTS;
+		$coverTypes[] = CounterDictionary::COUNTER_MENTIONED;
 
 		if (in_array($role, MemberTable::possibleTypes()))
 		{
@@ -173,7 +175,7 @@ class UserProcessor
 	{
 		if (!$this->collector)
 		{
-			$this->collector = UserCollector::getInstance($this->userId);
+			$this->collector = Container::getInstance()->getCounterUserCollector($this->userId);
 		}
 		return $this->collector;
 	}

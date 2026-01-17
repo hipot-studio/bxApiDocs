@@ -174,9 +174,11 @@ class User
 						'NAME' => 'name',
 						'LAST_NAME' => 'last-name',
 						'SECOND_NAME' => 'second-name',
+						'EMAIL' => 'email',
 						'EMAIL_WORK' => 'email',
 						'EMAIL_MAILING' => 'email',
 						'EMAIL_HOME' => 'email',
+						'PHONE' => 'phone',
 						'PHONE_WORK' => 'phone',
 						'PHONE_MAILING' => 'phone',
 						'PHONE_MOBILE' => 'phone',
@@ -352,9 +354,17 @@ class User
 		{
 			$type = $fmItem->getTypeId();
 			$value = $fmItem->getValue();
+			$valueType = $fmItem->getValueType();
 			if ($value && empty($values[$type]))
 			{
 				$values[$type] = $value;
+
+				if ($valueType && empty($values["{$type}_{$valueType}"]))
+				{
+					// additional value types (e.g. MOBILE or WORK for phone) currently not used on frontend
+					// use it to insert more specific value corresponding to field valueType
+					$values["{$type}_{$valueType}"] = $value;
+				}
 			}
 		}
 

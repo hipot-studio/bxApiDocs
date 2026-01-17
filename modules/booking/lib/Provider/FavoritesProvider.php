@@ -8,20 +8,24 @@ use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Entity\Favorites\Favorites;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\FavoritesRepositoryInterface;
+use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 
 class FavoritesProvider
 {
 	private FavoritesRepositoryInterface $repository;
+	private ResourceRepositoryInterface $resourceRepository;
 
 	public function __construct()
 	{
 		$this->repository = Container::getFavoritesRepository();
+		$this->resourceRepository = Container::getResourceRepository();
 	}
 
 	public function getList(
 		int $managerId,
 		DatePeriod $datePeriod = null,
 		bool $withCounters = false,
+		bool $withSku = false,
 	): Favorites
 	{
 		$favorites = $this->repository->getList($managerId);
@@ -34,6 +38,11 @@ class FavoritesProvider
 					managerId: $managerId,
 					datePeriod: $datePeriod,
 				);
+		}
+
+		if ($withSku)
+		{
+			$this->resourceRepository->withSkus($favorites->getResources());
 		}
 
 		return $favorites;

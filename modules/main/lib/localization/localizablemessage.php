@@ -14,7 +14,7 @@ use Bitrix\Main\IO\Path;
  *
  * @see Loc::getMessage()
  */
-class LocalizableMessage implements LocalizableMessageInterface
+class LocalizableMessage implements LocalizableMessageInterface, \Serializable
 {
 	public function __construct(
 		protected string  $code,
@@ -49,5 +49,33 @@ class LocalizableMessage implements LocalizableMessageInterface
 	public function __toString()
 	{
 		return $this->localize($this->language ?? Loc::getCurrentLang());
+	}
+
+	public function serialize(): string
+	{
+		return serialize($this->__serialize());
+	}
+
+	public function unserialize($data): void
+	{
+		$this->__unserialize(unserialize($data, ['allowed_classes' => false]));
+	}
+
+	public function __serialize(): array
+	{
+		return [
+			'code' => $this->code,
+			'replace' => $this->replace,
+			'language' => $this->language,
+			'phraseSrcFile' => $this->phraseSrcFile,
+		];
+	}
+
+	public function __unserialize(array $data): void
+	{
+		$this->code = $data['code'];
+		$this->replace = $data['replace'];
+		$this->language = $data['language'];
+		$this->phraseSrcFile = $data['phraseSrcFile'];
 	}
 }

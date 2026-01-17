@@ -30,8 +30,6 @@ class Auth
 
 	protected static $scopeCache = array();
 
-	private const TEMPORARY_FORBIDDEN_INTEGRATION = ['export-email-new-contact', 'contact-add'];
-
 	public static function onRestCheckAuth(array $query, $scope, &$res)
 	{
 		$auth = array();
@@ -102,7 +100,7 @@ class Auth
 						$error = true;
 					}
 				}
-				elseif (!\CRestUtil::makeAuth($tokenInfo))
+				elseif (!\CRestUtil::makeAuth($tokenInfo, self::AUTH_TYPE, $tokenInfo['password_id'] ?? 0))
 				{
 					$tokenInfo = array('error' => 'authorization_error', 'error_description' => 'Unable to authorize user');
 					$error = true;
@@ -131,74 +129,63 @@ class Auth
 
 	protected static function check($auth, $scope)
 	{
-		$result = array('error' => 'INVALID_CREDENTIALS', 'error_description' => 'Invalid request credentials');
+		$result = [
+			'error' => 'INVALID_CREDENTIALS',
+			'error_description' => 'Invalid request credentials',
+		];
+
+		if (empty($auth[static::$authQueryParams['UID']]))
+		{
+			return $result;
+		}
 
 		$uid = $auth[static::$authQueryParams['UID']];
-
-		if(strval(intval($uid)) === $uid)
+		if (strval(intval($uid)) === $uid)
 		{
-			$userInfo = array('ID' => intval($uid));
+			$userInfo = ['ID' => intval($uid)];
 		}
 		else
 		{
-			$dbRes = UserTable::getList(array(
-				'filter' => array(
+			$userInfo = UserTable::getList([
+				'filter' => [
 					'=LOGIN' => $uid,
 					'=ACTIVE' => 'Y',
-				),
-				'select' => array('ID'),
-			));
-			$userInfo = $dbRes->fetch();
+				],
+				'select' => ['ID'],
+			])->fetch();
 		}
 
-		if($userInfo)
+		if (!empty($userInfo))
 		{
-			$dbRes = PasswordTable::getList(array(
-				'filter' => array(
+			$passwordInfo = PasswordTable::getList([
+				'filter' => [
 					'=USER_ID' => $userInfo['ID'],
 					'=PASSWORD' => $auth[static::$authQueryParams['PASSWORD']],
 					'=ACTIVE' => PasswordTable::ACTIVE,
-				),
-				'select' => array('ID')
-			));
-			$passwordInfo = $dbRes->fetch();
+				],
+				'select' => ['ID']
+			])->fetch();
 
-			if(!$passwordInfo)
+			if (!$passwordInfo)
 			{
 				$passwordInfo = static::checkOldPassword($userInfo['ID'], $auth[static::$authQueryParams['PASSWORD']]);
 			}
 
-			if($passwordInfo)
+			if ($passwordInfo)
 			{
-				if (static::checkPermission($passwordInfo["ID"], $scope) === true)
+				if (static::checkPermission($passwordInfo['ID'], $scope) === true)
 				{
-					$forbiddenIntegration = IntegrationTable::query()
-						->setSelect(['ID'])
-						->where('PASSWORD_ID', $passwordInfo["ID"])
-						->whereIn('ELEMENT_CODE', static::TEMPORARY_FORBIDDEN_INTEGRATION)
-						->setCacheTtl(86400)
-						->exec()
-						->fetch()
-					;
-
-					if (!empty($forbiddenIntegration))
-					{
-						$result = array(
-							'error' => 'QUERY_LIMIT_EXCEEDED',
-							'error_description' => 'Rate limit exceeded. Too many requests in a given amount of time.'
-						);
-					}
-					else
-					{
-						$result = array(
-							'user_id' => $userInfo["ID"],
-							'password_id' => $passwordInfo["ID"],
-						);
-					}
+					$result = [
+						'user_id' => $userInfo['ID'],
+						'password_id' => $passwordInfo['ID'],
+					];
 				}
 				else
 				{
-					$result = array('error' => 'insufficient_scope', 'error_description' => 'The request requires higher privileges than provided by the webhook token');
+					$result = [
+						'error' => 'insufficient_scope',
+						'error_description' => 'The request requires higher privileges than provided by the webhook token'
+					];
 				}
 			}
 		}

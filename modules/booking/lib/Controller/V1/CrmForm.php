@@ -186,13 +186,16 @@ class CrmForm extends Controller
 		);
 
 		$response = [];
+		/** @var Resource $resource */
 		foreach ($resources as $resource)
 		{
 			$response[] = [
 				'id' => $resource->getId(),
 				'name' => $resource->getName(),
-				'typeName' => $resource->getType()->getName(),
+				'typeName' => $resource->getType()?->getName(),
 				'slotRanges' => $resource->getSlotRanges(),
+				'avatarUrl' => $resource->getAvatar()?->getUrl(),
+				'description' => $resource->getDescription(),
 			];
 		}
 

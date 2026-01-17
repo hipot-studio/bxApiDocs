@@ -307,6 +307,12 @@ class CompanyMerger extends EntityMerger
 			$relation->replaceAllItemBindings($itemFrom, $itemTo);
 		}
 
+		\CCrmContact::Rebind(
+			\CCrmOwnerType::Company,
+			$seedID,
+			$targID
+		);
+
 		\CCrmActivity::Rebind(\CCrmOwnerType::Company, $seedID, $targID);
 		\CCrmLiveFeed::Rebind(\CCrmOwnerType::Company, $seedID, $targID);
 		\CCrmSonetRelation::RebindRelations(\CCrmOwnerType::Company, $seedID, $targID);
@@ -318,7 +324,7 @@ class CompanyMerger extends EntityMerger
 		Timeline\MarkEntry::rebind(\CCrmOwnerType::Company, $seedID, $targID);
 		Timeline\CommentEntry::rebind(\CCrmOwnerType::Company, $seedID, $targID);
 		Timeline\LogMessageEntry::rebind(\CCrmOwnerType::Company, $seedID, $targID);
-		Timeline\AI\Call\Entry::rebind(\CCrmOwnerType::Company, $seedID, $targID);
+		Timeline\AI\Entry::rebind(\CCrmOwnerType::Company, $seedID, $targID);
 
 		Crm\Tracking\Entity::rebindTrace(
 			\CCrmOwnerType::Company, $seedID,

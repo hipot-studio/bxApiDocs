@@ -40,6 +40,7 @@ class ToolsManager
 			'menu_crm_favorite' => new Crm(),
 			'menu_teamwork' => new TeamWork(),
 			'menu_automation' => new Automation(),
+			'menu_ai_agents' => new AiAgents(),
 			'menu_sign' => new Sign(),
 			'menu_crm_store' => new Inventory(),
 			'menu_bi_constructor' => new BIConstructor(),

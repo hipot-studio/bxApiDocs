@@ -3,7 +3,7 @@
 /**
  * @deprecated
  */
-class CAllOption
+class COption
 {
 	public static function GetOptionString($module_id, $name, $def = "", $site = false, $bExactSite = false)
 	{
@@ -55,8 +55,4 @@ class CAllOption
 	{
 		return COption::SetOptionString($module_id, $name, intval($value), $desc, $site);
 	}
-}
-
-class COption extends CAllOption
-{
 }

@@ -96,6 +96,22 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return new static(MessageTable::query()->whereIn('ID', $messageIds)->setOrder($messageOrder)->setSelect($select)->fetchCollection());
 	}
 
+
+	/**
+	 * @param Message[] $messages
+	 * @return static
+	 */
+	public static function createFromArray(array $messages): static
+	{
+		$collection = new static();
+		foreach ($messages as $message)
+		{
+			$collection->add($message);
+		}
+
+		return $collection;
+	}
+
 	/**
 	 * @return int[]
 	 */
@@ -255,17 +271,32 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			return $this;
 		}
 
-		$messageIds = $this->getIds();
+		$messageIds = [];
+
+		foreach ($this as $message)
+		{
+			if ($message->getParams(true)->isLoaded())
+			{
+				continue;
+			}
+			$message->getParams(true)->load([]);
+			$id = $message->getId();
+			if ($id)
+			{
+				$messageIds[$id] = $id;
+			}
+		}
+
+		if (empty($messageIds) && !$this->isEmpty())
+		{
+			$this->isParamsFilled = true;
+		}
+
 		if (!empty($messageIds))
 		{
-			foreach ($this as $message)
-			{
-				$message->getParams(true)->load([]);
-			}
-
 			$result = MessageParamTable::query()
 				->setSelect(['*'])
-				->whereIn('MESSAGE_ID', $this->getIds())
+				->whereIn('MESSAGE_ID', $messageIds)
 				->whereNot('PARAM_NAME', 'LIKE')
 				->exec()
 			;
@@ -635,9 +666,9 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		$result = [];
 		foreach ($this as $message)
 		{
-			if ($message->getParams()->isSet(Params::REPLY_ID))
+			if ($message->hasReply())
 			{
-				$result[] = $message->getParams()->get(Params::REPLY_ID)->getValue();
+				$result[] = $message->getReplyId();
 			}
 		}
 

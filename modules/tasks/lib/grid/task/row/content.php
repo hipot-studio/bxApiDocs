@@ -65,6 +65,10 @@ class Content
 			'DEADLINE' => Content\Date\Deadline::class,
 			'DATE' => Content\Date\FormattedDate::class,
 			'FLOW' => Content\Flow::class,
+
+			'LINK_TYPE' => Content\LinkType::class,
+			'START_DATE_PLAN' => Content\Date\FormattedDate::class,
+			'END_DATE_PLAN' => Content\Date\FormattedDate::class,
 		];
 
 		if ($this->getParameter('GROUP_ID'))

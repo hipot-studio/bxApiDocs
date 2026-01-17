@@ -10,8 +10,6 @@ class Label
 {
 	public static function isRenamedMarket(): bool
 	{
-		return (Loader::includeModule('bitrix24')
-			&& License::getCurrent()->getRegion() === 'ru')
-			|| Application::getInstance()->getLicense()->getRegion() === 'ru';
+		return true;
 	}
 }

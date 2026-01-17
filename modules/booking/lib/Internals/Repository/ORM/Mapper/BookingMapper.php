@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM\Mapper;
 
 use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingSkuCollection;
 use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Entity\Booking\BookingVisitStatus;
 use Bitrix\Booking\Entity\Client\ClientCollection;
@@ -19,21 +20,27 @@ use Bitrix\Booking\Internals\Service\Rrule;
 use Bitrix\Main\Type\DateTime;
 use DateTimeImmutable;
 use DateTimeZone;
+use Bitrix\Booking\Internals\Repository\ORM\Mapper\Trait\NoteTrait;
 
 class BookingMapper
 {
+	use NoteTrait;
+
 	private ResourceMapper $resourceMapper;
 	private ClientMapper $clientMapper;
+	private BookingSkuMapper $skuMapper;
 	private ExternalDataItemMapper $externalDataItemMapper;
 
 	public function __construct(
 		ResourceMapper $resourceMapper,
 		ClientMapper $clientMapper,
+		BookingSkuMapper $skuMapper,
 		ExternalDataItemMapper $externalDataItemMapper,
 	)
 	{
 		$this->resourceMapper = $resourceMapper;
 		$this->clientMapper = $clientMapper;
+		$this->skuMapper = $skuMapper;
 		$this->externalDataItemMapper = $externalDataItemMapper;
 	}
 
@@ -77,8 +84,10 @@ class BookingMapper
 
 		$this->setResourceCollection($booking, $ormBooking);
 		$this->setClientCollection($booking, $ormBooking);
+		$this->setSkuCollection($booking, $ormBooking);
 		$this->setExternalDataCollection($booking, $ormBooking);
 		$this->setNote($booking, $ormBooking);
+		$this->setClientNote($booking, $ormBooking);
 
 		return $booking;
 	}
@@ -191,6 +200,19 @@ class BookingMapper
 		$booking->setClientCollection(new ClientCollection(...$clients));
 	}
 
+	private function setSkuCollection(Booking $booking, EO_Booking $ormBooking): void
+	{
+		$skus = [];
+
+		$ormSkuCollection = $ormBooking->getSkus() ?? [];
+		foreach ($ormSkuCollection as $ormSku)
+		{
+			$skus[] = $this->skuMapper->convertFromOrm($ormSku);
+		}
+
+		$booking->setSkuCollection(new BookingSkuCollection(...$skus));
+	}
+
 	private function setExternalDataCollection(Booking $booking, EO_Booking $ormBooking): void
 	{
 		$externalDataItems = [];
@@ -202,17 +224,5 @@ class BookingMapper
 		}
 
 		$booking->setExternalDataCollection(new ExternalDataCollection(...$externalDataItems));
-	}
-
-	private function setNote(Booking $booking, EO_Booking $ormBooking): void
-	{
-		$ormNote = $ormBooking->getNote();
-
-		if ($ormNote === null)
-		{
-			return;
-		}
-
-		$booking->setNote($ormNote->getDescription());
 	}
 }

@@ -327,7 +327,7 @@ class Block
 	 * @param bool $preventHistory True if no need save history
 	 * @return \Bitrix\Landing\PublicActionResult
 	 */
-	public static function updateNodes($lid, $block, array $data, array $additional = array(), bool $preventHistory = false)
+	public static function updateNodes(int $lid, int $block, array $data, array $additional = array(), bool $preventHistory = false)
 	{
 		$error = new \Bitrix\Landing\Error;
 		$result = new PublicActionResult();
@@ -335,12 +335,14 @@ class Block
 		$attributes = array();
 		$components = array();
 		$content = array();
-		$data = (array) $data;
+		$data = $data;
 		$dynamicParamsExists = false;
 		$block = intval($block);
 
 		Landing::setEditMode();
 		$preventHistory ? History::deactivate() : History::activate();
+
+		$additional['sanitize'] = true;
 
 		// save dynamic cards settings
 		if (isset($data['dynamicState']) || isset($data['dynamicBlock']))//@tmp refactor
@@ -842,7 +844,7 @@ class Block
 		$data = array();
 		foreach ($lids as $lid)
 		{
-			$lid = intval($lid);
+			$lid = (int)$lid;
 			$landing = Landing::createInstance($lid, array(
 				'deleted' => isset($params['deleted']) && $params['deleted']
 			));

@@ -283,16 +283,13 @@ class CMainInterfaceButtons
 	 */
 	protected function prepareItemUrl($url)
 	{
-		$url= trim((string)$url);
-		if (!preg_match('#^(?:/|https?://)#', $url)) {
+		$url = trim((string)$url);
+		if (!preg_match('#^(?:/|https?://)#', $url))
+		{
 			return '';
 		}
 
-		if (str_contains($url, SITE_DIR)) {
-			return $url;
-		}
-
-		return SITE_DIR . ltrim($url, '/');
+		return $url;
 	}
 
 	/**

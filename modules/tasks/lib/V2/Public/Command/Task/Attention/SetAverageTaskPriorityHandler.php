@@ -20,12 +20,13 @@ class SetAverageTaskPriorityHandler
 	public function __invoke(SetAverageTaskPriorityCommand $command): Entity\Task
 	{
 		$entity = new Entity\Task(
-			id: $command->taskId,
-			priority: Entity\Task\Priority::Average,
+			id:       $command->taskId,
+			priority: Entity\Priority::Average,
 		);
 
 		$config = new UpdateConfig(
 			userId: $command->userId,
+			useConsistency: $command->useConsistency,
 		);
 
 		return $this->updateTaskService->update(

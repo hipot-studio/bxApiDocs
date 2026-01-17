@@ -80,14 +80,14 @@ final class BookingExternalDataTable extends DataManager
 		return [
 			(new Reference(
 				'BOOKING',
-				BookingTable::getEntity(),
+				BookingTable::class,
 				Join::on('this.ENTITY_ID', 'ref.ID')
 					->where('this.ENTITY_TYPE', EntityType::Booking->value)
 			)),
 
 			(new Reference(
 				'WAIT_LIST',
-				BookingTable::getEntity(),
+				BookingTable::class,
 				Join::on('this.ENTITY_ID', 'ref.ID')
 					->where('this.ENTITY_TYPE', EntityType::WaitList->value)
 			)),

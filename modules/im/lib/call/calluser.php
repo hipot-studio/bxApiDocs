@@ -62,12 +62,34 @@ class CallUser
 
 	public function updateState($state)
 	{
+		$oldState = $this->state;
 		$fields = ['STATE' => $state];
 		if ($state === self::STATE_CALLING)
 		{
 			$fields['LAST_SEEN'] = new DateTime();
 		}
 		$this->update($fields);
+
+		// Fire event for state change
+		$this->fireStateChangeEvent($oldState, $state);
+	}
+
+	/**
+	 * Fire event when user state changes
+	 */
+	protected function fireStateChangeEvent($oldState, $newState)
+	{
+		$eventManager = \Bitrix\Main\EventManager::getInstance();
+		$eventManager->send(new \Bitrix\Main\Event(
+			'im',
+			'OnCallUserStateChange',
+			[
+				'callId' => $this->callId,
+				'userId' => $this->userId,
+				'oldState' => $oldState,
+				'newState' => $newState
+			]
+		));
 	}
 
 	/**

@@ -9,6 +9,7 @@ use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Kanban;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Web\Uri;
+use CUserOptions;
 
 class Desktop extends Kanban
 {
@@ -61,6 +62,11 @@ class Desktop extends Kanban
 		$result = [
 			'fields' => $this->getFieldsConfig(),
 			'users' => $this->getUsersData($params['userIds'] ?? null),
+			'shouldShowTooltips' => (bool)CUserOptions::GetOption(
+				'crm',
+				'should_show_tooltips_kanban',
+				true,
+			),
 		];
 
 		if ($params['fullConfig'] ?? true)
@@ -107,6 +113,7 @@ class Desktop extends Kanban
 				'icon' => $displayedField->getDisplayParam('icon'),
 				'html' => $displayedField->wasRenderedAsHtml(),
 				'isMultiple' => $displayedField->isMultiple(),
+				'helpMessage' => $displayedField->getUserFieldParams()['HELP_MESSAGE'] ?? '',
 			];
 		}
 

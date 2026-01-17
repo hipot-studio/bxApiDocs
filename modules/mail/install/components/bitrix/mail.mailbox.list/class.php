@@ -7,8 +7,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Mail\Grid\MailboxSettingsGrid\MailboxGrid;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Settings\MailboxSettings;
+use Bitrix\Mail\Helper\Config\Guide;
+use Bitrix\Mail\Helper\LicenseManager;
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailboxSettingsGridHelper;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 
 class CMailMailboxListComponent extends CBitrixComponent
@@ -26,8 +28,9 @@ class CMailMailboxListComponent extends CBitrixComponent
 
 	public function executeComponent(): void
 	{
-		$currentUser = CurrentUser::get();
-		if (!$currentUser->isAdmin())
+		$canManage = MailboxAccess::hasCurrentUserAccessToMailboxGrid();
+
+		if (!$canManage)
 		{
 			showError('access denied');
 
@@ -35,6 +38,11 @@ class CMailMailboxListComponent extends CBitrixComponent
 		}
 
 		$this->arResult = $this->prepareData();
+		$this->arResult['ACCESS_RIGHTS_ENABLED'] = LicenseManager::isAccessRightsEnabled();
+		$this->arResult['MAILBOX_MASS_CONNECT_ENABLED'] = LicenseManager::isMailboxesMassConnectEnabled();
+		$this->arResult['NEED_SHOW_MAILBOX_LIST_HINT'] = $this->needShowMailboxListHint();
+		$this->arResult['MAILBOX_LIST_HINT_NAME'] = Guide::getMailboxListHintOptionName();
+
 		$this->includeComponentTemplate();
 	}
 
@@ -44,6 +52,8 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$result['GRID_ID'] = $this->filterId;
 		$result['FILTER_ID'] = $this->filterId;
 		$result['TITLE'] = Loc::getMessage('MAIL_MAILBOX_LIST_TITLE');
+
+		$result = array_merge($result, $this->getAccess());
 
 		$grid = $this->getGrid();
 		$grid->processRequest();
@@ -85,5 +95,20 @@ class CMailMailboxListComponent extends CBitrixComponent
 		}
 
 		return $this->grid;
+	}
+
+	private function getAccess(): array
+	{
+		$accessValues = [];
+
+		$accessValues['HAS_ACCESS_TO_MASS_CONNECT'] = MailboxAccess::hasCurrentUserAccessToMassConnect();
+		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailboxAccess::hasCurrentUserAccessToPermission();
+
+		return $accessValues;
+	}
+
+	private function needShowMailboxListHint(): bool
+	{
+		return !Guide::wasMailboxListShown();
 	}
 }

@@ -96,12 +96,12 @@ class MicrosoftPowerBI extends Service
 		$connector->sendAnalytic();
 
 		$licenseLimit = $limitManager->getLimit();
-		$isBreakableOverLimit = $this->isBreakableOverlimitPrinting() && $licenseLimit > 0;
+		$isOverLimit = false;
+		$count = 0;
 
 		$queryResult = $connector->query($parameters, $limit, static::$dateFormats);
 		if ($connector->isFulfilledOutput())
 		{
-			$count = null;
 			foreach ($queryResult as $item)
 			{
 				echo $item;
@@ -110,7 +110,6 @@ class MicrosoftPowerBI extends Service
 		}
 		else
 		{
-			$count = 0;
 			foreach ($queryResult as $row)
 			{
 				if (!$firstLinePrinted)
@@ -120,7 +119,7 @@ class MicrosoftPowerBI extends Service
 					$size += strlen($output);
 					$firstLinePrinted = true;
 				}
-				elseif ($isBreakableOverLimit && $licenseLimit < $count)
+				elseif ($licenseLimit > 0 && $licenseLimit <= $count)
 				{
 					$count++;
 
@@ -162,23 +161,26 @@ class MicrosoftPowerBI extends Service
 				$size += strlen($output);
 			}
 
-			if ($isBreakableOverLimit && $licenseLimit < $count)
+			if ($licenseLimit > 0 && $licenseLimit < $count)
 			{
 				$overLimit = $count - $licenseLimit;
 				$errorRow = [
 					'error' => 'OVER_LIMIT',
 					'errorMessage' => Loc::getMessagePlural(
-						'BICONNECTOR_TABLE_OVER_LIMIT_ERROR',
+						'BICONNECTOR_TABLE_OVER_LIMIT_ERROR_MSGVER_1',
 						$overLimit,
 						[
-							'#LIMIT#' => $licenseLimit,
-							'#OVERLIMIT_COUNT#' => $overLimit,
+							'#LIMIT#' => $this->formatLimitValue($licenseLimit),
+							'#OVERLIMIT_COUNT#' => $this->formatLimitValue($overLimit),
 						],
+						$this->getLanguage(),
 					),
 				];
 
 				$output = ',' . Json::encode($errorRow, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_IGNORE) . "\n";
 				echo $output;
+
+				$isOverLimit = true;
 			}
 
 			$output = ']';
@@ -186,7 +188,8 @@ class MicrosoftPowerBI extends Service
 			$size += strlen($output);
 		}
 
-		$manager->endQuery($logId, $count, $size, $limitManager->fixLimit((int)$count));
+		$limitManager->fixLimit($count);
+		$manager->endQuery($logId, $count, $size, $isOverLimit);
 
 		$databaseConnection->unlock('biconnector_data');
 

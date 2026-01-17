@@ -35,6 +35,7 @@ use Bitrix\Tasks\Internals\Task\RelatedTable;
 use Bitrix\Tasks\Internals\Task\SearchIndexTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\Task\TaskTagTable;
+use Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable;
 use Bitrix\Tasks\Internals\Task\UserOptionTable;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Internals\UserOption\Option;
@@ -520,7 +521,7 @@ class TaskFilterBuilder
 					$entityForm = $field === 'SPRINT_ID' ? EntityForm::SPRINT_TYPE : EntityForm::BACKLOG_TYPE;
 
 					$condition = new Condition(
-						TaskQueryBuilder::ALIAS_SCRUM_ENTITY.'.ENTITY_TYPE',
+						TaskQueryBuilder::getScrumEntityAliasByItem(TaskQueryBuilder::ALIAS_SCRUM_ITEM) . '.ENTITY_TYPE',
 						'=',
 						$entityForm);
 
@@ -541,7 +542,7 @@ class TaskFilterBuilder
 						$scrumFilter = Query::filter()
 							->logic('and')
 							->whereNotNull(TaskQueryBuilder::ALIAS_SCRUM_ITEM . '.ID')
-							->where(TaskQueryBuilder::ALIAS_SCRUM_ENTITY . '.STATUS', EntityForm::SPRINT_ACTIVE)
+							->where(TaskQueryBuilder::getScrumEntityAliasByItem(TaskQueryBuilder::ALIAS_SCRUM_ITEM) . '.STATUS', EntityForm::SPRINT_ACTIVE)
 							->where('STATUS', Status::COMPLETED);
 
 						if ($subFilter)
@@ -883,6 +884,30 @@ class TaskFilterBuilder
 					$conditionTree->where($subFilter);
 					break;
 
+				case 'DEPENDS_ON_TEMPLATE':
+					if (empty($val))
+					{
+						break;
+					}
+					if (!is_array($val))
+					{
+						$val = [$val];
+					}
+
+					$subQuery = TaskQueryBuilder::createQuery(
+						TaskQueryBuilder::ALIAS_TASK_DEPENDS_TEMPLATE,
+						TemplateDependenceTable::getEntity()
+					);
+					$subQuery->setSelect(['*']);
+					$subQuery->whereIn('TEMPLATE_ID', $val);
+					$subQuery->where('DEPENDS_ON_ID', new SqlExpression('%s'));
+
+					$subFilter = Query::filter();
+					$subFilter->whereExpr("EXISTS({$subQuery->getQuery()})", ['ID']);
+
+					$conditionTree->where($subFilter);
+					break;
+
 				case 'GANTT_ANCESTOR_ID':
 					if (empty($val))
 					{
@@ -1110,6 +1135,7 @@ class TaskFilterBuilder
 
 				case 'PROJECT_NEW_COMMENTS':
 				case 'PROJECT_EXPIRED':
+				case 'MENTIONED':
 					$subQuery = TaskQueryBuilder::createQuery(TaskQueryBuilder::ALIAS_TASK_COUNTERS, CounterTable::getEntity());
 					$subQuery
 						->where('GROUP_ID', new SqlExpression('%1$s'))
@@ -1125,6 +1151,10 @@ class TaskFilterBuilder
 
 						$subQuery->whereIn('TYPE', CounterDictionary::MAP_COMMENTS);
 					}
+					elseif ($field === 'MENTIONED')
+					{
+						$typesIn = [CounterDictionary::COUNTER_MENTIONED];
+					}
 					else
 					{
 						$typesIn = array_merge(
@@ -1138,8 +1168,12 @@ class TaskFilterBuilder
 					$subFilter = Query::filter()
 						->logic('and')
 						->whereNotNull(TaskQueryBuilder::ALIAS_TASK_COUNTERS . '.ID')
-						->whereIn(TaskQueryBuilder::ALIAS_TASK_COUNTERS . '.TYPE', $typesIn)
-						->whereExpr("NOT EXISTS({$subQuery->getQuery()})", ["GROUP_ID", "ID"]);
+						->whereIn(TaskQueryBuilder::ALIAS_TASK_COUNTERS . '.TYPE', $typesIn);
+
+					if ($field !== 'MENTIONED')	
+					{
+						$subFilter->whereExpr("NOT EXISTS({$subQuery->getQuery()})", ["GROUP_ID", "ID"]);
+					}
 
 					$conditionTree->where($subFilter);
 					$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_COUNTERS);
@@ -1147,6 +1181,7 @@ class TaskFilterBuilder
 					break;
 
 				case 'WITH_COMMENT_COUNTERS':
+				case 'WITH_NEW_COMMENTS':
 					$types = array_values(CounterDictionary::MAP_COMMENTS);
 					$conditionTree->where(
 						Query::filter()
@@ -1156,7 +1191,8 @@ class TaskFilterBuilder
 					$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_COUNTERS);
 					break;
 
-				case 'WITH_NEW_COMMENTS':
+					// tmp, probably could be removed
+				case 'WITH_NEW_COMMENTS_FORUM':
 					Loader::requireModule('forum');
 
 					$notViewedCommentFilter = Query::filter()

@@ -118,6 +118,7 @@ class QuoteConverter extends EntityConverter
 			$options = array();
 		}
 		$options['INIT_DATA'] = $this->config->getEntityInitData($entityTypeID);
+		$options['CHECK_CATALOG_PRICES'] = $this->config->isPermissionCheckEnabled();
 
 		return $this->getMapper()->map($this->getMap($entityTypeID), $options);
 	}
@@ -300,7 +301,13 @@ class QuoteConverter extends EntityConverter
 			}
 
 			$map = self::prepareMap($entityTypeID);
-			$fields = $mapper->map($map, array('INIT_DATA' => $config->getInitData()));
+			$fields = $mapper->map(
+				$map,
+				[
+					'INIT_DATA' => $config->getInitData(),
+					'CHECK_CATALOG_PRICES' => $this->config->isPermissionCheckEnabled(),
+				],
+			);
 			if(empty($fields))
 			{
 				throw new EntityConversionException(

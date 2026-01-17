@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Model;
 
+use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
+use Bitrix\Booking\Internals\Model\Enum\NoteType;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\DatetimeField;
@@ -108,6 +110,7 @@ final class BookingTable extends DataManager
 				->addValidator(new LengthValidator(1, 20)),
 
 			(new StringField('SOURCE'))
+				->configureDefaultValue(BookingSource::Internal->value)
 				->addValidator(new LengthValidator(1, 20)),
 
 			(new IntegerField('CREATED_BY'))
@@ -129,6 +132,9 @@ final class BookingTable extends DataManager
 			(new OneToMany('CLIENTS', BookingClientTable::class, 'BOOKING'))
 				->configureJoinType(Join::TYPE_LEFT),
 
+			(new OneToMany('SKUS', BookingSkuTable::class, 'BOOKING'))
+				->configureJoinType(Join::TYPE_LEFT),
+
 			(new OneToMany('EXTERNAL_DATA', BookingExternalDataTable::class, 'BOOKING'))
 				->configureJoinType(Join::TYPE_LEFT),
 
@@ -140,9 +146,20 @@ final class BookingTable extends DataManager
 
 			(new Reference(
 				'NOTE',
-				NotesTable::getEntity(),
+				NotesTable::class,
 				Join::on('this.ID', 'ref.ENTITY_ID')
 					->where('ref.ENTITY_TYPE', EntityType::Booking->value)
+					->where('ref.NOTE_TYPE', NoteType::Manager->value)
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
+
+			(new Reference(
+				'CLIENT_NOTE',
+				NotesTable::class,
+				Join::on('this.ID', 'ref.ENTITY_ID')
+					->where('ref.ENTITY_TYPE', EntityType::Booking->value)
+					->where('ref.NOTE_TYPE', NoteType::Client->value)
 			))
 				->configureJoinType(Join::TYPE_LEFT)
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),

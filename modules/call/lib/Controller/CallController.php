@@ -18,6 +18,7 @@ use Bitrix\Call\DTO\ControllerRequest;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Integration\AI\CallAIService;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 
 
@@ -119,6 +120,13 @@ class CallController extends BaseReceiver
 			return null;
 		}
 
+		if (!$call->isAiAnalyzeEnabled())
+		{
+			$log && $logger->error("Ignoring track:{$trackFile->url}, track #{$trackFile->trackId}. FollowUp was disabled for call #{$call->getId()}.");
+			$this->addError(new CallAIError(CallAIError::AI_RECORDING_DISABLED));
+			return null;
+		}
+
 		$minDuration = CallAISettings::getRecordMinDuration();
 		if ($call->getDuration() < $minDuration)
 		{
@@ -129,6 +137,8 @@ class CallController extends BaseReceiver
 				->disableAudioRecord()
 				->disableAiAnalyze()
 				->save();
+
+			CallAIService::getInstance()->removeExpectation($call->getId());
 
 			(new FollowUpAnalytics($call))->addGotEmptyRecord();
 
@@ -190,12 +200,30 @@ class CallController extends BaseReceiver
 			return null;
 		}
 
+		(new FollowUpAnalytics($call))
+			->sendTelemetry(
+				source: null,
+				status: 'success',
+				event: 'track_ready_'.mb_strtolower($track->getType()),
+			)
+		;
+
 		$trackService = TrackService::getInstance();
 
 		$processResult = $trackService->processTrack($track);
 		if (!$processResult->isSuccess())
 		{
 			$this->addErrors($processResult->getErrors());
+
+			$error = $processResult->getError();
+			(new FollowUpAnalytics($call))
+				->sendTelemetry(
+					source: null,
+					status: 'error',
+					event: 'track_processing_error',
+					error: $error
+				)
+			;
 		}
 
 		if ($trackService->doNeedDownloadTrack($track))
@@ -206,6 +234,13 @@ class CallController extends BaseReceiver
 				$this->addErrors($downloadResult->getErrors());
 				return null;
 			}
+		}
+
+		// Update AI agent expectation time when track is ready
+		if ($call->isAiAnalyzeEnabled())
+		{
+			CallAIService::getInstance()->updateExpectationTime($call->getId());
+			$log && $logger->info("Updated AI expectation time for call #{$call->getId()} after receiving track");
 		}
 
 		return ['result' => true];
@@ -233,13 +268,22 @@ class CallController extends BaseReceiver
 
 		$log && $logger->error("Got track error: ".($trackError->errorCode ?? '-'));
 
+		// Remove AI expectation agent for failed track recording
+		CallAIService::getInstance()->removeExpectation($call->getId());
+		$log && $logger->info("Removed AI expectation agent for call #{$call->getId()} due to track error: ".($trackError->errorCode ?? '-'));
+
+		if (!$call->isAiAnalyzeEnabled())
+		{
+			return null;
+		}
+
 		$call
 			->disableAudioRecord()
 			->save();
 
+
 		$call->getSignaling()
 			->sendSwitchTrackRecordStatus(0, false, $trackError->errorCode);
-
 
 		(new FollowUpAnalytics($call))->addErrorRecording($trackError->errorCode);
 

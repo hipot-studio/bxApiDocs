@@ -21,6 +21,7 @@ class AttachFilesCommand extends AbstractCommand
 		public readonly int $userId,
 		#[NewFiles]
 		public readonly array $fileIds,
+		public readonly bool $useConsistency = false,
 	)
 	{
 
@@ -30,9 +31,7 @@ class AttachFilesCommand extends AbstractCommand
 	{
 		$result = new Result();
 
-		$attachmentService = Container::getInstance()->getAttachmentService();
-
-		$handler = new AttachFilesHandler($attachmentService);
+		$handler = Container::getInstance()->get(AttachFilesHandler::class);
 
 		try
 		{

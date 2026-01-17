@@ -798,7 +798,15 @@ abstract class Base extends ValueCollection
 
 	protected function appendDefaultUserPrefixes(): void
 	{
-		$fieldList = ['CREATED_BY', 'CREATED_BY_ID', 'MODIFY_BY', 'MODIFY_BY_ID', 'ASSIGNED_BY', 'ASSIGNED_BY_ID'];
+		$fieldList = [
+			'CREATED_BY',
+			'CREATED_BY_ID',
+			'MODIFY_BY',
+			'MODIFY_BY_ID',
+			'ASSIGNED_BY',
+			'ASSIGNED_BY_ID',
+			'RESPONSIBLE_ID',
+		];
 		foreach ($fieldList as $field)
 		{
 			if (isset($this->document[$field]))

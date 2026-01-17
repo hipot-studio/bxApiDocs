@@ -222,11 +222,13 @@ class DateType extends BaseType
 	public static function getFieldValue(array $userField, array $additionalParameters = [])
 	{
 		$bVarsFromForm = ($additionalParameters['bVarsFromForm'] ?? false);
+		$forceUseValueInsteadOfDefault = ($additionalParameters['FORCE_USE_VALUE'] ?? 'N') === 'Y';
 		if(!$bVarsFromForm)
 		{
 			if(
 				isset($userField['ENTITY_VALUE_ID'])
 				&& $userField['ENTITY_VALUE_ID'] <= 0
+				&& !$forceUseValueInsteadOfDefault
 			)
 			{
 				if($userField['SETTINGS']['DEFAULT_VALUE']['TYPE'] === self::TYPE_NOW)

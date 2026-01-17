@@ -614,4 +614,30 @@ class DatasetManager
 
 		return $datasetSettingsResult;
 	}
+
+	/**
+	 * Gets  map fields by dataset name, ['code' => 'name']
+	 *
+	 * @param string $tableName
+	 * @return array
+	 */
+	public static function getMapFieldsByTableName(string $tableName): array
+	{
+		$datasetFieldsResult = Internal\ExternalDatasetFieldTable::getList([
+			'select' => ['EXTERNAL_CODE', 'NAME'],
+			'filter' => [
+				'=DATASET.EXTERNAL_CODE' => $tableName
+			]
+		])
+			->fetchCollection()
+		;
+
+		$mapFields = [];
+		foreach ($datasetFieldsResult as $field)
+		{
+			$mapFields[$field->getExternalCode()] = $field->getName();
+		}
+
+		return $mapFields;
+	}
 }

@@ -37,17 +37,29 @@ class ReminderReadRepository implements ReminderReadRepositoryInterface
 		return $this->reminderMapper->mapToEntity($row);
 	}
 
-	public function getByTaskId(int $taskId, int $userId, int $offset, int $limit): ReminderCollection
+	public function getByTaskId(int $taskId, ?int $userId = null, ?int $offset = null, ?int $limit = null): ReminderCollection
 	{
-		$rows = ReminderTable::query()
+		$query = ReminderTable::query()
 			->setSelect(['ID', 'USER_ID', 'TASK_ID', 'REMIND_DATE', 'TYPE', 'TRANSPORT', 'RECEPIENT_TYPE', 'BEFORE_DEADLINE', 'RRULE'])
-			->where('TASK_ID', '=', $taskId)
-			->where('USER_ID', '=', $userId)
-			->setOffset($offset)
-			->setLimit($limit)
-			->setOrder(['REMIND_DATE' => 'DESC'])
-			->exec()
-			->fetchAll();
+			->where('TASK_ID', $taskId)
+			->setOrder(['REMIND_DATE' => 'DESC']);
+
+		if ($userId !== null)
+		{
+			$query->where('USER_ID', $userId);
+		}
+
+		if ($offset !== null)
+		{
+			$query->setOffset($offset);
+		}
+
+		if ($limit !== null)
+		{
+			$query->setLimit($limit);
+		}
+
+		$rows = $query->exec()->fetchAll();
 
 		return $this->reminderMapper->mapToCollection($rows);
 	}
@@ -89,5 +101,10 @@ class ReminderReadRepository implements ReminderReadRepositoryInterface
 			->fetchAll();
 
 		return $this->reminderMapper->mapToCollection($rows);
+	}
+
+	public function getNumberOfReminders(int $taskId, int $userId): int
+	{
+		return ReminderTable::getCount(['TASK_ID' => $taskId, 'USER_ID' => $userId]);
 	}
 }

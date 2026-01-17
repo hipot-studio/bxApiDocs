@@ -504,7 +504,6 @@ class CAllCrmLead
 			'WEBFORM_ID' => array('FIELD' => 'L.WEBFORM_ID', 'TYPE' => 'int'),
 			'ORIGINATOR_ID' => array('FIELD' => 'L.ORIGINATOR_ID', 'TYPE' => 'string'), //EXTERNAL SYSTEM THAT OWNS THIS ITEM
 			'ORIGIN_ID' => array('FIELD' => 'L.ORIGIN_ID', 'TYPE' => 'string'), //ITEM ID IN EXTERNAL SYSTEM
-			'FACE_ID' => array('FIELD' => 'L.FACE_ID', 'TYPE' => 'int'),
 
 			'MOVED_BY_ID' => ['FIELD' => 'L.MOVED_BY_ID', 'TYPE' => 'int'],
 			'MOVED_TIME' => ['FIELD' => 'L.MOVED_TIME', 'TYPE' => 'datetime'],
@@ -3101,14 +3100,6 @@ class CAllCrmLead
 			}
 			//endregion
 
-			$statusSemanticsId = $arFields['STATUS_SEMANTIC_ID'] ?? $arRow['STATUS_SEMANTIC_ID'] ?? \Bitrix\Crm\PhaseSemantics::PROCESS;
-			if(Crm\Ml\Scoring::isMlAvailable() && !Crm\PhaseSemantics::isFinal($statusSemanticsId))
-			{
-				Crm\Ml\Scoring::queuePredictionUpdate(CCrmOwnerType::Lead, $ID, [
-					'EVENT_TYPE' => Crm\Ml\Scoring::EVENT_ENTITY_UPDATE
-				]);
-			}
-
 			if ($bResult)
 			{
 				$scope = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getScope();
@@ -3373,7 +3364,6 @@ class CAllCrmLead
 				Crm\Timeline\TimelineEntry::deleteByOwner(CCrmOwnerType::Lead, $ID);
 				Crm\Pseudoactivity\WaitEntry::deleteByOwner(CCrmOwnerType::Lead, $ID);
 				Crm\Observer\ObserverManager::deleteByOwner(CCrmOwnerType::Lead, $ID);
-				Crm\Ml\Scoring::onEntityDelete(CCrmOwnerType::Lead, $ID);
 
 				self::getCommentsAdapter()->performDelete((int)$ID, $arOptions);
 

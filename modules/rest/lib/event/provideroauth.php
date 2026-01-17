@@ -70,11 +70,10 @@ class ProviderOAuth implements ProviderInterface
 						"\n{delimiter}\n"
 						. "{date} - {host}\n{delimiter}\n"
 						. "Event sends oauth\n"
-						. "EventName: {eventName}"
-						. "Result:\n"
-						. "{result}", [
+						. "EventName: {eventName}\n"
+						. "Request: {REQUEST_DATA} \n"
+						. "Response: {RESPONSE_DATA}", [
 						'eventName' => $item['query']['QUERY_DATA']['event'] ?? null,
-						'result' => $result,
 						'CLIENT_ID' => $item['client_id'] ?? null,
 						'METHOD' => $item['query']['QUERY_DATA']['event'] ?? null,
 						'EVENT_ID' => $item['query']['QUERY_DATA']['event_handler_id'] ?? null,

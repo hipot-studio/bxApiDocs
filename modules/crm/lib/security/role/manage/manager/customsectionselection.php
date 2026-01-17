@@ -17,8 +17,6 @@ use Bitrix\Main\Web\Uri;
 
 final class CustomSectionSelection implements SectionableRoleSelectionManager
 {
-	public const GROUP_CODE_PREFIX = 'AUTOMATED_SOLUTION_';
-
 	public function __construct(
 		private readonly CustomSection $customSection,
 	)
@@ -94,6 +92,11 @@ final class CustomSectionSelection implements SectionableRoleSelectionManager
 	{
 		$pages = $this->customSection->getPages();
 		$firstPage = array_shift($pages);
+
+		if ($firstPage === null)
+		{
+			return null;
+		}
 
 		return IntranetManager::getUrlForCustomSectionPage(
 			$this->customSection->getCode(),

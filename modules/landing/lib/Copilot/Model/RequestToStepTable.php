@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Copilot\Model;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Data\DataManager;
 
 /**
  * Class RequestToStepTable
@@ -22,7 +23,7 @@ use Bitrix\Main\ORM\Fields;
  * @method static \Bitrix\Landing\Copilot\Model\EO_RequestToStep wakeUpObject($row)
  * @method static \Bitrix\Landing\Copilot\Model\EO_RequestToStep_Collection wakeUpCollection($rows)
  */
-class RequestToStepTable extends Entity\DataManager
+class RequestToStepTable extends DataManager
 {
 	/**
 	 * @inheritdoc

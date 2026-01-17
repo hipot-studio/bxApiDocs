@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\Rest\Configuration;
 
 
 use Bitrix\Crm\Integration\Rest\Configuration\Entity;
+use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Exception;
@@ -41,6 +42,31 @@ class Controller
 	 */
 	protected static function check(Event $event)
 	{
+		$manifestCode = $event->getParameter('MANIFEST_CODE');
+
+		if (!is_string($manifestCode))
+		{
+			$manifest = $event->getParameter('MANIFEST');
+			if (
+				is_array($manifest)
+				&& isset($manifest['CODE'])
+			)
+			{
+				$manifestCode = $manifest['CODE'];
+			}
+		}
+
+		if (
+			!is_string($manifestCode)
+			|| (
+				str_starts_with($manifestCode, 'automated_solution')
+				&& !RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
+			)
+		)
+		{
+			return false;
+		}
+
 		return (bool)static::getEntityList()[$event->getParameter('CODE')];
 	}
 

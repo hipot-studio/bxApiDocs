@@ -11,13 +11,9 @@ class Transcribable extends BaseParam
 		return $this->value === 'Y';
 	}
 
-	public static function formatForDb(int $fileId, bool $value): array
+	protected static function getParamName(): ParamName
 	{
-		return [
-			'DISK_FILE_ID' => $fileId,
-			'PARAM_NAME' => ParamName::IsTranscribable->value,
-			'PARAM_VALUE' => $value ? 'Y' : 'N',
-		];
+		return ParamName::IsTranscribable;
 	}
 
 	public function toArray(): array
@@ -25,7 +21,7 @@ class Transcribable extends BaseParam
 		return [
 			'DISK_FILE_ID' => $this->fileId,
 			'PARAM_NAME' => ParamName::IsTranscribable->value,
-			'PARAM_VALUE' => $this->value,
+			'PARAM_VALUE' => $this->value === 'Y' ? 'Y' : 'N',
 		];
 	}
 }

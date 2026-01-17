@@ -1040,10 +1040,14 @@ class Message
 
 			if (isset($activityEmailMeta['__email']))
 			{
+				/*
+					We take a list of addresses to which the binding was made,
+					these are not the addresses of all employees
+				*/
 				$ownerEmail = trim($activityEmailMeta['__email']);
 
 				/* @TODO: replace with: the message owner's mailbox
-				 * Since clearing the fields when forwarding a letter is required only of  the owner's mailbox
+				 *  There is no point in selecting data for each message - you need to select it once for the mailbox
 				 */
 				$header['employeeEmails'] = self::parseContacts($ownerEmail, $contacts);
 			}

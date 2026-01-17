@@ -23,6 +23,7 @@ class ElapsedTime extends AbstractEntity
 		public ?int $createdAtTs = null,
 		public ?int $startTs = null,
 		public ?int $stopTs = null,
+		public ?array $rights = null,
 	)
 	{
 
@@ -45,6 +46,7 @@ class ElapsedTime extends AbstractEntity
 			createdAtTs: static::mapInteger($props, 'createdAtTs'),
 			startTs: static::mapInteger($props, 'startTs'),
 			stopTs: static::mapInteger($props, 'stopTs'),
+			rights: static::mapArray($props, 'rights'),
 		);
 	}
 
@@ -61,6 +63,7 @@ class ElapsedTime extends AbstractEntity
 			'createdAtTs' => $this->createdAtTs,
 			'startTs' => $this->startTs,
 			'stopTs' => $this->stopTs,
+			'rights' => $this->rights,
 		];
 	}
 }

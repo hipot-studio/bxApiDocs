@@ -12,6 +12,7 @@ use Bitrix\Sale\PaySystem;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\Crm\Order\Timeline\PaymentViewer;
 use Bitrix\Crm\Timeline\OrderPaymentController;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -62,7 +63,13 @@ class SalesCenterPaymentPay extends \CBitrixComponent implements Main\Engine\Con
 	 */
 	public function configureActions()
 	{
-		return [];
+		return [
+			'paymentViewerView' => [
+				'-prefilters' => [
+					Authentication::class,
+				],
+			],
+		];
 	}
 
 	/**
@@ -158,6 +165,7 @@ class SalesCenterPaymentPay extends \CBitrixComponent implements Main\Engine\Con
 	public function executeComponent()
 	{
 		$templateName = null;
+		$this->arResult['IS_NEED_PAYMENT_VIEWER_VIEW_ACTION'] = false;
 
 		if ($this->errorCollection->isEmpty())
 		{
@@ -218,10 +226,7 @@ class SalesCenterPaymentPay extends \CBitrixComponent implements Main\Engine\Con
 
 						if (Loader::includeModule('crm'))
 						{
-							(new PaymentViewer())->view(
-								$this->payment,
-								OrderPaymentController::VIEWED_WAY_CUSTOMER_PAYMENT_PAY
-							);
+							$this->arResult['IS_NEED_PAYMENT_VIEWER_VIEW_ACTION'] = true;
 						}
 					}
 					else
@@ -758,5 +763,48 @@ class SalesCenterPaymentPay extends \CBitrixComponent implements Main\Engine\Con
 			return false;
 		}
 		return true;
+	}
+
+	public function paymentViewerViewAction(array $fields): void
+	{
+		if (!Loader::includeModule('crm'))
+		{
+			return;
+		}
+
+		$this->orderId = (int)($fields['orderId'] ?? 0);
+		$this->paymentId = (int)($fields['paymentId'] ?? 0);
+		if (!$this->orderId || !$this->paymentId)
+		{
+			return;
+		}
+
+		$order = $this->loadOrder();
+		if (!$order)
+		{
+			return;
+		}
+
+		if (!$this->checkAuthorized($order, $fields['accessCode'] ?? null))
+		{
+			return;
+		}
+
+		if ($order->isCanceled())
+		{
+			return;
+		}
+
+		$paymentCollection = $order->getPaymentCollection();
+		$this->payment = $paymentCollection->getItemById($this->paymentId);
+		if (!$this->payment)
+		{
+			return;
+		}
+
+		(new PaymentViewer())->view(
+			$this->payment,
+			OrderPaymentController::VIEWED_WAY_CUSTOMER_PAYMENT_PAY
+		);
 	}
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\Yandex;
 
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Item\Company;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Item\Company;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Config\Option;
@@ -39,6 +39,11 @@ class CompanyRepository
 			$company->setPermalink((string)$value['permalink']);
 		}
 
+		if (isset($value['cabinetLink']))
+		{
+			$company->setCabinetLink((string)$value['cabinetLink']);
+		}
+
 		return $company;
 	}
 
@@ -47,6 +52,7 @@ class CompanyRepository
 		$this->saveValue([
 			'name' => $company->getName(),
 			'permalink' => $company->getPermalink(),
+			'cabinetLink' => $company->getCabinetLink(),
 			'timezone' => $company->getTimezone(),
 			'rubrics' => $company->getRubrics(),
 		]);

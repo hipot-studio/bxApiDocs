@@ -297,9 +297,12 @@ class Cookies
 		$consentItems = [];
 		foreach ($accepted as $key)
 		{
-			$consentItems[] = [
-				'VALUE' => $key
-			];
+			if (is_string($key))
+			{
+				$consentItems[] = [
+					'VALUE' => $key
+				];
+			}
 		}
 		if (!$consentItems)
 		{

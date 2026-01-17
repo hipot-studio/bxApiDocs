@@ -10,7 +10,8 @@ class InvalidRequestFieldTypeException extends RequestValidationException
 	public function __construct(string $field, string $type)
 	{
 		$message = new LocalizableMessage(
-			'REST_INVALID_REQUEST_FIELD_TYPE_EXCEPTION', [
+			code: 'REST_V3_EXCEPTIONS_VALIDATION_INVALIDREQUESTFIELDTYPEEXCEPTION',
+			replace: [
 				'#FIELD#' => $field,
 				'#TYPE#' => class_exists($type) ? (new \ReflectionClass($type))->getShortName() : $type,
 			],

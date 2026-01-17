@@ -39,7 +39,6 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Type;
 use Bitrix\Main\UI\Extension;
-use Bitrix\Main\UI\FileInputUtility;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\Catalog\v2\Barcode\Barcode;
 use Bitrix\Catalog\StoreDocumentTable;
@@ -1232,24 +1231,14 @@ class CatalogProductDetailsComponent
 					&& $isSku
 				)
 				{
-					if ($this->form->isImageProperty($property->getSettings()))
-					{
-						$field = $this->parseGridImagePropertyValues(
-							$fields[$name.'_custom'],
-							$this->getSkuPropertySavedValues($entity, $index)
-						);
-					}
-					else
-					{
-						$field = \Bitrix\Main\UI\FileInputUtility::instance()->checkFiles(
-							BaseForm::GRID_FIELD_PREFIX . BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader',
-							$this->parseFilePropertyValues($fields[$name.'_custom'])
-						);
-						if ($this->copyProduct)
-						{
-							$field = $this->prepareFileValuesForCopy($field, $this->getSkuPropertySavedValues($entity, $index));
-						}
-					}
+					$field = $this->prepareFilePropertyFromGrid(
+						$entity,
+						$property,
+						$name,
+						$index,
+						$fields[$name.'_custom'],
+						$fields['COPY_SKU_ID'] ?? null,
+					);
 					if (empty($field))
 					{
 						$field = '';
@@ -1296,40 +1285,22 @@ class CatalogProductDetailsComponent
 					}
 					else
 					{
-						if (!$isMultiple || !is_array($field))
+						if (isset($fields[$name . '_tile_widget']))
 						{
-							$field = [$field];
-						}
+							$field = $fields[$name . '_tile_widget'];
+							$field = $this->getForm()->parseTileWidgetFileField(
+								$property,
+								BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader',
+								$field,
+							);
 
-						if (isset($fields[$name . '_del']))
-						{
-							if (is_array($fields[$name . '_del']))
+							if ($this->copyProduct)
 							{
-								$deleteFiles = $fields[$name . '_del'];
-								foreach (array_keys($field) as $fileIndex)
-								{
-									if (in_array($field[$fileIndex], $deleteFiles))
-									{
-										unset($field[$fileIndex]);
-									}
-								}
-								unset($deleteFiles);
+								$field = $this->prepareFileValuesForCopy($field, $this->getPropertySavedValues($index));
 							}
-							else
-							{
-								$field = [];
-							}
-						}
 
-						$field = \Bitrix\Main\UI\FileInputUtility::instance()->checkFiles(
-							BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader',
-							$field
-						);
-						if ($this->copyProduct)
-						{
-							$field = $this->prepareFileValuesForCopy($field, $this->getPropertySavedValues($index));
+							unset($fields[$name . '_tile_widget']);
 						}
-						unset($fields[$name . '_del'], $fields[$name . '_uploader_deleted']);
 					}
 
 					if (empty($field))
@@ -1390,6 +1361,46 @@ class CatalogProductDetailsComponent
 		return $propertyFields;
 	}
 
+	private function prepareFilePropertyFromGrid(
+		$entity,
+		$property,
+		$name,
+		$index,
+		$propertyFields,
+		$copySkuId = null
+	): array
+	{
+		$field = [];
+		if ($this->form->isImageProperty($property->getSettings()))
+		{
+			$field = $this->parseGridImagePropertyValues(
+				$propertyFields,
+				$this->getSkuPropertySavedValues($entity, $index, $copySkuId)
+			);
+		}
+		else
+		{
+			if (isset($propertyFields[$name . '_tile_widget']))
+			{
+				$field = $propertyFields[$name . '_tile_widget'];
+				$field = $this->getForm()->parseTileWidgetFileField(
+					$property,
+					BaseForm::GRID_FIELD_PREFIX . BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader',
+					$field,
+				);
+			}
+			if ($this->copyProduct)
+			{
+				$field = $this->prepareFileValuesForCopy(
+					$field,
+					$this->getSkuPropertySavedValues($entity, $index, $copySkuId),
+				);
+			}
+		}
+
+		return $field;
+	}
+
 	private function prepareFileValuesForCopy(array $values, array $savedValues): array
 	{
 		$preparedValues = [];
@@ -1435,14 +1446,26 @@ class CatalogProductDetailsComponent
 		return $fileIds;
 	}
 
-	private function getSkuPropertySavedValues($sku, $index): array
+	private function getSkuPropertySavedValues($sku, $index, $copySkuId = null): array
 	{
-		if ($sku->isNew())
+		if (!$copySkuId && $sku->isNew())
 		{
 			return [];
 		}
 
-		$skuId = $sku->getId();
+		if ($copySkuId)
+		{
+			$skuId = $copySkuId;
+			$sku = $this->copyProduct->getSkuCollection()->findById($skuId);
+			if (!$sku)
+			{
+				return [];
+			}
+		}
+		else
+		{
+			$skuId = $sku->getId();
+		}
 
 		static $propertySavedValues = [];
 		if (isset($propertySavedValues[$skuId][$index]))
@@ -1927,93 +1950,133 @@ class CatalogProductDetailsComponent
 		$isSkuProduct = $this->parseIsSkuProduct($fields, $product);
 
 		$skuFields = $this->parseSkuFields($fields);
-		$propertyFields = $this->parsePropertyFields( $fields, $product, false);
-		$this->checkCompatiblePictureFields($product, $propertyFields);
-		$sectionFields = $this->parseSectionFields($fields);
 
-		$convertedSku = null;
-		if ($isSkuProduct && $product->allowConvertToSku())
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
 		{
-			$convertedSku = $this->convertSimpleProductToSku($product);
-		}
+			$propertyFields = $this->parsePropertyFields( $fields, $product, false);
+			$this->checkCompatiblePictureFields($product, $propertyFields);
+			$sectionFields = $this->parseSectionFields($fields);
 
-		$this->prepareDescriptionFields($fields);
-		$this->preparePictureFields($fields);
-		$this->prepareCatalogFields($fields);
-		$this->prepareDateFields($fields);
-
-		if ($product->isNew())
-		{
-			$this->prepareProductCode($fields);
-		}
-
-		if (!$this->getForm()->isVisibilityEditable())
-		{
-			unset($fields['UF_PRODUCT_MAPPING']);
-		}
-
-		$product->setFields($fields);
-
-		if ($sectionFields !== null)
-		{
-			$product->getSectionCollection()->setValues($sectionFields);
-			if ($product->isNew() && !isset($fields['IBLOCK_SECTION_ID']))
+			$convertedSku = null;
+			if ($isSkuProduct && $product->allowConvertToSku())
 			{
-				$product->setField('IBLOCK_SECTION_ID', reset($sectionFields));
+				$convertedSku = $this->convertSimpleProductToSku($product);
 			}
-		}
 
-		if (!empty($propertyFields))
-		{
-			$product->getPropertyCollection()->setValues($propertyFields);
-		}
+			$this->prepareDescriptionFields($fields);
+			$this->preparePictureFields($fields);
+			$this->prepareCatalogFields($fields);
+			$this->prepareDateFields($fields);
 
-		$notifyAboutNewVariation = false;
-
-		if (!empty($skuFields))
-		{
-			$skuFields = array_reverse($skuFields, true);
-
-			foreach ($skuFields as $skuId => $skuField)
+			if ($product->isNew())
 			{
-				$sku = null;
-
-				if (static::isNumericId($skuId))
-				{
-					$skuId = (int)$skuId;
-
-					// probably simple sku came with product id
-					if ($convertedSku)
-					{
-						$sku = $convertedSku;
-					}
-					else
-					{
-						/** @var \Bitrix\Catalog\v2\Sku\BaseSku $sku */
-						$sku = $product->getSkuCollection()->findById($skuId);
-					}
-				}
-				elseif ($product->isNew())
-				{
-					$sku =
-						$product->isSimple()
-							? $product->getSkuCollection()->getFirst()
-							: $product->getSkuCollection()->create()
-					;
-				}
-
-				if ($sku === null)
-				{
-					$notifyAboutNewVariation = true;
-
-					$sku = $this->createSkuItem($product, (int)($skuField['COPY_SKU_ID'] ?? 0));
-				}
-
-				$this->fillSku($sku, $skuField);
+				$this->prepareProductCode($fields);
 			}
+
+			if (!$this->getForm()->isVisibilityEditable())
+			{
+				unset($fields['UF_PRODUCT_MAPPING']);
+			}
+
+			$product->setFields($fields);
+
+			if ($sectionFields !== null)
+			{
+				$product->getSectionCollection()->setValues($sectionFields);
+				if ($product->isNew() && !isset($fields['IBLOCK_SECTION_ID']))
+				{
+					$product->setField('IBLOCK_SECTION_ID', reset($sectionFields));
+				}
+			}
+
+			if (!empty($propertyFields))
+			{
+				$product->getPropertyCollection()->setValues($propertyFields);
+			}
+
+			$notifyAboutNewVariation = false;
+
+			if (!empty($skuFields))
+			{
+				$skuFields = array_reverse($skuFields, true);
+
+				foreach ($skuFields as $skuId => $skuField)
+				{
+					$sku = null;
+
+					if (static::isNumericId($skuId))
+					{
+						$skuId = (int)$skuId;
+
+						// probably simple sku came with product id
+						if ($convertedSku)
+						{
+							$sku = $convertedSku;
+						}
+						else
+						{
+							/** @var \Bitrix\Catalog\v2\Sku\BaseSku $sku */
+							$sku = $product->getSkuCollection()->findById($skuId);
+						}
+					}
+					elseif ($product->isNew())
+					{
+						$sku =
+							$product->isSimple()
+								? $product->getSkuCollection()->getFirst()
+								: $product->getSkuCollection()->create()
+						;
+					}
+
+					if ($sku === null)
+					{
+						$notifyAboutNewVariation = true;
+
+						$sku = $this->createSkuItem($product, (int)($skuField['COPY_SKU_ID'] ?? 0));
+					}
+
+					$this->fillSku($sku, $skuField);
+				}
+			}
+
+			$result = $product->save();
+		}
+		catch (SqlQueryException)
+		{
+			$result = new Result();
+			$result->addError(new Error(Loc::getMessage('CPD_ERROR_SAVE')));
 		}
 
-		return $this->saveInternal($product, $notifyAboutNewVariation);
+		if ($result->isSuccess())
+		{
+			$connection->commitTransaction();
+		}
+		else
+		{
+			$connection->rollbackTransaction();
+			$this->errorCollection->add($result->getErrors());
+
+			return null;
+		}
+
+		$redirect = !$this->hasProductId();
+		$this->setProductId($product->getId());
+
+		$response = [
+			'ENTITY_ID' => $product->getId(),
+			'ENTITY_DATA' => $this->getEntityDataForResponse(),
+			'NOTIFY_ABOUT_NEW_VARIATION' => $redirect ? false : $notifyAboutNewVariation,
+			'IS_SIMPLE_PRODUCT' => $product->isSimple(),
+		];
+
+		if ($redirect)
+		{
+			$response['REDIRECT_URL'] = $this->getProductDetailUrl();
+		}
+
+		return $response;
 	}
 
 	private function convertSimpleProductToSku(BaseProduct $product): ?BaseSku
@@ -2184,50 +2247,6 @@ class CatalogProductDetailsComponent
 		}
 
 		return $sku;
-	}
-
-	private function saveInternal(BaseProduct $product, bool $notifyAboutNewVariation = false): ?array
-	{
-		$connection = Application::getConnection();
-		$connection->startTransaction();
-		try
-		{
-			$result = $product->save();
-		}
-		catch (SqlQueryException)
-		{
-			$result = new Result();
-			$result->addError(new Error(Loc::getMessage('CPD_ERROR_SAVE')));
-		}
-
-		if ($result->isSuccess())
-		{
-			$connection->commitTransaction();
-		}
-		else
-		{
-			$connection->rollbackTransaction();
-			$this->errorCollection->add($result->getErrors());
-
-			return null;
-		}
-
-		$redirect = !$this->hasProductId();
-		$this->setProductId($product->getId());
-
-		$response = [
-			'ENTITY_ID' => $product->getId(),
-			'ENTITY_DATA' => $this->getEntityDataForResponse(),
-			'NOTIFY_ABOUT_NEW_VARIATION' => $redirect ? false : $notifyAboutNewVariation,
-			'IS_SIMPLE_PRODUCT' => $product->isSimple(),
-		];
-
-		if ($redirect)
-		{
-			$response['REDIRECT_URL'] = $this->getProductDetailUrl();
-		}
-
-		return $response;
 	}
 
 	private function getEntityDataForResponse(): array

@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Booking\Internals\Model\ResourceSkuTable;
 use Bitrix\Main;
 use Bitrix\Catalog\GroupAccessTable;
 use Bitrix\Catalog\GroupTable;
@@ -20,6 +21,7 @@ final class CProductQueryBuilder
 	public const ENTITY_OLD_STORE = 'OLD_STORE';
 	private const ENTITY_CATALOG_IBLOCK = 'CATALOG_IBLOCK';
 	private const ENTITY_VAT = 'VAT';
+	private const ENTITY_BOOKING = 'BOOKING';
 
 	public const FIELD_ALLOWED_SELECT = 0x0001;
 	public const FIELD_ALLOWED_FILTER = 0x0002;
@@ -33,6 +35,7 @@ final class CProductQueryBuilder
 	private const FIELD_PATTERN_FLAT_ENTITY = '/^([A-Z][A-Z_]+)$/';
 	private const FIELD_PATTERN_SEPARATE_ENTITY = '/^([A-Z][A-Z_]+)_([1-9][0-9]*)$/';
 	private const FIELD_PATTERN_PRODUCT_USER_FIELD = '/^PRODUCT_(UF_[A-Z0-9_]+)$/';
+	private const FIELD_PATTERN_BOOKING = '/^BOOKING_([A-Z][A-Z_]+)$/';
 
 	private const ENTITY_TYPE_FLAT = 0x0001;
 	private const ENTITY_TYPE_SEPARATE = 0x0002;
@@ -105,6 +108,10 @@ final class CProductQueryBuilder
 
 		$prepared = [];
 
+		if (preg_match(self::FIELD_PATTERN_BOOKING, $field, $prepared))
+		{
+			return true;
+		}
 		if (preg_match(self::FIELD_PATTERN_OLD_STORE, $field, $prepared))
 		{
 			return true;
@@ -625,6 +632,14 @@ final class CProductQueryBuilder
 				'RELATION' => [self::ENTITY_CATALOG_IBLOCK]
 			],
 		];
+
+		if (Main\Loader::includeModule('booking'))
+		{
+			self::$entityDescription[self::ENTITY_BOOKING] = [
+				'EXTERNAL' => true,
+				'HANDLER' => [__CLASS__, 'handleBookingFields'],
+			];
+		}
 	}
 
 	/**
@@ -650,6 +665,11 @@ final class CProductQueryBuilder
 			self::ENTITY_OLD_STORE => self::getOldStoreFields(),
 			self::ENTITY_VAT => self::getVatFields(),
 		];
+
+		if (Main\Loader::includeModule('booking'))
+		{
+			self::$entityFields[self::ENTITY_BOOKING] = self::getBookingFields();
+		}
 	}
 
 	/**
@@ -1417,6 +1437,19 @@ final class CProductQueryBuilder
 		];
 	}
 
+	private static function getBookingFields(): array
+	{
+		return [
+			'SERVICES_ONLY' => [
+				'NAME' => 'ENTITY_TYPE',
+				'ALIAS' => 'BOO_RLE',
+				'TYPE' => self::FIELD_TYPE_CHAR,
+				'ALLOWED' => self::FIELD_ALLOWED_FILTER,
+				'FILTER_PREPARE_VALUE_EXPRESSION' => [__CLASS__, 'prepareFilterBooking'],
+			],
+		];
+	}
+
 	/**
 	 * @param array $userField
 	 * @return bool
@@ -1481,7 +1514,13 @@ final class CProductQueryBuilder
 		$compatible = false;
 		$checked = false;
 
-		if (preg_match(self::FIELD_PATTERN_OLD_STORE, $field, $prepared))
+		if (preg_match(self::FIELD_PATTERN_BOOKING, $field, $prepared))
+		{
+			$entity = self::ENTITY_BOOKING;
+			$field = $prepared[1];
+			$checked = true;
+		}
+		elseif (preg_match(self::FIELD_PATTERN_OLD_STORE, $field, $prepared))
 		{
 			$compatible = true;
 			$entity = self::ENTITY_OLD_STORE;
@@ -1892,6 +1931,7 @@ final class CProductQueryBuilder
 				&& $field['ENTITY'] != self::ENTITY_FLAT_WAREHNOUSE
 				&& $field['ENTITY'] != self::ENTITY_FLAT_BARCODE
 				&& $field['ENTITY'] != self::ENTITY_OLD_PRODUCT
+				&& $field['ENTITY'] != self::ENTITY_BOOKING
 			)
 			{
 				return false;
@@ -2805,5 +2845,37 @@ final class CProductQueryBuilder
 		}
 
 		unset($userFieldManager);
+	}
+
+	private static function handleBookingFields(array &$result, array $entity, array $data): void
+	{
+		if (empty($data['filter']))
+		{
+			return;
+		}
+		$aliases = self::getOption('ALIASES');
+		if (empty($aliases['#ELEMENT_JOIN#']))
+		{
+			return;
+		}
+
+		foreach ($data['filter'] as $entityIndex => $rows)
+		{
+			if (!str_starts_with($entityIndex, self::ENTITY_BOOKING . ':'))
+			{
+				continue;
+			}
+			foreach ($rows as $row)
+			{
+				if ($row['FIELD'] === 'SERVICES_ONLY' && $row['VALUES'] === 'Y')
+				{
+					$result['filter'][] = ' exists ('
+						. 'select 1 from ' . ResourceSkuTable::getTableName() . ' as BOO_RLE'
+						. ' where BOO_RLE.SKU_ID = ' . $aliases['#ELEMENT_JOIN#']
+						. ')'
+					;
+				}
+			}
+		}
 	}
 }

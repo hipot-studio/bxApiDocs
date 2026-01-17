@@ -15,7 +15,7 @@ class CallRequest extends Hydrator
 	public string $provider = '';
 	public int $callType = 0;
 	public array $users = [];
-	public string $video = 'N';
+	public bool $video = false;
 	public string $show = 'Y';
 	public string $legacyMobile = 'N';
 	public string $repeated = 'N';

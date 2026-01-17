@@ -913,7 +913,7 @@ final class IntranetConfigsComponent extends CBitrixComponent
 		//gdpr
 		if ($this->arResult["IS_BITRIX24"])
 		{
-			if (!in_array($this->arResult["LICENSE_PREFIX"], array("ru", "ua", "kz", "by")))
+			if (!in_array($this->arResult["LICENSE_PREFIX"], array("ru", "kz", "by", 'uz')))
 			{
 				$gdprLegalName = trim($_POST["gdpr_legal_name"]);
 				$gdprContactName = trim($_POST["gdpr_contact_name"]);

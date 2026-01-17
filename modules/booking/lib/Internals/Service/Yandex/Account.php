@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\Yandex;
 
+use Bitrix\Booking\Internals\Service\ModuleOptions;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\CompanyCollection;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -12,16 +14,16 @@ class Account
 {
 	private const OPTION_ACCOUNT_ID = 'yandex_account_id';
 
-	private ApiClient $apiClient;
-
-	public function __construct(ApiClient $apiClient)
+	public function __construct(
+		private readonly ApiClient $apiClient,
+		private readonly CompanyFeedHashService $feedHashService,
+	)
 	{
-		$this->apiClient = $apiClient;
 	}
 
-	public function register(): Result
+	public function register(CompanyCollection $companyCollection): Result
 	{
-		$result = $this->apiClient->register();
+		$result = $this->apiClient->register($companyCollection);
 
 		if ($result->isSuccess())
 		{
@@ -33,7 +35,8 @@ class Account
 				return $result;
 			}
 
-			$this->installCompanyFeedSenderAgent();
+			$this->feedHashService->save($companyCollection);
+			CompanyFeedSenderAgent::install();
 			$this->saveAccountId($accountId);
 		}
 
@@ -46,8 +49,10 @@ class Account
 
 		if ($result->isSuccess())
 		{
-			$this->uninstallCompanyFeedSenderAgent();
+			$this->feedHashService->reset();
+			CompanyFeedSenderAgent::uninstall();
 			$this->removeAccountId();
+			ModuleOptions::deleteRequestedFromYandex();
 		}
 
 		return $result;
@@ -73,21 +78,5 @@ class Account
 	private function removeAccountId(): void
 	{
 		Option::delete('booking', ['name' => self::OPTION_ACCOUNT_ID]);
-	}
-
-	private function installCompanyFeedSenderAgent(): void
-	{
-		\CAgent::AddAgent(
-			name: CompanyFeedSenderAgent::getName(),
-			module: 'booking',
-			interval: 60 * 60 * 12, // 12 hours
-			next_exec: ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 6 * 60 * 60, 'FULL'),
-			existError: false
-		);
-	}
-
-	private function uninstallCompanyFeedSenderAgent(): void
-	{
-		\CAgent::RemoveAgent(name: CompanyFeedSenderAgent::getName(), module: 'booking');
 	}
 }

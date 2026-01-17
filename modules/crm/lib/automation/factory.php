@@ -565,7 +565,7 @@ class Factory
 		return $result;
 	}
 
-	private static function doAutocompleteActivities($entityTypeId, $entityId)
+	public static function doAutocompleteActivities($entityTypeId, $entityId)
 	{
 		$result = ActivityTable::getList(array(
 			'select' => array('ID'),

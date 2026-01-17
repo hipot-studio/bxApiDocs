@@ -7,6 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
@@ -65,7 +66,7 @@ class ApacheSupersetDashboardCreateComponent
 			'defaultValues' => [
 				'title' => $this->getDefaultDashboardTitle(),
 			],
-			'scopeParamsMap' => $this->getScopeParamsMap(),
+			'paramList' => $this->getParamList(),
 			'groupIds' => $this->getGroupIds(),
 			'canManageGroups' => $this->canManageGroups(),
 		];
@@ -91,36 +92,9 @@ class ApacheSupersetDashboardCreateComponent
 		return $name;
 	}
 
-	private function getScopeParamsMap(): array
+	private function getParamList(): array
 	{
-		$scopeParamsMap = [];
-		$globalParams = UrlParameter\ScopeMap::getGlobals();
-		$globalScopeKey = 'global';
-		foreach ($globalParams as $globalParam)
-		{
-			$scopeParamsMap[$globalScopeKey][] = [
-				'code' => $globalParam->code(),
-				'title' => $globalParam->title(),
-				'description' => $globalParam->description(),
-				'scope' => $globalScopeKey,
-			];
-		}
-
-		$map = UrlParameter\ScopeMap::getMap();
-		foreach ($map as $scopeCode => $scopeParams)
-		{
-			foreach ($scopeParams as $scopeParam)
-			{
-				$scopeParamsMap[$scopeCode][] = [
-					'code' => $scopeParam->code(),
-					'title' => $scopeParam->title(),
-					'description' => $scopeParam->description(),
-					'scope' => $scopeCode,
-				];
-			}
-		}
-
-		return $scopeParamsMap;
+		return UrlParameter\ScopeMap::getParamList();
 	}
 
 	private function getGroupIds(): array
@@ -245,17 +219,11 @@ class ApacheSupersetDashboardCreateComponent
 			$groups = $data['groups'] ?? [];
 			$scopes = $data['scopes'] ?? [];
 			$params = $data['params'] ?? [];
-			foreach ($groups as $group)
-			{
-				$saveGroupResult = SupersetDashboardGroupBindingTable::add([
-					'DASHBOARD_ID' => $dashboard->getId(),
-					'GROUP_ID' => (int)$group,
-				]);
 
-				if (!$saveGroupResult->isSuccess())
-				{
-					$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
-				}
+			$saveGroupResult = DashboardGroupService::saveDashboardGroupBindings($dashboard->getId(), $groups);
+			if (!$saveGroupResult->isSuccess())
+			{
+				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
 			}
 
 			$saveScopesResult = ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopes);

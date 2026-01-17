@@ -26,16 +26,12 @@ class ChecklistOperationDetector
 		// Detect entire checklist additions/deletions first (higher priority)
 		$operations = array_merge($operations, $this->detectEntireChecklistOperations($checklistBefore, $checklistAfter));
 		
-		// Only detect item-level operations if no entire checklist operations were detected
-		if (empty($operations))
-		{
-			// Detect added items
-			$operations = array_merge($operations, $this->detectAddedItems($checklistBefore, $checklistAfter));
-			
-			// Detect deleted items
-			$operations = array_merge($operations, $this->detectDeletedItems($checklistBefore, $checklistAfter));
-		}
-		
+		// Detect added items
+		$operations = array_merge($operations, $this->detectAddedItems($checklistBefore, $checklistAfter));
+
+		// Detect deleted items
+		$operations = array_merge($operations, $this->detectDeletedItems($checklistBefore, $checklistAfter));
+
 		// Detect modified items
 		$operations = array_merge($operations, $this->detectModifiedItems($checklistBefore, $checklistAfter));
 		
@@ -59,8 +55,8 @@ class ChecklistOperationDetector
 		$operations = [];
 		
 		// Get root checklist items (parentId = 0) from before and after
-		$beforeRootItems = array_filter($checklistBefore, fn(array $item): bool => ($item['parentId'] ?? null) === 0);
-		$afterRootItems = array_filter($checklistAfter, fn(array $item): bool => ($item['parentId'] ?? null) === 0);
+		$beforeRootItems = array_filter($checklistBefore, fn(array $item): bool => $this->isRootItem($item));
+		$afterRootItems = array_filter($checklistAfter, fn(array $item): bool => $this->isRootItem($item));
 
 		$beforeRootIds = array_map(fn(array $item): ?int => $this->getItemId($item), $beforeRootItems);
 		$afterRootIds = array_map(fn(array $item): ?int => $this->getItemId($item), $afterRootItems);
@@ -71,13 +67,14 @@ class ChecklistOperationDetector
 			$rootItem = $this->findItemById($checklistAfter, $rootId);
 			if ($rootItem) {
 				// Count child items for this checklist
-				$childItems = array_filter($checklistAfter, fn(array $item): bool => ($item['parentId'] ?? null) === $rootId);
+				$childItems = array_filter($checklistAfter, fn(array $item): bool => $this->getParentId($item) === $rootId);
 				$itemCount = count($childItems);
 				
 				$operations[] = new ChecklistOperation(
 					type: NotificationType::ChecklistAdded,
 					checklistName: $this->getItemTitle($rootItem),
-					itemCount: $itemCount
+					itemCount: $itemCount,
+					itemId: $this->getItemId($rootItem),
 				);
 			}
 		}
@@ -98,7 +95,7 @@ class ChecklistOperationDetector
 	}
 	
 	/**
-	 * Detects newly added checklist items
+	 * Detects newly added checklist items (skip added checklists)
 	 */
 	private function detectAddedItems(array $checklistBefore, array $checklistAfter): array
 	{
@@ -107,23 +104,34 @@ class ChecklistOperationDetector
 		$afterIds = $this->extractItemIds($checklistAfter);
 		
 		$addedIds = array_diff($afterIds, $beforeIds);
-		
+
+		$addedRoots = $this->getAddedRootIds($checklistBefore, $checklistAfter);
+
 		if (!empty($addedIds))
 		{
 			$addedItems = array_filter($checklistAfter, fn(array $item): bool => in_array($this->getItemId($item), $addedIds));
 
-			// Only count non-root items (actual checklist items, not the checklist itself)
-			$actualAddedItems = array_filter($addedItems, fn(array $item): bool => ($item['parentId'] ?? null) !== 0);
-
-			if (!empty($actualAddedItems))
+			if (!empty($addedItems))
 			{
-				$checklistName = $this->getChecklistNameFromItems($checklistAfter, $actualAddedItems);
-				
-				$operations[] = new ChecklistOperation(
-					type: NotificationType::ChecklistItemsAdded,
-					checklistName: $checklistName,
-					itemCount: count($actualAddedItems)
-				);
+				$groupedItemsByCheckLists = $this->groupItemsByCheckLists($checklistAfter, $addedItems);
+
+				foreach ($groupedItemsByCheckLists as $checkListId => $checkListItems)
+				{
+					if (empty($checkListItems) || in_array($checkListId, $addedRoots))
+					{
+						continue;
+					}
+
+					$checklistName = $this->getChecklistNameFromItems($checklistAfter, $checkListItems);
+
+					$operations[] = new ChecklistOperation(
+						type: NotificationType::ChecklistItemsAdded,
+						checklistName: $checklistName,
+						itemCount: count($checkListItems),
+						itemId: $checkListId,
+						itemIds: $this->extractItemIds($checkListItems),
+					);
+				}
 			}
 		}
 		
@@ -140,22 +148,29 @@ class ChecklistOperationDetector
 		$afterIds = $this->extractItemIds($checklistAfter);
 		
 		$deletedIds = array_diff($beforeIds, $afterIds);
-		
+
+		$remainingRootIds = $this->getRootIds($checklistAfter);
+
 		if (!empty($deletedIds))
 		{
 			$deletedItems = array_filter($checklistBefore, fn(array $item): bool => in_array($this->getItemId($item), $deletedIds));
 
-			// Only count non-root items (actual checklist items, not the checklist itself)
-			$actualDeletedItems = array_filter($deletedItems, fn(array $item): bool => ($item['parentId'] ?? null) !== 0);
+			$groupedItemsByCheckLists = $this->groupItemsByCheckLists($checklistBefore, $deletedItems);
 
-			if (!empty($actualDeletedItems))
+			foreach ($groupedItemsByCheckLists as $checkListId => $checkListItems)
 			{
-				$checklistName = $this->getChecklistNameFromItems($checklistBefore, $actualDeletedItems);
-				
+				if (empty($checkListItems) || !in_array($checkListId, $remainingRootIds))
+				{
+					continue;
+				}
+
+				$checklistName = $this->getChecklistNameFromItems($checklistBefore, $checkListItems);
+
 				$operations[] = new ChecklistOperation(
 					type: NotificationType::ChecklistItemsDeleted,
 					checklistName: $checklistName,
-					itemCount: count($actualDeletedItems)
+					itemCount: count($checkListItems),
+					itemId: $checkListId,
 				);
 			}
 		}
@@ -176,20 +191,28 @@ class ChecklistOperationDetector
 			$itemId = $this->getItemId($afterItem);
 			$beforeItem = $this->findItemById($checklistBefore, $itemId);
 			
-			if ($beforeItem && $this->isItemModified($beforeItem, $afterItem)) {
+			if ($beforeItem && $this->isItemModified($beforeItem, $afterItem))
+			{
 				$modifiedItems[] = $afterItem;
 			}
 		}
-		
+
 		if (!empty($modifiedItems))
 		{
-			$checklistName = $this->getChecklistNameFromItems($checklistAfter, $modifiedItems);
-			
-			$operations[] = new ChecklistOperation(
-				type: NotificationType::ChecklistItemsModified,
-				checklistName: $checklistName,
-				itemCount: count($modifiedItems)
-			);
+			$groupedByCheckList = $this->groupItemsByCheckLists($checklistAfter, $modifiedItems);
+
+			foreach ($groupedByCheckList as $checkListId => $checkListItems)
+			{
+				$checklistName = $this->getChecklistNameFromItems($checklistAfter, $checkListItems);
+
+				$operations[] = new ChecklistOperation(
+					type: NotificationType::ChecklistItemsModified,
+					checklistName: $checklistName,
+					itemCount: count($checkListItems),
+					itemId: $checkListId,
+					itemIds: $this->extractItemIds($checkListItems),
+				);
+			}
 		}
 		
 		return $operations;
@@ -209,14 +232,17 @@ class ChecklistOperationDetector
 			$itemId = $this->getItemId($afterItem);
 			$beforeItem = $this->findItemById($checklistBefore, $itemId);
 			
-			if ($beforeItem)
+			if ($beforeItem && !$this->isRootItem($beforeItem))
 			{
 				$wasBefore = $this->isItemComplete($beforeItem);
 				$isAfter = $this->isItemComplete($afterItem);
-				
-				if (!$wasBefore && $isAfter) {
+
+				if (!$wasBefore && $isAfter)
+				{
 					$completedItems[] = $afterItem;
-				} elseif ($wasBefore && !$isAfter) {
+				}
+				elseif ($wasBefore && !$isAfter)
+				{
 					$uncheckedItems[] = $afterItem;
 				}
 			}
@@ -242,59 +268,52 @@ class ChecklistOperationDetector
 		{
 			return $operations;
 		}
-		
-		$checklistName = $this->getChecklistNameFromItems($checklistAfter, $completedItems);
-		
-		// Check if completing these items results in entire checklist completion
-		// Only consider child items (not the root checklist item with parentId=0)
-		$childItems = array_filter($checklistAfter, fn(array $item): bool => ($item['parentId'] ?? null) !== 0);
-		$allItemsComplete = true;
-		$completeCount = 0;
-		$totalCount = count($childItems);
-		
-		foreach ($childItems as $item)
-		{
-			if ($this->isItemComplete($item))
-			{
-				$completeCount++;
-			}
-			else
-			{
-				$allItemsComplete = false;
-			}
-		}
 
-		// If all items are now complete AND we have more than 1 item total, send checklist completion notification
-		// This ensures we only send checklist completion for actual checklists, not single items
-		if ($allItemsComplete && $totalCount > 1 && count($completedItems) > 0)
+		$groupedByChecklist = $this->groupItemsByCheckLists($checklistAfter, $completedItems);
+		foreach ($groupedByChecklist as $checkListId => $checkListItems)
 		{
-			$operations[] = new ChecklistOperation(
-				type: NotificationType::ChecklistCompleted,
-				checklistName: $checklistName
-			);
-		}
-		else
-		{
-			// Distinguish between single and multiple item operations
-			if (count($completedItems) === 1)
+			$checkList = $this->findItemById($checklistAfter, $checkListId);
+			if (!$checkList)
 			{
-				// Single item - include item name
-				$item = $completedItems[0];
+				continue;
+			}
+
+			$checklistName = $this->getItemTitle($checkList);
+			$childItems = $this->getDescendantsByCheckListId($checkListId, $checklistAfter);
+
+			$allItemsCompleted = true;
+			foreach ($childItems as $childItem)
+			{
+				if (!$this->isItemComplete($childItem))
+				{
+					$allItemsCompleted = false;
+
+					break;
+				}
+			}
+
+			if ($allItemsCompleted)
+			{
+				// All items in this checklist were completed - treat as entire checklist completion
 				$operations[] = new ChecklistOperation(
-					type: NotificationType::ChecklistSingleItemCompleted,
+					type: NotificationType::ChecklistCompleted,
 					checklistName: $checklistName,
-					itemCount: 1,
-					itemName: $this->getItemTitle($item)
+					itemId: $checkListId,
 				);
 			}
 			else
 			{
-				// Multiple items - use count format
-				$operations[] = new ChecklistOperation(
-					type: NotificationType::ChecklistItemsCompleted,
-					checklistName: $checklistName,
-					itemCount: count($completedItems)
+				$operation = $this->createOperationByItemCount(
+					checkList: $checkList,
+					checkListItems: $checkListItems,
+					singleItemType: NotificationType::ChecklistSingleItemCompleted,
+					multipleItemType: NotificationType::ChecklistItemsCompleted,
 				);
+
+				if ($operation)
+				{
+					$operations[] = $operation;
+				}
 			}
 		}
 		
@@ -307,37 +326,69 @@ class ChecklistOperationDetector
 	private function detectUncheckedItems(array $uncheckedItems, array $checklistAfter): array
 	{
 		$operations = [];
-		
+
 		if (empty($uncheckedItems))
 		{
 			return $operations;
 		}
-		
-		$checklistName = $this->getChecklistNameFromItems($checklistAfter, $uncheckedItems);
-		
-		// Distinguish between single and multiple item operations
-		if (count($uncheckedItems) === 1)
+
+		$groupedByChecklist = $this->groupItemsByCheckLists($checklistAfter, $uncheckedItems);
+		foreach ($groupedByChecklist as $checkListId => $checkListItems)
 		{
-			// Single item - include item name
-			$item = $uncheckedItems[0];
-			$operations[] = new ChecklistOperation(
-				type: NotificationType::ChecklistSingleItemUnchecked,
-				checklistName: $checklistName,
-				itemCount: 1,
-				itemName: $this->getItemTitle($item)
+			$checkList = $this->findItemById($checklistAfter, $checkListId);
+			if (!$checkList)
+			{
+				continue;
+			}
+
+			$operation = $this->createOperationByItemCount(
+				checkList: $checkList,
+				checkListItems: $checkListItems,
+				singleItemType: NotificationType::ChecklistSingleItemUnchecked,
+				multipleItemType: NotificationType::ChecklistItemsUnchecked,
 			);
+
+			if ($operation)
+			{
+				$operations[] = $operation;
+			}
 		}
-		else
-		{
-			// Multiple items - use count format
-			$operations[] = new ChecklistOperation(
-				type: NotificationType::ChecklistItemsUnchecked,
-				checklistName: $checklistName,
-				itemCount: count($uncheckedItems)
-			);
-		}
-		
+
 		return $operations;
+	}
+
+	private function createOperationByItemCount(
+		array $checkList,
+		array $checkListItems,
+		NotificationType $singleItemType,
+		NotificationType $multipleItemType,
+	): ?ChecklistOperation
+	{
+		if (empty($checkListItems))
+		{
+			return null;
+		}
+
+		$itemCount = count($checkListItems);
+
+		return match ($itemCount)
+		{
+			1 => new ChecklistOperation(
+					type: $singleItemType,
+					checklistName: $this->getItemTitle($checkList),
+					itemCount: $itemCount,
+					itemName: $this->getItemTitle(reset($checkListItems)),
+					itemId: $this->getItemId($checkList),
+					itemIds: $this->extractItemIds($checkListItems),
+				),
+			default => new ChecklistOperation(
+					type: $multipleItemType,
+					checklistName: $this->getItemTitle($checkList),
+					itemCount: $itemCount,
+					itemId: $this->getItemId($checkList),
+					itemIds: $this->extractItemIds($checkListItems),
+				),
+		};
 	}
 	
 	/**
@@ -388,21 +439,109 @@ class ChecklistOperationDetector
 				}
 			}
 		}
-		
+
 		if (!empty($itemsWithNewFiles))
 		{
-			$checklistName = $this->getChecklistNameFromItems($checklistAfter, $itemsWithNewFiles);
-			$operations[] = new ChecklistOperation(
-				type: NotificationType::ChecklistFilesAdded,
-				checklistName: $checklistName,
-				itemCount: $totalNewFiles
-			);
+			$groupedByChecklist = $this->groupItemsByCheckLists($checklistAfter, $itemsWithNewFiles);
+
+			foreach ($groupedByChecklist as $checkListId => $checkListItems)
+			{
+				$checkList = $this->findItemById($checklistAfter, $checkListId);
+				if (!$checkList)
+				{
+					continue;
+				}
+
+				$operations[] = new ChecklistOperation(
+					type: NotificationType::ChecklistFilesAdded,
+					checklistName: $this->getItemTitle($checkList),
+					itemCount: count($checkListItems),
+					itemId: $checkListId,
+					itemIds: $this->extractItemIds($checkListItems),
+				);
+			}
 		}
 		
 		return $operations;
 	}
 	
 	// Helper methods
+	private function getDescendantsByCheckListId(int $checkListId, array $items): array
+	{
+		$childrenMap = [];
+		foreach ($items as $item)
+		{
+			$parentId = $this->getParentId($item);
+			$childrenMap[$parentId][] = $item;
+		}
+
+		return $this->collectDescendantsRecursive($checkListId, $childrenMap);
+	}
+
+	private function collectDescendantsRecursive(int $parentId, array $childrenMap): array
+	{
+		$descendants = [];
+		$directChildren = $childrenMap[$parentId] ?? [];
+
+		foreach ($directChildren as $child)
+		{
+			$descendants[] = $child;
+
+			$childId = $this->getItemId($child);
+			$descendants = array_merge(
+				$descendants,
+				$this->collectDescendantsRecursive($childId, $childrenMap),
+			);
+		}
+
+		return $descendants;
+	}
+
+
+	private function groupItemsByCheckLists(array $allItems, array $itemsForGroup): array
+	{
+		$result = [];
+
+		foreach ($itemsForGroup as $item)
+		{
+			if (!$this->isRootItem($item))
+			{
+				$rootId = $this->getItemRootId($allItems, $item);
+				$result[$rootId] ??= [];
+				$result[$rootId][] = $item;
+			}
+		}
+
+		return $result;
+	}
+
+	private function getAddedRootIds(array $checkListBefore, array $checkListAfter): array
+	{
+		$afterRootIds = $this->getRootIds($checkListAfter);
+		$beforeRootIds = $this->getRootIds($checkListBefore);
+
+		return array_diff($afterRootIds, $beforeRootIds);
+	}
+
+	private function getRootIds(array $checkList): array
+	{
+		$rootItems = array_filter($checkList, fn(array $item): bool => $this->isRootItem($item));
+		$rootIds = $this->extractItemIds($rootItems);
+
+		return $rootIds;
+	}
+
+	private function getItemRootId(array $allItems, array $item): int
+	{
+		if ($this->isRootItem($item))
+		{
+			return $this->getItemId($item);
+		}
+
+		$parentItem = $this->findItemById($allItems, $this->getParentId($item)) ?? [];
+
+		return $this->getItemRootId($allItems, $parentItem);
+	}
 	
 	private function extractItemIds(array $checklist): array
 	{
@@ -412,6 +551,11 @@ class ChecklistOperationDetector
 	private function getItemId(array $item): ?int
 	{
 		return isset($item['id']) ? (int)$item['id'] : null;
+	}
+
+	private function getParentId(array $item): ?int
+	{
+		return isset($item['parentId']) ? (int)$item['parentId'] : null;
 	}
 	
 	private function findItemById(array $checklist, ?int $id): ?array
@@ -437,6 +581,11 @@ class ChecklistOperationDetector
 		}
 		
 		return (bool)$isComplete;
+	}
+
+	private function isRootItem(array $item): bool
+	{
+		return (int)$this->getParentId($item) === 0;
 	}
 	
 	private function isItemModified(array $beforeItem, array $afterItem): bool
@@ -480,30 +629,16 @@ class ChecklistOperationDetector
 		
 		// Get the parent ID from the first child item
 		$firstChild = reset($childItems);
-		$parentId = $firstChild['parentId'] ?? null;
-		
-		// Convert parentId to integer for consistent comparison
-		$parentIdInt = $parentId !== null ? (int)$parentId : null;
-		
-		// Check if this is a root item (parentId is null or explicitly 0 as integer)
-		// Note: parentId of '0' (string) means child of item with ID 0, not a root item
-		if ($parentIdInt === null || ($parentId === 0 && !is_string($parentId)))
+		$parentId = (int)$this->getParentId($firstChild);
+
+		if ($parentId === 0)
 		{
-			// If it's already a root item, use its title
 			return $this->getItemTitle($firstChild);
 		}
-		
-		// Find the parent checklist item
-		foreach ($allItems as $item)
-		{
-			if ($this->getItemId($item) === $parentIdInt)
-			{
-				return $this->getItemTitle($item);
-			}
-		}
-		
-		// Fallback to default name
-		return 'Checklist';
+
+		$nextItem = $this->findItemById($allItems, $parentId);
+
+		return $this->getChecklistNameFromItems($allItems, [$nextItem]);
 	}
 	
 	private function getItemMembers(array $item, string $memberType): array

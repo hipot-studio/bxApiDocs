@@ -10,15 +10,8 @@ class UserDeleteEventListener extends AbstractEventListener
 {
 	public function onAfterUserDelete(int $userId): EventResult
 	{
-		$eventResult = new EventResult(EventResult::SUCCESS);
-
-		if ($userId <= 0)
-		{
-			return $eventResult;
-		}
-
 		$this->queueService->deleteByUserIds($userId);
 
-		return $eventResult;
+		return new EventResult(EventResult::SUCCESS);
 	}
 }

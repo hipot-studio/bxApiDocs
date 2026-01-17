@@ -1,14 +1,14 @@
 <?php
 
-use Bitrix\Intranet\Enum\InvitationMessageType;
 use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
 use Bitrix\Intranet\Internal\Factory\Message\CollabJoinMessageFactory;
 use Bitrix\Intranet\Repository\UserRepository;
+use Bitrix\Intranet\Service;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Event;
 use Bitrix\Intranet\Internals\InvitationTable;
 use Bitrix\Main\ModuleManager;
-use Bitrix\Main\UserTable;
+use Bitrix\Intranet\Internal\Integration;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -1017,14 +1017,15 @@ class CIntranetEventHandlers
 			}
 		}
 
-		$res = InvitationTable::getList([
-			'filter' => [
+		$res = InvitationTable::query()
+			->setFilter([
 				'USER_ID' => $userId,
 				'INITIALIZED' => 'N'
-			],
-			'select' => ['ID', 'INVITATION_TYPE', 'IS_MASS', 'IS_DEPARTMENT', 'IS_INTEGRATOR', 'IS_REGISTER'],
-			'limit' => 1
-		]);
+			])
+			->setSelect(['ID', 'INVITATION_TYPE', 'IS_MASS', 'IS_DEPARTMENT', 'IS_INTEGRATOR', 'IS_REGISTER'])
+			->setLimit(1)
+			->setOrder(['DATE_CREATE' => 'DESC']);
+
 		$invitationFields = $res->fetch();
 
 		if ($invitationFields)
@@ -1035,6 +1036,12 @@ class CIntranetEventHandlers
 		}
 
 		$user = (new UserRepository())->getUserById($userId);
+
+		if (!$user)
+		{
+			return;
+		}
+
 		if ($user->isCollaber())
 		{
 			static::sendCollabMail($user);
@@ -1931,14 +1938,8 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 		$userId = (int)$arParams["user_fields"]["ID"];
 		if ($userId > 0 && (!defined('BX_SECURITY_SESSION_VIRTUAL') || BX_SECURITY_SESSION_VIRTUAL !== true))
 		{
-			\Bitrix\Intranet\Service\ServiceContainer::getInstance()
-				->getUserService()
-				->logAuthTimeForNonMobile($userId)
-			;
-			\Bitrix\Intranet\Service\ServiceContainer::getInstance()
-				->getUserService()
-				->logFirstTimeAuthForMobile($userId)
-			;
+			(new Service\UserService())->handleAuthorizeById($userId);
+			(new Integration\Im\Desktop\AccountConnection())->handleAuthorizeUser();
 		}
 	}
 

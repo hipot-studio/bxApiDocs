@@ -50,9 +50,17 @@ class TotpAlgorithm extends OtpAlgorithm
 			throw new ArgumentOutOfRangeException('input', 'string with numbers');
 		}
 
-		[$userOffset, $lastTimeCode] = explode(':', $params);
-		$userOffset = (int)$userOffset;
-		$lastTimeCode = (int)$lastTimeCode;
+		if (str_contains($params, ':'))
+		{
+			[$userOffset, $lastTimeCode] = explode(':', $params);
+			$userOffset = (int)$userOffset;
+			$lastTimeCode = (int)$lastTimeCode;
+		}
+		else
+		{
+			$userOffset = (int)$params;
+			$lastTimeCode = 0;
+		}
 
 		if ($time === null)
 		{

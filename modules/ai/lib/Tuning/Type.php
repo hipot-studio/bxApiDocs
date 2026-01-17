@@ -6,4 +6,6 @@ class Type
 {
 	public const BOOLEAN = 'boolean';
 	public const LIST = 'list';
+	public const ALERT = 'alert';
+	public const BLOCK = 'block';
 }

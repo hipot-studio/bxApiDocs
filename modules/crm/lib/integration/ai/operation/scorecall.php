@@ -29,7 +29,7 @@ use Bitrix\Crm\Integration\Analytics\Builder\AI\CallScoring;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MultiValueStoreService;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Timeline\AI\Call\Controller;
+use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main;
 use CCrmActivity;
 use CCrmOwnerType;
@@ -77,7 +77,7 @@ final class ScoreCall extends AbstractOperation
 		{
 			$activity = Container::getInstance()->getActivityBroker()->getById($target->getEntityId());
 			$providerId = $activity['PROVIDER_ID'] ?? null;
-			if ($providerId === Call::ACTIVITY_PROVIDER_ID)
+			if ($providerId === Call::getId())
 			{
 				return true;
 			}
@@ -367,7 +367,7 @@ final class ScoreCall extends AbstractOperation
 				]
 			);
 
-			self::cleanBadgeByType($activityId, Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT);
+			self::cleanBadgeByType($activityId, Badge\Badge::AI_FIELDS_FILLING_RESULT);
 			self::trySyncScoreStatusBadge(
 				$activityId,
 				$assessment,

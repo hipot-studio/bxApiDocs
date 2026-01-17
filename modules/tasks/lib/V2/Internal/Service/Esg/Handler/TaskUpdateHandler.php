@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Esg\Handler;
 
+use Bitrix\Tasks\V2\Internal\Entity\Stage;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Event\Task\OnCreatorUpdatedEvent;
+use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
@@ -17,7 +20,8 @@ class TaskUpdateHandler
 	public function __construct(
 		private readonly Chat                    $chatIntegration,
 		private readonly UserRepositoryInterface $userRepository,
-		private readonly ChatNotificationInterface $chatNotification
+		private readonly ChatNotificationInterface $chatNotification,
+		private readonly EventDispatcher $eventDispatcher,
 	)
 	{
 	}
@@ -56,7 +60,11 @@ class TaskUpdateHandler
 				'deadlineTs' => $this->chatNotification->notify(
 					type: NotificationType::DeadlineChanged,
 					task: $command->task,
-					args: ['triggeredBy' => $triggeredBy, 'oldDeadlineTs' => $taskBeforeUpdate->deadlineTs, 'newDeadlineTs' => $command->task->deadlineTs],
+					args: [
+						'triggeredBy' => $triggeredBy,
+						'oldDeadlineTs' => $taskBeforeUpdate->deadlineTs,
+						'newDeadlineTs' => $command->task->deadlineTs
+					],
 				),
 				'auditors' => $this->handleTaskMembersChanged(
 					task: $command->task,
@@ -73,12 +81,47 @@ class TaskUpdateHandler
 				'group' => $this->chatNotification->notify(
 					type: NotificationType::GroupChanged,
 					task: $command->task,
-					args: ['triggeredBy' => $triggeredBy, 'oldGroup' => $taskBeforeUpdate->group, 'newGroup' => $command->task->group],
+					args: [
+						'triggeredBy' => $triggeredBy,
+						'oldGroup' => $taskBeforeUpdate->group,
+						'newGroup' => $command->task->group
+					],
 				),
 				'status' => $this->chatNotification->notify(
 					type: NotificationType::TaskStatusChanged,
 					task: $command->task,
-					args: ['triggeredBy' => $triggeredBy, 'oldStatus' => $taskBeforeUpdate->status, 'newStatus' => $command->task->status],
+					args: [
+						'triggeredBy' => $triggeredBy,
+						'oldStatus' => $taskBeforeUpdate->status,
+						'newStatus' => $command->task->status,
+					],
+				),
+				'title' => 	$this->chatIntegration->renameChat(
+					task: $command->task,
+					taskBeforeUpdate: $taskBeforeUpdate,
+				),
+				'description' => $this->chatNotification->notify(
+					type: NotificationType::TaskDescriptionChanged,
+					task: $command->task,
+					args: [
+						'triggeredBy' => $triggeredBy,
+						'oldDescription' => $taskBeforeUpdate->description,
+						'newDescription' => $command->task->description,
+					],
+				),
+				'priority' => $this->chatNotification->notify(
+					type: NotificationType::TaskPriorityChanged,
+					task: $command->task,
+					args: [
+						'triggeredBy' => $triggeredBy,
+						'priority' => $command->task->priority,
+					],
+				),
+				'stage' => $this->handleTaskStageChanged(
+					task: $command->task,
+					taskBeforeUpdate: $taskBeforeUpdate,
+					triggeredBy: $triggeredBy,
+					stage: $command->task->stage,
 				),
 				default => '',
 			};
@@ -102,12 +145,22 @@ class TaskUpdateHandler
 			'auditors' => $this->chatNotification->notify(
 				type: NotificationType::AuditorsChanged,
 				task: $task,
-				args: ['triggeredBy' => $triggeredBy, 'oldAuditors' => $taskBeforeUpdate->auditors, 'newAuditors' => $task->auditors],
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'oldAuditors' => $taskBeforeUpdate->auditors,
+					'newAuditors' => $task->auditors,
+					'newAddMembers' => $task->auditors->diff($taskBeforeUpdate->getMembers())
+				],
 			),
 			'accomplices' => $this->chatNotification->notify(
 				type: NotificationType::AccomplicesChanged,
 				task: $task,
-				args: ['triggeredBy' => $triggeredBy, 'oldAccomplices' => $taskBeforeUpdate->accomplices, 'newAccomplices' => $task->accomplices],
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'oldAccomplices' => $taskBeforeUpdate->accomplices,
+					'newAccomplices' => $task->accomplices,
+					'newAddMembers' => $task->accomplices->diff($taskBeforeUpdate->getMembers())
+				],
 			),
 			default => false,
 		};
@@ -117,5 +170,43 @@ class TaskUpdateHandler
 
 		$this->chatIntegration->addChatMembers(task: $task, membersToAdd: $membersToAdd);
 		$this->chatIntegration->hideChatMembers(task: $task, membersToHide: $membersToHide);
+
+		if ('creator' === $key)
+		{
+			$this->eventDispatcher->dispatch(new OnCreatorUpdatedEvent(
+				task: $task,
+				newCreator: $task->creator,
+				previousCreator: $taskBeforeUpdate->creator,
+			));
+		}
+	}
+
+	private function handleTaskStageChanged(
+		Task $task,
+		Task $taskBeforeUpdate,
+		?User $triggeredBy,
+		?Stage $stage,
+	): void
+	{
+		if ($stage === null && $task->group !== null && $task->status !== Task\Status::Completed)
+		{
+			$this->chatNotification->notify(
+				type: NotificationType::TaskMovedToBacklog,
+				task: $task,
+				args: ['triggeredBy' => $triggeredBy],
+			);
+		}
+		else
+		{
+			$this->chatNotification->notify(
+				type: NotificationType::TaskStageChanged,
+				task: $task,
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'oldStage' => $taskBeforeUpdate->stage,
+					'newStage' => $stage,
+				],
+			);
+		}
 	}
 }

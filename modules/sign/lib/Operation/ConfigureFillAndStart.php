@@ -59,10 +59,28 @@ class ConfigureFillAndStart implements Operation
 		$result = (new ConfigureDocument($this->document->uid))->launch();
 		if (!$result->isSuccess())
 		{
+			if ($this->isDocumentNotReady($result))
+			{
+				return new ConfigureResult(false);
+			}
+
 			return $result;
 		}
 
 		return new ConfigureResult(false);
+	}
+
+	private function isDocumentNotReady(Main\Result $result): bool
+	{
+		foreach ($result->getErrors() as $error)
+		{
+			if ($error->getCode() === 'DOCUMENT_INCORRECT_STATE')
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function startOrProgress(FillFieldsResult $fillResult): Main\Result|ConfigureResult

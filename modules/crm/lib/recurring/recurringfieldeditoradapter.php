@@ -17,14 +17,19 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
 use CCrmOwnerType;
 
-Container::getInstance()->getLocalization()->loadMessages();
-
 final class RecurringFieldEditorAdapter
 {
 	private ?array $recurringData = null;
 	private ?array $createCategoriesList = null;
 
+	public const SECTION_RECURRING = 'recurring';
 	public const FIELD_RECURRING = 'RECURRING';
+	public const RECURRING_ACTIVE = 'RECURRING_ACTIVE';
+	public const RECURRING_COUNTER_REPEAT = 'RECURRING_COUNTER_REPEAT';
+	public const RECURRING_NEXT_EXECUTION = 'RECURRING_NEXT_EXECUTION';
+	public const RECURRING_START_DATE = 'RECURRING_START_DATE';
+	public const RECURRING_LIMIT_DATE = 'RECURRING_LIMIT_DATE';
+	public const RECURRING_LIMIT_REPEAT = 'RECURRING_LIMIT_REPEAT';
 
 	public function __construct(
 		private readonly Collection $fieldsCollection,
@@ -34,13 +39,16 @@ final class RecurringFieldEditorAdapter
 
 	public function isUsed(Item $item): bool
 	{
-		return $item->hasField(Item::FIELD_NAME_RECURRING);
+		return $item->hasField(Item::FIELD_NAME_IS_RECURRING);
 	}
 
 	public function getEntityData(Item $item): array
 	{
+		$data = $this->getRecurringData($item);
+
 		return [
-			Item::FIELD_NAME_RECURRING => $this->getRecurringData($item),
+			self::FIELD_RECURRING => $data,
+			'recurringV2' => $data,
 			Item::FIELD_NAME_IS_RECURRING => $this->getPreparedIsRecurringField($item),
 		];
 	}
@@ -135,10 +143,16 @@ final class RecurringFieldEditorAdapter
 					$recurringParams['CATEGORY_ID'] = $item->getCategoryId();
 				}
 
+				$recurringParams['IS_SEND_EMAIL'] = ($recurringData['IS_SEND_EMAIL'] ?? 'N') === 'Y';
+				$recurringParams['EMAIL_IDS'] = $recurringData['EMAIL_IDS'] ?? [];
+				$recurringParams['SENDER_ID'] ??= null;
+				$recurringParams['EMAIL_TEMPLATE_ID'] ??= null;
+				$recurringParams['EMAIL_DOCUMENT_ID'] ??= null;
+
 				$result = [];
 				foreach ($recurringParams as $name => $value)
 				{
-					$changedName = "RECURRING[{$name}]";
+					$changedName = "RECURRING[$name]";
 					$result[$changedName] = $value;
 				}
 
@@ -168,6 +182,11 @@ final class RecurringFieldEditorAdapter
 			'RECURRING[MULTIPLE_DATE_LIMIT]' => $today,
 			'RECURRING[MULTIPLE_TIMES_LIMIT]' => 1,
 			'RECURRING[CATEGORY_ID]' => $item->getCategoryId(),
+			'RECURRING[IS_SEND_EMAIL]' => false,
+			'RECURRING[EMAIL_TEMPLATE_ID]' => null,
+			'RECURRING[EMAIL_DOCUMENT_ID]' => null,
+			'RECURRING[SENDER_ID]' => null,
+			'RECURRING[EMAIL_IDS]' => [],
 		];
 	}
 
@@ -188,6 +207,8 @@ final class RecurringFieldEditorAdapter
 
 	public function prepareFieldByInfo(Item $item, array $field): array
 	{
+		Container::getInstance()->getLocalization()->loadMessages();
+
 		if ($item->getIsRecurring())
 		{
 			$params = ['filter' => [
@@ -225,11 +246,13 @@ final class RecurringFieldEditorAdapter
 				Manager::DYNAMIC,
 			)->fetchAll();
 
+			$isInvoice = $item->getEntityTypeId() === CCrmOwnerType::SmartInvoice;
 			$recurringCount = count($recurringList);
 			if ($recurringCount === 1)
 			{
+				$code = $isInvoice ? 'CRM_TYPE_RECURRING_FIELD_CREATED_FROM_CURRENT_INVOICE' : 'CRM_TYPE_RECURRING_FIELD_CREATED_FROM_CURRENT';
 				$recurringViewText =  Loc::getMessage(
-					'CRM_TYPE_RECURRING_FIELD_CREATED_FROM_CURRENT',
+					$code,
 					['#RECURRING_ID#' => $recurringList[0]['ITEM_ID']],
 				);
 			}
@@ -246,8 +269,9 @@ final class RecurringFieldEditorAdapter
 
 				if (!empty($recurringLines))
 				{
+					$code = $isInvoice ? 'CRM_TYPE_RECURRING_FIELD_CREATED_MANY_FROM_CURRENT_INVOICE' : 'CRM_TYPE_RECURRING_FIELD_CREATED_MANY_FROM_CURRENT';
 					$recurringViewText =  Loc::getMessage(
-						'CRM_TYPE_RECURRING_FIELD_CREATED_MANY_FROM_CURRENT',
+						$code,
 						['#RECURRING_LIST#' => implode(', ', $recurringLines)],
 					);
 				}
@@ -264,7 +288,7 @@ final class RecurringFieldEditorAdapter
 			$recurringViewText = Loc::getMessage('CRM_TYPE_RECURRING_FIELD_NOTHING_SELECTED');
 		}
 
-		// @todo ****recurring need restrictions for dynamic types?
+		// @todo ****recurring need slider for dynamic types?
 		$invoiceRecurringRestriction = null;
 		if ($item->getEntityTypeId() === CCrmOwnerType::SmartInvoice)
 		{
@@ -286,14 +310,22 @@ final class RecurringFieldEditorAdapter
 		$field['data']['loaders'] = [
 			'url' => UrlManager::getInstance()->create('crm.recurring.hint.get')->getUri(),
 		];
-		$field['data']['restrictScript'] =
-			(!$this->isRecurringEnabled($item) && $invoiceRecurringRestriction !== null)
+
+		$field['data']['restrictScript'] = (
+			$invoiceRecurringRestriction !== null
 				? $invoiceRecurringRestriction->prepareInfoHelperScript()
 				: ''
-		;
+		);
 
-		$field['elements'] = $this->prepareRecurringElements($item);
-		$field['enableRecurring'] = true;
+		$field['enableRecurring'] = $this->isRecurringEnabled($item);
+
+		$factory = Container::getInstance()->getFactory($item->getEntityTypeId());
+		$isCategoriesEnabled = $factory?->isCategoriesEnabled();
+		$field['data']['isCategoriesEnabled'] = $isCategoriesEnabled;
+		if ($isCategoriesEnabled)
+		{
+			$field['data']['categories'] = $this->getAvailableCategories($item);
+		}
 
 		return $field;
 	}
@@ -301,11 +333,6 @@ final class RecurringFieldEditorAdapter
 	private function isRecurringEnabled(Item $item): bool
 	{
 		$entityTypeId = $item->getEntityTypeId();
-
-		if  (!Manager::isAvailableEntityTypeId($entityTypeId))
-		{
-			return false;
-		}
 
 		return Container::getInstance()->getFactory($entityTypeId)?->isRecurringEnabled() ?? false;
 	}
@@ -316,8 +343,9 @@ final class RecurringFieldEditorAdapter
 		{
 			$result = [];
 			$categories = Container::getInstance()->getFactory($item->getEntityTypeId())?->getCategories();
+			$availableCategories = Container::getInstance()->getUserPermissions()->category()->filterAvailableForReadingCategories($categories);
 
-			foreach ($categories as $category)
+			foreach ($availableCategories as $category)
 			{
 				$result[] = [
 					'NAME' => $category->getName(),
@@ -329,391 +357,6 @@ final class RecurringFieldEditorAdapter
 		}
 
 		return $this->createCategoriesList;
-	}
-
-	private function prepareRecurringElements(Item $item): array
-	{
-		$isRecurringEnabled = $this->isRecurringEnabled($item);
-		if (!$isRecurringEnabled)
-			//|| (($this->arResult['READ_ONLY'] ?? null) === true)) // @todo
-		{
-			return [];
-		}
-
-		$categories = $this->getAvailableCategories($item);
-		$editable = !empty($categories);
-
-		$data = [
-			[
-				'name' => 'RECURRING[MODE]',
-				'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_RECURRING'),
-				'type' => 'list',
-				'editable' => true,
-				'enableAttributes' => false,
-				'enabledMenu' => false,
-				'data' => [
-					'items' => [
-						[
-							'VALUE' => Calculator::SALE_TYPE_NON_ACTIVE_DATE,
-							'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_NOT_REPEAT'),
-						],
-						[
-							'VALUE' => Manager::MULTIPLY_EXECUTION,
-							'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MANY_TIMES'),
-						],
-						[
-							'VALUE' => Manager::SINGLE_EXECUTION,
-							'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_ONCE_TIME'),
-						],
-					],
-				],
-			],
-			[
-				'name' => 'SINGLE_PARAMS',
-				'title' => Loc::getMessage(
-					$item->getEntityTypeId() === CCrmOwnerType::SmartInvoice
-						? 'CRM_TYPE_RECURRING_FIELD_SINGLE_TITLE_INVOICE'
-						: 'CRM_TYPE_RECURRING_FIELD_SINGLE_TITLE'
-				),
-				'type' => 'recurring_single_row',
-				'editable' => true,
-				'enableAttributes' => false,
-				'enabledMenu' => false,
-				'data' => [
-					'select' => [
-						'name' => 'RECURRING[SINGLE_TYPE]',
-						'items' => [
-							[
-								'VALUE' => Calculator::SALE_TYPE_DAY_OFFSET,
-								'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_SINGLE_TYPE_DAY'),
-							],
-							[
-								'VALUE' => Calculator::SALE_TYPE_WEEK_OFFSET,
-								'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_SINGLE_TYPE_WEEK'),
-							],
-							[
-								'VALUE' => Calculator::SALE_TYPE_MONTH_OFFSET,
-								'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_SINGLE_TYPE_MONTH'),
-							],
-						],
-					],
-					'amount' => 'RECURRING[SINGLE_INTERVAL_VALUE]',
-					'date' => 'RECURRING[SINGLE_DATE_BEFORE]',
-				],
-			],
-			[
-				'name' => 'MULTIPLE_PARAMS',
-				'type' => 'recurring',
-				'editable' => $editable,
-				'transferable' => false,
-				'enableAttributes' => false,
-				'enableRecurring' => $isRecurringEnabled,
-				'elements' => [
-					[
-						'name' => 'RECURRING[MULTIPLE_TYPE]',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_PERIOD_TITLE'),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'items' => [
-								[
-									'VALUE' => Calculator::SALE_TYPE_DAY_OFFSET,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_EVERYDAY'),
-								],
-								[
-									'VALUE' => Calculator::SALE_TYPE_WEEK_OFFSET,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_EVERY_WEEK'),
-								],
-								[
-									'VALUE' => Calculator::SALE_TYPE_MONTH_OFFSET,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_EVERY_MONTH'),
-								],
-								[
-									'VALUE' => Calculator::SALE_TYPE_YEAR_OFFSET,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_EVERY_YEAR'),
-								],
-								[
-									'VALUE' => Calculator::SALE_TYPE_CUSTOM_OFFSET,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_INTERVAL'),
-								],
-							],
-						],
-					],
-					[
-						'name' => 'MULTIPLE_CUSTOM',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_INTERVAL_TITLE'),
-						'type' => 'recurring_custom_row',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'select' => [
-								'name' => 'RECURRING[MULTIPLE_CUSTOM_TYPE]',
-								'items' => [
-									[
-										'VALUE' => Calculator::SALE_TYPE_DAY_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_DAY'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_WEEK_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_WEEK'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_MONTH_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_MONTH'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_YEAR_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_YEAR'),
-									],
-								],
-							],
-							'amount' => 'RECURRING[MULTIPLE_CUSTOM_INTERVAL_VALUE]',
-						],
-					],
-				],
-				'data' => [
-					'view' => [],
-					'fieldData' => [
-						'MULTIPLE_EXECUTION' => Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Manager::SINGLE_EXECUTION,
-						'MULTIPLE_CUSTOM' => Calculator::SALE_TYPE_CUSTOM_OFFSET,
-					],
-				],
-			],
-			[
-				'name' => 'RECURRING[MULTIPLE_DATE_START]',
-				'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_START_DATE_TITLE'),
-				'type' => 'datetime',
-				'editable' => true,
-				'enableAttributes' => false,
-				'enabledMenu' => false,
-				'data' => ['enableTime' => false],
-			],
-			[
-				'name' => 'MULTIPLE_LIMIT',
-				'type' => 'recurring',
-				'editable' => $editable,
-				'transferable' => false,
-				'enableAttributes' => false,
-				'enableRecurring' => $isRecurringEnabled,
-				'elements' => [
-					[
-						'name' => 'RECURRING[MULTIPLE_TYPE_LIMIT]',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_FINAL_LIMIT_TITLE'),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'items' => [
-								[
-									'VALUE' => Base::NO_LIMITED,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_FINAL_NO_LIMIT'),
-								],
-								[
-									'VALUE' => Base::LIMITED_BY_DATE,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_FINAL_LIMIT_DATE'),
-								],
-								[
-									'VALUE' => Base::LIMITED_BY_TIMES,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_FINAL_LIMIT_TIMES'),
-								],
-							],
-						],
-					],
-					[
-						'name' => 'RECURRING[MULTIPLE_DATE_LIMIT]',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_LIMIT_DATE_TITLE'),
-						'type' => 'datetime',
-						'editable' => true,
-						'enabledMenu' => false,
-						'enableAttributes' => false,
-						'data' => ['enableTime' => false],
-					],
-					[
-						'name' => 'RECURRING[MULTIPLE_TIMES_LIMIT]',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_MULTIPLE_LIMIT_TIMES_TITLE'),
-						'type' => 'number',
-						'editable' => true,
-						'enabledMenu' => false,
-						'enableAttributes' => false,
-					],
-				],
-				'data' => [
-					'view' => [],
-					'fieldData' => [
-						'MULTIPLE_EXECUTION' => Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Manager::SINGLE_EXECUTION,
-						'NO_LIMIT' => Base::NO_LIMITED,
-						'LIMITED_BY_DATE' => Base::LIMITED_BY_DATE,
-						'LIMITED_BY_TIMES' => Base::LIMITED_BY_TIMES,
-					],
-				],
-			],
-			[
-				'name' => 'NEW_BEGINDATE',
-				'type' => 'recurring',
-				'editable' => $editable,
-				'transferable' => false,
-				'enableAttributes' => false,
-				'enableRecurring' => $isRecurringEnabled,
-				'elements' => [
-					[
-						'name' => 'RECURRING[BEGINDATE_TYPE]',
-						'title' => Loc::getMessage(
-							$item->getEntityTypeId() === CCrmOwnerType::SmartInvoice
-								? 'CRM_TYPE_RECURRING_FIELD_NEW_BEGINDATE_VALUE_TITLE_INVOICE'
-								: 'CRM_TYPE_RECURRING_FIELD_NEW_BEGINDATE_VALUE_TITLE'
-						),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'items' => [
-								[
-									'VALUE' => Base::SETTED_FIELD_VALUE,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_NEW_VALUE_CURRENT_FIELD'),
-								],
-								[
-									'VALUE' => Base::CALCULATED_FIELD_VALUE,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_NEW_VALUE_DATE_CREATION_OFFSET'),
-								],
-							],
-						],
-					],
-					[
-						'name' => 'OFFSET_BEGINDATE',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_DATE_CREATION_BEGINDATE_OFFSET_TITLE'),
-						'type' => 'recurring_custom_row',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'select' => [
-								'name' => 'RECURRING[OFFSET_BEGINDATE_TYPE]',
-								'items' => [
-									[
-										'VALUE' => Calculator::SALE_TYPE_DAY_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_DAY'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_WEEK_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_WEEK'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_MONTH_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_MONTH'),
-									],
-								],
-							],
-							'amount' => 'RECURRING[OFFSET_BEGINDATE_VALUE]',
-						],
-					],
-				],
-				'data' => [
-					'view' => [],
-					'fieldData' => [
-						'SETTED_FIELD_VALUE' => Base::SETTED_FIELD_VALUE,
-						'CALCULATED_FIELD_VALUE' => Base::CALCULATED_FIELD_VALUE,
-						'MULTIPLE_EXECUTION' => Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Manager::SINGLE_EXECUTION,
-					],
-				],
-			],
-			[
-				'name' => 'NEW_CLOSEDATE',
-				'type' => 'recurring',
-				'editable' => $editable,
-				'transferable' => false,
-				'enableAttributes' => false,
-				'enableRecurring' => $isRecurringEnabled,
-				'elements' => [
-					[
-						'name' => 'RECURRING[CLOSEDATE_TYPE]',
-						'title' => Loc::getMessage(
-							$item->getEntityTypeId() === CCrmOwnerType::SmartInvoice
-								? 'CRM_TYPE_RECURRING_FIELD_NEW_CLOSEDATE_VALUE_TITLE_INVOICE'
-								: 'CRM_TYPE_RECURRING_FIELD_NEW_CLOSEDATE_VALUE_TITLE'
-						),
-						'type' => 'list',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'items' => [
-								[
-									'VALUE' => Base::SETTED_FIELD_VALUE,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_NEW_VALUE_CURRENT_FIELD'),
-								],
-								[
-									'VALUE' => Base::CALCULATED_FIELD_VALUE,
-									'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_NEW_VALUE_DATE_CREATION_OFFSET'),
-								],
-							],
-						],
-					],
-					[
-						'name' => 'OFFSET_CLOSEDATE',
-						'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_DATE_CREATION_CLOSEDATE_OFFSET_TITLE'),
-						'type' => 'recurring_custom_row',
-						'editable' => true,
-						'enableAttributes' => false,
-						'enabledMenu' => false,
-						'data' => [
-							'select' => [
-								'name' => 'RECURRING[OFFSET_CLOSEDATE_TYPE]',
-								'items' => [
-									[
-										'VALUE' => Calculator::SALE_TYPE_DAY_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_DAY'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_WEEK_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_WEEK'),
-									],
-									[
-										'VALUE' => Calculator::SALE_TYPE_MONTH_OFFSET,
-										'NAME' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CUSTOM_MONTH'),
-									],
-								],
-							],
-							'amount' => 'RECURRING[OFFSET_CLOSEDATE_VALUE]',
-						],
-					],
-				],
-				'data' => [
-					'view' => [],
-					'fieldData' => [
-						'SETTED_FIELD_VALUE' => Base::SETTED_FIELD_VALUE,
-						'CALCULATED_FIELD_VALUE' => Base::CALCULATED_FIELD_VALUE,
-						'MULTIPLE_EXECUTION' => Manager::MULTIPLY_EXECUTION,
-						'SINGLE_EXECUTION' => Manager::SINGLE_EXECUTION,
-					],
-				],
-			],
-		];
-
-		$factory = Container::getInstance()->getFactory($item->getEntityTypeId());
-		if (!empty($categories) && $factory?->isCategoriesEnabled())
-		{
-			$data[] = [
-				'name' => 'RECURRING[CATEGORY_ID]',
-				'title' => Loc::getMessage('CRM_TYPE_RECURRING_FIELD_CATEGORY_RECURRING'),
-				'type' => 'list',
-				'editable' => true,
-				'enabledMenu' => false,
-				'enableAttributes' => false,
-				'data' => [
-					'items' => $categories,
-				],
-			];
-		}
-
-		return $data;
 	}
 
 	public function saveRecurringData(Item $item, array $recurringData): Result
@@ -773,7 +416,7 @@ final class RecurringFieldEditorAdapter
 		{
 			$startDate = null;
 			$recurringFields = [
-				'CATEGORY_ID' => $item->getCategoryId(),
+				'CATEGORY_ID' => (int)($recurringData['CATEGORY_ID'] ?? $item->getCategoryId()),
 				'PARAMS' => $recurringData,
 			];
 
@@ -832,23 +475,16 @@ final class RecurringFieldEditorAdapter
 			$nextDate = Dynamic::getNextDate($recurringData, $startDate);
 			if ($nextDate->getTimestamp() < $today->getTimestamp())
 			{
-				return $result->addError(new Error(Loc::getMessage('CRM_RECURRING_EDITOR_EDAPTER_RECURRING_DATE_START_ERROR')));
+				$isInvoice = $item->getEntityTypeId() === CCrmOwnerType::SmartInvoice;
+				$code = $isInvoice ? 'CRM_RECURRING_EDITOR_ADAPTER_RECURRING_DATE_START_ERROR_INVOICE' : 'CRM_RECURRING_EDITOR_ADAPTER_RECURRING_DATE_START_ERROR';
+
+				return $result->addError(new Error(Loc::getMessage($code)));
 			}
 		}
 
+		$recurringFields['IS_SEND_EMAIL'] = ($recurringData['IS_SEND_EMAIL'] ?? 'N') === 'Y';
+		$recurringFields['EMAIL_IDS'] = $recurringData['EMAIL_IDS'] ?? [];
+
 		return $result->setData(['recurringFields' => $recurringFields]);
 	}
-
-	// @todo for other dynamic types recurring
-	/*	private function isCategoriesEnabled(): bool
-	{
-		$factory = Container::getInstance()->getFactory($this->item->getEntityTypeId());
-
-		return $factory && $factory->isCategoriesEnabled();
-	}
-
-	private function canAddItems(): bool
-	{
-		return Container::getInstance()->getUserPermissions()->entityType()->canAddItems($this->item->getEntityTypeId());
-	}*/
 }

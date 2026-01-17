@@ -12,6 +12,8 @@ use Bitrix\Main\Type\DateTime;
 class Daily implements IPeriod
 {
 	private const MAX_IN_PERIOD = 5;
+	private const MAX_WITH_MARKET_IN_PERIOD = 10;
+
 	private const PERIOD_FORMAT = 'Y-m-d';
 
 	/**
@@ -64,6 +66,11 @@ class Daily implements IPeriod
 	{
 		if (!Bitrix24::isFreeLicense())
 		{
+			if (Bitrix24::isMarketAvailable())
+			{
+				return self::MAX_WITH_MARKET_IN_PERIOD;
+			}
+
 			// +1 - tricky hack, because otherwise we will be always fall in daily limit
 			return Plan::createByB24()?->getMaxUsage() + 1;
 		}

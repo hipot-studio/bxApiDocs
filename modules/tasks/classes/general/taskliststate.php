@@ -6,6 +6,8 @@
  * @copyright 2001-2013 Bitrix
  */
 
+use Bitrix\Tasks\Internals\Counter\Type;
+
 IncludeModuleLangFile(__FILE__);
 
 /**
@@ -56,6 +58,7 @@ class CTaskListState
 	const VIEW_TASK_CATEGORY_WO_DEADLINE = 0x0A00000;	// tasks without DEADLINE, created NOT by the current user
 	const VIEW_TASK_CATEGORY_ALL         = 0x0B00000;
 	const VIEW_TASK_CATEGORY_NEW_COMMENTS = 0x0C00000;
+	const VIEW_TASK_CATEGORY_MENTIONED = Type::TYPE_MENTIONED;
 
 	// view mode parameters
 	const VIEW_MODE_GANTT_OPTION_ZOOM    = 'ZOOM';
@@ -297,8 +300,10 @@ class CTaskListState
 	{
 		$viewId = (int) $viewId;
 
-		if ( ! in_array($viewId, $this->getAllowedViewModes(), true) )
+		if (!in_array($viewId, $this->getAllowedViewModes(), true))
+		{
 			throw new TasksException('', TasksException::TE_WRONG_ARGUMENTS);
+		}
 
 		$this->state[self::TOC_VIEW_SELECTED] = $viewId;
 	}
@@ -667,7 +672,8 @@ class CTaskListState
 					self::VIEW_TASK_CATEGORY_WO_DEADLINE,
 					self::VIEW_TASK_CATEGORY_NEW,
 					self::VIEW_TASK_CATEGORY_EXPIRED,
-					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES
+					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES,
+					self::VIEW_TASK_CATEGORY_MENTIONED,
 				);
 				break;
 
@@ -680,7 +686,8 @@ class CTaskListState
 					self::VIEW_TASK_CATEGORY_ATTENTION,
 					self::VIEW_TASK_CATEGORY_NEW,
 					self::VIEW_TASK_CATEGORY_EXPIRED,
-					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES
+					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES,
+					self::VIEW_TASK_CATEGORY_MENTIONED,
 				);
 				break;
 
@@ -692,7 +699,8 @@ class CTaskListState
 					self::VIEW_TASK_CATEGORY_COMPLETED,
 					self::VIEW_TASK_CATEGORY_NEW,
 					self::VIEW_TASK_CATEGORY_EXPIRED,
-					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES
+					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES,
+					self::VIEW_TASK_CATEGORY_MENTIONED,
 				);
 				break;
 
@@ -705,13 +713,13 @@ class CTaskListState
 					self::VIEW_TASK_CATEGORY_WO_DEADLINE,
 					self::VIEW_TASK_CATEGORY_WAIT_CTRL,
 					self::VIEW_TASK_CATEGORY_EXPIRED,
-					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES
+					self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES,
+					self::VIEW_TASK_CATEGORY_MENTIONED,
 				);
 				break;
 
 			default:
 				throw new TasksException(TasksException::TE_WRONG_ARGUMENTS);
-				break;
 		}
 
 		return ($arCategories);
@@ -720,10 +728,10 @@ class CTaskListState
 
 	private static function getKnownSubmodes()
 	{
-		return (array(
+		return [
 			self::VIEW_SUBMODE_WITH_GROUPS,
 			self::VIEW_SUBMODE_WITH_SUBTASKS
-		));
+		];
 	}
 
 
@@ -741,26 +749,26 @@ class CTaskListState
 
 	public static function getKnownRoles()
 	{
-		return (array(
+		return [
 			self::VIEW_ROLE_RESPONSIBLE,
 			self::VIEW_ROLE_ACCOMPLICE,
 			self::VIEW_ROLE_ORIGINATOR,
 			self::VIEW_ROLE_AUDITOR
-		));
+		];
 	}
 
 
 	private static function getKnownSections()
 	{
-		return (array(
+		return [
 			self::VIEW_SECTION_ROLES,
 			self::VIEW_SECTION_ADVANCED_FILTER
-		));
+		];
 	}
 
 	private static function mapConstantCodename()
 	{
-		return array(
+		return [
 			self::VIEW_SECTION_ROLES             => 'VIEW_SECTION_ROLES',
 			self::VIEW_SECTION_ADVANCED_FILTER   => 'VIEW_SECTION_ADVANCED_FILTER',
 			self::VIEW_ROLE_RESPONSIBLE          => 'VIEW_ROLE_RESPONSIBLE',
@@ -784,8 +792,9 @@ class CTaskListState
 			self::VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES => 'VIEW_TASK_CATEGORY_EXPIRED_CANDIDATES',
 			self::VIEW_TASK_CATEGORY_ATTENTION   => 'VIEW_TASK_CATEGORY_ATTENTION',
 			self::VIEW_TASK_CATEGORY_WAIT_CTRL   => 'VIEW_TASK_CATEGORY_WAIT_CTRL',
-			self::VIEW_TASK_CATEGORY_WO_DEADLINE => 'VIEW_TASK_CATEGORY_WO_DEADLINE'
-		);
+			self::VIEW_TASK_CATEGORY_WO_DEADLINE => 'VIEW_TASK_CATEGORY_WO_DEADLINE',
+			self::VIEW_TASK_CATEGORY_MENTIONED   => 'VIEW_TASK_CATEGORY_MENTIONED',
+		];
 	}
 
 	public static function resolveCodenameConstant($constant)
@@ -848,12 +857,13 @@ class CTaskListState
 		}
 
 		if (isset($arMap[$submodeId]))
-			return ($arMap[$submodeId]);
-		else
 		{
-			CTaskAssert::logError('[0xe758ff49] ');
-			return ('???');
+			return ($arMap[$submodeId]);
 		}
+
+		CTaskAssert::logError('[0xe758ff49] ');
+
+		return ('???');
 	}
 
 	/**
@@ -895,12 +905,13 @@ class CTaskListState
 		$use = ($alternate ? 'ALT' : 'DEFAULT');
 
 		if (isset($arMap[$roleId][$use]))
-			return ($arMap[$roleId][$use]);
-		else
 		{
-			CTaskAssert::logError('[0xaa58b61e] role_id = ' . $roleId);
-			return ('???');
+			return ($arMap[$roleId][$use]);
 		}
+
+		CTaskAssert::logError('[0xaa58b61e] role_id = ' . $roleId);
+
+		return ('???');
 	}
 
 
@@ -915,32 +926,32 @@ class CTaskListState
 
 		if ($arMap === null)
 		{
-			$arMap = array(
-				self::VIEW_MODE_LIST => array(
+			$arMap = [
+				self::VIEW_MODE_LIST => [
 					'DEFAULT' => GetMessage('TASKS_LIST_CTRL_MODE_LIST'),
 					'SHORT'     => GetMessage('TASKS_LIST_CTRL_MODE_LIST_SHORT')
-				),
-				self::VIEW_MODE_GANTT => array(
+				],
+				self::VIEW_MODE_GANTT => [
 					'DEFAULT' => GetMessage('TASKS_LIST_CTRL_MODE_GANTT'),
 					'SHORT'     => GetMessage('TASKS_LIST_CTRL_MODE_GANTT_SHORT')
-				),
-				self::VIEW_MODE_KANBAN => array(
+				],
+				self::VIEW_MODE_KANBAN => [
 					'DEFAULT' => GetMessage('TASKS_LIST_CTRL_MODE_KANBAN'),
 					'SHORT'     => GetMessage('TASKS_LIST_CTRL_MODE_KANBAN_SHORT')
-				),
-				self::VIEW_MODE_TIMELINE => array(
+				],
+				self::VIEW_MODE_TIMELINE => [
 					'DEFAULT' => GetMessage('TASKS_LIST_CTRL_MODE_TIMELINE2'),
 					'SHORT'     => GetMessage('TASKS_LIST_CTRL_MODE_TIMELINE2_SHORT')
-				),
-				self::VIEW_MODE_PLAN => array(
+				],
+				self::VIEW_MODE_PLAN => [
 					'DEFAULT' => GetMessage('TASKS_LIST_CTRL_MODE_PLAN'),
 					'SHORT'     => GetMessage('TASKS_LIST_CTRL_MODE_PLAN_SHORT')
-				),
-				self::VIEW_MODE_CALENDAR => array(
+				],
+				self::VIEW_MODE_CALENDAR => [
 					'DEFAULT' => GetMessage('TASKS_LIST_CTRL_MODE_CALENDAR'),
 					'SHORT'     => GetMessage('TASKS_LIST_CTRL_MODE_CALENDAR')
-				),
-			);
+				],
+			];
 		}
 
 		$use = ($shortName ? 'SHORT' : 'DEFAULT');
@@ -948,10 +959,8 @@ class CTaskListState
 		{
 			return ($arMap[$viewId][$use]);
 		}
-		else
-		{
-			return "";
-		}
+
+		return "";
 	}
 
 	public static function getTaskCategoryName($categoryId)
@@ -979,6 +988,7 @@ class CTaskListState
 				self::VIEW_TASK_CATEGORY_WAIT_CTRL => GetMessage('TASKS_LIST_CTRL_CATEGORY_WAIT_CTRL'),
 				self::VIEW_TASK_CATEGORY_WO_DEADLINE => GetMessage('TASKS_LIST_CTRL_CATEGORY_WO_DEADLINE'),
 				self::VIEW_TASK_CATEGORY_NEW_COMMENTS => GetMessage('TASKS_LIST_CTRL_CATEGORY_NEW_COMMENTS'),
+				self::VIEW_TASK_CATEGORY_MENTIONED => GetMessage('TASKS_LIST_CTRL_CATEGORY_MENTIONED'),
 			];
 		}
 

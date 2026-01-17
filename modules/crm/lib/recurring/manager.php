@@ -33,16 +33,6 @@ class Manager
 		return array_values(self::ENTITY_TYPE_LIST);
 	}
 
-	public static function isAvailableEntityTypeId(int $entityTypeId): bool
-	{
-		if (isset(self::ENTITY_TYPE_LIST[$entityTypeId]))
-		{
-			return true;
-		}
-
-		return CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId);
-	}
-
 	/**
 	 * Create a new recurring entity.
 	 *
@@ -305,20 +295,9 @@ class Manager
 		return "\\".__CLASS__."::exposeAgent('".$typeEntity."');";
 	}
 
-	/**
-	 * @param $limit
-	 * @param $typeEntity.		Entity type from class constants. Default is INVOICE for compatibility.
-	 *
-	 * @return Main\Result
-	 */
 	public static function exposeToday($limit = null, $typeEntity = self::INVOICE)
 	{
-		$today = new Date();
-		return static::expose(
-			self::getTodayFilter(),
-			$limit,
-			$typeEntity
-		);
+		return static::expose(self::getTodayFilter(), $limit, $typeEntity);
 	}
 
 	protected static function getTodayFilter(): array
@@ -337,9 +316,6 @@ class Manager
 	}
 
 	/**
-	 * @param $limit
-	 *
-	 * @return Main\Result
 	 * @deprecated
 	 */
 	public static function exposeTodayInvoices($limit = null)
@@ -426,5 +402,15 @@ class Manager
 		return
 			Loc::getMessage('CRM_RECURRING_LIST_TITLE_' . $entityTypeName)
 			?? Loc::getMessage('CRM_RECURRING_LIST_TITLE');
+	}
+
+	private static function isAvailableEntityTypeId(int $entityTypeId): bool
+	{
+		if (isset(self::ENTITY_TYPE_LIST[$entityTypeId]))
+		{
+			return true;
+		}
+
+		return CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId);
 	}
 }

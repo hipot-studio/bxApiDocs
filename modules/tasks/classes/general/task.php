@@ -2727,12 +2727,12 @@ class CTasks
 				{
 					$task['SCENARIO_NAME'] = [];
 					$scenarios = Container::getInstance()
-					                                                   ->getScenarioRepository()
-					                                                   ->getById($ID);
+						->getScenarioRepository()
+						->getById($ID);
 
 					foreach ($scenarios as $name)
 					{
-						$task['SCENARIO_NAME'][] = $name;
+						$task['SCENARIO_NAME'][] = $name->name;
 					}
 				}
 
@@ -2776,18 +2776,28 @@ class CTasks
 					&& \Bitrix\Tasks\V2\FormV2Feature::isOn()
 				)
 				{
-					$task['CHAT_ID'] = Container::getInstance()
-						->getChatRepository()
-						->getChatIdByTaskId((int)$ID);
+					$chat =
+						Container::getInstance()
+							->getChatRepository()
+							->getByTaskId((int)$ID)
+					;
+
+					$task['CHAT_ID'] = $chat?->getId();
 
 					if ($task['CHAT_ID'] === null)
 					{
 						// special case, chat doesn't exist yet
 						$updatedTaskEntity = Container::getInstance()
-							->getTaskReadRepository()
-							->getById((int)$ID, new \Bitrix\Tasks\V2\Internal\Repository\Task\Select(chat: true));
+							->getEgressController()
+							->createChatForExistingTask(new \Bitrix\Tasks\V2\Internal\Entity\Task(id: $ID));
 
-						$task['CHAT_ID'] = $updatedTaskEntity?->chatId;
+						Container::getInstance()->getLogger()
+							->logWarning([
+								'userId' => Main\Engine\CurrentUser::get()->getId(),
+								'virtual' => defined('BX_SECURITY_SESSION_VIRTUAL') ? BX_SECURITY_SESSION_VIRTUAL : 'no',
+							], 'TASKS_CHAT_AUTOCREATION');
+
+						$task['CHAT_ID'] = $updatedTaskEntity->chatId;
 					}
 				}
 			}
@@ -3401,6 +3411,10 @@ class CTasks
 				'default' => 'N',
 			],
 			'FLOW_ID' => [
+				'type' => 'integer',
+				'default' => 0,
+			],
+			'CHAT_ID' => [
 				'type' => 'integer',
 				'default' => 0,
 			],

@@ -133,7 +133,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 			return $filter->getValue($rawUIFilter);
 		}
 
-		return $filterFactory->getFilterValue($filter);
+		return $filterFactory->getFilterValue($entityTypeId, $filter);
 	}
 
 	private function calculateHash(int $entityTypeId, string $gridId, array $filter): string

@@ -14,7 +14,7 @@ class SubTaskProvider extends AbstractRelationTaskProvider
 		return ['=PARENT_ID' => $relationTaskParams->taskId];
 	}
 
-	protected function getRelationRights(array $taskIds, int $taskId, int $userId): array
+	protected function getRelationRights(array $taskIds, int $rootId, int $userId): array
 	{
 		if (empty($taskIds))
 		{

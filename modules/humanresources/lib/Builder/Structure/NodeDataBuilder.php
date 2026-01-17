@@ -36,6 +36,7 @@ final class NodeDataBuilder extends BaseDataBuilder
 		'DESCRIPTION',
 		'ACCESS_CODE',
 		'COLOR_NAME',
+		'SORT',
 	];
 
 

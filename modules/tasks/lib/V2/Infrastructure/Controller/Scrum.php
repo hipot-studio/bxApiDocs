@@ -38,19 +38,21 @@ class Scrum extends BaseController
 	/**
 	 * @ajaxAction tasks.V2.Scrum.updateTask
 	 */
-	public function updateTaskAction(int $taskId, array $fields): void
+	public function updateTaskAction(Entity\Task $task): void
 	{
 		$this->forward(
 			new \Bitrix\Tasks\Rest\Controllers\Scrum\Task(),
 			'update',
 			[
-				'id' => $taskId,
-				'fields' => $fields,
+				'id' => $task->id,
+				'fields' => [
+					'epicId' => $task->epicId,
+					'storyPoints' => $task->storyPoints,
+				],
 			],
 		);
 	}
 
-	#[CloseSession]
 	private function getItem(int $taskId): ?array
 	{
 		return $this->forward(
@@ -62,7 +64,6 @@ class Scrum extends BaseController
 		);
 	}
 
-	#[CloseSession]
 	private function getEpic(int $id): ?array
 	{
 		return $this->forward(

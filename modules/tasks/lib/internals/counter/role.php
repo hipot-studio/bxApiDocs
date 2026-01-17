@@ -25,6 +25,13 @@ class Role
 		self::ORIGINATOR => MemberTable::MEMBER_TYPE_ORIGINATOR
 	];
 
+	public const ROLE_MAP_ID = [
+		MemberTable::MEMBER_TYPE_RESPONSIBLE => self::RESPONSIBLE,
+		MemberTable::MEMBER_TYPE_ACCOMPLICE => self::ACCOMPLICE,
+		MemberTable::MEMBER_TYPE_AUDITOR => self::AUDITOR,
+		MemberTable::MEMBER_TYPE_ORIGINATOR => self::ORIGINATOR,
+	];
+
 	public const STATE_MAP = [
 		self::RESPONSIBLE_STATE => self::RESPONSIBLE,
 		self::ACCOMPLICE_STATE => self::ACCOMPLICE,
@@ -62,6 +69,11 @@ class Role
 	{
 		/** @noinspection PhpDeprecationInspection */
 		return \CTaskListState::getRoleNameById($roleId);
+	}
+
+	public static function getRoleId(string $role): ?string
+	{
+		return static::ROLE_MAP_ID[$role] ?? null;
 	}
 
 	public static function getByState(string $state): string

@@ -269,6 +269,7 @@ class MssqlConnection extends Connection
 	public function renameTable($currentName, $newName)
 	{
 		$this->query('EXEC sp_rename ' . $this->getSqlHelper()->quote($currentName) . ', ' . $this->getSqlHelper()->quote($newName));
+		$this->clearCaches($currentName);
 	}
 
 	/**
@@ -277,6 +278,7 @@ class MssqlConnection extends Connection
 	public function dropTable($tableName)
 	{
 		$this->query('DROP TABLE ' . $this->getSqlHelper()->quote($tableName));
+		$this->clearCaches($tableName);
 	}
 
 	/*********************************************************

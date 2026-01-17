@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Reservation\Strategy;
 
-use Bitrix\Crm\Order\BasketItem;
 use Bitrix\Crm\Order\EntityBinding;
 use Bitrix\Crm\Order\PayableBasketItem;
 use Bitrix\Crm\Order\PayableItemCollection;
@@ -14,9 +13,6 @@ use Bitrix\Crm\Service\Sale\BasketService;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Crm\Service\Sale\Reservation\ShipmentService;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ORM\Data\AddResult;
-use Bitrix\Main\ORM\Data\UpdateResult;
-use Bitrix\Main\Type\Date;
 use Bitrix\Sale\Registry;
 use CCrmOwnerTypeAbbr;
 
@@ -29,9 +25,6 @@ use CCrmOwnerTypeAbbr;
  */
 class ReservePaidProductsStrategy extends ManualStrategy
 {
-	public int $defaultStoreId;
-	public ?Date $defaultDateReserveEnd;
-
 	public function __construct()
 	{
 		Loader::requireModule('sale');
@@ -40,11 +33,11 @@ class ReservePaidProductsStrategy extends ManualStrategy
 	/**
 	 * @inheritDoc
 	 */
-	public function reservation(int $ownerTypeId, int $ownerId): ReservationResult
+	public function reservation(int $entityTypeId, int $entityId): ReservationResult
 	{
 		$result = new ReservationResult();
 
-		$paidRows = $this->getPaidProductRows($ownerTypeId, $ownerId);
+		$paidRows = $this->getPaidProductRows($entityTypeId, $entityId);
 
 		$rowIds = array_keys($paidRows);
 		$existReserves = $this->getReservesByRowsIds($rowIds);
@@ -61,6 +54,12 @@ class ReservePaidProductsStrategy extends ManualStrategy
 				continue;
 			}
 
+			$updateFields = [];
+			if ($reserve['DATE_RESERVE_END'] === null)
+			{
+				$updateFields['DATE_RESERVE_END'] = $this->getDefaultDateReserveEnd();
+			}
+
 			$reserveInfo = $result->addReserveInfo(
 				$rowId,
 				$newReserveQuantity,
@@ -70,23 +69,25 @@ class ReservePaidProductsStrategy extends ManualStrategy
 			if ($reserve)
 			{
 				$reserveInfo->setStoreId($reserve['STORE_ID']);
-				$reserveInfo->setDateReserveEnd((string)$reserve['DATE_RESERVE_END']);
+				$reserveInfo->setDateReserveEnd(
+					$reserve['DATE_RESERVE_END'] ?? $this->getDefaultDateReserveEnd()
+				);
 
-				$saveResult = $this->saveCrmReserve([
-					'ID' => $reserve['ID'],
-					'RESERVE_QUANTITY' => $newReserveQuantity,
-				]);
+				$updateFields['ID'] = $reserve['ID'];
+				$updateFields['RESERVE_QUANTITY'] = $newReserveQuantity;
+
+				$saveResult = $this->saveCrmReserve($updateFields);
 			}
 			else
 			{
 				$reserveInfo->setStoreId($this->defaultStoreId);
-				$reserveInfo->setDateReserveEnd((string)$this->defaultDateReserveEnd);
+				$reserveInfo->setDateReserveEnd($this->getDefaultDateReserveEnd());
 
 				$saveResult = $this->saveCrmReserve([
 					'ROW_ID' => $rowId,
 					'RESERVE_QUANTITY' => $newReserveQuantity,
-					'STORE_ID' => $this->defaultStoreId,
-					'DATE_RESERVE_END' => $this->defaultDateReserveEnd,
+					'STORE_ID' => $this->getDefaultStoreId(),
+					'DATE_RESERVE_END' => $this->getDefaultDateReserveEnd(),
 				]);
 			}
 
@@ -116,17 +117,10 @@ class ReservePaidProductsStrategy extends ManualStrategy
 		 */
 		$paymentBasketItems = $payment->getPayableItemCollection()->getBasketItems();
 		$unReservedBasketItems = [];
-		$unReservedProductsIds = [];
 		foreach ($paymentBasketItems as $payableItem)
 		{
 			$basketId = (int)$payableItem->getField('ENTITY_ID');
 			$unReservedBasketItems[$basketId] = (float)$payableItem->getField('QUANTITY');
-
-			/**
-			 * @var BasketItem $entityObject
-			 */
-			$entityObject = $payableItem->getEntityObject();
-			$unReservedProductsIds[] = $entityObject->getProductId();
 		}
 
 		if (empty($unReservedBasketItems))
@@ -165,10 +159,17 @@ class ReservePaidProductsStrategy extends ManualStrategy
 			$reserveQuantity = (float)$reserve['RESERVE_QUANTITY'];
 			$newReserveQuantity = max(0, $reserveQuantity - $unReservedQuantity);
 
-			$saveResult = $this->saveCrmReserve([
+			$updateFields = [
 				'ID' => $reserve['ID'],
 				'RESERVE_QUANTITY' => $newReserveQuantity,
-			]);
+			];
+			if ($reserve['DATE_RESERVE_END'] === null)
+			{
+				$reserve['DATE_RESERVE_END'] = $this->getDefaultDateReserveEnd();
+				$updateFields['DATE_RESERVE_END'] = $reserve['DATE_RESERVE_END'];
+			}
+
+			$saveResult = $this->saveCrmReserve($updateFields);
 
 			$reserveInfo = $result->addReserveInfo(
 				$rowId,
@@ -176,7 +177,7 @@ class ReservePaidProductsStrategy extends ManualStrategy
 				$newReserveQuantity - $reserveQuantity
 			);
 			$reserveInfo->setStoreId((int)$reserve['STORE_ID']);
-			$reserveInfo->setDateReserveEnd((string)$reserve['DATE_RESERVE_END']);
+			$reserveInfo->setDateReserveEnd($reserve['DATE_RESERVE_END']);
 
 			$result->addErrors($saveResult->getErrors());
 		}
@@ -300,26 +301,6 @@ class ReservePaidProductsStrategy extends ManualStrategy
 		}
 
 		return $paidProductRows;
-	}
-
-	/**
-	 * Save CRM reserve.
-	 *
-	 * @param array $fields
-	 *
-	 * @return UpdateResult|AddResult
-	 */
-	protected function saveCrmReserve(array $fields)
-	{
-		$id = $fields['ID'] ?? null;
-		if (isset($id))
-		{
-			unset($fields['ID']);
-
-			return ProductRowReservationTable::update($id, $fields);
-		}
-
-		return ProductRowReservationTable::add($fields);
 	}
 
 	/**

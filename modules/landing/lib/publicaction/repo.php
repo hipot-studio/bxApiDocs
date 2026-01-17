@@ -51,6 +51,7 @@ class Repo
 		$error = new \Bitrix\Landing\Error;
 
 		static::onRegisterCheckFields($fields, $error);
+		static::onRegisterCheckManifest($manifest);
 		static::onRegisterBefore($fields, $manifest, $error);
 		if (!empty($error->getErrors()))
 		{
@@ -239,6 +240,19 @@ class Repo
 					Loc::getMessage('LANDING_FIELD_NO_EXISTS', ['#field#' => $field])
 				);
 			}
+		}
+	}
+
+	/**
+	 * Check manifest
+	 * @param array $manifest
+	 * @return void
+	 */
+	protected static function onRegisterCheckManifest(array &$manifest): void
+	{
+		if (isset($manifest['assets']['class']))
+		{
+			unset($manifest['assets']['class']);
 		}
 	}
 

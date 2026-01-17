@@ -41,6 +41,7 @@ class AuthorizeUserCommandHandler
 	public function __invoke(AuthorizeUserCommand $command): void
 	{
 		$userId = $command->userId;
+		$applicationType = (string)($command->applicationType ?? 'undefined');
 		$applicationId = (int)$command->applicationId;
 		$currentHour = $command->timePeriod ?? new Main\Type\DateTime(date('Y-m-d H'), 'Y-m-d H');
 
@@ -50,7 +51,7 @@ class AuthorizeUserCommandHandler
 
 			if ($this->needToLog)
 			{
-				$this->repo->saveAuthorization($userId, $applicationId, $currentHour);
+				$this->repo->saveAuthorization($userId, $applicationType, $applicationId, $currentHour);
 			}
 		}
 		else

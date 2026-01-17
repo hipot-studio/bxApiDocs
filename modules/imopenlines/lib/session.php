@@ -579,7 +579,16 @@ class Session
 				}
 				elseif (Loader::includeModule('imconnector'))
 				{
-					$limit = \Bitrix\ImConnector\Connector::getReplyLimit($fields['SOURCE']);
+					$channelType = null;
+					if (in_array($fields['SOURCE'], array_keys(\Bitrix\ImConnector\Library::TIME_LIMIT_CHANNELS_RESTRICTIONS), true))
+					{
+						$connectorStatusData = ImConnector\Status::getInstance($fields['SOURCE'], $fields['CONFIG_ID'])->getData();
+						if (!empty($connectorStatusData))
+						{
+							$channelType = $connectorStatusData['channelType'];
+						}
+					}
+					$limit = \Bitrix\ImConnector\Connector::getReplyLimit($fields['SOURCE'], $channelType);
 					if ($limit)
 					{
 						if (!empty($limit['BLOCK_DATE']))

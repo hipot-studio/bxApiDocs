@@ -26,9 +26,9 @@ class DeleteTaskService
 	 * @throws WrongTaskIdException
 	 * @throws TaskStopDeleteException
 	 */
-	public function delete(int $taskId, DeleteConfig $config, bool $useConsistency = true): void
+	public function delete(int $taskId, DeleteConfig $config): void
 	{
-		if ($useConsistency)
+		if ($config->isUseConsistency())
 		{
 			$this->consistencyResolver->resolve('task.delete')->wrap(
 				fn () => $this->deleteService->delete($taskId, $config)

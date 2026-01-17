@@ -40,6 +40,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
+use CComponentEngine;
 use CCrmComponentHelper;
 use CCrmOwnerType;
 
@@ -233,6 +234,8 @@ class EditorAdapter
 			)
 		);
 
+		$this->prepareRecurringField();
+
 		if (!$item->isNew())
 		{
 			$this->entityData = array_merge(
@@ -285,6 +288,18 @@ class EditorAdapter
 		if ($item->hasField(Item::FIELD_NAME_OPPORTUNITY))
 		{
 			$this->entityData[static::FIELD_PRODUCT_ROW_SUMMARY] = $this->getProductsSummaryEntityData($item, $mode);
+			if (
+				$mode === ComponentMode::COPING
+				&& !$item->getIsManualOpportunity()
+				&& Loader::includeModule('catalog')
+				&& !AccessController::getCurrent()->checkByValue(
+					ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+					$item->getEntityTypeId(),
+				)
+			)
+			{
+				$item->setOpportunity($this->entityData[static::FIELD_PRODUCT_ROW_SUMMARY]['totalRaw']['amount']);
+			}
 			$this->entityData = array_merge($this->entityData, $this->getOpportunityEntityData($item));
 		}
 
@@ -702,10 +717,6 @@ class EditorAdapter
 				);
 			}
 		}
-		elseif ($type === Field::TYPE_RECURRING && $this->recurringEditorAdapter->isUsed($this->item))
-		{
-			$field = $this->recurringEditorAdapter->prepareFieldByInfo($this->item, $field);
-		}
 
 		if ($name === Item::FIELD_NAME_TITLE)
 		{
@@ -851,7 +862,6 @@ class EditorAdapter
 			Item::FIELD_NAME_OPPORTUNITY,
 			Item::FIELD_NAME_STAGE_ID,
 			Item::FIELD_NAME_OBSERVERS,
-			Item::FIELD_NAME_RECURRING,
 		];
 
 		$isDefaultlyNotMergeable = in_array($name, $defaultlyNotMergeable, true);
@@ -1300,7 +1310,9 @@ class EditorAdapter
 				'FIELD' => $fieldName,
 				'MULTIPLE' => $userField['MULTIPLE'],
 				'MANDATORY' => $userField['MANDATORY'],
+				'HELP_MESSAGE' => $userField['HELP_MESSAGE'] ?? '',
 				'SETTINGS' => $userField['SETTINGS'] ?? null,
+				'ADDITIONAL' => $userField['ADDITIONAL'] ?? [],
 			];
 
 			if($userField['USER_TYPE_ID'] === 'enumeration')
@@ -1309,15 +1321,13 @@ class EditorAdapter
 			}
 			elseif($userField['USER_TYPE_ID'] === 'file')
 			{
-				$fieldInfo['ADDITIONAL'] = [
-					'URL_TEMPLATE' => \CComponentEngine::MakePathFromTemplate(
-						$fileHandlerUrl,
-						[
-							'owner_id' => $entityId,
-							'field_name' => $fieldName,
-						]
-					),
-				];
+				$fieldInfo['ADDITIONAL']['URL_TEMPLATE'] = CComponentEngine::MakePathFromTemplate(
+					$fileHandlerUrl,
+					[
+						'owner_id' => $entityId,
+						'field_name' => $fieldName
+					],
+				);
 			}
 
 			$entityUserFields[$fieldName] = [
@@ -1461,12 +1471,47 @@ class EditorAdapter
 		return $entityData;
 	}
 
-	/**
-	 * @param Item $item
-	 * @param array $entityFields
-	 * @param array $entityData
-	 * @return array
-	 */
+	protected function prepareRecurringField(): void
+	{
+		if (!$this->recurringEditorAdapter->isUsed($this->item))
+		{
+			return;
+		}
+
+		$entityTypeId = $this->item->getEntityTypeId();
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		if (!$factory?->isRecurringEnabled())
+		{
+			return;
+		}
+
+		if (CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
+		{
+			$entityType = 'DYNAMIC';
+		}
+		else
+		{
+			$entityType = CCrmOwnerType::ResolveName($entityTypeId);
+		}
+
+		$recurringField = [
+			'name' => RecurringFieldEditorAdapter::FIELD_RECURRING,
+			'title' =>
+				Loc::getMessage('CRM_TYPE_RECURRING_FIELD_RECURRING_' . $entityType)
+					??  Loc::getMessage('CRM_TYPE_RECURRING_FIELD_RECURRING')
+			,
+			'type' => 'recurringV2',
+			'editable' => true,
+			'enableAttributes' => true,
+			'mergeable' => true,
+			'transferable' => true,
+			'showAlways' => false,
+		];
+
+		$field = $this->recurringEditorAdapter->prepareFieldByInfo($this->item, $recurringField);
+		$this->addEntityField($field);
+	}
+
 	protected function getEntityDataForEntityFields(
 		Item $item,
 		array $entityFields,
@@ -1581,7 +1626,7 @@ class EditorAdapter
 
 		$entityTypeName = $field['data']['entityTypeName'] ?? CCrmOwnerType::ResolveName($entityTypeId);
 
-		if ($entityTypeId === \CCrmOwnerType::Company && \CCrmCompany::isMyCompany($entityId))
+		if ($entityTypeId === CCrmOwnerType::Company && \CCrmCompany::isMyCompany($entityId))
 		{
 			$canRead = Container::getInstance()->getUserPermissions()->myCompany()->canReadBaseFields($entityId);
 		}
@@ -1704,6 +1749,22 @@ class EditorAdapter
 		if (is_null($products))
 		{
 			return ['isReadOnly' => $isReadOnly];
+		}
+
+		if (
+			(
+				$mode === ComponentMode::COPING
+				|| $mode === ComponentMode::CONVERSION
+			)
+			&& Loader::includeModule('catalog')
+			&& !AccessController::getCurrent()->checkByValue(
+				ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
+				$item->getEntityTypeId(),
+			)
+		)
+		{
+			Container::getInstance()->getProductRowChecker()->updateCatalogPricesForItem($item);
+			$products = $item->getProductRows();
 		}
 
 		$rowData = [];

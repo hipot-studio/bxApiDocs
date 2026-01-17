@@ -17,7 +17,7 @@ use Bitrix\Call\Integration\AI\MentionService;
 }
 */
 
-class Summary
+class Summary extends AISenseContent
 {
 	/** @var array<array{start: string, end: string, title: string, summary: string}> */
 	public array $summary = [];
@@ -28,6 +28,9 @@ class Summary
 	{
 		if ($outcome)
 		{
+			$this->callId = $outcome->getCallId();
+			$this->version = (int)($outcome->getProperty('version')?->getContent() ?? 1);
+
 			$summary = $outcome->getProperty('call_summary')?->getStructure();
 			if (!$summary)
 			{
@@ -54,11 +57,21 @@ class Summary
 		}
 	}
 
-	public function toRestFormat(): array
+	public function toRestFormat(string $mentionFormat = 'bb'): array
 	{
 		$mentionService = MentionService::getInstance();
+		$replaceMentions = function (string $value) use ($mentionService, $mentionFormat)
+		{
+			return match ($mentionFormat)
+			{
+				'html' => $mentionService->replaceBBMentions($value),
+				'name' => $mentionService->removeBBMentions($value),
+				default => $value,//bb
+			};
+		};
 
 		$result = [];
+
 		foreach ($this->summary as $row)
 		{
 			if (!empty($row->title) || !empty($row->summary))
@@ -66,8 +79,8 @@ class Summary
 				$result[]  = [
 					'start' => $row->start,
 					'end' => $row->end,
-					'title' => $mentionService->replaceBbMentions($row->title),
-					'summary' => $mentionService->replaceBbMentions($row->summary),
+					'title' => $replaceMentions($row->title),
+					'summary' => $replaceMentions($row->summary),
 				];
 			}
 		}

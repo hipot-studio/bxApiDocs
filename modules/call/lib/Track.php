@@ -11,14 +11,18 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Call\Model\EO_CallTrack;
 use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Model\CallTrackTable;
+use Bitrix\Call\Cache\ExternalAccessTokenManager;
 
 
 class Track extends EO_CallTrack
 {
 	public const
 		TYPE_RECORD = 'record',
-		TYPE_TRACK_PACK = 'track_pack'
+		TYPE_TRACK_PACK = 'track_pack',
+		TYPE_VIDEO_RECORD = 'video_record',
+		TYPE_VIDEO_PREVIEW = 'video_preview'
 	;
+
 
 	public function attachTempFile(): Result
 	{
@@ -88,6 +92,8 @@ class Track extends EO_CallTrack
 				$type = match (true)
 				{
 					$this->getType() == self::TYPE_RECORD => \Bitrix\Im\V2\Link\File\FileItem::AUDIO_SUBTYPE,
+					$this->getType() == self::TYPE_VIDEO_RECORD => \Bitrix\Im\V2\Link\File\FileItem::MEDIA_SUBTYPE,
+					$this->getType() == self::TYPE_VIDEO_PREVIEW => \Bitrix\Im\V2\Link\File\FileItem::MEDIA_SUBTYPE,
 					str_contains($this->getFileMimeType(), 'audio/') => \Bitrix\Im\V2\Link\File\FileItem::AUDIO_SUBTYPE,
 					str_contains($this->getFileMimeType(), 'video/') => \Bitrix\Im\V2\Link\File\FileItem::MEDIA_SUBTYPE,
 					default => \Bitrix\Im\V2\Link\File\FileItem::OTHER_SUBTYPE
@@ -155,7 +161,7 @@ class Track extends EO_CallTrack
 	 * @param bool $forceDownload
 	 * @return string
 	 */
-	public function getUrl(bool $absolute = true, bool $forceDownload = false): string
+	public function getUrl(bool $absolute = true, bool $forceDownload = false, bool $isExternalLink = false): string
 	{
 		$params = [
 			'callId' => $this->getCallId(),
@@ -164,6 +170,11 @@ class Track extends EO_CallTrack
 		if ($forceDownload)
 		{
 			$params['forceDownload'] = 1;
+		}
+
+		if ($isExternalLink)
+		{
+			$params['token'] = ExternalAccessTokenManager::generateToken($this->getId(), $this->getCallId());
 		}
 
 		$url = UrlManager::getInstance()->create(
@@ -246,12 +257,62 @@ class Track extends EO_CallTrack
 
 			$this->setFileName($fileName ?: "composed-{$callId}.ogg");
 		}
+		elseif ($this->getType() == self::TYPE_VIDEO_RECORD)
+		{
+			$fileName =
+				Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
+					'#CALL_ID#' => $callId,
+					'#CALL_START#' => (new DateTime())->format('Y-m-d')
+				])
+				. ".mp4";
+
+			$this->setFileName($fileName ?: "composed-{$callId}.mp4");
+		}
+		elseif ($this->getType() == self::TYPE_VIDEO_PREVIEW)
+		{
+			$extension = $this->getFileExtensionFromMimeType() ?: 'jpg';
+
+			$fileName =
+				'preview_' . Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
+					'#CALL_ID#' => $callId,
+					'#CALL_START#' => (new DateTime())->format('Y-m-d')
+				])
+				. ".{$extension}";
+
+			$this->setFileName($fileName ?: "preview-{$callId}.{$extension}");
+		}
 		elseif (!$this->getFileName())
 		{
 			$this->setFileName("record-{$externalId}");
 		}
 
 		return $this;
+	}
+
+	/**
+	 * Get file extension based on MIME type
+	 *
+	 * @return string|null
+	 */
+	private function getFileExtensionFromMimeType(): ?string
+	{
+		$mimeType = $this->getFileMimeType();
+		if (!$mimeType) {
+			return null;
+		}
+
+		$mimeToExtension = [
+			'image/jpeg' => 'jpg',
+			'image/jpg' => 'jpg',
+			'image/png' => 'png',
+			'image/gif' => 'gif',
+			'image/webp' => 'webp',
+			'image/bmp' => 'bmp',
+			'image/tiff' => 'tiff',
+			'image/svg+xml' => 'svg',
+		];
+
+		return $mimeToExtension[$mimeType] ?? null;
 	}
 
 	/**

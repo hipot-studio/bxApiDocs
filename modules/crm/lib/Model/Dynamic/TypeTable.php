@@ -170,7 +170,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->configureStorageValues('N', 'Y')
 			->configureDefaultValue('N')
 			->configureRequired()
-			->configureTitle(Loc::getMessage('CRM_TYPE_TYPE_IS_USE_IN_USERFIELD_TITLE'));
+			->configureTitle(Loc::getMessage('CRM_TYPE_TYPE_IS_USE_IN_USERFIELD_ENABLED_TITLE'));
 		$fieldsMap[] = (new ORM\Fields\BooleanField('IS_LINK_WITH_PRODUCTS_ENABLED'))
 			->configureStorageValues('N', 'Y')
 			->configureDefaultValue('N')
@@ -424,6 +424,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		$entityTypeId = (int)$typeData['ENTITY_TYPE_ID'];
 
 		Option::delete('crm', ['name' => '~last_activity_columns_alter_success_' . $entityTypeId]);
+		Option::delete('crm', ['name' => '~is_recurring_column_alter_success_' . $entityTypeId]);
 		FieldContentTypeTable::deleteByEntityTypeId($entityTypeId);
 		EventRelationsTable::deleteByEntityType(\CCrmOwnerType::ResolveName($entityTypeId));
 		TimelineEntry::deleteByAssociatedEntityType($entityTypeId);
@@ -455,10 +456,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 				$category->delete();
 			}
 
-			if ($factory->isRecurringAvailable())
-			{
-				RecurringTable::deleteByEntityTypeId($factory->getEntityTypeId());
-			}
+			RecurringTable::deleteByEntityTypeId($factory->getEntityTypeId());
 		}
 
 		Container::getInstance()->getRestEventManager()->deleteDynamicItemEventsByEntityTypeId($type->getEntityTypeId());
@@ -702,7 +700,12 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 	protected static function getFieldIsNotChangeableError(string $fieldName): ORM\EntityError
 	{
-		$title = Loc::getMessage('CRM_TYPE_TYPE_' . $fieldName . '_TITLE') ?? $fieldName;
+		Container::getInstance()->getLocalization()->loadMessages();
+
+		$title = Loc::getMessage('CRM_TYPE_' . $fieldName . '_TITLE_MSGVER_1') // CRM_TYPE_ENTITY_TYPE_ID_TITLE_MSGVER_1
+			?? Loc::getMessage('CRM_TYPE_' . $fieldName . '_TITLE')
+			?? $fieldName
+		;
 
 		return new ORM\EntityError(Loc::getMessage('CRM_TYPE_TABLE_FIELD_NOT_CHANGEABLE_ERROR', [
 			'#FIELD#' => $title,
@@ -948,6 +951,8 @@ class TypeTable extends UserField\Internal\TypeDataManager
 	{
 		$entity = parent::compileEntity($type);
 
+		Container::getInstance()->getLocalization()->loadMessages();
+
 		// disable checking required fields here as it can be disabled
 		foreach ($entity->getFields() as $field)
 		{
@@ -987,14 +992,15 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		}
 
 		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
-		if (self::wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate((int)$type['ENTITY_TYPE_ID']))
+		$entityTypeId = (int)$type['ENTITY_TYPE_ID'];
+		if (self::wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate($entityTypeId))
 		{
 			$entity->addField($fieldRepository->getLastActivityBy());
 			$entity->addField($fieldRepository->getLastActivityTime());
 		}
 
 		/** @var ORM\Fields\Relations\Reference $communication */
-		foreach ($fieldRepository->getLastCommunications((int)$type['ENTITY_TYPE_ID']) as $communication)
+		foreach ($fieldRepository->getLastCommunications($entityTypeId) as $communication)
 		{
 			$entity->addField($communication);
 		}
@@ -1104,6 +1110,8 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 	public static function getFieldsInfo(): array
 	{
+		Container::getInstance()->getLocalization()->loadMessages();
+
 		return [
 			'ID' => [
 				'TYPE' => Field::TYPE_INTEGER,

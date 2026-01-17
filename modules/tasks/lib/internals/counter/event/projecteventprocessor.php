@@ -111,6 +111,10 @@ class ProjectEventProcessor
 					$recountComments[] = $taskId;
 					break;
 
+				case EventDictionary::EVENT_AFTER_COMMENTS_READ:
+					$recountComments[] = $taskId;
+					break;
+	
 				case EventDictionary::EVENT_AFTER_COMMENT_ADD:
 				case EventDictionary::EVENT_AFTER_COMMENT_DELETE:
 					$recountComments[] = $taskId;

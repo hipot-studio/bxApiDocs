@@ -6,12 +6,14 @@ use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Crm;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Rpa\Driver;
 use Bitrix\Sign;
+use CBPWorkflowTemplateUser;
 
 class AutomationSection
 {
@@ -170,6 +172,23 @@ class AutomationSection
 			}
 		}
 
+		if (Loader::includeModule('bizproc'))
+		{
+			$user = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
+
+			if (Option::get('bizproc', 'designer_v2', 'N') === 'Y' && $user->isAdmin())
+			{
+				$menu[] = [
+					Loc::getMessage('MENU_BIZPROC_TEMPLATE_PROCESSES'),
+					SITE_DIR . 'bizproc/templateprocesses/',
+					[],
+					[
+						'menu_item_id' => 'menu_template_processes',
+					],
+				];
+			}
+		}
+
 		self::$bpSubMenu = $menu;
 
 		return self::$bpSubMenu;
@@ -195,6 +214,13 @@ class AutomationSection
 			return [];
 		}
 
+		$hasIsNewItem = !empty(
+			array_filter(
+				$menuSubItems,
+				static fn($item) => (($item['IS_NEW'] ?? null) === true),
+			)
+		);
+
 		return [
 			'id' => 'crm-dynamic',
 			'title' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_SUBTITLE_1'),
@@ -204,6 +230,7 @@ class AutomationSection
 				'menu_item_id' => self::MENU_ITEMS_ID['smart_process'],
 				'top_menu_id' => 'top_menu_id_crm_dynamic',
 				'sub_menu' => $menuSubItems,
+				'is_new' => $hasIsNewItem,
 			],
 		];
 	}
@@ -217,7 +244,6 @@ class AutomationSection
 		$automatedSolutionManager = $container->getAutomatedSolutionManager();
 
 		$menuItems = [];
-
 		$canEditAutomatedSolutions = $userPermissions->automatedSolution()->canEdit();
 
 		foreach ($automatedSolutionManager->getExistingAutomatedSolutions() as $automatedSolution)
@@ -270,7 +296,13 @@ class AutomationSection
 			}
 
 			$menuItems[] = [
-				'TEXT' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_AUTOMATED_SOLUTION_LIST'),
+				'TEXT' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_AUTOMATED_SOLUTION_MARKET'),
+				'URL' => \Bitrix\Crm\Integration\Market\Router::getCategoryPath('automated_solutions_seats'),
+				'IS_NEW' => true, // @todo
+			];
+
+			$menuItems[] = [
+				'TEXT' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_AUTOMATED_SOLUTION_LIST_MSGVER_1'),
 				'URL' => $router->getAutomatedSolutionListUrl(),
 			];
 		}

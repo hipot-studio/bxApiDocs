@@ -33,4 +33,39 @@ class Analytics extends Base
 
 		return $this->labels;
 	}
+
+	public function setEvent(string $event): Analytics
+	{
+		$this->labels['event'] = $event;
+
+		return $this;
+	}
+
+	public function setElement(string $element): Analytics
+	{
+		$this->labels['c_element'] = $element;
+
+		return $this;
+	}
+
+	public function setP2(string $p2): Analytics
+	{
+		$this->labels['p2'] = $p2;
+
+		return $this;
+	}
+
+	public function setP4(string $p4): Analytics
+	{
+		$this->labels['p4'] = $p4;
+
+		return $this;
+	}
+
+	public function setP5(string $p5): Analytics
+	{
+		$this->labels['p5'] = $p5;
+
+		return $this;
+	}
 }

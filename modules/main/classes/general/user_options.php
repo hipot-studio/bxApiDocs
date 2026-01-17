@@ -1,43 +1,46 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2025 Bitrix
  */
+
+use Bitrix\Main\Application;
 
 class CUserOptions
 {
-	protected static $cache = array();
+	protected static $cache = [];
 
-	public static function GetList($arOrder = array("ID" => "ASC"), $arFilter = array())
+	public static function GetList($arOrder = ["ID" => "ASC"], $arFilter = [])
 	{
 		global $DB;
 
-		$arSqlSearch = array();
+		$arSqlSearch = [];
 		foreach ($arFilter as $key => $val)
 		{
 			$key = strtoupper($key);
 			switch ($key)
 			{
 				case "ID":
-					$arSqlSearch[] = "UO.ID = ".intval($val);
+					$arSqlSearch[] = "UO.ID = " . intval($val);
 					break;
 
 				case "USER_ID":
-					$arSqlSearch[] = "UO.USER_ID = ".intval($val);
+					$arSqlSearch[] = "UO.USER_ID = " . intval($val);
 					break;
 
 				case "USER_ID_EXT":
-					$arSqlSearch[] = "(UO.USER_ID = ".intval($val)." OR UO.COMMON='Y')";
+					$arSqlSearch[] = "(UO.USER_ID = " . intval($val) . " OR UO.COMMON='Y')";
 					break;
 
 				case "CATEGORY":
-					$arSqlSearch[] = "UO.CATEGORY = '".$DB->ForSql($val)."'";
+					$arSqlSearch[] = "UO.CATEGORY = '" . $DB->ForSql($val) . "'";
 					break;
 
 				case "NAME":
-					$arSqlSearch[] = "UO.NAME = '".$DB->ForSql($val)."'";
+					$arSqlSearch[] = "UO.NAME = '" . $DB->ForSql($val) . "'";
 					break;
 
 				case "NAME_MASK":
@@ -45,24 +48,28 @@ class CUserOptions
 					break;
 
 				case "COMMON":
-					$arSqlSearch[] = "UO.COMMON = '".$DB->ForSql($val)."'";
+					$arSqlSearch[] = "UO.COMMON = '" . $DB->ForSql($val) . "'";
 					break;
 			}
 		}
 
 		$strSqlSearch = "";
 		foreach ($arSqlSearch as $condition)
+		{
 			if ($condition <> '')
-				$strSqlSearch.= " AND  (".$condition.") ";
+			{
+				$strSqlSearch .= " AND  (" . $condition . ") ";
+			}
+		}
 
 		$strSql = "
 			SELECT UO.ID, UO.USER_ID, UO.CATEGORY, UO.NAME, UO.COMMON, UO.VALUE
 			FROM b_user_option UO
 			WHERE 1 = 1
-			".$strSqlSearch."
+			" . $strSqlSearch . "
 		";
 
-		$arSqlOrder = array();
+		$arSqlOrder = [];
 		if (is_array($arOrder))
 		{
 			foreach ($arOrder as $by => $order)
@@ -70,28 +77,43 @@ class CUserOptions
 				$by = strtoupper($by);
 				$order = strtoupper($order);
 				if ($order != "ASC")
+				{
 					$order = "DESC";
+				}
 
 				if ($by == "ID")
-					$arSqlOrder[$by] = " UO.ID ".$order." ";
+				{
+					$arSqlOrder[$by] = " UO.ID " . $order . " ";
+				}
 				elseif ($by == "USER_ID")
-					$arSqlOrder[$by] = " UO.USER_ID ".$order." ";
+				{
+					$arSqlOrder[$by] = " UO.USER_ID " . $order . " ";
+				}
 				elseif ($by == "CATEGORY")
-					$arSqlOrder[$by] = " UO.CATEGORY ".$order." ";
+				{
+					$arSqlOrder[$by] = " UO.CATEGORY " . $order . " ";
+				}
 				elseif ($by == "NAME")
-					$arSqlOrder[$by] = " UO.NAME ".$order." ";
+				{
+					$arSqlOrder[$by] = " UO.NAME " . $order . " ";
+				}
 				elseif ($by == "COMMON")
-					$arSqlOrder[$by] = " UO.COMMON ".$order." ";
+				{
+					$arSqlOrder[$by] = " UO.COMMON " . $order . " ";
+				}
 			}
 		}
 
 		if (!empty($arSqlOrder))
-			$strSqlOrder = "ORDER BY ".implode(", ", $arSqlOrder);
+		{
+			$strSqlOrder = "ORDER BY " . implode(", ", $arSqlOrder);
+		}
 		else
+		{
 			$strSqlOrder = "";
+		}
 
-		$res = $DB->Query($strSql.$strSqlOrder);
-		return $res;
+		return $DB->Query($strSql . $strSqlOrder);
 	}
 
 	public static function GetOption($category, $name, $default_value = false, $user_id = false)
@@ -104,7 +126,8 @@ class CUserOptions
 		}
 
 		$user_id = intval($user_id);
-		$category = strtolower($category);
+		$category = mb_strtolower($category);
+		$name = mb_strtolower($name);
 
 		if (!isset(self::$cache[$user_id][$category]))
 		{
@@ -129,9 +152,10 @@ class CUserOptions
 				$res = $DB->Query($sql);
 				while ($option = $res->Fetch())
 				{
-					if (!isset(self::$cache[$user_id][$category][$option["NAME"]]) || $option["COMMON"] <> 'Y')
+					$optionName = mb_strtolower($option["NAME"]);
+					if (!isset(self::$cache[$user_id][$category][$optionName]) || $option["COMMON"] <> 'Y')
 					{
-						self::$cache[$user_id][$category][$option["NAME"]] = unserialize($option["VALUE"], ['allowed_classes' => false]);
+						self::$cache[$user_id][$category][$optionName] = unserialize($option["VALUE"], ['allowed_classes' => false]);
 					}
 				}
 
@@ -164,50 +188,51 @@ class CUserOptions
 	{
 		global $DB, $USER, $CACHE_MANAGER;
 
-		if($bCommon == true)
+		if ($bCommon)
 		{
 			$user_id = 0;
 		}
-		elseif($user_id === false)
+		elseif ($user_id === false)
 		{
-			if(!is_object($USER))
+			if (!is_object($USER))
 			{
 				return false;
 			}
 			$user_id = $USER->GetID();
 		}
 
-		$category = strtolower($category);
+		$category = mb_strtolower($category);
+		$name = mb_strtolower($name);
 
 		$user_id = intval($user_id);
-		$arFields = array(
+		$arFields = [
 			"USER_ID" => $user_id,
 			"CATEGORY" => $category,
 			"NAME" => $name,
 			"VALUE" => serialize($value),
 			"COMMON" => ($bCommon ? "Y" : "N"),
-		);
+		];
 
-		$arUpdateFields = array(
+		$arUpdateFields = [
 			"VALUE" => $arFields["VALUE"],
 			"COMMON" => $arFields["COMMON"],
-		);
-		$helper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
-		$sql = $helper->prepareMerge("b_user_option", array("USER_ID", "CATEGORY", "NAME"), $arFields, $arUpdateFields);
+		];
+		$helper = Application::getConnection()->getSqlHelper();
+		$sql = $helper->prepareMerge("b_user_option", ["USER_ID", "CATEGORY", "NAME"], $arFields, $arUpdateFields);
 
-		if(!$DB->Query(current($sql)))
+		if (!$DB->Query(current($sql)))
 		{
 			return false;
 		}
 
-		if($bCommon)
+		if ($bCommon)
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
-			self::$cache = array();
+			self::$cache = [];
 		}
 		else
 		{
-			$CACHE_MANAGER->clean("user_option:".$user_id.":".$category, "user_option");
+			$CACHE_MANAGER->clean("user_option:" . $user_id . ":" . $category, "user_option");
 			unset(self::$cache[$user_id][$category]);
 		}
 		return true;
@@ -224,21 +249,23 @@ class CUserOptions
 				$val = $opt["v"];
 				if (is_array($opt["v"]))
 				{
-					$val = CUserOptions::GetOption($opt["c"], $opt["n"], array());
-					if(is_array($val))
+					$val = self::GetOption($opt["c"], $opt["n"], []);
+					if (is_array($val))
 					{
 						foreach ($opt["v"] as $k => $v)
+						{
 							$val[$k] = $v;
+						}
 					}
 					else
 					{
 						$val = $opt["v"];
 					}
 				}
-				CUserOptions::SetOption($opt["c"], $opt["n"], $val);
+				self::SetOption($opt["c"], $opt["n"], $val);
 				if (isset($opt["d"]) && $opt["d"] === "Y" && $USER->CanDoOperation('edit_other_settings'))
 				{
-					CUserOptions::SetOption($opt["c"], $opt["n"], $val, true);
+					self::SetOption($opt["c"], $opt["n"], $val, true);
 				}
 			}
 		}
@@ -254,22 +281,24 @@ class CUserOptions
 		}
 
 		$user_id = intval($user_id);
+		$category = mb_strtolower($category);
+
 		$strSql = "
 			DELETE FROM b_user_option
-			WHERE ".($bCommon ? "USER_ID=0 AND COMMON='Y' " : "USER_ID=".$user_id)."
-			AND CATEGORY='".$DB->ForSql($category, 50)."'
-			AND NAME='".$DB->ForSql($name, 255)."'
+			WHERE " . ($bCommon ? "USER_ID=0 AND COMMON='Y' " : "USER_ID=" . $user_id) . "
+			AND CATEGORY='" . $DB->ForSql($category, 50) . "'
+			AND NAME='" . $DB->ForSql($name, 255) . "'
 		";
 		if ($DB->Query($strSql))
 		{
-			if($bCommon)
+			if ($bCommon)
 			{
 				$CACHE_MANAGER->cleanDir("user_option");
-				self::$cache = array();
+				self::$cache = [];
 			}
 			else
 			{
-				$CACHE_MANAGER->clean("user_option:".$user_id.":".$category, "user_option");
+				$CACHE_MANAGER->clean("user_option:" . $user_id . ":" . $category, "user_option");
 				unset(self::$cache[$user_id][$category]);
 			}
 			return true;
@@ -284,20 +313,20 @@ class CUserOptions
 		if ($DB->Query("DELETE FROM b_user_option WHERE COMMON='Y' AND NAME NOT LIKE '~%'"))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
-			self::$cache = array();
+			self::$cache = [];
 			return true;
 		}
 		return false;
 	}
 
-	public static function DeleteUsersOptions($user_id=false)
+	public static function DeleteUsersOptions($user_id = false)
 	{
 		global $DB, $CACHE_MANAGER;
 
-		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID<>0 AND NAME NOT LIKE '~%'  ".($user_id <> false? " AND USER_ID=".intval($user_id):"")))
+		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID<>0 AND NAME NOT LIKE '~%'  " . ($user_id ? " AND USER_ID=" . intval($user_id) : "")))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
-			self::$cache = array();
+			self::$cache = [];
 			return true;
 		}
 		return false;
@@ -307,11 +336,11 @@ class CUserOptions
 	{
 		global $DB, $CACHE_MANAGER;
 
-		$strSql = "DELETE FROM b_user_option WHERE CATEGORY='".$DB->ForSql($category, 50)."' AND NAME='".$DB->ForSql($name, 255)."'";
+		$strSql = "DELETE FROM b_user_option WHERE CATEGORY='" . $DB->ForSql($category, 50) . "' AND NAME='" . $DB->ForSql($name, 255) . "'";
 		if ($DB->Query($strSql))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
-			self::$cache = array();
+			self::$cache = [];
 			return true;
 		}
 
@@ -321,31 +350,26 @@ class CUserOptions
 	public static function SetCookieOptions($cookieName)
 	{
 		//last user setting
-		$varCookie = array();
+		$varCookie = [];
 		parse_str($_COOKIE[$cookieName], $varCookie);
 		setcookie($cookieName, false, false, "/");
 		if (is_array($varCookie["p"]) && $varCookie["sessid"] == bitrix_sessid())
 		{
 			$arOptions = $varCookie["p"];
-			CUserOptions::SetOptionsFromArray($arOptions);
+			self::SetOptionsFromArray($arOptions);
 		}
 	}
 
-	//*****************************
-	// Events
-	//*****************************
-
-	//user deletion event
 	public static function OnUserDelete($user_id)
 	{
 		global $DB, $CACHE_MANAGER;
 
 		$user_id = intval($user_id);
 
-		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID=". $user_id))
+		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID=" . $user_id))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
-			self::$cache = array();
+			self::$cache = [];
 			return true;
 		}
 		return false;

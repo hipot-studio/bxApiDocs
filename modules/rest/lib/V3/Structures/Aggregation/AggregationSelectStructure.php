@@ -3,7 +3,6 @@
 namespace Bitrix\Rest\V3\Structures\Aggregation;
 
 use Bitrix\Rest\V3\Attributes\Filterable;
-use Bitrix\Rest\V3\Dto\PropertyHelper;
 use Bitrix\Rest\V3\Exceptions\UnknownAggregateFunctionException;
 use Bitrix\Rest\V3\Exceptions\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exceptions\Validation\DtoFieldRequiredAttributeException;
@@ -30,28 +29,32 @@ final class AggregationSelectStructure extends Structure implements \IteratorAgg
 
 		$value = (array)$value;
 
+		$dto = self::getDto($dtoClass);
+
+		$fields = $dto->getFields();
+
 		if (!empty($value))
 		{
-			foreach ($value as $aggregation => $fields)
+			foreach ($value as $aggregation => $aggregationFields)
 			{
-				$fields = (array)$fields;
+				$aggregationFields = (array)$aggregationFields;
 
-				foreach ($fields as $field => $alias)
+				foreach ($aggregationFields as $aggregationFieldName => $alias)
 				{
-					if (is_int($field))
+					if (is_int($aggregationFieldName))
 					{
-						$field = $alias;
-						$alias = $aggregation . '_' . $field;
+						$aggregationFieldName = $alias;
+						$alias = $aggregation . '_' . $aggregationFieldName;
 					}
 
-					if (!PropertyHelper::isValidProperty($dtoClass, $field))
+					if (!isset($fields[$aggregationFieldName]))
 					{
-						throw new UnknownDtoPropertyException($dtoClass, $field);
+						throw new UnknownDtoPropertyException($dto->getShortName(), $aggregationFieldName);
 					}
 
-					if (!PropertyHelper::hasAttribute($dtoClass, $field, Filterable::class))
+					if (!$fields[$aggregationFieldName]->isFilterable())
 					{
-						throw new DtoFieldRequiredAttributeException($dtoClass, $field, Filterable::class);
+						throw new DtoFieldRequiredAttributeException($dto->getShortName(), $aggregationFieldName, Filterable::class);
 					}
 
 					$aggregationType = AggregationType::tryFrom($aggregation);
@@ -62,7 +65,7 @@ final class AggregationSelectStructure extends Structure implements \IteratorAgg
 
 					$structure->add(new SelectItem(
 						$aggregationType,
-						$field,
+						$aggregationFieldName,
 						$alias,
 					));
 				}

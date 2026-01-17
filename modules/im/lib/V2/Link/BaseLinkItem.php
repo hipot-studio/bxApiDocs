@@ -172,6 +172,11 @@ abstract class BaseLinkItem implements LinkItem, \ArrayAccess, ActiveRecord, Reg
 
 	//endregion
 
+	public function needToAddLink(): bool
+	{
+		return true;
+	}
+
 	protected static function mirrorDataEntityFields(): array
 	{
 		return [

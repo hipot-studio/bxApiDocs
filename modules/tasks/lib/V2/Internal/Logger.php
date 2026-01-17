@@ -18,8 +18,13 @@ class Logger
 		LogFacade::logValidationErrors($errors);
 	}
 
-	public function logError(string|Throwable|Error $error, string $wrapperClass = SystemException::class): void
+	public function logError(null|string|Throwable|Error $error, string $wrapperClass = SystemException::class): void
 	{
+		if ($error === null)
+		{
+			return;
+		}
+
 		LogFacade::handle($error, $wrapperClass);
 	}
 

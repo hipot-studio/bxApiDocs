@@ -4,12 +4,13 @@ namespace Bitrix\Bizproc\Public\Provider;
 
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Entity\WorkflowState\WorkflowStateCollection;
-use Bitrix\Bizproc\Internal\Repository\WorkflowStateRepository\WorkflowStateRepositoryInterface;
+use Bitrix\Bizproc\Internal\Repository\WorkflowStateRepository\WorkflowStateRepository;
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 
 class WorkflowStateProvider
 {
-	private WorkflowStateRepositoryInterface $repository;
+	private WorkflowStateRepository $repository;
 
 	public function __construct()
 	{

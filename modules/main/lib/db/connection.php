@@ -858,6 +858,7 @@ abstract class Connection extends Data\Connection
 	public function dropColumn($tableName, $columnName)
 	{
 		$this->query('ALTER TABLE ' . $this->getSqlHelper()->quote($tableName) . ' DROP COLUMN ' . $this->getSqlHelper()->quote($columnName));
+		$this->clearCaches($tableName);
 	}
 
 	/**
@@ -1029,11 +1030,19 @@ abstract class Connection extends Data\Connection
 	/**
 	 * Clears all internal caches which may be used by some dictionary functions.
 	 *
+	 * @params string | null $table
 	 * @return void
 	 */
-	public function clearCaches()
+	public function clearCaches(?string $table = null)
 	{
-		$this->tableColumnsCache = [];
+		if ($table === null)
+		{
+			$this->tableColumnsCache = [];
+		}
+		else
+		{
+			unset($this->tableColumnsCache[$table]);
+		}
 	}
 
 	/**

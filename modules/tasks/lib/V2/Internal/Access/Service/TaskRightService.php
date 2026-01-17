@@ -13,6 +13,7 @@ use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 class TaskRightService
 {
 	use UserRightsTrait;
+	use ModelRightsTrait;
 
 	public function __construct(
 		private readonly ControllerFactoryInterface $controllerFactory,
@@ -24,9 +25,12 @@ class TaskRightService
 
 	public function canView(int $userId, int $taskId): bool
 	{
-		$rule = ActionDictionary::TASK_ACTIONS['read'];
+		return $this->can($userId, $taskId, ActionDictionary::TASK_ACTIONS['read']);
+	}
 
-		return $this->get(['read' => $rule], $taskId, $userId)['read'] ?? false;
+	public function can(int $userId, int $taskId, string $rule): bool
+	{
+		return $this->get([$rule => $rule], $taskId, $userId)[$rule] ?? false;
 	}
 
 	public function getTaskRightsBatch(int $userId, array $taskIds, array $rules = ActionDictionary::TASK_ACTIONS, array $params = []): array
@@ -74,34 +78,13 @@ class TaskRightService
 
 	public function get(array $rules, int $taskId, int $userId, array $params = []): array
 	{
-		$controller = $this->controllerFactory->create(Type::Task, $userId);
-		if ($controller === null)
-		{
-			return [];
-		}
-
-		$ruleChunks = [];
-		$accessRequest = [];
-		foreach ($rules as $name => $rule)
-		{
-			$ruleChunks[$rule][] = $name;
-			$accessRequest[$rule] = $params[$name] ?? null;
-		}
-
-		$item = TaskModel::createFromId($taskId);
-
-		$access = $controller->batchCheck($accessRequest, $item);
-
-		$result = [];
-		foreach ($access as $rule => $value)
-		{
-			$actions = $ruleChunks[$rule];
-			foreach ($actions as $name)
-			{
-				$result[$name] = $value;
-			}
-		}
-
-		return $result;
+		return $this->getModelRights(
+			type: Type::Task,
+			controllerFactory: $this->controllerFactory,
+			rules: $rules,
+			item: TaskModel::createFromId($taskId),
+			userId: $userId,
+			params: $params,
+		);
 	}
 }

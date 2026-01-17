@@ -5,10 +5,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\BIConnector;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\BIConnector\Access\Superset\Synchronizer;
 use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Configuration\Feature;
@@ -21,6 +21,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
@@ -66,6 +67,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			'SUPERSET_DOMAIN' => '',
 			'ERROR_MESSAGES' => [],
 			'NATIVE_FILTERS' => '',
+			'FILTERS' => [],
 			'MARKET_COLLECTION_URL' => MarketDashboardManager::getMarketCollectionUrl(),
 			'SUPERSET_SERVICE_LOCATION' => ServiceLocation::getCurrentDatacenterLocationRegion(),
 		];
@@ -147,7 +149,11 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		if (SupersetInitializer::isSupersetReady())
 		{
-			(new Synchronizer(CurrentUser::get()->getId()))->sync();
+			(new BIConnector\Access\Superset\Synchronizer(CurrentUser::get()->getId()))->sync();
+
+			Application::getInstance()
+				->addBackgroundJob(fn() => (new BIConnector\Superset\Synchronizer())->initRequiredDataset())
+			;
 		}
 
 		Application::getInstance()->addBackgroundJob(fn() => Superset\Updater\ClientUpdater::update());
@@ -237,6 +243,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		$this->arResult['IS_FIRST_STARTUP'] = $firstStartup;
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
+		$this->arResult['SUPERSET_SERVICE_LOCATION'] = ServiceLocation::getCurrentDatacenterLocationRegion();
 
 		$this->includeComponentTemplate('startup');
 	}
@@ -277,7 +284,15 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 	private function prepareNativeFilters(): void
 	{
-		$this->arResult['NATIVE_FILTERS'] = $this->dashboard->getNativeFilter();
+		$nativeFilter = new EmbeddedFilter\NativeFilterBuilder($this->dashboard);
+
+		if ($this->arParams['URL_PARAMS'] && is_array($this->arParams['URL_PARAMS']))
+		{
+			$nativeFilter->setValuesFromUrlParameters($this->arParams['URL_PARAMS']);
+		}
+
+		$this->arResult['NATIVE_FILTERS'] = $nativeFilter->getFormattedFilter();
+		$this->arResult['FILTERS'] = $nativeFilter->getPresetFilterOptions();
 	}
 
 	private function prepareUrlParams(): void

@@ -2,7 +2,6 @@
 
 namespace Bitrix\Im\V2\Integration\AI;
 
-use Bitrix\AI\Context;
 use Bitrix\Imbot\Bot\CopilotChatBot;
 use Bitrix\Main\Loader;
 

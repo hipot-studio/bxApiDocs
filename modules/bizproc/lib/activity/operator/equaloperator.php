@@ -2,14 +2,14 @@
 
 namespace Bitrix\Bizproc\Activity\Operator;
 
-use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Main\Localization\Loc;
 
 class EqualOperator extends BaseOperator
 {
 	public static function getCode(): string
 	{
-		return '=';
+		return Operator::Equal->value;
 	}
 
 	public static function getTitle(): string

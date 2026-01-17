@@ -3,6 +3,7 @@
 namespace Bitrix\DocumentGenerator;
 
 use Bitrix\DocumentGenerator\Body\Docx;
+use Bitrix\DocumentGenerator\Infrastructure\Agent\Access\DepartmentAccessCodesMigrateAgent;
 use Bitrix\DocumentGenerator\Model\FieldTable;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\DocumentGenerator\Model\TemplateProviderTable;
@@ -348,7 +349,11 @@ class Template
 				$users = TemplateUserTable::getList(['select' => ['ACCESS_CODE'], 'filter' => ['TEMPLATE_ID' => $this->ID]]);
 				while($user = $users->fetch())
 				{
-					$user['ACCESS_CODE'] = TemplateUserTable::removeSocialGroupAccessSuffix($user['ACCESS_CODE']);
+					if (!DepartmentAccessCodesMigrateAgent::isDone())
+					{
+						$user['ACCESS_CODE'] = TemplateUserTable::removeSocialGroupAccessSuffix($user['ACCESS_CODE']);
+					}
+
 					$this->users[$user['ACCESS_CODE']] = $user['ACCESS_CODE'];
 				}
 			}

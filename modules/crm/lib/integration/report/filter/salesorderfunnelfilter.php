@@ -40,7 +40,8 @@ class SalesOrderFunnelFilter extends Base
 			new OrderSettings(
 				[
 					'ID' => SalesOrderFunnelBoard::BOARD_KEY,
-				]
+					'disableDepartmentSelector' => true,
+				],
 			)
 		);
 

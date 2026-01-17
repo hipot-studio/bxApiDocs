@@ -461,6 +461,7 @@ class OracleConnection extends Connection
 						END;'
 			);
 		}
+		$this->clearCaches($currentName);
 	}
 
 	/**
@@ -478,6 +479,8 @@ class OracleConnection extends Connection
 		{
 			$this->query('DROP SEQUENCE ' . $this->getSqlHelper()->quote('sq_' . $aiName));
 		}
+
+		$this->clearCaches($tableName);
 	}
 
 	/*********************************************************

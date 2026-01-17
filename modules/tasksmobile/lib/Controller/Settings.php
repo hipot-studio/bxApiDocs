@@ -2,6 +2,8 @@
 
 namespace Bitrix\TasksMobile\Controller;
 
+use Bitrix\TasksMobile\Feature\ChatFeature;
+
 class Settings extends Base
 {
 	protected function getQueryActionNames(): array
@@ -9,6 +11,7 @@ class Settings extends Base
 		return [
 			'isBetaAvailable',
 			'isBetaActive',
+			'isChatFeatureEnabled',
 		];
 	}
 
@@ -30,5 +33,14 @@ class Settings extends Base
 	public function deactivateBetaAction(): void
 	{
 		\Bitrix\TasksMobile\Settings::getInstance()->deactivateBeta();
+	}
+
+	/**
+	 * @ajaxAction tasksmobile.Settings.isChatFeatureEnabled
+	 * @return bool
+	 */
+	public function isChatFeatureEnabledAction(): bool
+	{
+		return (new ChatFeature())->isEnabled();
 	}
 }

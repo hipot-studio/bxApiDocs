@@ -40,12 +40,12 @@ class OperationAccessService
 	}
 
 	public function filterUsersWithAccess(
-		int    $groupId,
-		array  $users,
+		int $groupId,
+		array $users,
 		string $type,
 		string $feature,
 		string $operation,
-		bool   $isAdmin = false
+		bool $isAdmin = false
 	): array
 	{
 		if (!Loader::includeModule('socialnetwork'))

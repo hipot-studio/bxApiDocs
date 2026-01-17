@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Ui\Filter;
 
 use Bitrix\Tasks\Util;
+use Bitrix\Tasks\Util\View;
 use CTaskListState;
 
 class Task
@@ -135,6 +136,12 @@ class Task
 		}
 		$stateParam = (array)$request[ 'F_STATE' ];
 
+		$relationToId = $request['relationToId'] ?? null;
+		if ($relationToId)
+		{
+			$stateParam = [View::LIST->value];
+		}
+
 		if(!empty($stateParam))
 		{
 			foreach($stateParam as $state)
@@ -160,7 +167,10 @@ class Task
 			}
 		}
 
-		$listStateInstance->saveState(); // to db
+		if (!$relationToId)
+		{
+			$listStateInstance->saveState(); // to db
+		}
 
 		return $listStateInstance;
 	}

@@ -452,7 +452,7 @@ class Utils
 
 	public static function getUserOption(string $name): ?PublicActionResult
 	{
-		$whiteList = ['color_field_recent_colors'];
+		$whiteList = ['color_field_recent_colors', 'color_field_favourite_colors'];
 
 		$response = new PublicActionResult();
 		if (in_array($name, $whiteList, true))

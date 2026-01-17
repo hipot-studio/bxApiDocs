@@ -9,6 +9,8 @@ use Bitrix\Tasks\V2\Public\Command\Task\Audit\UnwatchTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Audit\WatchTaskCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
+use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 
 class Audit extends BaseController
 {
@@ -24,6 +26,7 @@ class Audit extends BaseController
 			taskId: $task->getId(),
 			userId: $this->userId,
 			auditorId: $this->userId,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -41,13 +44,15 @@ class Audit extends BaseController
 	 */
 	public function unwatchAction(
 		#[Permission\Read]
-		Entity\Task $task
-	): ?bool
+		Entity\Task $task,
+		TaskProvider $taskProvider,
+	): ?Entity\EntityInterface
 	{
 		$result = (new UnwatchTaskCommand(
 			taskId: $task->getId(),
 			userId: $this->userId,
 			auditorId: $this->userId,
+			useConsistency: true,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -57,6 +62,6 @@ class Audit extends BaseController
 			return null;
 		}
 
-		return true;
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId, ['members' => true]));
 	}
 }

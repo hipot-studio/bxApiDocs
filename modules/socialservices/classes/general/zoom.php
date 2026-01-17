@@ -74,14 +74,14 @@ class CSocServZoom extends CSocServAuth
 			: GetMessage('SOCSERV_ZOOM_NOTE');
 
 		return $arParams['FOR_INTRANET']
-			? array('ON_CLICK' => 'onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 700, 700)"')
-			: '<a href="javascript:void(0)" onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 700, 700)" class="bx-ss-button zoom-button"></a><span class="bx-spacer"></span><span>' . $phrase . '</span>';
+			? array('ON_CLICK' => 'onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 680, 800)"')
+			: '<a href="javascript:void(0)" onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 680, 800)" class="bx-ss-button zoom-button"></a><span class="bx-spacer"></span><span>' . $phrase . '</span>';
 	}
 
 	public function GetOnClickJs($arParams): string
 	{
 		$url = $this->getUrl($arParams);
-		return "BX.util.popup('" . CUtil::JSEscape($url) . "', 460, 420)";
+		return "BX.util.popup('" . CUtil::JSEscape($url) . "', 680, 800)";
 	}
 
 	public function getUrl($arParams): string

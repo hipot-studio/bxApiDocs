@@ -261,6 +261,14 @@ class JwtCall
 				'userName' => $user->getFullName(false),
 				'avatar' => $user->getAvatar(),
 			];
+			if (
+				!empty($userData['avatar'])
+				&& !str_starts_with($userData['avatar'], 'https://')
+				&& !str_starts_with($userData['avatar'], 'http://')
+			)
+			{
+				$userData['avatar'] = Library::getPortalPublicUrl(). $userData['avatar'];
+			}
 
 			self::$userTokens[$userId] = JWT::encode($userData, Settings::getPrivateKey());
 		}

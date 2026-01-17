@@ -1,7 +1,8 @@
 <?php
 namespace Bitrix\Tasks\Internals\Counter;
 
-use Bitrix\Main\Entity\DataManager;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
 /**
  * Class CounterTable
@@ -23,6 +24,8 @@ use Bitrix\Main\Entity\DataManager;
  */
 class CounterTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_tasks_scorer';

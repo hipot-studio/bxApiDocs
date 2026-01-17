@@ -421,6 +421,11 @@ class RoleManager
 	 */
 	public function addRecentRole(Prompt\Role $role): void
 	{
+		if ($role->getCode() === 'copilot_chat_mention')
+		{
+			return;
+		}
+
 		$helper = Application::getConnection()->getSqlHelper();
 
 		$merge = $helper->prepareMerge(

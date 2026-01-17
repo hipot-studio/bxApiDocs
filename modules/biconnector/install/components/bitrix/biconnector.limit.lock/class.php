@@ -6,20 +6,15 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\BIConnector\LimitManager;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\UI;
 
 class LimitLockComponent extends CBitrixComponent
 {
 	private LimitManager $limitManager;
 	private bool $fullLock = false;
-	private bool $supersetLimit = false;
-
-	private const LAST_TIME_SHOW_POPUP_OPTION_NAME = 'last_time_show_limit_popup';
 
 	public function executeComponent()
 	{
@@ -28,11 +23,6 @@ class LimitLockComponent extends CBitrixComponent
 			return null;
 		}
 		$this->init();
-
-		if (!$this->needShowPopup())
-		{
-			return null;
-		}
 
 		if ($this->limitManager->checkLimitWarning())
 		{
@@ -45,6 +35,7 @@ class LimitLockComponent extends CBitrixComponent
 		$this->arResult['CONTENT'] = $this->getPopupContent();
 		$this->arResult['LICENSE_URL'] = $this->getLicenseUrl();
 		$this->arResult['FULL_LOCK'] = $this->fullLock ? 'Y' : 'N';
+		$this->arResult['IS_LICENCE_LIMIT'] = $this->limitManager->isLimitByLicence() ? 'Y' : 'N';
 
 		$this->includeComponentTemplate();
 	}
@@ -52,11 +43,6 @@ class LimitLockComponent extends CBitrixComponent
 	private function init(): void
 	{
 		$this->limitManager = LimitManager::getInstance();
-		$this->supersetLimit = ($this->arParams['SUPERSET_LIMIT'] ?? 'N') === 'Y';
-		if ($this->supersetLimit)
-		{
-			$this->limitManager->setIsSuperset();
-		}
 		$this->fullLock = !$this->limitManager->checkLimit();
 	}
 
@@ -71,61 +57,11 @@ class LimitLockComponent extends CBitrixComponent
 		];
 	}
 
-	private function needShowPopup(): bool
-	{
-		if (!$this->supersetLimit)
-		{
-			return true;
-		}
-
-		if ($this->fullLock)
-		{
-			return true;
-		}
-
-		$lastTimestampShow = (int)Option::get('biconnector', self::LAST_TIME_SHOW_POPUP_OPTION_NAME, 0);
-		if ($lastTimestampShow <= 0)
-		{
-			Option::set('biconnector', self::LAST_TIME_SHOW_POPUP_OPTION_NAME, time());
-
-			return true;
-		}
-
-		$lastTimeShow = DateTime::createFromTimestamp($lastTimestampShow);
-		if ($lastTimeShow->add('+60 seconds') < new DateTime())
-		{
-			Option::set('biconnector', self::LAST_TIME_SHOW_POPUP_OPTION_NAME, time());
-
-			return true;
-		}
-
-		return false;
-	}
-
 	private function getTitle(): string
 	{
-		if ($this->supersetLimit && !$this->limitManager->isLimitByLicence())
-		{
-			if ($this->fullLock)
-			{
-				return Loc::getMessage('CC_BLL_CONSTRUCTOR_TITLE_BLOCKED', [
-					'#LIMIT_END_DATE#' => $this->limitManager->getSupersetUnlockDate(),
-				]);
-			}
-
-			return Loc::getMessage('CC_BLL_CONSTRUCTOR_TITLE_WARNING');
-		}
-
 		if (Loader::includeModule('bitrix24'))
 		{
-			if ($this->fullLock)
-			{
-				return Loc::getMessage('CC_BLL_TITLE_CLOUD_BLOCKED', [
-					'#SHORT_DATE#' => $this->limitManager->getLimitDate(),
-				]);
-			}
-
-			return Loc::getMessage('CC_BLL_TITLE_CLOUD_WARNING');
+			return Loc::getMessage('CC_BLL_TITLE_BLOCKED');
 		}
 
 		if ($this->fullLock)
@@ -147,61 +83,27 @@ class LimitLockComponent extends CBitrixComponent
 			return Loc::getMessage('CC_BLL_LICENSE_BUTTON_CLOUD');
 		}
 
-		if ($this->supersetLimit && !$this->limitManager->isLimitByLicence())
-		{
-			return '';
-		}
-
-		return Loc::getMessage('CC_BLL_LICENSE_BUTTON_BOX');
+		return $this->limitManager->isLimitByLicence() ? Loc::getMessage('CC_BLL_LICENSE_BUTTON_BOX') : '';
 	}
 
 	private function getPopupContent(): string
 	{
-		if ($this->supersetLimit && !$this->limitManager->isLimitByLicence())
+		if (!$this->limitManager->isLimitByLicence())
 		{
-			if ($this->fullLock)
-			{
-				return Loc::getMessage('CC_BLL_CONSTRUCTOR_CONTENT_BLOCKED', [
-					'#LIMIT#' => number_format($this->limitManager->getLimit(), thousands_separator: ' '),
-					'#SHORT_DATE#' => $this->limitManager->getLimitDate(),
-					'#ABOUT_LIMITS_HREF#' => UI\Util::getArticleUrlByCode('14888370'),
-				]);
-			}
-
-			return Loc::getMessage('CC_BLL_CONSTRUCTOR_CONTENT_WARNING', [
-				'#LIMIT#' => number_format($this->limitManager->getLimit(), thousands_separator: ' '),
-				'#LOCK_DATE#' => $this->limitManager->getLimitDate(),
-				'#ABOUT_LIMITS_HREF#' => UI\Util::getArticleUrlByCode('14888370'),
-			]);
-		}
-
-		if (Loader::includeModule('bitrix24'))
-		{
-			if ($this->fullLock)
-			{
-				return Loc::getMessage('CC_BLL_CONTENT_BLOCKED_MSGVER_1', [
-					'#LIMIT#' => number_format($this->limitManager->getLimit(), thousands_separator: ' '),
-					'#SHORT_DATE#' => $this->limitManager->getLimitDate(),
-					'#ABOUT_LIMITS_HREF#' => UI\Util::getArticleUrlByCode('14888370'),
-				]);
-			}
-
-			return Loc::getMessage('CC_BLL_CONTENT_WARNING_MSGVER_1', [
-				'#LIMIT#' => number_format($this->limitManager->getLimit(), thousands_separator: ' '),
-				'#SHORT_DATE#' => $this->limitManager->getLimitDate(),
-				'#ABOUT_LIMITS_HREF#' => UI\Util::getArticleUrlByCode('14888370'),
+			return Loc::getMessage('CC_BLL_CONTENT_BLOCKED', [
+				'#UNBLOKING_HELP_URL#' => UI\Util::getArticleUrlByCode('26703738'),
 			]);
 		}
 
 		if ($this->fullLock)
 		{
-			return Loc::getMessage('CC_BLL_CONTENT_BLOCKED_BOX_MSGVER_1', [
+			return Loc::getMessage('CC_BLL_CONTENT_BLOCKED_BOX_MSGVER_2', [
 				'#SHORT_DATE#' => $this->limitManager->getLimitDate()->format(Date::getFormat()),
 				'#ABOUT_LIMITS_HREF#' => \Bitrix\UI\Util::getArticleUrlByCode('15702822'),
 			]);
 		}
 
-		return Loc::getMessage('CC_BLL_CONTENT_WARNING_BOX_MSGVER_1', [
+		return Loc::getMessage('CC_BLL_CONTENT_WARNING_BOX_MSGVER_2', [
 			'#SHORT_DATE#' => $this->limitManager->getLimitDate()->format(Date::getFormat()),
 			'#ABOUT_LIMITS_HREF#' => \Bitrix\UI\Util::getArticleUrlByCode('15702822'),
 		]);

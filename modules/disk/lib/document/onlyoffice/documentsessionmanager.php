@@ -9,9 +9,9 @@ final class DocumentSessionManager extends SessionManager
 {
 	protected DocumentService|null $service = DocumentService::OnlyOffice;
 
-	protected function buildFilter(): array
+	protected function buildFields(): array
 	{
-		$filter = parent::buildFilter();
+		$filter = parent::buildFields();
 		$filter['TYPE'] = $this->sessionType;
 
 		return $filter;

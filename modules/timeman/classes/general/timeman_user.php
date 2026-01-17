@@ -535,32 +535,16 @@ class CTimeManUser
 
 	public function State()
 	{
-		if ($this->isDayPaused())
-		{
-			return 'PAUSED';
-		}
-
-		$lastData = $this->_GetLastData(true);
-		if (
-			$lastData
-			&& isset($lastData['CURRENT_STATUS'])
-			&& $lastData['CURRENT_STATUS'] === 'CLOSED'
-		)
-		{
-			return 'CLOSED';
-		}
-
-		if ($this->isDayExpired())
-		{
-			return 'EXPIRED';
-		}
-
-		if ($this->isDayOpen())
-		{
-			return 'OPENED';
-		}
-
-		return 'CLOSED';
+		return ($this->isDayExpired()
+			? 'EXPIRED'
+			: ($this->isDayOpen()
+				? 'OPENED'
+				: ($this->isDayPaused()
+					? 'PAUSED'
+					: 'CLOSED'
+				)
+			)
+		);
 	}
 
 	public function GetExpiredRecommendedDate()

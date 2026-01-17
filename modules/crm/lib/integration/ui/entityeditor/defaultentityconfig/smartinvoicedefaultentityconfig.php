@@ -96,7 +96,7 @@ final class SmartInvoiceDefaultEntityConfig extends AbstractDefaultEntityConfig
 		if ($factory?->isRecurringEnabled())
 		{
 			$sections[] = [
-				'name' => 'recurring',
+				'name' => RecurringFieldEditorAdapter::SECTION_RECURRING,
 				'title' => self::getRecurringSectionTitle(),
 				'type' => 'section',
 				'elements' => [

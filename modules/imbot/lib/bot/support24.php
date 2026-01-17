@@ -256,6 +256,18 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
+			global $pPERIOD;
+
+			if ($pPERIOD == 86400 && $regular == false)
+			{
+				return __METHOD__. '();';
+			}
+
+			if ($pPERIOD == 100 && $regular == true)
+			{
+				return "";
+			}
+
 			$botId = self::getBotId();
 			$settings = self::getBotSettings([
 				'BOT_ID' => $botId
@@ -343,6 +355,8 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 						}
 					}
 
+					$alreadySent = 'N';
+
 					if ($isSupportLevelChanged)
 					{
 						$alreadySent = Option::get(self::MODULE_ID, self::OPTION_BOT_SEND_MESSAGE_CHANGE_LICENCE, 'N');
@@ -375,12 +389,12 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 						Option::set(self::MODULE_ID, self::OPTION_BOT_SEND_MESSAGE_CHANGE_LICENCE, 'Y');
 						Option::set(self::MODULE_ID, self::OPTION_BOT_TEMP_CURRENT_CODE, $currentCode);
 
-						return __METHOD__. '();';
+						return __METHOD__. '(false);';
 					}
 
 					if ($hasActiveSessions)
 					{
-						return __METHOD__ . '();';
+						return __METHOD__ . '(false);';
 					}
 
 					$hasTempCode = Option::get(self::MODULE_ID, self::OPTION_BOT_TEMP_CURRENT_CODE, '');
@@ -1652,7 +1666,7 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 			// disallow start dialog
 			!empty($warningRestrictionMessage)
 			// allow start dialog if greeting has been shown @see
-			&& self::allowSendStartMessage(['BOT_ID' => self::getBotId(), 'DIALOG_ID' => $messageFields['DIALOG_ID']])
+			&& self::allowSendStartMessage(['BOT_ID' => self::getBotId(), 'DIALOG_ID' => $messageFields['DIALOG_ID']], true)
 		)
 		{
 			self::markMessageUndelivered($messageId);
@@ -1843,7 +1857,7 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 		}
 
 		// Show greeting message on before any dialog starts
-		elseif (self::allowSendStartMessage($params))
+		elseif (self::allowSendStartMessage($params, false))
 		{
 			// Message for only three state: free, paid and partner.
 			$message = '';
@@ -1992,15 +2006,21 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 	 *
 	 * @return bool
 	 */
-	public static function allowSendStartMessage(array $params)
+	public static function allowSendStartMessage(array $params, bool $checkSessId = true): bool
 	{
 		if (empty($params['DIALOG_ID']) && !empty($params['USER_ID']))
 		{
 			$params['DIALOG_ID'] = (string)$params['USER_ID'];
 		}
+
 		$sess = self::instanceDialogSession(self::getBotId(), $params['DIALOG_ID']);
-		if ($sess->getParam('GREETING_SHOWN') === 'Y' && $sess->getParam('SESSION_ID') !== '0')
+
+		if ($sess->getParam('GREETING_SHOWN') === 'Y')
 		{
+			if ($checkSessId)
+			{
+				return $sess->getParam('SESSION_ID') === 0;
+			}
 			return false;
 		}
 

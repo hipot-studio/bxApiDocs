@@ -255,6 +255,67 @@ class Helper
 		}
 	}
 
+	/**
+	 * @param int $checkLettersWithId
+	 * @param int $packSize
+	 * @return string
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 *
+	 * Recommended agent call parameters:
+	 * CAgent::addAgent('Bitrix\Mail\Helper::removeUnattachedMessagesAgent();','mail', 'N', 3600);
+	 */
+	public static function removeUnattachedMessagesAgent(int $checkLettersWithId = 0, int $packSize = 40): string
+	{
+		$queryMessage = new \Bitrix\Main\ORM\Query\Query(\Bitrix\Mail\MailMessageTable::getEntity());
+
+		$deleteMessagesOlderThan = (new \Bitrix\Main\Type\DateTime())->add('- 3 days');
+
+		$queryMessage
+			->setSelect([
+				'ID',
+			])
+			->where(\Bitrix\Main\ORM\Query\Query::filter()
+				->logic('and')
+				->where('DATE_INSERT', '<=', $deleteMessagesOlderThan)
+				->where('ID', '>', $checkLettersWithId)
+			)
+			->setOrder(['ID' => 'ASC'])
+			->setLimit($packSize);
+
+		$rowsMailMessage = $queryMessage->fetchAll();
+
+		if (empty($rowsMailMessage))
+		{
+			return '';
+		}
+
+		$messageIds = array_map('intval', array_column($rowsMailMessage, 'ID'));
+
+		$maxId = max($messageIds);
+
+		$queryMailMessageUid = new \Bitrix\Main\ORM\Query\Query(\Bitrix\Mail\MailMessageUidTable::getEntity());
+
+		$queryMailMessageUid
+			->setSelect(['MESSAGE_ID'])
+			->setFilter([
+				'@MESSAGE_ID' => $messageIds,
+			]);
+
+		$rowsMailMessageUid = $queryMailMessageUid->fetchAll();
+		$existingMessageIds = array_map('intval', array_column($rowsMailMessageUid, 'MESSAGE_ID'));
+
+		$messageIdsWithoutUid = array_map('intval', array_values(array_diff($messageIds, $existingMessageIds)));
+
+		foreach($messageIdsWithoutUid as $messageId)
+		{
+			\CMailMessage::delete($messageId);
+		}
+
+		return sprintf('Bitrix\Mail\Helper::removeUnattachedMessagesAgent(%u, %u);', $maxId, $packSize);
+	}
+
 	public static function cleanupMailboxAgent($id)
 	{
 		$mailboxHelper = Helper\Mailbox::rawInstance($id, false);

@@ -7,8 +7,9 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Mobile\Provider\ViewersProvider;
 use Bitrix\Tasks\Access\ActionDictionary;
-use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
+use Bitrix\Tasks\V2\Public\Command\Task\Deadline\UpdateDeadlineCommand;
 use Bitrix\TasksMobile\Dto\DiskFileDto;
 use Bitrix\TasksMobile\Dto\TaskDto;
 use Bitrix\TasksMobile\Dto\TaskRequestFilter;
@@ -20,6 +21,9 @@ use Bitrix\TasksMobile\Provider\TasksMoveStageProvider;
 use Bitrix\TasksMobile\Settings;
 use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Main\Config\Option;
+use Bitrix\TasksMobile\Provider\AhaMomentProvider;
+use Bitrix\TasksMobile\Feature\ChatFeature;
 
 class Task extends Base
 {
@@ -66,7 +70,7 @@ class Task extends Base
 			$isASC,
 			$extra,
 			$searchParams,
-			$pageNavigation
+			$pageNavigation,
 		))->getUserListTasks();
 
 		return $this->convertKeysToCamelCase($result);
@@ -153,7 +157,7 @@ class Task extends Base
 			$isASC,
 			$extra,
 			$searchParams,
-			$pageNavigation
+			$pageNavigation,
 		))->getProjectListTasks($projectId);
 
 		return $this->convertKeysToCamelCase($result);
@@ -308,6 +312,15 @@ class Task extends Base
 				];
 			}
 
+			if ((new ChatFeature())?->isEnabled())
+			{
+				$ahaMomentAlreadyShown = (new AhaMomentProvider())?->isAhaMomentAlreadyShown('chat_button_moment_enabled');
+				if (!$ahaMomentAlreadyShown)
+				{
+					$getResult['aha_moments'] = ['chat_button_moment_enabled'];
+				}
+			}
+
 			$this->subscribeUserToViewPush($taskId);
 
 			return $this->convertKeysToCamelCase($getResult);
@@ -373,9 +386,8 @@ class Task extends Base
 	{
 		try
 		{
-			$provider = new TaskProvider($this->getCurrentUser()?->getId());
-
-			return $provider->attachUploadedFiles($taskId, $fileId);
+			$userId = $this->getCurrentUser()?->getId();
+			return (new TaskProvider($userId))->attachUploadedFiles($taskId, $fileId);
 		}
 		catch (\Exception $exception)
 		{
@@ -402,14 +414,64 @@ class Task extends Base
 		}
 	}
 
-	public function updateDeadlineAction(int $taskId, ?string $deadline = null): ?array
+	public function updateDeadlineAction(int $taskId, ?string $deadline = null, ?string $reason = null): ?array
 	{
 		try
 		{
-			$provider = new TaskProvider($this->getCurrentUser()?->getId());
-			$updateResult = $provider->update($taskId, ['DEADLINE' => ($deadline ?? '')]);
+			$userId = $this->getCurrentUser()?->getId();
 
-			return $this->prepareActionResult($updateResult, $taskId);
+			$deadlineTs = $deadline ? (new \DateTime($deadline))->getTimestamp() : 0;
+
+			$result = (new UpdateDeadlineCommand(
+				taskId: $taskId,
+				deadlineTs: $deadlineTs,
+				updateConfig: new UpdateConfig($userId),
+			    reason: $reason,
+			))->run();
+
+			return $this->prepareActionResult($result->isSuccess(), $taskId);
+		}
+		catch (\Exception $exception)
+		{
+			$this->addError(Error::createFromThrowable($exception));
+
+			return null;
+		}
+	}
+
+	public function attachFilesAction(int $taskId, array $ids): ?array
+	{
+		if (empty($ids) || !$taskId)
+		{
+			return null;
+		}
+
+		try
+		{
+			$result = $this->taskProvider()->attachFiles($taskId, $ids);
+
+			return $this->handleResultOrNull($result, $taskId);
+		}
+		catch (\Exception $exception)
+		{
+			$this->addError(Error::createFromThrowable($exception));
+
+			return null;
+		}
+	}
+
+	public function detachFilesAction(int $taskId, array $ids): ?array
+	{
+		if (empty($ids) || !$taskId)
+		{
+			return null;
+		}
+
+		try
+		{
+			$result = $this->taskProvider()->detachFiles($taskId, $ids);
+
+			return $this->handleResultOrNull($result, $taskId);
 		}
 		catch (\Exception $exception)
 		{
@@ -924,5 +986,27 @@ class Task extends Base
 	{
 		return (new TaskProvider($this->getCurrentUser()?->getId()
 		))->updateRelatedTasks($taskId, $newRelatedTasks, $deletedRelatedTasks);
+	}
+
+	private function handleResultOrNull(?\Bitrix\Tasks\V2\Internal\Result\Result $result, int $taskId): ?array
+	{
+		if ($result === null)
+		{
+			return null;
+		}
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $this->prepareActionResult(true, $taskId);
+	}
+
+	private function taskProvider(): TaskProvider
+	{
+		return new TaskProvider($this->getCurrentUser()?->getId());
 	}
 }

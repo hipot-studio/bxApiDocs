@@ -4,12 +4,15 @@ namespace Bitrix\Im\V2\Application;
 
 use Bitrix\Call\Call;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
+use Bitrix\Im\V2\Application\Config\PreloadedEntities;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\ImOpenLines\V2\Status\Status;
 use Bitrix\Im\V2\TariffLimit\Limit;
+use Bitrix\Intranet\Portal;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -36,7 +39,7 @@ class Config implements \JsonSerializable
 			'activeCalls' => $this->getActiveCalls(),
 			'permissions' => $this->getPermissions(),
 			'marketApps' => $this->getMarketApps(),
-			'currentUser' => $this->getCurrentUser(),
+			'isCurrentUserAdmin' => $this->getCurrentUser()->isAdmin(),
 			'loggerConfig' => $this->getLoggerConfig(),
 			'counters' => $this->getCounters(),
 			'settings' => $this->getSettings(),
@@ -48,6 +51,7 @@ class Config implements \JsonSerializable
 			'tariffRestrictions' => $this->getTariffRestrictions(),
 			'anchors' => $this->getAnchors(),
 			'copilot' => $this->getCopilotData(),
+			'preloadedEntities' => $this->getPreloadedEntities()->toRestFormat(),
 			'serviceHealthUrl' => $this->getServiceHealthUrl(),
 			'aiSettings' => $this->getAiSettings(),
 		];
@@ -125,18 +129,9 @@ class Config implements \JsonSerializable
 		return (new \Bitrix\Im\V2\Marketplace\Application())->toRestFormat();
 	}
 
-	protected function getCurrentUser(): array
+	protected function getCurrentUser(): User
 	{
-		$currentUser =  \CIMContactList::GetUserData([
-			'ID' => $this->getContext()->getUserId(),
-			'PHONES' => 'Y',
-			'SHOW_ONLINE' => 'N',
-			'EXTRA_FIELDS' => 'Y',
-			'DATE_ATOM' => 'Y'
-		])['users'][$this->getContext()->getUserId()];
-		$currentUser['isAdmin'] = $this->getContext()->getUser()->isAdmin();
-
-		return $currentUser;
+		return User::getCurrent();
 	}
 
 	protected function getLoggerConfig(): array
@@ -211,10 +206,25 @@ class Config implements \JsonSerializable
 		];
 	}
 
+	protected function getPreloadedEntities(): PreloadedEntities
+	{
+		return new PreloadedEntities();
+	}
+
 	protected function getAiSettings(): array
 	{
 		return [
 			'maxTranscribableFileSize' => TranscribeManager::MAX_TRANSCRIBABLE_FILE_SIZE,
 		];
+	}
+
+	public function getPortalSettingsUrl(): string
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return '';
+		}
+
+		return Portal::getInstance()->getSettings()->getSettingsUrl();
 	}
 }

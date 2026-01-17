@@ -22,7 +22,7 @@ use Bitrix\Tasks\Util\Error;
 use Bitrix\Tasks\Util\Result;
 use Bitrix\Tasks\Util\User;
 
-abstract class Disk extends \Bitrix\Tasks\Integration
+abstract class Disk extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'disk';
 

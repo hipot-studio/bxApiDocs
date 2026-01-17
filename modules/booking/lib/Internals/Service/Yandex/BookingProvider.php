@@ -7,7 +7,7 @@ namespace Bitrix\Booking\Internals\Service\Yandex;
 use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Internals\Exception\Yandex\BookingNotFoundException;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Item\Booking;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Item\Booking;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 
@@ -32,7 +32,9 @@ class BookingProvider
 			]),
 			select: (new BookingSelect([
 				'RESOURCES',
+				'SKUS',
 				'EXTERNAL_DATA',
+				'CLIENT_NOTE',
 			]))->prepareSelect(),
 		)->getFirstCollectionItem();
 

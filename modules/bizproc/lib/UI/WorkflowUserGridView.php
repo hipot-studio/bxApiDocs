@@ -51,17 +51,12 @@ class WorkflowUserGridView extends WorkflowUserView
 	 */
 	public function jsonSerialize(): array
 	{
-		$complexDocumentId = $this->workflow->getComplexDocumentId();
-
 		$data = [
 			'workflowId' => $this->getId(),
 			'userId' => $this->userId,
 			'isCompleted' => $this->getIsCompleted(),
 			'task' => $this->getFirstRunningTask(),
-			'document' => [
-				'url' => $this->getDocumentUrl(),
-				'name' =>\CBPRuntime::getRuntime()->getDocumentService()->getDocumentName($complexDocumentId),
-			],
+			'document' => $this->getDocumentNameAndUrl(),
 			'startedById' => $this->getAuthorId(),
 		];
 

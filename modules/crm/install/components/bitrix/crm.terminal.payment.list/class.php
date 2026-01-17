@@ -695,18 +695,9 @@ class CrmTerminalPaymentList extends \CBitrixComponent implements Main\Engine\Co
 
 	private function getCompanyLink($company): string
 	{
-		$companyId = (int)$company['ID'];
-		$title = htmlspecialcharsbx($company['TITLE']);
-
-		$companyUrl = Main\Config\Option::get('crm', 'path_to_company_details', '/crm/company/details/#company_id#/');
-		$companyUrl = CComponentEngine::MakePathFromTemplate($companyUrl, ['company_id' => $companyId]);
-		$userId = "COMPANY_{$companyId}";
-
-		return "<a href='{$companyUrl}'
-				 bx-tooltip-user-id='{$userId}'
-				 bx-tooltip-loader='/bitrix/components/bitrix/crm.company.show/card.ajax.php'
-				 bx-tooltip-classname='crm_balloon_company'>{$title}</a>"
-			;
+		return (new MiniCardHtmlBuilder(CCrmOwnerType::Company, (int)$company['ID']))
+			->setTitle($company['TITLE'])
+			->build();
 	}
 
 	private function getDetailComponentPath(int $id): string

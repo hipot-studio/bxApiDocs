@@ -18,8 +18,16 @@ class FeatureRepository
 			$categoryId = $feature->getCategory()->getId();
 			if (!isset($result[$categoryId]))
 			{
+				try
+				{
+					$categoryName = $feature->getCategory()->getName();
+				}
+				catch (\Throwable $e)
+				{
+					$categoryName = basename(get_class($feature->getCategory()));
+				}
 				$result[$categoryId] = [
-					'name' => $feature->getCategory()->getName(),
+					'name' => $categoryName,
 					'sort' => $feature->getCategory()->getSort(),
 					'items' => [],
 				];
@@ -28,8 +36,16 @@ class FeatureRepository
 			$host = \Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl();
 			$secretLink = $host . '/crm/configs/?enableFeature=' . $feature->getId();
 
+			try
+			{
+				$featureName = $feature->getName();
+			}
+			catch (\Throwable $e)
+			{
+				$featureName = basename(get_class($feature));
+			}
 			$result[$categoryId]['items'][] = [
-				'name' => $feature->getName(),
+				'name' => $featureName,
 				'id' => $feature->getId(),
 				'sort' => $feature->getSort(),
 				'enabled' => $feature->isEnabled(),

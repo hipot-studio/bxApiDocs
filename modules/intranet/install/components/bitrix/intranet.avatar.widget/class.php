@@ -3,6 +3,7 @@
 use Bitrix\Intranet;
 use Bitrix\Intranet\Internal\Integration\Timeman\WorkTime;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Intranet\User\Widget\Content;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
@@ -19,8 +20,10 @@ class IntranetAvatarWidget extends \CBitrixComponent
 		$this->arResult['avatar'] = Uri::urnEncode((new Intranet\User\Widget\Content\Main($user))->getUserPhotoSrc());
 		$this->arResult['userRole'] = $user->getUserRole()->value;
 		$this->arResult['userId'] = $user->getId();
-		$this->arResult['signDocumentsCounter'] = \Bitrix\Intranet\User\Widget\Content\Tool\MyDocuments::getCount();
-		$this->arResult['signDocumentsPullEventName'] = \Bitrix\Intranet\User\Widget\Content\Tool\MyDocuments::getCounterEventName();
+		$this->arResult['signDocumentsCounter'] = Content\Tool\MyDocuments::getCount();
+		$this->arResult['signDocumentsPullEventName'] = Content\Tool\MyDocuments::getCounterEventName();
+		$this->arResult['verifyPhoneCounter'] = Content\Tool\Security::hasCounter();
+		$this->arResult['verifyPhonePullEventName'] = Content\Tool\Security::getPullEventName();
 		$this->arResult['workTimeData'] = $this->getWorkTimeData($user->getId());
 
 		$this->includeComponentTemplate();

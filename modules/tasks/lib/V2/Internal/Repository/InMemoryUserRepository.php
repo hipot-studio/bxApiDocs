@@ -10,8 +10,9 @@ class InMemoryUserRepository implements UserRepositoryInterface
 {
 	private UserRepositoryInterface $userRepository;
 
-	private Entity\UserCollection $cache;
-	private ?Entity\UserCollection $adminCache = null;
+	protected Entity\UserCollection $cache;
+	protected ?Entity\UserCollection $adminCache = null;
+	protected array $existenceCache = [];
 
 	public function __construct(UserRepository $userRepository)
 	{
@@ -34,6 +35,9 @@ class InMemoryUserRepository implements UserRepositoryInterface
 		$users = $this->userRepository->getByIds($notStoredIds);
 
 		$this->cache->merge($users);
+		foreach ($users as $user) {
+			$this->existenceCache[$user->getId()] = true;
+		}
 
 		return $this->cache->findAllByIds($userIds);
 	}
@@ -46,5 +50,38 @@ class InMemoryUserRepository implements UserRepositoryInterface
 		}
 
 		return $this->adminCache;
+	}
+
+	public function isExists(int $userId): bool
+	{
+		if ($userId < 1)
+		{
+			return false;
+		}
+
+		if (!empty($this->existenceCache[$userId]))
+		{
+			return true;
+		}
+
+		$cached = $this->cache->findOneById($userId);
+
+		if ($cached)
+		{
+			$this->existenceCache[$userId] = true;
+
+			return true;
+		}
+
+		$isExists = $this->userRepository->isExists($userId);
+
+		if (!$isExists)
+		{
+			return false;
+		}
+
+		$this->existenceCache[$userId] = true;
+
+		return true;
 	}
 }

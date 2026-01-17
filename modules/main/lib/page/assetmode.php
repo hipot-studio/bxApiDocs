@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Main\Page;
 
 class AssetMode
@@ -8,5 +9,3 @@ class AssetMode
 	const SPECIAL = 4;
 	const ALL = 7;
 }
-
-?>

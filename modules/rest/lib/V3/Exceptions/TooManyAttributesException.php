@@ -14,7 +14,7 @@ class TooManyAttributesException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_TOO_MANY_ATTRIBUTES_EXCEPTION';
+		return 'REST_V3_EXCEPTIONS_TOOMANYATTRIBUTESEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array
@@ -22,7 +22,7 @@ class TooManyAttributesException extends RestException
 		return [
 			'#CLASS#' => (new \ReflectionClass($this->class))->getShortName(),
 			'#ATTRIBUTE#' => (new \ReflectionClass($this->attribute))->getShortName(),
-			'#EXPECTED#' => $this->expectedCount,
+			'#EXPECTED_COUNT#' => $this->expectedCount,
 		];
 	}
 }

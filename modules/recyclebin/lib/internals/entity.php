@@ -8,6 +8,10 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Recyclebin\Internals\Models\RecyclebinDataTable;
 use Bitrix\Recyclebin\Internals\Models\RecyclebinFileTable;
 use Bitrix\Recyclebin\Internals\Models\RecyclebinTable;
+use Bitrix\Main\UserField\Internal\UserFieldHelper;
+use Bitrix\Main\Application;
+use Bitrix\Recyclebin\Internals\Models\RecyclebinUfTable;
+use Bitrix\Recyclebin\Internals\UserFieldManager\Factory;
 
 class Entity
 {
@@ -21,6 +25,8 @@ class Entity
 	private ?DateTime $dateTime = null;
 	private $data = [];
 	private $files = [];
+	private ?string $userFieldEntityId = null;
+	private ?array $userFieldsValues = null;
 
 	public function __construct($entityId, $entityType, $moduleId)
 	{
@@ -37,12 +43,12 @@ class Entity
 		$result = new Result;
 
 		$data = [
-			'NAME'        => $this->getTitle(),
-			'SITE_ID'     => $this->getSiteId(),
-			'ENTITY_ID'   => $this->getEntityId(),
+			'NAME' => $this->getTitle(),
+			'SITE_ID' => $this->getSiteId(),
+			'ENTITY_ID' => $this->getEntityId(),
 			'ENTITY_TYPE' => $this->getEntityType(),
-			'MODULE_ID'   => $this->getModuleId(),
-			'USER_ID'     => $this->getOwnerId()
+			'MODULE_ID' => $this->getModuleId(),
+			'USER_ID' => $this->getOwnerId(),
 		];
 
 		try
@@ -87,6 +93,20 @@ class Entity
 							'STORAGE_TYPE'  => $storageType['STORAGE_TYPE']
 						]
 					);
+				}
+
+				$userFields = $this->getUserFieldsValuesToSave();
+				if (!empty($userFields))
+				{
+					$ufResult = RecyclebinUfTable::add([
+						'RECYCLEBIN_ID' => $this->getId(),
+						'UF_ENTITY_ID' => $this->getUserFieldEntityId(),
+						'DATA' => $userFields
+					]);
+					if ($ufResult->isSuccess())
+					{
+						$resultData['UF'] = $ufResult->getId();
+					}
 				}
 			}
 			$result->setData($resultData);
@@ -260,6 +280,16 @@ class Entity
 		$this->files = $files;
 	}
 
+	public function getUserFieldEntityId(): ?string
+	{
+		return $this->userFieldEntityId;
+	}
+
+	public function setUserFieldEntityId($userFieldEntityId): void
+	{
+		$this->userFieldEntityId = $userFieldEntityId;
+	}
+
 	/**
 	 * @param string $action Name of current action/name/index of data
 	 * @param array $data
@@ -279,5 +309,86 @@ class Entity
 			'FILE_ID'      => $fileId,
 			'STORAGE_TYPE' => $storageType
 		];
+	}
+
+	public function setUserFieldsValues(?array $values): void
+	{
+		$this->userFieldsValues = $values;
+	}
+
+	public function getUserFieldsValues(): ?array
+	{
+		return $this->userFieldsValues;
+	}
+
+	public function onMoveFromRecyclebin(): void
+	{
+		$userFields = $this->getUserFieldsValues();
+		if (is_array($userFields))
+		{
+			foreach ($userFields as $fieldName => $field)
+			{
+				$field['FIELD_NAME'] = $fieldName;
+				$field['ENTITY_ID'] = $this->getUserFieldEntityId();
+				$field['VALUE'] ??= null;
+				Factory::getManager($field)->onRestoreFromRecycleBin($field['VALUE']);
+			}
+		}
+	}
+
+	public function onRemoveFromRecyclebin(): void
+	{
+		$userFields = $this->getUserFieldsValues();
+		if (is_array($userFields))
+		{
+			foreach ($userFields as $fieldName => $field)
+			{
+				$field['FIELD_NAME'] = $fieldName;
+				$field['ENTITY_ID'] = $this->getUserFieldEntityId();
+				$field['VALUE'] ??= null;
+				Factory::getManager($field)->onEraseFromRecycleBin($field['VALUE']);
+			}
+		}
+	}
+
+	private function getUserFieldsValuesToSave(): ?array
+	{
+		$ufEntityId = $this->getUserFieldEntityId();
+		if ($ufEntityId === null)
+		{
+			return null;
+		}
+
+		$fieldTypeManager = UserFieldHelper::getInstance()->getManager();
+		$languageId = Application::getInstance()->getContext()->getLanguage();
+
+		$userFields = $fieldTypeManager?->GetUserFields(
+			$ufEntityId,
+			$this->getEntityId(),
+			$languageId,
+		);
+
+		$recyclebinUserFields = [];
+		foreach ($userFields as $field)
+		{
+			$field['VALUE'] ??= null;
+			Factory::getManager($field)->onMoveToRecycleBin($field['VALUE']);
+			if (
+				$field['VALUE'] === null
+				|| $field['VALUE'] === ''
+				|| $field['VALUE'] === []
+			)
+			{
+				continue;
+			}
+
+			$recyclebinUserFields[$field['FIELD_NAME']] = [
+				'USER_TYPE_ID' => $field['USER_TYPE_ID'],
+				'MULTIPLE' => $field['MULTIPLE'],
+				'VALUE' => $field['VALUE'],
+			];
+		}
+
+		return $recyclebinUserFields;
 	}
 }

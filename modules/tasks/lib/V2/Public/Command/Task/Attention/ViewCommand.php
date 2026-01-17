@@ -13,9 +13,9 @@ class ViewCommand extends AbstractCommand
 {
 	public function __construct(
 		#[PositiveNumber]
-		public readonly int  $taskId,
+		public readonly int $taskId,
 		#[PositiveNumber]
-		public readonly int  $userId,
+		public readonly int $userId,
 		public readonly ?int $viewedTs = null,
 		public readonly bool $isRealView = false,
 		public readonly bool $sendPush = true,
@@ -27,9 +27,7 @@ class ViewCommand extends AbstractCommand
 
 	protected function executeInternal(): Result
 	{
-		$viewService = Container::getInstance()->getViewService();
-
-		$handler = new ViewHandler($viewService);
+		$handler = Container::getInstance()->get(ViewHandler::class);
 
 		$handler($this);
 

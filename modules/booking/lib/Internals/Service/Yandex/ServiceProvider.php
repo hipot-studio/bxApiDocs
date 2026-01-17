@@ -8,10 +8,9 @@ use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Exception\Yandex\InternalErrorException;
 use Bitrix\Booking\Internals\Exception\Yandex\ResourceNotFoundException;
-use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Service\Time;
-use Bitrix\Booking\Internals\Service\Yandex\Dto\Collection\ServiceCollection;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Collection\ServiceCollection;
 use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 use Bitrix\Booking\Internals\Service\Yandex;
@@ -48,8 +47,7 @@ class ServiceProvider
 
 		$serviceCollection = new ServiceCollection();
 		$filter = [
-			'IS_MAIN' => true,
-			'HAS_LINKED_ENTITIES_OF_TYPE' => ResourceLinkedEntityType::Sku->value,
+			'WITH_SKUS_YANDEX' => true,
 		];
 		if ($resourceId !== null)
 		{
@@ -58,7 +56,12 @@ class ServiceProvider
 
 		$resourceCollection = $this->resourceRepository->getList(
 			filter: (new ResourceFilter($filter)),
-			select: new ResourceSelect(),
+			select: (new ResourceSelect([
+				'DATA',
+				'SETTINGS',
+				'SKUS',
+				'SKUS_YANDEX',
+			]))->prepareSelect(),
 		);
 
 		if ($resourceCollection->isEmpty())
@@ -71,16 +74,16 @@ class ServiceProvider
 
 		foreach ($skus as $sku)
 		{
-			$serviceItem = (new Yandex\Dto\Item\Service(
+			$serviceItem = (new Yandex\Dto\Api\Item\Service(
 				(string)$sku->getId(),
 				$sku->getName()
 			));
 			$serviceItem->setCategory($sku->getSection());
 
-			if ($sku->getPrice() !== null && $sku->getCurrency() !== null)
+			if ($sku->getPrice() !== null && $sku->getCurrencyId() !== null)
 			{
 				$serviceItem->setPrice(
-					new Yandex\Dto\Item\PriceRange($sku->getCurrency(), $sku->getPrice(), $sku->getPrice())
+					new Yandex\Dto\Api\Item\PriceRange($sku->getCurrencyId(), $sku->getPrice(), $sku->getPrice())
 				);
 			}
 
@@ -100,7 +103,7 @@ class ServiceProvider
 					continue;
 				}
 
-				$serviceResourceItem = new Yandex\Dto\Item\ServiceResource((string)$resource->getId());
+				$serviceResourceItem = new Yandex\Dto\Api\Item\ServiceResource((string)$resource->getId());
 				$range = $resource->getSlotRanges()->getFirstCollectionItem();
 				if ($range)
 				{
@@ -130,12 +133,9 @@ class ServiceProvider
 		/** @var Resource $resource */
 		foreach ($resourceCollection as $resource)
 		{
-			$linkedSkus = $resource->getEntityCollection()->getByTypeAndId(
-				ResourceLinkedEntityType::Sku
-			);
-			foreach ($linkedSkus as $linkedSku)
+			foreach ($resource->getSkuYandexCollection() as $sku)
 			{
-				$skuId = $linkedSku->getEntityId();
+				$skuId = $sku->getId();
 
 				if (!isset($service2ResourcesMap[$skuId]))
 				{
@@ -143,7 +143,7 @@ class ServiceProvider
 				}
 
 				$service2ResourcesMap[$skuId][] = $resource->getId();
-				$result[] = $linkedSku->getEntityId();
+				$result[] = $skuId;
 			}
 		}
 
@@ -153,6 +153,12 @@ class ServiceProvider
 			return [];
 		}
 
-		return $this->serviceSkuProvider->get($result, new Catalog\SkuProviderConfig(loadSections: true));
+		return $this->serviceSkuProvider->get(
+			$result,
+			new Catalog\SkuProviderConfig(
+				loadSections: true,
+				onlyActiveAndAvailable: true,
+			)
+		);
 	}
 }

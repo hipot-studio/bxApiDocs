@@ -559,7 +559,7 @@ class LeadMerger extends EntityMerger
 		Timeline\MarkEntry::rebind(\CCrmOwnerType::Lead, $seedID, $targID);
 		Timeline\CommentEntry::rebind(\CCrmOwnerType::Lead, $seedID, $targID);
 		Timeline\LogMessageEntry::rebind(\CCrmOwnerType::Lead, $seedID, $targID);
-		Timeline\AI\Call\Entry::rebind(\CCrmOwnerType::Lead, $seedID, $targID);
+		Timeline\AI\Entry::rebind(\CCrmOwnerType::Lead, $seedID, $targID);
 
 		Crm\Tracking\Entity::rebindTrace(
 			\CCrmOwnerType::Lead, $seedID,

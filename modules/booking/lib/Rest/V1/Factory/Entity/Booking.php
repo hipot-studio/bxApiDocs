@@ -64,11 +64,15 @@ class Booking extends EntityFactory
 			$booking = new Entity\Booking\Booking();
 		}
 
-		$resourceCollection = $this->resourceFactory->createCollectionFromResourceIds($fields['RESOURCE_IDS']);
-		$booking->setResourceCollection($resourceCollection);
-
-		$datePeriod = $this->datePeriodFactory->createFromRestFields($fields['DATE_PERIOD']);
-		$booking->setDatePeriod($datePeriod);
+		$booking
+			->setSource(Entity\Booking\BookingSource::Rest)
+			->setResourceCollection(
+				$this->resourceFactory->createCollectionFromResourceIds($fields['RESOURCE_IDS'])
+			)
+			->setDatePeriod(
+				$this->datePeriodFactory->createFromRestFields($fields['DATE_PERIOD'])
+			)
+		;
 
 		if (isset($fields['NAME']))
 		{

@@ -11,9 +11,9 @@ final class SessionManager extends BaseSessionManager
 {
 	protected DocumentService|null $service = DocumentService::FlipChart;
 
-	protected function buildFilter(): array
+	protected function buildFields(): array
 	{
-		$filter = parent::buildFilter();
+		$filter = parent::buildFields();
 		if (!is_null($this->sessionType))
 		{
 			$filter['TYPE'] = $this->sessionType;

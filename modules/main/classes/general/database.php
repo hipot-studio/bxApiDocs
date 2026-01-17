@@ -905,6 +905,7 @@ abstract class CAllDatabase
 
 		//Reset metadata cache
 		$this->column_cache = [];
+		$this->connection->clearCaches();
 
 		return $res;
 	}

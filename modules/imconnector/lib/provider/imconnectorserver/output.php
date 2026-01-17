@@ -332,10 +332,17 @@ class Output extends Base\Output
 				$params['DATA'] = \base64_encode(\serialize($params['DATA']));
 				$params['BX_HASH'] = self::requestSign($this->type, \md5(implode('|', $params)));
 
-				$waitResponse = true;
-				if (in_array(mb_strtolower($params['BX_COMMAND']), self::LIST_COMMAND_NOT_WAIT_RESPONSE))
+				if (is_null($this->getWaitResponse()))
 				{
-					$waitResponse = false;
+					$waitResponse = true;
+					if (in_array(mb_strtolower($params['BX_COMMAND']), self::LIST_COMMAND_NOT_WAIT_RESPONSE))
+					{
+						$waitResponse = false;
+					}
+				}
+				else
+				{
+					$waitResponse = $this->getWaitResponse();
 				}
 
 				$httpClient = $this->instanceHttpClient($waitResponse);

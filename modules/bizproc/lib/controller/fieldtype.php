@@ -110,6 +110,11 @@ class FieldType extends Base
 		}
 
 		$documentType = $this->request->getJsonList()->get('documentType');
+		if (is_string($documentType) && str_contains($documentType, '.'))
+		{
+			$documentType = \CBPDocument::unSignDocumentType($documentType);
+		}
+
 		$controlsData = $this->request->getJsonList()->get('controlsData');
 
 		$accessCheckOperation = \CBPCanUserOperateOperation::ViewWorkflow;

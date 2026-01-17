@@ -11,6 +11,7 @@ use Bitrix\Booking\Entity\Enum\TemplateType\TemplateTypeDelayed;
 use Bitrix\Booking\Entity\Enum\TemplateType\TemplateTypeFeedback;
 use Bitrix\Booking\Entity\Enum\TemplateType\TemplateTypeInfo;
 use Bitrix\Booking\Entity\Enum\TemplateType\TemplateTypeReminder;
+use Bitrix\Booking\Entity\File\File;
 use Bitrix\Booking\Entity\ResourceType\ResourceType;
 use Bitrix\Booking\Entity\Slot\RangeCollection;
 use Bitrix\Booking\Internals\Exception\InvalidArgumentException;
@@ -19,6 +20,7 @@ class Resource implements EntityInterface
 {
 	private int|null $id = null;
 	private int|null $externalId = null;
+	private File|null $avatar = null;
 	private ResourceType|null $type = null;
 	private string|null $name = null;
 	private string|null $description = null;
@@ -51,6 +53,8 @@ class Resource implements EntityInterface
 	private int|null $updatedAt = null;
 	private int|null $deletedAt = null;
 	private ResourceLinkedEntityCollection|null $entityCollection = null;
+	private ResourceSkuCollection|null $skuCollection = null;
+	private ResourceSkuCollection|null $skuYandexCollection = null;
 
 	public function __construct()
 	{
@@ -65,6 +69,8 @@ class Resource implements EntityInterface
 		$this->reminderNotificationDelay = ReminderNotificationDelay::Morning->value;
 
 		$this->entityCollection = new ResourceLinkedEntityCollection();
+		$this->skuCollection = new ResourceSkuCollection();
+		$this->skuYandexCollection = new ResourceSkuCollection();
 	}
 
 	public function getId(): int|null
@@ -89,6 +95,18 @@ class Resource implements EntityInterface
 		$this->externalId = $externalId;
 
 		return $this;
+	}
+
+	public function setAvatar(File|null $avatar): self
+	{
+		$this->avatar = $avatar;
+
+		return $this;
+	}
+
+	public function getAvatar(): File|null
+	{
+		return $this->avatar;
 	}
 
 	public function getType(): ResourceType|null
@@ -488,11 +506,36 @@ class Resource implements EntityInterface
 		$this->entityCollection = $entityCollection;
 	}
 
+	public function getSkuCollection(): ResourceSkuCollection
+	{
+		return $this->skuCollection;
+	}
+
+	public function setSkuCollection(ResourceSkuCollection $skuCollection): Resource
+	{
+		$this->skuCollection = $skuCollection;
+
+		return $this;
+	}
+
+	public function getSkuYandexCollection(): ResourceSkuCollection
+	{
+		return $this->skuYandexCollection;
+	}
+
+	public function setSkuYandexCollection(ResourceSkuCollection $skuCollection): Resource
+	{
+		$this->skuYandexCollection = $skuCollection;
+
+		return $this;
+	}
+
 	public function toArray(): array
 	{
 		return [
 			'id' => $this->id,
 			'externalId' => $this->externalId,
+			'avatar' => $this->avatar?->toArray(),
 			'type' => $this->type?->toArray(),
 			'isMain' => $this->isMain,
 			'isDeleted' => $this->isDeleted,
@@ -523,6 +566,8 @@ class Resource implements EntityInterface
 			'deletedAt' => $this->deletedAt,
 			'counter' => $this->counter,
 			'entities' => $this->entityCollection->toArray(),
+			'skus' => $this->skuCollection->toArray(),
+			'skusYandex' => $this->skuYandexCollection->toArray(),
 		];
 	}
 
@@ -538,6 +583,7 @@ class Resource implements EntityInterface
 		$resource = (new Resource())
 			->setId(isset($props['id']) ? (int)$props['id'] : null)
 			->setExternalId(isset($props['externalId']) ? (int)$props['externalId'] : null)
+			->setAvatar(isset($props['avatar']) ? File::createFromArray($props['avatar']) : null)
 			->setType($type)
 			->setName(isset($props['name']) ? (string)$props['name'] : null)
 			->setDescription(isset($props['description']) ? (string)$props['description'] : null)
@@ -638,6 +684,16 @@ class Resource implements EntityInterface
 		if (isset($props['entities']))
 		{
 			$resource->setEntityCollection(ResourceLinkedEntityCollection::mapFromArray($props['entities']));
+		}
+
+		if (isset($props['skus']))
+		{
+			$resource->setSkuCollection(ResourceSkuCollection::mapFromArray($props['skus']));
+		}
+
+		if (isset($props['skusYandex']))
+		{
+			$resource->setSkuYandexCollection(ResourceSkuCollection::mapFromArray($props['skusYandex']));
 		}
 
 		return $resource;

@@ -35,6 +35,19 @@ class Output
 	/** @var string */
 	protected $line;
 
+	protected $waitResponse = null;
+
+	public function getWaitResponse(): ?bool
+	{
+		return $this->waitResponse;
+	}
+
+	public function setWaitResponse(bool $waitResponse): Result
+	{
+		$this->waitResponse = $waitResponse;
+		return $this->result;
+	}
+
 	/**
 	 * Output constructor.
 	 * @param string $connector ID connector.
@@ -137,7 +150,7 @@ class Output
 	 */
 	protected function sendMessagesProcessing(array $messages): array
 	{
-		foreach ($messages as $cell=>$message)
+		foreach ($messages as $cell => $message)
 		{
 			$messages[$cell] = Connector::initConnectorHandler($this->connector)->sendMessageProcessing($message, $this->line);
 		}

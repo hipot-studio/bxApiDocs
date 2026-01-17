@@ -11,8 +11,10 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
+use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BiConnector\Settings;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -74,6 +76,13 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 						$this->arResult['SOURCE_FIELDS'][$setting['CODE']] = htmlspecialcharsbx($setting['VALUE']);
 					}
 				}
+
+				if ($source->getType() === Type::Rest->value)
+				{
+					$isSupportMapping = $this->getConnectorMappingByFilter(['SOURCE_ID' => $source->getId()]);
+
+					$this->arResult['SOURCE_FIELDS']['isSupportMapping'] = $isSupportMapping;
+				}
 			}
 		}
 		else
@@ -86,6 +95,15 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 			if (!empty($this->arParams['CONNECTOR_TYPE']))
 			{
 				$this->arResult['SOURCE_FIELDS']['type'] = htmlspecialcharsbx($this->arParams['CONNECTOR_TYPE']);
+				if (
+					$this->arParams['CONNECTOR_TYPE'] === Type::Rest->value
+					&& $connectorId = ExternalSourceRestConnectorTable::getIdFromCode($this->arParams['CONNECTOR_CODE'] ?? '')
+				)
+				{
+					$isSupportMapping = $this->getConnectorMappingByFilter(['CONNECTOR_ID' => $connectorId]);
+
+					$this->arResult['SOURCE_FIELDS']['isSupportMapping'] = $isSupportMapping;
+				}
 			}
 		}
 		$this->arResult['SIGNED_PARAMETERS'] = $this->getSignedParameters();
@@ -125,5 +143,26 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 	public function configureActions()
 	{
 		return [];
+	}
+
+	/**
+	 * @param array $filter
+	 * @return bool
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	protected function getConnectorMappingByFilter(array $filter): bool
+	{
+		$connector = ExternalSourceRestTable::getList([
+			'select' => ['CONNECTOR.SUPPORT_MAPPING'],
+			'filter' => $filter,
+			'limit' => 1,
+		])
+			->fetchObject()
+			?->getConnector()
+		;
+
+		return $connector?->getSupportMapping() ?? false;
 	}
 }

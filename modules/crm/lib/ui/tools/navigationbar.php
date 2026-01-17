@@ -159,23 +159,13 @@ class NavigationBar
 			$itemId = $row['id'] ?? $itemQty;
 			$itemName = $row['name'] ?? $itemId;
 			$itemUrl = $row['url'] ?? '';
-			if ($itemId === 'automation')
+			if ($itemId === 'automation' && isset($input['COUNTER_PANEL']['ENTITY_TYPE_NAME']))
 			{
-				if (!IsModuleInstalled('bizproc'))
+				$buttonHtml = $this->getRobotButtonHtml((string)$input['COUNTER_PANEL']['ENTITY_TYPE_NAME'], (string)$itemUrl);
+				if ($buttonHtml)
 				{
-					// hide "Robots" button if module is not installed
-					continue;
+					$this->automationView = $buttonHtml;
 				}
-
-				if (!Loader::includeModule('ui'))
-				{
-					continue;
-				}
-
-				$button = $this->getAutomationViewLayout();
-				$button->setLink((string)$itemUrl);
-
-				$this->automationView = $button->render(false);
 
 				continue;
 			}
@@ -203,5 +193,71 @@ class NavigationBar
 		{
 			$this->switchViewList['binding'] = $data['BINDING'] ?? [];
 		}
+	}
+
+	public function getRobotButtonHtml(string $entityTypeName, ?string $link = '', ?string $onClick = ''): ?string
+	{
+		if (!Loader::includeModule('bizproc'))
+		{
+			return null;
+		}
+
+		$params = [
+			'RENDER_BUTTON_TO_RESULT' => true,
+		];
+
+		if ($link)
+		{
+			$params['URL'] = $link;
+		}
+		elseif ($onClick)
+		{
+			$params['ON_CLICK'] = $onClick;
+		}
+		else
+		{
+			return null;
+		}
+
+		$params['DOCUMENT_TYPE'] = $this->getDocumentTypeByEntityTypeName($entityTypeName) ?? [];
+
+		global $APPLICATION;
+
+		$robotsButtonArResult = $APPLICATION->IncludeComponent(
+			'bitrix:bizproc.automation.robot.button',
+			'',
+			$params,
+			returnResult: true
+		);
+
+		if (!empty($robotsButtonArResult["ROBOT_BUTTON_HTML"]))
+		{
+			return $robotsButtonArResult["ROBOT_BUTTON_HTML"];
+		}
+
+		return null;
+	}
+
+	private function getDocumentTypeByEntityTypeName(string $entityTypeName): ?array
+	{
+		$entityTypeName = strtoupper($entityTypeName);
+
+		if (preg_match('/^'.\CCrmOwnerType::DynamicTypePrefixName.'(\d+)$/', $entityTypeName))
+		{
+			return ['crm', \Bitrix\Crm\Integration\BizProc\Document\Dynamic::class, $entityTypeName];
+		}
+
+		$typesMap = [
+			\CCrmOwnerType::LeadName => \CCrmDocumentLead::class,
+			\CCrmOwnerType::DealName => \CCrmDocumentDeal::class,
+			\CCrmOwnerType::ContactName => \CCrmDocumentContact::class,
+			\CCrmOwnerType::CompanyName => \CCrmDocumentCompany::class,
+			\CCrmOwnerType::QuoteName => \Bitrix\Crm\Integration\BizProc\Document\Quote::class,
+			\CCrmOwnerType::SmartInvoiceName => \Bitrix\Crm\Integration\BizProc\Document\SmartInvoice::class,
+			\CCrmOwnerType::SmartB2eDocumentName => \Bitrix\Crm\Integration\BizProc\Document\SmartB2eDocument::class,
+		];
+
+		$entity = $typesMap[$entityTypeName] ?? null;
+		return $entity ? ['crm', $entity, $entityTypeName] : null;
 	}
 }

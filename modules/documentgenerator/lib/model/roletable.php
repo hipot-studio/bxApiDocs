@@ -3,9 +3,9 @@
 namespace Bitrix\DocumentGenerator\Model;
 
 use Bitrix\Main\ORM\Data\DataManager;
-use Bitrix\Main\ORM\Event;
-use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\CascadePolicy;
+use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\StringField;
 
 /**
@@ -15,60 +15,63 @@ use Bitrix\Main\ORM\Fields\StringField;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Role_Query query()
- * @method static EO_Role_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Role_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Role_Result getById($id)
- * @method static EO_Role_Result getList(array $parameters = array())
+ * @method static EO_Role_Result getList(array $parameters = [])
  * @method static EO_Role_Entity getEntity()
  * @method static \Bitrix\DocumentGenerator\Model\Role createObject($setDefaultValues = true)
- * @method static \Bitrix\DocumentGenerator\Model\EO_Role_Collection createCollection()
+ * @method static \Bitrix\DocumentGenerator\Model\RoleCollection createCollection()
  * @method static \Bitrix\DocumentGenerator\Model\Role wakeUpObject($row)
- * @method static \Bitrix\DocumentGenerator\Model\EO_Role_Collection wakeUpCollection($rows)
+ * @method static \Bitrix\DocumentGenerator\Model\RoleCollection wakeUpCollection($rows)
  */
 class RoleTable extends DataManager
 {
-	/**
-	 * @inheritdoc
-	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_documentgenerator_role';
 	}
 
-	/**
-	 * @inheritdoc
-	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return [
-			new IntegerField('ID', [
-				'primary' => true,
-				'autocomplete' => true,
-			]),
-			new StringField('NAME', [
-				'required' => true,
-			]),
-			new StringField('CODE'),
+			(new IntegerField('ID'))
+				->configurePrimary()
+				->configureAutocomplete(),
+
+			(new StringField('NAME'))
+				->configureRequired(),
+
+			(new StringField('CODE')),
+
+			(new OneToMany(
+				'PERMISSIONS',
+				RolePermissionTable::class,
+				'ROLE',
+			))
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
+
+			(new OneToMany(
+				'ACCESSES',
+				RoleAccessTable::class,
+				'ROLE',
+			))
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
 		];
 	}
 
 	/**
-	 * @param Event $event
-	 * @return EventResult
+	 * @return class-string<Role>
 	 */
-	public static function onBeforeDelete(Event $event)
+	public static function getObjectClass(): string
 	{
-		$roleId = $event->getParameter('primary')['ID'];
-		RoleAccessTable::deleteByRoleId($roleId);
-		RolePermissionTable::deleteByRoleId($roleId);
-
-		return new EventResult();
+		return Role::class;
 	}
 
 	/**
-	 * @return \Bitrix\Main\ORM\Objectify\EntityObject|string
+	 * @return class-string<RoleCollection>
 	 */
-	public static function getObjectClass()
+	public static function getCollectionClass(): string
 	{
-		return Role::class;
+		return RoleCollection::class;
 	}
 }

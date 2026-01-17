@@ -53,6 +53,11 @@ class Sms extends BaseMessage
 		return [$id, $statusId];
 	}
 
+	protected static function getHandledInEventProviderTypeIds(): ?array
+	{
+		return self::ALLOWED_PROVIDER_TYPES;
+	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -176,17 +181,5 @@ class Sms extends BaseMessage
 		}
 
 		return null;
-	}
-
-	public static function onMessageSent(Event $event): void
-	{
-		$additionalFields = $event->getParameter('ADDITIONAL_FIELDS') ?? [];
-		$providerTypeId = $additionalFields['ACTIVITY_PROVIDER_TYPE_ID'] ?? static::getDefaultTypeId();
-		if (!in_array($providerTypeId, self::ALLOWED_PROVIDER_TYPES, true))
-		{
-			return;
-		}
-
-		parent::onMessageSent($event);
 	}
 }

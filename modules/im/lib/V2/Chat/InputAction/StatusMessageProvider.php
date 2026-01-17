@@ -16,6 +16,13 @@ class StatusMessageProvider
 
 	public static function get(Platform $platform = Platform::WEB): array
 	{
+		// TODO: remove after implementation in aiassistant module
+		$path =
+			Application::getDocumentRoot()
+			. '/bitrix/modules/aiassistant/lib/Core/Enum/AiClientStatusMessage.php'
+		;
+		$messages = Loc::loadLanguageFile($path);
+
 		$event = new Event(
 			self::MODULE_ID,
 			self::EVENT_ON_GET_MESSAGES,
@@ -25,19 +32,7 @@ class StatusMessageProvider
 		);
 		$event->send();
 
-		$messages = self::extractMessagesFromEventResults($event);
-
-		// TODO: remove after implementation
-		if (empty($messages))
-		{
-			$path =
-				Application::getDocumentRoot()
-				. '/bitrix/modules/aiassistant/lib/Core/Enum/AiClientStatusMessage.php'
-			;
-			$messages = Loc::loadLanguageFile($path);
-		}
-
-		return $messages;
+		return [...$messages, ...self::extractMessagesFromEventResults($event)];
 	}
 
 	private static function extractMessagesFromEventResults(Event $event): array

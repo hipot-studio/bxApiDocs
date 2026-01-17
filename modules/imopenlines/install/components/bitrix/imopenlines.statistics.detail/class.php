@@ -12,16 +12,18 @@ use \Bitrix\Imopenlines\Limit,
 	\Bitrix\ImOpenlines\Security,
 	\Bitrix\ImOpenLines\Model\SessionTable,
 	\Bitrix\ImOpenlines\Security\Permissions;
+use Bitrix\Main\Security\Sign\Signer;
+use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 
-class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent
+class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
 {
 	protected $gridId = 'imopenlines_statistic_v3';
 	protected $filterId = 'imopenlines_statistic_detail_filter';
 
 	/** @var  \Bitrix\Main\Grid\Options */
 	protected $gridOptions;
-
+	private const SIGNED_PARAMS_SALT = 'OLStatItemListSalt';
 	// export flags
 	protected $excelMode = false;
 	protected $enableExport = true;
@@ -1796,40 +1798,102 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent
 
 		if ($this->excelMode)
 		{
-			$nav->setCurrentPage($pageNum);
+			$filter = $this->getFilter();
+			if (isset($this->arParams['STEXPORT_LAST_EXPORTED_ID']) && $this->arParams['STEXPORT_LAST_EXPORTED_ID'] > 0)
+			{
+				$filter['<ID'] = $this->arParams['STEXPORT_LAST_EXPORTED_ID'];
+			}
+
+			$cursor = SessionTable::getList([
+				'order' => [
+					'ID' => 'DESC'
+				],
+				'filter' => $filter,
+				'select' => $selectHeaders,
+				'limit' => $pageSize,
+			]);
+		}
+		else
+		{
+			$limit = $nav->getLimit();
+			$offset = $nav->getOffset();
+			$fetchLimit = $limit + 1;
+
+			$cursor = SessionTable::getList([
+				'order' => $sorting["sort"],
+				'filter' => $this->getFilter(),
+				'select' => $selectHeaders,
+				'limit' => $fetchLimit,
+				'offset' => $offset,
+			]);
 		}
 
-		$cursor = SessionTable::getList(array(
-			'order' => $sorting["sort"],
-			'filter' => $this->getFilter(),
-			'select' => $selectHeaders,
-			'count_total' => true,
-			'limit' => ($this->excelMode ? $pageSize : $nav->getLimit()),
-			'offset' => ($this->excelMode ? $offset : $nav->getOffset())
-		));
+		if ($this->excelMode)
+		{
+			$totalCount = SessionTable::getList([
+				'filter' => $this->getFilter(),
+				'count_total' => true,
+			])->getCount();
 
-		$this->arResult["ROWS_COUNT"] = $cursor->getCount();
-		$nav->setRecordCount($cursor->getCount());
+			$this->arResult["ROWS_COUNT"] = $totalCount;
+			$nav->setRecordCount($totalCount);
+			$this->enableNextPage = $nav->getCurrentPage() < $nav->getPageCount();
+		}
+		else
+		{
+			$this->arResult["ROWS_COUNT"] = null;
+		}
+
+		$rows = [];
+		while ($row = $cursor->fetch())
+		{
+			$rows[] = $row;
+		}
+
+		if ($this->excelMode && !empty($rows))
+		{
+			$this->arResult['LAST_EXPORTED_ID'] = $rows[count($rows) - 1]['ID'];
+		}
+
+		if (!$this->excelMode)
+		{
+			if (count($rows) > $limit)
+			{
+				$this->enableNextPage = true;
+				array_pop($rows);
+			}
+			else
+			{
+				$this->enableNextPage = false;
+			}
+
+			$nav->setRecordCount($this->enableNextPage ? $offset + $limit + 1 : $offset + count($rows));
+		}
+
+		list($this->arResult["ELEMENTS_ROWS"], $userId) = $this->prepareRows($rows);
 
 		$this->arResult["SORT"] = $sorting["sort"];
 		$this->arResult["SORT_VARS"] = $sorting["vars"];
 		$this->arResult["NAV_OBJECT"] = $nav;
 
-		$this->enableNextPage = $nav->getCurrentPage() < $nav->getPageCount();
-
-		$userId = array();
-		$this->arResult["ELEMENTS_ROWS"] = [];
-		while ($data = $cursor->fetch())
+		if (!$this->excelMode)
 		{
-			if ($data["USER_ID"] > 0)
-			{
-				$userId[$data["USER_ID"]] = $data["USER_ID"];
-			}
-			if ($data["OPERATOR_ID"] > 0)
-			{
-				$userId[$data["OPERATOR_ID"]] = $data["OPERATOR_ID"];
-			}
-			$this->arResult["ELEMENTS_ROWS"][] = ["data" => $data, "columns" => []];
+			$filter = $this->getFilter();
+			$filterForJs = $this->prepareFilterForJs($filter);
+			$signedFilter = $this->signParams($filterForJs);
+
+			$params = [
+				'componentName' => $this->getName(),
+				'actionName' => 'getTotalCount',
+				'data' => ['signedFilter' => $signedFilter],
+			];
+
+			$this->arResult['TOTAL_ROWS_COUNT_HTML'] = $this->buildRowCountHtml($this->gridId, Json::encode($params));
+			$this->arResult["ENABLE_NEXT_PAGE"] = $this->enableNextPage;
+		}
+		else
+		{
+			$this->arResult['TOTAL_ROWS_COUNT_HTML'] = null;
 		}
 
 		$configManager = new Config();
@@ -2098,7 +2162,8 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent
 			$this->includeComponentTemplate('excel');
 			return [
 				'PROCESSED_ITEMS' => count($this->arResult['ELEMENTS_ROWS']),
-				'TOTAL_ITEMS' => $this->arResult['ROWS_COUNT']
+				'TOTAL_ITEMS' => $this->arResult['ROWS_COUNT'],
+				'LAST_EXPORTED_ID' => $this->arResult['LAST_EXPORTED_ID'],
 			];
 		}
 		else
@@ -2124,5 +2189,108 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent
 			$this->includeComponentTemplate();
 			return $this->arResult;
 		}
+	}
+	private function prepareFilterForJs(array $filter): array
+	{
+		foreach ($filter as $key => $value)
+		{
+			if (is_array($value))
+			{
+				$filter[$key] = $this->prepareFilterForJs($value);
+			}
+			elseif (is_object($value))
+			{
+				$filter[$key] = (string)$value;
+			}
+			elseif ($value === null)
+			{
+				$filter[$key] = '';
+			}
+		}
+
+		return $filter;
+	}
+
+
+	private function signParams(array $params): string
+	{
+		return (new Signer())->sign(
+			Json::encode($params),
+			self::SIGNED_PARAMS_SALT
+		);
+	}
+
+	private function unsignParams(string $signedParams): array
+	{
+		$signedData = (new Signer())->unsign(
+			$signedParams,
+			self::SIGNED_PARAMS_SALT
+		);
+
+		return Json::decode($signedData);
+	}
+
+	public function getTotalCountAction(string $signedFilter = ''): int
+	{
+		if (!Loader::includeModule('imopenlines'))
+		{
+			return 0;
+		}
+
+		$filter = $this->unsignParams($signedFilter);
+
+		return (int)SessionTable::getList([
+			'filter' => $filter,
+			'count_total' => true,
+		])->getCount();
+
+	}
+
+	public function configureActions()
+	{
+		return [];
+	}
+
+	private function prepareRows(array $rows): array
+	{
+		$userId = [];
+		$elements = [];
+
+		foreach ($rows as $data)
+		{
+			if ($data["USER_ID"] > 0)
+			{
+				$userId[$data["USER_ID"]] = $data["USER_ID"];
+			}
+			if ($data["OPERATOR_ID"] > 0)
+			{
+				$userId[$data["OPERATOR_ID"]] = $data["OPERATOR_ID"];
+			}
+
+			$elements[] = [
+				"data" => $data,
+				"columns" => []
+			];
+		}
+
+		return [$elements, $userId];
+	}
+
+	private function buildRowCountHtml(string $gridId, string $paramsJson): string
+	{
+		return strtr(
+			'<div id="%prefix%_row_count_wrapper">%all%  
+        <a id="%prefix%_row_count" 
+           data-params=\'%params%\' 
+           style="cursor: pointer"
+           onclick="BX.OpenLinesComponent.getTotalCount(\'%prefix%\')">%show%</a>
+     </div>',
+			[
+				'%prefix%' => htmlspecialcharsbx(strtolower($gridId)),
+				'%all%'    => Loc::getMessage('OL_COMPONENT_COUNT_ROW_ALL'),
+				'%params%' => htmlspecialcharsbx($paramsJson, ENT_QUOTES),
+				'%show%'   => Loc::getMessage('OL_COMPONENT_COUNT_ROW_SHOW'),
+			]
+		);
 	}
 }

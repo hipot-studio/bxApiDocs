@@ -13,8 +13,11 @@ class PrepareDeadline implements PrepareFieldInterface
 
 	public function __invoke(array $fields): array
 	{
-		$handler = new DeadlineFieldHandler($this->config->getUserId());
-		$handler->modify($fields);
+		if (!$this->config->isFromWorkFlow() && !$this->config->isFromAgent())
+		{
+			$handler = new DeadlineFieldHandler($this->config->getUserId());
+			$handler->modify($fields);
+		}
 
 		return $fields;
 	}

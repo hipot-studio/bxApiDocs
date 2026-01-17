@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Controller\Chat\Message;
 
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Reaction\ReactionItem;
 use Bitrix\Im\V2\Message\Reaction\ReactionService;
 use Bitrix\Im\V2\Rest\RestAdapter;
 
@@ -14,7 +15,7 @@ class Reaction extends BaseController
 	 */
 	public function addAction(Message $message, string $reaction): ?array
 	{
-		$reaction = mb_strtoupper($reaction);
+		$reaction = ReactionItem::getSnakeCaseName($reaction);
 		$service = new ReactionService($message);
 		$reactResult = $service->addReaction($reaction);
 
@@ -33,7 +34,7 @@ class Reaction extends BaseController
 	 */
 	public function deleteAction(Message $message, string $reaction): ?array
 	{
-		$reaction = mb_strtoupper($reaction);
+		$reaction = ReactionItem::getSnakeCaseName($reaction);
 		$service = new ReactionService($message);
 		$reactResult = $service->deleteReaction($reaction);
 
@@ -55,8 +56,8 @@ class Reaction extends BaseController
 		$reaction = $filter['reaction'] ?? null;
 		if ($reaction !== null)
 		{
-			$reaction = mb_strtoupper($reaction);
-			$validateResult = Message\Reaction\ReactionItem::validateReaction($reaction);
+			$reaction = ReactionItem::getSnakeCaseName($reaction);;
+			$validateResult = ReactionItem::validateReaction($reaction);
 			if (!$validateResult->isSuccess())
 			{
 				$this->addErrors($validateResult->getErrors());
@@ -73,10 +74,10 @@ class Reaction extends BaseController
 		$reactionOrder = [
 			'ID' => $order['id'] ?? 'DESC'
 		];
-		$reactionLimit = $this->getLimit($limit);
+		$limit = $this->getLimit($limit);
 
-		$reactions = Message\Reaction\ReactionCollection::find($reactionFilter, $reactionOrder, $reactionLimit);
+		$reactions = Message\Reaction\ReactionCollection::find($reactionFilter, $reactionOrder, $limit);
 
-		return (new RestAdapter($reactions))->toRestFormat();
+		return $this->toRestFormatWithPaginationData([$reactions], $limit, $reactions->count());
 	}
 }

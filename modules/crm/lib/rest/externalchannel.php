@@ -6,7 +6,6 @@ use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Disk\File;
-use Bitrix\Faceid\FaceTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -786,36 +785,6 @@ class CCrmExternalChannelImportAgent extends \CCrmExternalChannelRestProxy
 	}
 
 	/**
-	 * @param $fields
-	 * @return int|0
-	 * @internal
-	 */
-	protected function getFileIdByFaceId($fields)
-	{
-		$id = 0;
-
-		if(!\Bitrix\Main\Loader::includeModule("faceid"))
-			return $id;
-
-		if(isset($fields[CCrmExternalChannelImport::AGENT][CCrmExternalChannelImport::FIELDS]) &&
-			isset($fields[CCrmExternalChannelImport::AGENT][CCrmExternalChannelImport::FIELDS]['FACE_ID']))
-		{
-			$faceId = $fields[CCrmExternalChannelImport::AGENT][CCrmExternalChannelImport::FIELDS]['FACE_ID'];
-
-			if(intval($faceId)>0)
-			{
-				$r = FaceTable::getList(array('filter' => array('ID' => $faceId)));
-				if($fieldsFace = $r->fetch())
-				{
-					$id = $fieldsFace['FILE_ID'];
-				}
-			}
-		}
-
-		return $id;
-	}
-
-	/**
 	 * @param $photoId
 	 * @internal
 	 */
@@ -1005,7 +974,7 @@ class CCrmExternalChannelImportAgent extends \CCrmExternalChannelRestProxy
 			$photoId = 0;
 			if($bContact)
 			{
-				$photoId = $this->getFileIdByFaceId($import->getRawData());
+				$photoId = 0;
 			}
 
 			$id = 0;

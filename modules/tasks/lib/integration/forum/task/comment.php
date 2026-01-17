@@ -39,6 +39,7 @@ use Bitrix\Tasks\Util\Error;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Result;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Forum;
 use CSite;
 
@@ -65,6 +66,11 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 	 */
 	public static function add($taskId, array $data)
 	{
+		if (FormV2Feature::isOn())
+		{
+			return new Result();
+		}
+
 		$result = new Result();
 
 		if (!self::includeModule())
@@ -165,14 +171,17 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 					}
 				}
 
-				$feed->send(
-					$addResult["ID"],
-					[
-						'URL_TEMPLATES_PROFILE_VIEW' => Option::get('socialnetwork', 'user_page', '/company/personal/') . 'user/#user_id#/',
-						'SKIP_USER_READ' => $skipUserRead,
-						'AUX_LIVE_PARAMS' => ($data['AUX_LIVE_PARAMS'] ?? []),
-					]
-				);
+				if (!is_array($data['CONFIG'] ?? null) || ($data['CONFIG']['fromWorkFlow'] ?? null) !== true)
+				{
+					$feed->send(
+						$addResult["ID"],
+						[
+							'URL_TEMPLATES_PROFILE_VIEW' => Option::get('socialnetwork', 'user_page', '/company/personal/') . 'user/#user_id#/',
+							'SKIP_USER_READ' => $skipUserRead,
+							'AUX_LIVE_PARAMS' => ($data['AUX_LIVE_PARAMS'] ?? []),
+						]
+					);
+				}
 			}
 		}
 		elseif (is_array($errors = $feed->getErrors()))
@@ -210,6 +219,11 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 	 */
 	public static function update($id, array $data, $taskId = false)
 	{
+		if (FormV2Feature::isOn())
+		{
+			return new Result();
+		}
+
 		$result = new Result();
 
 		if(!static::includeModule())
@@ -276,6 +290,11 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 	 */
 	public static function delete($id, $taskId = false)
 	{
+		if (FormV2Feature::isOn())
+		{
+			return new Result();
+		}
+
 		$result = new Result();
 
 		if(!static::includeModule())
@@ -387,6 +406,11 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 
 	public static function onBeforeAdd($entityType, $taskId, $data): void
 	{
+		if (FormV2Feature::isOn())
+		{
+			return;
+		}
+
 		if ($entityType !== 'TK' || !$taskId)
 		{
 			return;
@@ -420,6 +444,11 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 	 */
 	public static function onBeforeDelete($entityType, $taskId, $data): void
 	{
+		if (FormV2Feature::isOn())
+		{
+			return;
+		}
+
 		if ($entityType !== 'TK' || empty($data['MESSAGE_ID']))
 		{
 			return;
@@ -427,11 +456,15 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 
 		self::collectFileAttachments($data['MESSAGE_ID']);
 		$taskId = (int)$taskId;
-		Counter\CounterService::getInstance()->collectData($taskId);
 	}
 
 	public static function onAfterDelete($entityType, $taskId, $data): void
 	{
+		if (FormV2Feature::isOn())
+		{
+			return;
+		}
+
 		if ($entityType !== 'TK' || !$taskId)
 		{
 			return;
@@ -526,7 +559,12 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 	 */
 	public static function onAfterAdd($entityType, $taskId, $arData)
 	{
-		static $parser = null;
+		if (FormV2Feature::isOn())
+		{
+			return;
+		}
+
+			static $parser = null;
 
 		// 'TK' is our entity type
 		if ($entityType !== 'TK')
@@ -999,6 +1037,11 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 	 */
 	public static function onAfterUpdate($entityType, $taskID, $arData)
 	{
+		if (FormV2Feature::isOn())
+		{
+			return;
+		}
+
 		// 'TK' is our entity type
 		if ($entityType !== 'TK')
 		{

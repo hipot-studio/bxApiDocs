@@ -19,6 +19,9 @@ class LicenseManager
 {
 	private const MAILBOX_IS_LOCKED_PROPERTY = 1;
 	private const MAILBOX_IS_AVAILABLE_PROPERTY = 0;
+	private const MAIL_ACCESS_RIGHTS_OPTION_NAME = 'mail_access_rights';
+	private const MAIL_MAILBOXES_MANAGEMENT_OPTION_NAME = 'mail_mailboxes_management_grid';
+	private const MAIL_MAILBOXES_MASS_CONNECT_OPTION_NAME = 'mail_mailbox_massconnect';
 
 	private static function sendNotificationsAboutBlockedMailboxes($ids): void
 	{
@@ -305,6 +308,9 @@ class LicenseManager
 		]);
 	}
 
+	/**
+	 * @deprecated
+	 */
 	public static function isMailClientReadyToUse($userId = null): bool
 	{
 		global $USER;
@@ -443,4 +449,33 @@ class LicenseManager
 		return static::getSyncOldLimit() > 0;
 	}
 
+	public static function isAccessRightsEnabled(): bool
+	{
+		if (!Main\Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return Bitrix24\Feature::isFeatureEnabled(self::MAIL_ACCESS_RIGHTS_OPTION_NAME);
+	}
+
+	public static function isMailboxManagementEnabled(): bool
+	{
+		if (!Main\Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return Bitrix24\Feature::isFeatureEnabled(self::MAIL_MAILBOXES_MANAGEMENT_OPTION_NAME);
+	}
+
+	public static function isMailboxesMassConnectEnabled(): bool
+	{
+		if (!Main\Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return Bitrix24\Feature::isFeatureEnabled(self::MAIL_MAILBOXES_MASS_CONNECT_OPTION_NAME);
+	}
 }

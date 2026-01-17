@@ -40,6 +40,7 @@ class ActionDictionary
 	public const ACTION_TASK_ADD_AUDITORS = 'task_add_auditors';
 	public const ACTION_TASK_DEPARTMENT = 'task_department';
 	public const ACTION_TASK_COPY = 'task_copy';
+	public const ACTION_TASK_SORT = 'task_sort';
 
 	public const ACTION_TASK_ATTACH_FILE = 'task_attach_file';
 	public const ACTION_TASK_DETACH_FILE = 'task_detach_file';
@@ -51,6 +52,10 @@ class ActionDictionary
 	public const ACTION_TASK_CREATE_GANTT_DEPENDENCE = 'task_create_gantt_dependence';
 
 	public const ACTION_TASK_ELAPSED_TIME = 'task_elapsed_time';
+
+	public const ACTION_ELAPSED_TIME_UPDATE = 'elapsed_time_update';
+	public const ACTION_ELAPSED_TIME_DELETE = 'elapsed_time_delete';
+
 	public const ACTION_TASK_FAVORITE_ADD = 'task_favorite_add';
 	public const ACTION_TASK_FAVORITE_DELETE = 'task_favorite_delete';
 	public const ACTION_TASK_FAVORITE = 'task_favorite';
@@ -67,15 +72,20 @@ class ActionDictionary
 	public const ACTION_TEMPLATE_REMOVE = 'template_remove';
 	public const ACTION_TEMPLATE_CREATE = 'template_create';
 	public const ACTION_TEMPLATE_SAVE = 'template_save';
+	public const ACTION_TEMPLATE_DETACH_PARENT = 'template_detach_parent';
+	public const ACTION_TEMPLATE_ATTACH_PARENT = 'template_attach_parent';
+	public const ACTION_TEMPLATE_DETACH_RELATED_TASK = 'template_detach_related_task';
 
 	public const ACTION_TASK_EXPORT = 'task_export';
 	public const ACTION_TASK_IMPORT = 'task_import';
 
 	public const ACTION_TASK_ROBOT_EDIT = 'task_robot_edit';
 
-	public const ACTION_TASK_RESULT_EDIT = 'task_result_edit';
+	public const ACTION_RESULT_EDIT = 'result_edit';
 	public const ACTION_TASK_COMPLETE_RESULT = 'task_complete_result';
-	public const ACTION_TASK_REMOVE_RESULT = 'task_remove_result';
+	public const ACTION_RESULT_REMOVE = 'result_remove';
+	public const ACTION_RESULT_READ = 'result_read';
+	public const ACTION_RESULT_CREATE_FROM_MESSAGE = 'result_create_from_message';
 
 	public const ACTION_TASK_ADMIN = 'task_admin';
 

@@ -212,21 +212,11 @@ class StructureRoleProvider extends BaseStructureProvider
 				'title' => Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ROLES_TAB_TITLE') ?? '',
 				'itemMaxDepth' => 7,
 				'icon' => [
-					'default' => $this->getRoleTabIconInBase64(),
-					'selected' => $this->getRoleTabSelectedIconInBase64(),
+					'default' => 'o-crown',
+					'selected' => 's-crown',
 				],
 			],
 		);
-	}
-
-	private function getRoleTabIconInBase64(): string
-	{
-		return 'data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2221%22%20height%3D%2217%22%20viewBox%3D%220%200%2021%2017%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M2.21523%2015.6207C2.33373%2016.089%202.75509%2016.417%203.23814%2016.417H17.299C17.8032%2016.417%2018.2369%2016.0603%2018.3343%2015.5656L20.0036%207.08371C20.191%206.13183%2019.2023%205.38045%2018.3353%205.81584L15.3199%207.33025C14.7499%207.61648%2014.0558%207.39199%2013.7614%206.82624L10.9854%201.49187C10.5493%200.653863%209.35009%200.654547%208.91495%201.49306L6.14886%206.82334C5.85462%207.39033%205.15912%207.61527%204.58858%207.32795L1.74639%205.89663C0.85334%205.4469%20-0.154668%206.25549%200.090627%207.22483L2.21523%2015.6207Z%22%20fill%3D%22%23ABB1B8%22/%3E%3C/svg%3E';
-	}
-
-	private function getRoleTabSelectedIconInBase64(): string
-	{
-		return str_replace('ABB1B8', 'fff', $this->getRoleTabIconInBase64());
 	}
 
 	private function getNodeRoles(Node $node): array

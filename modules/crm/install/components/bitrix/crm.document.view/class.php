@@ -1,8 +1,10 @@
 <?php
 
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Format;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
+use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\DocumentGenerator\Components\ViewComponent;
 use Bitrix\DocumentGenerator\CreationMethod;
@@ -26,6 +28,7 @@ Loc::loadMessages(__FILE__);
 class CrmDocumentViewComponent extends ViewComponent
 {
 	private const TEMPLATE_CODE = 'CRM_DOCUMENT_SHARING';
+	private const TEMPLATE_PLACEHOLDER = 'DOCUMENT_URL';
 
 	public function executeComponent()
 	{
@@ -241,10 +244,12 @@ class CrmDocumentViewComponent extends ViewComponent
 				'isCombineMessageWithLink' => false,
 				'isInsertLinkInMessage' => true,
 				'isConfigurable' => true,
-				'templateCode' => self::TEMPLATE_CODE,
-				'templatePlaceholders' => [
-					'DOCUMENT_URL' => $link,
-				],
+				'signedTemplate' => $this->getSignedTemplate(),
+				'needCommonPhoneChannel' => Feature::enabled(Feature\MessageSenderEditor::class),
+				'messageSenderSceneId' => 'crm.document.view',
+				'analytics' => [
+					'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DOCUMENT,
+				]
 			];
 			if (Driver::getInstance()->getDefaultStorage() instanceof \Bitrix\DocumentGenerator\Storage\Disk)
 			{
@@ -378,5 +383,25 @@ class CrmDocumentViewComponent extends ViewComponent
 		}
 
 		return false;
+	}
+
+	private function getSignedTemplate(): ?string
+	{
+		$documentUrl = $this->document->getPublicUrl();
+
+		if (!$documentUrl)
+		{
+			return null;
+		}
+
+		return NotificationsManager::signTemplate(
+			self::TEMPLATE_CODE,
+			[
+				[
+					'name' => self::TEMPLATE_PLACEHOLDER,
+					'value' => (string)$documentUrl,
+				],
+			],
+		);
 	}
 }
