@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\UI;
 
+use Bitrix\Bizproc\Integration\ScopeTokenService;
 use Bitrix\Bizproc\Public\Entity\Document\DocumentComplexId;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
@@ -35,6 +36,8 @@ class WorkflowUserView implements \JsonSerializable
 		$this->tasks = \CBPViewHelper::getWorkflowTasks($workflow['ID'], true, true);
 		$this->myRunningTasks = $this->getMyWaitingTasks();
 		$this->myCompletedTasks = $this->getMyCompletedTasks();
+
+		$this->setScopeForTokenService();
 	}
 
 	public static function create(string $workflowId, int $userId): ?static
@@ -47,6 +50,21 @@ class WorkflowUserView implements \JsonSerializable
 		;
 
 		return $workflowState !== null ? new static($workflowState, $userId) : null;
+	}
+
+	protected function setScopeForTokenService(): void
+	{
+		$tasks = [];
+		foreach ($this->myRunningTasks as $task)
+		{
+			$tasks[] = $task['id'] ?? '0';
+		}
+
+		if (!empty($tasks))
+		{
+			$scope = implode('_', $tasks);
+			ScopeTokenService::setScope('tasks_' . $scope);
+		}
 	}
 
 	public function toArray(): array

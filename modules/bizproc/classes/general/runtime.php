@@ -201,20 +201,6 @@ class CBPRuntime
 	 */
 	public function createWorkflow($workflowTemplateId, $documentId, $workflowParameters = array(), $parentWorkflow = null)
 	{
-
-		// todo: remove after bizproc 25.1150.0
-		if (\Bitrix\Main\Config\Option::get('bizproc', 'clear_stuck_agent_active', 'N') === 'N')
-		{
-			\Bitrix\Main\Config\Option::set('bizproc', 'clear_stuck_agent_active', 'Y');
-			CAgent::AddAgent(
-				name: Bitrix\Bizproc\Infrastructure\Agent\ClearStuckWorkflowAgent::class . '::run();',
-				module: 'bizproc',
-				interval: 86400,
-				next_exec: \ConvertTimeStamp(strtotime('tomorrow 03:00'), 'FULL'),
-				existError: false,
-			);
-		}
-
 		$workflowTemplateId = intval($workflowTemplateId);
 		if ($workflowTemplateId <= 0)
 		{

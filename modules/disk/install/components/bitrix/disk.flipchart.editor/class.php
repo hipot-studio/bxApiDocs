@@ -71,6 +71,10 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 				'session_id' => $session->getExternalHash(),
 				'file_name' => $this->arParams['ORIGINAL_FILE']?->getNameWithoutExtension() ?? $session->getObject()->getNameWithoutExtension(),
 				'salt' => crc32($session->getCreateTime()),
+				'analytics' => [
+					'action' => 'open',
+					'value1' => $this->isNewElement() ? 'new_element' : 'old_element',
+				],
 			],
 		);
 	}

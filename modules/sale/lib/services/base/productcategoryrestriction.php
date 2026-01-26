@@ -7,7 +7,7 @@ use Bitrix\Sale\Delivery\Restrictions\Base;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Internals\Entity;
 
-Loc::getMessage(__FILE__);
+Loc::loadMessages(__FILE__);
 
 abstract class ProductCategoryRestriction extends Restriction
 {

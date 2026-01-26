@@ -104,7 +104,7 @@ class CollaborationSection
 	{
 		$userId = (int)CurrentUser::get()->getId();
 		$cache = Cache::createInstance();
-		$cacheId = md5($userId . LANGUAGE_ID . SITE_ID);
+		$cacheId = md5($userId . LANGUAGE_ID . SITE_ID . 'v2');
 		$cachePath = static::CACHE_PATH . '/' . substr(md5($userId), 0, 2) . '/' . $userId . '/';
 
 		if ($cache->initCache(static::CACHE_TTL, $cacheId, $cachePath))
@@ -453,15 +453,21 @@ class CollaborationSection
 			);
 		}
 
+		$menuData = [
+			'menu_item_id' => 'menu_files',
+		];
+
+		if (static::isBitrix24Cloud())
+		{
+			$menuData['sub_menu'] = DiskSection::getSubmenuItems();
+		}
+
 		return [
 			'id' => 'disk',
 			'title' => static::getTitle('disk'),
 			'available' => $available,
 			'url' => SITE_DIR . 'docs/',
-			'menuData' => [
-				'menu_item_id' => 'menu_files',
-				'sub_menu' => DiskSection::getSubmenuItems(),
-			],
+			'menuData' => $menuData,
 		];
 	}
 

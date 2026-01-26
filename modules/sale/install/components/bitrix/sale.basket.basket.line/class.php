@@ -27,6 +27,13 @@ class SaleBasketLineComponent extends CBitrixComponent
 		$path = $arParams['PATH_TO_ORDER'] ?? '';
 		$path = is_string($path) ? trim($path) : '';
 		$arParams['PATH_TO_ORDER'] = $path ?: SITE_DIR . 'personal/order/make/';
+
+		// personal
+
+		$path = $arParams['PATH_TO_PERSONAL'] ?? '';
+		$path = is_string($path) ? trim($path) : '';
+		$arParams['PATH_TO_PERSONAL'] = $path ?: SITE_DIR . 'personal/';
+
 		unset($path);
 
 		$arParams["HIDE_ON_BASKET_PAGES"] = ($arParams["HIDE_ON_BASKET_PAGES"] ?? 'Y') === 'N' ? 'N' : 'Y';
@@ -34,13 +41,7 @@ class SaleBasketLineComponent extends CBitrixComponent
 		$arParams['SHOW_TOTAL_PRICE'] = ($arParams['SHOW_TOTAL_PRICE'] ?? 'Y') === 'N' ? 'N' : 'Y';
 		$arParams['SHOW_EMPTY_VALUES'] = ($arParams['SHOW_EMPTY_VALUES'] ?? 'Y') === 'N' ? 'N' : 'Y';
 
-		// personal
-
 		$arParams['SHOW_PERSONAL_LINK'] = ($arParams['SHOW_PERSONAL_LINK'] ?? 'N') === 'Y' ? 'Y' : 'N';
-
-		$arParams['PATH_TO_PERSONAL'] = trim($arParams['PATH_TO_PERSONAL']);
-		if ($arParams['PATH_TO_PERSONAL'] == '')
-			$arParams['PATH_TO_PERSONAL'] = SITE_DIR.'personal/';
 
 		// authorization
 

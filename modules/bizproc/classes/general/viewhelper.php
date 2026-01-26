@@ -1,13 +1,17 @@
 <?php
 
+use Bitrix\Bizproc\Integration\ScopeTokenService;
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Bizproc\Result\Entity\ResultTable;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\UI\Viewer\ItemAttributes;
 
 class CBPViewHelper
 {
 	private static $cachedTasks = array();
+	private static ScopeTokenService $scopeTokenService;
 
 	public const DESKTOP_CONTEXT = 'desktop';
 	public const MOBILE_CONTEXT = 'mobile';
@@ -56,7 +60,7 @@ class CBPViewHelper
 				'SHOW_EXTRANET_USERS' => 'NONE',
 				'POPUP' => 'Y',
 				'SITE_ID' => $siteID,
-				'NAME_TEMPLATE' => $nameFormat
+				'NAME_TEMPLATE' => $nameFormat,
 			),
 			null,
 			array('HIDE_ICONS' => 'Y')
@@ -231,7 +235,7 @@ class CBPViewHelper
 					array('separator' => true, 'compact' => false, 'sort' => 290),
 					array('id' => 'Fullscreen',  'compact' => false, 'sort' => 310),
 					array('id' => 'BbCode',  'compact' => true, 'sort' => 340),
-					array('id' => 'More',  'compact' => true, 'sort' => 400)
+					array('id' => 'More',  'compact' => true, 'sort' => 400),
 				),
 
 				'name' => $fieldName.'[TEXT]',
@@ -288,19 +292,21 @@ class CBPViewHelper
 
 	private static function getFileLinksReplaceCallback()
 	{
-		return function($matches)
+		return static function($matches)
 		{
 			$matches[2] = htmlspecialcharsback($matches[2]);
 			parse_str($matches[2], $query);
-			if (isset($query['i']))
+			$fileId = (int)($query['i'] ?? null);
+			if ($fileId > 0)
 			{
 				try
 				{
-					$attributes = \Bitrix\Main\UI\Viewer\ItemAttributes::buildByFileId(
-						$query['i'],
-						$matches[1].$matches[2]
-					);
-					return "<a href=\"".$matches[1].$matches[2]."\" ".$attributes.">";
+					$url = $matches[1].$matches[2];
+					$url = self::getScopeTokenService()->tokenizeUrl($url, $fileId) ?? $url;
+
+					$attributes = ItemAttributes::buildByFileId($fileId, $url);
+
+					return "<a href=\"$url\" $attributes>";
 				}
 				catch (ArgumentException $e)
 				{
@@ -352,22 +358,24 @@ class CBPViewHelper
 
 	private static function getDiskLinksReplaceCallback()
 	{
-		return function($matches)
+		return static function($matches)
 		{
 			$matches[2] = htmlspecialcharsback($matches[2]);
 			parse_str($matches[2], $query);
-			if (isset($query['attachedId']))
+			$attachedId = (int)($query['attachedId'] ?? null);
+			if ($attachedId > 0)
 			{
-				$attach = \Bitrix\Disk\AttachedObject::loadById($query['attachedId']);
+				$attach = AttachedObject::loadById($attachedId);
 				if ($attach)
 				{
 					try
 					{
-						$attributes = \Bitrix\Main\UI\Viewer\ItemAttributes::buildByFileId(
-							$attach->getFileId(),
-							$matches[1].$matches[2]
-						);
-						return "<a href=\"".$matches[1].$matches[2]."\" ".$attributes.">".$matches[3];
+						$url = $matches[1].$matches[2];
+						$url = self::getScopeTokenService()->tokenizeUrl($url, $attach) ?? $url;
+
+						$attributes = ItemAttributes::buildByFileId($attach->getFileId(), $url);
+
+						return "<a href=\"$url\" $attributes>{$matches[3]}";
 					}
 					catch (ArgumentException $e)
 					{
@@ -456,5 +464,15 @@ class CBPViewHelper
 		$tf = $culture?->getShortTimeFormat() ?? 'H:i';
 
 		return \FormatDate("$df, $tf", $date->toUserTime());
+	}
+
+	private static function getScopeTokenService(): ScopeTokenService
+	{
+		if (!isset(self::$scopeTokenService))
+		{
+			self::$scopeTokenService = new ScopeTokenService();
+		}
+
+		return self::$scopeTokenService;
 	}
 }

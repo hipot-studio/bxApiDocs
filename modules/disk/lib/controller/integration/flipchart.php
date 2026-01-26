@@ -198,7 +198,7 @@ final class Flipchart extends Controller implements JwtHolder
 					&& $this->isSaveByChanceNeeded($session)
 				)
 				{
-					$boardService->saveDocument();
+					$boardService->saveDocument($isNewBoard);
 
 					Application::getInstance()->addBackgroundJob(function () use ($isNewBoard, $cElement) {
 						$event = new AnalyticsEvent('save_changes', 'boards', 'boards');
@@ -225,7 +225,7 @@ final class Flipchart extends Controller implements JwtHolder
 
 				if ($editAllowed)
 				{
-					$boardService->saveDocument();
+					$boardService->saveDocument($isNewBoard);
 
 					Application::getInstance()->addBackgroundJob(function () use ($isNewBoard, $cElement) {
 						$event = new AnalyticsEvent('save_changes', 'boards', 'boards');
@@ -264,7 +264,7 @@ final class Flipchart extends Controller implements JwtHolder
 				{
 					if ($editAllowed)
 					{
-						$boardService->saveDocument();
+						$boardService->saveDocument($isNewBoard);
 
 						Application::getInstance()->addBackgroundJob(function () use ($isNewBoard, $cElement) {
 							$event = new AnalyticsEvent('save_changes', 'boards', 'boards');

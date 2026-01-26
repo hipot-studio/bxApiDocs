@@ -70,7 +70,7 @@ class BoardService
 		return array_pop($documentId);
 	}
 
-	public function saveDocument(): Error|bool
+	public function saveDocument($isNewBoard = false): Error|bool
 	{
 		if (!$this->session->getObject())
 		{
@@ -79,7 +79,7 @@ class BoardService
 
 		$boardId = $this->session->getObject()->getId();
 		$boardId = self::convertDocumentIdToExternal($boardId);
-		$downloadResult = (new BoardApiService())->downloadBoard("/api/v1/flip/{$boardId}/download");
+		$downloadResult = (new BoardApiService())->downloadBoard("/api/v1/flip/{$boardId}/download", isNewBoard: $isNewBoard);
 		if (!$downloadResult->isSuccess())
 		{
 			return new Error('Could not download the file.');

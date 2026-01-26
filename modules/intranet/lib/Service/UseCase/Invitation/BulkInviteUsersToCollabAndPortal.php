@@ -9,11 +9,10 @@ use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Dto;
 use Bitrix\Intranet\Command;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
-use Bitrix\Intranet\Entity\Type;
 use Bitrix\Intranet\Entity\Type\Email;
+use Bitrix\Intranet\Internal\Integration\Socialnetwork\CollabService;
 use Bitrix\Intranet\Public\Type\EmailInvitation;
 use Bitrix\Intranet\Entity\Type\InvitationsContainer;
-use Bitrix\Intranet\Service;
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Public\Type\PhoneInvitation;
 use Bitrix\Intranet\Entity\User;
@@ -22,12 +21,15 @@ use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\EventManager;
+use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
 use Bitrix\Intranet\Contract;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
+use Bitrix\Socialnetwork\Collab\Control\Event\CollabUpdateEvent;
 
 class BulkInviteUsersToCollabAndPortal
 {
@@ -238,6 +240,9 @@ class BulkInviteUsersToCollabAndPortal
 	{
 		$usersInvitedPortalAndGroup = [];
 		$usersInvitedOnlyToGroup = [];
+		$userIdsAlreadyInCollab = [];
+
+		$this->subscribeExistingMembersUpdate($collabId, $userIdsAlreadyInCollab);
 
 		if (!$invitationToPortalAndGroupCollection->empty())
 		{
@@ -272,8 +277,40 @@ class BulkInviteUsersToCollabAndPortal
 		}
 
 		$allUsersInvitedCollection = new UserCollection(...$usersInvitedPortalAndGroup, ...$usersInvitedOnlyToGroup);
+		$userIdsAlreadyInCollabFlipped = array_flip($userIdsAlreadyInCollab);
 
-		return (new Result())->setData($allUsersInvitedCollection->getIds());
+		$users = [];
+
+		foreach ($allUsersInvitedCollection as $user)
+		{
+			$users[] = [
+				'id' => $user->getId(),
+				'status' => isset($userIdsAlreadyInCollabFlipped[$user->getId()])
+					? InvitationStatus::ACTIVE
+					: InvitationStatus::INVITED
+				,
+			];
+		}
+
+		return (new Result())->setData($users);
+	}
+
+	private function subscribeExistingMembersUpdate(int $collabId, array &$userIdsAlreadyInCollab): void
+	{
+		if (Loader::includeModule('socialnetwork'))
+		{
+			EventManager::getInstance()->addEventHandler(
+				'socialnetwork',
+				'OnCollabUpdate',
+				static function (CollabUpdateEvent $event) use ($collabId, &$userIdsAlreadyInCollab): void
+				{
+					if ($collabId === $event->getCollabBefore()->getId())
+					{
+						$userIdsAlreadyInCollab = $event->getCollabBefore()->getUserMemberIds();
+					}
+				},
+			);
+		}
 	}
 
 	/**

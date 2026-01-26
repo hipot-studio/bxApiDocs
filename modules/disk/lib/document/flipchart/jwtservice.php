@@ -82,6 +82,12 @@ class JwtService
 			return $this->getTokenFromProxy();
 		}
 
+		// This analytics is only for proxy, so removing it
+		if (isset($data['analytics']))
+		{
+			unset($data['analytics']);
+		}
+
 		JWT::$leeway = $ttl;
 		$result = JWT::encode($data, $secret);
 

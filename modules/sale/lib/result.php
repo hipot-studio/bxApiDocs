@@ -1,11 +1,12 @@
 <?php
+
 namespace Bitrix\Sale;
 
-use Bitrix\Main\Entity;
+use Bitrix\Main\ORM;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 
-class Result extends \Bitrix\Main\ORM\Data\Result
+class Result extends ORM\Data\Result
 {
 	/** @var  int */
 	protected $id;
@@ -37,7 +38,7 @@ class Result extends \Bitrix\Main\ORM\Data\Result
 
 	public function __destruct()
 	{
-		//just quietly die in contrast Entity\Result either checked errors or not.
+		//just quietly die in contrast ORM\Data\Result either checked errors or not.
 	}
 
 	public function addData(array $data)
@@ -156,8 +157,7 @@ class Result extends \Bitrix\Main\ORM\Data\Result
 
 }
 
-class ResultError
-	extends Entity\EntityError
+class ResultError extends ORM\EntityError
 {
 	/**
 	 * @param Error $error

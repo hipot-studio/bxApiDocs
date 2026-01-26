@@ -821,6 +821,20 @@ class RestService extends \IRestService
 		{
 			throw new AccessException();
 		}
+
+		if (isset($params['FIELDS']['CODE']))
+		{
+			$dbRes = Internals\PaySystemRestHandlersTable::getList([
+				'filter' => [
+					'!=ID' => $params['ID'],
+					'=CODE' => $params['FIELDS']['CODE'],
+				],
+			]);
+			if ($dbRes->fetch())
+			{
+				throw new RestException('Handler already exists!', self::ERROR_HANDLER_ALREADY_EXIST);
+			}
+		}
 	}
 
 	/**

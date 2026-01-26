@@ -2,8 +2,6 @@
 namespace Bitrix\Sale;
 
 use Bitrix\Main\Entity;
-use Bitrix\Main\Localization\Loc;
-Loc::loadMessages(__FILE__);
 
 /**
  * Class TradingPlatformTable
@@ -47,44 +45,36 @@ class TradingPlatformTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('TRADING_PLATFORM_ORDER_ENTITY_ID_FIELD'),
 			),
 			'CODE' => array(
 				'required' => true,
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateCode'),
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_CODE_FIELD'),
 			),
 			'ACTIVE' => array(
 				'required' => true,
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateActive'),
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_ACTIVE_FIELD'),
 			),
 			'NAME' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateName'),
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_NAME_FIELD'),
 			),
 			'DESCRIPTION' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateDescription'),
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_DESCRIPTION_FIELD'),
 			),
 			'SETTINGS' => array(
 				'data_type' => 'text',
 				'serialized' => true,
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_SETTINGS_FIELD'),
 			),
 			'CATALOG_SECTION_TAB_CLASS_NAME' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateCatalogSectionTabClassName'),
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_CATALOG_SECTION_TAB_CLASS_NAME_FIELD'),
 			),
 			'CLASS' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateClass'),
-				'title' => Loc::getMessage('TRADING_PLATFORMS_ENTITY_CLASS_FIELD'),
 			),
 			'XML_ID' => array(
 				'data_type' => 'string',

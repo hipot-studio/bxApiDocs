@@ -4,6 +4,7 @@ use Bitrix\Catalog;
 use Bitrix\Crm\Agent\Security\DynamicTypes\ReFillDynamicTypeAttr;
 use Bitrix\Crm\CompanyAddress;
 use Bitrix\Crm\ContactAddress;
+use Bitrix\Crm\Controller\RepeatSale\Flow;
 use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\Format\AddressFormatter;
 use Bitrix\Crm\Invoice\Compatible;
@@ -3004,6 +3005,25 @@ class CAllCrmInvoice
 
 		$errMsg = [];
 		$bError = false;
+
+		$repeatSaleAiSegmentCalcAgent = '~CRM_REPEAT_SALE_AI_SEGMENT_CALC_AGENT';
+		if ((string)COption::GetOptionString('crm', $repeatSaleAiSegmentCalcAgent, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $repeatSaleAiSegmentCalcAgent, 'Y');
+
+			/**
+			 * @see Bitrix\Crm\Agent\RepeatSale\Hypothesis\AiSegmentAgent
+			 */
+			\CAgent::AddAgent(
+				'Bitrix\Crm\Agent\RepeatSale\Hypothesis\AiSegmentAgent::run();',
+				'crm',
+				'N',
+				60,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+			);
+		}
 
 		$recurringColumnAppendAgent = '~CRM_RECURRING_COLUMN_APPEND_AGENT';
 		if ((string)COption::GetOptionString('crm', $recurringColumnAppendAgent, 'N') === 'N')

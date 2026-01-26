@@ -123,6 +123,7 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 					'EXTERNAL_LINK_MODE' => false,
 					'UNIFIED_LINK_ACCESS_ONLY' => !$documentSession->canUserRead(CurrentUser::get()),
 					'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
+					'ORIGINAL_FILE' => $this->file,
 				],
 				'PLAIN_VIEW' => true,
 				'IFRAME_MODE' => true,

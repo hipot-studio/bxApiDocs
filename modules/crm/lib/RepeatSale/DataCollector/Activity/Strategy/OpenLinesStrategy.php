@@ -42,6 +42,10 @@ class OpenLinesStrategy extends StrategyBase
 
 			$data = OpenLineManager::getMessageData($userCode);
 			$openLinesText = $this->formatOpenLinesText($data);
+			if (empty($openLinesText))
+			{
+				continue;
+			}
 			$normalizedText = $this
 				->textNormalizer
 				->normalize($openLinesText, $this->getType())
@@ -58,7 +62,7 @@ class OpenLinesStrategy extends StrategyBase
 	private function formatOpenLinesText(array $data): string
 	{
 		$messages = array_filter(
-			$data['messages'],
+			$data['messages'] ?? [],
 			static fn(array $item) => $item['author_id'] > 0
 		);
 		if (empty($messages))

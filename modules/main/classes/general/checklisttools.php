@@ -24,9 +24,12 @@ class CCheckListTools
 				}
 				if (is_dir($pwd . $file))
 				{
-					if (isset($arExcept["FOLDERS"]) && in_array($file, $arExcept["FOLDERS"]))
+					if (isset($arExcept["FOLDERS"]))
 					{
-						continue;
+						if (in_array($pwd . $file, $arExcept["FOLDERS"]) || in_array($file, $arExcept["FOLDERS"]))
+						{
+							continue;
+						}
 					}
 					$curDir = basename($pwd);
 					if (isset($arExcept["SUBDIR"][$curDir]) && !in_array($file, $arExcept["SUBDIR"][$curDir]))

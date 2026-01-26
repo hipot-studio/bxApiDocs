@@ -1337,6 +1337,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$this->arResult['USER_NAME'] = (string)$documentSession->getUser()->getName();
 		$this->arResult['USER_AVATAR'] = (string)(new Uri($documentSession->getUser()->getAvatarSrc()))->toAbsolute();
 		$this->arResult['DOWNLOAD_TOKEN'] = $this->downloadToken;
+		$this->arResult['ORIGINAL_FILE'] = $file;
 	}
 
 	private function getUserIdForBoard(DocumentSession $documentSession): string
@@ -1360,7 +1361,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				'sessionId' => $documentSession->getExternalHash(),
 				'userId' => $documentSession->getUserId(),
 			],
-			true
+			true,
 		);
 	}
 

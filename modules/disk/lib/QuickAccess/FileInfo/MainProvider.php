@@ -10,6 +10,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Web\MimeType;
 use Bitrix\Main\Web\Uri;
 
 /**
@@ -53,7 +54,7 @@ class MainProvider extends BaseProvider
 
 	public function getFileInfo(): ?FileInfoDto
 	{
-		if (!$this->isImage())
+		if (!$this->isMediaFile())
 		{
 			return null;
 		}
@@ -63,9 +64,21 @@ class MainProvider extends BaseProvider
 		return self::createFileInfo($fileData);
 	}
 
+	private function isMediaFile(): bool
+	{
+		return $this->isImage() || $this->isVideo();
+	}
+
 	private function isImage(): bool
 	{
 		return \CFile::IsImage($this->getName(), $this->getFileData()['CONTENT_TYPE']);
+	}
+
+	private function isVideo(): bool
+	{
+		$mime = MimeType::getByFilename($this->getName());
+
+		return str_contains($mime, 'video/');
 	}
 
 	private function getFileData(): array
