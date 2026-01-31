@@ -25,7 +25,8 @@ class Repo
 	public static function checkContent($content, $splitter = '#SANITIZE#')
 	{
 		$result = new PublicActionResult();
-		$content = Manager::sanitize(
+		$bad = false;
+		$content = (new Landing\Sanitizer())->sanitizeText(
 			$content,
 			$bad,
 			$splitter
@@ -96,13 +97,14 @@ class Repo
 
 		if (isset($fields['CONTENT']))
 		{
-			// sanitize content
-			$fields['CONTENT'] = Manager::sanitize(
-				$fields['CONTENT'],
-				$bad
-			);
+			$sanitizer = new Landing\Sanitizer();
+			$bad = false;
+			am(['content before', $fields['CONTENT']]);
+			$fields['CONTENT'] = $sanitizer->sanitizeText($fields['CONTENT'], $bad);
+			am(['content after', $fields['CONTENT']]);
 			if ($bad)
 			{
+				am(["BAD content"]);
 				$error->addError(
 					'CONTENT_IS_BAD',
 					Loc::getMessage('LANDING_APP_CONTENT_IS_BAD')
@@ -130,7 +132,8 @@ class Repo
 							{
 								if (isset($preset[$code]))
 								{
-									$preset[$code] = Manager::sanitize(
+									$bad = false;
+									$preset[$code] = $sanitizer->sanitizeText(
 										$preset[$code],
 										$bad
 									);

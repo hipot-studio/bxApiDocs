@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Node;
 
 use Bitrix\Landing\History;
+use Bitrix\Landing\Sanitizer;
 use \Bitrix\Main\Application;
 
 class Link extends \Bitrix\Landing\Node
@@ -13,16 +14,6 @@ class Link extends \Bitrix\Landing\Node
 	public static function getHandlerJS()
 	{
 		return 'BX.Landing.Node.Link';
-	}
-
-	/**
-	 * Allowed or not this target.
-	 * @param string $target Type of target.
-	 * @return boolean
-	 */
-	protected static function isAllowedTarget($target)
-	{
-		return in_array($target, array('_self', '_blank', '_popup'));
 	}
 
 	/**
@@ -73,23 +64,25 @@ class Link extends \Bitrix\Landing\Node
 		$valueBefore = static::getNode($block, $selector);
 		$isIframe = self::isFrame();
 
+		$data = self::sanitizeData($data);
 		foreach ($data as $pos => $value)
 		{
-			$text = (isset($value['text']) && is_string($value['text'])) ? trim($value['text']) : '';
-			$href = (isset($value['href']) && is_string($value['href'])) ? trim($value['href']) : '';
-			$query = (isset($value['query']) && is_string($value['query'])) ? trim($value['query']) : '';
-			$target = (isset($value['target']) && is_string($value['target'])) ? trim(mb_strtolower($value['target'])) : '';
-			$attrs = isset($value['attrs']) ? (array)$value['attrs'] : array();
-			$skipContent = $globalSkipContent || (isset($value['skipContent']) ? (boolean)$value['skipContent'] : false);
+			$text = $value['text'];
+			$href = $value['href'];
+			$query = $value['query'];
+			$target = $value['target'];
+			$attrs = $value['attrs'];
+			$skipContent = $globalSkipContent || $value['skipContent'];
+
 			$result[$pos]['attrs'] = [];
 
-			if ($query)
+			if ($query !== '')
 			{
-				$href .= (mb_strpos($href, '?') === false && !$isIframe) ? '?' : '&';
+				$href .= (!str_contains($href, '?') && !$isIframe) ? '?' : '&';
 				$href .= $query;
 			}
 
-			if (isset($value['text']) && !$text)
+			if ($text === '')
 			{
 				$text = '&nbsp;';
 			}
@@ -97,34 +90,33 @@ class Link extends \Bitrix\Landing\Node
 			if (isset($resultList[$pos]))
 			{
 				if (
-					$text &&
-					!$skipContent &&
-					trim($resultList[$pos]->getTextContent()) != ''
+					$text !== ''
+					&& !$skipContent
+					&& trim($resultList[$pos]->getTextContent()) !== ''
 				)
 				{
-					$text = \htmlspecialcharsbx($text);
 					$result[$pos]['content'] = $text;
 					$resultList[$pos]->setInnerHTML($text);
 				}
 
-				if ($href != '')
+				if ($href !== '')
 				{
 					$result[$pos]['attrs']['href'] = $href;
 					$resultList[$pos]->setAttribute('href', $href);
 				}
 
-				if (self::isAllowedTarget($target))
-				{
-					$result[$pos]['attrs']['target'] = $target;
-					$resultList[$pos]->setAttribute('target', $target);
-				}
+				$result[$pos]['attrs']['target'] = $target;
+				$resultList[$pos]->setAttribute('target', $target);
 
 				$allowedAttrs = self::allowedAttrs();
 				if (!empty($attrs))
 				{
 					foreach ($attrs as $code => $val)
 					{
-						if ($val && in_array($code, $allowedAttrs))
+						if (
+							$val !== ''
+							&& in_array($code, $allowedAttrs, true)
+						)
 						{
 							$result[$pos]['attrs'][$code] = $val;
 							$resultList[$pos]->setAttribute($code, $val);
@@ -156,6 +148,36 @@ class Link extends \Bitrix\Landing\Node
 		return $result;
 	}
 
+	protected static function sanitizeData(array $data): array
+	{
+		$sanitized = [];
+		$sanitizer = new Sanitizer();
+		foreach ($data as $pos => $value)
+		{
+			$text = trim((string)($value['text'] ?? ''));
+			$href = trim((string)($value['href'] ?? ''));
+			$query = trim((string)($value['query'] ?? ''));
+			$target = trim((string)($value['target'] ?? ''));
+			$attrs = [];
+			foreach (($value['attrs'] ?? []) as $code => $attr)
+			{
+				$attr = trim((string)$attr);
+				$attrs[$code] = $sanitizer->sanitizeText($attr);
+			}
+
+			$sanitized[$pos] = [
+				'text' => $sanitizer->sanitizeText($text),
+				'href' => $sanitizer->sanitizeText($href),
+				'query' => $sanitizer->sanitizeText($query),
+				'target' => $sanitizer->sanitizeHrefTarget($target),
+				'attrs' => $attrs,
+				'skipContent' => (bool)($value['skipContent'] ?? false),
+			];
+		}
+
+		return $sanitized;
+	}
+
 	/**
 	 * Get data for this node.
 	 * @param \Bitrix\Landing\Block $block Block instance.
@@ -174,10 +196,10 @@ class Link extends \Bitrix\Landing\Node
 			$data[$pos] = array(
 				'href' => $res->getAttribute('href'),
 				'target' => $res->getAttribute('target'),
-				'attrs' => array(
+				'attrs' => [
 					'data-embed' => $res->getAttribute('data-embed'),
-					'data-url' => $res->getAttribute('data-url')
-				)
+					'data-url' => $res->getAttribute('data-url'),
+				],
 			);
 			if (
 				!isset($manifest['nodes'][$selector]['skipContent']) ||
@@ -275,7 +297,7 @@ class Link extends \Bitrix\Landing\Node
 
 			$result[] = [
 				'type' => $row['type'],
-				'name' => $row['name']
+				'name' => $row['name'],
 			];
 			$dublicate[$row['type']] = true;
 		}

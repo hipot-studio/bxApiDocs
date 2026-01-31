@@ -2,6 +2,7 @@
 namespace Bitrix\Landing;
 
 use Bitrix\Landing\Block\BlockRepo;
+use Bitrix\Landing\Block\Menu;
 use Bitrix\Landing\Site\Scope;
 use Bitrix\Landing\Site\Type;
 use \Bitrix\Main\Page\Asset;
@@ -2402,8 +2403,6 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			);
 		}
 
-		// @tmp bug with setInnerHTML save result
-		$content = preg_replace('/&amp;([^\s]{1})/is', '&$1', $content);
 		if ($edit)
 		{
 			if ($manifest ?? null)
@@ -3857,10 +3856,9 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 				foreach ($data[$selector] as $pos => $value)
 				{
-					$value = trim($value['tagName'] ?? $value);
-					if (
-						preg_match('/^[a-z0-9]+$/i', $value) &&
-						isset($resultList[$pos]))
+					$sanitizer = new Sanitizer();
+					$value = $sanitizer->sanitizeNodeName($value);
+					if (isset($resultList[$pos]))
 					{
 						$valueBefore[$selector][$pos] = $resultList[$pos]->getNodeName();
 						$resultList[$pos]->setNodeName($value);
@@ -3956,60 +3954,17 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			if ($isFind)
 			{
 				// and save content from frontend in DOM by handler-class
-				$affected[$selector] = call_user_func_array(array(
+				$affected[$selector] = call_user_func([
 					Node\Type::getClassName($node['type']),
 					'saveNode',
-					), array(
-						$this,
-						$selector,
-						$nodeData,
-						$additional,
-					));
+				], $this, $selector, $nodeData, $additional);
 			}
 		}
 
-		// additional work with menu
-		if (isset($additional['appendMenu']) && $additional['appendMenu'])
+		if (is_array($manifest['menu']) && !empty($manifest['menu']))
 		{
-			$export = $this->export();
-		}
-		else
-		{
-			$additional['appendMenu'] = false;
-		}
-		$manifest['menu'] = $manifest['menu'] ?? [];
-		foreach ($manifest['menu'] as $selector => $node)
-		{
-			if (isset($data[$selector]) && is_array($data[$selector]))
-			{
-				if (isset($data[$selector][0][0]))
-				{
-					$data[$selector] = array_shift($data[$selector]);
-				}
-				if ($additional['appendMenu'] && isset($export['menu'][$selector]))
-				{
-					$data[$selector] = array_merge(
-						$export['menu'][$selector],
-						$data[$selector]
-					);
-				}
-
-				$resultList = $doc->querySelectorAll($selector);
-				foreach ($resultList as $pos => $resultNode)
-				{
-					$parentNode = $resultNode->getParentNode();
-					if ($parentNode)
-					{
-						$parentNode->setInnerHtml(
-							$this->getMenuHtml(
-								$data[$selector],
-								$node
-							)
-						);
-					}
-					break;// we need only first position
-				}
-			}
+			$menu = new Menu($this);
+			$menu->updateMenu($data, $additional['appendMenu'] === true);
 		}
 
 		// save rebuild html as text
@@ -4068,92 +4023,6 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		Assets\PreProcessing::blockUpdateNodeProcessing($this);
 
 		return true;
-	}
-
-	/**
-	 * Returns menu html with child submenu.
-	 * @param array $data Data array.
-	 * @param array $manifestNode Manifest node for current selector.
-	 * @param string $level Level (root or children).
-	 * @return string
-	 */
-	protected function getMenuHtml($data, $manifestNode, $level = 'root')
-	{
-		if (!is_array($data) || !isset($manifestNode[$level]))
-		{
-			return '';
-		}
-
-		$htmlContent = '';
-		$rootSelector = $manifestNode[$level];
-
-		if (
-			isset($rootSelector['ulClassName']) &&
-			isset($rootSelector['liClassName']) &&
-			isset($rootSelector['aClassName']) &&
-			is_string($rootSelector['ulClassName']) &&
-			is_string($rootSelector['liClassName']) &&
-			is_string($rootSelector['aClassName'])
-		)
-		{
-			foreach ($data as $menuItem)
-			{
-				if (
-					isset($menuItem['text']) && is_string($menuItem['text']) &&
-					isset($menuItem['href']) && is_string($menuItem['href'])
-				)
-				{
-					if ($menuItem['href'] === 'page:#landing0')
-					{
-						$res = Landing::addByTemplate(
-							$this->getSiteId(),
-							Assets\PreProcessing\Theme::getNewPageTemplate($this->getSiteId()),
-							[
-								'TITLE' => $menuItem['text'],
-							]
-						);
-						if ($res->isSuccess())
-						{
-							$menuItem['href'] = '#landing' . $res->getId();
-						}
-					}
-					if (isset($menuItem['target']) && is_string($menuItem['target']))
-					{
-						$target = $menuItem['target'];
-					}
-					else
-					{
-						$target = '_self';
-					}
-					$htmlContent .= '<li class="' . \htmlspecialcharsbx($rootSelector['liClassName']) . '">';
-					$htmlContent .= 	'<a href="' . \htmlspecialcharsbx($menuItem['href']) . '" target="' . $target . '" 
-											class="' . \htmlspecialcharsbx($rootSelector['aClassName']) . '">';
-					$htmlContent .= 		\htmlspecialcharsbx($menuItem['text']);
-					$htmlContent .= 	'</a>';
-					if (isset($menuItem['children']))
-					{
-						$htmlContent .= $this->getMenuHtml(
-							$menuItem['children'],
-							$manifestNode,
-							'children'
-						);
-					}
-					$htmlContent .= '</li>';
-				}
-			}
-			if ($htmlContent)
-			{
-				$htmlContent = '<ul class="' . \htmlspecialcharsbx($rootSelector['ulClassName']) . '">' .
-							   		$htmlContent .
-								'</ul>';
-			}
-			else if ($level == 'root')
-			{
-				$htmlContent = '<ul class="' . \htmlspecialcharsbx($rootSelector['ulClassName']) . '"></ul>';
-			}
-		}
-
-		return $htmlContent;
 	}
 
 	/**

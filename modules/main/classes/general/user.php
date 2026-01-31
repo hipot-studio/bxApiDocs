@@ -194,6 +194,15 @@ class CUser extends CDBResult
 		);
 	}
 
+		
+	/**
+	 * <p>Метод добавляет нового пользователя. При успешном выполнении возвращает ID нового пользователя, в противном случае - вернет "false", а в свойстве LAST_ERROR объекта будет содержаться текст ошибки. Нестатический метод.</p><p></p><div class="note"> <b>Примечание</b>: CUser::Add можно вызывать только как метод инициализированного объекта, а не как статический метод класса CUser.</div>
+	 * @param array $arFields  Массив значений полей, в качестве ключей данного массива допустимо использовать: <ul> <li> <b>LOGIN</b><font color="red">*</font> - логин (имя входа) </li> <li> <b>NAME</b> - имя пользователя </li> <li> <b>LAST_NAME</b> - фамилия пользователя </li> <li> <b>SECOND_NAME</b> - отчество пользователя </li> <li> <b>EMAIL</b><font color="red">*</font> - E-Mail адрес пользователя </li> <li> <b>PASSWORD</b><font color="red">*</font> - пароль пользователя </li> <li> <b>CONFIRM_PASSWORD</b><font color="red">*</font> - подтверждение пароля (должно быть равным <b>PASSWORD</b>) </li> <li> <b>GROUP_ID</b> - массив ID групп к которым будет приписан пользователь </li> <li> <b>ACTIVE</b> - флаг активности пользователя [Y|N] </li> <li> <b>LID</b> - ID сайта по умолчанию для уведомлений </li> <li> <b>ADMIN_NOTES</b> - заметки администратора </li> <li> <b>XML_ID</b> - ID пользователя для связи с внешними источниками (например, ID пользователя в какой-либо внешний базе) </li> <li> <b>EXTERNAL_AUTH_ID</b> - код источника [link=89611]внешней авторизации[/link] </li> <li> <b>PERSONAL_PROFESSION</b> - наименование профессии </li> <li> <b>PERSONAL_WWW</b> - персональная WWW-страница </li> <li> <b>PERSONAL_ICQ</b> - ICQ </li> <li> <b>PERSONAL_GENDER</b> - пол ["M" - мужчина; "F" - женщина] </li> <li> <b>PERSONAL_BIRTHDAY</b> - дата рождения в формате текущего сайта (или текущего языка для административной части) </li> <li> <b>PERSONAL_PHOTO</b> - массив описывающий фотографию, допустимы следующие ключи этого массива: <ul> <li> <b>name</b> - имя файла </li> <li> <b>size</b> - размер файла </li> <li> <b>tmp_name</b> - временный путь на сервере </li> <li> <b>type</b> - тип загружаемого файла </li> <li> <b>del</b> - если значение равно "Y", то изображение будет удалено </li> <li> <b>MODULE_ID</b> - идентификатор главного модуля - "main" </li> </ul> </li> <li> <b>PERSONAL_PHONE</b> - телефон </li> <li> <b>PERSONAL_FAX</b> - факс </li> <li> <b>PERSONAL_MOBILE</b> - мобильный телефон </li> <li> <b>PERSONAL_PAGER</b> - пэйджер </li> <li> <b>PERSONAL_STREET</b> - улица, дом </li> <li> <b>PERSONAL_MAILBOX</b> - почтовый ящик </li> <li> <b>PERSONAL_CITY</b> - город </li> <li> <b>PERSONAL_STATE</b> - область / край </li> <li> <b>PERSONAL_ZIP</b> - индекс </li> <li> <b>PERSONAL_COUNTRY</b> - страна </li> <li> <b>PERSONAL_NOTES</b> - личные заметки </li> <li> <b>TITLE</b> - обращение к пользователю. Поле актуально при добавлении и обновлении. </li> <li> <b>WORK_COMPANY</b> - наименование компании </li> <li> <b>WORK_DEPARTMENT</b> - департамент / отдел </li> <li> <b>WORK_POSITION</b> - должность </li> <li> <b>WORK_WWW</b> - WWW-страница компании </li> <li> <b>WORK_PHONE</b> - рабочий телефон </li> <li> <b>WORK_FAX</b> - рабочий факс </li> <li> <b>WORK_PAGER</b> - рабочий пэйджер </li> <li> <b>WORK_STREET</b> - улица, дом компании </li> <li> <b>WORK_MAILBOX</b> - почтовый ящик компании </li> <li> <b>WORK_CITY</b> - город компании </li> <li> <b>WORK_STATE</b> - область / край компании </li> <li> <b>WORK_ZIP</b> - индекс компании </li> <li> <b>WORK_COUNTRY</b> - страна компании </li> <li> <b>WORK_PROFILE</b> - направления деятельности компании </li> <li> <b>WORK_LOGO</b> - массив описывающий логотип компании, допустимы следующие ключи этого массива: <ul> <li> <b>name</b> - имя файла </li> <li> <b>size</b> - размер файла </li> <li> <b>tmp_name</b> - временный путь на сервере </li> <li> <b>type</b> - тип загружаемого файла </li> <li> <b>del</b> - если значение равно "Y", то изображение будет удалено </li> <li> <b>MODULE_ID</b> - идентификатор главного модуля - "main" </li> </ul> </li> <li> <b>WORK_NOTES</b> - заметки касаемо работы пользователя </li> </ul> <font color="red">*</font> - обязательные поля.
+	 * @return mixed
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/main/reference/cuser/add.php
+	 * @author phpDoc author - generator by hipot at 30.01.2026
+	 */
 	public function Add($arFields)
 	{
 		/** @global CUserTypeManager $USER_FIELD_MANAGER */
@@ -3898,6 +3907,17 @@ class CUser extends CDBResult
 		return $rs;
 	}
 
+	
+	/**
+	 * Метод изменяет параметры пользователя с идентификатором id. Возвращает "true", если изменение прошло успешно, при возникновении ошибки метод вернет "false", а в свойстве LAST_ERROR объекта будет содержаться текст ошибки. Если пользователя с указанным id не существует, то ошибки не возникает. Нестатический метод.
+	 * @param int $ID  ID пользователя.<br /><br /><hr /><br /><br />
+	 * @param array $arFields  Массив значений полей вида array("поле"=&gt;"значение" [, ...]). В качестве полей могут быть использованы все поля <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cuser/add.php">CUser</a>, а также GROUP_ID - массив с ID групп пользователей, в которые входит этот пользователь. <p class="note">Для обновления аватара пользователя (поле PERSONAL_PHOTO) необходимо передавать полный путь к новой загружаемой фотографии на сервере, а не ID загруженного файла.</p><br /><br /><hr /><br /><br />
+	 * @param string $authActions = true Авторизовать ли пользователя после обновления данных. По умолчанию - <i>true</i> - не авторизовывать.
+	 * @return bool
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/main/reference/cuser/update.php
+	 * @author phpDoc author - generator by hipot at 30.01.2026
+	 */
 	public function Update($ID, $arFields, $authActions = true)
 	{
 		/** @global CUserTypeManager $USER_FIELD_MANAGER */

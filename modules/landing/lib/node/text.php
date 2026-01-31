@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Node;
 
 use Bitrix\Landing\History;
+use Bitrix\Landing\Sanitizer;
 
 class Text extends \Bitrix\Landing\Node
 {
@@ -58,25 +59,12 @@ class Text extends \Bitrix\Landing\Node
 			{
 				$result[$pos] = [];
 
-				if ($needSanitize)
+				$sanitizer = new Sanitizer();
+				if (!$needSanitize)
 				{
-					$value = \Bitrix\Landing\Manager::sanitize($value, $bad);
+					$sanitizer->disableTextFilter(Sanitizer::AVAILABLE_TEXT_FILTERS['sanitize']);
 				}
-
-				// clear some amp
-				if ($value)
-				{
-					$value = preg_replace('/&amp;([^\s]{1})/is', '&$1', $value);
-					$value = str_replace(
-						' bxstyle="',
-						' style="',
-						$value
-					);
-				}
-				else
-				{
-					$value = ' ';
-				}
+				$value = $sanitizer->sanitizeText($value);
 
 				if (History::isActive())
 				{

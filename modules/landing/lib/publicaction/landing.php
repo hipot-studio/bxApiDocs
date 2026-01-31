@@ -6,6 +6,7 @@ use Bitrix\Landing\Manager;
 use Bitrix\Landing\File;
 use Bitrix\Landing\Folder;
 use Bitrix\Landing\Metrika;
+use Bitrix\Landing\Sanitizer;
 use Bitrix\Landing\Site;
 use Bitrix\Landing\Block as BlockCore;
 use Bitrix\Landing\TemplateRef;
@@ -219,10 +220,7 @@ class Landing
 			}
 			if (isset($fields['CONTENT']))
 			{
-				$data['CONTENT'] = Manager::sanitize(
-					$fields['CONTENT'],
-					$bad
-				);
+				$data['CONTENT'] = (new Sanitizer())->sanitizeText($fields['CONTENT']);
 			}
 			if (isset($fields['CATEGORY']))
 			{

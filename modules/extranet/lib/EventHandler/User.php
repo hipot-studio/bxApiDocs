@@ -6,6 +6,7 @@ use Bitrix\Extranet\Enum\User\ExtranetRole;
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
+use Bitrix\Main\UserTable;
 use Bitrix\Socialnetwork\Collab\Control\Event\BeforeCollabUpdateEvent;
 use Bitrix\HumanResources;
 
@@ -46,6 +47,14 @@ class User
 
 	public static function onAfterUserUpdate($fields): void
 	{
+		if (
+			isset($fields['EXTERNAL_AUTH_ID'])
+			&& in_array($fields['EXTERNAL_AUTH_ID'], UserTable::getExternalUserTypes(), true)
+		)
+		{
+			return;
+		}
+
 		if (
 			!empty($fields['ID'])
 			&& Loader::includeModule('humanresources')

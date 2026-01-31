@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Landing\PublicAction;
 
+use Bitrix\Landing\Sanitizer;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Landing\Demos as DemoCore;
 use \Bitrix\Landing\PublicActionResult;
@@ -314,10 +315,8 @@ class Demos
 			{
 				unset($item['fields']['ADDITIONAL_FIELDS']);
 			}
-			\Bitrix\Landing\Manager::sanitize(
-				serialize($item),
-				$bad
-			);
+			$bad = false;
+			(new Sanitizer())->sanitizeText(serialize($item), $bad);
 			if ($bad)
 			{
 				$error->addError(

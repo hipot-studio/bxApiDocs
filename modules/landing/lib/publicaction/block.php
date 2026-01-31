@@ -11,6 +11,7 @@ use Bitrix\Landing\Assets;
 use Bitrix\Landing\Restriction;
 use Bitrix\Landing\Block as BlockCore;
 use Bitrix\Landing\Metrika;
+use Bitrix\Landing\Sanitizer;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Landing\PublicActionResult;
 
@@ -51,16 +52,14 @@ class Block
 					$position = -1;
 				}
 				if (
-					mb_strtolower($action) == 'clonecard' &&
 					isset($params['content'])
+					&& mb_strtolower($action) === 'clonecard'
 				)
 				{
 					$res = $blocks[$block]->$action(
 						$selector,
 						$position,
-						Manager::sanitize(
-							$params['content'], $bad
-						)
+						(new Sanitizer())->sanitizeText($params['content'])
 					);
 				}
 				else
@@ -201,7 +200,7 @@ class Block
 	 * @param bool $preventHistory True if no need save history
 	 * @return \Bitrix\Landing\PublicActionResult
 	 */
-	public static function changeNodeName($lid, $block, array $data, bool $preventHistory = false)
+	public static function changeNodeName($lid, $block, array $data, bool $preventHistory = false): PublicActionResult
 	{
 		$error = new \Bitrix\Landing\Error;
 		$result = new PublicActionResult();
@@ -332,12 +331,10 @@ class Block
 		$error = new \Bitrix\Landing\Error;
 		$result = new PublicActionResult();
 
-		$attributes = array();
-		$components = array();
-		$content = array();
-		$data = $data;
+		$attributes = [];
+		$components = [];
+		$content = [];
 		$dynamicParamsExists = false;
-		$block = intval($block);
 
 		Landing::setEditMode();
 		$preventHistory ? History::deactivate() : History::activate();
@@ -724,7 +721,7 @@ class Block
 			if (isset($blocks[$block]))
 			{
 				// remove extra files
-				$newContent = Manager::sanitize($content, $bad);
+				$newContent = (new Sanitizer())->sanitizeText($content);
 				$filesBeforeSave = File::getFilesFromBlockContent(
 					$block,
 					$blocks[$block]->getContent()
