@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Ldap\Internal\ImageType;
+
 IncludeModuleLangFile(__FILE__);
 
 class CLdapUtil
@@ -429,37 +431,17 @@ class CLdapUtil
 
 	/**
 	 * Returns image file extension/type/format
-	 * @param str $signature - first 12 bytes of the file.
-	 * @return mix (str type if success or bool false in opposite case)
+	 * @deprecated Use Bitrix\Ldap\Internal\ImageType instead
+	 * @param string $signature - first 12 bytes of the file.
+	 * @return string|false
 	 */
 	public static function GetImgTypeBySignature($signature)
 	{
-		if($signature == "")
-			return false;
+		$imageType = ImageType::fromFileContent((string)$signature);
 
-		$signature = mb_substr($signature, 0, 12);
-
-		$arSigs = array(
-			"GIF" => "gif",
-			"\xff\xd8\xff" => "jpg",
-			"\x89\x50\x4e" => "png",
-			"FWS" => "swf",
-			"CWS" => "swc",
-			"8BPS" => "psd",
-			"BM" => "bmp",
-			"\xff\x4f\xff" => "jpc",
-			"II\x2a\x00" => "tif",
-			"MM\x00\x2a" => "tif",
-			"FORM" => "iff",
-			"\x00\x00\x01\x00" => "ico",
-			"\x0d\x0a\x87\x0a" => "jp2"
-			);
-
-		foreach ($arSigs as $sig => $type)
-			if(preg_match("/^".$sig."/x", $signature))
-				return $type;
-
-		return false;
+		return ($imageType === ImageType::Unknown)
+			? false
+			: $imageType->value;
 	}
 
 	public static function isLdapPaginationAviable(): bool

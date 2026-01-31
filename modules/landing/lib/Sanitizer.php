@@ -10,6 +10,7 @@ class Sanitizer
 	public const AVAILABLE_TEXT_FILTERS = [
 		'sanitize' => 'sanitize',
 		'reverseSanitize' => 'reverseSanitize',
+		'noEmptyText' => 'noEmptyText',
 	];
 	private const DEFAULT_TEXT_FILTERS = [
 		'sanitize' => 'sanitize',
@@ -30,6 +31,14 @@ class Sanitizer
 		if (in_array($filter, self::AVAILABLE_TEXT_FILTERS, true))
 		{
 			unset($this->filters[$filter]);
+		}
+	}
+
+	public function enableTextFilter(string $filter): void
+	{
+		if (in_array($filter, self::AVAILABLE_TEXT_FILTERS, true))
+		{
+			$this->filters[$filter] = self::AVAILABLE_TEXT_FILTERS[$filter];
 		}
 	}
 
@@ -81,6 +90,14 @@ class Sanitizer
 		if ($needReverse)
 		{
 			$text = $this->reverseSanitizeText($text);
+		}
+
+		if (
+			$text === ''
+			&& $this->checkFilter(self::AVAILABLE_TEXT_FILTERS['noEmptyText'])
+		)
+		{
+			$text = ' ';
 		}
 
 		return $text;

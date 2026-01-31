@@ -99,12 +99,9 @@ class Repo
 		{
 			$sanitizer = new Landing\Sanitizer();
 			$bad = false;
-			am(['content before', $fields['CONTENT']]);
 			$fields['CONTENT'] = $sanitizer->sanitizeText($fields['CONTENT'], $bad);
-			am(['content after', $fields['CONTENT']]);
 			if ($bad)
 			{
-				am(["BAD content"]);
 				$error->addError(
 					'CONTENT_IS_BAD',
 					Loc::getMessage('LANDING_APP_CONTENT_IS_BAD')

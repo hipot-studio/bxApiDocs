@@ -60,6 +60,7 @@ class Text extends \Bitrix\Landing\Node
 				$result[$pos] = [];
 
 				$sanitizer = new Sanitizer();
+				$sanitizer->enableTextFilter(Sanitizer::AVAILABLE_TEXT_FILTERS['noEmptyText']);
 				if (!$needSanitize)
 				{
 					$sanitizer->disableTextFilter(Sanitizer::AVAILABLE_TEXT_FILTERS['sanitize']);

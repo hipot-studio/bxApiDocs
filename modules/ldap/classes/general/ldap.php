@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Ldap\EncryptionType;
+use Bitrix\Ldap\Internal\ImageType;
 use Bitrix\Ldap\Internal\Security\Password;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Authentication\ApplicationPasswordTable;
@@ -601,15 +602,17 @@ class CLDAP
 			if($arLdapUser[mb_strtolower($attr)] == "")
 				return false;
 
-			$fExt = CLdapUtil::GetImgTypeBySignature($arLdapUser[mb_strtolower($attr)][0]);
+			$imageType = ImageType::fromFileContent((string)$arLdapUser[mb_strtolower($attr)][0]);
 
-			if(!$fExt)
+			if($imageType === ImageType::Unknown)
+			{
 				return false;
+			}
 
 			$tmpDir = CTempFile::GetDirectoryName();
 			CheckDirPath($tmpDir);
 
-			$fname = "ad_".rand().".".$fExt;
+			$fname = "ad_".rand().".".$imageType->value;
 
 			if(!file_put_contents($tmpDir.$fname,$arLdapUser[mb_strtolower($attr)][0]))
 				return false;
