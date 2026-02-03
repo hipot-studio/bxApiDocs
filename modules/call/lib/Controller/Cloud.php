@@ -2,23 +2,23 @@
 
 namespace Bitrix\Call\Controller;
 
-use Bitrix\Call\DTO\CloudRecordingRequest;
-use Bitrix\Call\DTO\CloudRecordingErrorRequest;
-use Bitrix\Call\DTO\FileInfo;
-use Bitrix\Call\Integration\AI\ChatMessage;
-use Bitrix\Im\Call\Registry;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
-use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Message;
+use Bitrix\Main\Service\MicroService\BaseReceiver;
 use Bitrix\Call\Track;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Track\TrackService;
-use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
-use Bitrix\Main\UI\Viewer\PreviewManager;
-use Bitrix\Main\Service\MicroService\BaseReceiver;
+use Bitrix\Call\DTO\CloudRecordingRequest;
+use Bitrix\Call\DTO\CloudRecordingErrorRequest;
+use Bitrix\Call\DTO\FileInfo;
+use Bitrix\Call\NotifyService;
+use Bitrix\Call\CallChatMessage;
+use Bitrix\Im\Call\Registry;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Service\Context;
+use Bitrix\Im\V2\Chat;
+
 
 class Cloud extends BaseReceiver
 {
@@ -71,28 +71,22 @@ class Cloud extends BaseReceiver
 			return null;
 		}
 
-		$chatId = $call->getChatId();
-
-		// Get chat instance
-		$chat = Chat::getInstance($chatId);
+		$chat = Chat::getInstance($call->getChatId());
 		if (!$chat || $chat instanceof \Bitrix\Im\V2\Chat\NullChat)
 		{
 			$this->addError(new Error('Chat not found', 'chat_not_found'));
 			return null;
 		}
 
-		// Create and send message to chat
-		$message = new Message();
-		$message->setMessage(Loc::getMessage('CALL_CLOUD_RECORDING_PREPARE_MESSAGE'));
-		$message->markAsSystem(true);
+		$message = CallChatMessage::makeCloudRecordPrepareMessage($call, $chat);
 
-		$sendResult = $chat->sendMessage($message);
+		$sendingConfig = (new SendingConfig())
+			->enableSkipCounterIncrements()
+			->enableSkipUrlIndex()
+		;
+		$context = (new Context())->setUser($call->getInitiatorId());
 
-		if (!$sendResult->isSuccess())
-		{
-			$this->addErrors($sendResult->getErrors());
-			return null;
-		}
+		NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 
 		return ['result' => true];
 	}
@@ -107,7 +101,7 @@ class Cloud extends BaseReceiver
 	{
 		Loader::includeModule('im');
 
-		if (!$recordingRequest->roomId) 
+		if (!$recordingRequest->roomId)
 		{
 			$this->addError(new Error('Room Id is required', 'room_id_required'));
 			return null;
@@ -120,7 +114,6 @@ class Cloud extends BaseReceiver
 			return null;
 		}
 
-		$record = null;
 		if ($recordingRequest->recording)
 		{
 			$recordingData = $recordingRequest->recording;
@@ -130,10 +123,10 @@ class Cloud extends BaseReceiver
 			}
 			$recording = new FileInfo($recordingData);
 			$record = $this->downloadTrack($call, $recording);
-		}
-		if (!$record)
-		{
-			return null;
+			if (!$record)
+			{
+				return null;
+			}
 		}
 
 		if ($recordingRequest->preview)
@@ -144,94 +137,14 @@ class Cloud extends BaseReceiver
 				$previewData['type'] = Track::TYPE_VIDEO_PREVIEW;
 			}
 			$preview = new FileInfo($previewData);
-			$preview = $this->downloadTrack($call, $preview);
-			if (!$preview)
+			$preview_track = $this->downloadTrack($call, $preview);
+			if (!$preview_track)
 			{
 				return null;
 			}
-
-			(new PreviewManager())->setPreviewImageId($record->getFileId(), $preview->getFileId());
 		}
-
-		$this->sendRecordingReadyMessage($call, $record);
 
 		return ['result' => true];
-	}
-
-	/**
-	 * Send message to chat about recording ready
-	 *
-	 * @param \Bitrix\Im\Call\Call $call
-	 * @param Track $track
-	 * @return void
-	 */
-	private function sendRecordingReadyMessage(\Bitrix\Im\Call\Call $call, Track $track): void
-	{
-		Loader::includeModule('im');
-
-		$chat = Chat::getInstance($call->getChatId());
-		if (!$chat || $chat instanceof \Bitrix\Im\V2\Chat\NullChat)
-		{
-			return;
-		}
-
-		$userId = $call->getActionUserId() ?: $call->getInitiatorId();
-		if ($track->getFileId() && !$track->getDiskFileId())
-		{
-			$diskFileIds = \CIMDisk::UploadFileFromMain(
-				$call->getChatId(),
-				[$track->getFileId()],
-				$userId
-			);
-
-			if (!$diskFileIds || empty($diskFileIds[0]))
-			{
-				return;
-			}
-
-			$diskFileId = $diskFileIds[0];
-			$track->setDiskFileId($diskFileId);
-			$track->save();
-		}
-
-		if ($track->getDiskFileId())
-		{
-			\CIMDisk::UploadFileFromDisk(
-				$call->getChatId(),
-				['upload' . $track->getDiskFileId()],
-				'',
-				['USER_ID' => $userId]
-			);
-		}
-
-		// Try to get direct download URL from Disk
-		$downloadUrl = null;
-		if ($track->getDiskFileId() && Loader::includeModule('disk'))
-		{
-			$diskFile = \Bitrix\Disk\File::getById($track->getDiskFileId());
-			if ($diskFile)
-			{
-				$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
-				$downloadUrl = $urlManager->getUrlForDownloadFile($diskFile, true);
-			}
-		}
-
-		// Fallback to controller URL if Disk URL is not available
-		if (!$downloadUrl)
-		{
-			$downloadUrl = $track->getUrl(true, true);
-		}
-
-		$messageUrl = ChatMessage::makeCallStartMessageLink($call->getId(), $chat->getId());
-
-		$message = new Message();
-		$message->setMessage(Loc::getMessage('CALL_CLOUD_RECORDING_READY_MESSAGE', [
-			'#DOWNLOAD_URL#' => $downloadUrl,
-			'#CALL_ID#' => $call->getId(),
-			'#CALL_START#' => $messageUrl,
-		]));
-		$message->markAsSystem(true);
-		$chat->sendMessage($message);
 	}
 
 	/**
@@ -311,7 +224,7 @@ class Cloud extends BaseReceiver
 		}
 
 		$trackService = TrackService::getInstance();
-		if ($trackService->doNeedDownloadTrack($track)) 
+		if ($trackService->doNeedDownloadTrack($track))
 		{
 			$downloadResult = $trackService->downloadTrackFile($track, true);
 			if (!$downloadResult->isSuccess())
@@ -355,16 +268,15 @@ class Cloud extends BaseReceiver
 		if ($chat && !($chat instanceof \Bitrix\Im\V2\Chat\NullChat))
 		{
 			$errorText = $recordingError->errorMessage ?: $recordingError->errorCode;
-			$messageUrl = ChatMessage::makeCallStartMessageLink($call->getId(), $chat->getId());
+			$message = CallChatMessage::makeCloudRecordErrorMessage($call, $chat, $errorText);
 
-			$message = new Message();
-			$message->setMessage(Loc::getMessage('CALL_CLOUD_RECORDING_ERROR_MESSAGE', [
-				'#ERROR#' => $errorText,
-				'#CALL_ID#' => $call->getId(),
-				'#CALL_START#' => $messageUrl,
-			]));
-			$message->markAsSystem(true);
-			$chat->sendMessage($message);
+			$sendingConfig = (new SendingConfig())
+				->enableSkipCounterIncrements()
+				->enableSkipUrlIndex()
+			;
+			$context = (new Context())->setUser($call->getInitiatorId());
+
+			NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 		}
 
 		return ['result' => true];

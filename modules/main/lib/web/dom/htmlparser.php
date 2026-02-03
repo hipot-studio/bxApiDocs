@@ -427,9 +427,15 @@ class HtmlParser extends Parser
 				$cleaned = substr($tag, 1, -2);
 				$bxNodeWithCloseTag = false;
 			}
-			else
+			elseif (str_ends_with($tag, '>'))
 			{
 				$cleaned = substr($tag, 1, -1);
+				$isSingleTag = false;
+				$bxNodeWithCloseTag = true;
+			}
+			else
+			{
+				$cleaned = substr($tag, 1);
 				$isSingleTag = false;
 				$bxNodeWithCloseTag = true;
 			}

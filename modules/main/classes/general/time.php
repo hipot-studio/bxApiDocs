@@ -4,10 +4,11 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main;
+use Bitrix\Main\Type\DateTime;
 
 class CTimeZone
 {
@@ -56,7 +57,7 @@ class CTimeZone
 			try
 			{
 				$oTz = new DateTimeZone($tz);
-				$aTZ[$tz] = ['timezone_id' => $tz, 'offset' => $oTz->getOffset(new DateTime("now", $oTz))];
+				$aTZ[$tz] = ['timezone_id' => $tz, 'offset' => $oTz->getOffset(new \DateTime("now", $oTz))];
 			}
 			catch (Throwable)
 			{
@@ -77,7 +78,7 @@ class CTimeZone
 			$offset = '';
 			if ($z['offset'] != 0)
 			{
-				$offset = ' ' . Main\Type\DateTime::secondsToOffset($z['offset'], ':');
+				$offset = ' ' . DateTime::secondsToOffset($z['offset'], ':');
 			}
 			$aZones[$z['timezone_id']] = '(UTC' . $offset . ') ' . $z['timezone_id'];
 		}
@@ -93,7 +94,7 @@ class CTimeZone
 
 		if (self::IsAutoTimeZone($USER->GetParam("AUTO_TIME_ZONE")))
 		{
-			$cookieDate = (new \Bitrix\Main\Type\DateTime())->add("12M");
+			$cookieDate = (new DateTime())->add("12M");
 			$cookieDate->setDate((int)$cookieDate->format('Y'), (int)$cookieDate->format('m'), 1);
 			$cookieDate->setTime(0, 0);
 
@@ -188,9 +189,10 @@ class CTimeZone
 	/**
 	 * @param int|null $USER_ID If USER_ID is set offset is taken from DB
 	 * @param bool $forced If set, offset is calculated regardless enabling/disabling by functions Enable()/Disable().
+	 * @param DateTime|null $date Date to calculate offset for, default - current date
 	 * @return int
 	 */
-	public static function GetOffset($USER_ID = null, $forced = false)
+	public static function GetOffset($USER_ID = null, $forced = false, ?DateTime $date = null)
 	{
 		global $USER;
 
@@ -241,15 +243,16 @@ class CTimeZone
 			}
 		}
 
-		return static::getTimezoneOffset($timeZone);
+		return static::getTimezoneOffset($timeZone, $date);
 	}
 
 	/**
 	 * Returns timezone offset according to global settings.
 	 * @param string $timeZone
+	 * @param DateTime|null $date Date to calculate offset for, default - current date
 	 * @return int
 	 */
-	public static function getTimezoneOffset(string $timeZone): int
+	public static function getTimezoneOffset(string $timeZone, ?DateTime $date = null): int
 	{
 		if (!self::OptionEnabled())
 		{
@@ -261,24 +264,31 @@ class CTimeZone
 			$timeZone = COption::GetOptionString("main", "default_time_zone", "");
 		}
 
-		return static::calculateOffset($timeZone);
+		return static::calculateOffset($timeZone, $date);
 	}
 
 	/**
 	 * Calculates the difference between local server time and specified timezone in the present moment of time in seconds.
 	 * @param string $timeZone
+	 * @param DateTime|null $date Date to calculate offset for, default - current date
 	 * @return int
 	 */
-	public static function calculateOffset(string $timeZone): int
+	public static function calculateOffset(string $timeZone, ?DateTime $date = null): int
 	{
 		if ($timeZone != '')
 		{
+			if ($date === null)
+			{
+				$date = new DateTime();
+			}
+
 			try //possible DateTimeZone incorrect timezone
 			{
-				$localOffset = (new DateTime())->getOffset();
+				$localOffset = $date->getOffset();
 
-				$userTime = new DateTime('now', new DateTimeZone($timeZone));
-				$userOffset = $userTime->getOffset();
+				$date = clone $date;
+				$date->setTimeZone(new DateTimeZone($timeZone));
+				$userOffset = $date->getOffset();
 
 				return $userOffset - $localOffset;
 			}

@@ -48,4 +48,15 @@ class SearchTasksDto
 			status: static::mapBackedEnum($props, 'status', Entity\Task\Status::class),
 		);
 	}
+
+	public function hasParticipantFilters(): bool
+	{
+		return
+			$this->memberId !== null
+			|| $this->creatorId !== null
+			|| $this->responsibleId !== null
+			|| $this->accompliceId !== null
+			|| $this->auditorId !== null
+		;
+	}
 }

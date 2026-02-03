@@ -12,8 +12,10 @@ use Bitrix\AI\Tuning\Defaults;
 use Bitrix\Im\V2\Chat\OpenLineChat;
 use Bitrix\Im\V2\Chat\OpenLineLiveChat;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Status;
 use Bitrix\Im\V2\Integration\Tasks\Service\Transcription\TranscriptionHandler;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Pull\Event\AutoTaskStatus;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\DI\ServiceLocator;
@@ -89,6 +91,8 @@ class TaskCreationManager
 				->completionsInQueue()
 			;
 		}
+
+		(new AutoTaskStatus($this->message, Status::Search))->send();
 
 		return $result;
 	}

@@ -154,8 +154,6 @@ class Message extends Controller
 				break;
 		}
 
-
-
 		$result['items'] = MessageLoader::getMessageList($basicFilters, $selectedDirPath, $navigation, $isOutcomeDir);
 		$directoriesWithNumberOfUnreadMessages = $mailboxHelper->getDirsMd5WithCounter($mailboxId);
 		// TODO: put it in a separate method:

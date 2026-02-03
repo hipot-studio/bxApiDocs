@@ -177,4 +177,64 @@ class Variable implements JsonSerializable, Arrayable
 	{
 		return $this->toArray();
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		if (!isset($data['id']))
+		{
+			return null;
+		}
+
+		if (!isset($data['title']) || !is_string($data['title']))
+		{
+			return null;
+		}
+
+		$variable = new self(
+			$data['id'],
+			$data['title'],
+		);
+
+		if (isset($data['entityId']))
+		{
+			$variable->setEntityId((string)$data['entityId']);
+		}
+
+		if (isset($data['supertitle']))
+		{
+			$variable->setSupertitle((string)$data['supertitle']);
+		}
+
+		if (isset($data['avatar']))
+		{
+			$variable->setAvatar((string)$data['avatar']);
+		}
+
+		if (isset($data['avatarOptions']) && is_array($data['avatarOptions']))
+		{
+			$variable->setAvatarOptions($data['avatarOptions']);
+		}
+
+		if (isset($data['conflictsWith']) && is_array($data['conflictsWith']))
+		{
+			$variable->setConflictsWith($data['conflictsWith']);
+		}
+
+		if (isset($data['requires']) && is_array($data['requires']))
+		{
+			$variable->setRequires($data['requires']);
+		}
+
+		if (isset($data['secondary']))
+		{
+			$variable->setIsSecondary((bool)$data['secondary']);
+		}
+
+		if (isset($data['hint']))
+		{
+			$variable->setHint((string)$data['hint']);
+		}
+
+		return $variable;
+	}
 }

@@ -15,6 +15,7 @@ use Bitrix\Calendar\Sync\Entities\InstanceMap;
 use Bitrix\Calendar\Sync\Entities\SyncEvent;
 use Bitrix\Calendar\Sync\Handlers\SyncEventMergeHandler;
 use Bitrix\Calendar\Synchronization\Internal\Entity\EventConnection;
+use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\Processor\Event\EventData;
 use Bitrix\Calendar\Synchronization\Internal\Service\Processor\Event\LocalEventMap;
@@ -39,9 +40,12 @@ abstract class AbstractEventImportProcessor
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	protected function buildLocalEventMap(array $vendorEventsIds, int $connectionId): void
+	protected function buildLocalEventMap(array $vendorEventsIds, SectionConnection $sectionConnection): void
 	{
-		$eventConnections = $this->eventConnectionRepository->getByIdsAndConnectionId($vendorEventsIds, $connectionId);
+		$eventConnections = $this->eventConnectionRepository->getByIdsAndSectionConnection(
+			$vendorEventsIds,
+			$sectionConnection,
+		);
 
 		$this->map = new LocalEventMap($eventConnections);
 	}

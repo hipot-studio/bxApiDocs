@@ -146,9 +146,9 @@ class Repository
 	 * @param array $messagesToDelete Each message in the array must be represented by an associative array containing the "MESSAGE_ID" field.
 	 * @param $mailboxUserId
 	 *
-	 * @return null - if messages are missing
+	 * @return ?int (affected rows count)
 	 */
-	public function deleteMailsCompletely($messagesToDelete, $mailboxUserId)
+	public function deleteMailsCompletely(array $messagesToDelete, $mailboxUserId): ?int
 	{
 		// @TODO: make a log optional
 		/*$messageToLog = [
@@ -165,13 +165,15 @@ class Repository
 			},
 			$messagesToDelete
 		);
+
 		if (empty($ids))
 		{
-			return;
+			return null;
 		}
+
 		$mailFieldsForEvent = [];
 
-		foreach ($messagesToDelete as $index => $item)
+		foreach ($messagesToDelete as $item)
 		{
 			$mailFieldsForEvent[] = [
 				'HEADER_MD5' => $item['HEADER_MD5'],
@@ -179,6 +181,7 @@ class Repository
 				'MAILBOX_USER_ID' => $mailboxUserId,
 			];
 		}
+
 		Mail\MailMessageUidTable::deleteList(
 			[
 				'=MAILBOX_ID' => $this->mailboxId,
@@ -188,12 +191,27 @@ class Repository
 			$mailFieldsForEvent
 		);
 
-		// @TODO: use API
+		return $this->deleteMailMessageRows($ids);
+	}
+
+	private function deleteMailMessageRows(array $ids): int
+	{
+		$ids = array_filter(array_map('intval', $ids));
+
+		if (empty($ids))
+		{
+			return 0;
+		}
+
 		$connection = Main\Application::getInstance()->getConnection();
-		$connection->query(
-			'DELETE from ' . Mail\MailMessageTable::getTableName() .
-			' WHERE ID IN (' . implode(',', $ids) . ');'
-		);
+		$tableName = Mail\MailMessageTable::getTableName();
+
+		$inList = implode(',', $ids);
+
+		$sql = 'DELETE FROM ' . $tableName . ' WHERE ID IN (' . $inList . ');';
+		$connection->query($sql);
+
+		return $connection->getAffectedRowsCount();
 	}
 
 	public function getMessages()

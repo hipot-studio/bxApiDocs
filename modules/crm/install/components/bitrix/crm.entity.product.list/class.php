@@ -2091,7 +2091,8 @@ final class CCrmEntityProductListComponent
 			}
 		}
 
-		$this->crmSettings['PRICE_PRECISION'] = 2; // need fix it
+		$this->crmSettings['PRICE_PRECISION'] = 2;
+		$this->crmSettings['PRICE_CALCULATION_PRECISION'] = 8;
 		$this->crmSettings['QUANTITY_PRECISION'] = 4;
 		$this->crmSettings['COMMON_PRECISION'] = 2;
 
@@ -2129,6 +2130,7 @@ final class CCrmEntityProductListComponent
 		$this->arResult['ENABLE_DISCOUNT'] = $this->crmSettings['ENABLE_DISCOUNT'];
 
 		$this->arResult['PRICE_PRECISION'] = $this->crmSettings['PRICE_PRECISION'];
+		$this->arResult['PRICE_CALCULATION_PRECISION'] = $this->crmSettings['PRICE_CALCULATION_PRECISION'];
 		$this->arResult['QUANTITY_PRECISION'] = $this->crmSettings['QUANTITY_PRECISION'];
 		$this->arResult['COMMON_PRECISION'] = $this->crmSettings['COMMON_PRECISION'];
 

@@ -67,12 +67,19 @@ class Handler extends Http\Handler
 		$request = $this->request;
 		$uri = $request->getUri();
 
+		$version = match ($request->getProtocolVersion())
+		{
+			'2', '2.0' => CURL_HTTP_VERSION_2,
+			'1.1' => CURL_HTTP_VERSION_1_1,
+			default => CURL_HTTP_VERSION_1_0,
+		};
+
 		$curlOptions = [
 			CURLOPT_URL => (string)$uri,
 			CURLOPT_HEADER => false,
 			CURLOPT_RETURNTRANSFER => false,
 			CURLOPT_FOLLOWLOCATION => false,
-			CURLOPT_HTTP_VERSION => ($request->getProtocolVersion() === '1.1' ? CURL_HTTP_VERSION_1_1 : CURL_HTTP_VERSION_1_0),
+			CURLOPT_HTTP_VERSION => $version,
 			CURLOPT_CONNECTTIMEOUT => (int)($options['socketTimeout'] ?? 30),
 			CURLOPT_LOW_SPEED_TIME => (int)($options['streamTimeout'] ?? 60),
 			CURLOPT_LOW_SPEED_LIMIT => 1, // bytes/sec
@@ -207,7 +214,13 @@ class Handler extends Http\Handler
 	 */
 	public function receiveBody($handle, $data)
 	{
-		$body = $this->response->getBody();
+		$body = $this->response?->getBody();
+
+		if ($body === null)
+		{
+			// incorrect headers, response was never created
+			return false;
+		}
 
 		try
 		{

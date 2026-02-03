@@ -119,6 +119,11 @@ class SyncAjax extends \Bitrix\Main\Engine\Controller
 		}
 	}
 
+	public function getSyncLinksAction(): array
+	{
+		return \CCalendarSync::getSyncLinks();
+	}
+
 	/**
 	 * @return array
 	 * @throws LoaderException

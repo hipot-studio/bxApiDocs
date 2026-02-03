@@ -19,6 +19,7 @@ class LegacyCurrentUser implements RestConvertible
 		$user = User::getCurrent();
 		$rest = $user->getArray($option);
 		$rest['isAdmin'] = $user->isAdmin();
+		$rest['profile'] = \CIMContactList::GetUserPath($user->getId());
 
 		return $rest;
 	}

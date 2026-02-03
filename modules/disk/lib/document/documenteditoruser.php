@@ -7,6 +7,7 @@ use Bitrix\Main\EO_User;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\Cookie;
 use Bitrix\Main\Security;
+use CUser;
 
 final class DocumentEditorUser
 {
@@ -62,7 +63,7 @@ final class DocumentEditorUser
 		$password = md5($login . '|' . rand(1000, 9999) . '|' . time());
 		$xmlId = self::EXTERNAL_AUTH_ID . '|' . md5(time() . $login . $password . uniqid());
 
-		$userManager = new \CUser;
+		$userManager = new CUser;
 		$userId = $userManager->add([
 			'NAME' => $name,
 			'LAST_NAME' => $lastName,
@@ -97,5 +98,19 @@ final class DocumentEditorUser
 				'=XML_ID' => $xmlId
 			]
 		])->fetchObject();
+	}
+
+	public static function isCurrentUserDocumentEditor(): bool
+	{
+		global $USER;
+
+		if ($USER->isAuthorized())
+		{
+			$userFields = CUser::GetByID($USER->getId())->Fetch();
+
+			return $userFields['EXTERNAL_AUTH_ID'] === self::EXTERNAL_AUTH_ID;
+		}
+		
+		return false;
 	}
 }

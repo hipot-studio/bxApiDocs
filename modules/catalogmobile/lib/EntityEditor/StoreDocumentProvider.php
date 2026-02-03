@@ -3,6 +3,7 @@
 namespace Bitrix\CatalogMobile\EntityEditor;
 
 use Bitrix\Catalog\Document\StoreDocumentTableManager;
+use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -326,9 +327,16 @@ class StoreDocumentProvider extends \Bitrix\Catalog\v2\Integration\UI\EntityEdit
 				{
 					$entityTypeName = \CCrmOwnerType::ResolveName($entityTypeId);
 					$serviceUserPermissions = Container::getInstance()->getUserPermissions();
+					$categoryId = CategoryRepository::getIdByEntityTypeId($entityTypeId) ?? 0;
 					$permissions[$entityTypeName] = [
-						'read' => $serviceUserPermissions->checkReadPermissions($entityTypeId),
-						'add' => $serviceUserPermissions->checkAddPermissions($entityTypeId),
+						'read' => $serviceUserPermissions->entityType()->canReadItemsInCategory(
+							$entityTypeId,
+							$categoryId,
+						),
+						'add' => $serviceUserPermissions->entityType()->canAddItemsInCategory(
+							$entityTypeId,
+							$categoryId,
+						),
 					];
 				}
 			}

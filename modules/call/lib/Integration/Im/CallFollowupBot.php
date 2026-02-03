@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Service\Context;
 use Bitrix\ImBot;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\ChatMessage;
@@ -70,16 +71,24 @@ class CallFollowupBot extends ImBot\Bot\Base
 					if ($result->isSuccess())
 					{
 						$chat = Chat::getInstance($call->getChatId());
-						if (NotifyService::getInstance()->findMessage($chat->getId(), $callId, NotifyService::MESSAGE_TYPE_AI_START, 1) === null)
+						if (
+							!NotifyService::getInstance()->isMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START)
+							&& NotifyService::getInstance()->findMessage($chat->getId(), $callId, NotifyService::MESSAGE_TYPE_AI_START, 1) === null
+						)
 						{
 							$message = ChatMessage::generateTaskStartMessage($callId, $chat);
 							if ($message)
 							{
 								$sendingConfig = (new SendingConfig())
+									->enableSkipCommandExecution()
 									->enableSkipCounterIncrements()
 									->enableSkipUrlIndex()
 								;
-								NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
+								$context = (new Context())->setUser($call->getInitiatorId());
+								NotifyService::getInstance()
+									->sendMessageDeferred($chat, $message, $sendingConfig, $context)
+									->setMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START)
+								;
 							}
 						}
 					}

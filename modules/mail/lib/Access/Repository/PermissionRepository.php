@@ -113,4 +113,17 @@ class PermissionRepository
 
 		AccessPermissionTable::deleteList(['@ROLE_ID' => $roleIds]);
 	}
+
+	public function deleteByRoleIdsAndPermissionIds(array $roleIds, array $permissionIds): void
+	{
+		if (empty($roleIds) || empty($permissionIds))
+		{
+			return;
+		}
+
+		AccessPermissionTable::deleteList([
+			'@ROLE_ID' => $roleIds,
+			'@PERMISSION_ID' => $permissionIds,
+		]);
+	}
 }

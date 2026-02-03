@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\Tasks\Service\Transcription;
 
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Status;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Pull\Event\AutoTaskStatus;
 
 class TranscriptionHandler
 {
@@ -27,8 +29,8 @@ class TranscriptionHandler
 		{
 			EntityType::Task => $this->processTask($data, $message, $transcribedText),
 			EntityType::Result => $this->processResult($data, $message),
-			EntityType::Unknown => true,
-			default => false,
+			EntityType::Unknown => $this->processUnknown($message),
+			default => $this->processError($message),
 		};
 	}
 
@@ -39,6 +41,8 @@ class TranscriptionHandler
 		{
 			return false;
 		}
+
+		(new AutoTaskStatus($message, Status::TaskCreationStarted, true))->send();
 
 		return $this->taskHandler->handle($taskData, $message, $transcribedText);
 	}
@@ -51,6 +55,22 @@ class TranscriptionHandler
 			return false;
 		}
 
+		(new AutoTaskStatus($message, Status::ResultCreationStarted, true))->send();
+
 		return $this->resultHandler->handle($resultData, $message);
+	}
+
+	private function processUnknown(Message $message): bool
+	{
+		(new AutoTaskStatus($message, Status::NotFound))->send();
+
+		return true;
+	}
+
+	private function processError(Message $message): bool
+	{
+		(new AutoTaskStatus($message, Status::NotFound))->send();
+
+		return false;
 	}
 }

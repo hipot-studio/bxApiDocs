@@ -15,6 +15,6 @@ class GenerateResult extends Result
 
 	public function getSuccessMessage(): string
 	{
-		return "\n<info>Generated file '{$this->path}'</info>\n";
+		return "\nA file has been created:\n<info>{$this->path}</info>\n";
 	}
 }

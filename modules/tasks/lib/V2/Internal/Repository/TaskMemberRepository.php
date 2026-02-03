@@ -10,6 +10,8 @@ use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskMemberMapper;
 
 class TaskMemberRepository implements TaskMemberRepositoryInterface
 {
+	private array $membershipCache = [];
+
 	public function __construct(
 		private readonly TaskMemberMapper $memberMapper,
 	)
@@ -75,13 +77,34 @@ class TaskMemberRepository implements TaskMemberRepositoryInterface
 		return $this->memberMapper->mapToCollection($members);
 	}
 
-	public function getMembershipForUserId(int $userId): array
+	public function getMembershipForUserIdAndTaskIds(int $userId, array $taskIds): array
 	{
-		$recordset = MemberTable::query()
-			->setSelect(['TASK_ID', 'TYPE'])
-			->where('USER_ID', $userId)
-			->fetchAll();
+		if (empty($taskIds))
+		{
+			return [];
+		}
 
-		return array_column($recordset, 'TYPE', 'TASK_ID');
+		$taskIdsToSearch = array_diff($taskIds, array_keys($this->membershipCache[$userId] ?? []));
+
+		if (!empty($taskIdsToSearch))
+		{
+			$recordset = MemberTable::query()
+				->setSelect(['TASK_ID', 'TYPE'])
+				->where('USER_ID', $userId)
+				->whereIn('TASK_ID', $taskIdsToSearch)
+				->exec();
+
+			while($data = $recordset->fetch())
+			{
+				$this->membershipCache[$userId][(int)$data['TASK_ID']][] = $data['TYPE'];
+			}
+		}
+
+		if (empty($this->membershipCache[$userId]))
+		{
+			return [];
+		}
+
+		return $this->membershipCache[$userId];
 	}
 }

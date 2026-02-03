@@ -15,8 +15,11 @@ use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\AttachedObjectTable;
+use Bitrix\Forum\MessageTable;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Item\Context;
 use CTaskAssert;
@@ -180,6 +183,45 @@ final class Topic extends \Bitrix\Tasks\Integration\Forum
 		}
 
 		return $count;
+	}
+
+	public static function hasFiles(int $taskId): bool
+	{
+		$task = TaskRegistry::getInstance()->getObject($taskId);
+		if (!$task)
+		{
+			return false;
+		}
+
+		$topicId = $task->getForumTopicId();
+		$forumId = Comment::getForumId();
+
+		if (!$forumId || !$topicId || !static::includeModule() || !Loader::includeModule("disk"))
+		{
+			return false;
+		}
+
+		$userFieldManager = Driver::getInstance()->getUserFieldManager();
+		[$connectorClass, $moduleId] = $userFieldManager->getConnectorDataByEntityType("forum_message");
+
+		$messageField = (new Reference(
+			'MESSAGE_INNER',
+			MessageTable::getEntity(),
+			Join::on('this.ENTITY_ID', 'ref.ID')
+				->where('ref.TOPIC_ID', $topicId)
+				->where('ref.FORUM_ID', $forumId)
+		))->configureJoinType(Join::TYPE_INNER);
+
+		$result = AttachedObjectTable::query()
+			->setSelect(['ID'])
+			->where('ENTITY_TYPE', $connectorClass)
+			->where('MODULE_ID', $moduleId)
+			->whereNull('VERSION_ID')
+			->registerRuntimeField($messageField)
+			->setLimit(1)
+			->fetch();
+
+		return (bool)$result;
 	}
 
 	public static function delete($id)

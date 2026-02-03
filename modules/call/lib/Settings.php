@@ -260,17 +260,45 @@ class Settings
 	}
 
 	/**
-	 * New QOS is enabled.
+	 * Stream quality control is enabled.
 	 * @return bool
 	 */
-	public static function isNewQOSEnabled(): bool
+	public static function isStreamQualityFeatureEnabled(): bool
 	{
-		if (Option::get('call', 'call_new_qos_enabled', false))
+		if (Option::get('call', 'call_stream_quality_enabled', false))
 		{
 			return true;
 		}
 
-		return (bool)\CUserOptions::GetOption('call', 'call_new_qos_enabled', false);
+		return (bool)\CUserOptions::GetOption('call', 'call_stream_quality_enabled', false);
+	}
+
+	/**
+	 * Metrics is enabled.
+	 * @return bool
+	 */
+	public static function isMetricsEnabled(): bool
+	{
+		if (Option::get('call', 'call_metrics_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'call_metrics_enabled', false);
+	}
+
+	/**
+	 * Metrics logs is enabled.
+	 * @return bool
+	 */
+	public static function isMetricsLogsEnabled(): bool
+	{
+		if (Option::get('call', 'call_metrics_logs_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'call_metrics_logs_enabled', false);
 	}
 
 	/**
@@ -318,17 +346,13 @@ class Settings
 		return (bool)\CUserOptions::GetOption('call', 'call_cloud_record_log', false);
 	}
 
+	// TODO: Remove empty plug
 	/**
 	 * Create Call Button is enabled.
 	 * @return bool
 	 */
 	public static function isCreateCallButtonEnabled(): bool
 	{
-		if (Option::get('call', 'create_call_button_enabled', false))
-		{
-			return true;
-		}
-
-		return (bool)\CUserOptions::GetOption('call', 'create_call_button_enabled', false);
+		return true;
 	}
 }

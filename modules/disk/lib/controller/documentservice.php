@@ -6,7 +6,9 @@ use Bitrix\Disk;
 use Bitrix\Disk\Document;
 use Bitrix\Disk\Document\OnlyOffice\Filters\DocumentSessionCheck;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
+use Bitrix\Disk\Document\OnlyOffice\RestrictionManager;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Main\Context;
@@ -243,6 +245,7 @@ final class DocumentService extends Engine\Controller
 			}
 		}
 
+		$objectIdForSessionCheck = 0;
 		if ($objectId)
 		{
 			$file = Disk\File::getById($objectId);
@@ -250,6 +253,7 @@ final class DocumentService extends Engine\Controller
 			{
 				$securityContext = $file->getStorage()->getSecurityContext($this->getCurrentUser());
 				$canEdit = $file->canUpdate($securityContext);
+				$objectIdForSessionCheck = (int)$objectId;
 			}
 		}
 
@@ -260,6 +264,7 @@ final class DocumentService extends Engine\Controller
 			if ($attachedObject)
 			{
 				$canEdit = $canEdit || $attachedObject->canUpdate($this->getCurrentUser()->getId());
+				$objectIdForSessionCheck = (int)$attachedObject->getObjectId();
 			}
 		}
 
@@ -282,7 +287,18 @@ final class DocumentService extends Engine\Controller
 
 		if ($canEdit)
 		{
-			return $this->goToEditAction($serviceCode, $attachedObjectId, $objectId);
+			$isAllowedEdit = true;
+			$availableSessionBoost = (new BaasSessionBoostService())->isAvailable();
+			if ($availableSessionBoost)
+			{
+				$userId = (int)$this->getCurrentUser()?->getId();
+				$isAllowedEdit = (new RestrictionManager())->isAllowedEditByObjectId($objectIdForSessionCheck, $userId);
+			}
+
+			if (!$availableSessionBoost || $isAllowedEdit)
+			{
+				return $this->goToEditAction($serviceCode, $attachedObjectId, $objectId);
+			}
 		}
 
 		return $this->goToPreviewAction($serviceCode, $attachedObjectId, $objectId, $versionId);

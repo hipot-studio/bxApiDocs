@@ -173,10 +173,10 @@ class CommentChat extends GroupChat
 		return false;
 	}
 
-	public function onAfterMessageUpdate(Message $message): Result
+	public function onBeforeMentionsChange(Message\Send\Mention\MentionChange $mentionChange): Result
 	{
-		$result = $this->subscribeUsers(true, $message->getMentionedUserIds(), $message->getPrevId());
-		$parentResult = parent::onAfterMessageUpdate($message);
+		$parentResult = parent::onBeforeMentionsChange($mentionChange);
+		$result = $this->subscribeUsers(true, $mentionChange->addedUserIds, $mentionChange->message->getPrevId());
 
 		return Result::merge($parentResult, $result);
 	}
@@ -184,7 +184,6 @@ class CommentChat extends GroupChat
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
 	{
 		$this->subscribe(true, $message->getAuthorId());
-		$this->subscribeUsers(true, $message->getMentionedUserIds(), $message->getPrevId());
 		Message\LastMessages::insert($message);
 
 		if (!$sendingService->getConfig()->skipCounterIncrements())

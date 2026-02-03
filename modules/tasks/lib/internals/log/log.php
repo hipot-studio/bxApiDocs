@@ -9,11 +9,12 @@
 namespace Bitrix\Tasks\Internals\Log;
 
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\V2\Internal\LoggerInterface;
 use Exception;
 
 class Log
 {
-	public const DEFAULT_MARKER = 'DEBUG_TASKS';
+	public const DEFAULT_MARKER = LoggerInterface::DEFAULT_MARKER;
 
 	private $marker;
 	private $currentPortal = '';

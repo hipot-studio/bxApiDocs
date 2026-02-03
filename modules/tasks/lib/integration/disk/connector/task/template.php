@@ -1,11 +1,11 @@
-<?
+<?php
 
 namespace Bitrix\Tasks\Integration\Disk\Connector\Task;
 
 use Bitrix\Main\Localization\Loc;
 
-use Bitrix\Disk\Ui;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Integration\Disk\Connector\Task;
 
@@ -46,7 +46,19 @@ final class Template extends Task
 			return $this->canRead;
 		}
 
-		$this->canRead = TemplateAccessController::can($userId, ActionDictionary::ACTION_TEMPLATE_READ, $this->entityId);
+		$this->canRead = TemplateAccessController::can(
+			$userId,
+			ActionDictionary::ACTION_TEMPLATE_READ,
+			$this->entityId,
+		);
+
+		if (!$this->canRead)
+		{
+			$template = TemplateModel::createFromId($this->entityId);
+			$roles = $template->getUserRoles($userId);
+
+			$this->canRead = !empty($roles);
+		}
 
 		return $this->canRead;
 	}

@@ -110,10 +110,12 @@ final class CallAIService
 
 		$taskToLaunch = $this->getTaskToLaunchByOutcome($outcome);
 
+		$existingTasks = AITask::getTasksForCall($outcome->getCallId());
+
 		$tasks = [];
 		foreach ($taskToLaunch as $taskSenseType)
 		{
-			$task = AITask::getTaskForCall($outcome->getCallId(), $taskSenseType);
+			$task = $existingTasks[$taskSenseType->value] ?? null;
 			if ($task && $task->isFinished())
 			{
 				continue; // skip finished task
@@ -819,6 +821,16 @@ final class CallAIService
 		if (!$result->isSuccess())
 		{
 			$notifyService->sendTaskFailedMessage($result->getError(), $call);
+
+			(new FollowUpAnalytics($call))
+				->sendTelemetry(
+					source: null,
+					status: 'error',
+					errorCode: $result->getError()?->getCode(),
+					event: 'follow_up_error',
+					error: $result->getError()
+				)
+			;
 		}
 		/*
 		elseif ($result->getData()['wait_more'] === true)

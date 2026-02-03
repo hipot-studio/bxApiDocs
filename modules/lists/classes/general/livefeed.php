@@ -822,51 +822,92 @@ class CListsLiveFeed
 		}
 	}
 
-	public static function NotifyComment($comment)
+	public static function NotifyComment($comment): void
 	{
-		if (!Loader::includeModule("im"))
+		if (!Loader::includeModule('im'))
+		{
 			return;
-		if($comment["TO_USER_ID"] == $comment["FROM_USER_ID"])
+		}
+
+		$toUserId = (int)$comment['TO_USER_ID'];
+
+		$fromUserId = (int)$comment['FROM_USER_ID'];
+
+		if ($toUserId === $fromUserId)
+		{
 			return;
+		}
 
 		$siteDir = rtrim(SITE_DIR, '/');
-		$url = str_replace('#SITE_DIR#', $siteDir, $comment["URL"]);
-		$url .= ''.$comment['LOG_ID'].'/';
 
-		$messageAddComment = Loc::getMessage("LISTS_LF_COMMENT_MESSAGE_ADD",
-			array("#PROCESS#" => '<a href="'.$url.'" class="bx-notifier-item-action">'.$comment["TITLE"].'</a>'));
-		$userQuery = CUser::getList(
-			"id",
-			"asc",
-			array("ID_EQUAL_EXACT" => intval($comment["FROM_USER_ID"])),
-			array("FIELDS" => array("PERSONAL_GENDER"))
+		$url = str_replace('#SITE_DIR#', $siteDir, $comment['URL']);
+
+		$logId = (string)$comment['LOG_ID'];
+
+		$url .= "$logId/";
+
+		$processName = $comment['TITLE'];
+
+		$messageAddCommentDefault = Loc::getMessage('LISTS_LF_COMMENT_MESSAGE_ADD_DEFAULT');
+
+		$messageAddCommentSimple = Loc::getMessage(
+			'LISTS_LF_COMMENT_MESSAGE_ADD_SIMPLE',
+			['#PROCESS_NAME#' => $processName],
 		);
+
+		$userQuery = CUser::getList(
+			'id',
+			'asc',
+			[
+				'ID_EQUAL_EXACT' => $fromUserId,
+			],
+			[
+				'FIELDS' => ['PERSONAL_GENDER'],
+			],
+		);
+
 		if ($user = $userQuery->fetch())
 		{
-			switch ($user["PERSONAL_GENDER"])
+			$gender = $user['PERSONAL_GENDER'];
+
+			switch ($gender)
 			{
-				case "F":
-				case "M":
-				$messageAddComment = Loc::getMessage("LISTS_LF_COMMENT_MESSAGE_ADD" . '_' . $user["PERSONAL_GENDER"],
-					array("#PROCESS#" => '<a href="'.$url.'" class="bx-notifier-item-action">'.$comment["TITLE"].'</a>'));
+				case 'F':
+				case 'M':
+					$messageAddCommentDefault = Loc::getMessage("LISTS_LF_COMMENT_MESSAGE_ADD_DEFAULT_{$gender}");
+					$messageAddCommentSimple = Loc::getMessage(
+						"LISTS_LF_COMMENT_MESSAGE_ADD_SIMPLE_{$gender}",
+						['#PROCESS_NAME#' => $processName]
+					);
 					break;
 				default:
 					break;
 			}
 		}
 
-		$messageFields = array(
-			"TO_USER_ID" => $comment["TO_USER_ID"],
-			"FROM_USER_ID" => $comment["FROM_USER_ID"],
-			"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-			"NOTIFY_MODULE" => "lists",
-			"NOTIFY_TAG" => "SONET|EVENT|".$comment["LOG_ID"],
-			"NOTIFY_SUB_TAG" => "FORUM|COMMENT|".$comment["MESSAGE_ID"]."|".$comment["TO_USER_ID"],
-			"NOTIFY_EVENT" => "event_lists_comment_add",
-			"NOTIFY_MESSAGE" => $messageAddComment,
-		);
+		$messageId = (string)$comment['MESSAGE_ID'];
 
-		CIMNotify::Add($messageFields);
+		CIMNotify::Add([
+			'TO_USER_ID' => $toUserId,
+			'FROM_USER_ID' => $fromUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_FROM,
+			'NOTIFY_MODULE' => 'lists',
+			'NOTIFY_TAG' => "SONET|EVENT|{$logId}",
+			'NOTIFY_SUB_TAG' => "FORUM|COMMENT|{$messageId}|{$toUserId}",
+			'NOTIFY_EVENT' => 'event_lists_comment_add',
+			'NOTIFY_MESSAGE' => $messageAddCommentSimple,
+			'PARAMS' => [
+				'COMPONENT_ID' => 'ListsEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $messageAddCommentDefault,
+					'ENTITY' => [
+						'TITLE' => $processName,
+						'HREF' => $url,
+						'CONTENT_TYPE' => 'title',
+					],
+				],
+			],
+		]);
 	}
 
 	public static function OnSendMentionGetEntityFields($commentFields)

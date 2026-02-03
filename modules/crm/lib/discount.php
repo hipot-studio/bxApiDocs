@@ -47,8 +47,8 @@ class Discount
 
 	public static function calculateDiscountRate($originalPrice, $price)
 	{
-		$originalPrice = round(doubleval($originalPrice), 2);
-		$price = round(doubleval($price), 2);
+		$originalPrice = (float)$originalPrice;
+		$price = (float)$price;
 
 		if($originalPrice === 0.0)
 		{

@@ -4,7 +4,7 @@ namespace Bitrix\Main\Data\Configurator;
 
 use Bitrix\Main\NotSupportedException;
 
-class MemcachedConnectionConfigurator extends ConnectionConfigurator
+class MemcachedConnectionConfigurator extends MemcacheCommonConfigurator
 {
 	/**
 	 * @throws NotSupportedException
@@ -17,33 +17,6 @@ class MemcachedConnectionConfigurator extends ConnectionConfigurator
 		}
 
 		parent::__construct($config);
-	}
-
-	protected function addServers(array $config): void
-	{
-		$servers = $config['servers'] ?? [];
-
-		if (isset($config['host'], $config['port']))
-		{
-			array_unshift($servers, [
-				'host' => $config['host'],
-				'port' => $config['port'],
-			]);
-		}
-
-		foreach ($servers as $server)
-		{
-			if (!isset($server['weight']) || $server['weight'] <= 0)
-			{
-				$server['weight'] = 1;
-			}
-
-			$this->servers[] = [
-				$server['host'] ?? 'localhost',
-				$server['port'] ?? '11211',
-				$server['weight'],
-			];
-		}
 	}
 
 	public function createConnection(): ?\Memcached

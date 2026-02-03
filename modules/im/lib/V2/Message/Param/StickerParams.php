@@ -3,7 +3,6 @@
 namespace Bitrix\Im\V2\Message\Param;
 
 use Bitrix\Im\V2\Message\Param;
-use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Web\Json;
@@ -20,17 +19,6 @@ class StickerParams extends Param
 		return $this;
 	}
 
-	private function getActualStickerUri(array $value): ?string
-	{
-		$stickerId = (int)$value['ID'];
-		$packId = (int)$value['PACK_ID'];
-		$packType = (string)$value['PACK_TYPE'];
-
-		$sticker = (new StickerService())->getStickerById($stickerId, $packId, $packType);
-
-		return $sticker['uri'] ?? null;
-	}
-
 	public function loadJsonFilter($value)
 	{
 		if (!empty($value))
@@ -38,7 +26,6 @@ class StickerParams extends Param
 			try
 			{
 				$this->value = Json::decode($value);
-				$this->value['URI'] = $this->getActualStickerUri($this->value);
 			}
 			catch (ArgumentException $ext)
 			{}

@@ -482,7 +482,9 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 	protected function getData()
 	{
 		$viewState = \Bitrix\Tasks\Helper\Analytics::getInstance($this->arParams['USER_ID'], $this->arParams['GROUP_ID'] ?? 0)->getViewStateName();
-		$sectionType = match (true) {
+
+		$sectionType = match (true)
+		{
 			($this->arResult['IS_SCRUM_PROJECT'] ?? false) => 'scrum',
 			($this->arResult['IS_COLLAB'] ?? false) => 'collab',
 			(($this->arParams['MENU_GROUP_ID'] ?? $this->arParams['GROUP_ID'] ?? false) > 0) => 'project',

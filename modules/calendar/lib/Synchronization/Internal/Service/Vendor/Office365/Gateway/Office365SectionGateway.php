@@ -8,6 +8,7 @@ use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Sync\Office365\ApiService;
 use Bitrix\Calendar\Sync\Office365\Converter\ColorConverter;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Common\Gateway\SectionGatewayInterface;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\ConflictException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
@@ -24,10 +25,9 @@ class Office365SectionGateway extends AbstractOffice365Gateway implements Sectio
 	/**
 	 * @throws ConflictException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function createSection(Section $section): CalendarResponse
 	{
@@ -35,7 +35,6 @@ class Office365SectionGateway extends AbstractOffice365Gateway implements Sectio
 
 		$selectQuery = http_build_query($selectParams);
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$response = $this->post(
 			'me/calendars?' . $selectQuery,
 			[
@@ -50,6 +49,7 @@ class Office365SectionGateway extends AbstractOffice365Gateway implements Sectio
 	/**
 	 * @throws DtoValidationException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws PreconditionFailedException
@@ -69,6 +69,7 @@ class Office365SectionGateway extends AbstractOffice365Gateway implements Sectio
 
 	/**
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
@@ -81,6 +82,7 @@ class Office365SectionGateway extends AbstractOffice365Gateway implements Sectio
 	/**
 	 * @throws DtoValidationException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException

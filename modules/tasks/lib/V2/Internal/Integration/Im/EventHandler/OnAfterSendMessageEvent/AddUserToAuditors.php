@@ -9,15 +9,15 @@ use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
 use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder\SetAuditorsCommand;
-use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder\SetAuditorsHandler;
+use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder\AddAuditorsCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder\AddAuditorsHandler;
 
 class AddUserToAuditors
 {
 	public function __construct
 	(
 		private readonly TaskReadRepositoryInterface $tasksRepository,
-		private readonly SetAuditorsHandler $handler,
+		private readonly AddAuditorsHandler $handler,
 		private readonly Logger $logger,
 	) {
 	}
@@ -54,7 +54,7 @@ class AddUserToAuditors
 		$auditorsIds = $task->auditors->getIds();
 		$auditorsIds[] = $event->getMessage()->getAuthorId();
 
-		$command = new SetAuditorsCommand(
+		$command = new AddAuditorsCommand(
 			taskId: $task->getId(),
 			auditorIds: $auditorsIds,
 			config: new UpdateConfig(

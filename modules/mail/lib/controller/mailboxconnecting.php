@@ -3,16 +3,15 @@
 namespace Bitrix\Mail\Controller;
 
 use Bitrix\Mail\Helper\LicenseManager;
-use Bitrix\Mail\Access\MailAccessController;
-use Bitrix\Mail\Access\MailActionDictionary;
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
+use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxMassconnectDTO;
 use Bitrix\Mail\Helper\Mailbox\MailMassConnect;
-use Bitrix\Mail\Helper\Mailbox\MailboxConnectDTO;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
 use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\OAuth;
 use Bitrix\Mail\Integration\HumanResources\NodeMemberService;
-use Bitrix\Mail\Integration\Im\Notification;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailServicesTable;
 use Bitrix\Main\Engine\Controller;
@@ -21,6 +20,7 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Validation\Engine\AutoWire\ValidationParameter;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Mail\Helper\Message;
@@ -43,10 +43,24 @@ class MailboxConnecting extends Controller
 				new Main\Engine\ActionFilter\ContentType([Main\Engine\ActionFilter\ContentType::JSON, 'application/x-www-form-urlencoded']),
 				new Main\Engine\ActionFilter\Authentication(),
 				new Main\Engine\ActionFilter\HttpMethod(
-					[Main\Engine\ActionFilter\HttpMethod::METHOD_GET, Main\Engine\ActionFilter\HttpMethod::METHOD_POST]
+					[Main\Engine\ActionFilter\HttpMethod::METHOD_GET, Main\Engine\ActionFilter\HttpMethod::METHOD_POST],
 				),
 				new Intranet\ActionFilter\IntranetUser(),
 			];
+	}
+
+	public function getAutoWiredParameters(): array
+	{
+		return [
+			new ValidationParameter(
+				MailboxMassconnectDTO::class,
+				fn() => MailboxMassconnectDTO::createFromRequest($this->getRequest()),
+			),
+			new ValidationParameter(
+				MailboxConnectDTO::class,
+				fn() => MailboxConnectDTO::createFromRequest($this->getRequest()),
+			),
+		];
 	}
 
 	/**
@@ -57,13 +71,6 @@ class MailboxConnecting extends Controller
 	 */
 	public function getUrlOauthAction(string $serviceName, string $type = OAuth::WEB_TYPE): string
 	{
-		if (!Loader::includeModule('mail'))
-		{
-			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAIL_MODULE_IS_NOT_INSTALLED')));
-
-			return '';
-		}
-
 		$oauthHelper = OAuth::getInstance($serviceName);
 
 		if (!$oauthHelper)
@@ -82,13 +89,6 @@ class MailboxConnecting extends Controller
 	 */
 	public function getServicesAction(): array
 	{
-		if (!Loader::includeModule('mail'))
-		{
-			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAIL_MODULE_IS_NOT_INSTALLED')));
-
-			return [];
-		}
-
 		$services = Mailbox::getServices();
 
 		foreach ($services as &$service)
@@ -116,29 +116,8 @@ class MailboxConnecting extends Controller
 		return $uri->getLocator();
 	}
 
-	public function connectMailboxAction(
-		string $login = '',
-		string $password = '',
-		int $serviceId = 0,
-		string $server = '',
-		int $port = 993,
-		bool $ssl = true,
-		string $storageOauthUid = '',
-		bool $syncAfterConnection = true,
-		bool $useSmtp = true,
-		string $serverSmtp = '',
-		int $portSmtp = 587,
-		bool $sslSmtp = true,
-		string $loginSmtp = '',
-		string $passwordSMTP = '',
-	): array {
-		if (!Loader::includeModule('mail'))
-		{
-			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAIL_MODULE_IS_NOT_INSTALLED')));
-
-			return [];
-		}
-
+	public function connectMailboxAction(MailboxConnectDTO $mailboxConnectDTO): array
+	{
 		if (!MailboxAccess::hasCurrentUserAccessToAddMailbox())
 		{
 			$this->addError(new Error('Mailbox connection is not allowed'));
@@ -146,32 +125,11 @@ class MailboxConnecting extends Controller
 			return [];
 		}
 
-		$fromBool = static fn($value) => $value ? 'Y' : 'N';
-		$email = $login;
-
-		$mailboxConnectDTO = new MailboxConnectDTO(
-			$email,
-			$login,
-			$password,
-			$serviceId,
-			$server,
-			$port,
-			$fromBool($ssl),
-			$storageOauthUid,
-			$fromBool($syncAfterConnection),
-			$fromBool($useSmtp),
-			$serverSmtp,
-			$portSmtp,
-			$fromBool($sslSmtp),
-			$loginSmtp,
-			$passwordSMTP,
-		);
-
 		$mailboxConnector = new MailboxConnector();
 		$result = $mailboxConnector->connectMailboxWithDefaultCrm($mailboxConnectDTO);
 		$this->addErrors($mailboxConnector->getErrors());
 
-		$mailboxId = (int)$result['id'] ?? 0;
+		$mailboxId = (int)($result['id'] ?? 0);
 
 		if ($mailboxId > 0)
 		{
@@ -206,7 +164,7 @@ class MailboxConnecting extends Controller
 	}
 
 	/**
-	 * @param array $mailbox - array for creating MailboxConnectDTO
+	 * @param MailboxMassconnectDTO $mailboxConnectDTO - mailbox connection data
 	 * @param int $massConnectId - id of MailMassConnectTable entity
 	 * @return array
 	 *
@@ -214,7 +172,7 @@ class MailboxConnecting extends Controller
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function connectMailboxFromMassconnectAction(array $mailbox, int $massConnectId): array
+	public function connectMailboxFromMassconnectAction(MailboxMassconnectDTO $mailboxConnectDTO, int $massConnectId): array
 	{
 		if (!LicenseManager::isMailboxesMassConnectEnabled())
 		{
@@ -223,9 +181,8 @@ class MailboxConnecting extends Controller
 			return [];
 		}
 
-		$mailboxConnectDTO = new MailboxConnectDTO(...$mailbox);
 		$currentUserId = (int)CurrentUser::get()->getId();
-		if (!MailAccessController::can($currentUserId, MailActionDictionary::ACTION_MAILBOX_CONNECT_TO_USER, $mailboxConnectDTO->userIdToConnect))
+		if (!MailAccess::hasCurrentUserAccessToConnectMailboxToUser($mailboxConnectDTO->userIdToConnect))
 		{
 			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION_TO_CONNECT_TO_USER')));
 
@@ -233,28 +190,12 @@ class MailboxConnecting extends Controller
 		}
 
 		$mailboxConnector = new MailboxConnector();
-		$mailboxConnector->setMailboxConnectDTO($mailboxConnectDTO);
-		$result = $mailboxConnector->connectMailboxWithCustomCrm(useClassDto: true);
-		$errors = $mailboxConnector->getErrors();
-
-		$toUserId = $mailboxConnectDTO->userIdToConnect;
-		$this->addErrors($errors);
-		if (
-			empty($errors)
-			&& $toUserId !== null
-			&& $toUserId !== $currentUserId
-		)
-		{
-			Notification::sendAddMailboxNotification(
-				$result['id'] ?? '',
-				$result['email'] ?? '',
-				$toUserId,
-				$currentUserId
-			);
-		}
-
-		$mailMassConnectHelper = new MailMassConnect();
-		$mailMassConnectHelper->addResult($massConnectId, $mailbox, $result, $errors);
+		$result = $mailboxConnector->connectMailboxFromMassconnect(
+			$mailboxConnectDTO,
+			$massConnectId,
+			$currentUserId,
+		);
+		$this->addErrors($mailboxConnector->getErrors());
 
 		return $result;
 	}
@@ -363,13 +304,9 @@ class MailboxConnecting extends Controller
 	}
 
 	/**
-	 * @param $id
-	 * @param $dir
-	 * @param $onlySyncCurrent
-	 * @return array
 	 * @throws Main\LoaderException
 	 */
-	public function syncMailboxAction($id, $dir = null, $onlySyncCurrent = false): array
+	public function syncMailboxAction(int $id, ?string $dir = null, bool $onlySyncCurrent = false): array
 	{
 		$result = \Bitrix\Mail\Helper\Mailbox::quickSync($id, $dir, $onlySyncCurrent);
 		$this->errorCollection = $result->getErrorCollection();

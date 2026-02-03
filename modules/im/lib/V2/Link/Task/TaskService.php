@@ -54,7 +54,7 @@ class TaskService
 
 		if ($chat->needToSendTaskCreationMessage())
 		{
-			$sendMessageResult = $this->sendMessageAboutTask($taskLink, $chat, $taskType);
+			$sendMessageResult = $this->sendMessageAboutTask($taskLink, $chat, $taskType, $messageId);
 
 			if (!$sendMessageResult->isSuccess())
 			{
@@ -298,7 +298,12 @@ class TaskService
 		return $this->getFilesIds($files);
 	}
 
-	protected function sendMessageAboutTask(TaskItem $taskLink, Chat $chat, TaskType $taskType): SendResult
+	protected function sendMessageAboutTask(
+		TaskItem $taskLink,
+		Chat $chat,
+		TaskType $taskType,
+		int $messageId
+	): SendResult
 	{
 		$authorId = $this->getContext()->getUserId();
 		$messageText = $this->getTaskMessageText($taskLink, $taskType);
@@ -309,8 +314,9 @@ class TaskService
 				->setChatId($chat->getId())
 				->setMessage($messageText)
 				->markAsSystem(true)
-				->addParam(Params::STYLE_CLASS, 'bx-messenger-content-item-system')
 		;
+
+		$this->fillParams($message, $taskType, $messageId);
 
 		$sendingConfig =
 			(new SendingConfig())
@@ -329,6 +335,16 @@ class TaskService
 		}
 
 		return $result;
+	}
+
+	protected function fillParams(Message $message, TaskType $taskType, int $messageId): void
+	{
+		$message->addParam(Params::STYLE_CLASS, 'bx-messenger-content-item-system');
+
+		if ($taskType === TaskType::VideoNoteAutoTask || $taskType === TaskType::VoiceNoteAutoTask)
+		{
+			$message->addParam(Params::AI_TASK_TRIGGER_MESSAGE_ID, $messageId);
+		}
 	}
 
 	/**

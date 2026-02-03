@@ -46,8 +46,6 @@ use Psr\Container\NotFoundExceptionInterface;
 
 class Office365EventSynchronizer extends AbstractOffice365Synchronizer implements EventSynchronizerInterface
 {
-	private const MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION = 1;
-
 	use EventSynchronizerTrait;
 
 	public function __construct(
@@ -91,8 +89,12 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		if (!$sectionConnection)
 		{
 			throw new SynchronizerException(
-				sprintf('Section connection for event "%s" not found', $event->getSection()->getId()),
-				isRecoverable: false
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
 			);
 		}
 
@@ -424,8 +426,12 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		if (!$sectionConnection)
 		{
 			throw new SynchronizerException(
-				sprintf('Section connection for event "%s" not found', $event->getSection()->getId()),
-				isRecoverable: false
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
 			);
 		}
 
@@ -484,22 +490,7 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		?EventConnection $eventConnection = null
 	): void
 	{
-		try
-		{
-			$masterEventConnection = $this->getMasterEventConnection($event, $connection);
-		}
-		catch (SynchronizerException $e)
-		{
-			if ($e->getCode() === self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION)
-			{
-				throw new SynchronizerException(
-					$e->getMessage(),
-					isRecoverable: false
-				);
-			}
-
-			throw $e;
-		}
+		$masterEventConnection = $this->getMasterEventConnection($event, $connection);
 
 		$masterEventConnection->setLastSyncStatus(Dictionary::SYNC_STATUS['update']);
 
@@ -683,8 +674,12 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		if (!$sectionConnection)
 		{
 			throw new SynchronizerException(
-				sprintf('Section connection for event "%s" not found', $event->getSection()->getId()),
-				isRecoverable: false
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
 			);
 		}
 
@@ -944,9 +939,12 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 
 		if (!$masterEventConnection)
 		{
+			$modifiedTime = $masterEvent->getDateModified()?->getTimestamp();
+
 			throw new SynchronizerException(
 				sprintf('The master event "%s" has no connection with Office365', $masterEvent->getId()),
-				code: self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION,
+				code: SynchronizerException::NO_EVENT_CONNECTION,
+				isRecoverable: $modifiedTime && $modifiedTime + 86400 > time(),
 			);
 		}
 

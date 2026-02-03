@@ -162,6 +162,7 @@ class FollowUp extends Engine\Controller
 			'END_DATE' => $call->getEndDate(),
 			'UUID' => $call->getUuid(),
 			'RECORD_AUDIO' => $call->isAudioRecordEnabled(),
+			'AI_ANALYZED' => $call->isAiAnalyzeEnabled(),
 		];
 
 		$trackList = CallTrackTable::query()
@@ -183,7 +184,13 @@ class FollowUp extends Engine\Controller
 		$result['TRACKS'] = [];
 		while ($track = $trackList->fetchObject())
 		{
-			$result['TRACKS'][] = $track->toArray();
+			$result['TRACKS'][] = array_merge(
+				$track->toArray(),
+				[
+					'DOWNLOAD_URL' => $track->getDownloadUrl(),
+					'EXTERNAL_URL' => $track->getUrl(true, false, true),
+				]
+			);
 		}
 
 		$taskList = CallAITaskTable::query()

@@ -150,17 +150,6 @@ class PrivateChat extends Chat
 		return Network::getBotAsMultidialog($bot->getId(), $otherUser->getId());
 	}
 
-	public function filterUsersToMentionAnchor(array $userIds): array
-	{
-		$companionId = $this->getCompanionId();
-		if (in_array($companionId, $userIds, true))
-		{
-			return [$companionId => $companionId];
-		}
-
-		return [];
-	}
-
 	protected function prepareMessage(Message $message): void
 	{
 		parent::prepareMessage($message);
@@ -308,7 +297,7 @@ class PrivateChat extends Chat
 				'muted' => $muted ?? false,
 				'unread' => Recent::isUnread($this->getContext()->getUserId(), $this->getType(), $this->getDialogId() ?? ''),
 				'viewedMessages' => $messages->getIds(),
-				'counterType' => $this->getCounterType()->value,
+				'counterType' => $this->getCounterType(),
 				'recentConfig' => $this->getRecentConfig()->toPullFormat(),
 			],
 			'extra' => \Bitrix\Im\Common::getPullExtra()

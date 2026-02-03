@@ -87,6 +87,11 @@ class BotData implements RestEntity
 		return $this->botData['CODE'] ?? '';
 	}
 
+	public function isHidden(): bool
+	{
+		return $this->botData['HIDDEN'] === 'Y';
+	}
+
 	public function getBotData(): array
 	{
 		return $this->botData;

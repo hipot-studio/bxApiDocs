@@ -18,6 +18,7 @@ class MenuItem
 	public function __construct(
 		protected string $id,
 		protected ?string $text,
+		protected int $sort,
 		protected bool $isVisible = true,
 		protected ?int $entityId = null,
 	) {}
@@ -39,5 +40,15 @@ class MenuItem
 	public function isVisible(): bool
 	{
 		return $this->isVisible;
+	}
+
+	public function getId(): string
+	{
+		return $this->id;
+	}
+
+	public function getSort(): int
+	{
+		return $this->sort;
 	}
 }

@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Crm;
+
 class CAllCrmProductRow
 {
 	const CACHE_NAME = 'CRM_PRODUCT_ROW_CACHE';
@@ -13,14 +15,30 @@ class CAllCrmProductRow
 	protected static $LAST_ERROR = '';
 	protected static $FIELD_INFOS = null;
 
+	/**
+	 * @deprecated
+	 * @see Crm\Service\Accounting::calculatePriceIncludingTax
+	 *
+	 * @param $exclusivePrice
+	 * @param $taxRate
+	 * @return float
+	 */
 	public static function CalculateInclusivePrice($exclusivePrice, $taxRate)
 	{
-		return doubleval($exclusivePrice) * (1 + (doubleval($taxRate) / 100));
+		return Crm\Service\Accounting::calculatePriceIncludingTax((float)$exclusivePrice, (float)$taxRate);
 	}
 
+	/**
+	 * @deprecated
+	 * @see Crm\Service\Accounting::calculatePriceExcludingTax
+	 *
+	 * @param $inclusivePrice
+	 * @param $taxRate
+	 * @return float
+	 */
 	public static function CalculateExclusivePrice($inclusivePrice, $taxRate)
 	{
-		return doubleval($inclusivePrice) / (1 + (doubleval($taxRate) / 100));
+		return Crm\Service\Accounting::calculatePriceExcludingTax((float)$inclusivePrice, (float)$taxRate);
 	}
 
 	// CRUD -->
@@ -56,8 +74,8 @@ class CAllCrmProductRow
 			$accData = CCrmAccountingHelper::PrepareAccountingData(
 				array(
 					'CURRENCY_ID' => $arFields['CURRENCY_ID'],
-					'SUM' => isset($arFields['PRICE']) ? $arFields['PRICE'] : null,
-					'EXCH_RATE' => isset($arFields['EXCH_RATE']) ? $arFields['EXCH_RATE'] : null
+					'SUM' => $arFields['PRICE'] ?? null,
+					'EXCH_RATE' => $arFields['EXCH_RATE'] ?? null,
 				)
 			);
 
@@ -68,7 +86,7 @@ class CAllCrmProductRow
 		}
 
 		$productID = $arFields['PRODUCT_ID'] = isset($arFields['PRODUCT_ID']) ? intval($arFields['PRODUCT_ID']) : 0;
-		$arFields['PRODUCT_NAME'] = isset($arFields['PRODUCT_NAME']) ? $arFields['PRODUCT_NAME'] : '';
+		$arFields['PRODUCT_NAME'] = $arFields['PRODUCT_NAME'] ?? '';
 		if ($productID > 0
 			&& $arFields['PRODUCT_NAME'] !== ''
 			&& $arFields['PRODUCT_NAME'] === CCrmProduct::GetProductName($productID))
@@ -76,46 +94,46 @@ class CAllCrmProductRow
 			$arFields['PRODUCT_NAME'] = '';
 		}
 
-		$arFields['DISCOUNT_TYPE_ID'] = isset($arFields['DISCOUNT_TYPE_ID'])
-			? intval($arFields['DISCOUNT_TYPE_ID']) : \Bitrix\Crm\Discount::UNDEFINED;
+		$arFields['DISCOUNT_TYPE_ID'] = (int)($arFields['DISCOUNT_TYPE_ID'] ?? Crm\Discount::UNDEFINED);
 
-		if(!\Bitrix\Crm\Discount::isDefined($arFields['DISCOUNT_TYPE_ID']))
+		if (!Crm\Discount::isDefined($arFields['DISCOUNT_TYPE_ID']))
 		{
-			$arFields['DISCOUNT_TYPE_ID'] = \Bitrix\Crm\Discount::PERCENTAGE;
+			$arFields['DISCOUNT_TYPE_ID'] = Crm\Discount::PERCENTAGE;
 		}
 
-		if($arFields['DISCOUNT_TYPE_ID'] === \Bitrix\Crm\Discount::MONETARY)
+		switch ($arFields['DISCOUNT_TYPE_ID'])
 		{
-			$arFields['DISCOUNT_SUM'] = round(doubleval($arFields['DISCOUNT_SUM']), 2);
-			$arFields['DISCOUNT_RATE'] = \Bitrix\Crm\Discount::calculateDiscountRate(
-				($arFields['PRICE'] + $arFields['DISCOUNT_SUM']),
-				$arFields['PRICE']
-			);
-		}
-		else if($arFields['DISCOUNT_TYPE_ID'] === \Bitrix\Crm\Discount::PERCENTAGE)
-		{
-			$arFields['DISCOUNT_RATE'] = round(doubleval($arFields['DISCOUNT_RATE']), 2);
-			$arFields['DISCOUNT_SUM'] = round(\Bitrix\Crm\Discount::calculateDiscountSum(
-				$arFields['PRICE'],
-				$arFields['DISCOUNT_RATE']
-			), 2);
-		}
-		else
-		{
-			$arFields['DISCOUNT_SUM'] = $arFields['DISCOUNT_RATE'] = 0.0;
+			case Crm\Discount::MONETARY:
+				$arFields['DISCOUNT_SUM'] = (float)$arFields['DISCOUNT_SUM'];
+				$arFields['DISCOUNT_RATE'] = Crm\Discount::calculateDiscountRate(
+					($arFields['PRICE'] + $arFields['DISCOUNT_SUM']),
+					$arFields['PRICE']
+				);
+				break;
+			case Crm\Discount::PERCENTAGE:
+				$arFields['DISCOUNT_RATE'] = (float)$arFields['DISCOUNT_RATE'];
+				$arFields['DISCOUNT_SUM'] = Crm\Discount::calculateDiscountSum(
+					$arFields['PRICE'],
+					$arFields['DISCOUNT_RATE']
+				);
+				break;
+			default:
+				$arFields['DISCOUNT_RATE'] = 0.0;
+				$arFields['DISCOUNT_SUM'] = 0.0;
+				break;
 		}
 
-		$arFields['MEASURE_CODE'] = isset($arFields['MEASURE_CODE']) ? intval($arFields['MEASURE_CODE']) : 0;
-		$arFields['MEASURE_NAME'] = isset($arFields['MEASURE_NAME']) ? $arFields['MEASURE_NAME'] : '';
+		$arFields['MEASURE_CODE'] = (int)($arFields['MEASURE_CODE'] ?? 0);
+		$arFields['MEASURE_NAME'] = $arFields['MEASURE_NAME'] ?? '';
 
-		$defaultMeasureInfo = \Bitrix\Crm\Measure::getDefaultMeasure();
+		$defaultMeasureInfo = Crm\Measure::getDefaultMeasure();
 
-		if($arFields['MEASURE_CODE'] <= 0)
+		if ($arFields['MEASURE_CODE'] <= 0)
 		{
-			if($productID > 0)
+			if ($productID > 0)
 			{
-				$measureInfos = \Bitrix\Crm\Measure::getProductMeasures($productID);
-				if(isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
+				$measureInfos = Crm\Measure::getProductMeasures($productID);
+				if (isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
 				{
 					$measureInfo = $measureInfos[$productID][0];
 					$arFields['MEASURE_CODE'] = $measureInfo['CODE'];
@@ -123,27 +141,30 @@ class CAllCrmProductRow
 				}
 
 			}
-			if($arFields['MEASURE_CODE'] <= 0 && $defaultMeasureInfo !== null)
+			if ($arFields['MEASURE_CODE'] <= 0 && $defaultMeasureInfo !== null)
 			{
 				$arFields['MEASURE_CODE'] = $defaultMeasureInfo['CODE'];
 				$arFields['MEASURE_NAME'] = $defaultMeasureInfo['SYMBOL'];
 			}
 		}
-		elseif($arFields['MEASURE_NAME'] === '')
+		elseif ($arFields['MEASURE_NAME'] === '')
 		{
-			$measureInfo = \Bitrix\Crm\Measure::getMeasureByCode($arFields['MEASURE_CODE']);
+			$measureInfo = Crm\Measure::getMeasureByCode($arFields['MEASURE_CODE']);
 			if(is_array($measureInfo))
 			{
 				$arFields['MEASURE_NAME'] = $measureInfo['SYMBOL'];
 			}
 		}
 
-		$arFields['TAX_RATE'] = isset($arFields['TAX_RATE']) ? round(doubleval($arFields['TAX_RATE']), 2) : null;
+		if (isset($arFields['TAX_RATE']))
+		{
+			$arFields['TAX_RATE'] = (float)$arFields['TAX_RATE'];
+		}
 		$arFields['TAX_INCLUDED'] = isset($arFields['TAX_INCLUDED']) && mb_strtoupper($arFields['TAX_INCLUDED']) === 'Y' ? 'Y' : 'N';
 		$arFields['CUSTOMIZED'] = isset($arFields['CUSTOMIZED']) && mb_strtoupper($arFields['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
 
 		$ID = $DB->Add(CCrmProductRow::TABLE_NAME, $arFields);
-		if($ID === false)
+		if ($ID === false)
 		{
 			self::RegisterError('DB connection was lost');
 		}
@@ -154,9 +175,9 @@ class CAllCrmProductRow
 			// Update list of taxes
 			self::UpdateTotalInfo($ownerType, $ownerID);
 
-			self::SynchronizeOwner($ownerType, $ownerID, $checkPerms);
+			self::SynchronizeOwner($ownerType, $ownerID);
 
-			if($regEvent)
+			if ($regEvent)
 			{
 				self::RegisterAddEvent($ownerType, $ownerID, $arFields, $checkPerms);
 			}
@@ -167,7 +188,7 @@ class CAllCrmProductRow
 
 	/**
 	 * @deprecated
-	 * @see \Bitrix\Crm\ProductRowTable::update
+	 * @see Crm\ProductRowTable::update
 	 *
 	 * Careless usage of this method can cause awful data loss!
 	 *
@@ -182,16 +203,17 @@ class CAllCrmProductRow
 		}
 
 		$arParams = self::GetByID($ID);
-		if(!is_array($arParams))
+		if (!is_array($arParams))
 		{
-			self::RegisterError("Could not find CrmProductRow '$ID'!");
+			self::RegisterError("Could not find CrmProductRow '{$ID}'!");
+
 			return false;
 		}
 
 		$ownerType = (isset($arFields['OWNER_TYPE']) ? strval($arFields['OWNER_TYPE']) : (isset($arParams['OWNER_TYPE']) ? strval($arParams['OWNER_TYPE']) : ''));
 		$ownerID = (isset($arFields['OWNER_ID']) ? intval($arFields['OWNER_ID']) : (isset($arParams['OWNER_ID']) ? intval($arParams['OWNER_ID']) : 0));
 
-		if($ownerType !== '' && $ownerID > 0)
+		if ($ownerType !== '' && $ownerID > 0)
 		{
 			$accContext = self::PrepareAccountingContext($ownerType, $ownerID);
 			if(isset($accContext['CURRENCY_ID']))
@@ -211,8 +233,8 @@ class CAllCrmProductRow
 			$accData = CCrmAccountingHelper::PrepareAccountingData(
 				array(
 					'CURRENCY_ID' => $arFields['CURRENCY_ID'],
-					'SUM' => isset($arFields['PRICE']) ? $arFields['PRICE'] : null,
-					'EXCH_RATE' => isset($arFields['EXCH_RATE']) ? $arFields['EXCH_RATE'] : null
+					'SUM' => $arFields['PRICE'] ?? null,
+					'EXCH_RATE' => $arFields['EXCH_RATE'] ?? null
 				)
 			);
 
@@ -224,7 +246,7 @@ class CAllCrmProductRow
 
 		if(isset($arFields['PRODUCT_ID']) && isset($arFields['PRODUCT_NAME']))
 		{
-			$arFields['PRODUCT_ID'] = intval($arFields['PRODUCT_ID']);
+			$arFields['PRODUCT_ID'] = (int)$arFields['PRODUCT_ID'];
 			if($arFields['PRODUCT_ID'] > 0
 				&& $arFields['PRODUCT_NAME'] !== ''
 				&& $arFields['PRODUCT_NAME'] === CCrmProduct::GetProductName($arFields['PRODUCT_ID']))
@@ -233,7 +255,7 @@ class CAllCrmProductRow
 			}
 		}
 
-		if(!isset($arFields['PRICE']))
+		if (!isset($arFields['PRICE']))
 		{
 			unset($arFields['DISCOUNT_TYPE_ID']);
 			unset($arFields['DISCOUNT_SUM']);
@@ -241,51 +263,66 @@ class CAllCrmProductRow
 		}
 		else
 		{
-			$arFields['PRICE'] = round(doubleval($arFields['PRICE']), 2);
+			$arFields['PRICE'] = (float)$arFields['PRICE'];
 
-			$discountTypeID = isset($arFields['DISCOUNT_TYPE_ID'])
-				? intval($arFields['DISCOUNT_TYPE_ID']) : \Bitrix\Crm\Discount::UNDEFINED;
+			$discountTypeID = (int)($arFields['DISCOUNT_TYPE_ID'] ?? Crm\Discount::UNDEFINED);
 
-			if(!\Bitrix\Crm\Discount::isDefined($discountTypeID))
+			if (!Crm\Discount::isDefined($discountTypeID))
 			{
-				$discountTypeID = isset($arParams['DISCOUNT_TYPE_ID'])
-					? intval($arParams['DISCOUNT_TYPE_ID']) : \Bitrix\Crm\Discount::UNDEFINED;
+				$discountTypeID = (int)($arParams['DISCOUNT_TYPE_ID'] ?? Crm\Discount::UNDEFINED);
 			}
 
 			$arFields['DISCOUNT_TYPE_ID'] = $discountTypeID;
 
-			if($arFields['DISCOUNT_TYPE_ID'] === \Bitrix\Crm\Discount::MONETARY)
+			switch ($arFields['DISCOUNT_TYPE_ID'])
 			{
-				$arFields['DISCOUNT_SUM'] = isset($arFields['DISCOUNT_SUM'])
-					? round(doubleval($arFields['DISCOUNT_SUM']), 2)
-					: (isset($arParams['DISCOUNT_SUM']) ? round(doubleval($arParams['DISCOUNT_SUM']), 2) : 0.0);
-
-				$arFields['DISCOUNT_RATE'] = \Bitrix\Crm\Discount::calculateDiscountRate(
-					($arFields['PRICE'] + $arFields['DISCOUNT_SUM']),
-					$arFields['PRICE']
-				);
-			}
-			elseif($arFields['DISCOUNT_TYPE_ID'] === \Bitrix\Crm\Discount::PERCENTAGE)
-			{
-				$arFields['DISCOUNT_RATE'] = isset($arFields['DISCOUNT_RATE'])
-					? round(doubleval($arFields['DISCOUNT_RATE']), 2)
-					: (isset($arParams['DISCOUNT_RATE']) ? round(doubleval($arParams['DISCOUNT_RATE']), 2) : 0.0);
-
-				$arFields['DISCOUNT_SUM'] = round(\Bitrix\Crm\Discount::calculateDiscountSum(
-					$arFields['PRICE'],
-					$arFields['DISCOUNT_RATE']
-				), 2);
-			}
-			else
-			{
-				$arFields['DISCOUNT_SUM'] = $arFields['DISCOUNT_RATE'] = 0.0;
+				case Crm\Discount::MONETARY:
+					if (isset($arFields['DISCOUNT_SUM']))
+					{
+						$arFields['DISCOUNT_SUM'] = (float)$arFields['DISCOUNT_SUM'];
+					}
+					else
+					{
+						$arFields['DISCOUNT_SUM'] =
+							isset($arParams['DISCOUNT_SUM'])
+								? (float)$arParams['DISCOUNT_SUM']
+								: 0.0
+						;
+					}
+					$arFields['DISCOUNT_RATE'] = Crm\Discount::calculateDiscountRate(
+						$arFields['PRICE'] + $arFields['DISCOUNT_SUM'],
+						$arFields['PRICE']
+					);
+					break;
+				case Crm\Discount::PERCENTAGE:
+					if (isset($arFields['DISCOUNT_RATE']))
+					{
+						$arFields['DISCOUNT_RATE'] = (float)$arFields['DISCOUNT_RATE'];
+					}
+					else
+					{
+						$arFields['DISCOUNT_RATE'] =
+							isset($arParams['DISCOUNT_RATE'])
+								? (float)$arParams['DISCOUNT_RATE']
+								: 0.0
+						;
+					}
+					$arFields['DISCOUNT_SUM'] = Crm\Discount::calculateDiscountSum(
+						$arFields['PRICE'],
+						$arFields['DISCOUNT_RATE']
+					);
+					break;
+				default:
+					$arFields['DISCOUNT_RATE'] = 0.0;
+					$arFields['DISCOUNT_SUM'] = 0.0;
+					break;
 			}
 		}
 
 		if(isset($arFields['MEASURE_CODE']))
 		{
-			$arFields['MEASURE_CODE'] = isset($arFields['MEASURE_CODE']) ? intval($arFields['MEASURE_CODE']) : 0;
-			$arFields['MEASURE_NAME'] = isset($arFields['MEASURE_NAME']) ? $arFields['MEASURE_NAME'] : '';
+			$arFields['MEASURE_CODE'] = (int)$arFields['MEASURE_CODE'];
+			$arFields['MEASURE_NAME'] = $arFields['MEASURE_NAME'] ?? '';
 
 			if($arFields['MEASURE_CODE'] <= 0)
 			{
@@ -294,7 +331,7 @@ class CAllCrmProductRow
 			}
 			elseif($arFields['MEASURE_NAME'] === '')
 			{
-				$measureInfo = \Bitrix\Crm\Measure::getMeasureByCode($arFields['MEASURE_CODE']);
+				$measureInfo = Crm\Measure::getMeasureByCode($arFields['MEASURE_CODE']);
 				if(is_array($measureInfo))
 				{
 					$arFields['MEASURE_NAME'] = $measureInfo['SYMBOL'];
@@ -306,9 +343,9 @@ class CAllCrmProductRow
 			unset($arFields['MEASURE_NAME']);
 		}
 
-		if(isset($arFields['TAX_RATE']))
+		if (isset($arFields['TAX_RATE']))
 		{
-			$arFields['TAX_RATE'] = round(doubleval($arFields['TAX_RATE']), 2);
+			$arFields['TAX_RATE'] = (float)$arFields['TAX_RATE'];
 		}
 
 		if($arFields['TAX_INCLUDED'])
@@ -325,7 +362,7 @@ class CAllCrmProductRow
 		if (!empty($sUpdate))
 		{
 			$sQuery = 'UPDATE '.CCrmProductRow::TABLE_NAME.' SET '.$sUpdate.' WHERE ID = '.$ID;
-			$DB->Query($sQuery);
+			$DB->Query($sQuery, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
 
 			CCrmEntityHelper::RemoveCached(self::CACHE_NAME, $ID);
 		}
@@ -363,7 +400,7 @@ class CAllCrmProductRow
 			return false;
 		}
 
-		\Bitrix\Crm\Reservation\Internals\ProductRowReservationTable::deleteByRowId($ID);
+		Crm\Reservation\Internals\ProductRowReservationTable::deleteByRowId($ID);
 
 		CCrmEntityHelper::RemoveCached(self::CACHE_NAME, $ID);
 		if(isset($arParams['OWNER_TYPE']) && isset($arParams['OWNER_ID']))
@@ -527,19 +564,19 @@ class CAllCrmProductRow
 			}
 
 			$discountTypeID = isset($arFields['DISCOUNT_TYPE_ID'])
-				&& \Bitrix\Crm\Discount::isDefined($arFields['DISCOUNT_TYPE_ID'])
-				? intval($arFields['DISCOUNT_TYPE_ID']) : \Bitrix\Crm\Discount::UNDEFINED;
+				&& Crm\Discount::isDefined($arFields['DISCOUNT_TYPE_ID'])
+				? intval($arFields['DISCOUNT_TYPE_ID']) : Crm\Discount::UNDEFINED;
 
-			if($discountTypeID !== \Bitrix\Crm\Discount::UNDEFINED
-				&& !\Bitrix\Crm\Discount::isDefined($discountTypeID))
+			if($discountTypeID !== Crm\Discount::UNDEFINED
+				&& !Crm\Discount::isDefined($discountTypeID))
 			{
 				self::RegisterError("Discount type ID (DISCOUNT_TYPE_ID) '{$discountTypeID}' is not supported in current context.");
 			}
-			else if($discountTypeID === \Bitrix\Crm\Discount::MONETARY && !isset($arFields['DISCOUNT_SUM']))
+			else if($discountTypeID === Crm\Discount::MONETARY && !isset($arFields['DISCOUNT_SUM']))
 			{
 				self::RegisterError("Discount Sum (DISCOUNT_SUM) is required if Monetary Discount Type (DISCOUNT_TYPE_ID) is defined.");
 			}
-			else if($discountTypeID === \Bitrix\Crm\Discount::PERCENTAGE && !isset($arFields['DISCOUNT_RATE']))
+			else if($discountTypeID === Crm\Discount::PERCENTAGE && !isset($arFields['DISCOUNT_RATE']))
 			{
 				self::RegisterError("Discount Rate (DISCOUNT_RATE) is required if Percentage Discount Type (DISCOUNT_TYPE_ID) is defined.");
 			}
@@ -577,9 +614,9 @@ class CAllCrmProductRow
 				break;
 		}
 
-		if (empty($result) && \CCrmOwnerTypeAbbr::isDynamicTypeAbbreviation($ownerType))
+		if (empty($result) && CCrmOwnerTypeAbbr::isDynamicTypeAbbreviation($ownerType))
 		{
-			$result = \CCrmOwnerTypeAbbr::ResolveName($ownerType);
+			$result = CCrmOwnerTypeAbbr::ResolveName($ownerType);
 		}
 
 		return $result;
@@ -680,38 +717,40 @@ class CAllCrmProductRow
 			}
 		}
 
+		$quantityPrecision = Crm\Service\Accounting::getQuantityPrecision();
+
 		$measurelessProductIDs = array();
 		$dbRes = self::GetList(array('SORT' => 'ASC', 'ID'=>'ASC'), $filter);
 		$results = array();
 		while($ary = $dbRes->Fetch())
 		{
-			$productID = $ary['PRODUCT_ID'] = isset($ary['PRODUCT_ID']) ? intval($ary['PRODUCT_ID']) : 0;
+			$ary['PRODUCT_ID'] = (int)($ary['PRODUCT_ID'] ?? 0);
+			$productID = $ary['PRODUCT_ID'];
 
-			$ary['QUANTITY'] = isset($ary['QUANTITY']) ? round((float)$ary['QUANTITY'], 4) : 0.0;
-			$ary['PRICE'] = isset($ary['PRICE']) ? round((float)$ary['PRICE'], 2) : 0.0;
-			$ary['PRICE_EXCLUSIVE'] = isset($ary['PRICE_EXCLUSIVE']) ? round((float)$ary['PRICE_EXCLUSIVE'], 2) : 0.0;
-			$ary['PRICE_NETTO'] = isset($ary['PRICE_NETTO']) ? round((float)$ary['PRICE_NETTO'], 2) : 0.0;
-			$ary['PRICE_BRUTTO'] = isset($ary['PRICE_BRUTTO']) ? round((float)$ary['PRICE_BRUTTO'], 2) : 0.0;
+			$ary['QUANTITY'] = Crm\Service\Accounting::round((float)($ary['QUANTITY'] ?? 0.0), $quantityPrecision);
+			$ary['PRICE'] = (float)($ary['PRICE'] ?? 0.0);
+			$ary['PRICE_EXCLUSIVE'] = (float)($ary['PRICE_EXCLUSIVE'] ?? 0.0);
+			$ary['PRICE_NETTO'] = (float)($ary['PRICE_NETTO'] ?? 0.0);
+			$ary['PRICE_BRUTTO'] = (float)($ary['PRICE_BRUTTO'] ?? 0.0);
 
-			$ary['DISCOUNT_TYPE_ID'] = isset($ary['DISCOUNT_TYPE_ID'])
-				? (int)$ary['DISCOUNT_TYPE_ID'] : \Bitrix\Crm\Discount::UNDEFINED;
-			$ary['DISCOUNT_RATE'] = isset($ary['DISCOUNT_RATE']) ? round((float)$ary['DISCOUNT_RATE'], 2) : 0.0;
-			$ary['DISCOUNT_SUM'] = isset($ary['DISCOUNT_SUM']) ? round((float)$ary['DISCOUNT_SUM'], 2) : 0.0;
+			$ary['DISCOUNT_TYPE_ID'] = (int)($ary['DISCOUNT_TYPE_ID'] ?? Crm\Discount::UNDEFINED);
+			$ary['DISCOUNT_RATE'] = (float)($ary['DISCOUNT_RATE'] ?? 0.0);
+			$ary['DISCOUNT_SUM'] = (float)($ary['DISCOUNT_SUM'] ?? 0.0);
 
-			$ary['TAX_RATE'] = isset($ary['TAX_RATE']) ? round((float)$ary['TAX_RATE'], 2) : null;
-			$ary['TAX_INCLUDED'] = isset($ary['TAX_INCLUDED']) ? $ary['TAX_INCLUDED'] : 'N';
-			$ary['CUSTOMIZED'] = isset($ary['CUSTOMIZED']) ? $ary['CUSTOMIZED'] : 'N';
+			$ary['TAX_RATE'] = isset($ary['TAX_RATE']) ? (float)$ary['TAX_RATE'] : null;
+			$ary['TAX_INCLUDED'] = $ary['TAX_INCLUDED'] ?? 'N';
+			$ary['CUSTOMIZED'] = $ary['CUSTOMIZED'] ?? 'N';
 
-			$ary['SORT'] = isset($ary['SORT']) ? (int)$ary['SORT'] : 0;
+			$ary['SORT'] = (int)($ary['SORT'] ?? 0);
 
-			$ary['MEASURE_CODE'] = isset($ary['MEASURE_CODE']) ? (int)$ary['MEASURE_CODE'] : 0;
-			$ary['MEASURE_NAME'] = isset($ary['MEASURE_NAME']) ? $ary['MEASURE_NAME'] : '';
+			$ary['MEASURE_CODE'] = (int)($ary['MEASURE_CODE'] ?? 0);
+			$ary['MEASURE_NAME'] = $ary['MEASURE_NAME'] ?? '';
 
-			$ary['TYPE'] = isset($ary['TYPE']) ? (int)$ary['TYPE'] : \Bitrix\Crm\ProductType::TYPE_PRODUCT;
+			$ary['TYPE'] = (int)($ary['TYPE'] ?? Crm\ProductType::TYPE_PRODUCT);
 
-			if($productID > 0 && $ary['MEASURE_CODE'] <= 0)
+			if ($productID > 0 && $ary['MEASURE_CODE'] <= 0)
 			{
-				if(!in_array($productID, $measurelessProductIDs, true))
+				if (!in_array($productID, $measurelessProductIDs, true))
 				{
 					$measurelessProductIDs[] = $productID;
 				}
@@ -739,12 +778,12 @@ class CAllCrmProductRow
 			}
 		}
 
-		$results = \Bitrix\Crm\Service\Sale\Reservation\ReservationService::getInstance()->fillCrmReserves($results);
+		$results = Crm\Service\Sale\Reservation\ReservationService::getInstance()->fillCrmReserves($results);
 
 		if(!empty($measurelessProductIDs))
 		{
-			$defaultMeasureInfo = \Bitrix\Crm\Measure::getDefaultMeasure();
-			$measureInfos = \Bitrix\Crm\Measure::getProductMeasures($measurelessProductIDs);
+			$defaultMeasureInfo = Crm\Measure::getDefaultMeasure();
+			$measureInfos = Crm\Measure::getProductMeasures($measurelessProductIDs);
 			foreach($results as &$result)
 			{
 				if($result['MEASURE_CODE'] > 0)
@@ -753,7 +792,7 @@ class CAllCrmProductRow
 				}
 
 				$productID = $result['PRODUCT_ID'];
-				if(isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
+				if(!empty($measureInfos[$productID]))
 				{
 					$measureInfo = $measureInfos[$productID][0];
 					$result['MEASURE_CODE'] = $measureInfo['CODE'];
@@ -771,7 +810,16 @@ class CAllCrmProductRow
 		return $results;
 	}
 
-	public static function SaveRows($ownerType, $ownerID, $arRows, $accountContext = null, $checkPerms = true, $regEvent = true, $syncOwner = true, $totalInfo = array())
+	public static function SaveRows(
+		$ownerType,
+		$ownerID,
+		$arRows,
+		$accountContext = null,
+		$checkPerms = true,
+		$regEvent = true,
+		$syncOwner = true,
+		$totalInfo = []
+	)
 	{
 		$ownerType = strval($ownerType);
 		$ownerID = intval($ownerID);
@@ -851,18 +899,16 @@ class CAllCrmProductRow
 			}
 		}
 
-		$currencyID = isset($accountContext['CURRENCY_ID'])
-			? $accountContext['CURRENCY_ID'] : CCrmCurrency::GetBaseCurrencyID();
+		$currencyID = $accountContext['CURRENCY_ID'] ?? CCrmCurrency::GetBaseCurrencyID();
 
-		$exchRate = isset($accountContext['EXCH_RATE'])
-			? $accountContext['EXCH_RATE'] : null;
+		$exchRate = $accountContext['EXCH_RATE'] ?? null;
 		// <-- Preparing accounting context
 
 		$productIDs = array();
 		$products = array();
 		foreach($arRows as &$arRow)
 		{
-			$productID = isset($arRow['PRODUCT_ID']) ? intval($arRow['PRODUCT_ID']) : 0;
+			$productID = (int)($arRow['PRODUCT_ID'] ?? 0);
 			if($productID > 0 && !in_array($productID, $productIDs, true))
 			{
 				$productIDs[] = $productID;
@@ -875,13 +921,14 @@ class CAllCrmProductRow
 			$dbProduct = CCrmProduct::GetList(
 				array(),
 				array('ID' => $productIDs),
-				array('ID', 'NAME')
+				array('ID', 'NAME', 'XML_ID')
 			);
 			if(is_object($dbProduct))
 			{
 				while($product = $dbProduct->Fetch())
 				{
-					$products[intval($product['ID'])] = $product;
+					$product['ID'] = (int)$product['ID'];
+					$products[$product['ID']] = $product;
 				}
 			}
 		}
@@ -890,13 +937,15 @@ class CAllCrmProductRow
 		$arSafeRows = array();
 		foreach($arRows as &$arRow)
 		{
-			$rowID = isset($arRow['ID']) ? (int)$arRow['ID'] : 0;
-			$productID = $arRow['PRODUCT_ID'] = isset($arRow['PRODUCT_ID']) ? (int)$arRow['PRODUCT_ID'] : 0;
-			$productName = $arRow['PRODUCT_NAME'] = isset($arRow['PRODUCT_NAME']) ? $arRow['PRODUCT_NAME'] : '';
-			$arRow['MEASURE_CODE'] = isset($arRow['MEASURE_CODE']) ? (int)$arRow['MEASURE_CODE'] : 0;
-			$arRow['MEASURE_NAME'] = isset($arRow['MEASURE_NAME']) ? $arRow['MEASURE_NAME'] : '';
+			$rowID = (int)($arRow['ID'] ?? 0);
+			$arRow['PRODUCT_ID'] = (int)($arRow['PRODUCT_ID'] ?? 0);
+			$productID = $arRow['PRODUCT_ID'];
+			$arRow['PRODUCT_NAME'] = (string)($arRow['PRODUCT_NAME'] ?? '');
+			$productName = $arRow['PRODUCT_NAME'];
+			$arRow['MEASURE_CODE'] = (int)($arRow['MEASURE_CODE'] ?? 0);
+			$arRow['MEASURE_NAME'] = (string)($arRow['MEASURE_NAME'] ?? '');
 			$arRow['CUSTOMIZED'] = isset($arRow['CUSTOMIZED']) && mb_strtoupper($arRow['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
-			$arRow['SORT'] = isset($arRow['SORT']) ? (int)$arRow['SORT'] : 0;
+			$arRow['SORT'] = (int)($arRow['SORT'] ?? 0);
 
 			$prices = static::preparePrices($arRow, $currencyID, $exchRate);
 			if (false === $prices)
@@ -936,7 +985,7 @@ class CAllCrmProductRow
 				'CUSTOMIZED' => 'Y', //Is always enabled for disable requests to product catalog
 				'SORT' => $arRow['SORT'],
 
-				'TYPE' => (int)($arRow['TYPE'] ?? \Bitrix\Crm\ProductType::TYPE_PRODUCT),
+				'TYPE' => (int)($arRow['TYPE'] ?? Crm\ProductType::TYPE_PRODUCT),
 			];
 
 			if(isset($arRow['XML_ID']))
@@ -957,8 +1006,8 @@ class CAllCrmProductRow
 
 		if(!empty($measurelessProductIDs))
 		{
-			$defaultMeasureInfo = \Bitrix\Crm\Measure::getDefaultMeasure();
-			$measureInfos = \Bitrix\Crm\Measure::getProductMeasures($measurelessProductIDs);
+			$defaultMeasureInfo = Crm\Measure::getDefaultMeasure();
+			$measureInfos = Crm\Measure::getProductMeasures($measurelessProductIDs);
 			foreach($arSafeRows as &$safeRow)
 			{
 				if($safeRow['MEASURE_CODE'] > 0)
@@ -971,12 +1020,12 @@ class CAllCrmProductRow
 				{
 					$measureInfo = $measureInfos[$productID][0];
 					$safeRow['MEASURE_CODE'] = $measureInfo['CODE'];
-					$safeRow['MEASURE_NAME'] = isset($measureInfo['SYMBOL']) ? $measureInfo['SYMBOL'] : '';
+					$safeRow['MEASURE_NAME'] = $measureInfo['SYMBOL'] ?? '';
 				}
 				elseif($defaultMeasureInfo !== null)
 				{
 					$safeRow['MEASURE_CODE'] = $defaultMeasureInfo['CODE'];
-					$safeRow['MEASURE_NAME'] = isset($defaultMeasureInfo['SYMBOL']) ? $defaultMeasureInfo['SYMBOL'] : '';
+					$safeRow['MEASURE_NAME'] = $defaultMeasureInfo['SYMBOL'] ?? '';
 				}
 
 				if(!isset($safeRow['MEASURE_NAME']) || $safeRow['MEASURE_NAME'] === '')
@@ -1008,7 +1057,7 @@ class CAllCrmProductRow
 					continue;
 				}
 
-				$arPresentRow = isset($arPresentRows[$rowID]) ? $arPresentRows[$rowID] : null;
+				$arPresentRow = $arPresentRows[$rowID] ?? null;
 				if($arPresentRow)
 				{
 					// Row was modified
@@ -1043,125 +1092,48 @@ class CAllCrmProductRow
 		return $result;
 	}
 
-	protected static function preparePrices($product, $currencyID, $exchRate)
+	/**
+	 * @deprecated
+	 * @see Crm\Service\Accounting::calculateProductPrices
+	 *
+	 * @param $product
+	 * @param $currencyID
+	 * @param $exchRate
+	 * @param null|array $precision
+	 * @return array|false
+	 */
+	protected static function preparePrices($product, $currencyID, $exchRate, ?array $precision = null)
 	{
-		$result = [];
-
-		$result['PRICE'] = isset($product['PRICE']) ? round((float)$product['PRICE'], 2) : 0.0;
-		$result['PRICE_EXCLUSIVE'] = isset($product['PRICE_EXCLUSIVE']) ? round((float)$product['PRICE_EXCLUSIVE'], 2) : 0.0;
-		$result['QUANTITY'] = isset($product['QUANTITY']) ? round((float)$product['QUANTITY'], 4) : 1;
-		$result['TAX_RATE'] = (isset($product['TAX_RATE']) && $product['TAX_RATE'] !== false) ? round((float)$product['TAX_RATE'], 2) : null;
-		$result['TAX_INCLUDED'] = isset($product['TAX_INCLUDED']) ? ($product['TAX_INCLUDED'] === 'Y' ? 'Y' : 'N') : 'N';
-		$result['DISCOUNT_TYPE_ID'] = isset($product['DISCOUNT_TYPE_ID']) ? intval($product['DISCOUNT_TYPE_ID']) : 0;
-
-		$inclusivePrice = $result['PRICE'];
-		$exclusivePrice = $result['PRICE_EXCLUSIVE'];
-		if($exclusivePrice == 0.0 && $inclusivePrice != 0.0)
-		{
-			$exclusivePrice =  round(self::CalculateExclusivePrice($inclusivePrice, $result['TAX_RATE']), 2);
-		}
-
-		if(!\Bitrix\Crm\Discount::isDefined($result['DISCOUNT_TYPE_ID']))
-		{
-			$result['DISCOUNT_TYPE_ID'] = \Bitrix\Crm\Discount::PERCENTAGE;
-			$product['DISCOUNT_RATE'] = 0.0;
-		}
-		$discountTypeID = $result['DISCOUNT_TYPE_ID'];
-
-		if($discountTypeID === \Bitrix\Crm\Discount::PERCENTAGE)
-		{
-			if(!isset($product['DISCOUNT_RATE']))
-			{
-				self::RegisterError("Discount Rate (DISCOUNT_RATE) is required if Percentage Discount Type (DISCOUNT_TYPE_ID) is defined.");
-				return false;
-			}
-			$discountRate = round(doubleval($product['DISCOUNT_RATE']), 2);
-
-			if ($discountRate === 100.0)
-			{
-				if (!isset($product['DISCOUNT_SUM']) || empty($product['DISCOUNT_SUM']))
-				{
-					//impossible to calculate discount sum
-					self::RegisterError(
-						'Discount Sum (DISCOUNT_SUM) is required if Percentage Discount Type (DISCOUNT_TYPE_ID) '
-						. 'is defined and Discount Rate (DISCOUNT_RATE) is 100%'
-					);
-
-					return false;
-				}
-			}
-
-			if(isset($product['DISCOUNT_SUM']))
-			{
-				$discountSum = round(doubleval($product['DISCOUNT_SUM']), 2);
-			}
-			else
-			{
-				$discountSum = round(\Bitrix\Crm\Discount::calculateDiscountSum($exclusivePrice, $discountRate), 2);
-			}
-		}
-		else//if($discountTypeID === \Bitrix\Crm\Discount::MONETARY)
-		{
-			if(!isset($product['DISCOUNT_SUM']))
-			{
-				self::RegisterError("Discount Sum (DISCOUNT_SUM) is required if Monetary Discount Type (DISCOUNT_TYPE_ID) is defined.");
-				return false;
-			}
-			$discountSum = round(doubleval($product['DISCOUNT_SUM']), 2);
-
-			if(isset($product['DISCOUNT_RATE']))
-			{
-				$discountRate = round(doubleval($product['DISCOUNT_RATE']), 2);
-			}
-			else
-			{
-				$discountRate = \Bitrix\Crm\Discount::calculateDiscountRate(($exclusivePrice + $discountSum), $exclusivePrice);
-			}
-		}
-
-		if (isset($product['PRICE_NETTO']))
-		{
-			$priceNetto = $product['PRICE_NETTO'];
-		}
-		else
-		{
-			$priceNetto = $exclusivePrice + $discountSum;
-		}
-		$result['PRICE_NETTO'] = round((float)$priceNetto, 2);
-
-		if (isset($product['PRICE_BRUTTO']))
-		{
-			$result['PRICE_BRUTTO'] = round((float)$product['PRICE_BRUTTO'], 2);
-		}
-		elseif ($discountSum === 0.0) // avoid influence of $priceNetto rounding
-		{
-			$result['PRICE_BRUTTO'] = $inclusivePrice;
-		}
-		else
-		{
-			$result['PRICE_BRUTTO'] = round(static::CalculateInclusivePrice($priceNetto, $result['TAX_RATE']), 2);
-		}
-
-		$result['PRICE'] = $inclusivePrice;
-		$result['PRICE_EXCLUSIVE'] = $exclusivePrice;
-		$result['DISCOUNT_TYPE_ID'] = $discountTypeID;
-		$result['DISCOUNT_SUM'] = $discountSum;
-		$result['DISCOUNT_RATE'] = $discountRate;
-
-		$accData = CCrmAccountingHelper::PrepareAccountingData(
-			array(
+		$accounter = Crm\Service\Container::getInstance()->getAccounting();
+		$internalResult = $accounter->calculateProductPrices(
+			$product,
+			[
 				'CURRENCY_ID' => $currencyID,
-				'SUM' => $result['PRICE'],
-				'EXCH_RATE' => $exchRate
-			)
+				'EXCH_RATE' => $exchRate,
+				'PRECISION' =>
+					$precision
+					?? [
+						'PRICE_PRECISION' => $accounter->getPricePrecision(),
+						'RATE_PRECISION' => $accounter->getRatePrecision(),
+						'QUANTITY_PRECISION' => $accounter->getQuantityPrecision(),
+					]
+				,
+			]
 		);
 
-		if(is_array($accData))
+		if (!$internalResult->isSuccess())
 		{
-			$result['PRICE_ACCOUNT'] = $accData['ACCOUNT_SUM'];
+			self::RegisterError(
+				implode('; ', $internalResult->getErrorMessages())
+			);
+
+			return false;
 		}
 
-		return $result;
+		$data = $internalResult->getData();
+		unset($data['PRECISION']);
+
+		return $data;
 	}
 
 	protected static function NeedForUpdate(array $original, array $modified)
@@ -1210,7 +1182,7 @@ class CAllCrmProductRow
 		if (!is_array($totalInfo))
 			$totalInfo = array();
 
-		$taxMode = isset($totalInfo['TAX_MODE']) ? intval($totalInfo['TAX_MODE']) : 0;
+		$taxMode = (int)($totalInfo['TAX_MODE'] ?? 0);
 		if ($taxMode !== self::TAX_MODE && $taxMode !== self::LD_TAX_MODE)
 			$taxMode = CCrmTax::isVatMode() ? self::TAX_MODE : self::LD_TAX_MODE;
 
@@ -1358,8 +1330,8 @@ class CAllCrmProductRow
 	{
 		IncludeModuleLangFile(__FILE__);
 
-		$productID = isset($arRow['PRODUCT_ID']) ? intval($arRow['PRODUCT_ID']) : 0;
-		$productName = isset($arRow['PRODUCT_NAME']) ? $arRow['PRODUCT_NAME'] : '';
+		$productID = (int)($arRow['PRODUCT_ID'] ?? 0);
+		$productName = (string)($arRow['PRODUCT_NAME'] ?? '');
 		$productName = self::NormalizeProductName($productID, $productName);
 
 		$arFields = array(
@@ -1375,12 +1347,13 @@ class CAllCrmProductRow
 	{
 		IncludeModuleLangFile(__FILE__);
 
-		$productID = isset($arRow['PRODUCT_ID']) ? intval($arRow['PRODUCT_ID']) : 0;
-		$productName = isset($arRow['PRODUCT_NAME']) ? $arRow['PRODUCT_NAME'] : '';
+		$productID = (int)($arRow['PRODUCT_ID'] ?? 0);
+		$productName = (string)($arRow['PRODUCT_NAME'] ?? '');
 		$productName = self::NormalizeProductName($productID, $productName);
-		$presentProductID = isset($arPresentRow['PRODUCT_ID']) ? intval($arPresentRow['PRODUCT_ID']) : 0;
-		$presentproductName = isset($arPresentRow['PRODUCT_NAME']) ? $arPresentRow['PRODUCT_NAME'] : '';
+		$presentProductID = (int)($arPresentRow['PRODUCT_ID'] ?? 0);
+		$presentproductName = (string)($arPresentRow['PRODUCT_NAME'] ?? '');
 		$presentproductName = self::NormalizeProductName($presentProductID, $presentproductName);
+		$accounter = Crm\Service\Container::getInstance()->getAccounting();
 
 		$arEvents = array();
 		if($arPresentRow['PRODUCT_ID'] !== $arRow['PRODUCT_ID'])
@@ -1421,8 +1394,8 @@ class CAllCrmProductRow
 				$productName = $arPresentRow['ORIGINAL_PRODUCT_NAME'];
 			}
 
-			$price = round(doubleval($arRow['PRICE']), 2);
-			$presentPrice = round(doubleval($arPresentRow['PRICE']), 2);
+			$price = $accounter->round((float)$arRow['PRICE'], $accounter->getPricePublicPrecision());
+			$presentPrice = $accounter->round((float)$arPresentRow['PRICE'], $accounter->getPricePublicPrecision());
 			if($presentPrice !== $price)
 			{
 				// Product price was changed
@@ -1433,8 +1406,8 @@ class CAllCrmProductRow
 				);
 			}
 
-			$quantity = round(doubleval($arRow['QUANTITY']), 4);
-			$presentQuantity = round(doubleval($arPresentRow['QUANTITY']), 4);
+			$quantity = $accounter->round((float)$arRow['QUANTITY'], $accounter->getQuantityPrecision());
+			$presentQuantity = $accounter->round((float)$arPresentRow['QUANTITY'], $accounter->getQuantityPrecision());
 			if($presentQuantity !== $quantity)
 			{
 				// Product  quantity was changed
@@ -1445,8 +1418,8 @@ class CAllCrmProductRow
 				);
 			}
 
-			$discountSum = round(doubleval($arRow['DISCOUNT_SUM']), 2);
-			$presentDiscountSum = round(doubleval($arPresentRow['DISCOUNT_SUM']), 2);
+			$discountSum = $accounter->round((float)$arRow['DISCOUNT_SUM'], $accounter->getPricePublicPrecision());
+			$presentDiscountSum = $accounter->round((float)$arPresentRow['DISCOUNT_SUM'], $accounter->getPricePublicPrecision());
 			if($discountSum !== $presentDiscountSum)
 			{
 				// Product  discount was changed
@@ -1460,13 +1433,13 @@ class CAllCrmProductRow
 
 			$taxRate =
 				isset($arRow['TAX_RATE'])
-					? round((float)($arRow['TAX_RATE']), 2)
+					? $accounter->round((float)($arRow['TAX_RATE']), $accounter->getRatePrecision())
 					: null
 			;
 
 			$presentTaxRate =
 				isset($arPresentRow['TAX_RATE'])
-					? round((float)($arPresentRow['TAX_RATE']), 2)
+					? $accounter->round((float)($arPresentRow['TAX_RATE']), $accounter->getRatePrecision())
 					: null
 			;
 			if($presentTaxRate !== $taxRate)
@@ -1490,15 +1463,15 @@ class CAllCrmProductRow
 			}
 		}
 
-		return count($arEvents) > 0 ? self::RegisterEvents($ownerType, $ownerID, $arEvents, $checkPerms) : false;
+		return !empty($arEvents) ? self::RegisterEvents($ownerType, $ownerID, $arEvents, $checkPerms) : false;
 	}
 
 	private static function RegisterRemoveEvent($ownerType, $ownerID, $arPresentRow, $checkPerms)
 	{
 		IncludeModuleLangFile(__FILE__);
 
-		$productID = isset($arPresentRow['PRODUCT_ID']) ? intval($arPresentRow['PRODUCT_ID']) : 0;
-		$productName = isset($arPresentRow['PRODUCT_NAME']) ? $arPresentRow['PRODUCT_NAME'] : '';
+		$productID = (int)($arPresentRow['PRODUCT_ID'] ?? 0);
+		$productName = (string)($arPresentRow['PRODUCT_NAME'] ?? '');
 		$productName = self::NormalizeProductName($productID, $productName);
 
 		$arFields = array(
@@ -1549,6 +1522,7 @@ class CAllCrmProductRow
 
 		if(is_array($arResult))
 		{
+			$accounter = Crm\Service\Container::getInstance()->getAccounting();
 			CCrmEntityHelper::SetCached(self::CACHE_NAME, $ID, $arResult);
 
 			if(isset($arResult['OWNER_TYPE']))
@@ -1557,37 +1531,37 @@ class CAllCrmProductRow
 				$arResult['OWNER_TYPE'] = trim($arResult['OWNER_TYPE']);
 			}
 
-			$productID = $arResult['PRODUCT_ID'] = intval($arResult['PRODUCT_ID']);
-			$arResult['PRICE'] = round(doubleval($arResult['PRICE']), 2);
-			$arResult['QUANTITY'] = round(doubleval($arResult['QUANTITY']), 4);
+			$arResult['PRODUCT_ID'] = (int)$arResult['PRODUCT_ID'];
+			$productID = $arResult['PRODUCT_ID'];
+			$arResult['PRICE'] = $accounter->round((float)$arResult['PRICE']);
+			$arResult['QUANTITY'] = $accounter->round((float)$arResult['QUANTITY'], $accounter->getQuantityPrecision());
 
-			$arResult['DISCOUNT_TYPE_ID'] = isset($arResult['DISCOUNT_TYPE_ID'])
-				? intval($arResult['DISCOUNT_TYPE_ID']) : \Bitrix\Crm\Discount::UNDEFINED;
-			$arResult['DISCOUNT_RATE'] = isset($arResult['DISCOUNT_RATE']) ? round(doubleval($arResult['DISCOUNT_RATE']), 2) : 0.0;
-			$arResult['DISCOUNT_SUM'] = isset($arResult['DISCOUNT_SUM']) ? round(doubleval($arResult['DISCOUNT_SUM']), 2) : 0.0;
+			$arResult['DISCOUNT_TYPE_ID'] = (int)($arResult['DISCOUNT_TYPE_ID'] ?? Crm\Discount::UNDEFINED);
+			$arResult['DISCOUNT_RATE'] = isset($arResult['DISCOUNT_RATE']) ? $accounter->round((float)$arResult['DISCOUNT_RATE'], $accounter->getRatePrecision()) : 0.0;
+			$arResult['DISCOUNT_SUM'] = isset($arResult['DISCOUNT_SUM']) ? $accounter->round((float)$arResult['DISCOUNT_SUM']) : 0.0;
 
-			$arResult['TAX_RATE'] = isset($arResult['TAX_RATE']) ? round(doubleval($arResult['TAX_RATE']), 2) : null;
+			$arResult['TAX_RATE'] = isset($arResult['TAX_RATE']) ? $accounter->round((float)$arResult['TAX_RATE'], $accounter->getRatePrecision()) : null;
 			$arResult['TAX_INCLUDED'] = isset($arResult['TAX_INCLUDED']) ? $arResult['DISCOUNT_SUM'] : 'N';
-			$arResult['CUSTOMIZED'] = isset($arResult['CUSTOMIZED']) ? $arResult['CUSTOMIZED'] : 'N';
+			$arResult['CUSTOMIZED'] = $arResult['CUSTOMIZED'] ?? 'N';
 
-			$arResult['MEASURE_CODE'] = isset($arResult['MEASURE_CODE']) ? intval($arResult['MEASURE_CODE']) : 0;
-			$arResult['MEASURE_NAME'] = isset($arResult['MEASURE_NAME']) ? $arResult['MEASURE_NAME'] : '';
+			$arResult['MEASURE_CODE'] = (int)($arResult['MEASURE_CODE'] ?? 0);
+			$arResult['MEASURE_NAME'] = $arResult['MEASURE_NAME'] ?? '';
 
 			if($productID > 0 && $arResult['MEASURE_CODE'] <= 0)
 			{
-				$defaultMeasureInfo = \Bitrix\Crm\Measure::getDefaultMeasure();
-				$measureInfos = \Bitrix\Crm\Measure::getProductMeasures($productID);
+				$defaultMeasureInfo = Crm\Measure::getDefaultMeasure();
+				$measureInfos = Crm\Measure::getProductMeasures($productID);
 
-				if(isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
+				if (isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
 				{
 					$measureInfo = $measureInfos[$productID][0];
-					$result['MEASURE_CODE'] = $measureInfo['CODE'];
-					$result['MEASURE_NAME'] = $measureInfo['SYMBOL'];
+					$arResult['MEASURE_CODE'] = $measureInfo['CODE'];
+					$arResult['MEASURE_NAME'] = $measureInfo['SYMBOL'];
 				}
-				elseif($defaultMeasureInfo !== null)
+				elseif ($defaultMeasureInfo !== null)
 				{
-					$result['MEASURE_CODE'] = $defaultMeasureInfo['CODE'];
-					$result['MEASURE_NAME'] = $defaultMeasureInfo['SYMBOL'];
+					$arResult['MEASURE_CODE'] = $defaultMeasureInfo['CODE'];
+					$arResult['MEASURE_NAME'] = $defaultMeasureInfo['SYMBOL'];
 				}
 			}
 		}
@@ -1648,14 +1622,14 @@ class CAllCrmProductRow
 				return $result;
 			}
 
-			$currencyID = isset($params['CURRENCY_ID']) ? $params['CURRENCY_ID'] : '';
-			if($currencyID === '')
+			$currencyID = (string)($params['CURRENCY_ID'] ?? '');
+			if ($currencyID === '')
 			{
 				$currencyID = CCrmCurrency::GetBaseCurrencyID();
 			}
 
-			$companyID = isset($params['COMPANY_ID']) ? intval($params['COMPANY_ID']) : 0;
-			$contactID = isset($params['CONTACT_ID']) ? intval($params['CONTACT_ID']) : 0;
+			$companyID = (int)($params['COMPANY_ID'] ?? 0);
+			$contactID = (int)($params['CONTACT_ID'] ?? 0);
 
 			// Determine person type
 			$personTypeId = 0;
@@ -1686,14 +1660,15 @@ class CAllCrmProductRow
 			$calculateOptions = array();
 			if (CCrmTax::isTaxMode())
 			{
-				$calculateOptions['LOCATION_ID'] = isset($arParams['LOCATION_ID']) ? $arParams['LOCATION_ID'] : '';
+				$calculateOptions['LOCATION_ID'] = $arParams['LOCATION_ID'] ?? '';
 			}
 
 			$calculated = CCrmSaleHelper::Calculate($arRows, $currencyID, $personTypeId, $enableSaleDiscount, $siteID, $calculateOptions);
-			$result = array(
-				'OPPORTUNITY' => isset($calculated['PRICE']) ? round(doubleval($calculated['PRICE']), 2) : 0.0,
-				'TAX_VALUE' => isset($calculated['TAX_VALUE']) ? round(doubleval($calculated['TAX_VALUE']), 2) : 0.0
-			);
+
+			$result = [
+				'OPPORTUNITY' => (float)($calculated['PRICE'] ?? 0.0),
+				'TAX_VALUE' => (float)($calculated['TAX_VALUE'] ??  0.0),
+			];
 		}
 
 		return $result;
@@ -1723,12 +1698,20 @@ class CAllCrmProductRow
 
 	public static function GetPrice($arRow, $default = 0.0)
 	{
-		return isset($arRow['PRICE']) ? round(doubleval($arRow['PRICE']), 2) : $default;
+		return
+			isset($arRow['PRICE'])
+				? Crm\Service\Accounting::round((float)$arRow['PRICE'], Crm\Service\Container::getInstance()->getAccounting()->getPricePrecision())
+				: $default
+		;
 	}
 
 	public static function GetQuantity($arRow, $default = 0)
 	{
-		return isset($arRow['QUANTITY']) ? round(doubleval($arRow['QUANTITY']), 4) : $default;
+		return
+			isset($arRow['QUANTITY'])
+				? Crm\Service\Accounting::round((float)$arRow['QUANTITY'], Crm\Service\Accounting::getQuantityPrecision())
+				: $default
+		;
 	}
 
 	public static function RowsToString($arRows, $formatInfo = array('FORMAT' => '#NAME#', 'DELIMITER' => ', '))
@@ -1848,7 +1831,7 @@ class CAllCrmProductRow
 			return false;
 		}
 
-		$comparer = new \Bitrix\Crm\Comparer\ProductRowComparer();
+		$comparer = new Crm\Comparer\ProductRowComparer();
 		for($i = 0, $length = count($leftRows); $i < $length; $i++)
 		{
 			if(!$comparer->areEquals($leftRows[$i], $rightRows[$i]))
@@ -1879,8 +1862,8 @@ class CAllCrmProductRow
 					continue;
 				}
 
-				$ID = isset($row['PRODUCT_ID']) ? $row['PRODUCT_ID'] : 0;
-				$name = isset($row['PRODUCT_NAME']) ? $row['PRODUCT_NAME'] : '';
+				$ID = $row['PRODUCT_ID'] ?? 0;
+				$name = $row['PRODUCT_NAME'] ?? '';
 				$price = isset($row['PRICE']) ? number_format($row['PRICE'], 4) : '0';
 				$key = md5($ID > 0 ? "{$ID}_{$price}" : "{$name}_{$price}");
 
@@ -1905,8 +1888,8 @@ class CAllCrmProductRow
 					continue;
 				}
 
-				$ID = isset($row['PRODUCT_ID']) ? $row['PRODUCT_ID'] : 0;
-				$name = isset($row['PRODUCT_NAME']) ? $row['PRODUCT_NAME'] : '';
+				$ID = $row['PRODUCT_ID'] ?? 0;
+				$name = $row['PRODUCT_NAME'] ?? '';
 				$price = isset($row['PRICE']) ? number_format($row['PRICE'], 4) : '0';
 				$key = md5($ID > 0 ? "{$ID}_{$price}" : "{$name}_{$price}");
 

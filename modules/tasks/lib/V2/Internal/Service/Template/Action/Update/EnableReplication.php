@@ -10,6 +10,10 @@ class EnableReplication
 {
 	public function __invoke(array $fields): void
 	{
+		$replicator = Container::getInstance()->getRegularReplicator();
+
+		$replicator->stopReplication($fields['ID']);
+
 		if (
 			!array_key_exists('REPLICATE', $fields)
 			|| $fields['REPLICATE'] !== true
@@ -18,7 +22,6 @@ class EnableReplication
 			return;
 		}
 
-		$replicator = Container::getInstance()->getRegularReplicator();
 
 		$replicator->startReplicationAndUpdateTemplate($fields['ID'], $fields['REPLICATE_PARAMS']);
 	}

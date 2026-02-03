@@ -3,7 +3,6 @@
 namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\V2\Chat\NotifyChat;
-use Bitrix\Im\V2\Controller\Filter\CheckChatAccess;
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\MessageCollection;
@@ -22,6 +21,13 @@ class Notify extends BaseController
 			new ExactParameter(
 				MessageCollection::class,
 				'notifications',
+				function ($className, array $ids) {
+					return $this->getMessagesByIds($ids);
+				},
+			),
+			new ExactParameter(
+				MessageCollection::class,
+				'excludeNotifications',
 				function ($className, array $ids) {
 					return $this->getMessagesByIds($ids);
 				},
@@ -67,6 +73,31 @@ class Notify extends BaseController
 
 		$readService = new ReadService();
 		$readResult = $readService->readUserNotifications($notifications, $chatId);
+
+		if (!$readResult->isSuccess())
+		{
+			$this->addErrors($readResult->getErrors());
+
+			return null;
+		}
+
+		return $this->convertKeysToCamelCase($readResult->getResult());
+	}
+
+	/**
+	 * @restMethod im.v2.Notify.readAll
+	 */
+	public function readAllAction(?MessageCollection $excludeNotifications = null): ?array
+	{
+		$notifyChat = NotifyChat::getByUser();
+		if (!$notifyChat)
+		{
+			return null;
+		}
+
+		$chatId = $notifyChat->getChatId();
+		$readService = new ReadService();
+		$readResult = $readService->readAllNotifications($chatId, $excludeNotifications);
 
 		if (!$readResult->isSuccess())
 		{

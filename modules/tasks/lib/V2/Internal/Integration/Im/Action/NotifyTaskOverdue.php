@@ -37,4 +37,11 @@ class NotifyTaskOverdue extends AbstractNotify
 			'#DEADLINE#' => $this->deadlineFormatter->format($this->task->deadlineTs),
 		];
 	}
+
+	public function toString(): string
+	{
+		$message = parent::toString();
+
+		return $this->stripBbCodeUrl($message);
+	}
 }

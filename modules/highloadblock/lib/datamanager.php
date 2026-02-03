@@ -1,22 +1,16 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage highloadblock
- * @copyright 2001-2020 Bitrix
- */
 
 namespace Bitrix\Highloadblock;
 
 use Bitrix\Main;
 use Bitrix\Main\Entity;
-use Bitrix\Main\ORM\Data\UpdateResult;
+use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields\FieldTypeMask;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Objectify\Values;
 
-abstract class DataManager extends Entity\DataManager
+abstract class DataManager extends ORM\Data\DataManager
 {
 	/**
 	 * Being redefined in HL classes
@@ -27,7 +21,7 @@ abstract class DataManager extends Entity\DataManager
 		return null;
 	}
 
-	public static function checkFields(Entity\Result $result, $primary, array $data)
+	public static function checkFields(ORM\Data\Result $result, $primary, array $data)
 	{
 		// check for unknown fields
 		foreach ($data as $k => $v)
@@ -45,7 +39,7 @@ abstract class DataManager extends Entity\DataManager
 	/**
 	 * @param array $data
 	 *
-	 * @return Entity\AddResult
+	 * @return ORM\Data\AddResult
 	 * @throws Main\ArgumentException
 	 * @throws Main\Db\SqlQueryException
 	 * @throws Main\SystemException
@@ -57,7 +51,7 @@ abstract class DataManager extends Entity\DataManager
 		// prepare entity object for compatibility with new code
 		$object = static::convertArrayToObject($data, true);
 
-		$result = new Entity\AddResult;
+		$result = new ORM\Data\AddResult;
 		$hlblock = static::getHighloadBlock();
 		$entity = static::getEntity();
 
@@ -189,7 +183,7 @@ abstract class DataManager extends Entity\DataManager
 	 * @param mixed $primary
 	 * @param array $data
 	 *
-	 * @return Entity\UpdateResult
+	 * @return ORM\Data\UpdateResult
 	 * @throws Main\ArgumentException
 	 * @throws Main\Db\SqlQueryException
 	 * @throws Main\SystemException
@@ -213,7 +207,7 @@ abstract class DataManager extends Entity\DataManager
 
 		$hlblock = static::getHighloadBlock();
 		$entity = static::getEntity();
-		$result = new UpdateResult();
+		$result = new ORM\Data\UpdateResult();
 
 		try
 		{
@@ -328,7 +322,7 @@ abstract class DataManager extends Entity\DataManager
 	/**
 	 * @param mixed $primary
 	 *
-	 * @return Entity\DeleteResult
+	 * @return ORM\Data\DeleteResult
 	 * @throws Main\ArgumentException
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
@@ -342,7 +336,7 @@ abstract class DataManager extends Entity\DataManager
 		static::validatePrimary($primary);
 
 		$entity = static::getEntity();
-		$result = new Entity\DeleteResult();
+		$result = new ORM\Data\DeleteResult();
 		$hlblock = static::getHighloadBlock();
 
 		// get old data

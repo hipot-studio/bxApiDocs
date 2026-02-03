@@ -43,12 +43,14 @@ class MailboxSettingsGridHelper
 	private UserProvider $userProvider;
 	private DepartmentProvider $departmentProvider;
 	private int $currentUserId;
+	private MailboxAccessController $accessController;
 
 	public function __construct()
 	{
 		$this->userProvider = new UserProvider();
 		$this->departmentProvider = new DepartmentProvider();
 		$this->currentUserId = (int)CurrentUser::get()->getId();
+		$this->accessController = MailboxAccessController::getInstance($this->currentUserId);
 	}
 
 	/**
@@ -1093,15 +1095,19 @@ class MailboxSettingsGridHelper
 
 	private function applyNodeUserFilter(Query $query): void
 	{
-		$this->accessController = MailboxAccessController::getInstance($this->currentUserId);
 		$accessibleUser = $this->accessController->getUser();
+		$permissionValue = MailboxAccess::getPermissionValue(
+			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_VIEW,
+			$accessibleUser->getUserId(),
+		);
 
-		if ($accessibleUser->isAdmin())
+		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_NONE)
 		{
+			$query->where('USER_ID', $this->currentUserId);
+
 			return;
 		}
 
-		$permissionValue = $accessibleUser->getPermission(PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_VIEW);
 		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_ALL)
 		{
 			return;
@@ -1156,83 +1162,88 @@ class MailboxSettingsGridHelper
 
 	private function setCanEditFlag(array &$mailboxes): void
 	{
-		$availableToEditOwnersIds = [$this->currentUserId];
-
-		$this->accessController = MailboxAccessController::getInstance($this->currentUserId);
 		$accessibleUser = $this->accessController->getUser();
-		$permissionValue = $accessibleUser->isAdmin()
-			? PermissionVariablesDictionary::VARIABLE_ALL
-			: $accessibleUser->getPermission(PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT)
-		;
+		$permissionValue = MailboxAccess::getPermissionValue(
+			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT,
+			$accessibleUser->getUserId(),
+		);
 
-		if ($permissionValue !== PermissionVariablesDictionary::VARIABLE_NONE)
+		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_ALL)
 		{
-			if ($permissionValue === PermissionVariablesDictionary::VARIABLE_ALL)
-			{
-				foreach ($mailboxes as &$mailbox)
-				{
-					$mailbox['CAN_EDIT'] = true;
-				}
+			$this->fillCanEditFlag($mailboxes);
 
-				return;
-			}
+			return;
+		}
 
+		$availableToEditOwnersIds = [$this->currentUserId];
+		$nodeIds = Container::getNodeRepository()->findAllByUserId($this->currentUserId)->getIds();
+
+		if ($permissionValue !== PermissionVariablesDictionary::VARIABLE_NONE && !empty($nodeIds))
+		{
 			$allOwnersIds = array_unique(array_column($mailboxes, 'OWNER_ID'));
-			$nodeIds = Container::getNodeRepository()->findAllByUserId($this->currentUserId)->getIds();
-			if (!empty($nodeIds))
+
+			if ($permissionValue === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS)
 			{
-				if ($permissionValue === PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS)
-				{
-					$query = NodeMemberTable::query()
-						->setSelect(['ENTITY_ID'])
-						->where('ENTITY_TYPE', MemberEntityType::USER->value)
-						->whereIn('NODE_ID', $nodeIds)
-						->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
-						->whereIn('ENTITY_ID', $allOwnersIds)
-						->setDistinct()
-					;
+				$query = NodeMemberTable::query()
+					->setSelect(['ENTITY_ID'])
+					->where('ENTITY_TYPE', MemberEntityType::USER->value)
+					->whereIn('NODE_ID', $nodeIds)
+					->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+					->whereIn('ENTITY_ID', $allOwnersIds)
+					->setDistinct()
+				;
 
-					$rows = $query->fetchAll();
-					$availableToEditOwnersIds = array_merge(
-						$availableToEditOwnersIds,
-						array_map('intval', array_column($rows, 'ENTITY_ID')),
-					);
-				}
+				$rows = $query->fetchAll();
+				$availableToEditOwnersIds = array_merge(
+					$availableToEditOwnersIds,
+					array_map('intval', array_column($rows, 'ENTITY_ID')),
+				);
+			}
+			elseif ($permissionValue === PermissionVariablesDictionary::VARIABLE_DEPARTMENT_WITH_SUBDEPARTMENTS)
+			{
+				$descendantsQuery = NodePathTable::query()
+					->setSelect(['CHILD_ID'])
+					->whereIn('PARENT_ID', $nodeIds)
+					->where('DEPTH', '>=', 0)
+					->where('CHILD_NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+					->setDistinct()
+				;
 
-				if ($permissionValue === PermissionVariablesDictionary::VARIABLE_DEPARTMENT_WITH_SUBDEPARTMENTS)
-				{
-					$descendantsQuery = NodePathTable::query()
-						->setSelect(['CHILD_ID'])
-						->whereIn('PARENT_ID', $nodeIds)
-						->where('DEPTH', '>=', 0)
-						->where('CHILD_NODE.TYPE', NodeEntityType::DEPARTMENT->value)
-						->setDistinct()
-					;
+				$query = NodeMemberTable::query()
+					->setSelect(['ENTITY_ID'])
+					->where('ENTITY_TYPE', MemberEntityType::USER->value)
+					->whereIn('NODE_ID', $descendantsQuery)
+					->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+					->whereIn('ENTITY_ID', $allOwnersIds)
+					->setDistinct()
+				;
 
-					$query = NodeMemberTable::query()
-						->setSelect(['ENTITY_ID'])
-						->where('ENTITY_TYPE', MemberEntityType::USER->value)
-						->whereIn('NODE_ID', $descendantsQuery)
-						->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
-						->whereIn('ENTITY_ID', $allOwnersIds)
-						->setDistinct()
-					;
-
-					$rows = $query->fetchAll();
-					$availableToEditOwnersIds = array_merge(
-						$availableToEditOwnersIds,
-						array_map('intval', array_column($rows, 'ENTITY_ID')),
-					);
-				}
+				$rows = $query->fetchAll();
+				$availableToEditOwnersIds = array_merge(
+					$availableToEditOwnersIds,
+					array_map('intval', array_column($rows, 'ENTITY_ID')),
+				);
 			}
 		}
 
+		$this->fillCanEditFlag(
+			$mailboxes,
+			function (array $mailbox) use ($availableToEditOwnersIds): bool {
+				return in_array((int)($mailbox['OWNER_ID'] ?? 0), $availableToEditOwnersIds, true);
+			},
+		);
+	}
+
+	private function fillCanEditFlag(array &$mailboxes, ?\Closure $conditionCallback = null): void
+	{
 		foreach ($mailboxes as &$mailbox)
 		{
-			if (in_array((int)($mailbox['OWNER_ID'] ?? 0), $availableToEditOwnersIds, true))
+			if ($conditionCallback !== null && !($conditionCallback)($mailbox))
 			{
-				$mailbox['CAN_EDIT'] = true;
+				continue;
 			}
+
+			$mailbox['CAN_EDIT'] = true;
 		}
 	}
 }

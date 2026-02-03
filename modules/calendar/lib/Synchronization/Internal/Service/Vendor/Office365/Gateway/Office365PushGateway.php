@@ -7,6 +7,7 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Gate
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\GoneException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
@@ -20,11 +21,10 @@ class Office365PushGateway extends AbstractOffice365Gateway
 	/**
 	 * @throws DtoValidationException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function addSectionPush(SectionConnection $sectionConnection): PushResponse
 	{
@@ -34,7 +34,6 @@ class Office365PushGateway extends AbstractOffice365Gateway
 			$sectionConnection->getSection()->getOwner()->getId()
 		);
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$response = $this->post('subscriptions', $requestData->toArray());
 
 		return PushResponse::fromArray($response);
@@ -43,6 +42,7 @@ class Office365PushGateway extends AbstractOffice365Gateway
 	/**
 	 * @throws GoneException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws PreconditionFailedException
@@ -58,6 +58,7 @@ class Office365PushGateway extends AbstractOffice365Gateway
 	}
 
 	/**
+	 * @throws NoResponseException
 	 * @throws UnexpectedException
 	 */
 	public function deletePush(string $resourceId): void

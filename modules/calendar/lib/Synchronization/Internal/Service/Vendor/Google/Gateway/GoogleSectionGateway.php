@@ -8,6 +8,7 @@ use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Sync\Google\SectionConverter;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Common\Gateway\SectionGatewayInterface;
@@ -24,12 +25,11 @@ class GoogleSectionGateway extends AbstractGoogleGateway implements SectionGatew
 	/**
 	 * @throws ConflictException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function createSection(Section $section): CalendarResponse
 	{
@@ -47,19 +47,17 @@ class GoogleSectionGateway extends AbstractGoogleGateway implements SectionGatew
 			return $response;
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Section was not created');
 	}
 
 	/**
 	 * @throws AccessDeniedException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function updateSection(Section $section, string $googleCalendarId): CalendarResponse
 	{
@@ -77,17 +75,15 @@ class GoogleSectionGateway extends AbstractGoogleGateway implements SectionGatew
 			return $response;
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Section was not updated');
 	}
 
 	/**
 	 * @throws AccessDeniedException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function deleteSection(string $vendorSectionId): void
 	{
@@ -101,19 +97,17 @@ class GoogleSectionGateway extends AbstractGoogleGateway implements SectionGatew
 			return;
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Section was not deleted');
 	}
 
 	/**
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws SyncTokenNotValidException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function getSections(?string $token = null): CalendarListResponse
 	{
@@ -140,7 +134,6 @@ class GoogleSectionGateway extends AbstractGoogleGateway implements SectionGatew
 			return CalendarListResponse::fromJson($this->client->getResult());
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Sections list was not retrieved from Google');
 	}
 

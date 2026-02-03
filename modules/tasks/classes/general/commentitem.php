@@ -554,7 +554,14 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 		switch(mb_strtolower($arHandler['EVENT_NAME']))
 		{
 			case 'ontaskcommentadd':
-				$arEventFields['FIELDS_AFTER'] = array('ID' => $commentId, 'TASK_ID' => $taskId);
+				if (FormV2Feature::isOn())
+				{
+					$arEventFields['FIELDS_AFTER'] = ['ID' => 0, 'MESSAGE_ID' => $commentId, 'TASK_ID' => $taskId];
+				}
+				else
+				{
+					$arEventFields['FIELDS_AFTER'] = array('ID' => $commentId, 'TASK_ID' => $taskId);
+				}
 				$arEventFields['IS_ACCESSIBLE_BEFORE'] = 'N';
 				break;
 

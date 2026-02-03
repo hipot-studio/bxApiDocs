@@ -80,22 +80,12 @@ class Settings
 			return false;
 		}
 
-		return \Bitrix\Main\Config\Option::get('im', 'is_tasks_recent_list_available', 'N') === 'Y';
+		return \Bitrix\Main\Config\Option::get('im', 'is_tasks_recent_list_available', 'Y') === 'Y';
 	}
 
 	public static function isMessengerV2Enabled(): bool
 	{
-		if (\Bitrix\Main\Config\Option::get('immobile', 'messenger_v2_enabled', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		if (self::isMessengerV2EnabledForCurrentUser())
-		{
-			return true;
-		}
-
-		return false;
+		return true;
 	}
 
 	public static function isMultipleReactionsEnabled(): bool
@@ -110,15 +100,13 @@ class Settings
 
 	public static function isMessengerV2EnabledForCurrentUser(): bool
 	{
-		return \CUserOptions::GetOption('immobile', 'messenger_v2_enabled', 'N') === 'Y';
+		return true;
 	}
 
 	public static function toggleMessengerV2ForCurrentUser(): array
 	{
-		$isSuccess = self::isMessengerV2EnabledForCurrentUser() ? self::disableMessengerV2ForCurrentUser() : self::enableMessengerV2ForCurrentUser();
-
 		return [
-			'isSuccess' => $isSuccess,
+			'isSuccess' => true,
 			'isMessengerV2Enabled' => self::isMessengerV2Enabled(),
 			'isMessengerV2EnabledForCurrentUser' => self::isMessengerV2EnabledForCurrentUser(),
 		];
@@ -147,5 +135,20 @@ class Settings
 	public static function isAiAssistantMcpSelectorAvailable(): bool
 	{
 		return \Bitrix\Main\Config\Option::get('immobile', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
+	}
+
+	public static function isAutoTaskEnabled(): bool
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return (new \Bitrix\Im\V2\Integration\AI\Restriction())->isAutoTaskActive();
+	}
+
+	public static function isAutoTaskUIAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_auto_task_ui_available', 'N') === 'Y';
 	}
 }

@@ -10,7 +10,7 @@ if (!\Bitrix\Main\Loader::includeModule('mail'))
 	return;
 }
 
-use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
 
@@ -23,7 +23,7 @@ class MailConfigPermissionsComponent extends \CBitrixComponent implements Contro
 
 	public function executeComponent(): void
 	{
-		$canManage = MailboxAccess::hasCurrentUserAccessToPermission();
+		$canManage = MailAccess::hasCurrentUserAccessToPermission();
 
 		if (!$canManage)
 		{

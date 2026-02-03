@@ -32,7 +32,7 @@ class Chat
 			'config' => new Config(
 				hasOwnRecentSection: true,
 				permissions: [
-					Action::Extend->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
+					Action::Extend->value => \Bitrix\Im\V2\Chat::ROLE_MEMBER,
 					Action::ChangeAvatar->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
 					Action::ChangeDescription->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
 					Action::ChangeColor->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
@@ -65,14 +65,24 @@ class Chat
 	{
 		$userIds = $event->getUserIds();
 		$taskId = (int)$event->getChat()->getEntityId();
-
-		[, $hiddenUserIds] = Container::getInstance()
-			->getTaskAccessService()
-			// @todo Process TaskNotExistsException
-			->filterMemberUsers($taskId, $userIds);
-
 		$config = $event->getAddUsersConfig();
-		$config = $config->addHiddenUserIds($hiddenUserIds);
+
+		if ($config->byAutoJoin)
+		{
+			[, $hiddenUserIds] = Container::getInstance()
+				->getTaskAccessService()
+				// @todo Process TaskNotExistsException
+				->filterMemberUsers($taskId, $userIds);
+
+			$config = $config
+				->addHiddenUserIds($hiddenUserIds)
+			;
+		}
+
+		$config = $config
+			->setWithMessage(false)
+			->setHideHistory(false)
+		;
 
 		return new EventResult(EventResult::SUCCESS, ['config' => $config]);
 	}

@@ -19,7 +19,7 @@ class InMemoryCheckListEntityRepository implements CheckListEntityRepositoryInte
 
 	public function getIdByCheckListId(int $checkListId, Type $type): int
 	{
-		$key = "{$checkListId}_{$type->name}";
+		$key = "{$checkListId}_{$type->value}";
 		if (!isset($this->idsCache[$key]))
 		{
 			$this->idsCache[$key] = $this->checkListEntityRepository->getIdByCheckListId($checkListId, $type);

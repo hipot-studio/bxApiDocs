@@ -723,6 +723,12 @@ class Call
 				{
 					$callUser->updateState(CallUser::STATE_IDLE);
 				}
+
+				// so that the call gets into this user's call list
+				if ($callUser->getState() === CallUser::STATE_UNAVAILABLE)
+				{
+					$callUser->updateState(CallUser::STATE_UNAVAILABLE);
+				}
 			}
 			$this->getSignaling()->sendFinish();
 			$this->saveStat();

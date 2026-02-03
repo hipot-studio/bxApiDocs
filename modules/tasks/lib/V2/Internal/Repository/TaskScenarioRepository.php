@@ -23,6 +23,11 @@ class TaskScenarioRepository implements TaskScenarioRepositoryInterface
 
 	public function save(int $taskId, array $scenarios): void
 	{
+		if (empty($scenarios))
+		{
+			return;
+		}
+
 		$rows = [];
 		foreach ($scenarios as $scenario)
 		{

@@ -45,7 +45,10 @@ class TemplatePermissionRepository implements TemplatePermissionRepositoryInterf
 						&& $accessEntity->type === $this->accessEntityTypeMapper->mapToEnum($accessCode->getEntityType())
 			);
 
-
+			$row['ACCESS_ENTITY'] ??= new AccessEntity(
+				id: $accessCode->getEntityId(),
+				type: $this->accessEntityTypeMapper->mapToEnum($accessCode->getEntityType()),
+			);
 		}
 
 		return $this->templatePermissionMapper->mapToCollection($rows);

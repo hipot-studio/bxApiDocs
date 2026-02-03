@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Invoice\Compatible;
 
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale;
 
@@ -288,7 +289,8 @@ class BasketHelper
 					}
 				}
 
-				$arShoppingCartItem['PRICE'] = Sale\PriceMaths::roundPrecision($arShoppingCartItem['PRICE']);
+				$accounter = Container::getInstance()->getAccounting();
+				$arShoppingCartItem['PRICE'] = $accounter->round($arShoppingCartItem['PRICE'] ?? 0);
 
 				$arShoppingCartItem['QUANTITY'] = (float)$arShoppingCartItem['QUANTITY'];
 				$arShoppingCartItem['WEIGHT'] = (float)($arShoppingCartItem['WEIGHT'] ?? null);
@@ -310,14 +312,12 @@ class BasketHelper
 				$arShoppingCartItem['DIMENSIONS'] = $dimensions;
 				unset($dimensions);
 				$arShoppingCartItem['VAT_RATE'] = (float)($arShoppingCartItem['VAT_RATE'] ?? null);
-				$arShoppingCartItem['DISCOUNT_PRICE'] = round(($arShoppingCartItem['DISCOUNT_PRICE'] ?? 0), SALE_VALUE_PRECISION);
+				$arShoppingCartItem['DISCOUNT_PRICE'] = $accounter->round($arShoppingCartItem['DISCOUNT_PRICE'] ?? 0);
 
 				if ($arShoppingCartItem['VAT_RATE'] > 0)
 				{
-					$arShoppingCartItem['VAT_VALUE'] = Sale\PriceMaths::roundPrecision(
-						($arShoppingCartItem['PRICE'] / ($arShoppingCartItem['VAT_RATE'] + 1)) *
-						$arShoppingCartItem['VAT_RATE']
-					);
+					$arShoppingCartItem['VAT_VALUE'] = ($arShoppingCartItem['PRICE'] / ($arShoppingCartItem['VAT_RATE'] + 1)) *	$arShoppingCartItem['VAT_RATE'];
+					$arShoppingCartItem['VAT_VALUE'] = $accounter->round($arShoppingCartItem['VAT_VALUE']);
 				}
 
 				if ($arShoppingCartItem['DISCOUNT_PRICE'] > 0)

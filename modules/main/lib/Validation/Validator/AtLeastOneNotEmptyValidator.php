@@ -14,6 +14,8 @@ class AtLeastOneNotEmptyValidator implements ValidatorInterface
 	public function __construct(
 		private readonly bool $allowZero = false,
 		private readonly bool $allowEmptyString = false,
+		private readonly array $propertyNames = [],
+		private readonly bool $showPropertyNames = false,
 	)
 	{
 	}
@@ -59,10 +61,19 @@ class AtLeastOneNotEmptyValidator implements ValidatorInterface
 
 		if ($allEmpty)
 		{
-			$result->addError(new ValidationError(
-				new LocalizableMessage('MAIN_VALIDATION_AT_LEAST_ONE_PROPERTY_NOT_EMPTY_ALL_EMPTY'),
-				failedValidator: $this
-			));
+			if ($this->showPropertyNames && !empty($this->propertyNames))
+			{
+				$message = new LocalizableMessage(
+					'MAIN_VALIDATION_AT_LEAST_ONE_PROPERTY_NOT_EMPTY_ALL_EMPTY_WITH_PROPERTY_NAMES',
+					['#PROPERTY_NAMES#' => implode(', ', $this->propertyNames)]
+				);
+			}
+			else
+			{
+				$message = new LocalizableMessage('MAIN_VALIDATION_AT_LEAST_ONE_PROPERTY_NOT_EMPTY_ALL_EMPTY');
+			}
+
+			$result->addError(new ValidationError($message, failedValidator: $this));
 		}
 
 		return $result;

@@ -23,8 +23,8 @@ class SendAnalytics
 		$params = array_merge(
 			$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
 			[
-				'p3' => 'auditorsCount_' . count($fields['AUDITORS'] ?? []),
-				'p5' => 'accomplicesCount_' . count($fields['ACCOMPLICES'] ?? []),
+				'p3' => 'viewersCount_' . count($fields['AUDITORS'] ?? []),
+				'p5' => 'coexecutorsCount_' . count($fields['ACCOMPLICES'] ?? []),
 			]
 		);
 

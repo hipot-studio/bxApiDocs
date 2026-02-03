@@ -26,7 +26,7 @@ class TaskDetachFileRule extends AbstractRule
 			return false;
 		}
 
-		if ($this->controller->check(ActionDictionary::ACTION_TASK_EDIT))
+		if ($this->controller->check(ActionDictionary::ACTION_TASK_EDIT, $item, $params))
 		{
 			return true;
 		}

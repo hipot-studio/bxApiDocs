@@ -1455,6 +1455,8 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$topicId = $task->getForumTopicId();
 		$forumId = Comment::getForumId();
 
+		\Bitrix\Main\UI\Extension::load(['viewer']);
+
 		ob_start();
 		$APPLICATION->IncludeComponent(
 			"bitrix:disk.uf.comments.attached.objects",

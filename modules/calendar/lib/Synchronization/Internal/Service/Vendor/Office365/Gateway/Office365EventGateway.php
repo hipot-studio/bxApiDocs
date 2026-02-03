@@ -6,6 +6,7 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Gate
 
 use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Sync\Office365\Dto\EventDto;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
@@ -18,10 +19,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedExceptio
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Dto\EventListResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Dto\EventResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Util\DeltaIntervalGenerator;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\HttpClient;
@@ -39,6 +37,7 @@ class Office365EventGateway extends AbstractOffice365Gateway
 	/**
 	 * @throws GoneException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
@@ -81,6 +80,7 @@ class Office365EventGateway extends AbstractOffice365Gateway
 	/**
 	 * @throws DtoValidationException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
@@ -98,6 +98,7 @@ class Office365EventGateway extends AbstractOffice365Gateway
 	 * @throws ConflictException
 	 * @throws DtoValidationException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws PreconditionFailedException
@@ -126,6 +127,7 @@ class Office365EventGateway extends AbstractOffice365Gateway
 
 	/**
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws UnexpectedException
 	 */
@@ -143,6 +145,7 @@ class Office365EventGateway extends AbstractOffice365Gateway
 
 	/**
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws UnexpectedException
 	 * @throws NotFoundException
@@ -208,6 +211,7 @@ class Office365EventGateway extends AbstractOffice365Gateway
 	 * @return EventDto[]
 	 *
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException

@@ -43,7 +43,7 @@ class EventListResponse
 				$item['end'],
 				$item['reminders'] ?? [],
 				$item['originalStartTime'] ?? null,
-				$item['summary'], // can be empty?
+				$item['summary'] ?? null,
 				$item['description'] ?? null,
 				$item['location'] ?? null,
 				$item['colorId'] ?? null,

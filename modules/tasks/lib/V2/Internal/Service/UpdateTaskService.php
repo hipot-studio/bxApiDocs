@@ -59,7 +59,7 @@ class UpdateTaskService
 		{
 			$this->taskRepository->invalidate($task->id);
 
-			$task = $this->taskRepository->getById($task->id);
+			$task = $this->getTask($task->id);
 		}
 
 		(new RunUpdateEvent($config))(
@@ -76,6 +76,20 @@ class UpdateTaskService
 			taskBeforeUpdate: $taskBefore,
 		));
 
-		return $this->taskRepository->getById($task->id);
+		return $this->getTask($task->id);
+	}
+
+	/**
+	 * @throws TaskNotExistsException
+	 */
+	protected function getTask(int $taskId): Task
+	{
+		$task = $this->taskRepository->getById($taskId);
+		if ($task === null)
+		{
+			throw new TaskNotExistsException();
+		}
+
+		return $task;
 	}
 }

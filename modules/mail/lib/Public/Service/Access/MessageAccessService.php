@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Public\Service\Access;
 
-use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Main\ArgumentTypeException;
@@ -66,7 +66,7 @@ class MessageAccessService
 			$signer->getSignature($access['SECRET'], sprintf('user%u', $userId)),
 		);
 
-		$link = Message::addSourceAnalyticsToMessage($link, $access['ENTITY_TYPE'] ?? '');
+		$link = AnalyticsHelper::addSourceAnalyticsToMessage($link, $access['ENTITY_TYPE'] ?? '');
 		$uri = new Uri($link);
 		$uri->addParams(['mail_uf_message_token' => $token]);
 

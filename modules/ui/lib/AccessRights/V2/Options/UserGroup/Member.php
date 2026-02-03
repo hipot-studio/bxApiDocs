@@ -95,4 +95,34 @@ class Member implements JsonSerializable, Arrayable
 			$entity->getAvatar(22, 22),
 		);
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		if (!isset($data['id']) || (!is_string($data['id']) && !is_int($data['id'])))
+		{
+			return null;
+		}
+
+		if (!isset($data['name']) || !is_string($data['name']))
+		{
+			return null;
+		}
+
+		if (!isset($data['type']) || !is_string($data['type']))
+		{
+			return null;
+		}
+
+		if (isset($data['avatar']) && !is_string($data['avatar']))
+		{
+			return null;
+		}
+
+		return new self(
+			$data['id'],
+			$data['name'],
+			$data['type'],
+			$data['avatar'] ?? '',
+		);
+	}
 }

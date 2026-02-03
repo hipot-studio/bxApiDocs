@@ -128,9 +128,21 @@ class ElapsedTimeService
 		return $elapsedTime;
 	}
 
+	/**
+	 * @throws ElapsedTimeException
+	 * @throws ElapsedTimeNotFoundException
+	 */
 	public function delete(ElapsedTime $elapsedTime): bool
 	{
+		$elapsedTimeId = $elapsedTime->getId();
+
+		if ($elapsedTimeId === null)
+		{
+			throw new ElapsedTimeNotFoundException('Elapsed time id is null');
+		}
+
 		$removingItem = $this->elapsedTimeRepository->getById($elapsedTime->getId());
+
 		if ($removingItem === null)
 		{
 			throw new ElapsedTimeNotFoundException();

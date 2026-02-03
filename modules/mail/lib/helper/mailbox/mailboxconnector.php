@@ -2,9 +2,12 @@
 
 namespace Bitrix\Mail\Helper\Mailbox;
 
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\Dto\MailboxConnect\AbstractMailboxConnectDTO;
+use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxMassconnectDTO;
 use Bitrix\Mail\Helper\MailboxSearchIndexHelper;
-use Bitrix\Mail\Integration\Crm\Permissions;
 use Bitrix\Main;
 use Bitrix\Mail;
 use Bitrix\Main\Config\Option;
@@ -35,9 +38,9 @@ final class MailboxConnector
 
 	private bool $isSMTPAvailable = false;
 
-	private ?MailboxConnectDTO $mailboxConnectDTO = null;
+	private ?AbstractMailboxConnectDTO $mailboxConnectDTO = null;
 
-	public function setMailboxConnectDTO(MailboxConnectDTO $mailboxConnectDTO): void
+	public function setMailboxConnectDTO(AbstractMailboxConnectDTO $mailboxConnectDTO): void
 	{
 		$this->mailboxConnectDTO = $mailboxConnectDTO;
 	}
@@ -271,12 +274,12 @@ final class MailboxConnector
 		return $result;
 	}
 
-	public function connectMailboxWithDefaultCrm(MailboxConnectDTO $mailboxConnectDTO): array
+	public function connectMailboxWithDefaultCrm(AbstractMailboxConnectDTO $mailboxConnectDTO): array
 	{
 		return $this->connectMailboxAndSaveIndex($mailboxConnectDTO, defaultCrm: true);
 	}
 
-	public function connectMailboxWithCustomCrm(?MailboxConnectDTO $mailboxConnectDTO = null, bool $useClassDto = false): array
+	public function connectMailboxWithCustomCrm(?AbstractMailboxConnectDTO $mailboxConnectDTO = null, bool $useClassDto = false): array
 	{
 		if ($useClassDto && $this->mailboxConnectDTO)
 		{
@@ -292,7 +295,7 @@ final class MailboxConnector
 	}
 
 	public function connectMailbox(
-		MailboxConnectDTO $mailboxConnectDTO,
+		AbstractMailboxConnectDTO $mailboxConnectDTO,
 		?bool $defaultCrm = false,
 	): array
 	{
@@ -366,7 +369,7 @@ final class MailboxConnector
 		return $this->createMailboxInternal($mailboxData, $senderFields, $isOAuth, $mailboxConnectDTO->syncAfterConnection);
 	}
 
-	public function getMailboxConnectionData(MailboxConnectDTO $mailboxConnectDTO): ?array
+	public function getMailboxConnectionData(AbstractMailboxConnectDTO $mailboxConnectDTO): ?array
 	{
 		try
 		{
@@ -393,7 +396,7 @@ final class MailboxConnector
 		}
 	}
 
-	private function connectMailboxAndSaveIndex(MailboxConnectDTO $mailboxConnectDTO, bool $defaultCrm = false): array
+	private function connectMailboxAndSaveIndex(AbstractMailboxConnectDTO $mailboxConnectDTO, bool $defaultCrm = false): array
 	{
 		$connectResult = $this->connectMailbox($mailboxConnectDTO, $defaultCrm);
 
@@ -434,14 +437,7 @@ final class MailboxConnector
 		$currentSite = \CSite::getById(SITE_ID)->fetch();
 		$email = $address->getEmail() ?? '';
 
-		$existingMailbox = Mail\MailboxTable::getList([
-			'filter' => [
-				'=EMAIL' => $email,
-				'=USER_ID' => $userId,
-				'=ACTIVE' => 'Y',
-				'=LID' => $currentSite['LID'],
-			],
-		])->fetch();
+		$existingMailbox = Mailbox::findActiveMailbox($userId, $email, $currentSite['LID']);
 
 		if (!empty($existingMailbox))
 		{
@@ -521,7 +517,7 @@ final class MailboxConnector
 		return $oauthHelper ?: null;
 	}
 
-	private function buildMailboxData(MailboxConnectDTO $mailboxConnectDTO): array
+	private function buildMailboxData(AbstractMailboxConnectDTO $mailboxConnectDTO): array
 	{
 		$useTls = $mailboxConnectDTO->ssl;
 
@@ -620,21 +616,17 @@ final class MailboxConnector
 
 	private function isCrmIntegrationAvailableForCurrentUser(): bool
 	{
-		global $USER;
-
 		if (!Loader::includeModule('crm'))
 		{
 			return false;
 		}
 
-		if (!Permissions::getInstance()->hasAccessToCrm())
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm())
 		{
 			return false;
 		}
 
-		return $USER->isAdmin()
-			|| $USER->canDoOperation('bitrix24_config')
-			|| Option::get('intranet', 'allow_external_mail_crm', 'Y', SITE_ID) === 'Y';
+		return Feature::isCrmAvailable();
 	}
 
 	private function resetExistingSmtp(string $email): void
@@ -669,7 +661,7 @@ final class MailboxConnector
 
 	private function prepareSmtpSender(
 		array $mailboxData,
-		MailboxConnectDTO $mailboxConnectDTO,
+		AbstractMailboxConnectDTO $mailboxConnectDTO,
 	): ?array
 	{
 		$this->setIsSmtpAvailable();
@@ -926,6 +918,48 @@ final class MailboxConnector
 			Main\Mail\Sender::delete([$sender['ID']]);
 			Main\Mail\Sender::clearCustomSmtpCache($email);
 		}
+	}
+
+	/**
+	 * Connect mailbox from mass connect with notifications and result saving
+	 *
+	 * @param MailboxMassconnectDTO $mailboxConnectDTO Mailbox connection data
+	 * @param int $massConnectId ID of MailMassConnectTable entity
+	 * @param int $currentUserId ID of user performing the connection
+	 * @return array
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 */
+	public function connectMailboxFromMassconnect(
+		MailboxMassconnectDTO $mailboxConnectDTO,
+		int $massConnectId,
+		int $currentUserId,
+	): array
+	{
+		$this->setMailboxConnectDTO($mailboxConnectDTO);
+		$result = $this->connectMailboxWithCustomCrm(useClassDto: true);
+		$errors = $this->getErrors();
+
+		$toUserId = $mailboxConnectDTO->userIdToConnect;
+		if (
+			empty($errors)
+			&& $toUserId !== null
+			&& $toUserId !== $currentUserId
+		)
+		{
+			Mail\Integration\Im\Notification::sendAddMailboxNotification(
+				$result['id'] ?? '',
+				$result['email'] ?? '',
+				$toUserId,
+				$currentUserId,
+			);
+		}
+
+		$mailMassConnectHelper = new MailMassConnect();
+		$mailMassConnectHelper->addResult($massConnectId, $mailboxConnectDTO, $result, $errors);
+
+		return $result;
 	}
 
 	public static function deleteMailbox(int $id): Main\Result

@@ -43,17 +43,43 @@ class MentionService
 		return $enable;
 	}
 
-	public function processMentions(Message $message): void
+	public function onMessageSend(Message $message): void
 	{
-		$userName = $message->getAuthor()?->getName();
-		if (!$userName)
+		$this->processMentions($message);
+	}
+
+	public function onMessageUpdate(Message $newMessage, Message $previousMessage): void
+	{
+		$this->processMentions($newMessage, $previousMessage);
+	}
+
+	protected function processMentions(Message $newMessage, ?Message $previousMessage = null): void
+	{
+		if ($newMessage->isForward() || !$newMessage->getAuthor()?->getName())
 		{
 			return;
 		}
 
-		$this->processMessageAnchors($message);
-		$this->processBotExternalMention($message);
+		$change = Message\Send\Mention\MentionChange::fromMessages($newMessage, $previousMessage);
+		$this->processMentionsChange($change);
 
+		$isNewMessage = $previousMessage === null;
+		if ($isNewMessage)
+		{
+			$this->processBotExternalMention($newMessage);
+		}
+	}
+
+	protected function processMentionsChange(Message\Send\Mention\MentionChange $change): void
+	{
+		$change->message->getChat()->onBeforeMentionsChange($change);
+		$this->addMentions($change->message, $change->addedUserIds);
+		$this->deleteMentions($change->message, $change->removedUserIds);
+	}
+
+	protected function addMentions(Message $message, array $addedUserIds): void
+	{
+		$this->addAnchors($message, $addedUserIds);
 		$chat = $this->getChat($message);
 		if ($this->canMention($message, $chat))
 		{
@@ -61,19 +87,13 @@ class MentionService
 		}
 	}
 
-	public function updateMentions(Message $previousMessage, Message $newMessage): void
+	protected function deleteMentions(Message $message, array $removedUserIds): void
 	{
-		if ($previousMessage->getMessage() === $newMessage->getMessage())
+		$this->deleteAnchors($message, $removedUserIds);
+		$chat = $this->getChat($message);
+		if ($this->canMention($message, $chat))
 		{
-			return;
-		}
-
-		$this->updateMessageAnchors($previousMessage, $newMessage);
-
-		$chat = $this->getChat($newMessage);
-		if ($this->canMention($newMessage, $chat))
-		{
-			$this->updateUsersMentions($previousMessage, $newMessage);
+			$this->deleteMentionNotifications($message, $removedUserIds);
 		}
 	}
 
@@ -311,50 +331,6 @@ class MentionService
 		return array_diff_key($mentionedBots, $botInChat);
 	}
 
-	private function processMessageAnchors(Message $message): void
-	{
-		$anchorMentionedUserIds = $message->getUserIdsToSendMentionAnchors();
-		unset($anchorMentionedUserIds[$message->getAuthorId()]);
-
-		$this->addAnchors($message, $anchorMentionedUserIds);
-	}
-
-	private function updateMessageAnchors(Message $previousMessage, Message $newMessage): void
-	{
-		$previousMentionedUserIds = $previousMessage->getUserIdsToSendMentionAnchors();
-		$newMentionedUserIds = $newMessage->getUserIdsToSendMentionAnchors();
-
-		unset(
-			$previousMentionedUserIds[$previousMessage->getAuthorId()],
-			$newMentionedUserIds[$newMessage->getAuthorId()]
-		);
-
-		$toDelete = array_diff_key($previousMentionedUserIds, $newMentionedUserIds);
-		$this->deleteAnchors($newMessage, $toDelete);
-
-		$toAdd = array_diff_key($newMentionedUserIds, $previousMentionedUserIds);
-		$this->addAnchors($newMessage, $toAdd);
-	}
-
-	private function updateUsersMentions(Message $previousMessage, Message $newMessage): void
-	{
-		$chat = $this->getChat($newMessage);
-
-		$previousMentionedUserIds = $previousMessage->getUserIdsToSendMentions();
-		$newMentionedUserIds =  $newMessage->getUserIdsToSendMentions();
-
-		unset(
-			$previousMentionedUserIds[$previousMessage->getAuthorId()],
-			$newMentionedUserIds[$newMessage->getAuthorId()]
-		);
-
-		$toDelete = array_diff_key($previousMentionedUserIds, $newMentionedUserIds);
-		$this->deleteMentionNotifications($newMessage, $toDelete);
-
-		$toAdd = array_diff_key($newMentionedUserIds, $previousMentionedUserIds);
-		$this->sendMentionsToUsers($newMessage, $chat, $toAdd);
-	}
-
 	private function addAnchors(Message $message, array $mentionedUserIds): void
 	{
 		if (!AnchorFeature::isOn())
@@ -362,18 +338,27 @@ class MentionService
 			return;
 		}
 
+		$userIdsForAnchors = $this->filterUsersToMentionAnchor($message, $mentionedUserIds);
+
 		$anchorService = AnchorContainer::getInstance()
 			->getAnchorService($message)
-			->setContext($this->getContext());
+			->setContext($this->getContext())
+		;
 
-		$anchorService->addMentionAnchor($mentionedUserIds);
+		$anchorService->addMentionAnchor($userIdsForAnchors);
+	}
+
+	private function filterUsersToMentionAnchor(Message $message, array $mentionedUserIds): array
+	{
+		return $message->getChat()->getRelationsByUserIds($mentionedUserIds)->getUserIds();
 	}
 
 	private function deleteAnchors(Message $message, array $unmentionedUserIds): void
 	{
 		$anchorService = AnchorContainer::getInstance()
 			->getAnchorService($message)
-			->setContext($this->getContext());
+			->setContext($this->getContext())
+		;
 
 		$anchorService->deleteUsersMentionAnchors($unmentionedUserIds);
 	}

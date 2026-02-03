@@ -121,10 +121,13 @@ class Overview extends AISenseContent
 					$this->{$field} = [];
 					foreach ($values as $row)
 					{
-						$obj = $this->convertObjectStructure($row);
-						if (!empty($obj))
+						if (is_array($row) && !empty($row))
 						{
-							$this->{$field}[] = $obj;
+							$obj = $this->convertObjectStructure($row);
+							if (!empty($obj))
+							{
+								$this->{$field}[] = $obj;
+							}
 						}
 					}
 				}

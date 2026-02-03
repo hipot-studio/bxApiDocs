@@ -11,6 +11,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Exception;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Dto\Push\PushResponse;
@@ -31,6 +32,7 @@ class GooglePushGateway extends AbstractGoogleGateway
 	 * @throws Exception
 	 * @throws DtoValidationException
 	 * @throws NotAuthorizedException
+	 * @throws NoResponseException
 	 * @throws ArgumentException
 	 * @throws RateLimitExceededException
 	 */
@@ -70,6 +72,7 @@ class GooglePushGateway extends AbstractGoogleGateway
 	 * @throws ArgumentException
 	 * @throws DtoValidationException
 	 * @throws Exception
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws RateLimitExceededException
 	 */
@@ -97,6 +100,7 @@ class GooglePushGateway extends AbstractGoogleGateway
 
 	/**
 	 * @throws NotAuthorizedException
+	 * @throws NoResponseException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
 	 *

@@ -14,7 +14,6 @@ use Bitrix\Tasks\Control\Task;
 use Bitrix\Tasks\Control\Template;
 use Bitrix\Tasks\Integration\Disk\UserField;
 use Bitrix\Tasks\Internals\TaskObject;
-use Bitrix\Tasks\Provider\TasksUFManager;
 use Bitrix\Tasks\Replication\ProducerInterface;
 use Bitrix\Tasks\Replication\Repository\TemplateRepository;
 use Bitrix\Tasks\Replication\RepositoryInterface;
@@ -219,7 +218,10 @@ class TemplateTaskProducer implements ProducerInterface
 		$filteredAttachmentIds = [];
 		$templateFiles = $this->fields[UserField::getMainSysUFCode()] ?? [];
 		$templateFiles = $templateFiles === false ? [] : $templateFiles;
-		$fileUf = (new CUserTypeManager())->GetUserFields(TasksUFManager::ENTITY_TYPE)[UserField::getMainSysUFCode()];
+		$fileUf = (new CUserTypeManager())->GetUserFields(
+			\Bitrix\Tasks\V2\Internal\Entity\UF\UserField::TEMPLATE,
+			$this->repository->getEntity()->getId(),
+		)[UserField::getMainSysUFCode()];
 		foreach ($templateFiles as $fileId => $attachmentId)
 		{
 			$errors = FileUserType::checkFields($fileUf, $attachmentId, $this->userId);
@@ -284,12 +286,20 @@ class TemplateTaskProducer implements ProducerInterface
 	{
 		$result = new Result();
 
-		$this->addParentIdToFields()->overrideCreatedDate()->overrideActivityDate()->overrideChangedDate()->filterFiles(
-			);
+		$this
+			->addParentIdToFields()
+			->overrideCreatedDate()
+			->overrideActivityDate()
+			->overrideChangedDate()
+			->filterFiles();
 
 		try
 		{
-			$this->task = (new Task($this->userId))->skipDeadlineTimeZone()->fromAgent()->add($this->fields);
+			$this->task = (new Task($this->userId))
+				->withCloneAttachments()
+				->skipDeadlineTimeZone()
+				->fromAgent()
+				->add($this->fields);
 		}
 		catch (Exception $exception)
 		{

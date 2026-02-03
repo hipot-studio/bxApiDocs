@@ -44,7 +44,7 @@ class RecentUpdate extends BaseChatEvent
 
 		$pull['chat'] = $this->chat->toPullFormat();
 		$pull['lastActivityDate'] = $this->lastActivity;
-		$pull['counterType'] = $this->chat->getCounterType()->value;
+		$pull['counterType'] = $this->chat->getCounterType();
 		$pull['recentConfig'] = $this->chat->getRecentConfig()->toPullFormat();
 
 		return $pull;

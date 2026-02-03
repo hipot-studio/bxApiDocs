@@ -9,7 +9,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Action\Deadline\DeadlineFormatter;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
-#[Recipients(creator: true, responsible: true, accomplices: true, auditors: false)]
+#[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
 class NotifyTaskOverdueSoon extends AbstractNotify
 {
 	private readonly DeadlineFormatter $deadlineFormatter;
@@ -36,5 +36,12 @@ class NotifyTaskOverdueSoon extends AbstractNotify
 			'#RESPONSIBLE#' => $this->formatUser($this->task->responsible),
 			'#DEADLINE#' => $this->deadlineFormatter->format($this->task->deadlineTs),
 		];
+	}
+
+	public function toString(): string
+	{
+		$message = parent::toString();
+
+		return $this->stripBbCodeUrl($message);
 	}
 }

@@ -37,6 +37,7 @@ use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Json;
 use Bitrix\Pull\Event;
 
 Loc::loadMessages(__FILE__);
@@ -979,8 +980,7 @@ class Recent
 				'FILE' => false,
 				'AUTHOR_ID' =>  0,
 				'ATTACH' => false,
-				'COMPONENT_ID' => null,
-				'STICKER' => false,
+				'STICKER' => null,
 				'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 				'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
 			];
@@ -997,7 +997,7 @@ class Recent
 			{
 				try
 				{
-					$value = \Bitrix\Main\Web\Json::decode($row["MESSAGE_ATTACH_JSON"]);
+					$value = Json::decode($row["MESSAGE_ATTACH_JSON"]);
 					$attachRestored = \CIMMessageParamAttach::PrepareAttach($value);
 					$attach = $attachRestored['DESCRIPTION'];
 				}
@@ -1037,14 +1037,15 @@ class Recent
 			);
 		}
 
+		$sticker = self::getStickerParams($row['MESSAGE_STICKER'] ?? null);
+
 		return [
 			'ID' => (int)$row['ITEM_MID'],
 			'TEXT' => $text,
 			'FILE' => $row['MESSAGE_FILE'],
 			'AUTHOR_ID' =>  (int)$row['MESSAGE_AUTHOR_ID'],
 			'ATTACH' => $attach,
-			'COMPONENT_ID' => $row['MESSAGE_COMPONENT_ID'],
-			'STICKER' => $row['MESSAGE_STICKER'] ?? false,
+			'STICKER' => $sticker,
 			'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 			'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
 			'UUID' => $row['MESSAGE_UUID_VALUE'],
@@ -1787,7 +1788,7 @@ class Recent
 						'counter' => $counter,
 						'markedId' => $markedId ?? $element['MARKED_ID'],
 						'lines' => $element['ITEM_TYPE'] === IM_MESSAGE_OPEN_LINE,
-						'counterType' => $chat->getCounterType()->value,
+						'counterType' => $chat->getCounterType(),
 						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 					],
 					'extra' => \Bitrix\Im\Common::getPullExtra()
@@ -2187,14 +2188,9 @@ class Recent
 			$messageId = (int)$item['MESSAGE_ID'];
 			$paramName = $item['PARAM_NAME'];
 
-			if ($paramName === 'COMPONENT_ID')
-			{
-				$result[$messageId]['COMPONENT_ID'] = $item['PARAM_VALUE'];
-			}
-
 			if ($paramName === 'STICKER_PARAMS')
 			{
-				$result[$messageId]['STICKER'] = true;
+				$result[$messageId]['STICKER'] = $item['PARAM_JSON'] ?? null;
 			}
 
 			if ($paramName === 'CODE')
@@ -2274,7 +2270,6 @@ class Recent
 			$rows[$key]['MESSAGE_ATTACH_JSON'] = $params[$messageId]['ATTACH']['JSON'] ?? null;
 			$rows[$key]['MESSAGE_FILE'] = $params[$messageId]['MESSAGE_FILE'] ?? false;
 			$rows[$key]['RELATION_USER_ID'] = $row['RELATION_ID'] ? $userId : null;
-			$rows[$key]['MESSAGE_COMPONENT_ID'] = $params[$messageId]['COMPONENT_ID'] ?? null;
 			$rows[$key]['MESSAGE_STICKER'] = $params[$messageId]['STICKER'] ?? null;
 		}
 
@@ -2307,5 +2302,24 @@ class Recent
 	public static function isLimitError(): bool
 	{
 		return self::$limitError;
+	}
+
+	private static function getStickerParams(?string $stickerData): ?array
+	{
+		if (empty($stickerData))
+		{
+			return null;
+		}
+
+		$sticker = null;
+
+		try
+		{
+			$sticker = Json::decode($stickerData);
+		}
+		catch (\Bitrix\Main\SystemException $e)
+		{}
+
+		return is_array($sticker) ? $sticker : null;
 	}
 }

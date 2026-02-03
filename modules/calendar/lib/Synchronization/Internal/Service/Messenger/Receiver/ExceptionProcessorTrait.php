@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Receiver;
 
+use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\LogicException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\NoLogSynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\RecoverableMessageException;
@@ -43,6 +45,7 @@ trait ExceptionProcessorTrait
 
 				if ($previous instanceof NoLogSynchronizerException)
 				{
+					// @todo Change to no loggable exception after adding it's support to main module
 					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
 				}
 
@@ -51,6 +54,15 @@ trait ExceptionProcessorTrait
 				if ($vendorException instanceof RateLimitExceededException)
 				{
 					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 60);
+				}
+
+				if (
+					$vendorException instanceof NoResponseException
+					|| $vendorException instanceof DtoValidationException
+				)
+				{
+					// @todo Change to no loggable exception after adding it's support to main module
+					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
 				}
 			}
 		}

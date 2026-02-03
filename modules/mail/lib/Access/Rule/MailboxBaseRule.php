@@ -5,6 +5,7 @@ namespace Bitrix\Mail\Access\Rule;
 use Bitrix\Mail\Access\Model\MailboxModel;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Mail\Access\Permission\PermissionVariablesDictionary;
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Integration\HumanResources\NodeMemberService;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Rule\AbstractRule;
@@ -33,7 +34,7 @@ class MailboxBaseRule extends AbstractRule
 		}
 
 		$permissionId = (string)$params[self::PERMISSION_ID_KEY];
-		$permissionValue = (int)$accessibleUser->getPermission($permissionId);
+		$permissionValue = (int)MailboxAccess::getPermissionValue($permissionId, $accessibleUser->getUserId());
 		if ($permissionValue === PermissionVariablesDictionary::VARIABLE_NONE)
 		{
 			return false;

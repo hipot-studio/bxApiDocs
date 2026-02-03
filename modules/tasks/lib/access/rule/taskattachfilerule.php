@@ -31,7 +31,7 @@ class TaskAttachFileRule extends AbstractRule
 			return true;
 		}
 
-		if ($this->controller->check(ActionDictionary::ACTION_TASK_EDIT))
+		if ($this->controller->check(ActionDictionary::ACTION_TASK_EDIT, $item, $params))
 		{
 			return true;
 		}

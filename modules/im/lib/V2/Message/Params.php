@@ -71,7 +71,8 @@ class Params extends Registry
 		COPILOT_ROLE = 'COPILOT_ROLE',
 		STICKER_PARAMS = 'STICKER_PARAMS',
 		AI_ASSISTANT_MCP_AUTH_ID = 'AI_ASSISTANT_MCP_AUTH_ID',
-		COPILOT_REASONING = 'COPILOT_REASONING'
+		COPILOT_REASONING = 'COPILOT_REASONING',
+		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID'
 	;
 
 	//todo: Move it into CRM module
@@ -285,6 +286,10 @@ class Params extends Registry
 		self::STICKER_PARAMS => [
 			'className' => Message\Param\StickerParams::class,
 			'type' => Param::TYPE_JSON,
+		],
+		self::AI_TASK_TRIGGER_MESSAGE_ID => [
+			'type' => Param::TYPE_INT,
+			'default' => 0,
 		],
 	];
 

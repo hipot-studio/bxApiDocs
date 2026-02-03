@@ -32,6 +32,11 @@ class UserRepository implements UserRepositoryInterface
 
 		Collection::normalizeArrayValuesByInt($userIds, false);
 
+		if (empty($userIds))
+		{
+			return new UserCollection();
+		}
+
 		$select = [
 			'ID',
 			'PERSONAL_PHOTO',

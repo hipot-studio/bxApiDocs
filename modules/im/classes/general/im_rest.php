@@ -4015,6 +4015,12 @@ class CIMRestService extends IRestService
 			!($arParams['SEARCH_TYPE'] ?? null)
 			&& !($arParams['SEARCH_DATE'] ?? null)
 			&& mb_strlen(trim($arParams['SEARCH_TEXT'])) < 3
+			&& (empty($arParams['SEARCH_AUTHORS'] ?? []))
+			&& (empty($arParams['SEARCH_TYPES'] ?? []))
+			&& (
+				empty($arParams['SEARCH_DATE_FROM'] ?? [])
+				&& empty($arParams['SEARCH_DATE_TO'] ?? [])
+			)
 		)
 		{
 			throw new Bitrix\Rest\RestException("SEARCH_TEXT can't be less then 3 symbols", "SEARCH_TEXT_ERROR", CRestServer::STATUS_WRONG_REQUEST);
@@ -4028,10 +4034,31 @@ class CIMRestService extends IRestService
 		{
 			$options['SEARCH_TYPE'] = $arParams['SEARCH_TYPE'];
 		}
+
+		if (isset($arParams['SEARCH_TYPES']) && is_array($arParams['SEARCH_TYPES']))
+		{
+			$typeValues = array_filter($arParams['SEARCH_TYPES'], function ($value): bool {
+				return is_string($value) && $value !== '';
+			}
+			);
+
+			if (!empty($typeValues))
+			{
+				$options['SEARCH_TYPES'] = array_values($typeValues);
+			}
+		}
+
 		if (isset($arParams['SEARCH_DATE']))
 		{
 			$options['SEARCH_DATE'] = $arParams['SEARCH_DATE'];
 		}
+
+		if (isset($arParams['SEARCH_DATE_TO']) && isset($arParams['SEARCH_DATE_FROM']))
+		{
+			$options['SEARCH_DATE_TO'] = $arParams['SEARCH_DATE_TO'];
+			$options['SEARCH_DATE_FROM'] = $arParams['SEARCH_DATE_FROM'];
+		}
+
 		if (isset($arParams['LAST_ID']))
 		{
 			if (!preg_match('/^\d+$/', $arParams['LAST_ID']))
@@ -4057,6 +4084,18 @@ class CIMRestService extends IRestService
 
 		$options['CONVERT_TEXT'] = isset($arParams['CONVERT_TEXT']) && $arParams['CONVERT_TEXT'] === 'Y';
 		$options['GROUP_TAG'] = (string)($arParams['GROUP_TAG'] ?? '');
+
+		if (isset($arParams['SEARCH_AUTHORS']) && is_array($arParams['SEARCH_AUTHORS']))
+		{
+			$authorIds = array_filter($arParams['SEARCH_AUTHORS'], function($value) {
+				return is_numeric($value) && (int)$value >= 0;
+			});
+
+			if (!empty($authorIds))
+			{
+				$options['SEARCH_AUTHORS'] = array_map('intval', $authorIds);
+			}
+		}
 
 		$notify = new \Bitrix\Im\Notify($options);
 

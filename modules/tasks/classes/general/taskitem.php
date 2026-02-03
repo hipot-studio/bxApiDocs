@@ -3359,13 +3359,14 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			{
 				if (FormV2Feature::isOn('gantt'))
 				{
-					$mapper = new LinkTypeMapper();
+					$linkType = is_numeric($linkType) ? (int)$linkType : 0;
+					$mapper = Container::getInstance()->get(LinkTypeMapper::class);
 
 					$result = (new AddDependenceCommand(
 						taskId: $this->taskId,
 						dependentId: (int)$parentId,
 						userId: $this->executiveUserId,
-						linkType: $mapper->mapToEnum($linkType) ?? LinkType::FinishStart,
+						linkType: $mapper->mapToEnum($linkType),
 					))->run();
 
 					if (!$result->isSuccess())

@@ -4422,14 +4422,6 @@ class CAllCrmDeal
 		return CCrmProductRow::LoadRows(\CCrmOwnerTypeAbbr::Deal, $ID);
 	}
 
-	/**
-	 * @return array
-	 */
-	public static function getSafeSaveRows(): array
-	{
-		return CCrmProductRow::getSafeSaveRows();
-	}
-
 	public static function SaveProductRows($ID, $arRows, $checkPerms = true, $regEvent = true, $syncOwner = true)
 	{
 		global $APPLICATION;

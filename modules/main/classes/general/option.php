@@ -1,7 +1,10 @@
 <?php
 
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\ArgumentNullException;
+
 /**
- * @deprecated
+ * @deprecated Use Bitrix\Main\Config\Option
  */
 class COption
 {
@@ -13,13 +16,13 @@ class COption
 		{
 			if ($bExactSite)
 			{
-				$v = \Bitrix\Main\Config\Option::getRealValue($module_id, $name, $site);
+				$v = Option::getRealValue($module_id, $name, $site);
 				return $v === null ? false : $v;
 			}
 
-			$v = \Bitrix\Main\Config\Option::get($module_id, $name, $def, $site);
+			$v = Option::get($module_id, $name, $def, $site);
 		}
-		catch (\Bitrix\Main\ArgumentNullException)
+		catch (ArgumentNullException)
 		{
 		}
 
@@ -28,7 +31,7 @@ class COption
 
 	public static function SetOptionString($module_id, $name, $value = "", $desc = false, $site = "")
 	{
-		\Bitrix\Main\Config\Option::set($module_id, $name, $value, $site);
+		Option::set($module_id, $name, $value, $site);
 		return true;
 	}
 
@@ -43,16 +46,16 @@ class COption
 		{
 			$filter["site_id"] = $site;
 		}
-		\Bitrix\Main\Config\Option::delete($module_id, $filter);
+		Option::delete($module_id, $filter);
 	}
 
 	public static function GetOptionInt($module_id, $name, $def = "", $site = false)
 	{
-		return intval(COption::GetOptionString($module_id, $name, $def, $site));
+		return intval(self::GetOptionString($module_id, $name, $def, $site));
 	}
 
 	public static function SetOptionInt($module_id, $name, $value = "", $desc = "", $site = "")
 	{
-		return COption::SetOptionString($module_id, $name, intval($value), $desc, $site);
+		return self::SetOptionString($module_id, $name, intval($value), $desc, $site);
 	}
 }

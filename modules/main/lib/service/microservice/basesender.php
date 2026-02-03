@@ -2,11 +2,12 @@
 
 namespace Bitrix\Main\Service\MicroService;
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Application;
 
 /**
  * Class BaseSender
@@ -30,12 +31,28 @@ abstract class BaseSender
 
 		$request = [
 			"action" => $action,
-			"serializedParameters" => base64_encode(gzencode(Json::encode($parameters))),
+			"serializedParameters" => \base64_encode(\gzencode(Json::encode($parameters))),
 		];
 
 		$request["BX_TYPE"] = Client::getPortalType();
 		$request["BX_LICENCE"] = Client::getLicenseCode();
 		$request["SERVER_NAME"] = $this->getClientServerName();
+
+		$region = Application::getInstance()->getLicense()->getRegion() ?? '';
+		if ($region)
+		{
+			$request["BX_REGION"] = $region;
+		}
+		if (Option::get('main', 'update_devsrv', '') === 'Y')
+		{
+			$request["BX_DEVSRV"] = 'Y';
+		}
+		$site = Application::getInstance()->getContext()->getSiteObject();
+		if ($site && $site->getLid() && !$site->getDef())
+		{
+			$request["BX_SITE"] = $site->getLid();
+		}
+
 		$request["BX_HASH"] = Client::signRequest($request);
 
 		$result = $httpClient->query(HttpClient::HTTP_POST, $url, $request);

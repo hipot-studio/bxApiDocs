@@ -3,11 +3,17 @@
 namespace Bitrix\Im\V2\Chat\EntityLink;
 
 use Bitrix\Im\V2\Chat\EntityLink;
+use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Main\Loader;
 
 class TasksType extends EntityLink
 {
-	protected const HAS_URL = true;
+
+	public function __construct(EntityLinkDto $entityLinkDto)
+	{
+		parent::__construct($entityLinkDto);
+		$this->type = ExtendedType::Tasks->value;
+	}
 
 	protected function getUrl(): string
 	{

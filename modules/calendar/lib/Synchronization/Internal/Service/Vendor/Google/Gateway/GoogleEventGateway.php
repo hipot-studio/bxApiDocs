@@ -16,6 +16,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\ConflictException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\SyncTokenNotValidException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
@@ -35,6 +36,7 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
 	 */
 	public function createEvent(Event $event, string $googleCalendarId): EventResponse
 	{
@@ -75,12 +77,11 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	public function updateEvent(Event $event, EventConnection $eventConnection, string $googleCalendarId): EventResponse
 	{
@@ -102,7 +103,6 @@ class GoogleEventGateway extends AbstractGoogleGateway
 			return EventResponse::fromJson($this->client->getResult());
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Event was not updated');
 	}
 
@@ -112,8 +112,7 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws NotAuthorizedException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
+	 * @throws NoResponseException
 	 */
 	public function deleteEvent(string $googleCalendarId, string $googleEventId): void
 	{
@@ -137,7 +136,6 @@ class GoogleEventGateway extends AbstractGoogleGateway
 			return;
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Event was not deleted');
 	}
 
@@ -170,8 +168,7 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
+	 * @throws NoResponseException
 	 */
 	public function deleteInstance(
 		Event $masterEvent,
@@ -208,7 +205,6 @@ class GoogleEventGateway extends AbstractGoogleGateway
 			return EventResponse::fromJson($this->client->getResult());
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Event instance was not deleted');
 	}
 
@@ -298,8 +294,7 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws RateLimitExceededException
 	 * @throws SyncTokenNotValidException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
+	 * @throws NoResponseException
 	 */
 	public function getEvents(SectionConnection $sectionConnection): EventListResponse
 	{
@@ -313,7 +308,6 @@ class GoogleEventGateway extends AbstractGoogleGateway
 			return EventListResponse::fromJson($this->client->getResult());
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		$this->processErrors('Events list was not retrieved from Google');
 	}
 

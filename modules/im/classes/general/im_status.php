@@ -448,20 +448,24 @@ class CIMStatus
 			return null;
 		}
 
-		$userStatus = null;
-		$cache = \Bitrix\Main\Data\Cache::createInstance();
-
 		if (isset(self::$status[$userId]))
 		{
 			return self::getStatusFromStaticCache($userId);
 		}
 
-		if($cache->initCache(self::CACHE_TTL, 'list_v2', self::CACHE_PATH.$userId.'/'))
+		$userStatus = null;
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+		$cacheId = 'list_v2';
+		$cachePath = self::CACHE_PATH.$userId.'/';
+
+		if($cache->initCache(self::CACHE_TTL, $cacheId, $cachePath))
 		{
 			$userStatus = $cache->getVars();
 		}
 		else
 		{
+			$cache->startDataCache();
+
 			$res = IM\Model\StatusTable::getList(Array(
 				'select' => Array(
 					'STATUS',
@@ -480,22 +484,20 @@ class CIMStatus
 				),
 				'filter' => Array('=USER_ID' => $userId),
 			));
-			if ($status = $res->fetch())
-			{
-				$userStatus = $status;
-				$cache->startDataCache();
-				$cache->endDataCache($userStatus);
-			}
+
+			$userStatus = ($status = $res->fetch()) ? $status : [];
+			$cache->endDataCache($userStatus);
 		}
 
-		self::$status[$userId] = $userStatus ?? [];
+		self::$status[$userId] = $userStatus;
 
-		if ($userStatus)
+		if (!empty($userStatus))
 		{
 			$userStatus = CIMStatus::prepareLastDate($userStatus);
+			return $userStatus;
 		}
 
-		return $userStatus;
+		return null;
 	}
 
 	protected static function getStatusFromStaticCache(int $userId): ?array

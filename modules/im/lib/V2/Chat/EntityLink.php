@@ -3,32 +3,29 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Chat\EntityLink\CalendarType;
-use Bitrix\Im\V2\Chat\EntityLink\CrmType;
-use Bitrix\Im\V2\Chat\EntityLink\MailType;
-use Bitrix\Im\V2\Chat\EntityLink\SonetType;
-use Bitrix\Im\V2\Chat\EntityLink\TasksType;
-use Bitrix\Im\V2\Chat\EntityLink\CallType;
+use Bitrix\Im\V2\Chat\EntityLink\EntityLinkDto;
+use Bitrix\Im\V2\Chat\EntityLink\EntityLinkFactory;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Rest\RestConvertible;
 use Bitrix\Main\Application;
-use Bitrix\Main\Loader;
 
 class EntityLink implements RestConvertible
 {
 	use ContextCustomer;
-
-	protected const HAS_URL = false;
 
 	private const CACHE_TTL = 18144000;
 
 	protected int $chatId;
 	protected string $entityId = '';
 	protected string $type = '';
-	protected string $url = '';
+	protected ?string $url = null;
 
-	protected function __construct()
+	public function __construct(EntityLinkDto $entityLinkDto)
 	{
+		$this->type = $entityLinkDto->type;
+		$this->chatId = $entityLinkDto->chatId;
+		$this->entityId = $entityLinkDto->entityId;
+		$this->url = $entityLinkDto->url;
 	}
 
 	public function getEntityId(): string
@@ -38,44 +35,8 @@ class EntityLink implements RestConvertible
 
 	public static function getInstance(Chat $chat): self
 	{
-		$type = $chat->getEntityType() ?? '';
-		if ($type === ExtendedType::Sonet->value && Loader::includeModule('socialnetwork'))
-		{
-			$instance = new SonetType();
-		}
-		elseif (
-			Loader::includeModule('tasks')
-			&& ($type === ExtendedType::Tasks->value || $type === \Bitrix\Tasks\V2\Internal\Integration\Im\Chat::ENTITY_TYPE)
-		)
-		{
-			// TODO: replace with send event!!!
-			$type = ExtendedType::Tasks->value;
-			$instance = new TasksType();
-		}
-		elseif ($type === ExtendedType::Calendar->value && Loader::includeModule('calendar'))
-		{
-			$instance = new CalendarType();
-		}
-		elseif ($type === ExtendedType::Crm->value && Loader::includeModule('crm'))
-		{
-			$instance = new CrmType($chat->getEntityId() ?? '');
-		}
-		elseif ($type === ExtendedType::Call->value && Loader::includeModule('crm'))
-		{
-			$instance = new CallType($chat->getEntityData1() ?? '');
-		}
-		elseif ($type === ExtendedType::Mail->value && Loader::includeModule('mail'))
-		{
-			$instance = new MailType();
-		}
-		else
-		{
-			$instance = new self();
-		}
-
-		$instance->type = $instance->type ?: $type;
-		$instance->chatId = $chat->getId() ?? 0;
-		$instance->entityId = $chat->getEntityId() ?? '';
+		$factory = EntityLinkFactory::getInstance();
+		$instance = $factory->create($chat);
 		$instance->fillUrl();
 
 		return $instance;
@@ -83,7 +44,7 @@ class EntityLink implements RestConvertible
 
 	protected function fillUrl(): void
 	{
-		if (!static::HAS_URL)
+		if (isset($this->url))
 		{
 			return;
 		}

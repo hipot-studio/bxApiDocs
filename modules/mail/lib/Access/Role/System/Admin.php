@@ -15,6 +15,7 @@ class Admin extends Base
 			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_VIEW => PermissionVariablesDictionary::VARIABLE_ALL,
 			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT => PermissionVariablesDictionary::VARIABLE_ALL,
 			PermissionDictionary::MAIL_MAILBOX_CONNECT => PermissionDictionaryAlias::VALUE_YES,
+			PermissionDictionary::MAIL_MAILBOX_CRM_INTEGRATION_EDIT => PermissionDictionaryAlias::VALUE_YES,
 		];
 	}
 }

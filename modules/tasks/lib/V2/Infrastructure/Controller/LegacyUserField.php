@@ -34,7 +34,7 @@ class LegacyUserField extends BaseController
 			}
 		}
 
-		$taskId = $task->getId() ? (string)$task->getId() : Random::getString(8);
+		$randomId = Random::getString(8);
 		$taskData = $task->getId()
 			? \Bitrix\Tasks\Manager\Task::get($this->userId, $task->getId())['DATA']
 			: []
@@ -47,7 +47,7 @@ class LegacyUserField extends BaseController
 				'EXCLUDE' => UserField::TASK_SYSTEM_USER_FIELDS,
 				'DATA' => $taskData,
 				'ENTITY_CODE' => 'TASK',
-				'SIGNATURE' => "bitrix-tasks-userfield-panel-$taskId",
+				'SIGNATURE' => "bitrix-tasks-userfield-panel-$randomId",
 				'INPUT_PREFIX' => 'USER_FIELDS',
 				'RELATED_ENTITIES' => [
 					'TASK_TEMPLATE',
@@ -75,15 +75,9 @@ class LegacyUserField extends BaseController
 		}
 
 		$randomId = Random::getString(8);
-		$templateId = $template->getId() ? (string)$template->getId() : $randomId;
 		$templateData = $template->getId()
 			? \Bitrix\Tasks\Manager\Task\Template::get($this->userId, $template->getId())['DATA']
 			: []
-		;
-
-		$signatureSuffix = $template->task !== null
-			? "from-template-task-$randomId"
-			: "template-$templateId"
 		;
 
 		return new Component(
@@ -93,7 +87,7 @@ class LegacyUserField extends BaseController
 				'EXCLUDE' => UserField::TASK_SYSTEM_USER_FIELDS,
 				'DATA' => $templateData,
 				'ENTITY_CODE' => 'TASK_TEMPLATE',
-				'SIGNATURE' => "bitrix-tasks-userfield-panel-$signatureSuffix",
+				'SIGNATURE' => "bitrix-tasks-userfield-panel-template-$randomId",
 				'INPUT_PREFIX' => 'USER_FIELDS',
 				'RELATED_ENTITIES' => [
 					'TASK',

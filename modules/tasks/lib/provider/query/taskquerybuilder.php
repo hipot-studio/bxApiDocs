@@ -1194,6 +1194,8 @@ class TaskQueryBuilder implements QueryBuilderInterface
 				'CASE WHEN %1$s IS NULL THEN 0 ELSE %1$s END',
 				['GROUP_ID']
 			),
+			'GROUP_NAME' => 'GROUP.NAME',
+			'GROUP_TYPE' => 'GROUP.TYPE',
 			"FORUM_TOPIC_ID" => "FORUM_TOPIC_ID",
 			"PARENT_ID" => "PARENT_ID",
 			"COMMENTS_COUNT" => self::ALIAS_FORUM_TOPIC . ".POSTS",

@@ -8,9 +8,9 @@ use Bitrix\AiAssistant\Facade\TracedLogger;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\UserProvider;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Member\SearchUsersDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\MemberSchemaBuilder;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\UserService;
 
 // TODO: This is the general logic. Remove when there is an analog in AiAssistant.
 class SearchUsersTool extends BaseTool
@@ -18,7 +18,7 @@ class SearchUsersTool extends BaseTool
 	public const ACTION_NAME = 'search_users';
 
 	public function __construct(
-		private readonly UserService $userService,
+		private readonly UserProvider $userProvider,
 		MemberSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
@@ -72,7 +72,7 @@ class SearchUsersTool extends BaseTool
 			return $this->createFailureResponse($e->getMessage());
 		}
 
-		$users = $this->userService->search($dto);
+		$users = $this->userProvider->search($dto);
 
 		if (empty($users))
 		{

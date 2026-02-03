@@ -48,5 +48,7 @@ class ConvertDatePlan implements ConvertFieldInterface
 				$taskBuilder->set('endPlanTs', $endDatePlan->getTimestamp());
 			}
 		}
+
+		$taskBuilder->set('allowsChangeDatePlan', (bool)$template->allowsChangeDeadline);
 	}
 }

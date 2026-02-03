@@ -120,4 +120,5 @@ enum Solid: string
 	case VERIFICATION = 's-verification';
 	case WALLET = 's-wallet';
 	case WINDOW_FLAG = 's-window-flag';
+	case CROWN_1 = 's-crown-1';
 }

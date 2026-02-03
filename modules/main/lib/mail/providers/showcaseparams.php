@@ -127,8 +127,10 @@ final class ShowcaseParams
 	private function isSmtpAvailable(): bool
 	{
 		$defaultMailConfiguration = Configuration::getValue('smtp');
-		return Loader::includeModule('bitrix24')
-			|| $defaultMailConfiguration['enabled']
+
+		return
+			Loader::includeModule('bitrix24')
+			|| (($defaultMailConfiguration['enabled'] ?? false) === true)
 		;
 	}
 }

@@ -6,8 +6,8 @@ use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Interaction\Request\Request;
-use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\CrmItemDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\ElapsedTimeDto;
+use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\EmailDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\FlowDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\GroupDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\ReminderDto;
@@ -141,6 +141,14 @@ class TaskDtoMapper
 		if (empty($select) || in_array('containsPlacements', $select, true))
 		{
 			$dto->containsPlacements = $task->containsPlacements ?? null;
+		}
+		if (empty($select) || in_array('containsResults', $select, true))
+		{
+			$dto->containsResults = $task->containsResults ?? null;
+		}
+		if (empty($select) || in_array('numberOfReminders', $select, true))
+		{
+			$dto->numberOfReminders = $task->numberOfReminders ?? null;
 		}
 		if (empty($select) || in_array('chatId', $select, true))
 		{
@@ -304,10 +312,6 @@ class TaskDtoMapper
 		{
 			$dto->crmItemIds = $task->crmItemIds ?? [];
 		}
-		if ($request?->getRelation('crmItems') !== null)
-		{
-			$dto->crmItems = isset($task->crmItems) ? array_map(fn($c) => CrmItemDto::fromEntity($c, $request?->getRelation('crmItems')?->getRequest()), $task->crmItems->getIterator() ?? []) : null;
-		}
 		if ($request?->getRelation('reminders') !== null)
 		{
 			$dto->reminders = isset($task->reminders) ? array_map(fn($r) => ReminderDto::fromEntity($r, $request?->getRelation('reminders')?->getRequest()), $task->reminders->getIterator() ?? []) : null;
@@ -320,13 +324,13 @@ class TaskDtoMapper
 		{
 			$dto->source = isset($task->source) ? SourceDto::fromEntity($task->source, $request?->getRelation('source')?->getRequest()) : null;
 		}
+		if ($request?->getRelation('email') !== null)
+		{
+			$dto->email = isset($task->email) ? EmailDto::fromEntity($task->email, $request?->getRelation('email')?->getRequest()) : null;
+		}
 		if (empty($select) || in_array('dependsOn', $select, true))
 		{
 			$dto->dependsOn = $task->dependsOn ?? [];
-		}
-		if (empty($select) || in_array('ganttLinks', $select, true))
-		{
-			$dto->ganttLinks = $task->ganttLinks ?? [];
 		}
 		if (empty($select) || in_array('requireResult', $select, true))
 		{
@@ -343,6 +347,18 @@ class TaskDtoMapper
 		if (empty($select) || in_array('allowsChangeDatePlan', $select, true))
 		{
 			$dto->allowsChangeDatePlan = $task->allowsChangeDatePlan ?? null;
+		}
+		if (empty($select) || in_array('maxDeadlineChangeDate', $select, true))
+		{
+			$dto->maxDeadlineChangeDate = $task->maxDeadlineChangeDate ?? null;
+		}
+		if (empty($select) || in_array('maxDeadlineChanges', $select, true))
+		{
+			$dto->maxDeadlineChanges = $task->maxDeadlineChanges ?? null;
+		}
+		if (empty($select) || in_array('requireDeadlineChangeReason', $select, true))
+		{
+			$dto->requireDeadlineChangeReason = $task->requireDeadlineChangeReason ?? null;
 		}
 		if (empty($select) || in_array('inFavorite', $select, true))
 		{

@@ -127,6 +127,12 @@ class TaskDto extends Dto
 	public ?bool $containsPlacements;
 
 	#[Editable]
+	public ?bool $containsResults;
+
+	#[Editable]
+	public ?int $numberOfReminders;
+
+	#[Editable]
 	public ?int $chatId;
 
 	#[RelationToOne('chatId', 'id')]
@@ -248,10 +254,6 @@ class TaskDto extends Dto
 	#[Editable]
 	public ?array $crmItemIds;
 
-	#[ElementType(CrmItemDto::class)]
-	#[RelationToMany('crmItemIds', 'id', ['id' => 'ASC'])]
-	public ?DtoCollection $crmItems;
-
 	#[Editable]
 	public ?array $reminders;
 
@@ -270,6 +272,21 @@ class TaskDto extends Dto
 	public ?bool $allowsChangeDatePlan;
 
 	#[Editable]
+	public ?int $emailId;
+
+	#[RelationToOne('emailId', 'id')]
+	public ?EmailDto $email;
+
+	#[Editable]
+	public ?DateTime $maxDeadlineChangeDate;
+
+	#[Editable]
+	public ?int $maxDeadlineChanges;
+
+	#[Editable]
+	public ?bool $requireDeadlineChangeReason;
+
+	#[Editable]
 	public ?array $inFavorite;
 
 	#[Editable]
@@ -285,9 +302,6 @@ class TaskDto extends Dto
 
 	#[Editable]
 	public ?array $dependsOn;
-
-	#[Editable]
-	public ?array $ganttLinks;
 
 	#[Editable]
 	public ?array $scenarios;

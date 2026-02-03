@@ -7,8 +7,10 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Gateway
 use Bitrix\Calendar\Integration\Dav\WebDavMethodProvider;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Main\Web\HttpClient;
@@ -34,7 +36,7 @@ class AbstractICloudGateway
 
 	protected function isDavRequestSuccess(): bool
 	{
-		$acceptedCodes = [200, 201, 207];
+		$acceptedCodes = [200, 201, 204, 207];
 
 		return in_array($this->client->getStatus(), $acceptedCodes, true);
 	}
@@ -68,6 +70,8 @@ class AbstractICloudGateway
 	 * @throws UnexpectedException
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	protected function processErrors(string $defaultErrorMessage): void
 	{
@@ -87,14 +91,19 @@ class AbstractICloudGateway
 					throw new NotAuthorizedException($error['message']);
 				}
 
+				if ($error['code'] === 403)
+				{
+					throw new AccessDeniedException($error['message']);
+				}
+
 				if ($error['code'] === 404)
 				{
 					throw new NotFoundException($error['message']);
 				}
 
-				if ($error['code'] === 403)
+				if ($error['code'] === 412)
 				{
-					throw new AccessDeniedException($error['message']);
+					throw new PreconditionFailedException($error['message']);
 				}
 
 				throw new UnexpectedException($error['message'], $error['code']);
@@ -106,7 +115,7 @@ class AbstractICloudGateway
 			);
 		}
 
-		throw new UnexpectedException($defaultErrorMessage);
+		throw new NoResponseException($defaultErrorMessage);
 	}
 
 	private function getResponseError(): array

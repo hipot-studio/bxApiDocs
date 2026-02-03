@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Controller;
 
 use Bitrix\Forum\ForumTable;
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Helper\Message;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
@@ -358,7 +359,7 @@ class Secretary extends Controller
 		$address = new \Bitrix\Main\Mail\Address($message->getFrom());
 
 		$link = \Bitrix\Mail\Integration\Intranet\Secretary::getDirectMessageUrl($message->getId());
-		$link = Message::addAnalyticsToMessage($link, ['source' => Message::SOURCE_TYPE_EVENT]);
+		$link = AnalyticsHelper::addAnalyticsToMessage($link, ['source' => AnalyticsHelper::SOURCE_TYPE_EVENT]);
 
 		$desc = Loc::getMessage('MAIL_SECRETARY_CALENDAR_EVENT_DESC', [
 			'#SUBJECT#' => htmlspecialcharsbx($message->getSubject()),

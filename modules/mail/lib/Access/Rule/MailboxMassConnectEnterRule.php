@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\Access\Rule;
 
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Permission\PermissionDictionary as PermissionDictionaryAlias;
 use Bitrix\Main\Access\Rule\AbstractRule;
@@ -20,7 +21,10 @@ class MailboxMassConnectEnterRule extends AbstractRule
 			return true;
 		}
 
-		$permissionValue = (int)$this->user->getPermission((string)$params['PERMISSION_ID']);
+		$permissionValue = (int)MailboxAccess::getPermissionValue(
+			(string)$params['PERMISSION_ID'],
+			$this->user->getUserId(),
+		);
 
 		return $permissionValue > PermissionDictionaryAlias::VALUE_NO;
 	}

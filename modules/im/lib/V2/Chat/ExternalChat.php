@@ -106,17 +106,6 @@ class ExternalChat extends GroupChat
 		return $this->chatRelations;
 	}
 
-	public function getCounterType(): CounterType
-	{
-		// TODO: delete this asap
-		if ($this->getEntityType() === 'TASKS_TASK')
-		{
-			return CounterType::TasksTask;
-		}
-
-		return parent::getCounterType();
-	}
-
 	public function isAutoJoinEnabled(): bool
 	{
 		return $this->getConfig()->isAutoJoinEnabled;

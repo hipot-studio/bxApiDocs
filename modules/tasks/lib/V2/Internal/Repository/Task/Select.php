@@ -18,6 +18,7 @@ class Select
 		public readonly bool $relatedTasks = false,
 		public readonly bool $gantt = false,
 		public readonly bool $placements = false,
+		public readonly bool $containsCommentFiles = false,
 		public readonly bool $favorite = false,
 		public readonly bool $options = false,
 		public readonly bool $parameters = false,

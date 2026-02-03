@@ -1,6 +1,6 @@
 <?php
 
-use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\ModuleManager;
@@ -14,7 +14,7 @@ class CMailClientMassconnectComponent extends CBitrixComponent
 {
 	public function executeComponent()
 	{
-		$canManage = MailboxAccess::hasCurrentUserAccessToMassConnect();
+		$canManage = MailAccess::hasCurrentUserAccessToMassConnect();
 
 		if (!$canManage)
 		{

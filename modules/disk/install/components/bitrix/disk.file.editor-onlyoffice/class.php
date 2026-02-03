@@ -10,15 +10,20 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Document\OnlyOffice;
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\Result;
+use Bitrix\Main\Session\SessionInterface;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Pull\Config;
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
 
@@ -28,10 +33,18 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 {
 	public const ERROR_CODE_EXCEEDED_LIMIT = 'exceeded_limit';
 	public const ERROR_CODE_COULD_NOT_LOCK = 'could_not_lock';
+	protected const SESSION_LIMIT_SLIDER_KEY = 'disk.limitSlider';
+	protected const LIMIT_SLIDER_TARIFF = 'tariff';
+	protected const LIMIT_SLIDER_TARIFF_ID = 'limit_v2_disk_onlyoffice_edit';
+	protected const LIMIT_SLIDER_FEEDBACK_FORM = 'feedbackForm';
+	protected const AUTO_FORCE_RELOAD_AFTER = 300_000; // 5 minutes in ms
+
+	private const OPTION_CATEGORY_TO_CONTROL_BUTTON_WIDGET_DISPLAY = 'session-boost-in-editor';
 
 	protected User $currentUser;
 	protected OnlyOffice\Configuration $onlyOfficeConfiguration;
 	protected OnlyOffice\RestrictionManager $restrictionManager;
+	protected Disk\Integration\Baas\BaasSessionBoostService $sessionBoostService;
 	private bool $unifiedLinkAccessOnly = false;
 	private bool $unifiedLinkMode = false;
 
@@ -44,6 +57,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		{
 			return false;
 		}
+
+		$this->sessionBoostService = new Disk\Integration\Baas\BaasSessionBoostService();
 
 		return parent::processBeforeAction($actionName);
 	}
@@ -100,23 +115,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		{
 			if (!$bitrix24Scenario->canUseEdit())
 			{
-				$this->arResult['INFO_HELPER_CODE'] = 'limit_office_small_documents';
+				LocalRedirect($this->processExceededLimit($documentSession, true));
 			}
-			if (!$bitrix24Scenario->canUseView())
-			{
-				$this->arResult['INFO_HELPER_CODE'] = 'limit_office_no_document';
-			}
-		}
-		elseif (!$bitrix24Scenario->canUseView())
-		{
-			$this->arResult['INFO_HELPER_CODE'] = 'limit_office_no_document';
-		}
-
-		if (!empty($this->arResult['INFO_HELPER_CODE']))
-		{
-			$this->includeComponentTemplate('feature-restriction');
-
-			return;
 		}
 
 		$this->arResult['EXTERNAL_LINK_MODE'] = (bool)($this->arParams['EXTERNAL_LINK_MODE'] ?? false);
@@ -192,6 +192,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			'ID' => $documentSession->getObjectId(),
 			'NAME' => $documentSession->getObject()->getName(),
 			'SIZE' => $documentSession->getObject()->getSize(),
+			'SIZE_READABLE' => CFile::FormatSize($documentSession->getObject()->getSize()),
 		];
 		$this->arResult['ATTACHED_OBJECT'] = [
 			'ID' => $documentSession->getContext()->getAttachedObjectId(),
@@ -257,6 +258,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$featureBlocker = Bitrix24Manager::filterJsAction('disk_manual_external_link', '');
 		$this->arResult['SHOULD_BLOCK_EXTERNAL_LINK_FEATURE'] = (bool)$featureBlocker;
 		$this->arResult['BLOCKER_EXTERNAL_LINK_FEATURE'] = $featureBlocker;
+		$this->arResult['SESSION_BOOST_OPTIONS'] = $this->getSessionBoostOptions($documentSession);
 
 		if ($allowEdit && $configBuilder->isEditMode() && $this->shouldUseRestriction())
 		{
@@ -268,6 +270,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 				{
 					$this->errorCollection[] = new Disk\Internals\Error\Error('Exceeded limit.', self::ERROR_CODE_EXCEEDED_LIMIT, [
 						'limit' => $this->restrictionManager->getLimit(),
+						'isTariffExtendable' => $this->restrictionManager->isCurrentTariffExtendable(),
 					]);
 
 					AddEventToStatFile(
@@ -287,7 +290,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 			if ($this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT) || $this->getErrorByCode(self::ERROR_CODE_COULD_NOT_LOCK))
 			{
-				$this->processRestrictionError();
+				$this->processRestrictionError($documentSession);
 
 				return;
 			}
@@ -296,7 +299,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$editorJsonConfigResult = $this->getEditorJsonConfig($configBuilder);
 		if (!$editorJsonConfigResult->isSuccess())
 		{
-			$this->processCloudError($editorJsonConfigResult);
+			$this->processCloudError($editorJsonConfigResult, $documentSession);
 
 			return;
 		}
@@ -317,6 +320,11 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		{
 			$realObjectId = $documentSession->getObject()->getRealObjectId();
 			$this->arResult['PULL_CONFIG'] = $publicPullConfigurator->getConfig($realObjectId);
+
+			$this->arResult['PULL_USER_CONFIG'] = Config::get([
+				'JSON' => true,
+			]);
+
 			$this->arResult['PUBLIC_CHANNEL'] = $publicPullConfigurator->getChannel($realObjectId)->getSignedPublicId();
 		}
 
@@ -326,12 +334,82 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 		else
 		{
+			$this->processLimitSlider();
+
+			if ($configBuilder->isEditMode())
+			{
+				$realtimeForceReloadTag = new Disk\Realtime\Tags\OnlyOfficeForceReloadTag();
+				$this->arResult['REALTIME_FORCE_RELOAD_TAG'] = $realtimeForceReloadTag->getName();
+				$this->arResult['REALTIME_FORCE_RELOAD_COMMAND'] = Disk\Realtime\Events\OnlyOfficeForceReloadEvent::COMMAND;
+				$this->arResult['AUTO_FORCE_RELOAD_AFTER'] = self::AUTO_FORCE_RELOAD_AFTER;
+
+				$realtimeForceReloadTag->subscribe();
+			}
+
 			$this->includeComponentTemplate();
 		}
 
 		if ($this->shouldUseRestriction())
 		{
 			$this->unlockForRestriction();
+		}
+	}
+
+ 	/**
+	 * Fill necessary params for show selected slider.
+	 * @return void
+	 * @throws ArgumentException
+	 */
+	protected function processLimitSlider(): void
+	{
+		$session = $this->getSession();
+		/** @var string|null $limitSlider */
+		$limitSlider = $session->get(self::SESSION_LIMIT_SLIDER_KEY);
+
+		$this->arResult['PROMO_SHOW_IMMEDIATELY'] = !is_null($limitSlider);
+
+		$session->remove(self::SESSION_LIMIT_SLIDER_KEY);
+
+		if (!IsModuleInstalled('bitrix24'))
+		{
+			$this->arResult['LIMIT_SLIDER'] = $limitSlider;
+			switch ($limitSlider)
+			{
+				case self::LIMIT_SLIDER_FEEDBACK_FORM:
+					if (defined('BX24_HOST_NAME'))
+					{
+						$fromDomain = BX24_HOST_NAME;
+					}
+					else
+					{
+						$fromDomain = Application::getInstance()->getContext()->getRequest()->getHttpHost();
+					}
+
+					$this->arResult['LIMIT_SLIDER_FEEDBACK_FORM_PARAMS'] = [
+						'forms' => Json::encode([
+							[
+								'zones' => ['ru', 'kz', 'by', 'uz'],
+								'id' => 2996,
+								'lang' => 'ru',
+								'sec' => '7plkx7',
+							],
+							[
+								'zones' => ['en'],
+								'id' => 850,
+								'lang' => 'en',
+								'sec' => 'c76ugx',
+							],
+						]),
+						'presets' => Json::encode([
+							'from_domain' => $fromDomain,
+						]),
+					];
+
+					break;
+				case self::LIMIT_SLIDER_TARIFF:
+				default:
+					$this->arResult['LIMIT_SLIDER_TARIFF_ID'] = self::LIMIT_SLIDER_TARIFF_ID;
+			}
 		}
 	}
 
@@ -367,7 +445,17 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$this->restrictionManager->unlock();
 	}
 
-	protected function getLinkToView(Disk\Document\Models\DocumentSession $documentSession)
+	/**
+	 * Generate link for view document.
+	 *
+	 * @param Disk\Document\Models\DocumentSession $documentSession
+	 * @param bool $exactlyView open document exactly in view mode instead of any side effects (for e.g. redirect)
+	 * @return Uri|string
+	 */
+	protected function getLinkToView(
+		Disk\Document\Models\DocumentSession $documentSession,
+		bool $exactlyView = false,
+	): string|Uri
 	{
 		if ($this->unifiedLinkMode)
 		{
@@ -376,6 +464,11 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			if ($attachedObjectId > 0)
 			{
 				$unifiedLinkOptions['attachedId'] = $attachedObjectId;
+			}
+
+			if ($exactlyView)
+			{
+				$unifiedLinkOptions['noRedirect'] = true;
 			}
 
 			return $this->getUrlManager()->getUnifiedLink($documentSession->getFile(), $unifiedLinkOptions);
@@ -548,35 +641,88 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		return (new Result())->setData($configBuilder->build());
 	}
 
-	protected function processRestrictionError(): void
+	protected function processRestrictionError(Disk\Document\Models\DocumentSession $documentSession): void
 	{
 		$cloudErrorResult = [];
+		$error = $this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT);
 
-		if ($this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT))
+		if ($error)
 		{
 			$cloudErrorResult['LIMIT'] = [
 				'RESTRICTION' => true,
 				'LIMIT_VALUE' => $this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT)->getCustomData()['limit'],
 			];
+
+			if (!Disk\Internal\Service\OnlyOffice\Promo\PromoResolver::shouldBlockPromoForUser())
+			{
+				LocalRedirect($this->processExceededLimitError($error, $documentSession));
+			}
 		}
+
 		$cloudErrorResult['ERRORS'] = $this->getErrors();
 		$this->arResult['CLOUD_ERROR'] = $cloudErrorResult;
 
 		$this->includeComponentTemplate('cloud-error');
 	}
 
-	protected function processCloudError(Result $result): void
+	/**
+	 * Process exceeded limit by error.
+	 *
+	 * @param \Bitrix\Main\Error $error
+	 * @param Disk\Document\Models\DocumentSession $documentSession
+	 * @return string url for redirection
+	 * @throws ArgumentException
+	 * @throws NotImplementedException
+	 */
+	protected function processExceededLimitError(
+		\Bitrix\Main\Error $error,
+		Disk\Document\Models\DocumentSession $documentSession,
+	): string
+	{
+		$isTariffExtendable = $error->getCustomData()['isTariffExtendable'] ?? true;
+
+		return $this->processExceededLimit($documentSession, $isTariffExtendable);
+	}
+
+	/**
+	 * Generate URL for redirection and setting slider type for show in UI.
+	 *
+	 * @param Disk\Document\Models\DocumentSession $documentSession
+	 * @param bool $isTariffExtendable
+	 * @return string url for redirection
+	 * @throws ArgumentException
+	 * @throws NotImplementedException
+	 */
+	protected function processExceededLimit(
+		Disk\Document\Models\DocumentSession $documentSession,
+		bool $isTariffExtendable,
+	): string
+	{
+		if (!$this->sessionBoostService->isAvailable())
+		{
+			$limitSlider = $isTariffExtendable ? self::LIMIT_SLIDER_TARIFF : self::LIMIT_SLIDER_FEEDBACK_FORM;
+
+			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, $limitSlider);
+		}
+		else
+		{
+			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, self::LIMIT_SLIDER_TARIFF);
+		}
+
+		$documentSession->transformToView();
+
+		return $this->getLinkToView($documentSession, true);
+	}
+
+	protected function processCloudError(Result $result, Disk\Document\Models\DocumentSession $documentSession): void
 	{
 		$cloudErrorResult = [];
 
 		$errorCollection = $result->getErrorCollection();
 		/** @see \Bitrix\DocumentProxy\Controller\SignDocumentConfiguration::ERROR_CODE_EXCEEDED_LIMIT */
-		if ($errorCollection->getErrorByCode('exceeded_limit'))
+		if (($error = $errorCollection->getErrorByCode('exceeded_limit')) && !Disk\Internal\Service\OnlyOffice\Promo\PromoResolver::shouldBlockPromoForUser())
 		{
-			$cloudErrorResult['LIMIT'] = [
-				'RESTRICTION' => true,
-				'LIMIT_VALUE' => $errorCollection->getErrorByCode('exceeded_limit')->getCustomData()['limit'],
-			];
+			LocalRedirect($this->processExceededLimitError($error, $documentSession));
 		}
 		/** @see \Bitrix\DocumentProxy\Engine\Filter\DemoRestriction::ERROR_DEMO_RESTRICTION */
 		if ($errorCollection->getErrorByCode('demo_restriction'))
@@ -586,7 +732,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			];
 		}
 		$cloudErrorResult['ERRORS'] = $errorCollection->toArray();
-
 
 		$this->arResult['CLOUD_ERROR'] = $cloudErrorResult;
 
@@ -634,5 +779,34 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		return $allowEdit;
+	}
+
+	/**
+	 * Get instance of session.
+	 *
+	 * @return SessionInterface session
+	 */
+	protected function getSession(): SessionInterface
+	{
+		return Application::getInstance()->getSession();
+	}
+
+	private function getSessionBoostOptions(Disk\Document\Models\DocumentSession $documentSession): ?array
+	{
+		if ($documentSession->isEdit() && $this->sessionBoostService->isAvailable())
+		{
+			$extension = (string)$documentSession->getObject()?->getExtension();
+			$completedDateTimestamp = (int)CUserOptions::GetOption(self::OPTION_CATEGORY_TO_CONTROL_BUTTON_WIDGET_DISPLAY, $extension, 0, $this->currentUser->getId());
+
+			return [
+				'shouldShowButtonWidgetInstantly' => $completedDateTimestamp === 0,
+				'optionParamsToControlButtonWidgetDisplay' => [
+					'category' => self::OPTION_CATEGORY_TO_CONTROL_BUTTON_WIDGET_DISPLAY,
+					'name' => $extension,
+				],
+			];
+		}
+
+		return null;
 	}
 }

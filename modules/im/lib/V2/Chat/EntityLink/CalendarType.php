@@ -8,7 +8,6 @@ use Bitrix\Main\Web\Uri;
 
 class CalendarType extends EntityLink
 {
-	protected const HAS_URL = true;
 
 	protected function getUrl(): string
 	{
@@ -19,8 +18,7 @@ class CalendarType extends EntityLink
 
 		$uri = new Uri(\CCalendar::GetPathForCalendarEx($this->getContext()->getUserId()));
 		$uri->addParams(['EVENT_ID' => $this->entityId]);
-		$url = $uri->getUri();
 
-		return $url;
+		return $uri->getUri();
 	}
 }

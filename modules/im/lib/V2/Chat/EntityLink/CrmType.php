@@ -7,18 +7,17 @@ use Bitrix\Main\Loader;
 
 class CrmType extends EntityLink
 {
-	protected const HAS_URL = true;
 	protected const DYNAMIC_TYPE = 'DYNAMIC';
 
 	protected string $crmType = '';
 	protected int $crmId = 0;
 
-	protected function __construct(string $entityId)
+	public function __construct(EntityLinkDto $entityLinkDto)
 	{
-		parent::__construct();
+		parent::__construct($entityLinkDto);
 		if (Loader::includeModule('crm'))
 		{
-			$this->extractCrmData($entityId);
+			$this->extractCrmData($entityLinkDto->entityId ?? '');
 		}
 		$this->type = $this->crmType;
 	}

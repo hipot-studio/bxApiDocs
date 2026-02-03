@@ -20,7 +20,7 @@ class PrepareDates implements PrepareFieldInterface
 	public function __invoke(array $fields, array $fullTaskData): array
 	{
 		$this->checkDatePlan($fields);
-		$this->checkDatesInProject($fields);
+		$this->checkDatesInProject($fields, $fullTaskData);
 		$this->checkItemLinked($fields, $fullTaskData);
 
 		return $fields;
@@ -74,10 +74,17 @@ class PrepareDates implements PrepareFieldInterface
 		}
 	}
 
-	private function checkDatesInProject(array $fields): void
+	private function checkDatesInProject(array $fields, array $fullTaskData): void
 	{
-		$groupId = (int)($fields['GROUP_ID'] ?? 0);
+		$hasGroupChanges = isset($fields['GROUP_ID']);
+		$hasDatesChanges = $this->hasDatesChanges($fields);
 
+		if (!$hasGroupChanges && !$hasDatesChanges)
+		{
+			return;
+		}
+
+		$groupId = (int)($fields['GROUP_ID'] ?? $fullTaskData['GROUP_ID'] ?? 0);
 		if ($groupId <= 0)
 		{
 			return;
@@ -88,8 +95,7 @@ class PrepareDates implements PrepareFieldInterface
 			return;
 		}
 
-		$isProject = GroupProvider::isProject($groupId);
-		if (!$isProject)
+		if (!GroupProvider::isProject($groupId))
 		{
 			return;
 		}
@@ -104,22 +110,9 @@ class PrepareDates implements PrepareFieldInterface
 			$projectFinishDate->addSecond(86399);
 		}
 
-		$deadline = null;
-		$endDatePlan = null;
-		$startDatePlan = null;
-
-		if (isset($fields['DEADLINE']) && $fields['DEADLINE'])
-		{
-			$deadline = DateTime::createFrom($fields['DEADLINE']);
-		}
-		if (isset($fields['END_DATE_PLAN']) && $fields['END_DATE_PLAN'])
-		{
-			$endDatePlan = DateTime::createFrom($fields['END_DATE_PLAN']);
-		}
-		if (isset($fields['START_DATE_PLAN']) && $fields['START_DATE_PLAN'])
-		{
-			$startDatePlan = DateTime::createFrom($fields['START_DATE_PLAN']);
-		}
+		$deadline = $this->getDateValue('DEADLINE', $fields, $fullTaskData);
+		$endDatePlan = $this->getDateValue('END_DATE_PLAN', $fields, $fullTaskData);
+		$startDatePlan = $this->getDateValue('START_DATE_PLAN', $fields, $fullTaskData);
 
 		if ($deadline && !$deadline->checkInRange($projectStartDate, $projectFinishDate))
 		{
@@ -135,5 +128,20 @@ class PrepareDates implements PrepareFieldInterface
 		{
 			throw new TaskFieldValidateException(Loc::getMessage('TASKS_PLAN_DATE_START_OUT_OF_PROJECT_RANGE'));
 		}
+	}
+
+	private function hasDatesChanges(array $fields): bool
+	{
+		return isset($fields['DEADLINE'])
+			|| isset($fields['END_DATE_PLAN'])
+			|| isset($fields['START_DATE_PLAN'])
+		;
+	}
+
+	private function getDateValue(string $fieldName, array $fields, array $fullTaskData): ?DateTime
+	{
+		$value = $fields[$fieldName] ?? $fullTaskData[$fieldName] ?? null;
+
+		return $value ? DateTime::createFrom($value) : null;
 	}
 }

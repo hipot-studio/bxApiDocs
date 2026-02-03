@@ -6,6 +6,9 @@ namespace Bitrix\Calendar\Synchronization\Internal\Exception;
 
 class SynchronizerException extends Exception
 {
+	public const NO_SECTION_CONNECTION = 1001;
+	public const NO_EVENT_CONNECTION = 1002;
+
 	public function __construct(
 		string $message,
 		int $code = 0,

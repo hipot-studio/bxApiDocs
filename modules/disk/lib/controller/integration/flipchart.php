@@ -34,9 +34,6 @@ use Bitrix\Main\UserTable;
 
 final class Flipchart extends Controller implements JwtHolder
 {
-
-	private const NEW_BOARD_MAX_SIZE = 500;
-
 	private ?object $jwtData;
 
 	public function setJwtData(?object $data): void
@@ -584,27 +581,15 @@ final class Flipchart extends Controller implements JwtHolder
 			return $this->getErrorPageResponse();
 		}
 
-		$file = $session->getFile();
-		$showTemplatesModal = false;
-		if (
-			$file->getCreatedBy() == $currentUser->getId()
-			&& $file->getRealObjectId() == $file->getId()
-			&& $file->getSize() < self::NEW_BOARD_MAX_SIZE
-		)
-		{
-			$diff = time() - $file->getCreateTime()->getTimestamp();
-			if ($diff < 30)
-			{
-				$showTemplatesModal = true;
-			}
-		}
-
 		$avatarUrl = $userModel->getAvatarSrc();
 		if (strpos($avatarUrl, 'http') !== 0)
 		{
 			$urlManager = UrlManager::getInstance();
 			$avatarUrl = $urlManager->getHostUrl() . $avatarUrl;
 		}
+
+		$file = $session->getFile();
+		$showTemplatesModal = isset($file) && BoardService::shouldShowTemplateModal($file);
 
 		$content = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:ui.sidepanel.wrapper',

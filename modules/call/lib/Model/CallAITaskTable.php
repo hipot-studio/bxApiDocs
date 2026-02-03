@@ -60,7 +60,10 @@ class CallAITaskTable extends DataManager
 				->configureNullable(),
 
 			(new DatetimeField('DATE_CREATE'))
-				->configureDefaultValue(function (){return new DateTime;}),
+				->configureDefaultValue(function ()
+				{
+					return new DateTime;
+				}),
 
 			(new DatetimeField('DATE_FINISHED'))
 				->configureNullable(),
@@ -81,7 +84,7 @@ class CallAITaskTable extends DataManager
 
 			(new StringField('LANGUAGE_ID'))
 				->configureNullable()
-				->configureSize(2),
+				->configureSize(10),
 
 			(new StringField('ERROR_CODE'))
 				->configureSize(100)

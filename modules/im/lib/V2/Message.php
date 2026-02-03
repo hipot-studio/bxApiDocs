@@ -8,6 +8,8 @@ use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessage;
+use Bitrix\Im\V2\Message\Sticker\PackType;
+use Bitrix\Im\V2\Message\Sticker\StickerItem;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
@@ -66,7 +68,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	/** Created by Id */
 	protected int $authorId = 0;
-	protected array $mentionedUserIds;
+	protected ?array $mentionedUserIds = null;
 
 	/** Message to send */
 	protected ?string $message = null;
@@ -149,7 +151,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	/** Display message as a system notification. */
 	protected bool $isSystem = false;
 
-	protected ?UrlItem $url;
+	protected ?UrlItem $url = null;
 
 	protected int $botId = 0;
 
@@ -257,7 +259,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function isImportant(): ?bool
 	{
-		return $this->isImportant;
+		return $this->isImportant || $this->hasMentionAll();
 	}
 
 	public function hasMentionAll(): bool
@@ -294,7 +296,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			return $this->importantFor;
 		}
 
-		if ($this->hasMentionAll())
+		if ($this->isImportant())
 		{
 			$this->setImportantFor([]);
 		}
@@ -708,6 +710,22 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $this->files;
 	}
 
+	public function getSticker(): ?StickerItem
+	{
+		$stickerParam = $this->getParams()->get(Params::STICKER_PARAMS)->getValue();
+
+		$stickerId = (int)$stickerParam['ID'];
+		$packId = (int)$stickerParam['PACK_ID'];
+		$packType = PackType::tryFrom((string)$stickerParam['PACK_TYPE']);
+
+		if ($packType === null)
+		{
+			return null;
+		}
+
+		return (new StickerService())->getStickerById($stickerId, $packId, $packType);
+	}
+
 	public function getPrevId(): int
 	{
 		if ($this->prevId !== null)
@@ -826,6 +844,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			new Im\V2\Entity\File\FilePopupItem(),
 			new Im\V2\Link\Reminder\ReminderPopupItem(),
 			new Im\V2\Message\Reaction\ReactionPopupItem($this->getReactions()),
+			Im\V2\Message\Sticker\StickerCollection::createByStickers([$this->getSticker()]),
 		], $excludedList);
 
 		if (!in_array(Im\V2\Entity\File\FilePopupItem::class, $excludedList, true))
@@ -947,7 +966,13 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		$this->message = $value ?? '';
-		unset($this->parsedMessage, $this->formattedMessage, $this->url);
+		$this->parsedMessage = null;
+		$this->formattedMessage = null;
+		$this->url = null;
+		$this->mentionedUserIds = null;
+		$this->hasMentionAll = null;
+		$this->importantFor = null;
+
 		return $this;
 	}
 
@@ -1789,7 +1814,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		{
 			$mentionedUserIds += $this->getChat()->getAllUserIdsForMention();
 			$this->setHasMentionAll(true);
-			$this->markAsImportant();
 		}
 
 		return $mentionedUserIds;
@@ -1806,13 +1830,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		return $chat->filterUsersToMention($mentionedUsers);
-	}
-
-	public function getUserIdsToSendMentionAnchors(): array
-	{
-		$mentionedUsers = $this->getMentionedUserIds();
-
-		return $this->getChat()->filterUsersToMentionAnchor($mentionedUsers);
 	}
 
 	public function getEnrichedParams(bool $withUrl = true): Params

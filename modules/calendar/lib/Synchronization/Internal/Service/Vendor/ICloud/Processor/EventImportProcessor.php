@@ -48,7 +48,7 @@ class EventImportProcessor extends AbstractEventImportProcessor
 	{
 		$ids = $this->getEventConnectionIds($eventList->getItems());
 
-		$this->buildLocalEventMap($ids, (int)$sectionConnection->getConnection()?->getId());
+		$this->buildLocalEventMap($ids, $sectionConnection);
 
 		$externalEvents = $this->buildEventsTree($eventList->getItems(), $sectionConnection);
 

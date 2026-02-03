@@ -25,6 +25,7 @@ class AddMultiTaskChildrenHandler
 		$task = $this->taskProvider->get(new TaskParams(
 			taskId: $command->taskId,
 			userId: $command->config->userId,
+			checkLists: false,
 		));
 
 		if ($task === null)

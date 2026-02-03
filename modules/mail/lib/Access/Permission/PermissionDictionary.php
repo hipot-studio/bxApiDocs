@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Mail\Access\Permission;
 
 use Bitrix\Main;
@@ -11,6 +13,7 @@ class PermissionDictionary extends Main\Access\Permission\PermissionDictionary
 	public const MAIL_MAILBOX_LIST_ITEM_VIEW = '201';
 	public const MAIL_MAILBOX_LIST_ITEM_EDIT = '202';
 	public const MAIL_MAILBOX_CONNECT = '203';
+	public const MAIL_MAILBOX_CRM_INTEGRATION_EDIT = '204';
 
 	private static function getRephrasedPermissionCode(string $permissionId): ?string
 	{
@@ -28,8 +31,26 @@ class PermissionDictionary extends Main\Access\Permission\PermissionDictionary
 		};
 	}
 
+	public static function getMinValueByTypeOrNull(string|int $permissionType): null|string|int
+	{
+		return match ($permissionType) {
+			self::TYPE_VARIABLES, self::TYPE_DEPENDENT_VARIABLES => PermissionVariablesDictionary::VARIABLE_NONE,
+			self::TYPE_TOGGLER => self::VALUE_NO,
+			default => null,
+		};
+	}
+
+	public static function getMaxValueByTypeOrNull(string|int $permissionType): null|string|int
+	{
+		return match ($permissionType) {
+			self::TYPE_VARIABLES, self::TYPE_DEPENDENT_VARIABLES => PermissionVariablesDictionary::VARIABLE_ALL,
+			self::TYPE_TOGGLER => self::VALUE_YES,
+			default => null,
+		};
+	}
+
 	/**
-	 * @param $permissionId int
+	 * @param $permissionId string
 	 */
 	public static function getTitle($permissionId): string
 	{
@@ -42,7 +63,7 @@ class PermissionDictionary extends Main\Access\Permission\PermissionDictionary
 		return parent::getTitle($permissionId) ?? '';
 	}
 
-	public static function getHint(int $permissionId): ?string
+	public static function getHint(string $permissionId): ?string
 	{
 		$permissionList = self::getList();
 

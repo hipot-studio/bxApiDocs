@@ -113,7 +113,7 @@ class MobilePush
 
 		foreach ($activeUserRelations as $relation)
 		{
-			if ($relation->getUserId() === $this->message->getAuthorId())
+			if ($relation->getUserId() === $this->message->getActionContextUserId())
 			{
 				continue;
 			}
@@ -137,6 +137,7 @@ class MobilePush
 		$attachmentSuffix = self::getAttachmentSuffixForPush($params['params']);
 		$pushText = $this->prepareMessageForPush($params['params']);
 		unset($params['params']['message']['text_push']);
+		unset($params['params']['message']['params'][Message\Params::STICKER_PARAMS]);
 
 		$chatTitle = mb_substr(htmlspecialcharsback($params['params']['chat'][$params['params']['chatId']]['name']), 0, 32);
 		$chatType = $params['params']['chat'][$params['params']['chatId']]['type'];
@@ -234,6 +235,7 @@ class MobilePush
 		$attachmentSuffix = self::getAttachmentSuffixForPush($params['params']);
 		$pushText = $this->prepareMessageForPush($params['params']);
 		unset($params['params']['message']['text_push']);
+		unset($params['params']['message']['params'][Message\Params::STICKER_PARAMS]);
 
 		if (isset($params['params']['system']) && $params['params']['system'] == 'Y')
 		{

@@ -49,10 +49,17 @@ class Track extends EO_CallTrack
 			return $result->addError(new TrackError(TrackError::SAVE_FILE_ERROR, 'Could not save file'));
 		}
 
+		// Schedule temp file cleanup via agent
+		$tempPath = $this->getTempPath();
+		if ($tempPath)
+		{
+			self::scheduleTempCleanup($tempPath);
+		}
+
 		$this
 			->setFileId($fileId)
 			->setFileSize((int)$attachFile['size'])
-			->unsetTempPath()
+			->setTempPath(null)
 			->unsetDownloadUrl()
 			->setDownloaded(true)
 			->save()
@@ -316,12 +323,75 @@ class Track extends EO_CallTrack
 	}
 
 	/**
+	 * Check if directory is empty
+	 */
+	private static function isDirectoryEmpty(\Bitrix\Main\IO\Directory $dir): bool
+	{
+		return empty($dir->getChildren());
+	}
+
+	/**
+	 * Schedule temp file cleanup via agent
+	 */
+	public static function scheduleTempCleanup(string $tempPath, int $delay = 5): void
+	{
+		$escapedPath = addslashes($tempPath);
+		$agentName = self::class . "::cleanupTempFileAgent('{$escapedPath}');";
+
+		$agents = \CAgent::getList([], [
+			'MODULE_ID' => 'call',
+			'NAME' => $agentName,
+		]);
+
+		if ($agents->fetch())
+		{
+			return;
+		}
+
+		\CAgent::AddAgent(
+			$agentName,
+			'call',
+			'N',
+			60,
+			'',
+			'Y',
+			\ConvertTimeStamp(\time() + \CTimeZone::GetOffset() + $delay, 'FULL')
+		);
+	}
+
+	/**
+	 * Agent for cleaning up temp files
+	 */
+	public static function cleanupTempFileAgent(string $tempPath): string
+	{
+		if (empty($tempPath))
+		{
+			return '';
+		}
+
+		$tempFile = new \Bitrix\Main\IO\File($tempPath);
+		if ($tempFile->isExists())
+		{
+			$tempFile->delete();
+		}
+
+		$tempDir = new \Bitrix\Main\IO\Directory(dirname($tempPath));
+		if ($tempDir->isExists() && self::isDirectoryEmpty($tempDir))
+		{
+			$tempDir->delete();
+		}
+
+		return '';
+	}
+
+	/**
 	 * @return string
 	 */
 	public function generateTemporaryPath(): self
 	{
+		$tempDir = \CTempFile::GetDirectoryName(24); // Keep for 24 hours
 		$tempFilePath = \Bitrix\Main\Security\Random::getString(20);
-		$this->setTempPath(\CFile::GetTempName('', $tempFilePath));
+		$this->setTempPath($tempDir . $tempFilePath);
 
 		return $this;
 	}

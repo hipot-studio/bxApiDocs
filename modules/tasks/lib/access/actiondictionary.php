@@ -42,6 +42,8 @@ class ActionDictionary
 	public const ACTION_TASK_COPY = 'task_copy';
 	public const ACTION_TASK_SORT = 'task_sort';
 
+	public const ACTION_TASK_CREATE_SUB_TASK = 'task_create_sub_task';
+
 	public const ACTION_TASK_ATTACH_FILE = 'task_attach_file';
 	public const ACTION_TASK_DETACH_FILE = 'task_detach_file';
 

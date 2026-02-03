@@ -25,6 +25,7 @@ class MessageSender implements MessageSenderInterface
 	public function __construct(
 		private readonly Action\CounterRecipientsResolver $counterRecipientsResolver,
 		private readonly Action\NotificationRecipientsResolver $notificationRecipientsResolver,
+		private readonly Action\ImportanceRecipientsResolver $importanceRecipientsResolver,
 		private readonly ChatRepositoryInterface $chatRepository,
 		private readonly SendResultAdapter $sendResultAdapter,
 		private readonly EventDispatcher $eventDispatcher,
@@ -68,13 +69,18 @@ class MessageSender implements MessageSenderInterface
 		{
 			$config->disableGenerateUrlPreview();
 		}
+		if($notification->shouldDisableAddRecent())
+		{
+			$config->disableAddRecent();
+		}
 
+		$contextUserId = $notification->getTriggeredBy()?->getId() ?? $this->getAuthorId($notification);
 		$message = (new Message())
 			->setMessage((string)$notification)
 			->setAuthorId($this->getAuthorId($notification))
-			->setContextUser($this->getAuthorId($notification))
+			->setContextUser($contextUserId)
 			->disableNotify()
-			->setImportantFor($this->notificationRecipientsResolver->resolve($notification, $task)->getIds())
+			->setImportantFor($this->importanceRecipientsResolver->resolve($notification, $task)->getIds())
 		;
 
 		$keyboard = $notification->getKeyboard();
@@ -95,8 +101,16 @@ class MessageSender implements MessageSenderInterface
 			$config->disallowSendPush();
 		}
 
-		$chat->setContextUser($this->getAuthorId($notification));
-		$sendMessageResult = $chat->sendMessage($message, $config);
+		$messageParams = $notification->getMessageParams();
+		if (!empty($messageParams))
+		{
+			foreach ($messageParams as $name => $value)
+			{
+				$message->addParam($name, $value);
+			}
+		}
+
+		$sendMessageResult = $chat->withContextUser($contextUserId)->sendMessage($message, $config);
 
 		if ($sendMessageResult->isSuccess())
 		{

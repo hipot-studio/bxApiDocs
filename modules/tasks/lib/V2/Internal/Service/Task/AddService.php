@@ -9,6 +9,7 @@ use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddGanttLinks;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddParent;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendTranscribedTaskAnalytics;
 use Bitrix\Tasks\V2\Public\Command\Task\AddTaskCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\FormV2Feature;
@@ -48,7 +49,6 @@ class AddService
 		private readonly Counter\Service $counterService,
 	)
 	{
-		
 	}
 
 	/**
@@ -132,6 +132,8 @@ class AddService
 		(new RunIntegration($config))($fields, $source);
 
 		(new SendAnalytics($config))($fields);
+
+		(new SendTranscribedTaskAnalytics($config))($task);
 
 		// get task object with prepopulated data
 		$task = $this->repository->getById($id);

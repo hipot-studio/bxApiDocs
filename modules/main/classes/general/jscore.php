@@ -321,7 +321,11 @@ class CJSCore
 				? " bx-retina"
 				: " bx-no-retina";
 
-			if (/AppleWebKit/.test(ua))
+			if (/Safari/i.test(ua) && !/Chrome/i.test(ua))
+			{
+				cl += " bx-safari";
+			}
+			else if (/AppleWebKit/.test(ua))
 			{
 				cl += " bx-chrome";
 			}

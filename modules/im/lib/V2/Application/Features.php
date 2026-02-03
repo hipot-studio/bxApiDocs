@@ -60,6 +60,7 @@ class Features
 		public readonly bool $videoNoteTranscriptionAvailable,
 		public readonly bool $stickersAvailable,
 		public readonly bool $isCopilotReasoningAvailable,
+		public readonly bool $isTextFormatToolbarAvailable,
 	){}
 
 	public static function get(): self
@@ -112,6 +113,7 @@ class Features
 			self::isVideoNoteTranscriptionAvailable(),
 			self::isStickersAvailable(),
 			self::isCopilotReasoningAvailable(),
+			self::isTextFormatToolbarAvailable(),
 		);
 	}
 
@@ -215,7 +217,7 @@ class Features
 	public static function isTasksRecentListAvailable(): bool
 	{
 		return
-			Option::get('im', 'is_tasks_recent_list_available', 'N') === 'Y'
+			Option::get('im', 'is_tasks_recent_list_available', 'Y') === 'Y'
 			&& Loader::includeModule('tasks')
 		;
 	}
@@ -253,5 +255,10 @@ class Features
 	public static function isAiAssistantMcpSelectorAvailable(): bool
 	{
 		return Option::get('im', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
+	}
+
+	public static function isTextFormatToolbarAvailable(): bool
+	{
+		return Option::get('im', 'text_format_toolbar_available', 'N') === 'Y';
 	}
 }

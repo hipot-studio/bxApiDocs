@@ -17,7 +17,7 @@ class RunMessenger
 
 	public function __invoke(array $fields, ?Task\Source $source = null): void
 	{
-		if ($source && $source->type === 'chat')
+		if ($source && $source->type === Task\Source::TYPE_CHAT)
 		{
 			$fields['IM_CHAT_ID'] = $source->data['entityId'] ?? 0;
 			$fields['IM_MESSAGE_ID'] = $source->data['subEntityId'] ?? 0;

@@ -70,7 +70,7 @@ class UserEventProcessor
 				EventDictionary::EVENT_AFTER_TASK_ADD,
 				EventDictionary::EVENT_AFTER_TASK_MUTE,
 				EventDictionary::EVENT_AFTER_TASK_UPDATE,
-				EventDictionary::EVENT_TASK_EXPIRED
+				EventDictionary::EVENT_TASK_EXPIRED,
 			]))
 			{
 				$toUpdate[CounterDictionary::COUNTER_EXPIRED][] = $taskId;

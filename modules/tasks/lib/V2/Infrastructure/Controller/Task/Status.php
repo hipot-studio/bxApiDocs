@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Public\Command\Task\Status\DisapproveTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Status\PauseTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Status\RenewTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Status\StartTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Status\TakeTaskCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Task\Status\Permission;
@@ -47,6 +48,35 @@ class Status extends BaseController
 		}
 
 		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Task.Status.take
+	 */
+	public function takeAction(
+		#[Permission\Take]
+		Entity\Task $task,
+		TaskProvider $taskProvider,
+	): ?Entity\EntityInterface
+	{
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
+		$result = (new TakeTaskCommand(
+			taskId: $task->getId(),
+			config: $config,
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId, ['members' => true]));
 	}
 
 	/**

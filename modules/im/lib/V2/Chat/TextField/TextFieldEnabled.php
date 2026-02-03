@@ -47,16 +47,13 @@ class TextFieldEnabled
 
 	protected function sendPush(): void
 	{
-		try
-		{
-			$chat = Chat::getInstance($this->chatId);
-			$updateField = ['textFieldEnabled' => $this->get()];
-			(new ChatFieldsUpdate($chat, $updateField))->send();
-		}
-		catch (\Exception $exception)
+		$chat = Chat::getInstance($this->chatId);
+		$updateField = ['textFieldEnabled' => $this->get()];
+		$result = (new ChatFieldsUpdate($chat, $updateField))->send();
+
+		if (!$result->isSuccess())
 		{
 			$this->params->deleteParam(Params::TEXT_FIELD_ENABLED);
-			throw $exception;
 		}
 	}
 }

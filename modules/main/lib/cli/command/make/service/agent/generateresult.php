@@ -17,6 +17,7 @@ final class GenerateResult extends \Bitrix\Main\Cli\Helper\GenerateResult
 	{
 		return <<<TEXT
 
+		A file has been created:
 		<info>{$this->path}</info>
 
 		PHP code for register agent:

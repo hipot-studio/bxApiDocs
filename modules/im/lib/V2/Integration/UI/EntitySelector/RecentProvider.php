@@ -750,11 +750,7 @@ class RecentProvider extends BaseProvider
 				return true;
 			}
 
-			$botData = $user->getBotData()->toRestFormat();
-			if ($botData['isHidden'])
-			{
-				return true;
-			}
+			return $user->isHidden();
 		}
 
 		return false;

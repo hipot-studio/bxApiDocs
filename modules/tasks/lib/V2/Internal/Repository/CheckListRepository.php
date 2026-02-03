@@ -21,6 +21,23 @@ class CheckListRepository implements CheckListRepositoryInterface
 	{
 	}
 
+	/**
+	 * @param int[] $entityIds
+	 * @param Entity\CheckList\Type $type
+	 *
+	 * @return Entity\CheckList
+	 */
+	public function getByEntities(array $entityIds, Entity\CheckList\Type $type): Entity\CheckList
+	{
+		$facade = $this->facadeResolver->resolveByType($type);
+
+		$items = $facade::getList(filter: [$facade::$entityIdName => $entityIds]);
+
+		$items = $this->treeService->buildTree($items);
+
+		return $this->checkListMapper->mapToEntity($items);
+	}
+
 	public function getByEntity(int $entityId, Entity\CheckList\Type $type): Entity\CheckList
 	{
 		$facade = $this->facadeResolver->resolveByType($type);

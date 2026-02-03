@@ -8,9 +8,11 @@ use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Integration\Dav\WebDavMethodProvider;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\CalendarListResponse;
@@ -33,11 +35,14 @@ class ICloudSectionGateway extends AbstractICloudGateway
 	}
 
 	/**
+	 * @throws AccessDeniedException
 	 * @throws BadRequestException
 	 * @throws DtoValidationException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function createSection(Section $section): CalendarResponse
 	{
@@ -67,6 +72,8 @@ class ICloudSectionGateway extends AbstractICloudGateway
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function updateSection(Section $section, string $iCloudCalendarId): CalendarResponse
 	{
@@ -91,9 +98,12 @@ class ICloudSectionGateway extends AbstractICloudGateway
 
 	/**
 	 * @throws AccessDeniedException
+	 * @throws BadRequestException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function deleteSection(string $iCloudCalendarId): void
 	{
@@ -115,6 +125,8 @@ class ICloudSectionGateway extends AbstractICloudGateway
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function getSections(): CalendarListResponse
 	{
@@ -145,6 +157,8 @@ class ICloudSectionGateway extends AbstractICloudGateway
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	private function getSection(string $uri): CalendarResponse
 	{

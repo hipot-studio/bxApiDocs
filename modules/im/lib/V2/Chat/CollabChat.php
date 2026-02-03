@@ -113,14 +113,14 @@ class CollabChat extends GroupChat
 		return parent::updateStateAfterRelationsAdd($usersToAdd);
 	}
 
-	protected function updateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): self
+	protected function processUpdateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): self
 	{
 		if (!empty($this->filterCollabers([$deletedUserId])))
 		{
 			GuestCounter::cleanCache($this->chatId);
 		}
 
-		return parent::updateStateAfterUserDelete($deletedUserId, $config);
+		return parent::processUpdateStateAfterUserDelete($deletedUserId, $config);
 	}
 
 	protected function sendPushUsersAdd(array $usersToAdd, RelationCollection $oldRelations): void

@@ -1,102 +1,57 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Mail\Access\Install;
 
-use Bitrix\Mail\Access\Repository\RoleRepository;
-use Bitrix\Mail\Access\Role\RoleDictionary;
-use Bitrix\Mail\Access\Role\RoleUtil;
-use Bitrix\Main\Access\AccessCode;
+use Bitrix\Mail\Access\Install\AgentInstaller\InstallerFactory;
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentOutOfRangeException;
+use Bitrix\Main\Config\Option;
 
 class AccessInstaller
 {
+	private const MODULE_ID = 'mail';
+	public const MAIL_ACCESS_VERSION_KEY = 'mail_access_version';
+	private const LOCK_NAME = 'mailbox_config_access_install';
+
 	public static function install(): string
 	{
-		self::fillSystemPermissions();
-
-		return '';
-	}
-
-	private static function fillSystemPermissions(): void
-	{
-		$connection = Application::getConnection();
-		if (!$connection->lock('mailbox_config_access_install'))
+		$connection = Application::getInstance()->getConnection();
+		if (!$connection->lock(self::LOCK_NAME))
 		{
-			return;
+			return '';
 		}
 
 		try
 		{
-			if (self::areDefaultRoleDefined())
+			$accessInstaller = (new self());
+			$currentVersion = $accessInstaller->getAccessVersion();
+
+			while ($installer = InstallerFactory::getInstaller($currentVersion))
 			{
-				$connection->unlock('mailbox_config_access_install');
-
-				return;
+				$installer->install();
+				$accessInstaller->setActualAccessVersion(++$currentVersion);
 			}
-
-			$defaultRoles = RoleUtil::getDefaultMap();
-			foreach ($defaultRoles as $roleName => $permissions)
-			{
-				$roleId = RoleUtil::createRole($roleName);
-				$role = new RoleUtil($roleId);
-
-				$permissionValues = [];
-				foreach ($permissions as $permission)
-				{
-					$permissionValues[$permission['id']] = $permission['value'];
-				}
-				$role->updatePermissions($permissionValues);
-
-				$accessCodes = [];
-				switch ($roleName)
-				{
-					case RoleDictionary::ROLE_DIRECTOR:
-						$accessCodes = [AccessCode::ACCESS_DIRECTOR . '0' => 'access_director'];
-
-						break;
-					case RoleDictionary::ROLE_EMPLOYEE:
-						$accessCodes = [AccessCode::ACCESS_EMPLOYEE . '0' => 'groups'];
-
-						break;
-				}
-
-
-				if (!empty($accessCodes))
-				{
-					$role->updateRoleRelations($accessCodes);
-				}
-			}
-		}
-		catch (\Exception $e)
-		{
 		}
 		finally
 		{
-			$connection->unlock('mailbox_config_access_install');
+			$connection->unlock(self::LOCK_NAME);
 		}
+
+		return '';
 	}
 
-	private static function areDefaultRoleDefined(): bool
+	/**
+	 * @throws ArgumentOutOfRangeException
+	 */
+	public function setActualAccessVersion(int $version): void
 	{
-		$roleRepository = new RoleRepository();
-		$roles = $roleRepository->getRoleList();
-		if (empty($roles))
-		{
-			return false;
-		}
+		Option::set(self::MODULE_ID, self::MAIL_ACCESS_VERSION_KEY, $version);
+	}
 
-		foreach ($roles as $role)
-		{
-			if (in_array((string)($role['NAME'] ?? ''), [
-				RoleDictionary::ROLE_ADMIN,
-				RoleDictionary::ROLE_DIRECTOR,
-				RoleDictionary::ROLE_EMPLOYEE,
-			], true))
-			{
-				return true;
-			}
-		}
-
-		return false;
+	public function getAccessVersion(): int
+	{
+		return (int)Option::get(self::MODULE_ID, self::MAIL_ACCESS_VERSION_KEY, 0);
 	}
 }

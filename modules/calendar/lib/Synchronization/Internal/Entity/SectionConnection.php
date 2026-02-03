@@ -8,6 +8,7 @@ use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core\Role\Role;
 use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Sync\Connection\Connection;
+use Bitrix\Calendar\Sync\Dictionary;
 use Bitrix\Main\Entity\EntityInterface;
 
 class SectionConnection implements EntityInterface
@@ -209,5 +210,16 @@ class SectionConnection implements EntityInterface
 		}
 
 		return $data;
+	}
+
+	public function disable(): void
+	{
+		$this
+			->setActive(false)
+			->setSyncToken(null)
+			->setPageToken(null)
+			->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
+			->setLastSyncDate(new Date())
+		;
 	}
 }

@@ -85,12 +85,12 @@ class TranscribedTaskHandler
 
 	private function getTaskType(Task $task): TaskType
 	{
-		if ($task->scenarios->contains(Task\Scenario::Voice))
+		if ($task->scenarios?->contains(Task\Scenario::Voice))
 		{
 			return TaskType::VoiceNoteAutoTask;
 		}
 
-		if ($task->scenarios->contains(Task\Scenario::Video))
+		if ($task->scenarios?->contains(Task\Scenario::Video))
 		{
 			return TaskType::VideoNoteAutoTask;
 		}

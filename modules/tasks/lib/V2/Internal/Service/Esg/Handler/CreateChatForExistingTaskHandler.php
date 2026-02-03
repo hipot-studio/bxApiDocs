@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Esg\Handler;
 
+use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskMutedUserSyncEvent;
@@ -33,6 +34,7 @@ class CreateChatForExistingTaskHandler
 		$chatId = $result->getId();
 		if (!$result->isSuccess() || $chatId <= 0)
 		{
+			Logger::logErrors($result->getErrorCollection());
 			throw new RuntimeException('There was an error while creating new task chat');
 		}
 

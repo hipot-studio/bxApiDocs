@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail;
@@ -91,7 +92,7 @@ class CMailMessageActionsComponent extends CBitrixComponent
 			array('user_id' => $USER->getId())
 		);
 
-		$this->arParams['CRM_AVAILABLE'] = \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm();
+		$this->arParams['CRM_AVAILABLE'] = MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm();
 
 		$this->includeComponentTemplate();
 	}

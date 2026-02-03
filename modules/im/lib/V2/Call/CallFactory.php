@@ -8,6 +8,7 @@ use Bitrix\Call\Call\PlainCall;
 use Bitrix\Call\Call\BitrixCall;
 use Bitrix\Call\Call\ConferenceCall;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 
 class CallFactory
 {
@@ -137,6 +138,8 @@ class CallFactory
 
 	/**
 	 * Checks if user has active call.
+	 * @param int $userId
+	 * @param int $depthHours
 	 * @return bool
 	 */
 	public static function hasUserActiveCalls(int $userId, int $depthHours = 12): bool
@@ -147,13 +150,25 @@ class CallFactory
 			->addSelect('ID')
 			->whereIn('STATE', [\Bitrix\Im\Call\Call::STATE_NEW, \Bitrix\Im\Call\Call::STATE_INVITING])
 			->where('START_DATE', '>=', $date)
-			->where('CALL_USER.USER_ID', $userId)
-			->whereIn('CALL_USER.STATE', [\Bitrix\Im\Call\CallUser::STATE_READY, \Bitrix\Im\Call\CallUser::STATE_CALLING])
 			->setLimit(1)
 		;
-		$activeCall = $query->exec()->fetchAll();
 
-		return (bool)$activeCall;
+		$intervalInviting = (new DateTime())->add('-30 seconds');
+		$userState = (new ConditionTree())
+			->logic(ConditionTree::LOGIC_OR)
+			->where('CALL_USER.STATE', \Bitrix\Im\Call\CallUser::STATE_READY)
+			->where(
+				(new ConditionTree())
+					->where('CALL_USER.STATE', \Bitrix\Im\Call\CallUser::STATE_CALLING)
+					->where('CALL_USER.LAST_SEEN', '>', $intervalInviting)
+			)
+		;
+		$query
+			->where('CALL_USER.USER_ID', $userId)
+			->where($userState)
+		;
+
+		return (bool)$query->exec()->fetchAll();
 	}
 
 	/**

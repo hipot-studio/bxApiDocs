@@ -46,6 +46,7 @@ class Task extends BaseController
 				relatedTasks: $taskSelect->relatedTasks,
 				gantt: $taskSelect->gantt,
 				placements: $taskSelect->placements,
+				containsCommentFiles: $taskSelect->containsCommentFiles,
 				favorite: $taskSelect->favorite,
 				options: $taskSelect->options,
 				parameters: $taskSelect->parameters,

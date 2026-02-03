@@ -59,7 +59,8 @@ class ConsumeMessagesCommand extends Command
 	{
 		$output->writeln('Started ' . date('Y-m-d H:i:s') . '. PID: ' . getmypid());
 
-		if (null !== $timeLimit = $input->getOption('time-limit'))
+		$timeLimit = $input->getOption('time-limit');
+		if ($timeLimit !== null)
 		{
 			if (!is_numeric($timeLimit) || $timeLimit < 1)
 			{
@@ -70,7 +71,6 @@ class ConsumeMessagesCommand extends Command
 		}
 
 		$config = Configuration::getValue('messenger');
-
 		if (!$config)
 		{
 			return self::SUCCESS;

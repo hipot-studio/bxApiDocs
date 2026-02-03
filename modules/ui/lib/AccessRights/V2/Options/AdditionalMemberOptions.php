@@ -74,4 +74,31 @@ class AdditionalMemberOptions implements JsonSerializable, Arrayable
 	{
 		return $this->toArray();
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		$options = new self();
+
+		if (isset($data['addUserGroupsProviderTab']))
+		{
+			$options->setAddUserGroupsProviderTab((bool)$data['addUserGroupsProviderTab']);
+		}
+
+		if (isset($data['addProjectsProviderTab']))
+		{
+			$options->setAddProjectsProviderTab((bool)$data['addProjectsProviderTab']);
+		}
+
+		if (isset($data['addStructureTeamsProviderTab']))
+		{
+			$options->setAddStructureTeamsProviderTab((bool)$data['addStructureTeamsProviderTab']);
+		}
+
+		if (isset($data['useStructureDepartmentsProviderTab']))
+		{
+			$options->setUseStructureDepartmentsProviderTab((bool)$data['useStructureDepartmentsProviderTab']);
+		}
+
+		return $options;
+	}
 }

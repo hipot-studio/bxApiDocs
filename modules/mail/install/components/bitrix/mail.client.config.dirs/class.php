@@ -133,7 +133,7 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 			return false;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessOrCanEditMailbox($mailboxId))
+		if (!Mail\Helper\MailboxAccess::hasCurrentUserAnyAccessToMailbox($mailboxId))
 		{
 			$this->errorCollection[] = new Error('access denied');
 			return false;

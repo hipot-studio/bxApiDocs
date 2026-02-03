@@ -5,6 +5,8 @@ namespace Bitrix\Im\V2\Recent\Config;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\ExtendedType;
+use Bitrix\Im\V2\Common\FormatConverter;
+use Bitrix\Im\V2\Message\Counter\CounterType;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 
@@ -75,11 +77,16 @@ class RecentConfigManager
 
 	private function loadInternal(): void
 	{
-		$this->configByTypes[ExtendedType::Copilot->value] = new RecentConfig(true, true);
-		$this->configByTypes[ExtendedType::Collab->value] = new RecentConfig(true, true);
-		$this->configByTypes[ExtendedType::Lines->value] = new RecentConfig(false, true);
-		$this->configByTypes[ExtendedType::Comment->value] = new RecentConfig(false, false);
-		$this->configByTypes[ExtendedType::OpenChannel->value] = new RecentConfig(true, true);
+		$this->configByTypes[ExtendedType::Copilot->value] =
+			new RecentConfig(true, true, CounterType::Copilot);
+		$this->configByTypes[ExtendedType::Collab->value] =
+			new RecentConfig(true, true, CounterType::Collab);
+		$this->configByTypes[ExtendedType::Lines->value] =
+			new RecentConfig(false, true, CounterType::Openline);
+		$this->configByTypes[ExtendedType::Comment->value] =
+			new RecentConfig(false, false, CounterType::Comment);
+		$this->configByTypes[ExtendedType::OpenChannel->value] =
+			new RecentConfig(true, true);
 		$this->configByTypes[ExtendedType::GeneralChannel->value]
 			= (new RecentConfig(true, true))->setOwnSectionName('openChannel')
 		;
@@ -96,10 +103,13 @@ class RecentConfigManager
 				continue;
 			}
 
-			$this->configByTypes[$type] = new RecentConfig(
+			$recentConfig = new RecentConfig(
 				self::EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION,
-				$config->hasOwnRecentSection
+				$config->hasOwnRecentSection,
+				$config->hasOwnRecentSection ? FormatConverter::toCamelCase($type) : CounterType::Chat
 			);
+
+			$this->configByTypes[$type] = $recentConfig;
 		}
 	}
 }

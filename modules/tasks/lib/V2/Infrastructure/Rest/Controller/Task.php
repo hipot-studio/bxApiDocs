@@ -192,6 +192,8 @@ class Task extends RestController
 			throw new AccessDeniedException();
 		}
 
+		$select = $request->select?->getList() ?? [];
+
 		/** @var TaskEntity $entity */
 		$entity = $taskProvider->get(
 			new TaskParams(
@@ -203,15 +205,35 @@ class Task extends RestController
 				members: ($request->getRelation('responsible')
 					|| $request->getRelation('creator')
 					|| $request->getRelation('accomplices')
-					|| $request->getRelation('auditors')
 					|| $request->getRelation('auditors')),
-				checkLists: (bool)$request->getRelation('checkLists'),
+				checkLists: (empty($select)
+					|| in_array('checklist', $select, true)
+					|| in_array('containsChecklist', $select, true)),
 				tags: (bool)$request->getRelation('tags'),
-				crm: (bool)$request->getRelation('crmItems'),
-				subTasks: (bool)$request->getRelation('subTasks'),
-				relatedTasks: (bool)$request->getRelation('relatedTasks'),
-				gantt: (bool)$request->getRelation('gantt'),
+				crm: (empty($select) || in_array('crmItemIds', $select, true)),
+				email: (bool)$request->getRelation('email'),
+				subTasks: empty($select) || in_array('containsSubTasks', $select, true),
+				relatedTasks: empty($select) || in_array('containsRelatedTasks', $select, true),
+				gantt: empty($select) || in_array('containsGanttLinks', $select, true),
+				placements: empty($select) || in_array('containsPlacements', $select, true),
+				favorite: empty($select) || in_array('inFavorite', $select, true),
+				options: (empty($select)
+					|| in_array('inPin', $select, true)
+					|| in_array('inGroupPin', $select, true)
+					|| in_array('inMute', $select, true)),
+				parameters: (empty($select)
+					|| in_array('matchesSubTasksTime', $select, true)
+					|| in_array('autocompleteSubTasks', $select, true)
+					|| in_array('allowsChangeDatePlan', $select, true)
+					|| in_array('requireResult', $select, true)
+					|| in_array('maxDeadlineChangeDate', $select, true)
+					|| in_array('maxDeadlineChanges', $select, true)
+					|| in_array('requireDeadlineChangeReason', $select, true)),
+				results: empty($select) || in_array('containsResults', $select, true),
+				reminders: empty($select) || in_array('numberOfReminders', $select, true),
+				userFields: (bool)$request->getRelation('userFields'),
 				checkTaskAccess: false,
+				scenarios: empty($select) || in_array('scenarios', $select, true),
 			),
 		);
 

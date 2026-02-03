@@ -50,4 +50,17 @@ class Access implements JsonSerializable, Arrayable
 	{
 		return $this->toArray();
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		if (!isset($data['id']) || !isset($data['value']))
+		{
+			return null;
+		}
+
+		return new self(
+			$data['id'],
+			$data['value'],
+		);
+	}
 }

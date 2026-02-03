@@ -8,14 +8,20 @@ use Bitrix\Disk\Document\BitrixHandler;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Enum\ServersTypesEnum;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Viewer\Transformation\Document;
 use Bitrix\Main\UI\Viewer\Transformation\Video;
+use Bitrix\Main\Web\Json;
+use InvalidArgumentException;
 
 final class Configuration
 {
 	public const DEFAULT_CACHE_TIME = 60;
 	public const REVISION_API       = 8;
+	public const OPTION_ONLYOFFICE_SERVERS_TYPE = 'disk_onlyoffice_servers_type';
+	public const OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE = 'disk_onlyoffice_switch_servers_type_state';
 
 	public static function isEnabledDefaultEditInUf()
 	{
@@ -388,6 +394,78 @@ final class Configuration
 		}
 
 		return (int)Option::get(Driver::INTERNAL_MODULE_ID, 'disk_trashcan_ttl', -1);
+	}
+
+	public static function setOnlyOfficeServersType(ServersTypesEnum $serversType): void
+	{
+		Option::set(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_ONLYOFFICE_SERVERS_TYPE,
+			value: $serversType->value,
+		);
+	}
+
+	public static function getOnlyOfficeServersType(): ServersTypesEnum
+	{
+		$optionServersType = Option::get(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_ONLYOFFICE_SERVERS_TYPE,
+			default: null,
+		);
+
+		// if option doesn't exist, default - regular
+		if (!is_string($optionServersType))
+		{
+			return ServersTypesEnum::Regular;
+		}
+
+		if (is_null($serversType = ServersTypesEnum::tryFrom($optionServersType)))
+		{
+			throw new InvalidArgumentException(
+				message: "Invalid value \"$optionServersType\" for option"
+				. " \"" . self::OPTION_ONLYOFFICE_SERVERS_TYPE . "\""
+			);
+		}
+
+		return $serversType;
+	}
+
+	public static function storeStateForOnlyofficeSwitchServersType(array $state): void
+	{
+		$state['dateTime'] = $state['dateTime']->format(DATE_ATOM);
+
+		Option::set(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE,
+			value: Json::encode($state),
+		);
+	}
+
+	public static function getStateForOnlyofficeSwitchServersType(): ?array
+	{
+		$serializedState = Option::get(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE,
+			default: null,
+		);
+
+		if (!is_string($serializedState))
+		{
+			return null;
+		}
+
+		$state = Json::decode($serializedState);
+		$state['dateTime'] = DateTime::createFromPhp(new \DateTime($state['dateTime']));
+
+		return $state;
+	}
+
+	public static function deleteStateForOnlyofficeSwitchServersType(): void
+	{
+		Option::delete(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			filter: ['name' => self::OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE],
+		);
 	}
 }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service;
 
 use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\Internals\Registry\FeaturePermRegistry;
 use Bitrix\Socialnetwork\Permission\OperationService;
 use CAllSocNetUser;
 
@@ -37,6 +38,26 @@ class OperationAccessService
 		}
 
 		return CAllSocNetUser::CanProfileView($userId, $targetUserId);
+	}
+
+	public function canViewAllTasks(int $userId, int $groupId): bool
+	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return false;
+		}
+
+		if ($groupId <= 0)
+		{
+			return false;
+		}
+
+		return FeaturePermRegistry::getInstance()->get(
+			$groupId,
+			'tasks',
+			'view_all',
+			$userId,
+		);
 	}
 
 	public function filterUsersWithAccess(

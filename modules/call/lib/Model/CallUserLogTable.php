@@ -79,7 +79,8 @@ class CallUserLogTable extends DataManager
 
 			(new DatetimeField('STATUS_TIME'))
 				->configureRequired()
-				->configureDefaultValue(function() {
+				->configureDefaultValue(function()
+				{
 					return new DateTime();
 				}),
 

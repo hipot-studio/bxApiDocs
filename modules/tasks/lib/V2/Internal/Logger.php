@@ -7,11 +7,10 @@ namespace Bitrix\Tasks\V2\Internal;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\SystemException;
-use Bitrix\Tasks\Internals\Log\Log;
 use Bitrix\Tasks\Internals\Log\LogFacade;
 use Throwable;
 
-class Logger
+class Logger implements LoggerInterface
 {
 	public function logValidationErrorWarning(ErrorCollection $errors): void
 	{
@@ -28,7 +27,7 @@ class Logger
 		LogFacade::handle($error, $wrapperClass);
 	}
 
-	public function logWarning(mixed $data, string $marker = Log::DEFAULT_MARKER): void
+	public function logWarning(mixed $data, string $marker = self::DEFAULT_MARKER): void
 	{
 		LogFacade::log($data, $marker);
 	}

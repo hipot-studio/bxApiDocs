@@ -56,17 +56,17 @@ abstract class BaseRecent implements TabInterface
 				'params' => $this->params,
 				'settings' => $this->getWidgetSettings(),
 			],
-			'spotlightId' => $this->getId()
+			'spotlightId' => 'tab-' . $this->getId()
 		];
 	}
-	
+
 	public function getWidgetData(): ?array
 	{
 		if (!$this->isAvailable())
 		{
 			return null;
 		}
-		
+
 		return [
 			"id" => $this->getId(),
 			"title" => $this->getTabTitle(),
@@ -78,7 +78,7 @@ abstract class BaseRecent implements TabInterface
 					'objectName'=> $this->getId(),
 				],
 			],
-			'spotlightId' => $this->getId(),
+			'spotlightId' => 'tab-' . $this->getId()
 		];
 	}
 

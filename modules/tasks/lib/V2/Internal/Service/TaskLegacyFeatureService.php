@@ -29,6 +29,11 @@ class TaskLegacyFeatureService
 		return (new Forum\Message())->hasTopicComments($topicId);
 	}
 
+	public function hasForumCommentFiles(int $taskId): bool
+	{
+		return \Bitrix\Tasks\Integration\Forum\Task\Topic::hasFiles($taskId);
+	}
+
 	public function getLegacyChatId(int $taskId): ?int
 	{
 		$task = TaskRegistry::getInstance()->getObject($taskId);

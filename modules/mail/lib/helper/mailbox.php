@@ -553,6 +553,8 @@ abstract class Mailbox
 			$this->syncIncompleteMessages($this->getLostMessages(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE, $messageInFolderFilter));
 		}
 
+
+
 		\Bitrix\Mail\Helper\Message::reSyncBody($this->mailbox['ID'], $this->findMessagesWithAnEmptyBody(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE, $this->mailbox['ID']));
 	}
 
@@ -618,7 +620,7 @@ abstract class Mailbox
 
 		$mailbox = null;
 
-		if (MailboxAccess::hasCurrentUserAccessOrCanEditMailbox($id))
+		if (MailboxAccess::hasCurrentUserAnyAccessToMailbox($id))
 		{
 			$mailbox = MailboxTable::getById($id)->fetch();
 		}
@@ -2369,5 +2371,18 @@ abstract class Mailbox
 		}
 
 		return 0;
+	}
+
+	public static function findActiveMailbox($userId, $email, $lid)
+	{
+		return Mail\MailboxTable::getList([
+			'filter' => [
+				'=EMAIL' => $email,
+				'=USER_ID' => $userId,
+				'=ACTIVE' => 'Y',
+				'=LID' => $lid,
+			],
+			'limit' => 1,
+		])->fetch();
 	}
 }

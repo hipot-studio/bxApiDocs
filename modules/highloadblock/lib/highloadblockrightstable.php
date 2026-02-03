@@ -1,7 +1,9 @@
 <?php
+
 namespace Bitrix\Highloadblock;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM;
 
 /**
  * Class HighloadBlockRightsTable
@@ -19,13 +21,13 @@ use Bitrix\Main\Entity;
  * @method static \Bitrix\Highloadblock\EO_HighloadBlockRights wakeUpObject($row)
  * @method static \Bitrix\Highloadblock\EO_HighloadBlockRights_Collection wakeUpCollection($rows)
  */
-class HighloadBlockRightsTable extends Entity\DataManager
+class HighloadBlockRightsTable extends ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
 	 * @return string
 	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_hlblock_entity_rights';
 	}
@@ -34,7 +36,7 @@ class HighloadBlockRightsTable extends Entity\DataManager
 	 * Returns entity map definition.
 	 * @return array
 	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return array(
 			'ID' => new Entity\IntegerField('ID', array(

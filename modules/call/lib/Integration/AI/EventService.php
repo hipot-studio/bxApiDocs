@@ -57,7 +57,10 @@ class EventService
 						->enableSkipUrlIndex()
 					;
 					$context = (new Context())->setUser($call->getInitiatorId());
-					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+					NotifyService::getInstance()
+						->sendMessageDeferred($chat, $message, $sendingConfig, $context)
+						->setMessageShown($call->getId(), NotifyService::MESSAGE_TYPE_AI_START)
+					;
 				}
 			}
 

@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Param\ParamError;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Im\V2\Message\Sticker\PackType;
 use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\MessageCollection;
@@ -382,9 +383,10 @@ class FieldsValidationService
 		}
 
 		if (
-			!isset($this->fields['STICKER_PARAMS']['stickerId'])
+			!isset($this->fields['STICKER_PARAMS']['id'])
 			|| !isset($this->fields['STICKER_PARAMS']['packId'])
 			|| !isset($this->fields['STICKER_PARAMS']['packType'])
+			|| PackType::tryFrom((string)$this->fields['STICKER_PARAMS']['packType']) === null
 		)
 		{
 			$result->addError(new StickerError(StickerError::STICKER_SENDING_ERROR));
@@ -393,9 +395,9 @@ class FieldsValidationService
 		}
 
 		$stickerParams = StickerService::getStickerMessageParams(
-			(int)$this->fields['STICKER_PARAMS']['stickerId'],
+			(int)$this->fields['STICKER_PARAMS']['id'],
 			(int)$this->fields['STICKER_PARAMS']['packId'],
-			(string)$this->fields['STICKER_PARAMS']['packType']
+			PackType::tryFrom((string)$this->fields['STICKER_PARAMS']['packType'])
 		);
 
 		if (empty($stickerParams))
@@ -406,7 +408,6 @@ class FieldsValidationService
 		}
 
 		$this->fields['MESSAGE'] = '';
-		$this->fields['PARAMS'][Params::COMPONENT_ID] = StickerService::getStickerMessageComponentId();
 		$this->fields['PARAMS'][Params::STICKER_PARAMS] = $stickerParams;
 
 		return $result;

@@ -9,6 +9,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Validation\ValidationError;
+use Bitrix\Tasks\V2\Internal\LoggerInterface;
 use ReflectionClass;
 use Throwable;
 
@@ -16,12 +17,12 @@ final class LogFacade
 {
 	private static array $loggers = [];
 
-	public static function log(mixed $data, string $marker = Log::DEFAULT_MARKER): void
+	public static function log(mixed $data, string $marker = LoggerInterface::DEFAULT_MARKER): void
 	{
 		self::getLogger($marker)->collect($data);
 	}
 
-	public static function logThrowable(Throwable $throwable, string $marker = Log::DEFAULT_MARKER): void
+	public static function logThrowable(Throwable $throwable, string $marker = LoggerInterface::DEFAULT_MARKER): void
 	{
 		self::getLogger($marker)->collect([
 			'message' => $throwable->getMessage(),
@@ -46,7 +47,7 @@ final class LogFacade
 
 	public static function logValidationErrors(ErrorCollection $errors): void
 	{
-		if (!self::isDevMode() && Option::get('tasks', 'tasks_log_validation_errors', 'N') !== 'Y')
+		if (Option::get('tasks', 'tasks_log_validation_errors', 'Y') !== 'Y')
 		{
 			return;
 		}
@@ -56,14 +57,15 @@ final class LogFacade
 		{
 			if ($error instanceof ValidationError)
 			{
+				$failedValidator = $error->getFailedValidator() ? $error->getFailedValidator()::class : 'No validator';
 				$messages [] =
-					$error->getCode() . ':' . $error->getMessage() . ':' . $error->getFailedValidator()::class;
+					$error->getCode() . ':' . $error->getMessage() . ':' . $failedValidator;
 			}
 		}
 
 		if (!empty($messages))
 		{
-			self::log($messages);
+			self::log($messages, LoggerInterface::VALIDATION_MARKER);
 		}
 	}
 

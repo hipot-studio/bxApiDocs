@@ -79,6 +79,11 @@ abstract class AbstractNotify
 		return [];
 	}
 
+	public function getMessageParams(): array
+	{
+		return [];
+	}
+
 	public function getDisableNotify(): bool
 	{
 		return false;
@@ -87,5 +92,15 @@ abstract class AbstractNotify
 	public function shouldDisableGenerateUrlPreview(): bool
 	{
 		return true;
+	}
+
+	public function shouldDisableAddRecent(): bool
+	{
+		return false;
+	}
+
+	protected function stripBbCodeUrl(string $text): string
+	{
+		return preg_replace('#\[URL=[^]]*]([^\[]*)\[/URL]#i', '$1', $text);
 	}
 }

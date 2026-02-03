@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Mail\Integration\Intranet;
 
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Helper\MessageAccess;
 use Bitrix\Mail\Internals\MessageAccessTable;
@@ -170,7 +171,7 @@ class Secretary
 
 
 		Message::prepare($message);
-		$message['__href'] = Message::addSourceAnalyticsToMessage($message['__href'], $entityType);
+		$message['__href'] = AnalyticsHelper::addSourceAnalyticsToMessage($message['__href'], $entityType);
 
 		$signer = new \Bitrix\Main\Security\Sign\Signer(new \Bitrix\Main\Security\Sign\HmacAlgorithm('md5'));
 

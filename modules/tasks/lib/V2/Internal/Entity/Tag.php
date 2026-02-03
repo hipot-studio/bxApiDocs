@@ -13,7 +13,7 @@ class Tag extends AbstractEntity
 
 	public function __construct(
 		public readonly ?int $id = null,
-		#[NotEmpty(allowZero: true)]
+		// #[NotEmpty(allowZero: true)] we need remove all empty tags before
 		public readonly ?string $name = null,
 		public readonly ?User $owner = null,
 		public readonly ?Group $group = null,

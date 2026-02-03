@@ -4,27 +4,29 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Message\Sticker\VendorPack;
 
+use Bitrix\Im\V2\Message\Sticker\PackCollection;
 use Bitrix\Im\V2\Message\Sticker\PackItem;
 use Bitrix\Im\V2\Message\Sticker\PackType;
-use Bitrix\Im\V2\Message\Sticker\RecentItem;
+use Bitrix\Im\V2\Message\Sticker\Recent\RecentCollection;
+use Bitrix\Im\V2\Message\Sticker\StickerCollection;
+use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\Message\Sticker\StickerItem;
+use Bitrix\Im\V2\Message\Sticker\StickerPacks;
 use Bitrix\Im\V2\Message\Sticker\StickerType;
+use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
 use Bitrix\Main\IO\File;
 use Bitrix\Main\Localization\Loc;
 
-class VendorPacks
+class VendorPacks implements StickerPacks
 {
 	private static self $instance;
 
-	/**
-	 * @var PackItem[] $vendorPacks
-	 */
-	private static array $vendorPacks = [];
+	private static ?PackCollection $vendorPacks = null;
 
 	private function __construct()
 	{
-		if (empty(self::$vendorPacks))
+		if (!isset(self::$vendorPacks))
 		{
 			$this->fill();
 		}
@@ -37,61 +39,57 @@ class VendorPacks
 		return self::$instance;
 	}
 
-	public function getList(int $limit, ?int $lastId = null, ?string $lastType = null): array
+	public function getList(int $limit, ?int $lastId = null, ?PackType $lastType = null): PackCollection
 	{
-		$packs = [];
+		$packCollection = new PackCollection();
 
-		if ($lastId !== null && $lastType !== PackType::Vendor->value)
+		if ($lastId !== null && $lastType !== $this->getType())
 		{
-			return [];
+			$lastId = 0;
 		}
 
-		if ($lastId === null)
+		$lastId = $lastId ?? 0;
+		$lastPack = null;
+
+		foreach (self::$vendorPacks as $pack)
 		{
-			foreach (array_slice(self::$vendorPacks, 0, $limit) as $pack)
+			if ($pack->id > $lastId && count($packCollection) < $limit)
 			{
-				$packs[] = $pack->toRestFormat();
-			}
-		}
-		else
-		{
-			foreach (self::$vendorPacks as $pack)
-			{
-				if ($pack->id > $lastId && count($packs) < $limit)
-				{
-					$packs[] = $pack->toRestFormat();
-				}
+				$packCollection->append($pack);
+				$lastPack = $pack;
 			}
 		}
 
-		return $packs;
+		if (isset($lastPack) && $lastPack->id === $this->getLastPackId())
+		{
+			$packCollection->setHasNextPage(false);
+		}
+
+		return $packCollection;
 	}
 
-	public function getPackByName(VendorPackName $packName): PackItem
+	protected function getLastPackId(): int
 	{
-		$stickers = $this->getStickersByPackName($packName);
+		$packId = 0;
 
-		return new PackItem(
-			$packName->getId(),
-			$this->getPackName($packName),
-			PackType::Vendor,
-			$stickers
-		);
+		foreach (self::$vendorPacks as $pack)
+		{
+			$packId = $pack->id;
+		}
+
+		return $packId;
 	}
 
-	public function getStickerById(int $stickerId, int $packId): ?array
+	public function getStickerById(int $stickerId, int $packId): ?StickerItem
 	{
 		$packName = VendorPackName::getById($packId);
 		if ($this->packExists($packName))
 		{
-			$stickers = self::$vendorPacks[$packName->value]->stickers;
+			$stickers = self::$vendorPacks->offsetGet($packName->value)->stickers;
 
 			if (isset($stickers[$stickerId]))
 			{
-				return array_merge(
-					$stickers[$stickerId],
-					['packId' => $packId, 'packType' => PackType::Vendor->value]
-				);
+				return $stickers[$stickerId];
 			}
 		}
 
@@ -103,20 +101,24 @@ class VendorPacks
 		$packName = VendorPackName::getById($packId);
 		if ($this->packExists($packName))
 		{
-			return self::$vendorPacks[$packName->value];
+			return self::$vendorPacks->offsetGet($packName->value);
 		}
 
 		return null;
 	}
 
-	public function getStickersByRecent(array $recentItems): array
+	public function isPackAdded(int $packId): bool
 	{
-		/** @var array<RecentItem> $recentItems */
-		$stickers = [];
+		return true;
+	}
 
-		foreach ($recentItems as $recentItem)
+	public function getStickersByRecent(RecentCollection $recentCollection): StickerCollection
+	{
+		$stickerCollection = new StickerCollection();
+
+		foreach ($recentCollection as $recentItem)
 		{
-			if ($recentItem->packType !== PackType::Vendor->value)
+			if ($recentItem->packType !== PackType::Vendor)
 			{
 				continue;
 			}
@@ -124,19 +126,59 @@ class VendorPacks
 			$sticker = $this->getStickerById($recentItem->id, $recentItem->packId);
 			if ($sticker !== null)
 			{
-				$stickers[] = $sticker;
+				$stickerCollection->append($sticker);
 			}
 		}
 
-		return $stickers;
+		return $stickerCollection;
 	}
 
-	private function getStickersByPackName(VendorPackName $packName): array
+	public function addPack(array $fileUuidMap, ?string $packName): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function linkPack(int $packId): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function addStickers(array $fileUuidMap, int $packId, bool $sendPush = true): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function deletePack(int $packId): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function unlinkPack(int $packId): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function renamePack(int $packId, string $name): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function deleteStickers(array $stickerIds, int $packId): Result
+	{
+		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
+	}
+
+	public function getType(): PackType
+	{
+		return PackType::Vendor;
+	}
+
+	private function getStickersByPackName(VendorPackName $packName, int $packId): StickerCollection
 	{
 		$dir = $this->getImageDir($packName);
 		$publicDir = $this->getImagePublicDir($packName);
 
-		$stickers = [];
+		$stickerCollection = (new StickerCollection());
 
 		$files = match ($packName)
 		{
@@ -146,43 +188,90 @@ class VendorPacks
 			VendorPackName::BitrixReactions => VendorConfig::getBitrixReactions(),
 			VendorPackName::Airy => VendorConfig::getAiry(),
 			VendorPackName::BittyBob => VendorConfig::getBittyBob(),
+			VendorPackName::OfficeRoutine => VendorConfig::getOfficeRoutine(),
+			VendorPackName::Smileys => VendorConfig::getSmileys(),
+			VendorPackName::Hands => VendorConfig::getHands(),
+			VendorPackName::WorkDay => VendorConfig::getWorkDay(),
+			VendorPackName::Animals => VendorConfig::getAnimals(),
+			VendorPackName::Celebration => VendorConfig::getCelebration(),
 		};
 
 		foreach ($files as $id => $file)
 		{
-			if (File::isFileExists($dir . $file['name']))
-			{
-				$uri = $publicDir . $file['name'];
-				$stickerItem = new StickerItem($id, $uri, StickerType::Image, $file['width'], $file['height']);
-				$stickers[$id] = $stickerItem->toRestFormat();
-			}
+			$uri = $publicDir . $file['name'];
+			$sticker = (new StickerItem($id, $uri, StickerType::Image, $file['width'], $file['height'], $packId, PackType::Vendor));
+			$stickerCollection->offsetSet($id, $sticker);
 		}
 
-		return $stickers;
+		return $stickerCollection;
 	}
 
 	private function fill(): void
 	{
+		self::$vendorPacks = (new PackCollection());
 		$license = Application::getInstance()->getLicense();
 
 
 		if ($license->isCis())
 		{
-			self::$vendorPacks[VendorPackName::BitrixVibe->value] = $this->getPackByName(VendorPackName::BitrixVibe);
-			self::$vendorPacks[VendorPackName::Zefir->value] = $this->getPackByName(VendorPackName::Zefir);
-			self::$vendorPacks[VendorPackName::ArkashaAndCat->value] = $this->getPackByName(VendorPackName::ArkashaAndCat);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::BitrixVibe->value,
+				$this->getPackByName(VendorPackName::BitrixVibe)
+			);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::Zefir->value,
+				$this->getPackByName(VendorPackName::Zefir)
+			);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::ArkashaAndCat->value,
+				$this->getPackByName(VendorPackName::ArkashaAndCat)
+			);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::OfficeRoutine->value,
+				$this->getPackByName(VendorPackName::OfficeRoutine)
+			);
 		}
 		else
 		{
-			self::$vendorPacks[VendorPackName::BitrixReactions->value] = $this->getPackByName(VendorPackName::BitrixReactions);
-			self::$vendorPacks[VendorPackName::Airy->value] = $this->getPackByName(VendorPackName::Airy);
-			self::$vendorPacks[VendorPackName::BittyBob->value] = $this->getPackByName(VendorPackName::BittyBob);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::BitrixReactions->value,
+				$this->getPackByName(VendorPackName::BitrixReactions)
+			);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::Airy->value,
+				$this->getPackByName(VendorPackName::Airy)
+			);
+			self::$vendorPacks->offsetSet(
+				VendorPackName::BittyBob->value,
+				$this->getPackByName(VendorPackName::BittyBob)
+			);
 		}
+
+		self::$vendorPacks->offsetSet(
+			VendorPackName::Smileys->value,
+			$this->getPackByName(VendorPackName::Smileys)
+		);
+		self::$vendorPacks->offsetSet(
+			VendorPackName::Hands->value,
+			$this->getPackByName(VendorPackName::Hands)
+		);
+		self::$vendorPacks->offsetSet(
+			VendorPackName::WorkDay->value,
+			$this->getPackByName(VendorPackName::WorkDay)
+		);
+		self::$vendorPacks->offsetSet(
+			VendorPackName::Animals->value,
+			$this->getPackByName(VendorPackName::Animals)
+		);
+		self::$vendorPacks->offsetSet(
+			VendorPackName::Celebration->value,
+			$this->getPackByName(VendorPackName::Celebration)
+		);
 	}
 
 	private function packExists(?VendorPackName $packName): bool
 	{
-		return $packName !== null && isset(self::$vendorPacks[$packName->value]);
+		return $packName !== null && self::$vendorPacks->offsetExists($packName->value);
 	}
 
 	private function getPackName(VendorPackName $packName): string
@@ -195,7 +284,25 @@ class VendorPacks
 			VendorPackName::BitrixReactions => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_BITRIX_REACTIONS') ?? '',
 			VendorPackName::Airy => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_AIRY') ?? '',
 			VendorPackName::BittyBob => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_BITTY_BOB') ?? '',
+			VendorPackName::OfficeRoutine => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_OFFICE_ROUTINE') ?? '',
+			VendorPackName::Smileys => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_SMILEYS') ?? '',
+			VendorPackName::Hands => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_HANDS') ?? '',
+			VendorPackName::WorkDay => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_WORK_DAY') ?? '',
+			VendorPackName::Animals => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_ANIMALS') ?? '',
+			VendorPackName::Celebration => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_CELEBRATION') ?? '',
 		};
+	}
+
+	private function getPackByName(VendorPackName $packName): PackItem
+	{
+		$stickerCollection = $this::getStickersByPackName($packName, $packName->getId());
+
+		return new PackItem(
+			$packName->getId(),
+			$this->getPackName($packName),
+			PackType::Vendor,
+			$stickerCollection
+		);
 	}
 
 	private function getImageDir(VendorPackName $packName): string

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Calendar\Synchronization\Internal\Repository;
 
 use Bitrix\Calendar\Synchronization\Internal\Entity\EventConnection;
+use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
 use Bitrix\Calendar\Synchronization\Internal\Model\EventConnectionTable;
 use Bitrix\Calendar\Synchronization\Internal\Repository\Mapper\EventConnectionMapper;
@@ -77,7 +78,7 @@ class EventConnectionRepository implements RepositoryInterface
 
 	/**
 	 * @param int[] $ids
-	 * @param int $connectionId
+	 * @param SectionConnection $sectionConnection
 	 *
 	 * @return EntityCollection
 	 *
@@ -85,7 +86,7 @@ class EventConnectionRepository implements RepositoryInterface
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function getByIdsAndConnectionId(array $ids, int $connectionId): EntityCollection
+	public function getByIdsAndSectionConnection(array $ids, SectionConnection $sectionConnection): EntityCollection
 	{
 		$collection = new EntityCollection();
 
@@ -94,16 +95,18 @@ class EventConnectionRepository implements RepositoryInterface
 			return $collection;
 		}
 
-		$query = EventConnectionTable::query()
-			->setSelect(['*', 'EVENT', 'CONNECTION'])
-			->where('CONNECTION_ID', '=', $connectionId)
-			->whereNotNull('EVENT.ID')
-			->where(
-				(new ConditionTree())
-					->logic(ConditionTree::LOGIC_OR)
-					->whereIn('VENDOR_EVENT_ID', $ids)
-					->whereIn('RECURRENCE_ID', $ids),
-			)
+		$query =
+			EventConnectionTable::query()
+				->setSelect(['*', 'EVENT', 'CONNECTION'])
+				->where('CONNECTION_ID', '=', (int)$sectionConnection->getConnection()?->getId())
+				->where('EVENT.SECTION_ID', '=', (int)$sectionConnection->getSection()?->getId())
+				->whereNotNull('EVENT.ID')
+				->where(
+					(new ConditionTree())
+						->logic(ConditionTree::LOGIC_OR)
+						->whereIn('VENDOR_EVENT_ID', $ids)
+						->whereIn('RECURRENCE_ID', $ids),
+				)
 		;
 
 		$queryResult = $query->exec();

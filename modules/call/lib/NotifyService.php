@@ -55,13 +55,13 @@ class NotifyService
 		return self::$service;
 	}
 
-	public function sendTaskFailedMessage(\Bitrix\Main\Error $error, Call $call, int $checkDuplicateDepth = 3): void
+	public function sendTaskFailedMessage(\Bitrix\Main\Error $error, Call $call, int $checkDuplicateDepth = 3): self
 	{
-		if (isset($this->shownMessage[self::MESSAGE_TYPE_AI_FAILED][$call->getId()]))
+		if ($this->isMessageShown($call->getId(), self::MESSAGE_TYPE_AI_FAILED))
 		{
-			return;
+			return $this;
 		}
-		$this->shownMessage[self::MESSAGE_TYPE_AI_FAILED][$call->getId()] = true;
+		$this->setMessageShown($call->getId(), self::MESSAGE_TYPE_AI_FAILED);
 
 		$chat = Chat::getInstance($call->getChatId());
 
@@ -88,15 +88,17 @@ class NotifyService
 			}
 			$this->sendAudioRecordMessage($call);
 		}
+
+		return $this;
 	}
 
-	public function sendCallError(\Bitrix\Main\Error $error, Call $call, int $checkDuplicateDepth = 3): void
+	public function sendCallError(\Bitrix\Main\Error $error, Call $call, int $checkDuplicateDepth = 3): self
 	{
-		if (isset($this->shownMessage[self::MESSAGE_TYPE_AI_FAILED][$call->getId()]))
+		if ($this->isMessageShown($call->getId(), self::MESSAGE_TYPE_AI_FAILED))
 		{
-			return;
+			return $this;
 		}
-		$this->shownMessage[self::MESSAGE_TYPE_AI_FAILED][$call->getId()] = true;
+		$this->setMessageShown($call->getId(), self::MESSAGE_TYPE_AI_FAILED);
 
 		$chat = Chat::getInstance($call->getChatId());
 
@@ -118,15 +120,17 @@ class NotifyService
 
 			$this->sendAudioRecordMessage($call);
 		}
+
+		return $this;
 	}
 
-	public function sendTaskWaitMessage(Call $call): void
+	public function sendTaskWaitMessage(Call $call): self
 	{
-		if (isset($this->shownMessage[self::MESSAGE_TYPE_AI_WAIT][$call->getId()]))
+		if ($this->isMessageShown($call->getId(), self::MESSAGE_TYPE_AI_WAIT))
 		{
-			return;
+			return $this;
 		}
-		$this->shownMessage[self::MESSAGE_TYPE_AI_WAIT][$call->getId()] = true;
+		$this->setMessageShown($call->getId(), self::MESSAGE_TYPE_AI_WAIT);
 
 		$chat = Chat::getInstance($call->getChatId());
 
@@ -146,14 +150,16 @@ class NotifyService
 				$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 			}
 		}
+
+		return $this;
 	}
 
-	public function sendOpponentBusyMessage(int $currentUserId, int $opponentUserId): void
+	public function sendOpponentBusyMessage(int $currentUserId, int $opponentUserId): self
 	{
 		$chat = ChatFactory::getInstance()->getPrivateChat($currentUserId, $opponentUserId);
 		if ($chat->getId() > 0)
 		{
-			$message = ChatMessage::generateOpponentBusyMessage($opponentUserId);
+			$message = CallChatMessage::generateOpponentBusyMessage($opponentUserId);
 			if ($message)
 			{
 				$sendingConfig = (new SendingConfig)
@@ -164,25 +170,39 @@ class NotifyService
 				$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 			}
 		}
+
+		return $this;
 	}
 
-	public function sendMessage(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): void
+	public function sendMessage(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): self
 	{
 		$chat
 			->setContext($context ?? new Context)
-			->sendMessage($message, $sendingConfig);
+			->sendMessage($message, $sendingConfig)
+		;
+
+		return $this;
 	}
 
-	public function sendError(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): void
+	public function sendError(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): self
 	{
 		$chat
 			->setContext($context ?? new Context)
-			->sendMessage($message, $sendingConfig);
+			->sendMessage($message, $sendingConfig)
+		;
+
+		return $this;
 	}
 
-	public function sendMessageDeferred(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): void
+	public function sendMessageDeferred(Chat $chat, Message $message, ?SendingConfig $sendingConfig = null, ?Context $context = null): self
 	{
-		Application::getInstance()->addBackgroundJob([$this, 'sendMessage'], [$chat, $message, $sendingConfig, $context], Application::JOB_PRIORITY_LOW);
+		Application::getInstance()->addBackgroundJob(
+			job: [$this, 'sendMessage'],
+			args: [$chat, $message, $sendingConfig, $context],
+			priority: Application::JOB_PRIORITY_LOW
+		);
+
+		return $this;
 	}
 
 	public function findMessage(int $chatId, int $callId, string $messageType, int $depth = 100): ?Message
@@ -260,14 +280,89 @@ class NotifyService
 		return $result;
 	}
 
-	public function sendAudioRecordMessage(Call $call): void
+	public function sendRecordingReadyMessage(Call $call, Track $track): void
 	{
-		// Check if audio record message was already sent
-		if (isset($this->shownMessage[self::MESSAGE_TYPE_AUDIO_RECORD][$call->getId()]))
+		if ($track->getType() !== Track::TYPE_VIDEO_RECORD)
 		{
 			return;
 		}
-		$this->shownMessage[self::MESSAGE_TYPE_AUDIO_RECORD][$call->getId()] = true;
+
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		$chat = Chat::getInstance($call->getChatId());
+		if (!$chat || $chat instanceof \Bitrix\Im\V2\Chat\NullChat)
+		{
+			return;
+		}
+
+		$userId = $call->getActionUserId() ?: $call->getInitiatorId();
+
+		if ($track->getFileId() && !$track->getDiskFileId())
+		{
+			$diskFileIds = \CIMDisk::UploadFileFromMain(
+				$call->getChatId(),
+				[$track->getFileId()],
+				$userId
+			);
+
+			if (!$diskFileIds || empty($diskFileIds[0]))
+			{
+				return;
+			}
+
+			$diskFileId = $diskFileIds[0];
+			$track->setDiskFileId($diskFileId);
+			$track->save();
+		}
+
+		if ($track->getDiskFileId())
+		{
+			\CIMDisk::UploadFileFromDisk(
+				$call->getChatId(),
+				['upload' . $track->getDiskFileId()],
+				'',
+				['USER_ID' => $userId]
+			);
+		}
+
+		$downloadUrl = null;
+		if ($track->getDiskFileId() && \Bitrix\Main\Loader::includeModule('disk'))
+		{
+			$diskFile = \Bitrix\Disk\File::getById($track->getDiskFileId());
+			if ($diskFile)
+			{
+				$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
+				$downloadUrl = $urlManager->getUrlForDownloadFile($diskFile, true);
+			}
+		}
+
+		if (!$downloadUrl)
+		{
+			$downloadUrl = $track->getUrl(true, true);
+		}
+
+		$message = CallChatMessage::makeCloudRecordReadyMessage($call, $chat, $downloadUrl);
+
+		$sendingConfig = (new SendingConfig())
+			->enableSkipCounterIncrements()
+			->enableSkipUrlIndex()
+		;
+		$context = (new Context())->setUser($call->getInitiatorId());
+
+		$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+	}
+
+	public function sendAudioRecordMessage(Call $call): self
+	{
+		// Check if audio record message was already sent
+		if ($this->isMessageShown($call->getId(), self::MESSAGE_TYPE_AUDIO_RECORD))
+		{
+			return $this;
+		}
+		$this->setMessageShown($call->getId(), self::MESSAGE_TYPE_AUDIO_RECORD);
 
 		$chat = Chat::getInstance($call->getChatId());
 
@@ -280,16 +375,20 @@ class NotifyService
 				if (!empty($messages))
 				{
 					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
+					$context = (new Context())->setUser($call->getInitiatorId());
 					foreach ($messages as $message)
 					{
-						$this->sendMessageDeferred($chat, $message, $sendingConfig);
+						$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 					}
 				}
 			}
 		}
+
+		return $this;
 	}
 
-	public function addAdminNotify(string $message): void
+	//region Admin Notify
+	public function addAdminNotify(string $message): self
 	{
 		\CAdminNotify::add([
 			'MESSAGE' => $message,
@@ -298,9 +397,11 @@ class NotifyService
 			'ENABLE_CLOSE' => 'Y',
 			'NOTIFY_TYPE' => \CAdminNotify::TYPE_NORMAL,
 		]);
+
+		return $this;
 	}
 
-	public function addAdminNotifyError(string $message): void
+	public function addAdminNotifyError(string $message): self
 	{
 		\CAdminNotify::add([
 			'MESSAGE' => $message,
@@ -309,9 +410,33 @@ class NotifyService
 			'ENABLE_CLOSE' => 'Y',
 			'NOTIFY_TYPE' => \CAdminNotify::TYPE_ERROR,
 		]);
+
+		return $this;
 	}
-	public function clearAdminNotify(): void
+	public function clearAdminNotify(): self
 	{
 		\CAdminNotify::DeleteByTag(self::ADMIN_NOTIFICATION_TAG);
+		return $this;
 	}
+
+	//endregion
+
+	//region Message shown tracking
+	public function isMessageShown(int $callId, string $messageType): bool
+	{
+		return isset($this->shownMessage[$messageType][$callId]);
+	}
+
+	public function setMessageShown(int $callId, string $messageType): self
+	{
+		if (!isset($this->shownMessage[$messageType]))
+		{
+			$this->shownMessage[$messageType] = [];
+		}
+		$this->shownMessage[$messageType][$callId] = true;
+
+		return $this;
+	}
+
+	//endregion
 }

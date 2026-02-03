@@ -17,6 +17,8 @@ class CheckListItem extends AbstractEntity
 
 	public function __construct(
 		public readonly ?int $id = null,
+		public readonly ?int $entityId = null,
+		public readonly ?Type $entityType = null,
 		public readonly ?string $nodeId = null,
 		public readonly ?string $title = null,
 		public readonly ?User $creator = null,
@@ -48,6 +50,8 @@ class CheckListItem extends AbstractEntity
 	{
 		return new static(
 			id: static::mapInteger($props, 'id'),
+			entityId: static::mapInteger($props, 'entityId'),
+			entityType: static::mapBackedEnum($props, 'entityType', Type::class),
 			nodeId: static::mapString($props, 'nodeId'),
 			title: static::mapString($props, 'title'),
 			creator: static::mapEntity($props, 'creator', User::class),
@@ -72,6 +76,8 @@ class CheckListItem extends AbstractEntity
 	{
 		return [
 			'id' => $this->id,
+			'entityId' => $this->entityId,
+			'entityType' => $this->entityType?->value,
 			'nodeId' => $this->nodeId,
 			'title' => $this->title,
 			'creator' => $this->creator?->toArray(),

@@ -92,21 +92,24 @@ if (Loader::includeModule('transformer'))
 				else
 				{
 					$previewId = self::saveFile($filePath, MimeType::getByFileExtension($ext));
-					if ($previewLogId)
+					if ($previewId)
 					{
-						FilePreviewTable::update($previewLogId, [
-							'PREVIEW_ID' => $previewId,
-						]);
-					}
-					else
-					{
-						FilePreviewTable::add([
-							'FILE_ID' => $params['fileId'],
-							'PREVIEW_ID' => $previewId,
-						]);
-					}
+						if ($previewLogId)
+						{
+							FilePreviewTable::update($previewLogId, [
+								'PREVIEW_ID' => $previewId,
+							]);
+						}
+						else
+						{
+							FilePreviewTable::add([
+								'FILE_ID' => $params['fileId'],
+								'PREVIEW_ID' => $previewId,
+							]);
+						}
 
-					self::sendNotifyAboutTransformation($params['fileId']);
+						self::sendNotifyAboutTransformation($params['fileId']);
+					}
 				}
 			}
 

@@ -66,7 +66,10 @@ class DiskProvider extends BaseProvider
 	{
 		$fileObject = File::loadById($this->id);
 		$fileData = $fileObject->getFile();
-		if (!is_array($fileData))
+		if (
+			!is_array($fileData)
+			|| empty($fileData)
+		)
 		{
 			return null;
 		}

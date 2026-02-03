@@ -15,15 +15,15 @@ use Bitrix\Im\V2\Link\Pin\PinCollection;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\MessageService;
+use Bitrix\Im\V2\Message\Sticker\PackType;
+use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Rest\RestConvertible;
-use Bitrix\Main\Application;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\Converter;
-use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\Type\ParameterDictionary;
 
 abstract class BaseController extends Controller
@@ -77,6 +77,13 @@ abstract class BaseController extends Controller
 				'chat',
 				function($className, int $postId, string $createIfNotExists = 'N') {
 					return $this->getChatByPostId($postId, $createIfNotExists === 'Y');
+				}
+			),
+			new ExactParameter(
+				PackType::class,
+				'packType',
+				function($className, string $packType) {
+					return $this->getPackType($packType);
 				}
 			),
 		];
@@ -258,5 +265,19 @@ abstract class BaseController extends Controller
 		$fields = $converter->process($fields);
 
 		return  $this->checkWhiteList($fields, $whiteList);
+	}
+
+	protected function getPackType(string $packType): ?PackType
+	{
+		$packType = PackType::tryFrom($packType);
+
+		if ($packType === null)
+		{
+			$this->addError(new StickerError(StickerError::WRONG_PACK_TYPE));
+
+			return null;
+		}
+
+		return $packType;
 	}
 }

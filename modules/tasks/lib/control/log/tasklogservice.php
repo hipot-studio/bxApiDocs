@@ -528,21 +528,46 @@ class TaskLogService
 		switch ($trackedFields[$key]['TYPE'])
 		{
 			case 'integer':
+				if (!is_scalar($value))
+				{
+					$value = 0;
+
+					break;
+				}
+
 				$value = (int)((string)$value);
 
 				break;
 			case 'string':
+				if (!is_scalar($value))
+				{
+					$value = '';
+
+					break;
+				}
+
 				$value = trim((string)$value);
 
 				break;
 			case 'array':
-				if (!is_array($value))
+				if (is_scalar($value))
 				{
-					$value = explode(',', $value);
+					$value = explode(',', (string)$value);
 				}
+				elseif (!is_array($value))
+				{
+					$value = [];
+				}
+
+				if (empty($value))
+				{
+					break;
+				}
+
 				$value = array_map(static fn ($item): mixed => is_string($item) ? trim($item) : $item, $value);
 				$value = array_filter($value);
 				$value = array_unique($value);
+
 				sort($value);
 
 				break;
@@ -576,15 +601,7 @@ class TaskLogService
 
 				break;
 			case 'bool':
-				if ($value !== 'Y' && $value !== true)
-				{
-					$value = false;
-				}
-
-				if($value === 'Y')
-				{
-					$value = true;
-				}
+				$value = ($value === 'Y' || $value === true);
 
 				break;
 		}

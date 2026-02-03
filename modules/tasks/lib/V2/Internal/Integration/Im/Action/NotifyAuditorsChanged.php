@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
@@ -19,6 +20,9 @@ class NotifyAuditorsChanged
 	)
 	{
 		$auditorsToAdd = $newAuditors->diff($oldAuditors);
+
+		Container::getInstance()->getLogger()
+			->logWarning(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS), 'TASKS_AUDITORS_DEBUG');
 
 		if (!$auditorsToAdd->isEmpty())
 		{

@@ -15,12 +15,12 @@ class RoleRelationService
 		foreach ($userGroups as $group)
 		{
 			$roleId = (int)$group['id'];
-			if (!$roleId || !isset($group['accessCodes']))
+			if (!$roleId)
 			{
 				continue;
 			}
 
-			(new RoleUtil($roleId))->updateRoleRelations($group['accessCodes']);
+			(new RoleUtil($roleId))->updateRoleRelations($group['accessCodes'] ?? []);
 		}
 	}
 }

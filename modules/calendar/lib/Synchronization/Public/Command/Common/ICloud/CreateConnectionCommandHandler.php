@@ -106,6 +106,11 @@ class CreateConnectionCommandHandler
 
 		$serverPath = $this->vendorSyncService->getCalendarServerPath($authorizationData);
 
+		if (empty($serverPath))
+		{
+			throw new SystemException('Unable to create connection for iCloud');
+		}
+
 		foreach ($connections as $connection)
 		{
 			$currentServerPath = $connection->getServer()->getFullPath();

@@ -4,8 +4,8 @@ namespace Bitrix\Seo\Retargeting\Services;
 
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use \Bitrix\Seo\Retargeting\Audience;
 use Bitrix\Seo\Retargeting\Response;
 
@@ -33,6 +33,13 @@ class AudienceYandex extends Audience
 			self::ENUM_CONTACT_TYPE_EMAIL
 		),
 	);
+
+	public static function normalizePhone($phone): string
+	{
+		$normalized = parent::normalizePhone($phone);
+
+		return preg_replace("/\D/", '', $normalized);
+	}
 
 	public static function normalizeListRow(array $row)
 	{
@@ -80,20 +87,19 @@ class AudienceYandex extends Audience
 
 	/**
 	 * @param array $data Data.
-	 * @return \Bitrix\Seo\Retargeting\Response
-	 * @deprecated Not supported by Yandex
-	 * @throws NotImplementedException
+	 * @return Response
+	 * @throws SystemException
 	 */
-	public function add(array $data)
+	public function add(array $data): Response
 	{
-		$response = $this->request->send(array(
+		$response = $this->request->send([
 			'methodName' => 'retargeting.audience.add',
-			'parameters' => array(
+			'parameters' => [
 				'name' => $data['NAME'],
 				'hashed' => 0,
 				'contacts' => $this->prepareContacts(["email" => [self::EXAMPLE_MAIL]]),
-			),
-		));
+			],
+		]);
 
 		$responseData = $response->getData();
 		if (isset($responseData['id']))
@@ -101,8 +107,7 @@ class AudienceYandex extends Audience
 			$response->setId($responseData['id']);
 		}
 
-		return $response
-			;
+		return $response;
 	}
 
 	/**
@@ -146,7 +151,7 @@ class AudienceYandex extends Audience
 	 * @param string $audienceId Audience id.
 	 * @param array $contacts Contacts.
 	 * @param array $options Options.
-	 * @return Result|\Bitrix\Seo\Retargeting\Response
+	 * @return Result|Response
 	 * @throws \Bitrix\Main\SystemException
 	 */
 	public function importContacts($audienceId, array $contacts, array $options)

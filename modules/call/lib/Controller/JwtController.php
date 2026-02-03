@@ -22,6 +22,34 @@ abstract class JwtController extends Controller
 		];
 	}
 
+	protected function decodeJsonParameter(): \Closure
+	{
+		return function ($className, $params = [])
+		{
+			$sourceParams = $this->getSourceParametersList();
+			$parameters = !empty($sourceParams) ? $sourceParams[0] : [];
+
+			if ($parameters instanceof \Bitrix\Main\Type\Dictionary)
+			{
+				$parameters = $parameters->getValues();
+			}
+
+			if (empty($parameters))
+			{
+				$jsonBody = file_get_contents('php://input');
+				if ($jsonBody)
+				{
+					$data = \Bitrix\Main\Web\Json::decode($jsonBody);
+					if (is_array($data) && !empty($data))
+					{
+						$parameters = $data;
+					}
+				}
+			}
+			return new $className($parameters);
+		};
+	}
+
 	protected function decodeJwtParameter(): \Closure
 	{
 		return function ($className, string $jwt)

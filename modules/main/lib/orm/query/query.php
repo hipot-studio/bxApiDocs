@@ -333,7 +333,7 @@ class Query
 	 * Sets a list of fields for SELECT clause
 	 *
 	 * @param array $select
-	 * @return Query
+	 * @return $this
 	 */
 	public function setSelect(array $select)
 	{

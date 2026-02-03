@@ -233,6 +233,26 @@ class UIPromotionService implements PromotionServiceInterface
 			];
 		}
 
+		if (Features::get()->isTasksRecentListAvailable)
+		{
+			$result[] = [
+				"ID" => 'immobile:tasks-recent-list:18112025:mobile',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::MOBILE->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+		}
+
+		if (Features::get()->stickersAvailable)
+		{
+			$result[] = [
+				"ID" => 'im:stickers-available:27112025:all',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::ALL->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+		}
+
 		$settings = Configuration::getValue('im');
 		if (isset($settings['promotion']) && is_array($settings['promotion']))
 		{

@@ -108,4 +108,47 @@ class UserGroup implements JsonSerializable, Arrayable
 	{
 		return $this->toArray();
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		if (!isset($data['id']) || !isset($data['title']) || !is_string($data['title']))
+		{
+			return null;
+		}
+
+		$userGroup = new self(
+			$data['id'],
+			$data['title'],
+		);
+
+		if (isset($data['accessRights']) && is_array($data['accessRights']))
+		{
+			$accessRights = [];
+			foreach ($data['accessRights'] as $accessData)
+			{
+				$access = Member\Access::tryFromArray($accessData);
+				if ($access !== null)
+				{
+					$accessRights[] = $access;
+				}
+			}
+			$userGroup->setAccessRights($accessRights);
+		}
+
+		if (isset($data['members']) && is_array($data['members']))
+		{
+			$members = [];
+			foreach ($data['members'] as $accessCode => $memberData)
+			{
+				$member = Member::tryFromArray($memberData);
+				if ($member !== null)
+				{
+					$members[$accessCode] = $member;
+				}
+			}
+			$userGroup->setMembers($members);
+		}
+
+		return $userGroup;
+	}
 }

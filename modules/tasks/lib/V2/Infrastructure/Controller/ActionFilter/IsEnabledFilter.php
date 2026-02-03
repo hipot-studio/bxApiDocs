@@ -31,8 +31,7 @@ class IsEnabledFilter extends Base
 		/** @var Action $action */
 		$action = $event->getParameter('action');
 
-		// @todo Remove FormV2Feature::isOn('team_form') before release
-		if (FormV2Feature::isOn() || FormV2Feature::isDevMode() || FormV2Feature::isOn('team_form'))
+		if (FormV2Feature::isOn())
 		{
 			return null;
 		}

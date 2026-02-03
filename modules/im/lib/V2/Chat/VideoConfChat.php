@@ -229,9 +229,9 @@ class VideoConfChat extends GroupChat
 		return $this;
 	}
 
-	protected function updateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): Chat
+	protected function processUpdateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): Chat
 	{
-		parent::updateStateAfterUserDelete($deletedUserId, $config);
+		parent::processUpdateStateAfterUserDelete($deletedUserId, $config);
 
 		$externalAuthId = User::getInstance($deletedUserId)->getExternalAuthId();
 		if ($externalAuthId === 'call')

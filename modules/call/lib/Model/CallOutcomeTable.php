@@ -69,10 +69,14 @@ class CallOutcomeTable extends DataManager
 				->configureNullable(),
 
 			(new DatetimeField('DATE_CREATE'))
-				->configureDefaultValue(function (){return new DateTime;}),
+				->configureDefaultValue(function ()
+				{
+					return new DateTime;
+				}),
 
 			(new StringField('LANGUAGE_ID'))
-				->configureSize(5),
+				->configureNullable()
+				->configureSize(10),
 
 			(new TextField('CONTENT'))
 				->configureLong()

@@ -4,6 +4,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\DownloadResponse;
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Integration\Calendar\ICal\ICalMailManager;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Main;
@@ -554,15 +555,23 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 			while ($item = $res->fetch())
 			{
 				$defaultTitle = sprintf('%s #%u', Loc::getMessage('MAIL_MESSAGE_EXT_BIND_TASKS_EMPTY_TITLE'), $item['ID']);
+
+				$taskLink = \CComponentEngine::makePathFromTemplate(
+					$this->arParams['PATH_TO_USER_TASKS_TASK'],
+					[
+						'action' => 'view',
+						'task_id' => $item['ID'],
+					]
+				);
+
+				$taskLink = Mail\Helper\AnalyticsHelper::addAnalyticsToMessage($taskLink, [
+					'ta_sec' => 'mail',
+					'ta_el' => 'context_menu',
+				]);
+
 				$message['BIND_LINKS'][Loc::getMessage('MAIL_MESSAGE_EXT_BIND_TASKS_TITLE')][] = array(
 					'title' => $item['TITLE'] ?: $defaultTitle,
-					'href' => \CComponentEngine::makePathFromTemplate(
-						$this->arParams['PATH_TO_USER_TASKS_TASK'],
-						[
-							'action' => 'view',
-							'task_id' => $item['ID'],
-						]
-					),
+					'href' => $taskLink,
 				);
 			}
 		}
@@ -717,7 +726,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 	 */
 	private function setCrmEnableFields(): void
 	{
-		$this->isCrmEnable = \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm();
+		$this->isCrmEnable = MailboxAccess::hasCurrentUserAccessToViewMailboxIntegrationCrm();
 		$this->arResult['CRM_ENABLE'] = ($this->isCrmEnable ? 'Y' : 'N');
 	}
 
@@ -1058,5 +1067,4 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 			['messageIds' => $messageIds,],
 		);
 	}
-
 }

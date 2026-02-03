@@ -56,7 +56,7 @@ class TimeManagementService
 		bool $canRenew = false,
 	): Timer
 	{
-		$this->stopTimer($userId, $taskId);
+		$this->stopTimer($userId);
 
 		$task = $this->taskRepository->getById($taskId);
 		if ($task === null)
@@ -121,9 +121,7 @@ class TimeManagementService
 			return null;
 		}
 
-		$userOffset = User::getTimeZoneOffset($userId);
-
-		$startTs = $timer->startedAtTs + $userOffset;
+		$startTs = $timer->startedAtTs;
 		$stopTs = $startTs + $timer->seconds;
 
 		$elapsedTime = new ElapsedTime(

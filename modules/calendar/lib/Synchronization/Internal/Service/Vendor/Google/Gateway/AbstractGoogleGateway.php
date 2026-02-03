@@ -9,6 +9,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestExceptio
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\ConflictException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\SyncTokenNotValidException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
@@ -88,6 +89,7 @@ abstract class AbstractGoogleGateway
 	 * @throws RateLimitExceededException
 	 * @throws SyncTokenNotValidException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
 	 */
 	protected function processErrors(string $defaultErrorMessage): void
 	{
@@ -144,7 +146,7 @@ abstract class AbstractGoogleGateway
 			throw new UnexpectedException('Unknown Google API error', (int)($error['code'] ?? 400));
 		}
 
-		throw new UnexpectedException($defaultErrorMessage);
+		throw new NoResponseException($defaultErrorMessage);
 	}
 
 	/**
@@ -153,6 +155,11 @@ abstract class AbstractGoogleGateway
 	 */
 	private function process403Response(array $error): void
 	{
+		if (str_starts_with($error['message'], 'Quota exceeded for quota metric'))
+		{
+			throw new RateLimitExceededException($error['message']);
+		}
+
 		if (!empty($error['details']))
 		{
 			foreach ($error['details'] as $detail)
@@ -177,6 +184,13 @@ abstract class AbstractGoogleGateway
 	 */
 	private function getResponseError(): ?array
 	{
+		$result = $this->client->getResult();
+
+		if (empty($result))
+		{
+			return null;
+		}
+
 		$response = Json::decode($this->client->getResult());
 
 		if (is_array($response) && !empty($response['error']) && is_array($response['error']))

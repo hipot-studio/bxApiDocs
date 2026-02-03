@@ -54,7 +54,7 @@ class OrmTaskMapper
 		return TaskObject::wakeUpObject($fields);
 	}
 
-	public function mapToEntity(array $fields): Entity\Task
+	public function mapToEntity(array $fields, array $skipTimeZoneFields = []): Entity\Task
 	{
 		$entityFields = [];
 		if (isset($fields['ID']))
@@ -89,12 +89,18 @@ class OrmTaskMapper
 
 		if (isset($fields['START_DATE_PLAN']))
 		{
-			$entityFields['startPlanTs'] = $this->castDateTime($fields['START_DATE_PLAN']);
+			$entityFields['startPlanTs'] = $this->castDateTime(
+				$fields['START_DATE_PLAN'],
+				$this->isTimeZoneSkip('START_DATE_PLAN', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['END_DATE_PLAN']))
 		{
-			$entityFields['endPlanTs'] = $this->castDateTime($fields['END_DATE_PLAN']);
+			$entityFields['endPlanTs'] = $this->castDateTime(
+				$fields['END_DATE_PLAN'],
+				$this->isTimeZoneSkip('END_DATE_PLAN', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['CREATED_BY']))
@@ -104,7 +110,10 @@ class OrmTaskMapper
 
 		if (isset($fields['STATUS_CHANGED_DATE']))
 		{
-			$entityFields['statusChangedTs'] = $this->castDateTime($fields['STATUS_CHANGED_DATE']);
+			$entityFields['statusChangedTs'] = $this->castDateTime(
+				$fields['STATUS_CHANGED_DATE'],
+				$this->isTimeZoneSkip('STATUS_CHANGED_DATE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['STAGE_ID']))
@@ -154,12 +163,18 @@ class OrmTaskMapper
 
 		if (isset($fields['DATE_START']))
 		{
-			$entityFields['startedTs'] = $this->castDateTime($fields['DATE_START']);
+			$entityFields['startedTs'] = $this->castDateTime(
+				$fields['DATE_START'],
+				$this->isTimeZoneSkip('DATE_START', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['TIME_ESTIMATE']))
 		{
-			$entityFields['estimatedTime'] = $this->castDateTime($fields['TIME_ESTIMATE']);
+			$entityFields['estimatedTime'] = $this->castDateTime(
+				$fields['TIME_ESTIMATE'],
+				$this->isTimeZoneSkip('TIME_ESTIMATE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['REPLICATE']))
@@ -169,17 +184,26 @@ class OrmTaskMapper
 
 		if (isset($fields['DEADLINE']))
 		{
-			$entityFields['deadlineTs'] = $this->castDateTime($fields['DEADLINE']);
+			$entityFields['deadlineTs'] = $this->castDateTime(
+				$fields['DEADLINE'],
+				$this->isTimeZoneSkip('DEADLINE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['CREATED_DATE']))
 		{
-			$entityFields['createdTs'] = $this->castDateTime($fields['CREATED_DATE']);
+			$entityFields['createdTs'] = $this->castDateTime(
+				$fields['CREATED_DATE'],
+				$this->isTimeZoneSkip('CREATED_DATE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['CHANGED_DATE']))
 		{
-			$entityFields['changedTs'] = $this->castDateTime($fields['CHANGED_DATE']);
+			$entityFields['changedTs'] = $this->castDateTime(
+				$fields['CHANGED_DATE'],
+				$this->isTimeZoneSkip('CHANGED_DATE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['STATUS_CHANGED_BY']))
@@ -199,12 +223,18 @@ class OrmTaskMapper
 
 		if (isset($fields['CLOSED_DATE']))
 		{
-			$entityFields['closedTs'] = $this->castDateTime($fields['CLOSED_DATE']);
+			$entityFields['closedTs'] = $this->castDateTime(
+				$fields['CLOSED_DATE'],
+				$this->isTimeZoneSkip('CLOSED_DATE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['ACTIVITY_DATE']))
 		{
-			$entityFields['activityTs'] = $this->castDateTime($fields['ACTIVITY_DATE']);
+			$entityFields['activityTs'] = $this->castDateTime(
+				$fields['ACTIVITY_DATE'],
+				$this->isTimeZoneSkip('ACTIVITY_DATE', $skipTimeZoneFields),
+			);
 		}
 
 		if (isset($fields['GUID']))
@@ -420,6 +450,15 @@ class OrmTaskMapper
 			$entityFields['userFields'] = $userFields;
 		}
 
+		if (isset($fields['IM_MESSAGE_ID'], $fields['IM_CHAT_ID']))
+		{
+			$entityFields['source'] = [
+				'type' => Entity\Task\Source::TYPE_CHAT,
+				'entityId' => (int)$fields['IM_CHAT_ID'],
+				'subEntityId' => (int)$fields['IM_MESSAGE_ID'],
+			];
+		}
+
 		return Entity\Task::mapFromArray($entityFields);
 	}
 
@@ -463,7 +502,7 @@ class OrmTaskMapper
 			$fields['START_DATE_PLAN'] = DateTime::createFromTimestamp($task->startPlanTs);
 		}
 
-		if ($task->startPlanTs === 0 || $task->startPlanTs === null)
+		if ($task->startPlanTs === 0)
 		{
 			$fields['START_DATE_PLAN'] = $task->startPlanTs;
 		}
@@ -473,7 +512,7 @@ class OrmTaskMapper
 			$fields['END_DATE_PLAN'] = DateTime::createFromTimestamp($task->endPlanTs);
 		}
 
-		if ($task->endPlanTs === 0 || $task->endPlanTs === null)
+		if ($task->endPlanTs === 0)
 		{
 			$fields['END_DATE_PLAN'] = $task->endPlanTs;
 		}
@@ -838,6 +877,21 @@ class OrmTaskMapper
 			$fields['SCENARIO_NAME'] = $task->scenarios->toArray();
 		}
 
+		if ($task->epicId !== null)
+		{
+			$fields['EPIC_ID'] = $task->epicId;
+		}
+
+		if ($task->storyPoints !== null)
+		{
+			$fields['STORY_POINTS'] = $task->storyPoints;
+		}
+
 		return $fields;
+	}
+
+	private function isTimeZoneSkip(string $field, array $skipTimeZoneFields): bool
+	{
+		return in_array($field, $skipTimeZoneFields, true);
 	}
 }

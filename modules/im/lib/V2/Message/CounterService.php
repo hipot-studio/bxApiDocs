@@ -6,6 +6,7 @@ use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
+use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\NotifyChat;
@@ -24,6 +25,8 @@ use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use CTimeZone;
@@ -328,7 +331,7 @@ class CounterService
 		static::clearCache($userId);
 	}
 
-	public function deleteNotifyByChatId(int $chatId): void
+	public function deleteNotifyByChatId(int $chatId, array $excludeIds = []): void
 	{
 		$userId = $this->getContext()->getUserId();
 		if ($userId <= 0)
@@ -350,9 +353,10 @@ class CounterService
 			'=CHAT_ID' => $chatId,
 		];
 
-		if (!empty($confirmMessageIds))
+		$excludeMessageIds = array_merge($confirmMessageIds, $excludeIds);
+		if (!empty($excludeMessageIds))
 		{
-			$filter['!@MESSAGE_ID'] = $confirmMessageIds;
+			$filter['!@MESSAGE_ID'] = $excludeMessageIds;
 		}
 
 		MessageUnreadTable::deleteByFilter($filter);
@@ -777,6 +781,7 @@ class CounterService
 	protected function countUnreadMessages(?array $chatIds = null): void
 	{
 		$counters = $this->getCountersForEachChat($chatIds);
+
 		$chatsInfo = $this->getChatsInfo($counters);
 
 		foreach ($counters as $counter)

@@ -9,7 +9,7 @@ class Calculator
 {
 	private array $product;
 
-	private const PRICE_PRECISION = 2;
+	private const PRICE_PRECISION = 8;
 
 	public function __construct(array $product)
 	{

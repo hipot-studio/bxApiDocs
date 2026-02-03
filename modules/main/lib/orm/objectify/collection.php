@@ -1081,7 +1081,7 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 		return $this->count() === 0;
 	}
 
-	public function find(callable $callback): ?EntityObject
+	final public function find(callable $callback): ?EntityObject
 	{
 		foreach ($this as $key => $item)
 		{
@@ -1097,7 +1097,7 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 	/**
 	 * @throws CollectionFilterException
 	 */
-	public function filter(callable $callback): static
+	final public function filter(callable $callback): static
 	{
 		if ($this->sysIsChanged())
 		{
@@ -1116,5 +1116,20 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 		$collection->sysResetChanges();
 
 		return $collection;
+	}
+
+	/**
+	 * @param  callable $callback
+	 *
+	 * @return $this
+	 */
+	final public function walk(callable $callback): static
+	{
+		foreach ($this as $key => $item)
+		{
+			$callback($item, $key);
+		}
+
+		return $this;
 	}
 }

@@ -25,6 +25,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\ImBot\Bot\Marta;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\UI\Util;
 
 class Device
 {
@@ -245,6 +246,9 @@ class Device
 
 		// Devices
 		$deviceTypes = DeviceType::getDescription($lang);
+		$deviceType = $deviceTypes[$device->getDeviceType()];
+		$browser = $device->getBrowser();
+		$platform = $device->getPlatform();
 
 		// geoIP
 		$geonames = [];
@@ -259,9 +263,10 @@ class Device
 			'LOGIN' => $user['LOGIN'],
 			'NAME' => $user['NAME'],
 			'LAST_NAME' => $user['LAST_NAME'],
-			'DEVICE' => $deviceTypes[$device->getDeviceType()],
-			'BROWSER' => $device->getBrowser(),
-			'PLATFORM' => $device->getPlatform(),
+			'DEVICE' => $deviceType,
+			'BROWSER' => $browser,
+			'PLATFORM' => $platform,
+			'DEVICE_INFO' => implode(', ', array_filter([$deviceType, $browser, $platform])),
 			'USER_AGENT' => $device->getUserAgent(),
 			'IP' => $deviceLogin->getIp(),
 			'DATE' => $deviceLogin->getLoginDate(),
@@ -300,8 +305,16 @@ class Device
 			{
 				$replace["#$key#"] = $value;
 			}
-			$message = Loc::getMessage('main_device_message', $replace, $lang);
+
 			$pushMessage = Loc::getMessage('main_device_push_message', null, $lang);
+			$message = Loc::getMessage('main_device_message_MSGVER_1', $replace, $lang);
+
+			if (!empty($fields['LOCATION']))
+			{
+				$message .= Loc::getMessage('main_device_message_location', $replace, $lang);
+			}
+
+			$message .= Loc::getMessage('main_device_message_url', ['#URL#' => Util::getArticleUrlByCode('26937636', $lang)]);
 
 			$infoBotId = Marta::getBotIdOrRegister();
 			if ($infoBotId)

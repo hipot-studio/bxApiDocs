@@ -84,11 +84,11 @@ class ElapsedTime extends BaseController
 	 */
 	public function deleteAction(
 		#[Tracking\Elapsed\Permission\Delete]
-		Entity\Task\ElapsedTime $elapsedTime,
+		Entity\Task\ElapsedTime $elapsedTimeId,
 	): ?bool
 	{
 		$result = (new DeleteElapsedTimeCommand(
-			elapsedTime: $elapsedTime,
+			elapsedTime: $elapsedTimeId,
 		))->run();
 
 		if (!$result->isSuccess())

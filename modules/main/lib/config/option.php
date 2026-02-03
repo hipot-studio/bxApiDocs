@@ -427,6 +427,7 @@ class Option
 					{
 						throw new Main\ArgumentNullException("filter[name]");
 					}
+					$value = mb_strtolower($value);
 					$sqlWhere .= " AND NAME = '{$sqlHelper->forSql($value)}'";
 					break;
 

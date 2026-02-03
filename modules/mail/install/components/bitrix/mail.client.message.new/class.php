@@ -2,6 +2,7 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail;
@@ -32,7 +33,7 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 			return;
 		}
 
-		$this->isCrmEnable = \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm();
+		$this->isCrmEnable = MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm();
 		$this->arResult['CRM_ENABLE'] = ($this->isCrmEnable ? 'Y' : 'N');
 
 		$messageId = 0;

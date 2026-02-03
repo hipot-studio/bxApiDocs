@@ -604,4 +604,27 @@ enum Outline: string
 
 	case BLACK_LIST = 'o-black-list';
 	case IMPORTANT_TASK = 'o-important-task';
+	case ADD_DATABASE = 'o-add-database';
+	case BANK_CARD = 'o-bank-card';
+	case CIRCLECHECK_FORWARD = 'o-circlecheck-forward';
+	case CROWN_1 = 'o-crown-1';
+	case DIAL_10 = 'o-dial-10';
+	case DIAL_20 = 'o-dial-20';
+	case DOCUMENT_LINK = 'o-document-link';
+	case DOCUMENT_PRINT = 'o-document-print';
+	case LIST_AI_2 = 'o-list-ai-2';
+	case PARTS_RECORD = 'o-parts-record';
+	case PARTS_RECORD_PLAY = 'o-parts-record-play';
+	case PARTS_RECORD_STOP = 'o-parts-record-stop';
+	case PLANNING_2 = 'o-planning-2';
+	case SEEN_ITEMS = 'o-seen-items';
+	case SHOP_ORDER = 'o-shop-order';
+	case SSO = 'o-sso';
+	case TABLE = 'o-table';
+	case TASK_FIRE = 'o-task-fire';
+	case UNIVERSAL_ACCESS = 'o-universal-access';
+	case VISITED_ITEMS = 'o-visited-items';
+	case WEBHOOK = 'o-webhook';
+	case TEXT_FORMAT_RESET = 'o-text-format-reset';
+	case SPOILER = 'o-spoiler';
 }

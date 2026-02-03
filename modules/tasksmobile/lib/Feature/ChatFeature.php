@@ -11,7 +11,7 @@ final class ChatFeature extends FeatureFlag
 {
 	public function isEnabled(): bool
 	{
-		return Option::get('tasksmobile', 'feature_chat_enabled', 'off') === 'on';
+		return Option::get('tasksmobile', 'feature_chat_enabled', 'on') === 'on';
 	}
 
 	public function enable(): void

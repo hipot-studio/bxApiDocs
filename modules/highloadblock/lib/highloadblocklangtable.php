@@ -1,7 +1,9 @@
 <?php
+
 namespace Bitrix\Highloadblock;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM;
 
 /**
  * Class HighloadBlockLangTable
@@ -19,13 +21,13 @@ use Bitrix\Main\Entity;
  * @method static \Bitrix\Highloadblock\EO_HighloadBlockLang wakeUpObject($row)
  * @method static \Bitrix\Highloadblock\EO_HighloadBlockLang_Collection wakeUpCollection($rows)
  */
-class HighloadBlockLangTable extends Entity\DataManager
+class HighloadBlockLangTable extends ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
 	 * @return string
 	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_hlblock_entity_lang';
 	}
@@ -34,7 +36,7 @@ class HighloadBlockLangTable extends Entity\DataManager
 	 * Returns entity map definition.
 	 * @return array
 	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return array(
 			'ID' => new Entity\IntegerField('ID', array(

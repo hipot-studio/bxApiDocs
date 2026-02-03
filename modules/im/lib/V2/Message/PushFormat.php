@@ -66,12 +66,25 @@ class PushFormat
 				'additionalEntities' => $this->getAdditionalEntities(),
 				'forward' => $message->getForwardInfo(),
 			],
-			'counterType' => $chat->getCounterType()->value,
+			'counterType' => $chat->getCounterType(),
 			'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 			'files' => $message->getFiles()->toRestFormat(['IDS_AS_KEY' => true]),
 			'notify' => $notify,
 			'messagesAutoDeleteConfigs' => $chat->getMessageAutoDeleteConfigs()->toRestFormat(),
+			'stickers' => $this->getStickers(),
 		];
+	}
+
+	protected function getStickers(): array
+	{
+		$sticker = $this->message->getSticker()?->toRestFormat();
+
+		if (empty($sticker))
+		{
+			return [];
+		}
+
+		return [$sticker];
 	}
 
 	protected function getUserInChat(): array

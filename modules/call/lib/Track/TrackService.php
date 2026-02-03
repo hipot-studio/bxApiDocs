@@ -7,7 +7,6 @@ use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Web\HttpClient;
 use Bitrix\Im\Call\Registry;
 use Bitrix\Call;
 use Bitrix\Call\NotifyService;
@@ -16,15 +15,14 @@ use Bitrix\Call\Integration\AI;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
+use Bitrix\Call\Track\Downloader\DownloadHelper;
+use Bitrix\Call\Track\Downloader\AbstractDownloader;
+use Bitrix\Call\Track\Downloader\FullDownloader;
+use Bitrix\Call\Track\Downloader\ChunkedDownloader;
 
 
 final class TrackService
 {
-	protected const
-		MAX_RETRY_COUNT = 3,
-		RETRY_DELAY = 10
-	;
-
 	private static ?TrackService $service = null;
 
 	private function __construct()
@@ -112,7 +110,94 @@ final class TrackService
 			return $result;// cancel processing by event
 		}
 
-		$minDuration = \Bitrix\Call\Integration\AI\CallAISettings::getRecordMinDuration();
+		if (in_array($track->getType(), [Call\Track::TYPE_VIDEO_RECORD, Call\Track::TYPE_VIDEO_PREVIEW], true))
+		{
+			return $this->processCloudVideoTrack($track, $result);
+		}
+
+		return $this->processAiTrack($track, $result);
+	}
+
+	protected function processCloudVideoTrack(Call\Track $track, Result $result): Result
+	{
+		if ($log = CallAISettings::isLoggingEnable())
+		{
+			$logger = Logger::getInstance();
+		}
+
+		$log && $logger->info("Processing cloud video track. TrackId: {$track->getId()}, Type: {$track->getType()}");
+
+		if (!Loader::includeModule('im'))
+		{
+			$log && $logger->error("IM module not loaded. TrackId: {$track->getId()}");
+			return $result;
+		}
+
+		$callId = $track->getCallId();
+
+		$tracks = Call\Model\CallTrackTable::query()
+			->setSelect(['*'])
+			->where('CALL_ID', $callId)
+			->whereIn('TYPE', [Call\Track::TYPE_VIDEO_RECORD, Call\Track::TYPE_VIDEO_PREVIEW])
+			->exec()
+			->fetchCollection();
+
+		$record = null;
+		$preview = null;
+
+		foreach ($tracks as $trackObj)
+		{
+			if ($trackObj->getType() === Call\Track::TYPE_VIDEO_RECORD && $trackObj->getDownloaded())
+			{
+				$record = $trackObj;
+			}
+			elseif ($trackObj->getType() === Call\Track::TYPE_VIDEO_PREVIEW && $trackObj->getDownloaded())
+			{
+				$preview = $trackObj;
+			}
+		}
+
+		if (!$record || !$preview)
+		{
+			$log && $logger->info("Waiting for both tracks. CallId: {$callId}, Record: " . ($record ? 'yes' : 'no') . ", Preview: " . ($preview ? 'yes' : 'no'));
+			return $result;
+		}
+
+		if (!$record->getFileId() || !$preview->getFileId())
+		{
+			$log && $logger->error("Missing file IDs. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}");
+			return $result;
+		}
+
+		$log && $logger->info("Attaching preview to record. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}");
+
+		(new \Bitrix\Main\UI\Viewer\PreviewManager())->setPreviewImageId(
+			$record->getFileId(),
+			$preview->getFileId()
+		);
+
+		$call = Registry::getCallWithId($callId);
+		if ($call)
+		{
+			$log && $logger->info("Sending recording ready message. CallId: {$callId}, RecordId: {$record->getId()}");
+			NotifyService::getInstance()->sendRecordingReadyMessage($call, $record);
+		}
+		else
+		{
+			$log && $logger->error("Call not found. CallId: {$callId}");
+		}
+
+		return $result;
+	}
+
+	protected function processAiTrack(Call\Track $track, Result $result): Result
+	{
+		if ($log = CallAISettings::isLoggingEnable())
+		{
+			$logger = Logger::getInstance();
+		}
+
+		$minDuration = CallAISettings::getRecordMinDuration();
 		if ($track->getDuration() > 0 && $track->getDuration() < $minDuration)
 		{
 			$log && $logger->error("Ignoring track:{$track->getUrl()}, track #{$track->getExternalTrackId()}. Call #{$track->getCallId()} was too short.");
@@ -170,174 +255,160 @@ final class TrackService
 	}
 
 	/**
+	 * Create callback for post-download processing.
+	 * Used by downloaders to finalize download after completion.
+	 *
+	 * @return callable
+	 */
+	public function onDownloadCompleteCallback(): callable
+	{
+		return function (Call\Track $track): void
+		{
+			$this->finalizeDownload($track);
+		};
+	}
+
+	/**
+	 * Finalize download: validate, attach to storage, fire events, process track.
+	 *
 	 * @param Call\Track $track
-	 * @param bool $retryOnFailure
+	 */
+	protected function finalizeDownload(Call\Track $track): void
+	{
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
+
+		$log && $logger->info("finalizeDownload: Starting. TrackId: {$track->getId()}");
+
+		// Validate downloaded file
+		$validateResult = DownloadHelper::validateFile($track);
+		if (!$validateResult->isSuccess())
+		{
+			$log && $logger->error("finalizeDownload: Validation failed. TrackId: {$track->getId()}");
+			$this->fireTrackErrorEvent($track, $validateResult->getError());
+			return;
+		}
+
+		// Attach to file storage
+		$attachResult = $track->attachTempFile();
+		if (!$attachResult->isSuccess())
+		{
+			$log && $logger->error("finalizeDownload: attachTempFile failed. TrackId: {$track->getId()}");
+			$this->fireTrackErrorEvent($track, $attachResult->getError());
+			return;
+		}
+
+		// Attach to Disk (for audio records)
+		if ($this->doNeedNeedAttachToDisk($track))
+		{
+			$diskResult = $track->attachToDisk();
+			if (!$diskResult->isSuccess())
+			{
+				$log && $logger->error("finalizeDownload: attachToDisk failed. TrackId: {$track->getId()}");
+				$this->fireTrackErrorEvent($track, $diskResult->getError());
+				return;
+			}
+		}
+
+		$log && $logger->info("finalizeDownload: Success. TrackId: {$track->getId()}, FileId: {$track->getFileId()}");
+
+		$this->fireTrackDownloadedEvent($track);
+
+		$processResult = $this->processTrack($track);
+		if (!$processResult->isSuccess())
+		{
+			$call = Registry::getCallWithId($track->getCallId());
+			if ($call)
+			{
+				(new FollowUpAnalytics($call))
+					->sendTelemetry(
+						source: null,
+						status: 'error',
+						event: 'track_processing_error',
+						error: $processResult->getError()
+					)
+				;
+			}
+		}
+	}
+
+	/**
+	 * Download track file - orchestrates the download process.
+	 *
+	 * @param Call\Track $track Track entity
+	 * @param bool $retryOnFailure Schedule retry agent on failure
 	 * @return Result
 	 */
 	public function downloadTrackFile(Call\Track $track, bool $retryOnFailure = true): Result
 	{
-		$result = new Result;
+		$result = new Result();
 
 		if ($track->getFileId() > 0)
 		{
 			return $result->setData(['fileId' => $track->getFileId()]);
 		}
 
-		if ($log = \Bitrix\Call\Integration\AI\CallAISettings::isLoggingEnable())
-		{
-			$logger = Logger::getInstance();
-		}
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
 
 		if (empty($track->getDownloadUrl()))
 		{
-			$log && $logger->error('Download URL undefined');
-			$result->addError(new TrackError(TrackError::EMPTY_DOWNLOAD_URL, 'Download URL undefined'));
-		}
-		else
-		{
-			$log && $logger->info('Downloading track. TrackId:'.$track->getId(). ' Url: ' . $track->getDownloadUrl());
-
-			try
-			{
-				$tempPath = $track->generateTemporaryPath()->getTempPath();
-
-				$httpClient = $this->instanceHttpClient();
-				$isDownloadSuccess = $httpClient->download($track->getDownloadUrl(), $tempPath);
-
-				if (!$isDownloadSuccess || $httpClient->getStatus() !== 200)
-				{
-					$result->addError(new TrackError(TrackError::DOWNLOAD_ERROR, 'Call track download failure'));
-
-					$errors = [];
-					foreach ($httpClient->getError() as $code => $message)
-					{
-						$result->addError(new TrackError(TrackError::DOWNLOAD_ERROR, $code . ": " . $message));
-						$errors[] = $code . ": " . $message;
-					}
-
-					$error = !empty($errors) ? implode("; " , $errors) : $httpClient->getStatus();
-					$log && $logger->error("Call track download failure; Error: " . $error);
-
-					if ($retryOnFailure)
-					{
-						$log && $logger->info("Set delay download agent. TrackId:".$track->getId());
-						$this->delayDownload($track->getId());
-					}
-				}
-				else
-				{
-					$log && $logger->info("Track downloaded successfully into ".$track->getTempPath());
-				}
-			}
-			catch (\Psr\Http\Client\ClientExceptionInterface $ex)
-			{
-				$log && $logger->error('Error caught during downloading record: ' . PHP_EOL . print_r($ex, true));
-				$result->addError(new TrackError(Call\Track\TrackError::DOWNLOAD_ERROR, '('.$ex->getMessage().') '.$ex->getMessage()));
-			}
-			catch (SystemException $ex)
-			{
-				$log && $logger->error('Error caught during downloading record: ' . PHP_EOL . print_r($ex, true));
-				$result->addError(new TrackError(Call\Track\TrackError::DOWNLOAD_ERROR, '('.$ex->getMessage().') '.$ex->getMessage()));
-			}
+			$log && $logger->error("downloadTrackFile: URL undefined. TrackId: {$track->getId()}");
+			return $result->addError(new TrackError(TrackError::EMPTY_DOWNLOAD_URL, 'Download URL undefined'));
 		}
 
-		if ($result->isSuccess())
+		$log && $logger->info("downloadTrackFile: Starting. TrackId: {$track->getId()}, Url: {$track->getDownloadUrl()}");
+
+		try
 		{
-			$attachResult = $track->attachTempFile();
-			if (!$attachResult->isSuccess())
+			// Check Range support and choose downloader
+			$rangeCheck = DownloadHelper::checkRangeSupport($track->getDownloadUrl());
+
+			if ($rangeCheck['supports_range'] && $rangeCheck['file_size'] > 0)
 			{
-				$log && $logger->error('Attach track failure. Error: ' . implode('; ', $attachResult->getErrorMessages()));
-				$result->addErrors($attachResult->getErrors());
+				$track->setFileSize($rangeCheck['file_size']);
+				$downloader = new ChunkedDownloader($rangeCheck['file_size']);
+			}
+			else
+			{
+				$log && $logger->info("downloadTrackFile: No Range support, using FullDownloader. TrackId: {$track->getId()}");
+				$downloader = new FullDownloader();
+			}
+
+			$downloader->setOnComplete($this->onDownloadCompleteCallback());
+
+			$downloadResult = $downloader->download($track);
+			if (!$downloadResult->isSuccess())
+			{
+				$result->addErrors($downloadResult->getErrors());
+			}
+
+			$downloadData = $downloadResult->getData();
+			if (isset($downloadData['status']) && $downloadData['status'] === 'in_progress')
+			{
+				return $result->setData(['status' => 'in_progress']);
 			}
 		}
-
-		if ($result->isSuccess())
+		catch (\Psr\Http\Client\ClientExceptionInterface $ex)
 		{
-			if ($this->doNeedNeedAttachToDisk($track))
-			{
-				$diskResult = $track->attachToDisk();
-				if (!$diskResult->isSuccess())
-				{
-					$log && $logger->error('Attach file to Disk failed. TrackId:'.$track->getId().' Error: '. implode('; ', $diskResult->getErrorMessages()));
-					$result->addErrors($diskResult->getErrors());
-				}
-			}
+			$log && $logger->error("downloadTrackFile: Exception: {$ex->getMessage()}. TrackId: {$track->getId()}");
+			$result->addError(new TrackError(TrackError::DOWNLOAD_ERROR, $ex->getMessage()));
+		}
+		catch (SystemException $ex)
+		{
+			$log && $logger->error("downloadTrackFile: Exception: {$ex->getMessage()}. TrackId: {$track->getId()}");
+			$result->addError(new TrackError(TrackError::DOWNLOAD_ERROR, $ex->getMessage()));
 		}
 
-		if ($result->isSuccess())
+		// Retry on failure
+		if (!$result->isSuccess() && $retryOnFailure)
 		{
-			$log && $logger->info("File successfully saved. TrackId:".$track->getId()." FileId:".$track->getFileId()." DiskFileId:".$track->getDiskFileId());
-			$this->fireTrackDownloadedEvent($track);
-		}
-		else
-		{
+			$log && $logger->info("downloadTrackFile: Scheduling retry. TrackId: {$track->getId()}");
+			AbstractDownloader::scheduleRetry($track->getId());
 			$this->fireTrackErrorEvent($track, $result->getError());
 		}
 
 		return $result;
-	}
-
-	/**
-	 * @param int $trackId
-	 * @param int $retryCount
-	 * @return string
-	 */
-	public static function downloadAgent(int $trackId, int $retryCount = 1): string
-	{
-		if (!Loader::includeModule('call'))
-		{
-			return '';
-		}
-
-		$track = Call\Model\CallTrackTable::getById($trackId)->fetchObject();
-		if (!$track || $track->getDownloaded() === true)
-		{
-			return '';
-		}
-
-		$trackService = self::getInstance();
-		if ($trackService->downloadTrackFile($track, false)->isSuccess())
-		{
-			$trackService->processTrack($track);
-
-			return '';
-		}
-
-		if ($retryCount >= self::MAX_RETRY_COUNT)
-		{
-			return '';
-		}
-
-		$retryCount ++;
-
-		return __METHOD__ . "({$trackId}, {$retryCount});";
-	}
-
-	/**
-	 * Setup agent to delayed download.
-	 * @param int $trackId
-	 * @param int $delay
-	 * @return void
-	 */
-	protected function delayDownload(int $trackId, int $delay = self::RETRY_DELAY): void
-	{
-		$agents = \CAgent::getList([], [
-			'MODULE_ID' => 'call',
-			'NAME' => __CLASS__ . "::downloadAgent({$trackId}%);"
-		]);
-		if (!($row = $agents->fetch()))
-		{
-			/** @see self::downloadAgent() */
-			\CAgent::AddAgent(
-				__CLASS__ . "::downloadAgent({$trackId});",
-				'call',
-				'N',
-				60,
-				'',
-				'Y',
-				\ConvertTimeStamp(\time() + \CTimeZone::GetOffset() + $delay, 'FULL')
-			);
-		}
 	}
 
 	/**
@@ -354,7 +425,6 @@ final class TrackService
 			return;
 		}
 
-		// Only process track pack type
 		if ($track->getType() !== \Bitrix\Call\Track::TYPE_RECORD)
 		{
 			return;
@@ -385,24 +455,6 @@ final class TrackService
 				$log && $logger->info("Audio record message sent for call #{$track->getCallId()}");
 			}
 		}
-	}
-
-	/**
-	 * @return HttpClient
-	 */
-	protected function instanceHttpClient(): HttpClient
-	{
-		$httpClient = new HttpClient();
-		$httpClient
-			->waitResponse(true)
-			->setTimeout(20)
-			->setStreamTimeout(60)
-			->disableSslVerification()
-			->setHeader('User-Agent', 'Bitrix Call Client '.\Bitrix\Main\Service\MicroService\Client::getPortalType())
-			->setHeader('Referer', \Bitrix\Main\Service\MicroService\Client::getServerName())
-		;
-
-		return $httpClient;
 	}
 
 	/**

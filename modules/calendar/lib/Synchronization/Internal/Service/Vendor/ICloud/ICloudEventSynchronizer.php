@@ -18,12 +18,14 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Exception;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\LogicException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Messenger\MessageSendingException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\NoLogSynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\ConnectionManager;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
@@ -42,8 +44,6 @@ use Bitrix\Main\SystemException;
 
 class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements EventSynchronizerInterface
 {
-	private const MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION = 1;
-
 	use EventSynchronizerTrait;
 
 	public function __construct(
@@ -108,13 +108,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 			catch (NotFoundException)
 			{
 				// If the section was deleted on the vendor side
-				$sectionConnection
-					->setActive(false)
-					->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-					->setLastSyncDate(new Date())
-				;
-
-				$this->sectionConnectionRepository->save($sectionConnection);
+				$this->disableDeletedSectionConnection($sectionConnection);
 			}
 			catch (ApiException|DtoValidationException|Exception $e)
 			{
@@ -264,8 +258,12 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		if (!$sectionConnection)
 		{
 			throw new SynchronizerException(
-				sprintf('Section connection for event "%s" not found', $event->getSection()->getId()),
-				isRecoverable: false,
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
 			);
 		}
 
@@ -352,15 +350,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		catch (NotFoundException $e)
 		{
 			// If the section was deleted on the vendor side
-			$sectionConnection
-				->setActive(false)
-				->setSyncToken(null)
-				->setPageToken(null)
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-				->setLastSyncDate(new Date())
-			;
-
-			$this->sectionConnectionRepository->save($sectionConnection);
+			$this->disableDeletedSectionConnection($sectionConnection);
 
 			throw new SynchronizerException(
 				sprintf('iCloud API exception: "%s"', $e->getMessage()),
@@ -447,6 +437,22 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				->setLastSyncStatus(Dictionary::SYNC_STATUS['success'])
 			;
 		}
+		catch (PreconditionFailedException $e)
+		{
+			$this->handlePreconditionFailedException(
+				$e,
+				$gateway,
+				$connection,
+				$sectionConnection,
+				$eventConnection,
+			);
+
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
 		catch (NotAuthorizedException $e)
 		{
 			$this->handleUnauthorizedException($connection);
@@ -461,15 +467,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		catch (NotFoundException $e)
 		{
 			// If the section was deleted on the vendor side
-			$sectionConnection
-				->setActive(false)
-				->setSyncToken(null)
-				->setPageToken(null)
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-				->setLastSyncDate(new Date())
-			;
-
-			$this->sectionConnectionRepository->save($sectionConnection);
+			$this->disableDeletedSectionConnection($sectionConnection);
 
 			throw new SynchronizerException(
 				sprintf('iCloud API exception: "%s"', $e->getMessage()),
@@ -549,15 +547,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 			if ($sectionConnection)
 			{
-				$sectionConnection
-					->setActive(false)
-					->setSyncToken(null)
-					->setPageToken(null)
-					->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-					->setLastSyncDate(new Date())
-				;
-
-				$this->sectionConnectionRepository->save($sectionConnection);
+				$this->disableDeletedSectionConnection($sectionConnection);
 			}
 
 			throw new SynchronizerException(
@@ -616,8 +606,12 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		if (!$sectionConnection)
 		{
 			throw new SynchronizerException(
-				sprintf('Section connection for event "%s" not found', $event->getSection()->getId()),
-				isRecoverable: false,
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
 			);
 		}
 
@@ -671,22 +665,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		ICloudEventGateway $gateway,
 	): void
 	{
-		try
-		{
-			$masterEventConnection = $this->getMasterEventConnection($event, $connection);
-		}
-		catch (SynchronizerException $e)
-		{
-			if ($e->getCode() === self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION)
-			{
-				throw new SynchronizerException(
-					$e->getMessage(),
-					isRecoverable: false
-				);
-			}
-
-			throw $e;
-		}
+		$masterEventConnection = $this->getMasterEventConnection($event, $connection);
 
 		$masterEventConnection->setLastSyncStatus(Dictionary::SYNC_STATUS['update']);
 
@@ -725,6 +704,22 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				->setLastSyncStatus(Dictionary::SYNC_STATUS['success'])
 			;
 		}
+		catch (PreconditionFailedException $e)
+		{
+			$this->handlePreconditionFailedException(
+				$e,
+				$gateway,
+				$connection,
+				$sectionConnection,
+				$masterEventConnection,
+			);
+
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
 		catch (NotAuthorizedException $e)
 		{
 			$this->handleUnauthorizedException($connection);
@@ -739,15 +734,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		catch (NotFoundException $e)
 		{
 			// If the section was deleted on the vendor side
-			$sectionConnection
-				->setActive(false)
-				->setSyncToken(null)
-				->setPageToken(null)
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-				->setLastSyncDate(new Date())
-			;
-
-			$this->sectionConnectionRepository->save($sectionConnection);
+			$this->disableDeletedSectionConnection($sectionConnection);
 
 			throw new SynchronizerException(
 				sprintf('iCloud API exception: "%s"', $e->getMessage()),
@@ -827,6 +814,22 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				->setLastSyncStatus(Dictionary::SYNC_STATUS['success'])
 			;
 		}
+		catch (PreconditionFailedException $e)
+		{
+			$this->handlePreconditionFailedException(
+				$e,
+				$gateway,
+				$connection,
+				$sectionConnection,
+				$masterEventConnection,
+			);
+
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
 		catch (NotAuthorizedException $e)
 		{
 			$this->handleUnauthorizedException($connection);
@@ -841,15 +844,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		catch (NotFoundException $e)
 		{
 			// If the section was deleted on the vendor side
-			$sectionConnection
-				->setActive(false)
-				->setSyncToken(null)
-				->setPageToken(null)
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-				->setLastSyncDate(new Date())
-			;
-
-			$this->sectionConnectionRepository->save($sectionConnection);
+			$this->disableDeletedSectionConnection($sectionConnection);
 
 			throw new SynchronizerException(
 				sprintf('iCloud API exception: "%s"', $e->getMessage()),
@@ -913,8 +908,12 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		if (!$masterSectionConnection)
 		{
 			throw new SynchronizerException(
-				sprintf('Section connection for event "%s" not found', $masterEvent->getSection()->getId()),
-				isRecoverable: false,
+				sprintf(
+					'Section connection for section "%s" not found (master event: "%s")',
+					$masterEvent->getSection()->getId(),
+					$masterEvent->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
 			);
 		}
 
@@ -923,7 +922,8 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		if (!$masterEventConnection)
 		{
 			throw new SynchronizerException(
-				message: sprintf('Event connection for event "%s" not found', $masterEvent->getId()),
+				message: sprintf('Event connection for master event "%s" not found', $masterEvent->getId()),
+				code: SynchronizerException::NO_EVENT_CONNECTION,
 				isRecoverable: false,
 			);
 		}
@@ -952,6 +952,22 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 			$this->connectionManager->updateConnection($connection);
 		}
+		catch (PreconditionFailedException $e)
+		{
+			$this->handlePreconditionFailedException(
+				$e,
+				$gateway,
+				$connection,
+				$masterSectionConnection,
+				$masterEventConnection,
+			);
+
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
 		catch (NotAuthorizedException $e)
 		{
 			$this->handleUnauthorizedException($connection);
@@ -970,15 +986,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 			if ($sectionConnection)
 			{
-				$sectionConnection
-					->setActive(false)
-					->setSyncToken(null)
-					->setPageToken(null)
-					->setLastSyncStatus(Dictionary::SYNC_STATUS['deleted'])
-					->setLastSyncDate(new Date())
-				;
-
-				$this->sectionConnectionRepository->save($sectionConnection);
+				$this->disableDeletedSectionConnection($sectionConnection);
 			}
 
 			throw new SynchronizerException(
@@ -1124,12 +1132,104 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 		if (!$masterEventConnection)
 		{
+			$modifiedTime = $masterEvent->getDateModified()?->getTimestamp();
+
 			throw new SynchronizerException(
 				sprintf('The master event "%s" has no connection with iCloud', $masterEvent->getId()),
-				code: self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION,
+				SynchronizerException::NO_EVENT_CONNECTION,
+				isRecoverable: $modifiedTime && $modifiedTime + 86400 > time(),
 			);
 		}
 
 		return $masterEventConnection;
+	}
+
+	/**
+	 * @throws PersistenceException
+	 */
+	private function disableDeletedSectionConnection(SectionConnection $sectionConnection): void
+	{
+		$sectionConnection->disable();
+
+		$this->sectionConnectionRepository->save($sectionConnection);
+	}
+
+	/**
+	 * @throws NoLogSynchronizerException
+	 * @throws PersistenceException
+	 * @throws SynchronizerException
+	 */
+	private function handlePreconditionFailedException(
+		PreconditionFailedException $preconditionFailedException,
+		ICloudEventGateway $gateway,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		EventConnection $eventConnection,
+	): void
+	{
+		$uri = $gateway->getUri($sectionConnection->getVendorSectionId(), $eventConnection->getVendorEventId());
+
+		try
+		{
+			$gateway->getEvent($uri);
+		}
+		// The event has been moved to another section
+		catch (NotFoundException)
+		{
+			$event = $eventConnection->getEvent();
+
+			$modifiedTime = $event->getDateModified()?->getTimestamp();
+
+			$isModifiedWithinHour = $modifiedTime && $modifiedTime + 3600 > time();
+
+			if ($isModifiedWithinHour)
+			{
+				throw new NoLogSynchronizerException(
+					sprintf('iCloud API exception: "%s"', $preconditionFailedException->getMessage()),
+					$preconditionFailedException->getCode(),
+					$preconditionFailedException,
+					isRecoverable: true,
+				);
+			}
+
+			// @todo Create a mechanism to catch an event moving to another section (on the vendor's side)
+			$this->eventConnectionRepository->deleteByVendorId($eventConnection->getVendorEventId());
+
+			// Drop the message to avoid endless loop on sending
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $preconditionFailedException->getMessage()),
+				$preconditionFailedException->getCode(),
+				$preconditionFailedException,
+				isRecoverable: false,
+			);
+		}
+		catch (NotAuthorizedException $e)
+		{
+			$this->handleUnauthorizedException($connection);
+
+			throw new SynchronizerException(
+				sprintf('iCloud authorization exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+				isRecoverable: false,
+			);
+		}
+		catch (BadRequestException|AccessDeniedException $e)
+		{
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+				isRecoverable: false,
+			);
+		}
+		catch (ApiException|DtoValidationException $e)
+		{
+			throw new SynchronizerException(
+				sprintf('iCloud API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
 	}
 }

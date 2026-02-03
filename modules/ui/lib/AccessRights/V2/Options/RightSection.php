@@ -143,4 +143,59 @@ class RightSection implements JsonSerializable, Arrayable
 	{
 		return $this->toArray();
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		if (!isset($data['sectionTitle']) || !is_string($data['sectionTitle']))
+		{
+			return null;
+		}
+
+		$section = new self($data['sectionTitle']);
+
+		if (isset($data['sectionSubTitle']))
+		{
+			$section->setSubTitle((string)$data['sectionSubTitle']);
+		}
+
+		if (isset($data['sectionCode']))
+		{
+			$section->setCode((string)$data['sectionCode']);
+		}
+
+		if (isset($data['sectionHint']))
+		{
+			$section->setHint((string)$data['sectionHint']);
+		}
+
+		if (isset($data['sectionIcon']) && is_array($data['sectionIcon']))
+		{
+			if (isset($data['sectionIcon']['type']))
+			{
+				$section->setIconCode((string)$data['sectionIcon']['type']);
+			}
+
+			if (isset($data['sectionIcon']['bgColor']))
+			{
+				$section->setIconBgColor((string)$data['sectionIcon']['bgColor']);
+			}
+		}
+
+		if (isset($data['rights']) && is_array($data['rights']))
+		{
+			$rights = [];
+			foreach ($data['rights'] as $rightData)
+			{
+				$item = RightItem::tryFromArray($rightData);
+				if ($item === null)
+				{
+					continue;
+				}
+				$rights[] = $item;
+			}
+			$section->setRightItems($rights);
+		}
+
+		return $section;
+	}
 }

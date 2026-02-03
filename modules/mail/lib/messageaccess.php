@@ -4,6 +4,7 @@ namespace Bitrix\Mail;
 
 use Bitrix\Mail\Internals\MessageAccessTable;
 use \Bitrix\Crm\ActivityTable;
+use Bitrix\Main\Loader;
 
 /**
  * @see \Bitrix\Mail\Helper\MessageAccess
@@ -13,6 +14,7 @@ class MessageAccess
 	// supported entity types
 	public const ENTITY_TYPE_IM_CHAT = MessageAccessTable::ENTITY_TYPE_IM_CHAT;
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
+	public const GUEST_USER_ID = 0;
 
 	/** @var int */
 	private $userId;
@@ -30,13 +32,23 @@ class MessageAccess
 		$this->storage = $storage;
 	}
 
-	public static function createForMessage(\Bitrix\Mail\Item\Message $message, int $userId): self
+	/**
+	 * @param Item\Message $message
+	 * @param int|string $userId (Can take the value \Bitrix\Disk\Security\SecurityContext::GUEST_USER)
+	 * @return self
+	 */
+	public static function createForMessage(\Bitrix\Mail\Item\Message $message, int|string $userId): self
 	{
 		$storage = new \Bitrix\Mail\Storage\MessageAccess();
 		return new self($userId, $message, $storage);
 	}
 
-	public static function createByMessageId(int $messageId, int $userId): self
+	/**
+	 * @param int $messageId
+	 * @param int|string $userId (Can take the value \Bitrix\Disk\Security\SecurityContext::GUEST_USER)
+	 * @return self
+	 */
+	public static function createByMessageId(int $messageId, int|string $userId): self
 	{
 		$messageStorage = new \Bitrix\Mail\Storage\Message();
 		$message = $messageStorage->getMessage($messageId);
@@ -148,7 +160,16 @@ class MessageAccess
 
 	private function getUserId(): int
 	{
-		return $this->userId;
+		if (
+			is_string($this->userId) &&
+			Loader::includeModule('disk') &&
+			$this->userId === \Bitrix\Disk\Security\SecurityContext::GUEST_USER
+		)
+		{
+			return self::GUEST_USER_ID;
+		}
+
+		return (int)$this->userId;
 	}
 
 	private function getStorage(): IMessageAccessStorage

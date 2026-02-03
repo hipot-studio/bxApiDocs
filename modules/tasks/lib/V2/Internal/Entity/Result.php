@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Tasks\V2\Internal\Entity\Result\Status;
+use Bitrix\Tasks\V2\Internal\Entity\Result\Type;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFileCollection;
 
@@ -20,6 +21,7 @@ class Result extends AbstractEntity
 		public readonly ?int $createdAtTs = null,
 		public readonly ?int $updatedAtTs = null,
 		public readonly ?Status $status = null,
+		public readonly ?Type $type = null,
 		public readonly ?array $fileIds = null,
 		public readonly ?int $previewId = null,
 		public readonly ?array $rights = [],
@@ -55,6 +57,7 @@ class Result extends AbstractEntity
 			createdAtTs: static::mapInteger($props, 'createdAtTs'),
 			updatedAtTs: static::mapInteger($props, 'updatedAtTs'),
 			status: static::mapBackedEnum($props, 'status', Status::class),
+			type: static::mapBackedEnum($props, 'type', Type::class),
 			fileIds: static::mapArray($props, 'fileIds'),
 			previewId: static::mapInteger($props, 'previewId'),
 			rights: static::mapArray($props, 'rights'),
@@ -73,6 +76,7 @@ class Result extends AbstractEntity
 			'createdAtTs' => $this->createdAtTs,
 			'updatedAtTs' => $this->updatedAtTs,
 			'status' => $this->status?->value,
+			'type' => $this->type?->value,
 			'fileIds' => $this->fileIds,
 			'previewId' => $this->previewId,
 			'rights' => $this->rights,

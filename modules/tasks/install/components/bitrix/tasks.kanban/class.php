@@ -2561,9 +2561,6 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		}
 		$task = CTaskItem::add($fields, $this->userId, [
 			'DISABLE_BIZPROC_RUN' => true,
-			'SKIP_TIMEZONE' => [
-				'DEADLINE',
-			]
 		]);
 		if ($task->getId() > 0)
 		{

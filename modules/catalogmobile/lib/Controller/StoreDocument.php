@@ -135,7 +135,7 @@ class StoreDocument extends Controller
 			return $this->setShipped($id, 'N');
 		}
 
-		if (!$this->checkDocumentAccess(ActionDictionary::ACTION_STORE_DOCUMENT_CONDUCT, $id, $currentUser))
+		if (!$this->checkDocumentAccess(ActionDictionary::ACTION_STORE_DOCUMENT_CANCEL, $id, $currentUser))
 		{
 			$this->addError(new Error(Loc::getMessage('MOBILE_CONTROLLER_CATALOG_ERROR_CANCELLATION_PERMS')));
 

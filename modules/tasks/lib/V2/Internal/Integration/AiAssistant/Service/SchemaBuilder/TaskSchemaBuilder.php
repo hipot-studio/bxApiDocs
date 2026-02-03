@@ -279,7 +279,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			],
 			'memberId' => [
 				'type' => ['integer', 'null'],
-				'description' => 'Identifier of a task member. By default, the current user.',
+				'description' => 'Identifier of a task member. Leave null for the current user.',
 				'minimum' => 1,
 			],
 			'tag' => [

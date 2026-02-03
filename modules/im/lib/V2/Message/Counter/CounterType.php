@@ -4,18 +4,17 @@ namespace Bitrix\Im\V2\Message\Counter;
 
 use Bitrix\Im\V2\Chat;
 
-enum CounterType: string
+final class CounterType
 {
-	case Chat = 'chat';
-	case Comment = 'comment';
-	case Copilot = 'copilot';
-	case Openline = 'openline';
-	case Collab = 'collab';
-	case TasksTask = 'tasksTask'; // TODO: delete this asap
+	public const Chat = 'chat';
+	public const Comment = 'comment';
+	public const Copilot = 'copilot';
+	public const Openline = 'openline';
+	public const Collab = 'collab';
 
-	public static function tryFromType(?string $type): self
+	public static function tryFromChat(Chat $chat): string
 	{
-		return match ($type)
+		return match ($chat->getType())
 		{
 			Chat::IM_TYPE_COMMENT => self::Comment,
 			Chat::IM_TYPE_OPEN_LINE => self::Openline,
@@ -23,10 +22,5 @@ enum CounterType: string
 			Chat::IM_TYPE_COLLAB => self::Collab,
 			default => self::Chat,
 		};
-	}
-
-	public static function tryFromChat(Chat $chat): self
-	{
-		return self::tryFromType($chat->getType());
 	}
 }

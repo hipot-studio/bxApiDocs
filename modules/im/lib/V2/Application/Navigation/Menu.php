@@ -37,16 +37,7 @@ class Menu
 	 */
 	public function getMenuItems(): array
 	{
-		$menuItemsFormatted = [];
-		foreach ($this->getAllMenuItems() as $menuItem)
-		{
-			if ($menuItem->isVisible())
-			{
-				$menuItemsFormatted[] = $menuItem->toArray();
-			}
-		}
-
-		return $menuItemsFormatted;
+		return $this->getAllMenuItems()->toRestFormat();
 	}
 
 	/**
@@ -61,10 +52,8 @@ class Menu
 
 	/**
 	 * Returns all possible communication navigation menu item objects
-	 *
-	 * @return MenuItem[]
 	 */
-	protected function getAllMenuItems(): array
+	protected function getAllMenuItems(): MenuItemCollection
 	{
 		return $this->menuItemProvider->getMenuItems();
 	}

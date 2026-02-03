@@ -2,13 +2,13 @@
 
 namespace Bitrix\Call\Controller;
 
-use Bitrix\Call\Cache\ExternalAccessTokenManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Registry;
+use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Call\Error;
 use Bitrix\Call\Settings;
@@ -18,6 +18,7 @@ use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\ControllerClient;
 use Bitrix\Call\Integration\AI\ChatMessage;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Cache\ExternalAccessTokenManager;
 
 
 class Track extends Engine\Controller
@@ -143,7 +144,7 @@ class Track extends Engine\Controller
 		Loader::includeModule('im');
 
 		$chat = Chat::getInstance($call->getChatId());
-		$message = ChatMessage::generateTrackDestroyMessage($call->getId(), $this->getCurrentUser()->getId(), $chat->getId());
+		$message = ChatMessage::generateTrackDestroyMessage($call->getId(), $this->getCurrentUser()->getId(), $chat);
 		if ($message)
 		{
 			$message->setAuthorId($call->getInitiatorId());
@@ -151,7 +152,8 @@ class Track extends Engine\Controller
 				->enableSkipCounterIncrements()
 				->enableSkipUrlIndex()
 			;
-			NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig);
+			$context = (new Context())->setUser($call->getInitiatorId());
+			NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 		}
 
 		return ['destroyed' => true];
@@ -280,7 +282,7 @@ class Track extends Engine\Controller
 				$this->addError(new Error("invalid_token", "Invalid or expired token"));
 				return null;
 			}
-			ExternalAccessTokenManager::revokeToken($token);
+			//ExternalAccessTokenManager::revokeToken($token);
 		}
 		else
 		{

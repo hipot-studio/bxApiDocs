@@ -51,12 +51,7 @@ class Call extends JwtController
 			new ExactParameter(
 				DTO\UserRequest::class,
 				'userRequest',
-				function ($className, $params = [])
-				{
-					$parameters = $this->getSourceParametersList()[0];
-					$userRequest = new DTO\UserRequest($parameters);
-					return $userRequest;
-				}
+				$this->decodeJsonParameter()
 			),
 			new ExactParameter(
 				DTO\CallPushRequest::class,
@@ -229,11 +224,11 @@ class Call extends JwtController
 					foreach ($participants as $user)
 					{
 						CallUser::create([
-							 'CALL_ID' => $callObject->getId(),
-							 'USER_ID' => $user['id'],
-							 'STATE' => $user['state'],
-							 'LAST_SEEN' => null
-						 ])->save();
+							'CALL_ID' => $callObject->getId(),
+							'USER_ID' => $user['id'],
+							'STATE' => $user['state'],
+							'LAST_SEEN' => null
+						])->save();
 					}
 
 					$callObject->getSignaling()->sendFinishToInitiator($userId);
@@ -384,7 +379,7 @@ class Call extends JwtController
 					isLegacyMobile: ($pushRequest->legacyMobile == 'Y'),
 					video: ($pushRequest->video == 'Y'),
 					sendPush: true,
-					sendMode: Signaling::MODE_ALL
+					sendMode: Signaling::MODE_MOBILE
 				);
 			}
 
@@ -692,6 +687,12 @@ class Call extends JwtController
 		if (!$call)
 		{
 			$this->addError(new \Bitrix\Main\Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+			return null;
+		}
+
+		if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+		{
+			$this->addError(new Error('Call already finished', 'call_finished'));
 			return null;
 		}
 

@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Bizproc\Public\Entity\Document\DocumentComplexId;
 use Bitrix\Iblock\PropertyEnumerationTable;
 use Bitrix\Iblock\PropertyTable;
 use Bitrix\Main\Loader;
@@ -7,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
+use Bitrix\Bizproc\Public\Entity\Document\DocumentService\DocumentNameAndUrlDto;
 
 Loc::loadMessages(__FILE__);
 
@@ -345,9 +347,11 @@ class BizprocDocument extends CIBlockDocument
 							$result['PROPERTY_' . $propertyId][] = $moneyValue;
 							if (array_key_exists('GetPublicViewHTML', $userType))
 							{
-								$result['PROPERTY_' . $propertyId . '_PRINTABLE'][] = call_user_func_array(
-									$userType['GetPublicViewHTML'],
-									[$property, ['VALUE' => $moneyValue], []]
+								$result['PROPERTY_' . $propertyId . '_PRINTABLE'][] = html_entity_decode(
+									call_user_func_array(
+										$userType['GetPublicViewHTML'],
+										[$property, ['VALUE' => $moneyValue], []]
+									)
 								);
 							}
 						}
@@ -357,9 +361,11 @@ class BizprocDocument extends CIBlockDocument
 						$result['PROPERTY_' . $propertyId] = $property['VALUE'];
 						if (array_key_exists('GetPublicViewHTML', $userType))
 						{
-							$result['PROPERTY_' . $propertyId . '_PRINTABLE'] = call_user_func_array(
-								$userType['GetPublicViewHTML'],
-								[$property, ['VALUE' => $property['VALUE']], []]
+							$result['PROPERTY_' . $propertyId . '_PRINTABLE'] = html_entity_decode(
+								call_user_func_array(
+									$userType['GetPublicViewHTML'],
+									[$property, ['VALUE' => $property['VALUE']], []]
+								)
 							);
 						}
 					}
@@ -389,7 +395,7 @@ class BizprocDocument extends CIBlockDocument
 					while ($enums = $enumsObject->fetch())
 					{
 						$propertyArray[] = $enums['VALUE'];
-						$propertyKeyArray[] = $enums['XML_ID'];
+						$propertyKeyArray[] = (static::class === self::class || self::getVersion() > 1) ? $enums['XML_ID'] : $enums['ID'];
 					}
 				}
 				for ($i = 0, $cnt = count($propertyArray); $i < $cnt; $i++)
@@ -1004,7 +1010,7 @@ class BizprocDocument extends CIBlockDocument
 			$fieldsTemporary["TYPE"] = "L";
 			$fieldsTemporary["USER_TYPE"]= false;
 
-			if (is_array($fields["options"]))
+			if (is_array($fields["options"] ?? null))
 			{
 				$i = 10;
 				foreach ($fields["options"] as $k => $v)
@@ -1016,7 +1022,7 @@ class BizprocDocument extends CIBlockDocument
 					$i = $i + 10;
 				}
 			}
-			elseif (is_string($fields["options"]) && ($fields["options"] <> ''))
+			elseif (!empty($fields["options"]) && is_string($fields["options"]))
 			{
 				$a = explode("\n", $fields["options"]);
 				$i = 10;
@@ -1618,23 +1624,69 @@ class BizprocDocument extends CIBlockDocument
 	 */
 	public static function getDocumentAdminPage($documentId)
 	{
-		$documentId = intval($documentId);
+		$documentId = (int)$documentId;
 		if ($documentId <= 0)
-			throw new CBPArgumentNullException("documentId");
+		{
+			throw new CBPArgumentNullException('documentId');
+		}
 
 		$elementQuery = CIBlockElement::getList(
-			array(),
-			array("ID" => $documentId, "SHOW_NEW"=>"Y", "SHOW_HISTORY" => "Y"),
+			[],
+			['ID' => $documentId, 'SHOW_NEW'=>'Y', 'SHOW_HISTORY' => 'Y'],
 			false,
 			false,
-			array("ID", "IBLOCK_ID", "IBLOCK_TYPE_ID", "DETAIL_PAGE_URL")
+			['ID', 'IBLOCK_ID', 'IBLOCK_TYPE_ID', 'DETAIL_PAGE_URL']
 		);
+
 		if ($element = $elementQuery->fetch())
 		{
-			return COption::getOptionString('lists', 'livefeed_url').'?livefeed=y&list_id='.$element["IBLOCK_ID"].'&element_id='.$documentId;
+			return static::compileDocumentUrl($element, $documentId);
 		}
 
 		return null;
+	}
+
+	public static function getDocumentNameAndUrl(DocumentComplexId $parameterDocumentId): DocumentNameAndUrlDto | null
+	{
+		$documentId = (int)($parameterDocumentId->id);
+		if ($documentId <= 0)
+		{
+			return null;
+		}
+
+		$result = \CIBlockElement::getList(
+			[],
+			['ID' => $documentId, 'SHOW_NEW' => 'Y', 'SHOW_HISTORY' => 'Y'],
+			false,
+			false,
+			['ID', 'NAME', 'IBLOCK_ID', 'IBLOCK_TYPE_ID', 'DETAIL_PAGE_URL']
+		);
+		$element = $result->fetch();
+		if (!$element)
+		{
+			return null;
+		}
+
+		$name = $element['NAME'];
+		$url = static::compileDocumentUrl($element, $documentId);
+
+		if (CBPHelper::hasStringRepresentation($name) && CBPHelper::hasStringRepresentation($url))
+		{
+			return new DocumentNameAndUrlDto((string)$name, (string)$url);
+		}
+
+		return null;
+	}
+
+	protected static function compileDocumentUrl(array $element, int $documentId): mixed
+	{
+		return (
+			Option::get('lists', 'livefeed_url')
+			. '?livefeed=y&list_id='
+			. $element['IBLOCK_ID']
+			. '&element_id='
+			. $documentId
+		);
 	}
 
 	protected static function getRightsTasks()
@@ -1742,7 +1794,7 @@ class BizprocDocument extends CIBlockDocument
 		if ($documentId == '')
 			return false;
 
-		if (self::isAdmin())
+		if ((new \CBPWorkflowTemplateUser($userId))->isAdmin())
 		{
 			return true;
 		}
@@ -1946,7 +1998,7 @@ class BizprocDocument extends CIBlockDocument
 		if ($documentType == '')
 			return false;
 
-		if (self::isAdmin())
+		if ((new \CBPWorkflowTemplateUser($userId))->isAdmin())
 		{
 			return true;
 		}

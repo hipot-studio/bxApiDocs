@@ -290,7 +290,7 @@ class UserCollector
 		foreach ($rows as $row)
 		{
 			$type = $row['TYPE'];
-			if (!array_key_exists($type, CounterDictionary::MAP_EXPIRED))
+			if (!array_key_exists($type, CounterDictionary::MAP_COMMENTS))
 			{
 				continue;
 			}

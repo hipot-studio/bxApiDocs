@@ -736,27 +736,7 @@ class CIMNotify
 			$readService = new IM\V2\Message\ReadService($this->user_id);
 		}
 
-		$readResult = $readService->readAllInChat($chatId);
-		$newCounter = $readResult->getResult()['COUNTER'];
-		if (CModule::IncludeModule("pull"))
-		{
-			\Bitrix\Pull\Event::add(
-				$this->user_id,
-				[
-					'module_id' => 'im',
-					'command' => 'notifyReadAll',
-					'params' => [
-						'chatId' => $chatId,
-						'newCounter' => $newCounter,
-					],
-					'extra' => \Bitrix\Im\Common::getPullExtra(),
-				],
-			);
-
-			\Bitrix\Pull\MobileCounter::send($this->user_id, $appId);
-		}
-
-		return $readResult;
+		return $readService->readAllNotifications($chatId, appId: $appId);
 	}
 
 	public function MarkNotifyReadBySubTag($subTagList = array())
@@ -1746,7 +1726,7 @@ class CIMNotify
 
 	public static function prepareNotifyParams(array $params): array
 	{
-		if (is_string($params['COMPONENT_PARAMS']['PLAIN_TEXT']) ?? null)
+		if (is_string($params['COMPONENT_PARAMS']['PLAIN_TEXT'] ?? null))
 		{
 			$params['COMPONENT_PARAMS']['PLAIN_TEXT'] = self::prepareNotifyParam($params['COMPONENT_PARAMS']['PLAIN_TEXT']);
 		}

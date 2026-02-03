@@ -72,6 +72,7 @@ class Analytics extends Common
 		'flows' => 'flows',
 		'collab' => 'collab',
 		'onboarding_notification' => 'onboarding_notification',
+		'templates' => 'templates',
 	];
 
 	public const SUB_SECTION = [
@@ -82,6 +83,7 @@ class Analytics extends Common
 		'calendar' => 'calendar',
 		'gantt' => 'gantt',
 		'task_card' => 'task_card',
+		'templates_card' => 'templates_card',
 		'efficiency' => 'efficiency',
 		'lead' => 'lead',
 		'deal' => 'deal',
@@ -93,6 +95,7 @@ class Analytics extends Common
 		'flow_guide' => 'flow_guide',
 		'copilot_advice' => 'copilot_advice',
 		'existing' => 'existing',
+		'ai' => 'ai',
 	];
 
 	public const ELEMENT = [
@@ -124,6 +127,8 @@ class Analytics extends Common
 		'checklist_button' => 'checklist_button',
 		'task_link' => 'task_link',
 		'delegation_button' => 'delegation_button',
+		'context_menu_subtask' => 'context_menu_subtask',
+		'context_menu_templatetask' => 'context_menu_templatetask',
 	];
 
 	/**

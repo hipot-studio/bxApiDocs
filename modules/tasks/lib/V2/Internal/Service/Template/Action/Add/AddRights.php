@@ -6,7 +6,6 @@ namespace Bitrix\Tasks\V2\Internal\Service\Template\Action\Add;
 
 use Bitrix\Main\Access\Permission\PermissionDictionary;
 use Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable;
-use Bitrix\Tasks\Item\Access\Task\Template;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Integration\HumanResources\Repository\StructureRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
@@ -26,16 +25,16 @@ class AddRights
 		$creatorId = (int)$fields['CREATED_BY'];
 		$permissions = $fields['PERMISSIONS'] ?? [];
 
-		$permissions = $this->grantUserPermission($currentUserId, $permissions);
+		$permissions = $this->addUserPermission($currentUserId, $permissions);
 		if ($creatorId !== $currentUserId)
 		{
-			$permissions = $this->grantUserPermission($creatorId, $permissions);
+			$permissions = $this->addUserPermission($creatorId, $permissions);
 		}
 
 		$this->addPermissions($fields['ID'], $permissions);
 	}
 
-	private function grantUserPermission(int $userId, array $permissions): array
+	private function addUserPermission(int $userId, array $permissions): array
 	{
 		$grantedCode = 'U' . $userId;
 		$grantedPermissionId = \Bitrix\Tasks\Access\Permission\PermissionDictionary::TEMPLATE_FULL;
@@ -74,7 +73,13 @@ class AddRights
 		$tariffService = Container::getInstance()->getTariffService();
 		if (!$tariffService->canManageTemplatePermissions())
 		{
-			return;
+			// add full permission for the current user only
+			$permissions = [
+				[
+					'ACCESS_CODE' => 'U' . $this->config->getUserId(),
+					'PERMISSION_ID' => \Bitrix\Tasks\Access\Permission\PermissionDictionary::TEMPLATE_FULL,
+				],
+			];
 		}
 
 		$mainDepartment = Container::getInstance()->get(StructureRepositoryInterface::class)->getMainDepartment();

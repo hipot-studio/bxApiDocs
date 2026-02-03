@@ -58,9 +58,16 @@ abstract class Audience extends BaseApiObject
 		return trim(mb_strtolower($email));
 	}
 
-	public static function normalizePhone($phone)
+	public static function normalizePhone($phone): string
 	{
-		return preg_replace("/[^\+0-9]/", '', $phone);
+		$phone = preg_replace("/[^+0-9]/", '', $phone);
+
+		if ($phone[0] === '8' && strlen($phone) === 11)
+		{
+			$phone = '+7' . mb_substr($phone, 1);
+		}
+
+		return $phone;
 	}
 
 	public static function isSupportMultiTypeContacts()
@@ -185,10 +192,6 @@ abstract class Audience extends BaseApiObject
 
 					case self::ENUM_CONTACT_TYPE_PHONE:
 						$contact = static::normalizePhone($contact);
-						if (mb_substr($contact, 0, 1) == '8' && mb_strlen($contact) > 8)
-						{
-							$contactPhone = '+7'.mb_substr($contact, 1);
-						}
 						break;
 				}
 

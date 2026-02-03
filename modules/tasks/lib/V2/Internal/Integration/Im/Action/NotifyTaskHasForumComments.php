@@ -47,4 +47,9 @@ class NotifyTaskHasForumComments extends AbstractNotify
 	{
 		return true;
 	}
+
+	public function shouldDisableAddRecent(): bool
+	{
+		return true;
+	}
 }

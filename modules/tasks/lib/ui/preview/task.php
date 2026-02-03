@@ -300,6 +300,11 @@ class Task
 		$description = \CTextParser::clearAllTags($description);
 		$description = trim($description);
 		$description = preg_replace('/\n{3,}/', "\n\n", $description);
+		$description = str_replace(
+			["&#91;", "&#93;"],
+			["[", "]"],
+			$description,
+		);
 
 		if ($description === '')
 		{

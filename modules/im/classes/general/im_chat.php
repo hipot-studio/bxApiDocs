@@ -1600,7 +1600,7 @@ class CIMChat
 						'unread' => Im\Recent::isUnread($this->user_id, $relation['MESSAGE_TYPE'], 'chat'.$chatId),
 						'lines' => $relation['MESSAGE_TYPE'] === IM_MESSAGE_OPEN_LINE,
 						'viewedMessages' => $viewedMessages,
-						'counterType' => $chat->getCounterType()->value,
+						'counterType' => $chat->getCounterType(),
 						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 					),
 					'extra' => \Bitrix\Im\Common::getPullExtra()
@@ -1709,7 +1709,7 @@ class CIMChat
 						'unreadTo' => $lastId,
 						'unread' => Im\Recent::isUnread($this->user_id, $relation['MESSAGE_TYPE'], 'chat'.$chatId),
 						'lastMessageViews' => Im\Common::toJson($chat->getLastMessageViews()),
-						'counterType' => $chat->getCounterType()->value,
+						'counterType' => $chat->getCounterType(),
 						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 					),
 					'push' => Array('badge' => 'Y'),

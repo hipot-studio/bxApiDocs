@@ -1,6 +1,6 @@
 <?php
 
-use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Main;
 use Bitrix\Main\Security;
 use Bitrix\Main\Localization\Loc;
@@ -73,7 +73,7 @@ class CMailUfMessageComponent extends CBitrixComponent
 
 		if (!empty($access))
 		{
-			$message['__href'] = Message::addSourceAnalyticsToMessage($message['__href'], $access['ENTITY_TYPE'] ?? '');
+			$message['__href'] = AnalyticsHelper::addSourceAnalyticsToMessage($message['__href'], $access['ENTITY_TYPE'] ?? '');
 
 			$signer = new Security\Sign\Signer(new Security\Sign\HmacAlgorithm('md5'));
 

@@ -13,14 +13,10 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\StructureAction;
-use Bitrix\Mail\Access\Permission\PermissionDictionary;
-use Bitrix\Mail\Access\Permission\PermissionVariablesDictionary;
-use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main\Loader;
 
 class NodeMemberService
 {
-
 	/**
 	 * @param $departmentIds array<int>}
 	 *
@@ -42,7 +38,7 @@ class NodeMemberService
 			return [];
 		}
 
-		$members = (new NodeMemberDataBuilder)
+		$members = (new NodeMemberDataBuilder())
 			->addFilter(
 				new NodeMemberFilter(
 					nodeFilter: new NodeFilter(
@@ -90,7 +86,7 @@ class NodeMemberService
 
 		$accessFilter = $withCheckViewHrAccess ? new NodeAccessFilter(StructureAction::ViewAction) : null;
 		$depthLevel = $withSubDepartments ? DepthLevel::FULL : 0;
-		$nodeMembers = (new NodeMemberDataBuilder)
+		$nodeMembers = (new NodeMemberDataBuilder())
 			->addFilter(
 				new NodeMemberFilter(
 					entityIdFilter: EntityIdFilter::fromEntityIds($userIds),

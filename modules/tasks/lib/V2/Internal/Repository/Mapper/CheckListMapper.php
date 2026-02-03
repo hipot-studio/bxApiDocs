@@ -9,6 +9,7 @@ use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\CheckList\Node\Nodes;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\FileRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\NodeIdGenerator;
 
@@ -18,6 +19,7 @@ class CheckListMapper
 		private readonly NodeIdGenerator $nodeIdGenerator,
 		private readonly UserMapper $userMapper,
 		private readonly FileRepositoryInterface $fileRepository,
+		private readonly Logger $logger,
 	)
 	{
 	}
@@ -44,8 +46,17 @@ class CheckListMapper
 			Collection::normalizeArrayValuesByInt($fileIds, false);
 			$files = $fileIds ? $this->fileRepository->getByIds($fileIds) : null;
 
+			[$entityId, $entityType] = match (true)
+			{
+				isset($item['TASK_ID']) => [(int)$item['TASK_ID'], Entity\CheckList\Type::Task],
+				isset($item['TEMPLATE_ID']) => [(int)$item['TEMPLATE_ID'], Entity\CheckList\Type::Template],
+				default => [null, null],
+			};
+
 			$items[] = new Entity\CheckList\CheckListItem(
 				id: (int)($item['ID'] ?? 0),
+				entityId: $entityId,
+				entityType: $entityType,
 				nodeId: $nodeId,
 				title: $item['TITLE'] ?? null,
 				creator: $this->mapUser((int)($item['CREATED_BY'] ?? 0)),
@@ -75,6 +86,13 @@ class CheckListMapper
 
 		foreach ($checkList as $id => $item)
 		{
+			if (!is_array($item))
+			{
+				$this->logger->logWarning($item, 'CheckListMapper.mapToNodes: item is not an array');
+
+				continue;
+			}
+
 			$itemId = $item['id'] ?? null;
 			$item['id'] = (is_string($itemId) || (int)$itemId === 0) ? null : (int)$itemId;
 

@@ -2,26 +2,39 @@
 
 namespace Bitrix\Disk\Document\OnlyOffice;
 
-use Bitrix\Disk\Document\OnlyOffice\Enum;
 use Bitrix\Disk\Document\Models\RestrictionLog;
 use Bitrix\Disk\Document\Models\RestrictionLogTable;
+use Bitrix\Disk\Driver;
+use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config;
+use Bitrix\Main\Event;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Disk\Document\Models\DocumentSessionTable;
+use CBitrix24;
 
 final class RestrictionManager
 {
 	public const DEFAULT_LIMIT = 10;
-	public const UNLIMITED_VALUE = -1;
+	public const UNLIMITED_VALUE = 10_000_000;
 	public const LOCK_NAME = 'oo_edit_restriction';
 	public const TTL = 4 * 3600;
 	public const TTL_PENDING = 2*60;
+	public const SAVE_SESSION_EVENT = 'OnSaveSessionInRestrictionLog';
+	public const DELETE_SESSION_EVENT = 'OnDeleteSessionsFromRestrictionLog';
 
 	protected const LOCK_LIMIT = 15;
 
+	protected Config\Configuration $config;
+
 	public function __construct()
 	{
+		$this->config = Config\Configuration::getInstance('disk');
 	}
 
 	public function shouldUseRestriction(): bool
@@ -37,6 +50,12 @@ final class RestrictionManager
 	public function getLimit(): int
 	{
 		$value = Bitrix24Manager::getFeatureVariable('disk_oo_edit_restriction');
+
+		$baasDocumentQuotaService = new BaasSessionBoostService();
+		if ($value && $baasDocumentQuotaService->isActual())
+		{
+			$value += $baasDocumentQuotaService->getQuota();
+		}
 
 		return $value ?? self::UNLIMITED_VALUE;
 	}
@@ -57,19 +76,7 @@ final class RestrictionManager
 
 	public function isAllowedEdit(string $documentKey, int $userId): bool
 	{
-		$limit = $this->getLimit();
-		if ($limit === self::UNLIMITED_VALUE)
-		{
-			return true;
-		}
-
-		$countSessions = $this->countSessions();
-		if ($this->isEnoughToDeletePendingUsages($limit, $countSessions))
-		{
-			$this->addJobToCleanPendingUsages();
-		}
-
-		if ($limit > $countSessions)
+		if ($this->checkLimit())
 		{
 			return true;
 		}
@@ -80,6 +87,32 @@ final class RestrictionManager
 		}
 
 		return false;
+	}
+
+	public function isAllowedEditByObjectId(int $objectId, int $userId): bool
+	{
+		if ($this->checkLimit())
+		{
+			return true;
+		}
+
+		if ($this->isExistsSessionByObjectId($objectId, $userId))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	public function getAvailableDocumentSessionCount(): int
+	{
+		$limit = $this->getLimit();
+		if ($limit >= self::UNLIMITED_VALUE)
+		{
+			return self::UNLIMITED_VALUE;
+		}
+
+		return $limit - $this->countSessions();
 	}
 
 	protected function isEnoughToDeletePendingUsages(int $limit, int $countSessions): bool
@@ -105,6 +138,8 @@ final class RestrictionManager
 			->setExternalHash($documentKey);
 
 		$restrictionLog->save();
+
+		self::emitEvent(self::SAVE_SESSION_EVENT);
 	}
 
 	public function processHookData(int $status, array $hookData): void
@@ -164,6 +199,7 @@ final class RestrictionManager
 			'UPDATE_TIME' => new DateTime(),
 			'STATUS' => RestrictionLogTable::STATUS_USED,
 		], $filter);
+
 	}
 
 	protected function deleteUserEntriesByDocumentKey(array $userIds, string $documentKey): void
@@ -194,6 +230,8 @@ final class RestrictionManager
 		}
 
 		$connection->queryExecute($sql);
+
+		self::emitEvent(self::DELETE_SESSION_EVENT);
 	}
 
 	protected function countSessions(): int
@@ -212,6 +250,27 @@ final class RestrictionManager
 		return $countSession > 0;
 	}
 
+	private function isExistsSessionByObjectId(int $objectId, int $userId): bool
+	{
+		$referenceField = new ReferenceField(
+			'SESSION',
+			DocumentSessionTable::class,
+			Join::on('this.EXTERNAL_HASH', 'ref.EXTERNAL_HASH')
+		);
+		$referenceField->configureJoinType(Join::TYPE_INNER);
+
+		$query =
+			(new Query(RestrictionLogTable::getEntity()))
+				->setSelect(['ID', 'OBJECT_ID' => 'SESSION.OBJECT_ID'])
+				->registerRuntimeField($referenceField)
+				->where('USER_ID', $userId)
+		;
+
+		$objectIds = array_map(static fn(array $item) => (int)$item['OBJECT_ID'], $query->fetchAll());
+
+		return in_array($objectId, $objectIds, true);
+	}
+
 	public function deletePendingUsages(): void
 	{
 		$connection = Application::getConnection();
@@ -227,6 +286,32 @@ final class RestrictionManager
 				UPDATE_TIME < {$ttlTimeForPending} AND STATUS = {$statusPending}
 		");
 
+
+		self::emitEvent(self::DELETE_SESSION_EVENT);
+	}
+
+	/**
+	 * Determinate is current portal tariff extendable (max number of sessions).
+	 *
+	 * @return bool
+	 */
+	public function isCurrentTariffExtendable(): bool
+	{
+		$licenseType = CBitrix24::getLicenseType();
+
+		if (!is_string($licenseType))
+		{
+			return true;
+		}
+
+		$extendableTariffs = $this->config->get('extendableTariffs');
+
+		if (!is_array($extendableTariffs))
+		{
+			return true;
+		}
+
+		return in_array($licenseType, $extendableTariffs, true);
 	}
 
 	public static function deleteOldOrPendingAgent(): string
@@ -253,5 +338,32 @@ final class RestrictionManager
 			WHERE 
 				UPDATE_TIME < {$ttlTime} OR (UPDATE_TIME < {$ttlTimeForPending} AND STATUS = {$statusPending})
 		");
+
+		self::emitEvent(self::DELETE_SESSION_EVENT);
+	}
+
+	private static function emitEvent(string $type): void
+	{
+		$event = new Event(Driver::INTERNAL_MODULE_ID, $type);
+		$event->setParameter('availableDocumentSessionCount', (new self)->getAvailableDocumentSessionCount());
+		$event->send();
+	}
+
+	private function checkLimit(): bool
+	{
+		$limit = $this->getLimit();
+
+		if ($limit === self::UNLIMITED_VALUE)
+		{
+			return true;
+		}
+
+		$countSessions = $this->countSessions();
+		if ($this->isEnoughToDeletePendingUsages($limit, $countSessions))
+		{
+			$this->addJobToCleanPendingUsages();
+		}
+
+		return $limit > $countSessions;
 	}
 }

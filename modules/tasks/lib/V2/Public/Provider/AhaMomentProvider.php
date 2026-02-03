@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Provider;
 
+use Bitrix\Intranet\CurrentUser;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Integration\Bitrix24\Portal;
 use Bitrix\Tasks\V2\Internal\Repository\UserOptionRepositoryInterface;
@@ -19,7 +21,7 @@ class AhaMomentProvider
 
 	public function get(int $userId): array
 	{
-		$isOldPortal = $this->isOldPortal();
+		$isOldPortalUser = $this->isOldPortalUser();
 
 		$ahaResponsibleMany = !$this->isShown($userId, OptionDictionary::AhaResponsibleMany);
 		$ahaTaskSettingsShow = !$this->isShown($userId, OptionDictionary::AhaTaskSettingsMessage);
@@ -28,7 +30,7 @@ class AhaMomentProvider
 		$ahaRequiredResultCreatorShow = !$this->isShown($userId, OptionDictionary::AhaRequiredResultCreator);
 		$ahaRequiredResultResponsibleShow = !$this->isShown($userId, OptionDictionary::AhaRequiredResultResponsible);
 		$ahaStartTimeTrackingShow = !$this->isShown($userId, OptionDictionary::AhaStartTimeTracking);
-		$ahaTaskChatShow = $isOldPortal && !$this->isShown($userId, OptionDictionary::AhaTaskChat);
+		$ahaTaskChatShow = $isOldPortalUser && !$this->isShown($userId, OptionDictionary::AhaTaskChat);
 
 		return [
 			OptionDictionary::AhaResponsibleMany->value => $ahaResponsibleMany,
@@ -51,11 +53,22 @@ class AhaMomentProvider
 		);
 	}
 
-	private function isOldPortal(): bool
+	private function isOldPortalUser(): bool
 	{
-		$portalCreateDate = (new Portal())->getCreationDateTime();
-		$suitablePortalCreationDate = new DateTime('2025-11-26', 'Y-m-d');
+		if (!Loader::includeModule('intranet'))
+		{
+			return false;
+		}
 
-		return $portalCreateDate?->getTimestamp() <= $suitablePortalCreationDate->getTimestamp();
+		$portalCreateDate = (new Portal())->getCreationDateTime();
+		$userDateRegister = CurrentUser::get()->getDateRegister();
+		$suitablePortalCreationDate = Loader::includeModule('bitrix24')
+			? new DateTime('2025-11-26', 'Y-m-d')
+			: new DateTime('2026-01-21', 'Y-m-d')
+		;
+
+		return ($portalCreateDate?->getTimestamp() <= $suitablePortalCreationDate->getTimestamp())
+			&& (!$userDateRegister || $userDateRegister->getTimestamp() <= $suitablePortalCreationDate->getTimestamp())
+		;
 	}
 }

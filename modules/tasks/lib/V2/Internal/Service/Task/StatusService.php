@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
+use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
@@ -22,6 +24,29 @@ class StatusService
 	public function start(int $taskId, UpdateConfig $config): Task
 	{
 		return $this->updateTaskStatus($taskId, Status::InProgress, $config);
+	}
+
+	public function take(int $taskId, UpdateConfig $config): Task
+	{
+		$entity = new Task(
+			id: $taskId,
+			responsible: User::mapFromId($config->getUserId()),
+			status: Status::InProgress
+		);
+
+		$updatedTask = $this->updateTaskService->update($entity, $config);
+
+		if ($updatedTask->allowsTimeTracking)
+		{
+			$timeManagementService = Container::getInstance()->getTimeManagementService();
+			$timeManagementService->startTimer(
+				userId: $config->getUserId(),
+				taskId: $taskId,
+				canStart: true,
+			);
+		}
+
+		return $updatedTask;
 	}
 
 	public function renew(int $taskId, UpdateConfig $config): Task

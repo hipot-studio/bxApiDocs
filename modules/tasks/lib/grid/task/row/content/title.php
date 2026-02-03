@@ -51,7 +51,7 @@ class Title extends Content
 		}
 		else
 		{
-			$taSec = Analytics::SECTION['tasks'];
+			$taSec = $groupId ? Analytics::SECTION['project'] : Analytics::SECTION['tasks'];
 		}
 
 		$taEl = (

@@ -32,6 +32,7 @@ class Popup extends BaseProvider
 		$helpdeskRequest = new Helpdesk\Request(self::HELPDESK_PATH, [
 			'url' => $this->configuration->currentUrl,
 			'code' => $this->configuration->code,
+			'mode' => 'air',
 		]);
 
 		return $helpdeskRequest->send();

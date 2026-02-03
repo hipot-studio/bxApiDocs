@@ -354,12 +354,15 @@ class Chat extends AbstractEntity
 				}
 				elseif ($otherUserState == CallUser::STATE_BUSY)
 				{
+					/*
 					$componentParams['MESSAGE_TYPE'] = 'BUSY';
 					$message = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_USER_BUSY_" . $otherUser->getGender(), [
 						'#NAME#' => $otherUser->getFullName(false)
 					]);
 					$mute = false;
 					$skipCounterInc = false;
+					*/
+					$message = '';
 				}
 				elseif ($otherUserState == CallUser::STATE_UNAVAILABLE || $otherUserState == CallUser::STATE_CALLING)
 				{
@@ -372,8 +375,11 @@ class Chat extends AbstractEntity
 				}
 			}
 
-			$componentParams['MESSAGE_TEXT'] = $message;
-			$this->sendMessage($message, $mute, $skipCounterInc, $componentParams);
+			if ($message)
+			{
+				$componentParams['MESSAGE_TEXT'] = $message;
+				$this->sendMessage($message, $mute, $skipCounterInc, $componentParams);
+			}
 		}
 	}
 

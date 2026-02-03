@@ -18,9 +18,9 @@ trait NamespaceVariationsCommandTrait
 
 	protected static function configureNamespaceVariationsOptions(Command $command): void
 	{
-		$command->addOption(self::$PREFIX_OPTION_NAME, 'P', InputArgument::OPTIONAL, 'Prefix for the standard namespace for the generated class.');
+		$command->addOption(self::$PREFIX_OPTION_NAME, 'P', InputArgument::OPTIONAL, 'Prefix for the standard namespace for the generated class');
 
-		$command->addOption(self::$CONTEXT_OPTION_NAME, 'C', InputArgument::OPTIONAL, 'Namespace of context for the generated class.');
+		$command->addOption(self::$CONTEXT_OPTION_NAME, 'C', InputArgument::OPTIONAL, 'Namespace of context for the generated class');
 
 		// in the future, if it suddenly hurts a lot without a custom
 		//$command->addOption(self::$NAMESPACE_OPTION_NAME, 'N', InputArgument::OPTIONAL, 'Namespace in which the generated class will be placed');

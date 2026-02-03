@@ -18,6 +18,9 @@ interface TaskMemberRepositoryInterface
 
 	public function getAuditors(int $taskId): Entity\UserCollection;
 
-	/** @return array<int, string> */
-	public function getMembershipForUserId(int $userId): array;
+	/**
+	 * @param int[] $taskIds
+	 * @return array<int, string[]>
+	 */
+	public function getMembershipForUserIdAndTaskIds(int $userId, array $taskIds): array;
 }

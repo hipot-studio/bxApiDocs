@@ -116,7 +116,7 @@ class OrmTemplateMapper
 			}
 		}
 
-		if ($template->group?->id)
+		if ($template->group?->id !== null)
 		{
 			$fields['GROUP_ID'] = $template->group->id;
 		}
@@ -186,7 +186,7 @@ class OrmTemplateMapper
 			$fields[Entity\UF\UserField::TASK_ATTACHMENTS] = $template->fileIds;
 		}
 
-		if ($template->allowsTimeTracking)
+		if ($template->allowsTimeTracking !== null)
 		{
 			$fields['ALLOW_TIME_TRACKING'] = $template->allowsTimeTracking;
 		}
@@ -202,6 +202,11 @@ class OrmTemplateMapper
 		if ($template->crmItemIds !== null)
 		{
 			$fields[Entity\UF\UserField::TASK_CRM] = $template->crmItemIds;
+		}
+
+		if ($template->multitask !== null)
+		{
+			$fields['MULTITASK'] = $template->multitask ? 'Y' : 'N';
 		}
 
 		return $fields;
@@ -238,6 +243,11 @@ class OrmTemplateMapper
 		elseif (isset($fields['RESPONSIBLE_ID']))
 		{
 			$templateFields['responsibleCollection'] = $this->castMembers([$fields['RESPONSIBLE_ID']]);
+		}
+
+		if (isset($fields['MULTITASK']))
+		{
+			$templateFields['multitask'] = $fields['MULTITASK'] === 'Y';
 		}
 
 		if (isset($fields['DEADLINE_AFTER']))

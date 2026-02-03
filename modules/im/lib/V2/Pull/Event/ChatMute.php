@@ -27,7 +27,7 @@ class ChatMute extends BaseChatEvent
 			'muted' => $this->isMuted,
 			'mute' => $this->isMuted, // TODO remove this later
 			'lines' => $this->chat instanceof Chat\OpenLineChat,
-			'counterType' => $this->chat->getCounterType()->value,
+			'counterType' => $this->chat->getCounterType(),
 			'recentConfig' => $this->chat->getRecentConfig()->toPullFormat(),
 		];
 	}

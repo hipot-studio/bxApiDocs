@@ -15,6 +15,7 @@ class ProductRow extends EO_ProductRow implements \JsonSerializable
 	public const ERROR_CODE_NORMALIZATION_MEASURE_INVALID = 'CRM_PRODUCTROW_NORMALIZATION_MEASURE_INVALID';
 	public const ERROR_CODE_NORMALIZATION_DISCOUNT_RATE_REQUIRED = 'CRM_PRODUCTROW_NORMALIZATION_DISCOUNT_RATE_REQUIRED';
 	public const ERROR_CODE_NORMALIZATION_DISCOUNT_SUM_REQUIRED = 'CRM_PRODUCTROW_NORMALIZATION_DISCOUNT_SUM_REQUIRED';
+	public const ERROR_CODE_NORMALIZATION_COMMON_ERROR = 'CRM_PRODUCTROW_NORMALIZATION_CODE_NORMALIZATION_COMMON_ERROR';
 
 	protected const REFERENCE_FIELD_NAME = 'IBLOCK_ELEMENT';
 	protected const REFERENCE_PRODUCT_ROW_RESERVATION_NAME = 'PRODUCT_ROW_RESERVATION';
@@ -159,11 +160,7 @@ class ProductRow extends EO_ProductRow implements \JsonSerializable
 		$normalizationResult = new Result();
 
 		$this->normalizeMeasure($normalizationResult);
-		$this->normalizePriceExclusive();
-		$this->normalizeDiscount($normalizationResult);
-		$this->normalizePriceNetto();
-		$this->normalizePriceBrutto();
-		$this->normalizePriceAccount($currencyId, $exchRate);
+		$this->normalizePrices($normalizationResult, $currencyId, $exchRate);
 
 		return $normalizationResult;
 	}
@@ -244,109 +241,24 @@ class ProductRow extends EO_ProductRow implements \JsonSerializable
 		return true;
 	}
 
-	protected function normalizePriceExclusive(): void
+	protected function normalizePrices(Result $result, string $currencyId, ?float $exchRate): void
 	{
-		$exclusivePrice = Container::getInstance()->getAccounting()->calculatePriceWithoutTax(
-			(float)$this->getPrice(),
-			(float)$this->getTaxRate()
+		$calculationResult = Container::getInstance()->getAccounting()->recalculateProductRow(
+			$this,
+			[
+				'CURRENCY_ID' => $currencyId,
+				'EXCH_RATE' => $exchRate,
+			],
 		);
 
-		$this->setPriceExclusive($exclusivePrice);
-	}
-
-	protected function normalizeDiscount(Result $result): void
-	{
-		if (!Discount::isDefined($this->getDiscountTypeId()))
+		if (!$calculationResult->isSuccess())
 		{
-			$this->setDiscountTypeId(Discount::PERCENTAGE);
-			$this->setDiscountRate(0.0);
-		}
-
-		if ($this->getDiscountTypeId() === Discount::PERCENTAGE)
-		{
-			$this->normalizeDiscountForPercentage($result);
-		}
-		elseif ($this->getDiscountTypeId() === Discount::MONETARY)
-		{
-			$this->normalizeDiscountForMonetary($result);
-		}
-	}
-
-	protected function normalizeDiscountForPercentage(Result $result): void
-	{
-		if (is_null($this->getDiscountRate()))
-		{
-			$result->addError(new Error(
-				'Discount Rate (DISCOUNT_RATE) is required if '
-				. "Percentage Discount Type (DISCOUNT_TYPE_ID) is used. ID = {$this->getId()}",
-				static::ERROR_CODE_NORMALIZATION_DISCOUNT_RATE_REQUIRED,
-			));
+			$result->addErrors($calculationResult->getErrors());
 
 			return;
 		}
 
-		if ($this->getDiscountRate() === 100.0)
-		{
-			$discountSum = $this->getDiscountSum();
-			if ($discountSum === 0.0 || is_null($discountSum))
-			{
-				// impossible to calculate discount sum, since price with 100% discount is exactly zero
-				$result->addError(new Error(
-					'Discount Sum (DISCOUNT_SUM) is required if '
-					. 'Percentage Discount Type (DISCOUNT_TYPE_ID) is used and Discount Rate (DISCOUNT_RATE) is 100%. '
-					. "ID = {$this->getId()}",
-					static::ERROR_CODE_NORMALIZATION_DISCOUNT_SUM_REQUIRED,
-				));
-
-				return;
-			}
-		}
-		else
-		{
-			$discountSum = Discount::calculateDiscountSum($this->getPriceExclusive(), $this->getDiscountRate());
-		}
-
-		$this->setDiscountSum($discountSum);
-	}
-
-	protected function normalizeDiscountForMonetary(Result $result): void
-	{
-		if (is_null($this->getDiscountSum()))
-		{
-			$result->addError(new Error(
-				'Discount Sum (DISCOUNT_SUM) is required if '
-				. "Monetary Discount Type (DISCOUNT_TYPE_ID) is used. ID = {$this->getId()}",
-				static::ERROR_CODE_NORMALIZATION_DISCOUNT_SUM_REQUIRED,
-			));
-			return;
-		}
-
-		$priceBeforeDiscount = $this->getPriceExclusive() + $this->getDiscountSum();
-		$discountRate = Discount::calculateDiscountRate($priceBeforeDiscount, $this->getPriceExclusive());
-
-		$this->setDiscountRate($discountRate);
-	}
-
-	protected function normalizePriceNetto(): void
-	{
-		$this->setPriceNetto($this->getPriceExclusive() + $this->getDiscountSum());
-	}
-
-	protected function normalizePriceBrutto(): void
-	{
-		$priceBrutto = Container::getInstance()->getAccounting()->calculatePriceWithTax(
-			(float)$this->getPriceNetto(),
-			(float)$this->getTaxRate()
-		);
-
-		$this->setPriceBrutto($priceBrutto);
-	}
-
-	protected function normalizePriceAccount(string $currencyId, ?float $exchRate): void
-	{
-		$priceAccount = Currency\Conversion::toAccountCurrency($this->getPrice(), $currencyId, $exchRate);
-
-		$this->setPriceAccount($priceAccount);
+		$result->setData($calculationResult->getData());
 	}
 
 	public function remindActualProductName(): ?string

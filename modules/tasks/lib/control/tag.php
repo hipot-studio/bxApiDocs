@@ -139,7 +139,7 @@ class Tag
 		$forDelete = [];
 		foreach ($tagsForDelete as $tag)
 		{
-			$forDelete[] = trim($tag['NAME']);
+			$forDelete[] = $tag['NAME'];
 		}
 
 		$this->cacheCurrentTags($taskId);
@@ -153,6 +153,11 @@ class Tag
 				$idList[] = $tag['ID'];
 				TagAccessController::invalidate($tag['ID']);
 			}
+		}
+
+		if (empty($idList))
+		{
+			return;
 		}
 
 		TaskTagTable::deleteList([
@@ -194,9 +199,14 @@ class Tag
 			}
 		}
 
+		if (empty($idList))
+		{
+			return;
+		}
+
 		TaskTagTable::deleteList([
 			'=TASK_ID' => $taskId,
-			'TAG_ID' => $idList,
+			'@TAG_ID' => $idList,
 		]);
 	}
 
@@ -479,15 +489,20 @@ class Tag
 		$this->cacheCurrentTags($taskId);
 		$currentTags = $this->getNames(self::$storage[self::TASK_TAGS_CACHE]);
 
-		return $this->formatTags(array_diff($currentTags, $newTags));
+		return $this->formatTags(array_diff($currentTags, $newTags), false);
 	}
 
-	private function formatTags(array $tags): array
+	private function formatTags(array $tags, bool $skipEmpty = true): array
 	{
 		$data = [];
 		foreach ($tags as $tag)
 		{
 			if (!is_string($tag))
+			{
+				continue;
+			}
+
+			if ($skipEmpty && empty(trim($tag)))
 			{
 				continue;
 			}

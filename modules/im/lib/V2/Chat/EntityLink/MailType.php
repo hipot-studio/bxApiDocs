@@ -7,7 +7,6 @@ use Bitrix\Main\Loader;
 
 class MailType extends EntityLink
 {
-	protected const HAS_URL = true;
 
 	protected function getUrl(): string
 	{

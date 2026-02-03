@@ -71,6 +71,7 @@ class TaskMapper
 			containsRelatedTasks: $aggregates['containsRelatedTasks'] ?? null,
 			containsGanttLinks: $aggregates['containsGanttLinks'] ?? null,
 			containsPlacements: $aggregates['containsPlacements'] ?? null,
+			containsCommentFiles: $aggregates['containsCommentFiles'] ?? null,
 			numberOfReminders: $aggregates['numberOfReminders'] ?? null,
 			timers: $aggregates['timers'] ?? null,
 			timeSpent: $aggregates['timeSpent'] ?? null,

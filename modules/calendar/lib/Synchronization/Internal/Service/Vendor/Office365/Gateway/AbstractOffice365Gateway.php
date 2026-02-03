@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Gateway;
 
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\ConflictException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\GoneException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
@@ -29,11 +30,10 @@ class AbstractOffice365Gateway
 
 	/**
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	protected function get(string $uri, array $params = []): array
 	{
@@ -42,72 +42,64 @@ class AbstractOffice365Gateway
 			$uri .= (strpos($uri, '?') ? '&' : '?') . http_build_query($params);
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		return $this->request(HttpClient::HTTP_GET, $uri, $params);
 	}
 
 	/**
 	 * @throws ConflictException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	protected function post(string $uri, array $params = []): array
 	{
-		/** @noinspection PhpUnhandledExceptionInspection */
 		return $this->request(HttpClient::HTTP_POST, $uri, $params);
 	}
 
 	/**
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	protected function delete(string $uri, array $params = []): array
 	{
-		/** @noinspection PhpUnhandledExceptionInspection */
 		return $this->request(HttpClient::HTTP_DELETE, $uri, $params);
 	}
 
 	/**
 	 * @throws ConflictException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	protected function put(string $uri, array $params = []): array
 	{
-		/** @noinspection PhpUnhandledExceptionInspection */
 		return $this->request(HttpClient::HTTP_PUT, $uri, $params);
 	}
 
 	/**
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws PreconditionFailedException
 	 * @throws UnexpectedException
-	 *
-	 * @noinspection PhpDocMissingThrowsInspection
 	 */
 	protected function patch(string $uri, array $params = []): array
 	{
-		/** @noinspection PhpUnhandledExceptionInspection */
 		return $this->request(HttpClient::HTTP_PATCH, $uri, $params);
 	}
 
 	/**
 	 * @throws ConflictException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws PreconditionFailedException
@@ -160,6 +152,7 @@ class AbstractOffice365Gateway
 	/**
 	 * @throws ConflictException
 	 * @throws GoneException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws PreconditionFailedException
@@ -181,7 +174,7 @@ class AbstractOffice365Gateway
 			throw new UnexpectedException('Unknown Office 365 error', (int)($error['code'] ?? 400));
 		}
 
-		throw new UnexpectedException('Unknown Office 365 error', 400);
+		throw new NoResponseException('Unknown Office 365 error. No response received from the server');
 	}
 
 	/**
@@ -210,6 +203,13 @@ class AbstractOffice365Gateway
 	 */
 	private function getResponseError(): ?array
 	{
+		$result = $this->client->getResult();
+
+		if (empty($result))
+		{
+			return null;
+		}
+
 		try
 		{
 			$response = Json::decode($this->client->getResult());

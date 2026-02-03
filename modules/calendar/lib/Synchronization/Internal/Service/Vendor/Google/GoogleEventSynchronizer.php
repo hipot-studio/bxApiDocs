@@ -25,6 +25,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\ConflictException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\SyncTokenNotValidException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
@@ -38,15 +39,12 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Common\EventSynchron
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Gateway\GoogleEventGateway;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Processor\EventImportProcessor;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
 
 class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements EventSynchronizerInterface
 {
-	private const MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION = 1;
-
 	use EventSynchronizerTrait;
 
 	public function __construct(
@@ -68,6 +66,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	 * @throws SynchronizerException
 	 * @throws PersistenceException
 	 * @throws ArgumentException
+	 * @throws RepositoryReadException
 	 */
 	public function sendEvent(Event $event): void
 	{
@@ -92,8 +91,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		if (!$sectionConnection)
 		{
-			// Calendar was removed
-			return;
+			throw new SynchronizerException(
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
+			);
 		}
 
 		$this->configureLoggerContext($userId, $event->getId());
@@ -137,7 +142,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			throw new SynchronizerException(
 				sprintf('Unable to get event instances: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 
@@ -153,12 +158,13 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	/**
 	 * @throws SynchronizerException
 	 * @throws PersistenceException
+	 * @throws RepositoryReadException
 	 */
 	private function createEvent(
 		Event $event,
 		Connection $connection,
 		SectionConnection $sectionConnection,
-		GoogleEventGateway $gateway
+		GoogleEventGateway $gateway,
 	): void
 	{
 		try
@@ -291,7 +297,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
 					$e->getCode(),
-					$e
+					$e,
 				);
 			}
 			catch (NotFoundException $e)
@@ -299,7 +305,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					'EventConnection not found',
 					previous: $e,
-					isRecoverable: false
+					isRecoverable: false,
 				);
 			}
 			catch (BadRequestException|AccessDeniedException $e)
@@ -316,7 +322,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					sprintf('Google API exception: "%s"', $e->getMessage()),
 					$e->getCode(),
-					$e
+					$e,
 				);
 			}
 			finally
@@ -379,7 +385,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
 					$e->getCode(),
-					$e
+					$e,
 				);
 			}
 			catch (BadRequestException|AccessDeniedException $e)
@@ -396,7 +402,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					sprintf('Google API exception: "%s"', $e->getMessage()),
 					$e->getCode(),
-					$e
+					$e,
 				);
 			}
 		}
@@ -427,7 +433,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		if (!$sectionConnection)
 		{
-			return;
+			throw new SynchronizerException(
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
+			);
 		}
 
 		$gateway = $this->getEventGateway($userId, $connection);
@@ -460,25 +473,10 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		Event $event,
 		Connection $connection,
 		SectionConnection $sectionConnection,
-		GoogleEventGateway $gateway
+		GoogleEventGateway $gateway,
 	): void
 	{
-		try
-		{
-			$masterEventConnection = $this->getMasterEventConnection($event, $connection);
-		}
-		catch (SynchronizerException $e)
-		{
-			if ($e->getCode() === self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION)
-			{
-				throw new SynchronizerException(
-					$e->getMessage(),
-					isRecoverable: false
-				);
-			}
-
-			throw $e;
-		}
+		$masterEventConnection = $this->getMasterEventConnection($event, $connection);
 
 		if ($masterEventConnection->getEvent()->getVersion() > $event->getVersion())
 		{
@@ -531,7 +529,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			throw new SynchronizerException(
 				sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 		catch (NotFoundException)
@@ -555,7 +553,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			throw new SynchronizerException(
 				sprintf('Google API exception: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 	}
@@ -609,7 +607,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			throw new SynchronizerException(
 				sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 		catch (BadRequestException|AccessDeniedException|NotFoundException $e)
@@ -629,7 +627,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			throw new SynchronizerException(
 				sprintf('Google API exception: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 	}
@@ -657,7 +655,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		if (!$sectionConnection)
 		{
-			return;
+			throw new SynchronizerException(
+				sprintf(
+					'Section connection for section "%s" not found (event: "%s")',
+					$event->getSection()->getId(),
+					$event->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
+			);
 		}
 
 		$this->configureLoggerContext($userId, $event->getId());
@@ -670,7 +675,8 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		{
 			throw new SynchronizerException(
 				message: sprintf('Event connection for event "%s" not found', $event->getId()),
-				isRecoverable: false
+				code: SynchronizerException::NO_EVENT_CONNECTION,
+				isRecoverable: false,
 			);
 		}
 
@@ -736,7 +742,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			throw new SynchronizerException(
 				sprintf('Google API exception: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 		finally
@@ -822,7 +828,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
 					$e->getCode(),
-					$e
+					$e,
 				);
 			}
 			catch (NotFoundException)
@@ -840,7 +846,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				throw new SynchronizerException(
 					sprintf('Google API exception: "%s"', $e->getMessage()),
 					$e->getCode(),
-					$e
+					$e,
 				);
 			}
 		}
@@ -849,7 +855,6 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	/**
 	 * @throws ArgumentException
 	 * @throws BaseException
-	 * @throws LoaderException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
@@ -926,7 +931,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		{
 			throw new SynchronizerException(
 				sprintf('Unable to get master event for event "%s": "%s"', $event->getId(), $e->getMessage()),
-				previous: $e
+				previous: $e,
 			);
 		}
 
@@ -943,7 +948,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 			throw new NoLogSynchronizerException(
 				sprintf('The master event "%s" has no connection with Google', $masterEvent->getId()),
-				code: self::MASTER_EVENT_NO_EVENT_CONNECTION_EXCEPTION,
+				code: SynchronizerException::NO_EVENT_CONNECTION,
 				isRecoverable: $modifiedTime && $modifiedTime + 86400 > time(),
 			);
 		}
@@ -959,6 +964,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	 * @throws RateLimitExceededException
 	 * @throws SynchronizerException
 	 * @throws UnexpectedException
+	 * @throws NoResponseException
 	 */
 	public function importSectionEvents(SectionConnection $sectionConnection): void
 	{
@@ -1035,7 +1041,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		if (!$sectionConnection)
 		{
-			return;
+			throw new SynchronizerException(
+				sprintf(
+					'Section connection for section "%s" not found (master event: "%s")',
+					$masterEvent->getSection()->getId(),
+					$masterEvent->getId(),
+				),
+				SynchronizerException::NO_SECTION_CONNECTION,
+			);
 		}
 
 		if (!$sectionConnection->isActive())
@@ -1173,6 +1186,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	 * @throws BadRequestException
 	 * @throws ConflictException
 	 * @throws DtoValidationException
+	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException

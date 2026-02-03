@@ -113,7 +113,7 @@ class UpdateService
 		$this->message->getChat()->onAfterMessageUpdate($this->message);
 
 		// update mentions after all events
-		(new Message\Send\MentionService())->updateMentions($previousMessage, $this->message);
+		(new Message\Send\MentionService())->onMessageUpdate($this->message, $previousMessage);
 
 		return $result;
 	}

@@ -41,6 +41,8 @@ class RolePermissionService
 		$roleIds = [];
 		$permissionsToSave = [];
 
+		$availablePermissionIds = $this->getAvailablePermissionIds();
+
 		foreach ($userGroups as $group)
 		{
 			$roleId = (int)$group['id'];
@@ -62,6 +64,11 @@ class RolePermissionService
 			{
 				foreach ($group['accessRights'] as $right)
 				{
+					if (!in_array($right['id'], $availablePermissionIds, true))
+					{
+						continue;
+					}
+
 					$permissionsToSave[] = [
 						'ROLE_ID' => $roleId,
 						'PERMISSION_ID' => $right['id'],
@@ -71,9 +78,9 @@ class RolePermissionService
 			}
 		}
 
-		if (!empty($roleIds))
+		if (!empty($roleIds) && !empty($availablePermissionIds))
 		{
-			$this->permissionRepository->deleteByRoleIds($roleIds);
+			$this->permissionRepository->deleteByRoleIdsAndPermissionIds($roleIds, $availablePermissionIds);
 		}
 
 		if (!empty($permissionsToSave))
@@ -137,13 +144,29 @@ class RolePermissionService
 			$rights = [];
 			foreach ($permissionIds as $permissionId)
 			{
-				$rights[] = [
+				$permissionType = PermissionDictionary::getType($permissionId);
+				$right = [
 					'id' => $permissionId,
-					'type' => PermissionDictionary::getType($permissionId),
+					'type' => $permissionType,
 					'title' => PermissionDictionary::getTitle($permissionId),
 					'hint' => PermissionDictionary::getHint($permissionId),
 					'variables' => PermissionDictionary::getVariables($permissionId),
 				];
+
+				$minValue = PermissionDictionary::getMinValueByTypeOrNull($permissionType);
+				if ($minValue !== null)
+				{
+					$right['minValue'] = $minValue;
+					$right['emptyValue'] = $minValue;
+				}
+
+				$maxValue = PermissionDictionary::getMaxValueByTypeOrNull($permissionType);
+				if ($maxValue !== null)
+				{
+					$right['maxValue'] = $maxValue;
+				}
+
+				$rights[] = $right;
 			}
 
 			$section = [
@@ -253,5 +276,23 @@ class RolePermissionService
 		}
 
 		return $members;
+	}
+
+	/**
+	 * @return array<string>
+	 */
+	private function getAvailablePermissionIds(): array
+	{
+		$permissionIds = [];
+
+		foreach (SectionDictionary::getMap() as $sectionPermissions)
+		{
+			foreach ($sectionPermissions as $permissionId)
+			{
+				$permissionIds[] = $permissionId;
+			}
+		}
+
+		return $permissionIds;
 	}
 }

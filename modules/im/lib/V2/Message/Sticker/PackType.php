@@ -8,5 +8,4 @@ enum PackType: string
 {
 	case Vendor = 'vendor';
 	case Custom = 'custom';
-	case Market = 'market';
 }

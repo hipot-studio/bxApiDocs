@@ -282,6 +282,7 @@ class CUserOptions
 
 		$user_id = intval($user_id);
 		$category = mb_strtolower($category);
+		$name = mb_strtolower($name);
 
 		$strSql = "
 			DELETE FROM b_user_option

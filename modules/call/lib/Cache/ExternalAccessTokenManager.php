@@ -2,12 +2,12 @@
 
 namespace Bitrix\Call\Cache;
 
-use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 
 class ExternalAccessTokenManager
 {
-	public const TOKEN_TTL = 24 * 3600; // 24 hours
-	public const CACHE_DIR = '/call/track_tokens/';
+	private const TOKEN_TTL = 24 * 3600; // 24 hours
 
 	/**
 	 * Generates temporary access token for external services
@@ -18,19 +18,16 @@ class ExternalAccessTokenManager
 	public static function generateToken(int $trackId, int $callId): string
 	{
 		$token = md5(uniqid('track_' . $trackId . '_', true));
-
-		$cache = Cache::createInstance();
-		$cacheId = static::getCacheId($token);
-		$cacheDir = static::CACHE_DIR;
-
 		$tokenData = [
 			'track_id' => $trackId,
 			'call_id' => $callId,
 			'created_at' => time(),
 		];
 
-		$cache->startDataCache(static::TOKEN_TTL, $cacheId, $cacheDir);
-		$cache->endDataCache($tokenData);
+		ServiceLocator::getInstance()
+			->get(PersistentStorageInterface::class)
+			->set($token, $tokenData, static::TOKEN_TTL)
+		;
 
 		return $token;
 	}
@@ -42,16 +39,10 @@ class ExternalAccessTokenManager
 	 */
 	public static function validateToken(string $token): ?array
 	{
-		$cache = Cache::createInstance();
-		$cacheId = static::getCacheId($token);
-		$cacheDir = static::CACHE_DIR;
-
-		if ($cache->initCache(static::TOKEN_TTL, $cacheId, $cacheDir))
-		{
-			return $cache->getVars();
-		}
-
-		return null;
+		return ServiceLocator::getInstance()
+			->get(PersistentStorageInterface::class)
+			->get($token, null)
+		;
 	}
 
 	/**
@@ -60,11 +51,10 @@ class ExternalAccessTokenManager
 	 */
 	public static function revokeToken(string $token): void
 	{
-		$cache = Cache::createInstance();
-		$cacheId = static::getCacheId($token);
-		$cacheDir = static::CACHE_DIR;
-
-		$cache->clean($cacheId, $cacheDir);
+		ServiceLocator::getInstance()
+			->get(PersistentStorageInterface::class)
+			->delete($token)
+		;
 	}
 
 	/**

@@ -40,7 +40,17 @@ class PopupConfigurationValidator
 			return false;
 		}
 
-		return is_string($headerTopConfiguration['title']);
+		if (isset($headerTopConfiguration['headTitle']) && !is_string($headerTopConfiguration['headTitle']))
+		{
+			return false;
+		}
+
+		if (isset($headerTopConfiguration['title']) && !is_string($headerTopConfiguration['title']))
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	private function isValidHeaderInfoConfiguration(array $headerInfoConfiguration): bool
@@ -156,6 +166,8 @@ class PopupConfigurationValidator
 				&& !is_string($itemButtonConfiguration['backgroundColor']))
 			|| (isset($itemButtonConfiguration['onclick']) && !is_string($itemButtonConfiguration['onclick']))
 			|| (isset($itemButtonConfiguration['url']) && !is_string($itemButtonConfiguration['url']))
+			|| (isset($itemButtonConfiguration['airStyle']) && !is_string($itemButtonConfiguration['airStyle']))
+			|| (isset($itemButtonConfiguration['analyticsEvent']) && !is_string($itemButtonConfiguration['analyticsEvent']))
 		)
 		{
 			return false;

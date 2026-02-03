@@ -519,7 +519,7 @@ class DeleteService
 			'unread' => false,
 			'muted' => false,
 			'counter' => 0,
-			'counterType' => $this->chat->getCounterType()->value,
+			'counterType' => $this->chat->getCounterType(),
 			'recentConfig' => $this->chat->getRecentConfig()->toPullFormat(),
 		];
 

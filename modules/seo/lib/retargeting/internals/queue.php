@@ -169,22 +169,35 @@ class QueueTable extends Entity\DataManager
 	protected static function processQueue($type)
 	{
 		$hasQueue = false;
-		$queryData = array();
+		$queryData = [];
 
 		$audience = Service::getAudience($type);
-		$maxQuantity = $audience->getMaxContactsPerPacket();
-		$maxQuantity = $maxQuantity > 1000 ? 1000 : $maxQuantity;
-		$queueDb = static::getList(array(
-			'filter' => array(
-				'=TYPE' => $type,
-				'=ACTION' => array(
-					self::ACTION_IMPORT,
-					self::ACTION_REMOVE,
-					self::ACTION_IMPORT_AND_AUTO_REMOVE,
-				)
-			),
-			'limit' => $maxQuantity
-		));
+
+		// Yandex requires all contacts to be sent at once, so we need to wait for the queue to be fully collected
+		if ($type === Service::TYPE_YANDEX && static::isQueueStillCollecting($type))
+		{
+			return true;
+		}
+
+		$maxQuantity = $audience::getMaxContactsPerPacket();
+		$maxQuantity = min($maxQuantity, 1000);
+
+		$filter = [
+			'=TYPE' => $type,
+			'=ACTION' => [
+				self::ACTION_IMPORT,
+				self::ACTION_REMOVE,
+				self::ACTION_IMPORT_AND_AUTO_REMOVE,
+			],
+		];
+		$listParams = ['filter' => $filter];
+
+		if ($maxQuantity > 0)
+		{
+			$listParams['limit'] = $maxQuantity;
+		}
+
+		$queueDb = static::getList($listParams);
 		while ($queueItem = $queueDb->fetch())
 		{
 			$hasQueue = true;
@@ -344,6 +357,31 @@ class QueueTable extends Entity\DataManager
 		return $portions;
 	}
 
+	/**
+	 * Checks if queue is still being collected (new records were added recently).
+	 * Used for Yandex to ensure all contacts are collected before sending.
+	 */
+	protected static function isQueueStillCollecting(string $type): bool
+	{
+		$threshold = \ConvertTimeStamp(time() + \CTimeZone::GetOffset() - 300, 'FULL');
+
+		$recentRecord = static::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=TYPE' => $type,
+				'=ACTION' => [
+					self::ACTION_IMPORT,
+					self::ACTION_REMOVE,
+					self::ACTION_IMPORT_AND_AUTO_REMOVE,
+				],
+				'>DATE_INSERT' => $threshold,
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return (bool)$recentRecord;
+	}
+
 	protected static function addQueueAutoRemoveAgent()
 	{
 		if (isset(static::$isAgentAdded['sys.auto_remove']))
@@ -374,14 +412,33 @@ class QueueTable extends Entity\DataManager
 		if ($type)
 		{
 			$agentName = static::getProcessQueueAgentName($type);
-			$agentsDb = $agent->GetList(array("ID" => "DESC"), array(
-				"MODULE_ID" => self::MODULE_ID,
-				"NAME" => $agentName,
-			));
+			$agentsDb = $agent::GetList(
+				[
+					"ID" => "DESC",
+				],
+				[
+					"MODULE_ID" => self::MODULE_ID,
+					"NAME" => $agentName,
+				],
+			);
+
 			if (!$agentsDb->Fetch())
 			{
-				$interval = ($type == 'yandex' ? 900 : 30); // yandex queues must be processed rarely
-				$agent->AddAgent($agentName, self::MODULE_ID, "N", $interval, null, "Y", "");
+				// Yandex requires all contacts to be sent at once, so delay first execution to allow queue to be fully collected
+				$timePeriod = 900;
+				$interval = ($type === Service::TYPE_YANDEX ? $timePeriod : 30);
+				$nextExec = '';
+				if ($type === Service::TYPE_YANDEX)
+				{
+					$nextExec = \ConvertTimeStamp(time() + \CTimeZone::GetOffset() + $timePeriod, 'FULL');
+				}
+
+				$agent::AddAgent(
+					name: $agentName,
+					module: self::MODULE_ID,
+					interval: $interval,
+					next_exec: $nextExec,
+				);
 			}
 		}
 

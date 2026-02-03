@@ -63,7 +63,7 @@ class Copyright
 
 		return (new static(Loc::getMessage("EPILOG_ADMIN_SM_".$vendor)))
 			->setProductUrl(Loc::getMessage("EPILOG_ADMIN_URL_PRODUCT_".$vendor))
-			->setCopyright(Loc::getMessage("EPILOG_ADMIN_COPY_".$vendor))
+			->setCopyright(Loc::getMessage("EPILOG_ADMIN_COPY_".$vendor, ["#YEAR#" => 2026]))
 			->setVendorName(Loc::getMessage("EPILOG_ADMIN_URL_MAIN_TEXT_".$vendor))
 			->setVendorUrl(Loc::getMessage("EPILOG_ADMIN_URL_MAIN_".$vendor))
 			->setSupportUrl(Loc::getMessage("EPILOG_ADMIN_URL_SUPPORT_".$vendor))

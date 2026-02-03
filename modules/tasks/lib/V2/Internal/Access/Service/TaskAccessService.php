@@ -116,7 +116,7 @@ class TaskAccessService
 
 		if ($task->group !== null)
 		{
-			$withAccess = $this->getGroupAccess($task, $withAccess);
+			$withAccess = $this->getGroupAccess($task, $withAccess, $userIds);
 			$checkAccess = array_diff($userIds, $withAccess);
 
 			if (empty($checkAccess))
@@ -159,13 +159,24 @@ class TaskAccessService
 		return array_merge($withAccess, $accessViaAdminRights);
 	}
 
-	private function getGroupAccess($task, array $withAccess): array
+	private function getGroupAccess($task, array $withAccess, array $userIds): array
 	{
 		$members = $this->groupRepository->getMembers($task->group->id);
+
 		$members = array_map(
 			static fn (Entity\User $user): array => [$user->id => $user->role],
 			iterator_to_array($members)
 		);
+
+		//todo: simplify, merge queries with filterUsersWithAccess
+		$accessViaNonMemberRights = [];
+		foreach ($userIds as $userId)
+		{
+			if ($this->operationService->canViewAllTasks($userId, $task->group->id))
+			{
+				$accessViaNonMemberRights[] = $userId;
+			}
+		}
 
 		$accessViaGroup = $this->operationService->filterUsersWithAccess(
 			$task->group->id,
@@ -175,7 +186,7 @@ class TaskAccessService
 			'view_all'
 		);
 
-		return array_merge($withAccess, $accessViaGroup);
+		return array_merge($withAccess, $accessViaGroup, $accessViaNonMemberRights);
 	}
 
 	private function getDepartmentAccess(int $taskId, array $withAccess, array $checkAccess): array

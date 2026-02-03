@@ -405,4 +405,161 @@ class RightItem implements JsonSerializable, Arrayable
 	{
 		return $this->toArray();
 	}
+
+	public static function tryFromArray(array $data): ?self
+	{
+		if (!isset($data['id']))
+		{
+			return null;
+		}
+
+		if (!isset($data['title']) || !is_string($data['title']))
+		{
+			return null;
+		}
+
+		if (!isset($data['type']) || !is_string($data['type']))
+		{
+			return null;
+		}
+
+		$type = Type::tryFrom($data['type']);
+		if ($type === null)
+		{
+			return null;
+		}
+
+		$item = new self(
+			$data['id'],
+			$data['title'],
+			$type,
+		);
+
+		if (isset($data['subtitle']))
+		{
+			$item->setSubtitle((string)$data['subtitle']);
+		}
+
+		if (isset($data['hint']))
+		{
+			$item->setHint((string)$data['hint']);
+		}
+
+		if (isset($data['groupHead']))
+		{
+			$item->setIsGroupHead((bool)$data['groupHead']);
+		}
+
+		if (isset($data['group']))
+		{
+			$item->setGroup((string)$data['group']);
+		}
+
+		if (isset($data['minValue']))
+		{
+			$item->setMinValue($data['minValue']);
+		}
+
+		if (isset($data['maxValue']))
+		{
+			$item->setMaxValue($data['maxValue']);
+		}
+
+		if (isset($data['defaultValue']))
+		{
+			$item->setDefaultValue($data['defaultValue']);
+		}
+
+		if (isset($data['emptyValue']))
+		{
+			$item->setEmptyValue($data['emptyValue']);
+		}
+
+		if (isset($data['nothingSelectedValue']))
+		{
+			$item->setNothingSelectedValue($data['nothingSelectedValue']);
+		}
+
+		if (isset($data['setEmptyOnSetMinMaxValueInColumn']))
+		{
+			$item->setIsEmptyOnSetMinMaxValueInColumn((bool)$data['setEmptyOnSetMinMaxValueInColumn']);
+		}
+
+		if (isset($data['selectedVariablesAliases']) && is_array($data['selectedVariablesAliases']))
+		{
+			$item->setSelectedVariablesAliases($data['selectedVariablesAliases']);
+		}
+
+		if (isset($data['allSelectedCode']))
+		{
+			$item->setAllSelectedCode($data['allSelectedCode']);
+		}
+
+		if (isset($data['enableSearch']))
+		{
+			$item->setIsEnableSearch((bool)$data['enableSearch']);
+		}
+
+		if (isset($data['showAvatars']))
+		{
+			$item->setIsShowAvatars((bool)$data['showAvatars']);
+		}
+
+		if (isset($data['compactView']))
+		{
+			$item->setIsCompactView((bool)$data['compactView']);
+		}
+
+		if (isset($data['hintTitle']))
+		{
+			$item->setHintTitle((string)$data['hintTitle']);
+		}
+
+		if (isset($data['dependentVariablesPopupHint']))
+		{
+			$item->setDependentVariablesPopupHint((string)$data['dependentVariablesPopupHint']);
+		}
+
+		if (isset($data['iconClass']))
+		{
+			$item->setIconClass((string)$data['iconClass']);
+		}
+
+		if (isset($data['isClickable']))
+		{
+			$item->setIsClickable((bool)$data['isClickable']);
+		}
+
+		if (isset($data['isDeletable']))
+		{
+			$item->setIsDeletable((bool)$data['isDeletable']);
+		}
+
+		if (isset($data['isNew']))
+		{
+			$item->setIsNew((bool)$data['isNew']);
+		}
+
+		if (isset($data['isModified']))
+		{
+			$item->setIsModified((bool)$data['isModified']);
+		}
+
+		if (isset($data['variables']) && is_array($data['variables']))
+		{
+			$variables = [];
+			foreach ($data['variables'] as $variableData)
+			{
+				$variable = Variable::tryFromArray($variableData);
+				if ($variable === null)
+				{
+					continue;
+				}
+				$variables[] = $variable;
+			}
+			$item->setVariables($variables);
+		}
+
+		return $item;
+	}
 }

@@ -6,23 +6,20 @@ namespace Bitrix\Disk\Document\Flipchart;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Document\Models\DocumentSession;
-use Bitrix\Disk\Document\Models\DocumentSessionContext;
-use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
-use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\User;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\DI\ServiceLocator;
 
 class BoardService
 {
-	protected $session;
+	private const NEW_BOARD_MAX_SIZE = 500;
+
+	protected DocumentSession $session;
 
 	public function __construct(DocumentSession $session)
 	{
@@ -34,7 +31,7 @@ class BoardService
 		return $this->session->setAsNonActive();
 	}
 
-	public static function convertDocumentIdToExternal(int | string $documentId, int | string | null $versionId = null): string
+	public static function convertDocumentIdToExternal(int|string $documentId, int|string|null $versionId = null): string
 	{
 		if ($versionId)
 		{
@@ -162,7 +159,7 @@ class BoardService
 		$apiService->kickUsers(static::convertDocumentIdToExternal($file->getId()), $userIds);
 	}
 
-	public static function kickUnallowedUsers(array $sessions, File|AttachedObject $object)
+	public static function kickUnallowedUsers(array $sessions, File|AttachedObject $object): void
 	{
 		$userIds = [];
 		$needToKickGuests = false;
@@ -189,7 +186,7 @@ class BoardService
 		}
 	}
 
-	public static function kickGuestsUsers(File|AttachedObject $object)
+	public static function kickGuestsUsers(File|AttachedObject $object): void
 	{
 		if ($object instanceof AttachedObject)
 		{
@@ -206,9 +203,30 @@ class BoardService
 		$userIds = array_values(
 			array_filter($userIds, static function ($userId) {
 				return str_starts_with($userId, '~');
-			})
+			}),
 		);
 
 		static::kickUsers($object, $userIds);
+	}
+
+	/**
+	 * Determine whether to show the template selection modal for a newly created board.
+	 * @param File $file
+	 * @return bool
+	 */
+	public static function shouldShowTemplateModal(File $file): bool
+	{
+		$secondsSinceCreation = time() - $file->getCreateTime()->getTimestamp();
+		$isRealObject = (int)$file->getRealObjectId() === (int)$file->getId();
+
+		$currentUser = CurrentUser::get();
+		$isCreatedByCurrentUser = (int)$file->getCreatedBy() === (int)$currentUser->getId();
+
+		$isSmallNewBoard = $file->getSize() < self::NEW_BOARD_MAX_SIZE;
+
+		return $secondsSinceCreation < 30
+			&& $isCreatedByCurrentUser
+			&& $isRealObject
+			&& $isSmallNewBoard;
 	}
 }

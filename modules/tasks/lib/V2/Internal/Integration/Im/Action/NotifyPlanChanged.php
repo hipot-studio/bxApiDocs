@@ -8,7 +8,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Action\Deadline\DeadlineFormatter;
 
-#[Recipients(creator: false, responsible: false, accomplices: false, auditors: false)]
+#[Recipients(creator: true, responsible: true, accomplices: true, auditors: false)]
 class NotifyPlanChanged extends AbstractNotify
 {
 	public function __construct(

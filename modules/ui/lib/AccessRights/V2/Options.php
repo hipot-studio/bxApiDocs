@@ -10,12 +10,18 @@ use JsonSerializable;
 
 class Options implements JsonSerializable, Arrayable
 {
+	protected ?string $moduleId = null;
 	protected ?string $actionSave = null;
 	protected ?string $mode = null;
 
 	protected ?string $bodyType = null;
 
+	protected ?string $userSortConfigName = null;
+	protected ?array $sortConfigForAllUserGroups = null;
+
 	protected array $additionalSaveParams = [];
+
+	protected array $analytics = [];
 
 	protected ?bool $isSaveOnlyChangedRights = null;
 
@@ -33,14 +39,60 @@ class Options implements JsonSerializable, Arrayable
 	/** @var RightSection[] */
 	protected array $accessRights = [];
 
-	protected array $analytics = [];
-
 	public function __construct(
 		protected string $component,
 		protected string $containerId,
 	)
 	{
 		$this->additionalMembersParams = (new AdditionalMemberOptions());
+	}
+
+	public function getComponent(): string
+	{
+		return $this->component;
+	}
+
+	public function setComponent(string $component): static
+	{
+		$this->component = $component;
+
+		return $this;
+	}
+
+	public function getContainerId(): string
+	{
+		return $this->containerId;
+	}
+
+	public function setContainerId(string $containerId): static
+	{
+		$this->containerId = $containerId;
+
+		return $this;
+	}
+
+	public function getModuleId(): ?string
+	{
+		return $this->moduleId;
+	}
+
+	public function setModuleId(?string $moduleId): static
+	{
+		$this->moduleId = $moduleId;
+
+		return $this;
+	}
+
+	public function getActionSave(): ?string
+	{
+		return $this->actionSave;
+	}
+
+	public function setActionSave(?string $actionSave): static
+	{
+		$this->actionSave = $actionSave;
+
+		return $this;
 	}
 
 	public function getMode(): ?string
@@ -67,6 +119,30 @@ class Options implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function getUserSortConfigName(): ?string
+	{
+		return $this->userSortConfigName;
+	}
+
+	public function setUserSortConfigName(?string $userSortConfigName): static
+	{
+		$this->userSortConfigName = $userSortConfigName;
+
+		return $this;
+	}
+
+	public function getSortConfigForAllUserGroups(): ?array
+	{
+		return $this->sortConfigForAllUserGroups;
+	}
+
+	public function setSortConfigForAllUserGroups(?array $sortConfigForAllUserGroups): static
+	{
+		$this->sortConfigForAllUserGroups = $sortConfigForAllUserGroups;
+
+		return $this;
+	}
+
 	public function getAdditionalSaveParams(): array
 	{
 		return $this->additionalSaveParams;
@@ -75,6 +151,18 @@ class Options implements JsonSerializable, Arrayable
 	public function setAdditionalSaveParams(array $additionalSaveParams): static
 	{
 		$this->additionalSaveParams = $additionalSaveParams;
+
+		return $this;
+	}
+
+	public function getAnalytics(): array
+	{
+		return $this->analytics;
+	}
+
+	public function setAnalytics(array $analytics): static
+	{
+		$this->analytics = $analytics;
 
 		return $this;
 	}
@@ -188,59 +276,26 @@ class Options implements JsonSerializable, Arrayable
 		return $this;
 	}
 
-	public function getComponent(): string
-	{
-		return $this->component;
-	}
-
-	public function setComponent(string $component): static
-	{
-		$this->component = $component;
-
-		return $this;
-	}
-
-	public function getActionSave(): ?string
-	{
-		return $this->actionSave;
-	}
-
-	public function setActionSave(?string $actionSave): static
-	{
-		$this->actionSave = $actionSave;
-
-		return $this;
-	}
-
-	public function getContainerId(): string
-	{
-		return $this->containerId;
-	}
-
-	public function setContainerId(string $containerId): static
-	{
-		$this->containerId = $containerId;
-
-		return $this;
-	}
-
 	public function toArray(): array
 	{
 		return [
 			'component' => $this->getComponent(),
+			'moduleId' => $this->getModuleId(),
 			'actionSave' => $this->getActionSave(),
 			'mode' => $this->getMode(),
 			'bodyType' => $this->getBodyType(),
+			'userSortConfigName' => $this->getUserSortConfigName(),
+			'sortConfigForAllUserGroups' => $this->getSortConfigForAllUserGroups(),
 			'additionalSaveParams' => $this->getAdditionalSaveParams(),
+			'analytics' => $this->getAnalytics(),
 			'isSaveOnlyChangedRights' => $this->isSaveOnlyChangedRights(),
+			'isSaveAccessRightsList' => $this->isSaveAccessRightsList(),
 			'maxVisibleUserGroups' => $this->getMaxVisibleUserGroups(),
 			'searchContainerSelector' => $this->getSearchContainerSelector(),
 			'additionalMembersParams' => $this->getAdditionalMembersParams()->toArray(),
-			'isSaveAccessRightsList' => $this->isSaveAccessRightsList(),
 			'renderToContainerId' => $this->getContainerId(),
 			'userGroups' => array_map(static fn (UserGroup $userGroup) => $userGroup->toArray(), $this->userGroups),
 			'accessRights' => array_map(static fn (RightSection $section) => $section->toArray(), $this->accessRights),
-			'analytics' => $this->getAnalytics(),
 		];
 	}
 
@@ -249,15 +304,115 @@ class Options implements JsonSerializable, Arrayable
 		return $this->toArray();
 	}
 
-	public function getAnalytics(): array
+	public static function tryFromArray(array $data): ?self
 	{
-		return $this->analytics;
-	}
+		if (
+			!isset($data['component'])
+			|| !is_string($data['component'])
+			|| !isset($data['renderToContainerId'])
+			|| !is_string($data['renderToContainerId'])
+		)
+		{
+			return null;
+		}
 
-	public function setAnalytics(array $analytics): static
-	{
-		$this->analytics = $analytics;
+		$options = new self(
+			$data['component'],
+			$data['renderToContainerId'],
+		);
 
-		return $this;
+		if (isset($data['moduleId']))
+		{
+			$options->setModuleId((string)$data['moduleId']);
+		}
+
+		if (isset($data['actionSave']))
+		{
+			$options->setActionSave((string)$data['actionSave']);
+		}
+
+		if (isset($data['mode']))
+		{
+			$options->setMode((string)$data['mode']);
+		}
+
+		if (isset($data['bodyType']))
+		{
+			$options->setBodyType((string)$data['bodyType']);
+		}
+
+		if (isset($data['userSortConfigName']))
+		{
+			$options->setUserSortConfigName((string)$data['userSortConfigName']);
+		}
+
+		if (isset($data['sortConfigForAllUserGroups']) && is_array($data['sortConfigForAllUserGroups']))
+		{
+			$options->setSortConfigForAllUserGroups($data['sortConfigForAllUserGroups']);
+		}
+
+		if (isset($data['additionalSaveParams']) && is_array($data['additionalSaveParams']))
+		{
+			$options->setAdditionalSaveParams($data['additionalSaveParams']);
+		}
+
+		if (isset($data['isSaveOnlyChangedRights']))
+		{
+			$options->setIsSaveOnlyChangedRights((bool)$data['isSaveOnlyChangedRights']);
+		}
+
+		if (isset($data['isSaveAccessRightsList']))
+		{
+			$options->setIsSaveAccessRightsList((bool)$data['isSaveAccessRightsList']);
+		}
+
+		if (isset($data['maxVisibleUserGroups']))
+		{
+			$options->setMaxVisibleUserGroups((int)$data['maxVisibleUserGroups']);
+		}
+
+		if (isset($data['searchContainerSelector']))
+		{
+			$options->setSearchContainerSelector((string)$data['searchContainerSelector']);
+		}
+
+		if (isset($data['additionalMembersParams']) && is_array($data['additionalMembersParams']))
+		{
+			$additionalMembersParams = AdditionalMemberOptions::tryFromArray($data['additionalMembersParams']);
+			if ($additionalMembersParams !== null)
+			{
+				$options->setAdditionalMembersParams($additionalMembersParams);
+			}
+		}
+
+		if (isset($data['userGroups']) && is_array($data['userGroups']))
+		{
+			$userGroups = [];
+			foreach ($data['userGroups'] as $userGroupData)
+			{
+				$userGroup = UserGroup::tryFromArray($userGroupData);
+				if ($userGroup !== null)
+				{
+					$userGroups[] = $userGroup;
+				}
+			}
+			$options->setUserGroups($userGroups);
+		}
+
+		if (isset($data['accessRights']) && is_array($data['accessRights']))
+		{
+			$accessRights = [];
+			foreach ($data['accessRights'] as $rightSectionData)
+			{
+				$rightSection = RightSection::tryFromArray($rightSectionData);
+				if ($rightSection !== null)
+				{
+					$accessRights[] = $rightSection;
+				}
+			}
+			$options->setAccessRights($accessRights);
+		}
+
+		return $options;
 	}
 }

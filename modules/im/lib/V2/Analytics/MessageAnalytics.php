@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Analytics\Event\MessageEvent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Reaction\ReactionService;
 
 class MessageAnalytics extends ChatAnalytics
 {
@@ -48,13 +49,20 @@ class MessageAnalytics extends ChatAnalytics
 		});
 	}
 
-	public function addAddReaction(string $reaction): void
+	public function addAddReaction(string $reaction, int $reactionAuthorId): void
 	{
-		$this->async(function () use ($reaction) {
+		$this->async(function () use ($reaction, $reactionAuthorId) {
+			$reactionCount =
+				(new ReactionService($this->message))
+					->withContextUser($reactionAuthorId)
+					->getReactionCount()
+			;
+
 			$this
 				->createMessageEvent(self::ADD_REACTION)
 				?->setType($reaction)
-				?->setMessageP4($this->message->getAuthorId())
+				?->setReactionP3($reactionCount)
+				?->setReactionP4($this->message->getAuthorId())
 				?->send()
 			;
 		});

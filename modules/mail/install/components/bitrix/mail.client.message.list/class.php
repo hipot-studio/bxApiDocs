@@ -1,7 +1,9 @@
 <?php
 
 use Bitrix\Mail;
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Helper\MessageLoader;
 use Bitrix\Mail\Internals\MessageAccessTable;
@@ -231,7 +233,7 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			Mail\Helper::setMailboxUnseenCounter($this->mailbox['ID'],0);
 		}
 
-		$this->arResult['userHasCrmActivityPermission'] = \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm();
+		$this->arResult['userHasCrmActivityPermission'] = MailboxAccess::hasCurrentUserAccessToViewMailboxIntegrationCrm();
 
 		$mailboxesUnseen = Message::getCountersForUserMailboxes(
 			Main\Engine\CurrentUser::get()->getId(),
@@ -608,14 +610,14 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 		$dateLastOpening = makeTimeStamp($this->getDateLastOpening($this->mailbox['ID']));
 
-		$availableSourceDirs = Message::getAvailableDirsForAnalytics();
+		$availableSourceDirs = AnalyticsHelper::getAvailableDirsForAnalytics();
 		foreach ($items as $item)
 		{
 			$url = \CComponentEngine::makePathFromTemplate(
 				$this->arParams['PATH_TO_MAIL_MSG_VIEW'],
 				['id' => $item['MID']],
 			);
-			$url = Message::addAnalyticsToMessage($url, ['source' => Message::SOURCE_TYPE_MAIL]);
+			$url = AnalyticsHelper::addSourceAnalyticsToMessage($url, AnalyticsHelper::ENTITY_TYPE_MAIL);
 
 			$sliderData = ['printable' => true];
 			if (
@@ -755,6 +757,8 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			);
 
 			$taskUri->addParams([
+				'ta_sec' => 'mail',
+				'ta_el' => 'context_menu',
 				'TITLE' => Loc::getMessage(
 						'MAIL_MESSAGE_TASK_TITLE',
 						['#SUBJECT#' => $item['SUBJECT']],
@@ -827,13 +831,20 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 							break;
 						case MessageAccessTable::ENTITY_TYPE_TASKS_TASK:
-							$bindId .= 'bind-href ="' . \CComponentEngine::makePathFromTemplate(
+							$taskPath = \CComponentEngine::makePathFromTemplate(
 								$this->arParams['PATH_TO_USER_TASKS_TASK'],
 								[
 									'action' => 'view',
 									'task_id' => $bindEntityId,
 								],
-							) . '"';
+							);
+
+							$taskPath = AnalyticsHelper::addAnalyticsToMessage($taskPath, [
+								'ta_sec' => 'mail',
+								'ta_el' => 'view_button',
+							]);
+
+							$bindId .= 'bind-href ="' . $taskPath . '"';
 							$columns['TASK_BIND'] = $bindId;
 
 							break;
@@ -1669,12 +1680,12 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 	private function hasAccessToMailboxGrid(): bool
 	{
-		return Mail\Helper\MailboxAccess::hasCurrentUserAccessToMailboxGrid();
+		return Mail\Helper\MailAccess::hasCurrentUserAccessToMailboxGrid();
 	}
 
 	private function hasAccessToAccessRights(): bool
 	{
-		return Mail\Helper\MailboxAccess::hasCurrentUserAccessToPermission();
+		return Mail\Helper\MailAccess::hasCurrentUserAccessToPermission();
 	}
 
 	private function needShowMailboxGridHint(): bool

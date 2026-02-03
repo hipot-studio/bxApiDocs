@@ -29,6 +29,10 @@ class ItemAttributes
 	 */
 	protected $actions = [];
 	/**
+	 * @var array
+	 */
+	protected $sources = [];
+	/**
 	 * @var
 	 */
 	protected $sourceUri;
@@ -221,6 +225,45 @@ class ItemAttributes
 	public function getGroupBy()
 	{
 		return $this->getAttribute('data-viewer-group-by');
+	}
+
+	public function setSources(array $sources): self
+	{
+		$this->sources = $sources;
+
+		return $this;
+	}
+
+	public function clearSources(): self
+	{
+		$this->sources = [];
+
+		return $this;
+	}
+
+	public function getSources(): array
+	{
+		return $this->sources;
+	}
+
+	public function setWidth(int $width): self
+	{
+		return $this->setAttribute('data-viewer-width', $width);
+	}
+
+	public function getWidth(): int | null
+	{
+		return $this->getAttribute('data-viewer-width');
+	}
+
+	public function setHeight(int $height): self
+	{
+		return $this->setAttribute('data-viewer-height', $height);
+	}
+
+	public function getHeight(): int | null
+	{
+		return $this->getAttribute('data-viewer-height');
 	}
 
 	/**
@@ -418,6 +461,11 @@ class ItemAttributes
 			}
 		}
 
+		if (!empty($this->sources))
+		{
+			$string .= "data-sources='" . htmlspecialcharsbx(Json::encode($this->sources)) . "' ";
+		}
+
 		if ($this->actions)
 		{
 			$string .= "data-actions='" . htmlspecialcharsbx(Json::encode($this->actions)) . "'";
@@ -443,6 +491,11 @@ class ItemAttributes
 			{
 				$likeDataSet[$this->convertKeyToDataSet($key)] = $value;
 			}
+		}
+
+		if (!empty($this->sources))
+		{
+			$likeDataSet[$this->convertKeyToDataSet('data-sources')] = Json::encode($this->sources);
 		}
 
 		if ($this->actions)
@@ -471,6 +524,11 @@ class ItemAttributes
 			{
 				$result[$key] = $value ?? '';
 			}
+		}
+
+		if (!empty($this->sources))
+		{
+			$result['data-sources'] = Json::encode($this->sources);
 		}
 
 		if ($this->actions)

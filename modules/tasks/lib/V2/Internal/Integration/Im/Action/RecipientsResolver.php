@@ -12,10 +12,11 @@ abstract class RecipientsResolver
 {
 	public AbstractNotify $notification;
 	public Entity\Task $task;
+	public ?Entity\Task $taskWithMembers = null;
 	public Entity\UserCollection $recipients;
 
 	public function __construct(
-		private readonly Container $container,
+		protected readonly Container $container,
 	)
 	{
 	}
@@ -55,7 +56,7 @@ abstract class RecipientsResolver
 	}
 
 	/** @return CounterRecipients\Mapper\MapperInterface[] */
-	private function getMappersFromNotification(): \Generator
+	protected function getMappersFromNotification(): \Generator
 	{
 		foreach (Recipients::getFromNotification($this->notification) as $attribute)
 		{
@@ -67,7 +68,7 @@ abstract class RecipientsResolver
 	}
 
 	/** @return CounterRecipients\Reducer\ReducerInterface[] */
-	private function getReducersFromNotification(): \Generator
+	protected function getReducersFromNotification(): \Generator
 	{
 		foreach (Recipients::getFromNotification($this->notification) as $attribute)
 		{

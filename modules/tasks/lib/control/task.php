@@ -298,7 +298,7 @@ class Task
 			$mapper = Container::getInstance()->getOrmTaskMapper();
 			$service = Container::getInstance()->getAddTaskService();
 
-			$entity = $mapper->mapToEntity($fields);
+			$entity = $mapper->mapToEntity($fields, $this->skipTimeZoneFields);
 
 			$entity = $service->add(
 				task: $entity,
@@ -391,6 +391,11 @@ class Task
 	 */
 	public function update(int $taskId, array $fields): TaskObject|bool
 	{
+		if (empty($fields))
+		{
+			return false;
+		}
+
 		$this->reset();
 
 		if (FormV2Feature::isOn('update'))
@@ -416,7 +421,7 @@ class Task
 
 			$fields['ID'] = $taskId;
 
-			$entity = $mapper->mapToEntity($fields);
+			$entity = $mapper->mapToEntity($fields, $this->skipTimeZoneFields);
 
 			try
 			{

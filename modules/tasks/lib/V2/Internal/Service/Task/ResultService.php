@@ -134,6 +134,7 @@ class ResultService
 			createdAtTs: time(),
 			updatedAtTs: time(),
 			status: Result\Status::Open,
+			type: $result->type,
 			fileIds: $result->fileIds,
 			previewId: $result->previewId,
 			messageId: $result->messageId,
@@ -331,7 +332,7 @@ class ResultService
 	{
 		$this->automationService->onTaskFieldChanged(
 			taskId: $taskId,
-			updatedFields: ['RESULT' => $result->text],
+			updatedFields: ['COMMENT_RESULT' => $result->text],
 		);
 	}
 
@@ -373,6 +374,7 @@ class ResultService
 				'dateTs' => $result->createdAtTs,
 				'fileIds' => $result->fileIds ?? [],
 				'messageId' => $result->messageId ?? 0,
+				'type' => $result->type ?? null,
 			],
 		);
 	}

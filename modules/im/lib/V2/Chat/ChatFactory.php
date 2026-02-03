@@ -574,7 +574,11 @@ class ChatFactory
 			$chatId = $this->getEntityChatId($entityType, $entityId);
 			if ($chatId)
 			{
-				return $result->setResult(['CHAT_ID' => $chatId, 'CHAT' => Chat::getInstance($chatId)]);
+				return $result->setResult([
+					'CHAT_ID' => $chatId,
+					'CHAT' => Chat::getInstance($chatId),
+					'ALREADY_EXISTS' => true,
+				]);
 			}
 
 			return $this->addChat($params);

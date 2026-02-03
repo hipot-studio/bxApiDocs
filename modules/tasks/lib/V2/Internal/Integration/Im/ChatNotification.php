@@ -259,6 +259,7 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				triggeredBy: $args['triggeredBy'] ?? null,
 				messageId: $args['messageId'] ?? 0,
 				dateTs: $args['dateTs'] ?? 0,
+				type: $args['type'] ?? null,
 			),
 			NotificationType::ResultRequested => new Action\NotifyResultRequested(
 				task: $task,

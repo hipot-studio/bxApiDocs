@@ -7,7 +7,6 @@ use Bitrix\Main\EventResult;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\V2\Call\CallFactory;
 use Bitrix\Im\Call\Integration\EntityType;
-use Bitrix\Call\Cache\ActiveCallsCache;
 use Bitrix\Call\Service\CallLogService;
 
 
@@ -212,6 +211,7 @@ class EventHandler
 			'calling:ready' => 'answered',
 			':declined' => 'declined',
 			':busy' => 'missed',
+			'unavailable:unavailable' => 'missed',
 			'unavailable:idle' => 'missed',
 			'calling:idle' => 'missed',
 		];
@@ -233,4 +233,37 @@ class EventHandler
 		return $result;
 	}
 
+	/**
+	 * Handles event when portal domain changes its domain.
+	 * @param array{new_domain: string, old_domain: string} $domains
+	 * @return EventResult
+	 */
+	public static function onPortalDomainChange(array $domains): EventResult
+	{
+		$result = new EventResult(EventResult::SUCCESS);
+
+		/*
+		$publicUrl = $domains['new_domain'];
+		if (!str_starts_with($publicUrl, 'https://') && !str_starts_with($publicUrl, 'http://'))
+		{
+			$publicUrl = 'https://' . $publicUrl;
+		}
+		*/
+
+		if (Settings::isNewCallsEnabled())
+		{
+			/** @see JwtCall::checkPortalRegistrationAgent() */
+			\CAgent::AddAgent(
+				'Bitrix\Call\JwtCall::checkPortalRegistrationAgent();',
+				'call',
+				'N',
+				300,
+				'',
+				'Y',
+				\ConvertTimeStamp(time()+\CTimeZone::GetOffset() + rand(5, 20), 'FULL')
+			);
+		}
+
+		return $result;
+	}
 }

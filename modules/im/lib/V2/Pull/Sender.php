@@ -54,7 +54,7 @@ class Sender
 
 		if ($event->shouldSendImmediately())
 		{
-			\Bitrix\Pull\Event::send();
+			$results[] = $this->sendImmediately();
 		}
 
 		return Result::merge(...$results);
@@ -129,5 +129,21 @@ class Sender
 		}
 
 		return new Result();
+	}
+
+	protected function sendImmediately(): Result
+	{
+		$result = new Result();
+
+		try
+		{
+			\Bitrix\Pull\Event::send();
+		}
+		catch (\Exception $exception)
+		{
+			$result->addError(new \Bitrix\Main\Error($exception->getMessage(), $exception->getCode()));
+		}
+
+		return $result;
 	}
 }

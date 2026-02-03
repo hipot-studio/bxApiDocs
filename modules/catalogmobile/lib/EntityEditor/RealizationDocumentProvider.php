@@ -303,8 +303,8 @@ class RealizationDocumentProvider extends \Bitrix\UI\EntityEditor\BaseProvider
 			$entityTypeName = \CCrmOwnerType::ResolveName($entityTypeId);
 			$serviceUserPermissions = Container::getInstance()->getUserPermissions();
 			$permissions[$entityTypeName] = [
-				'read' => $serviceUserPermissions->checkReadPermissions($entityTypeId),
-				'add' => $serviceUserPermissions->checkAddPermissions($entityTypeId),
+				'read' => $serviceUserPermissions->entityType()->canReadItems($entityTypeId),
+				'add' => $serviceUserPermissions->entityType()->canAddItems($entityTypeId),
 			];
 		}
 
@@ -817,7 +817,7 @@ class RealizationDocumentProvider extends \Bitrix\UI\EntityEditor\BaseProvider
 
 		if ($companyId > 0)
 		{
-			$isEntityReadPermitted = \CCrmCompany::CheckReadPermission($companyId, \CCrmPerms::GetCurrentUserPermissions());
+			$isEntityReadPermitted = Container::getInstance()->getUserPermissions()->item()->canRead(\CCrmOwnerType::Company, $companyId);
 			$companyInfo = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				\CCrmOwnerType::CompanyName,
 				$companyId,
@@ -837,7 +837,7 @@ class RealizationDocumentProvider extends \Bitrix\UI\EntityEditor\BaseProvider
 
 		foreach ($contactIds as $contactID)
 		{
-			$isEntityReadPermitted = \CCrmContact::CheckReadPermission($contactID, \CCrmPerms::GetCurrentUserPermissions());
+			$isEntityReadPermitted = Container::getInstance()->getUserPermissions()->item()->canRead(\CCrmOwnerType::Contact, $contactID);
 			$clientInfo['CONTACT_DATA'][] = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				\CCrmOwnerType::ContactName,
 				$contactID,

@@ -133,20 +133,20 @@ class ProductRowTable extends DataManager
 				->configureValueType(StringField::class),
 			(new FloatField('PRICE'))
 				->configureRequired()
-				->configureScale(2)
+				->configureScale(8)
 				->configureDefaultValue(0.00),
 			(new FloatField('PRICE_ACCOUNT'))
 				->configureRequired()
-				->configureScale(2)
+				->configureScale(8)
 				->configureDefaultValue(0.00),
 			(new FloatField('PRICE_EXCLUSIVE'))
-				->configureScale(2)
+				->configureScale(8)
 				->configureDefaultValue(0.00),
 			(new FloatField('PRICE_NETTO'))
-				->configureScale(2)
+				->configureScale(8)
 				->configureDefaultValue(0.00),
 			(new FloatField('PRICE_BRUTTO'))
-				->configureScale(2)
+				->configureScale(8)
 				->configureDefaultValue(0.00),
 			(new FloatField('QUANTITY'))
 				->configureRequired()
@@ -161,13 +161,13 @@ class ProductRowTable extends DataManager
 			(new IntegerField('DISCOUNT_TYPE_ID'))
 				->configureDefaultValue(Discount::UNDEFINED),
 			(new FloatField('DISCOUNT_RATE'))
-				->configureScale(2)
+				->configureScale(4)
 				->configureDefaultValue(0.00),
 			(new FloatField('DISCOUNT_SUM'))
-				->configureScale(2)
+				->configureScale(8)
 				->configureDefaultValue(0.00),
 			(new FloatField('TAX_RATE'))
-				->configureScale(2)
+				->configureScale(4)
 				->configureNullable(),
 			(new BooleanField('TAX_INCLUDED'))
 				->configureStorageValues('N', 'Y')

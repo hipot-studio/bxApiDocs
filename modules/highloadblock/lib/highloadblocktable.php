@@ -1,12 +1,5 @@
 <?php
 
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage highloadblock
- * @copyright 2001-2025 1C-Bitrix
- */
-
 namespace Bitrix\Highloadblock;
 
 use Bitrix\Main,
@@ -37,7 +30,7 @@ Main\Localization\Loc::loadLanguageFile(__FILE__);
  * @method static \Bitrix\Highloadblock\HighloadBlock wakeUpObject($row)
  * @method static \Bitrix\Highloadblock\EO_HighloadBlock_Collection wakeUpCollection($rows)
  */
-class HighloadBlockTable extends Entity\DataManager
+class HighloadBlockTable extends Orm\Data\DataManager
 {
 	private const ENTITY_ID_PREFIX = 'HLBLOCK_';
 
@@ -99,7 +92,7 @@ class HighloadBlockTable extends Entity\DataManager
 	/**
 	 * @param array $data
 	 *
-	 * @return Entity\AddResult
+	 * @return Orm\Data\AddResult
 	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function add(array $data)
@@ -154,7 +147,7 @@ class HighloadBlockTable extends Entity\DataManager
 	 * @param mixed $primary
 	 * @param array $data
 	 *
-	 * @return Entity\UpdateResult
+	 * @return ORM\Data\UpdateResult
 	 */
 	public static function update($primary, array $data)
 	{

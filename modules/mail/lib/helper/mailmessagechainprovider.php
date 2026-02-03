@@ -15,9 +15,8 @@ use Bitrix\Mail\Message;
 use Bitrix\Mail\Helper;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Entity\ReferenceField;
-use Bitrix\Mail\Helper\AttachmentHelper;
 
-class MailMessageChainProvider
+class MailMessageChainProvider extends AbstractMailMessageChainProvider
 {
 	const SELECT_MESSAGE_FIELDS = [
 		'MAILBOX_EMAIL' => 'MAILBOX.EMAIL',
@@ -126,8 +125,14 @@ class MailMessageChainProvider
 	protected function getMessageFilesLinkMessages(int $id, bool $forMobile = true): array
 	{
 		$attachments = Mail\Internals\MailMessageAttachmentTable::getList([
-			'select' => ['FILE_ID', 'FILE_NAME'],
-			'filter' => ['=MESSAGE_ID' => $id],
+			'select' => [
+				'ID',
+				'FILE_ID',
+				'FILE_NAME',
+			],
+			'filter' => [
+				'=MESSAGE_ID' => $id,
+			],
 		])->fetchAll();
 
 		$filesInfo = [];
@@ -148,6 +153,7 @@ class MailMessageChainProvider
 							which is why it is required to restore its real name.
 						*/
 						$diskFileInfo['name'] = $attachment['FILE_NAME'];
+						$diskFileInfo[self::KEY_ID_IN_MESSAGE_BODY] = (int)$attachment['ID'];
 						$filesInfo[] = $diskFileInfo;
 
 					}
@@ -206,7 +212,7 @@ class MailMessageChainProvider
 			}
 
 			$message->uidId = $messageData['UID_ID'].'-'.$messageData['MAILBOX_ID'];
-			$message->body = $messageData['BODY_HTML'];
+			$message->body = $this->cleanCharset($messageData['BODY_HTML']);
 			$message->id = $messageData['ID'];
 			$message->subject = $messageData['SUBJECT'];
 			$message->date = $messageData['FIELD_DATE']->getTimestamp();
@@ -231,6 +237,8 @@ class MailMessageChainProvider
 				$messageAttachments->update();
 				$message->attachments = $this->getMessageFilesLinkMessages($id);
 			}
+
+			$message->body = $this->replaceAttachmentPlaceholders($message->body, $message->attachments);
 		}
 
 		return $message;
@@ -377,12 +385,13 @@ class MailMessageChainProvider
 
 			if (isset($row['BODY_HTML']))
 			{
-				$mailMessage->body = $row['BODY_HTML'];
+				$mailMessage->body = $this->cleanCharset($row['BODY_HTML']);
 			}
 
 			if ($threadMessageRowId === (int)$row['ID'])
 			{
 				$mailMessage->attachments = $this->getMessageFilesLinkMessages($row['ID']);
+				$mailMessage->body = $this->replaceAttachmentPlaceholders($mailMessage->body, $mailMessage->attachments);
 			}
 
 			$this->fillRecipients($mailMessage, $row);
@@ -399,7 +408,11 @@ class MailMessageChainProvider
 
 		$mailMessageChain->list = $messages;
 
-		if ($lastIncomingKey !== null && $lastIncomingId !== null)
+		if (
+			$lastIncomingKey !== null
+			&& $lastIncomingId !== null
+			&& $lastIncomingId !== $threadMessageRowId
+		)
 		{
 			$full = $this->getMessage($lastIncomingId, true, true);
 			$mailMessageChain->list[$lastIncomingKey]->body = $full->body;

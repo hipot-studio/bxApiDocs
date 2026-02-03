@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Integration\AI;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Im\V2\Analytics\CopilotAnalytics;
@@ -63,10 +64,30 @@ class EngineManager
 
 		if (!isset(self::$availableEngines))
 		{
-			self::$availableEngines = Engine::getListAvailable(self::CATEGORY);
+			// TODO: Delete this after ai exclude IT-Solution model in all environments
+			self::$availableEngines = $this->excludeUnavailableEngines(Engine::getListAvailable(self::CATEGORY));
 		}
 
 		return self::$availableEngines;
+	}
+
+	/**
+	 * @param Engine\IEngine[] $engines
+	 * @return Engine\IEngine[]
+	 */
+	protected function excludeUnavailableEngines(array $engines): array
+	{
+		if (!in_array(Bitrix24::getPortalZone(), ['ru', 'by'], true))
+		{
+			return $engines;
+		}
+
+		$unavailableEngineCodes = [Engine\Cloud\ChatGPT::ENGINE_CODE, Engine\Cloud\ItSolution::ENGINE_CODE];
+
+		return array_filter(
+			$engines,
+			static fn (Engine\IEngine $engine) => !in_array($engine->getCode(), $unavailableEngineCodes, true)
+		);
 	}
 
 	public function getAvailableEnginesForRest(): array

@@ -34,26 +34,18 @@ class ChannelChat extends GroupChat
 		return $result;
 	}
 
-	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
+	public function onBeforeMentionsChange(Message\Send\Mention\MentionChange $mentionChange): Result
 	{
-		$commentChat = CommentChat::get($message)->getResult();
-		$commentChat?->subscribeUsers(true, $message->getMentionedUserIds());
-
-		parent::onAfterMessageSend($message, $sendingService);
-	}
-
-	public function onAfterMessageUpdate(Message $message): Result
-	{
-		$parentResult = parent::onAfterMessageUpdate($message);
-		$commentGetResult = CommentChat::get($message);
+		$parentResult = parent::onBeforeMentionsChange($mentionChange);
+		$commentGetResult = CommentChat::get($mentionChange->message);
 		$commentChat = $commentGetResult->getResult();
 
 		if ($commentChat === null)
 		{
-			return $commentGetResult;
+			return $parentResult;
 		}
 
-		$result = $commentChat->subscribeUsers(true, $message->getMentionedUserIds());
+		$result = $commentChat->subscribeUsers(true, $mentionChange->addedUserIds);
 
 		return Result::merge($parentResult, $result);
 	}

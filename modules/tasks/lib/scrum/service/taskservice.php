@@ -1711,7 +1711,9 @@ class TaskService implements Errorable
 			$backlog = $backlogService->getBacklogByGroupId($fields['GROUP_ID']);
 			if (!$backlog->isEmpty())
 			{
-				self::createItem($backlog, $taskId, $fields, $previousFields);
+				$epicId = $fields['EPIC_ID'] ?? 0;
+
+				self::createItem($backlog, $taskId, $fields, $previousFields, $epicId);
 			}
 		}
 	}
@@ -1743,6 +1745,10 @@ class TaskService implements Errorable
 			$epicId = (is_numeric($fields['EPIC'] ?? null) ? (int) $fields['EPIC'] : $epicId);
 
 			$scrumItem->setEpicId($epicId);
+			if (isset($fields['STORY_POINTS']))
+			{
+				$scrumItem->setStoryPoints($fields['STORY_POINTS']);
+			}
 
 			$itemService->createTaskItem($scrumItem, $pushService);
 			if (!$itemService->getErrors() && $entity->isActiveSprint())

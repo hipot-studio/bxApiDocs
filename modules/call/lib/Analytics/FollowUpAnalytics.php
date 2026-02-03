@@ -14,7 +14,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 {
 	public function addFollowUpResultMessage(): self
 	{
-		$this->async(function () {
+		$this->async(function ()
+		{
 			(new FollowUpEvent('send_message', $this->call))
 				->setType('follow_up')//st[type]
 				->setStatus('summary')
@@ -27,7 +28,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 
 	public function addFollowUpErrorMessage(string $errorCode): self
 	{
-		$this->async(function () use ($errorCode) {
+		$this->async(function () use ($errorCode)
+		{
 			(new FollowUpEvent('send_message', $this->call))
 				->setType('processing_error')//st[type]
 				->setStatus('processing_error_' . $errorCode)
@@ -40,7 +42,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 
 	public function addStopRecording(): self
 	{
-		$this->async(function () {
+		$this->async(function ()
+		{
 			(new FollowUpTaskEvent('ai_record_stop', $this->call))
 				->setStatus('success')
 				->send()
@@ -52,7 +55,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 
 	public function addErrorRecording(string $errorCode): self
 	{
-		$this->async(function () use ($errorCode) {
+		$this->async(function () use ($errorCode)
+		{
 			(new FollowUpTaskEvent('ai_record_stop', $this->call))
 				->setStatus('error_'. $errorCode)
 				->send()
@@ -64,7 +68,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 
 	public function addGotEmptyRecord(): self
 	{
-		$this->async(function () {
+		$this->async(function ()
+		{
 			(new FollowUpTaskEvent('blank_record', $this->call))
 				->setSection('call_followup')
 				->setP4('recordDuration_0')
@@ -86,7 +91,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 			SenseType::EVALUATION->value => 'meeting_evaluation',
 			default => strtolower(SenseType::EVALUATION->value),
 		};
-		$this->async(function () use ($eventType) {
+		$this->async(function () use ($eventType)
+		{
 			(new FollowUpTaskEvent($eventType, $this->call))
 				->setSection('success')
 				->send()
@@ -107,7 +113,8 @@ class FollowUpAnalytics extends AbstractAnalytics
 			SenseType::EVALUATION->value => 'meeting_evaluation',
 			default => strtolower(SenseType::EVALUATION->value),
 		};
-		$this->async(function () use ($eventType, $errorCode) {
+		$this->async(function () use ($eventType, $errorCode)
+		{
 			(new FollowUpTaskEvent($eventType, $this->call))
 				->setSection('error_'. $errorCode)
 				->send()
@@ -118,11 +125,12 @@ class FollowUpAnalytics extends AbstractAnalytics
 	}
 
 	/**
-	 * Send telemetry data about AI follow-up or call events to callcontroller
-	 * @param AITask|null $source Task object for AI events or Call object for general call events
-	 * @param string $status 'success' or 'error'
+	 * Send telemetry data about AI follow-up or call events to callcontroller.
+	 * @param AITask|null $source Task object for AI events or Call object for general call events.
+	 * @param string $status Allows 'success' or 'error'.
 	 * @param string|null $errorCode
-	 * @param string $event Event type identifier
+	 * @param string $event Event type identifier.
+	 * @param Error|null $error
 	 * @return self
 	 */
 	public function sendTelemetry(

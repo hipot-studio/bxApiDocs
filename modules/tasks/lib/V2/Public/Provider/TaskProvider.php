@@ -83,6 +83,7 @@ class TaskProvider
 			relatedTasks: $taskParams->relatedTasks,
 			gantt: $taskParams->gantt,
 			placements: $taskParams->placements,
+			containsCommentFiles: $taskParams->containsCommentFiles,
 			favorite: $taskParams->favorite,
 			options: $taskParams->options,
 			parameters: $taskParams->parameters,

@@ -14,6 +14,7 @@ use Bitrix\Tasks\V2\Internal\Integration\Rest\Service\PlacementService;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
 use Bitrix\Tasks\V2\Internal\Service\Task\ChecksumService;
+use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
 use Bitrix\Tasks\V2\Public\Provider\TaskElapsedTimeProvider;
 
 class TaskReadRepository implements TaskReadRepositoryInterface
@@ -41,6 +42,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		private readonly TaskScenarioRepositoryInterface $scenarioRepository,
 		private readonly TaskMapper $taskMapper,
 		private readonly TaskElapsedTimeProvider $elapsedTimeProvider,
+		private readonly TaskLegacyFeatureService $taskLegacyFeatureService,
 	)
 	{
 	}
@@ -176,22 +178,21 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			$containsPlacements = $this->placementService->existsTaskCardPlacement();
 		}
 
+		$containsCommentFiles = false;
+		if ($select->containsCommentFiles)
+		{
+			$containsCommentFiles = $this->taskLegacyFeatureService->hasForumCommentFiles($id);
+		}
+
 		$containsResults = null;
 		if ($select->results)
 		{
 			$containsResults = $this->taskResultRepository->containsResults($id);
 		}
 
-		$timers = null;
-		$timeSpent = null;
-		$numberOfElapsedTimes = 0;
-		if ($task->getAllowTimeTracking())
-		{
-			$timers = $this->timerRepository->getRunningTimersByTaskId($id);
-
-			$timeSpent = $this->elapsedTimeProvider->getTimeSpentOnTask($task->getId());
-			$numberOfElapsedTimes = $this->elapsedTimeProvider->getNumberOfElapsedTimes($task->getId());
-		}
+		$timers = $this->timerRepository->getRunningTimersByTaskId($id);
+		$timeSpent = $this->elapsedTimeProvider->getTimeSpentOnTask($task->getId());
+		$numberOfElapsedTimes = $this->elapsedTimeProvider->getNumberOfElapsedTimes($task->getId());
 
 		$aggregates = [
 			'containsCheckList' => !empty($checkListIds),
@@ -199,6 +200,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			'containsRelatedTasks' => $containsRelatedTasks,
 			'containsGanttLinks' => $containsGanttLinks,
 			'containsPlacements' => $containsPlacements,
+			'containsCommentFiles' => $containsCommentFiles,
 			'containsResults' => $containsResults,
 			'numberOfReminders' => $numberOfReminders,
 			'timers' => $timers,

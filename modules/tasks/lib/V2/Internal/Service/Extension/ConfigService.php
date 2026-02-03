@@ -68,7 +68,7 @@ class ConfigService
 			],
 			'rights' => [
 				'user' => [
-					'admin' => \Bitrix\Tasks\Util\User::isAdmin($userId),
+					'admin' => \Bitrix\Tasks\Util\User::isSuper($userId),
 				],
 				'flow' => $this->flowRightService->getUserRights($userId),
 				'tasks' => $this->taskRightService->getUserRights($userId),

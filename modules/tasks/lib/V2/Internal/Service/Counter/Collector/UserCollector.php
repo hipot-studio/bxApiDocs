@@ -30,7 +30,7 @@ class UserCollector extends Counter\Collector\UserCollector
 		$chats2tasks = Container::getInstance()->getChatRepository()->findChatIdsByTaskIds($taskFilter);
 
 		$groupIds = Container::getInstance()->getGroupRepository()->getGroupIdsByTaskIds($taskFilter);
-		$membership = Container::getInstance()->getTaskMemberRepository()->getMembershipForUserId($this->userId);
+		$membership = Container::getInstance()->getTaskMemberRepository()->getMembershipForUserIdAndTaskIds($this->userId, $taskFilter);
 		$chatsCounters = (new ImMessageCounterServiceDelegate($this->userId))->getForEachChat($chats2tasks);
 
 		$counters = [];
@@ -43,13 +43,21 @@ class UserCollector extends Counter\Collector\UserCollector
 				continue;
 			}
 
+			$baseDictionary = in_array($taskId, $mutedTasks) ? CounterDictionary::MAP_MUTED_COMMENTS : CounterDictionary::MAP_COMMENTS;
+			$types = array_values(array_intersect($membership[$taskId] ?? [], array_keys($baseDictionary)));
+
 			$counters[] = [
 				'USER_ID' => (int)$this->userId,
 				'TASK_ID' => (int)$taskId,
 				'GROUP_ID' => array_key_exists($taskId, $groupIds) ? (int)$groupIds[$taskId] : 0,
-				'TYPE' => in_array($taskId, $mutedTasks)
-					? CounterDictionary::MAP_MUTED_COMMENTS[$membership[$taskId] ?? MemberTable::MEMBER_TYPE_RESPONSIBLE]
-					: CounterDictionary::MAP_COMMENTS[$membership[$taskId] ?? MemberTable::MEMBER_TYPE_RESPONSIBLE],
+				'TYPE' => $baseDictionary[match (true)
+				{
+					in_array(MemberTable::MEMBER_TYPE_ORIGINATOR, $types, true) => MemberTable::MEMBER_TYPE_ORIGINATOR,
+					in_array(MemberTable::MEMBER_TYPE_RESPONSIBLE, $types, true) => MemberTable::MEMBER_TYPE_RESPONSIBLE,
+					in_array(MemberTable::MEMBER_TYPE_ACCOMPLICE, $types, true) => MemberTable::MEMBER_TYPE_ACCOMPLICE,
+					in_array(MemberTable::MEMBER_TYPE_AUDITOR, $types, true) => MemberTable::MEMBER_TYPE_AUDITOR,
+					default => MemberTable::MEMBER_TYPE_AUDITOR,
+				}] ?? CounterDictionary::COUNTER_NEW_COMMENTS,
 				'VALUE' => $value,
 			];
 		}

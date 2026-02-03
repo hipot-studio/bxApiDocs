@@ -126,6 +126,47 @@ class CounterOverflowService
 		}
 	}
 
+	/**
+	 * Deletes overflow counter records and cache for the provided [user => chat] map
+	 * Format [userId => [chatId, chatId, ...]]
+	 * @param array<int, array<int>> $overflowMap
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	public static function deleteBatch(array $overflowMap): void
+	{
+		if (empty($overflowMap))
+		{
+			return;
+		}
+
+		$filter = ['LOGIC' => 'OR'];
+		$hasData = false;
+
+		foreach ($overflowMap as $userId => $chatIds)
+		{
+			if (empty($chatIds))
+			{
+				continue;
+			}
+
+			$filter[] = [
+				'=USER_ID' => $userId,
+				'@CHAT_ID' => $chatIds,
+			];
+			$hasData = true;
+
+			foreach ($chatIds as $chatId)
+			{
+				self::cleanCacheByChatId($chatId, $userId);
+			}
+		}
+
+		if ($hasData)
+		{
+			CounterOverflowTable::deleteByFilter($filter);
+		}
+	}
+
 	protected function getUsersWithOverflow(array $userIds): array
 	{
 		$result = [];

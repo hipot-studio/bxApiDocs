@@ -300,10 +300,6 @@ class CallAISettings
 					'ru' => self::CALL_RECORD_MIN_USERS['B24']['ru'],
 					default => self::CALL_RECORD_MIN_USERS['B24']['def'],
 				};
-				if (self::isMarketSubscriptionEnabled() || self::isPaidTariff())//todo Temporally ignoring option from db. Remove it in a while.
-				{
-					return $defaultValue;
-				}
 			}
 			else
 			{

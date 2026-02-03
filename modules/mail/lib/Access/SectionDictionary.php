@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Access;
 
 use Bitrix\Mail\Access\Permission\PermissionDictionary;
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Main\Localization\Loc;
 
 class SectionDictionary
@@ -15,12 +16,19 @@ class SectionDictionary
 	 */
 	public static function getMap(): array
 	{
+		$mailPermissions = [
+			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_VIEW,
+			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT,
+			PermissionDictionary::MAIL_MAILBOX_CONNECT,
+		];
+
+		if (Feature::isCrmAvailable())
+		{
+			$mailPermissions[] = PermissionDictionary::MAIL_MAILBOX_CRM_INTEGRATION_EDIT;
+		}
+
 		return [
-			self::SECTION_MAIL => [
-				PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_VIEW,
-				PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT,
-				PermissionDictionary::MAIL_MAILBOX_CONNECT
-			],
+			self::SECTION_MAIL => $mailPermissions,
 			self::SECTION_SETTINGS => [
 				PermissionDictionary::MAIL_ACCESS_RIGHTS_EDIT,
 			],

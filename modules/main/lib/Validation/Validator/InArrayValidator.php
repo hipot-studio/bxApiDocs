@@ -12,7 +12,8 @@ class InArrayValidator implements ValidatorInterface
 {
 	public function __construct(
 		private readonly array $validValues,
-		private readonly bool $strict = false
+		private readonly bool $strict = false,
+		private readonly bool $showValues = false
 	)
 	{
 	}
@@ -23,6 +24,18 @@ class InArrayValidator implements ValidatorInterface
 
 		if (!in_array($value, $this->validValues, $this->strict))
 		{
+			if ($this->showValues)
+			{
+				$result->addError(new ValidationError(
+					new LocalizableMessage(
+						'MAIN_VALIDATION_IN_ARRAY_WITH_VALUES',
+						['#VALUES#' => implode(', ', $this->validValues)]
+					),
+					failedValidator: $this
+				));
+				return $result;
+			}
+
 			$result->addError(new ValidationError(
 				new LocalizableMessage('MAIN_VALIDATION_IN_ARRAY'),
 				failedValidator: $this

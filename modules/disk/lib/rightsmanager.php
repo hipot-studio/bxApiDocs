@@ -1658,7 +1658,7 @@ final class SimpleReBuilder
 				$prevDepthLevel = $depthLevel - 1;
 
 				$inheritedRights = [];
-				$parentSimpleRights = $simpleRights[$prevDepthLevel][$parentId];
+				$parentSimpleRights = $simpleRights[$prevDepthLevel][$parentId] ?? [];
 				$specificRights = $specificRightsByObjectId[$depthLevel][$objectId] ?? [];
 
 				//calculate inherited rights

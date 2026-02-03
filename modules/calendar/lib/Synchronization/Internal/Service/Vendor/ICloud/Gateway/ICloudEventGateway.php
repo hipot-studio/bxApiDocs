@@ -10,8 +10,10 @@ use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\SyncTokenResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\EventListResponse;
@@ -30,6 +32,8 @@ class ICloudEventGateway extends AbstractICloudGateway
 	 * @throws UnexpectedException
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function createEvent(Event $event, string $iCloudCalendarId): EventResponse
 	{
@@ -45,8 +49,10 @@ class ICloudEventGateway extends AbstractICloudGateway
 		}
 		catch (LoaderException|SystemException $e)
 		{
-			$this->processErrors(
+			throw new UnexpectedException(
 				sprintf('Event was not created. Failed to build request data: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
 			);
 		}
 
@@ -71,6 +77,8 @@ class ICloudEventGateway extends AbstractICloudGateway
 	 * @throws UnexpectedException
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function updateEvent(Event $event, EventConnection $eventConnection, string $iCloudCalendarId): EventResponse
 	{
@@ -86,8 +94,10 @@ class ICloudEventGateway extends AbstractICloudGateway
 		}
 		catch (LoaderException|SystemException $e)
 		{
-			$this->processErrors(
+			throw new UnexpectedException(
 				sprintf('Event was not updated. Failed to build request data: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
 			);
 		}
 
@@ -110,6 +120,9 @@ class ICloudEventGateway extends AbstractICloudGateway
 	 * @throws NotFoundException
 	 * @throws UnexpectedException
 	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function deleteEvent(string $iCloudCalendarId, string $iCloudEventId): void
 	{
@@ -130,6 +143,8 @@ class ICloudEventGateway extends AbstractICloudGateway
 	 * @throws UnexpectedException
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function getEvents(SectionConnection $sectionConnection): EventListResponse
 	{
@@ -246,6 +261,8 @@ class ICloudEventGateway extends AbstractICloudGateway
 	 * @throws UnexpectedException
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
+	 * @throws NoResponseException
+	 * @throws PreconditionFailedException
 	 */
 	public function getEvent(string $uri): EventResponse
 	{
@@ -268,7 +285,7 @@ class ICloudEventGateway extends AbstractICloudGateway
 		return EventResponse::fromXml($this->client->getResult());
 	}
 
-	private function getUri(string $calendarId, string $eventId): string
+	public function getUri(string $calendarId, string $eventId): string
 	{
 		return $this->serverPath . $calendarId . $eventId . '.ics';
 	}

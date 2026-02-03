@@ -15,6 +15,7 @@ class InArray extends AbstractPropertyValidationAttribute
 		private readonly array $validValues,
 		private readonly bool $strict = false,
 		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		private readonly bool $showValues = false,
 	)
 	{
 	}
@@ -22,7 +23,7 @@ class InArray extends AbstractPropertyValidationAttribute
 	protected function getValidators(): array
 	{
 		return [
-			(new InArrayValidator($this->validValues, $this->strict)),
+			(new InArrayValidator($this->validValues, $this->strict, $this->showValues)),
 		];
 	}
 }

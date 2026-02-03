@@ -2,10 +2,10 @@
 
 namespace Bitrix\UI\FileUploader;
 
-use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\ORM\Data;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\DateTime;
@@ -93,6 +93,10 @@ class TempFileTable extends Data\DataManager
 			(new Fields\StringField('CONTROLLER'))
 				->configureRequired()
 				->configureSize(255)
+			,
+
+			(new ArrayField('CONTROLLER_OPTIONS'))
+				->configureSerializationJson()
 			,
 
 			(new Fields\BooleanField('CLOUD'))

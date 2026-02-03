@@ -9,7 +9,9 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Version;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Type\DateTime;
 
@@ -365,6 +367,20 @@ final class DocumentSession extends Model
 			'CONTEXT' => $this->getContextRaw(),
 			'SERVICE' => $this->getServiceRaw(),
 		], $this->errorCollection);
+	}
+
+	/**
+	 * Set and store `view` type.
+	 *
+	 * @return bool
+	 * @throws ArgumentException
+	 * @throws NotImplementedException
+	 */
+	public function transformToView(): bool
+	{
+		return $this->update([
+			'TYPE' => self::TYPE_VIEW,
+		]);
 	}
 
 	public function transformToEdit(): bool

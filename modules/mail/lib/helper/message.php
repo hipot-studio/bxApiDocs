@@ -14,6 +14,7 @@ use Bitrix\Mail\Internals;
 use Bitrix\Mail\Helper\MessageAccess as AccessHelper;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Config\Ini;
+use Bitrix\Mail\Helper\Message\Parsers;
 use Bitrix\Main\Web\Uri;
 
 class Message
@@ -21,15 +22,6 @@ class Message
 	// entity types with special access rules (group tokens)
 	public const ENTITY_TYPE_IM_CHAT = MessageAccessTable::ENTITY_TYPE_IM_CHAT;
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
-	public const ENTITY_TYPE_TASKS_TASK = MessageAccessTable::ENTITY_TYPE_TASKS_TASK;
-	public const ENTITY_TYPE_BLOG_POST = MessageAccessTable::ENTITY_TYPE_BLOG_POST;
-	public const ENTITY_TYPE_NOTIFICATION = 'notification';
-	public const SOURCE_TYPE_CHAT = 'chat';
-	public const SOURCE_TYPE_EVENT = 'event';
-	public const SOURCE_TYPE_TASKS = 'tasks';
-	public const SOURCE_TYPE_POST = 'post';
-	public const SOURCE_TYPE_MAIL = 'mail';
-	public const SOURCE_TYPE_NOTIFICATION = 'notification';
 	private const MAX_FILE_SIZE_MAIL_ATTACHMENT = 20000000;
 
 	public static function getMaxAttachedFilesSize()
@@ -276,15 +268,16 @@ class Message
 						);
 					}
 
-					$inlineParams = array_merge(
-						array('__bxacid' => sprintf('n%u', $diskFile->getId())),
-						$urlParams
-					);
-					$message['BODY_HTML'] = preg_replace(
-						sprintf('/("|\')\s*aid:%u\s*\1/i', $item['ID']),
-						sprintf('\1%s\1', $urlManager->getUrlForShowFile($diskFile, $inlineParams)),
-						$message['BODY_HTML']
-					);
+					$fileInfo = $diskFile->getFile();
+
+					if (isset($fileInfo['SRC']))
+					{
+						$message['BODY_HTML'] = Parsers\ReplacingImagesLinks::parse(
+							(string)$message['BODY_HTML'],
+							$item['ID'],
+							(new Uri($fileInfo['SRC']))->toAbsolute()->getLocator(),
+						);
+					}
 				}
 				else
 				{
@@ -313,11 +306,14 @@ class Message
 							}
 						}
 
-						$message['BODY_HTML'] = preg_replace(
-							sprintf('/("|\')\s*aid:%u\s*\1/i', $item['ID']),
-							sprintf('\1%s\1', $file['SRC']),
-							$message['BODY_HTML']
-						);
+						if (isset($file['SRC']))
+						{
+							$message['BODY_HTML'] = Parsers\ReplacingImagesLinks::parse(
+								(string)$message['BODY_HTML'],
+								$item['ID'],
+								(new Uri($file['SRC']))->toAbsolute()->getLocator(),
+							);
+						}
 					}
 					else
 					{
@@ -915,79 +911,5 @@ class Message
 		])->fetchAll();
 
 		return ICalMailManager::hasICalAttachments($attachments);
-	}
-
-	public static function addSourceAnalyticsToMessage(string $messageHref, string $entityType): string
-	{
-		$source = self::getAnalyticsSourceByType($entityType);
-
-		if ($source)
-		{
-			return self::addAnalyticsToMessage($messageHref, ['source' => $source]);
-		}
-
-		return $messageHref;
-	}
-
-	public static function addAnalyticsToMessage(string $messageHref, array $analyticsData): string
-	{
-		$uri = new Uri($messageHref);
-		$uri->addParams($analyticsData);
-
-		return $uri->getUri();
-	}
-
-	public static function getAnalyticsSourceByType(string $entityType): ?string
-	{
-		return match ($entityType)
-		{
-			self::ENTITY_TYPE_TASKS_TASK => self::SOURCE_TYPE_TASKS,
-			self::ENTITY_TYPE_BLOG_POST => self::SOURCE_TYPE_POST,
-			self::ENTITY_TYPE_IM_CHAT => self::SOURCE_TYPE_CHAT,
-			self::ENTITY_TYPE_CALENDAR_EVENT => self::SOURCE_TYPE_EVENT,
-			self::ENTITY_TYPE_NOTIFICATION => self::SOURCE_TYPE_NOTIFICATION,
-			default => null,
-		};
-	}
-
-	public static function getValidatedSource(string $context, ?string $source): ?string
-	{
-		if (empty($source))
-		{
-			return null;
-		}
-
-		$allowedSources = match ($context)
-		{
-			'home' => [
-				'left_menu',
-				'horizontal_menu',
-				self::SOURCE_TYPE_NOTIFICATION,
-			],
-			'msg_view', 'msg_new' => [
-				self::SOURCE_TYPE_MAIL,
-				self::SOURCE_TYPE_TASKS,
-				self::SOURCE_TYPE_CHAT,
-				self::SOURCE_TYPE_EVENT,
-				self::SOURCE_TYPE_POST,
-				self::SOURCE_TYPE_NOTIFICATION,
-			],
-			default => [],
-		};
-
-		$mappedSource = self::getAnalyticsSourceByType($source) ?? $source;
-
-		return in_array($mappedSource, $allowedSources, true) ? $source : null;
-	}
-
-	public static function getAvailableDirsForAnalytics(): array
-	{
-		return [
-			'inbox',
-			'sent',
-			'drafts',
-			'spam',
-			'trash',
-		];
 	}
 }

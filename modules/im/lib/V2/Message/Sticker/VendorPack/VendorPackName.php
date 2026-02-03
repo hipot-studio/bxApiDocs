@@ -12,6 +12,12 @@ enum VendorPackName: string
 	case BitrixReactions = 'bitrixReactions';
 	case Airy = 'airy';
 	case BittyBob = 'bittyBob';
+	case OfficeRoutine = 'officeRoutine';
+	case Smileys = 'smileys';
+	case Hands = 'hands';
+	case WorkDay = 'workDay';
+	case Animals = 'animals';
+	case Celebration = 'celebration';
 
 	public function getId(): int
 	{
@@ -23,6 +29,12 @@ enum VendorPackName: string
 			self::BitrixReactions => 4,
 			self::Airy => 5,
 			self::BittyBob => 6,
+			self::OfficeRoutine => 7,
+			self::Smileys => 8,
+			self::Hands => 9,
+			self::WorkDay => 10,
+			self::Animals => 11,
+			self::Celebration => 12,
 		};
 	}
 
@@ -36,6 +48,12 @@ enum VendorPackName: string
 			4 => self::BitrixReactions,
 			5 => self::Airy,
 			6 => self::BittyBob,
+			7 => self::OfficeRoutine,
+			8 => self::Smileys,
+			9 => self::Hands,
+			10 => self::WorkDay,
+			11 => self::Animals,
+			12 => self::Celebration,
 			default => null,
 		};
 	}

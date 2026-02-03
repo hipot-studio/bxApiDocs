@@ -2,7 +2,7 @@
 
 namespace Bitrix\Mail\Integration\Im;
 
-use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Web\Uri;
@@ -63,7 +63,7 @@ class Notification
 			return $uri->toAbsolute()->getLocator();
 		}
 
-		$url = Message::addSourceAnalyticsToMessage($url, Message::ENTITY_TYPE_NOTIFICATION);
+		$url = AnalyticsHelper::addSourceAnalyticsToMessage($url, AnalyticsHelper::ENTITY_TYPE_NOTIFICATION);
 
 		return $url;
 	}
@@ -177,7 +177,7 @@ class Notification
 			$url = $uri->toAbsolute()->getLocator();
 		}
 
-		$url = Message::addSourceAnalyticsToMessage($url, Message::ENTITY_TYPE_NOTIFICATION);
+		$url = AnalyticsHelper::addSourceAnalyticsToMessage($url, AnalyticsHelper::ENTITY_TYPE_NOTIFICATION);
 
 		if ($message['SUBJECT'])
 		{

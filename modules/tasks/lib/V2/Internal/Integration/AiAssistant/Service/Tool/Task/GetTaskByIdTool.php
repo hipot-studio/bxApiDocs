@@ -9,10 +9,10 @@ use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\TaskProvider;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\GetTaskByIdDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\TaskSchemaBuilder;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\TaskService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\BaseTool;
 
 class GetTaskByIdTool extends BaseTool
@@ -20,7 +20,7 @@ class GetTaskByIdTool extends BaseTool
 	public const ACTION_NAME = 'get_task_by_id';
 
 	public function __construct(
-		private readonly TaskService $taskService,
+		private readonly TaskProvider $taskProvider,
 		TaskSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
@@ -42,7 +42,7 @@ class GetTaskByIdTool extends BaseTool
 		{
 			$this->validate($dto);
 
-			$task = $this->taskService->getById($dto, $userId);
+			$task = $this->taskProvider->getById($dto, $userId);
 		}
 		catch (DtoValidationException $e)
 		{

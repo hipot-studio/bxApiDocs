@@ -15,6 +15,7 @@ use Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessages;
 use Bitrix\Im\V2\Message\Reaction\ReactionPopupItem;
 use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Message\Sticker\StickerCollection;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Imbot\Bot\CopilotChatBot;
@@ -620,6 +621,11 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $files->getUnique();
 	}
 
+	public function getStickers(): StickerCollection
+	{
+		return StickerCollection::createByMessages($this);
+	}
+
 	public function getUserIds(): array
 	{
 		$users = [];
@@ -736,6 +742,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			new FilePopupItem($this->getFiles()),
 			new AdditionalMessagePopupItem($additionalMessageIds),
 			CopilotPopupItem::getInstanceByMessages($this),
+			$this->getStickers(),
 		];
 
 		if (!in_array(ReactionPopupItem::class, $excludedList, true))

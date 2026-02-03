@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper\Trait;
 
 use Bitrix\Main\Type\DateTime;
+use CTimeZone;
 use Exception;
 
 trait CastTrait
@@ -27,7 +28,7 @@ trait CastTrait
 		return DateTime::createFromTimestamp($timestamp);
 	}
 
-	protected function castDateTime(mixed $dateTime): ?int
+	protected function castDateTime(mixed $dateTime, bool $skipTimeZone = false): ?int
 	{
 		if ($dateTime === 0 || $dateTime === '0' || $dateTime === '' || $dateTime === false)
 		{
@@ -49,8 +50,15 @@ trait CastTrait
 			return $dateTime->getTimestamp();
 		}
 
-		if (is_string($dateTime) && $dateTime !== '')
+		if (is_string($dateTime))
 		{
+			$timeZoneEnabled = CTimeZone::Enabled();
+
+			if ($skipTimeZone && $timeZoneEnabled)
+			{
+				CTimeZone::Disable();
+			}
+
 			try
 			{
 				return DateTime::createFromUserTime($dateTime)->getTimestamp();
@@ -58,6 +66,13 @@ trait CastTrait
 			catch (Exception)
 			{
 				return null;
+			}
+			finally
+			{
+				if ($skipTimeZone && $timeZoneEnabled)
+				{
+					CTimeZone::Enable();
+				}
 			}
 		}
 

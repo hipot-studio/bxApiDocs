@@ -61,11 +61,25 @@ class Config implements \JsonSerializable
 	{
 		$region = Application::getInstance()->getLicense()->getRegion();
 
-		return
-			in_array($region, self::RU_REGIONS, true)
-				? 'https://www.bitrix24.ru/features/desktop.php'
-				: 'https://www.bitrix24.com/apps/desktop.php'
-			;
+		return match ($region) {
+			'ru' => 'https://www.bitrix24.ru/features/downloads/',
+			'by' => 'https://www.bitrix24.by/apps/desktop.php',
+			'kz' => 'https://www.bitrix24.kz/apps/desktop.php',
+			'uz' => 'https://www.bitrix24.uz/apps/desktop.php',
+			'uk' => 'https://www.bitrix24.uk/apps/desktop.php',
+			'in' => 'https://www.bitrix24.in/apps/desktop.php',
+			'eu' => 'https://www.bitrix24.eu/apps/desktop.php',
+			'br' => 'https://www.bitrix24.com.br/apps/desktop.php',
+			'la' => 'https://www.bitrix24.es/apps/desktop.php',
+			'mx' => 'https://www.bitrix24.mx/apps/desktop.php',
+			'co' => 'https://www.bitrix24.co/apps/desktop.php',
+			'tr' => 'https://www.bitrix24.com.tr/apps/desktop.php',
+			'fr' => 'https://www.bitrix24.fr/apps/desktop.php',
+			'it' => 'https://www.bitrix24.it/apps/desktop.php',
+			'pl' => 'https://www.bitrix24.pl/apps/desktop.php',
+			'de' => 'https://www.bitrix24.de/apps/desktop.php',
+			default => 'https://www.bitrix24.com/apps/desktop.php',
+		};
 	}
 
 	public function getInternetCheckLink(): string

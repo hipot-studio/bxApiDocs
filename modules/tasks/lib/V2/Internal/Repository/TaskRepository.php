@@ -231,7 +231,9 @@ class TaskRepository implements TaskRepositoryInterface
 
 		if ($currentTask === null)
 		{
-			throw new TaskUpdateException('Not found');
+			$message = Loc::getMessage('TASKS_UNKNOWN_UPDATE_ERROR');
+
+			throw new TaskNotExistsException($message);
 		}
 
 		$fields = $this->ormTaskMapper->mapFromEntity($task);

@@ -7,8 +7,6 @@ use Bitrix\Main\Loader;
 
 class SonetType extends EntityLink
 {
-	protected const HAS_URL = true;
-
 	protected function getUrl(): string
 	{
 		if (!Loader::includeModule('socialnetwork'))

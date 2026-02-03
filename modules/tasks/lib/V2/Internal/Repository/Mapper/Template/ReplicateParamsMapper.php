@@ -109,6 +109,10 @@ class ReplicateParamsMapper
 		{
 			$data['TIMEZONE_OFFSET'] = (string)$params->timezoneOffset;
 		}
+		else
+		{
+			$data['TIMEZONE_OFFSET'] = '0';
+		}
 
 		if ($params->repeatTill !== null)
 		{

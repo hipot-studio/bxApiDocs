@@ -9,10 +9,10 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\TaskProvider;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\SearchTasksDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\TaskSchemaBuilder;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\TaskService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\BaseTool;
 
 class SearchTasksTool extends BaseTool
@@ -20,7 +20,7 @@ class SearchTasksTool extends BaseTool
 	public const ACTION_NAME = 'search_tasks';
 
 	public function __construct(
-		private readonly TaskService $taskService,
+		private readonly TaskProvider $taskProvider,
 		TaskSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
@@ -50,7 +50,7 @@ class SearchTasksTool extends BaseTool
 		{
 			$this->validate($dto);
 
-			$tasks = $this->taskService->search($dto, $userId);
+			$tasks = $this->taskProvider->getList($dto, $userId);
 		}
 		catch (DtoValidationException|TaskListException $e)
 		{

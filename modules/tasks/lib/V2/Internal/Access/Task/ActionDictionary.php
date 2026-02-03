@@ -45,7 +45,7 @@ class ActionDictionary
 		'admin' => Access\ActionDictionary::ACTION_TASK_ADMIN,
 		'watch' => Access\ActionDictionary::ACTION_TASK_READ,
 		'mute' => Access\ActionDictionary::ACTION_TASK_READ,
-		'createSubtask' => Access\ActionDictionary::ACTION_TASK_READ,
+		'createSubtask' => Access\ActionDictionary::ACTION_TASK_CREATE_SUB_TASK,
 		'copy' => Access\ActionDictionary::ACTION_TASK_COPY,
 		'saveAsTemplate' => Access\ActionDictionary::ACTION_TASK_SAVE_AS_TEMPLATE,
 		'attachFile' => Access\ActionDictionary::ACTION_TASK_ATTACH_FILE,

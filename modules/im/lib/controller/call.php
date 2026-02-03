@@ -6,7 +6,6 @@ use Bitrix\Call\NotifyService;
 use Bitrix\Im\Call\CallUser;
 use Bitrix\Im\Call\Integration\EntityType;
 use Bitrix\Im\Call\Registry;
-use Bitrix\Im\Call\Util;
 use Bitrix\Im\Common;
 use Bitrix\Im\V2\Call\CallFactory;
 use Bitrix\Im\V2\Chat\ChatFactory;
@@ -424,22 +423,41 @@ class Call extends Engine\Controller
 		$isRepeated = ($repeated === "Y");
 		$userIds = array_map('intVal', $userIds);
 
+		// Acquire lock first to prevent race conditions
+		$lockName = static::getLockNameWithCallId('invite', $callId);
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+			return null;
+		}
+
+		Registry::clearCache($callId);
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
 		{
+			Application::getConnection()->unlock($lockName);
 			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+			return null;
+		}
+
+		// Check if call is already finished
+		if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+		{
+			Application::getConnection()->unlock($lockName);
 			return null;
 		}
 
 		$currentUserId = $this->getCurrentUser()->getId();
 		if (!$this->checkCallAccess($call, $currentUserId))
 		{
+			Application::getConnection()->unlock($lockName);
 			return null;
 		}
 
 		if ($call->hasErrors())
 		{
 			$this->addErrors($call->getErrors());
+			Application::getConnection()->unlock($lockName);
 			return null;
 		}
 
@@ -448,14 +466,10 @@ class Call extends Engine\Controller
 			'IS_MOBILE' => ($isLegacyMobile ? 'Y' : 'N')
 		]);
 
-		$lockName = static::getLockNameWithCallId('invite', $callId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		if ($call->getState() !== \Bitrix\Im\Call\Call::STATE_FINISHED)
 		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
-			return null;
+			$this->inviteUsers($call, $userIds, $isLegacyMobile, $isVideo, $isShow, $isRepeated);
 		}
-
-		$this->inviteUsers($call, $userIds, $isLegacyMobile, $isVideo, $isShow, $isRepeated);
 
 		Application::getConnection()->unlock($lockName);
 
@@ -577,10 +591,26 @@ class Call extends Engine\Controller
 		$callUser = $call->getUser($currentUserId);
 		if ($callUser)
 		{
-			$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callId);
+			$lockName = static::getLockNameWithCallId('user' . $currentUserId, $callId);
 			if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 			{
 				$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+				return null;
+			}
+
+			Registry::clearCache($callId);
+			$call = Registry::getCallWithId($callId);
+			if (!$call)
+			{
+				Application::getConnection()->unlock($lockName);
+				$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+				return null;
+			}
+
+			// Check if call is already finished
+			if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+			{
+				Application::getConnection()->unlock($lockName);
 				return null;
 			}
 
@@ -590,9 +620,9 @@ class Call extends Engine\Controller
 				'FIRST_JOINED' => $callUser->getFirstJoined() ?: new DateTime(),
 				'IS_MOBILE' => $isLegacyMobile ? 'Y' : 'N',
 			]);
-
-			Application::getConnection()->unlock($lockName);
 		}
+
+		Application::getConnection()->unlock($lockName);
 
 		$call->getSignaling()->sendAnswer($currentUserId, $callInstanceId, $isLegacyMobile);
 	}
@@ -636,6 +666,25 @@ class Call extends Engine\Controller
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+			return null;
+		}
+
+		// Clear cache to force fresh DB load
+		Registry::clearCache($callId);
+		$call = Registry::getCallWithId($callId);
+
+		// Check if call is already finished
+		if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+		{
+			Application::getConnection()->unlock($lockName);
+			return null;
+		}
+
+		// Reload user object from fresh call data
+		$callUser = $call->getUser($currentUserId);
+		if (!$callUser)
+		{
+			Application::getConnection()->unlock($lockName);
 			return null;
 		}
 
@@ -898,6 +947,15 @@ class Call extends Engine\Controller
 	 */
 	public function hangupAction(int $callId, $callInstanceId, $retransmit = true)
 	{
+		$currentUserId = $this->getCurrentUser()->getId();
+
+		$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callId);
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+			return null;
+		}
+
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
 		{
@@ -905,16 +963,8 @@ class Call extends Engine\Controller
 			return null;
 		}
 
-		$currentUserId = $this->getCurrentUser()->getId();
 		if (!$this->checkCallAccess($call, $currentUserId))
 		{
-			return null;
-		}
-
-		$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
-		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
 			return null;
 		}
 
@@ -934,11 +984,23 @@ class Call extends Engine\Controller
 			$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId);
 		}
 
-		Application::getConnection()->unlock($lockName);
-
-		if (!$call->hasActiveUsers())
+		if (!$this->hasActiveUsers($call))
 		{
 			$call->setActionUserId($currentUserId)->finish();
+		}
+
+		Application::getConnection()->unlock($lockName);
+	}
+
+	private function hasActiveUsers(\Bitrix\Im\Call\Call $call)
+	{
+		if (static::isPlainCall($call))
+		{
+			return $call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED;
+		}
+		else
+		{
+			return $call->hasActiveUsers();
 		}
 	}
 
@@ -1092,15 +1154,26 @@ class Call extends Engine\Controller
 		return "call_entity_{$entityType}_{$entityId}";
 	}
 
-	protected static function getLockNameWithCallId(string $prefix, $callId): string
+	protected static function getLockNameWithCallId(string $prefix, int|string $callId): string
 	{
-		//TODO: int|string after switching to php 8
-		if (is_string($callId) || is_numeric($callId))
+		$call = Registry::getCallWithId($callId);
+		if (static::isPlainCall($call))
 		{
-			return "{$prefix}_call_{$callId}";
+			$prefix = '';
 		}
+		return "{$prefix}_call_{$callId}";
+	}
 
-		return '';
+	/**
+	 * Check if call is 1-on-1 (direct call between two users)
+	 * For 1-on-1 calls, we use call-level locking instead of per-user locking
+	 *
+	 * @param \Bitrix\Im\Call\Call $call
+	 * @return bool
+	 */
+	private static function isPlainCall(\Bitrix\Im\Call\Call $call): bool
+	{
+		return $call->getProvider() === \Bitrix\Im\Call\Call::PROVIDER_PLAIN;
 	}
 
 	public function configureActions(): array

@@ -152,6 +152,7 @@ class NotifyTaskStatusChanged extends AbstractNotify implements ShouldSend
 	public function getMessageData(): array
 	{
 		return [
+			'#TITLE#' => $this->task->title,
 			'#USER#' => $this->formatUser($this->triggeredBy),
 		];
 	}

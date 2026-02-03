@@ -160,6 +160,48 @@ class ReadService
 		]);
 	}
 
+	public function readAllNotifications(
+		int $chatId,
+		?MessageCollection $excludeNotifications = null,
+		string $appId = 'Bitrix24',
+	): Result
+	{
+		$result = new Result();
+		$userId = $this->getContext()->getUserId();
+
+		$excludeIds = [];
+		if (!is_null($excludeNotifications))
+		{
+			$excludeIds = $excludeNotifications->getIds();
+		}
+
+		$this->counterService->deleteNotifyByChatId($chatId, $excludeIds);
+
+		$newCounter = $this->counterService->getByChat($chatId);
+
+		if (Loader::includeModule("pull"))
+		{
+			Event::add($userId, [
+				'module_id' => 'im',
+				'command' => 'notifyReadAll',
+				'params' => [
+					'chatId' => $chatId,
+					'excludeIds' => $excludeIds,
+					'newCounter' => $newCounter,
+				],
+				'extra' => Common::getPullExtra(),
+			]);
+
+			MobileCounter::send($userId, $appId);
+		}
+
+		return $result->setResult([
+			'CHAT_ID' => $chatId,
+			'COUNTER' => $newCounter,
+			'EXCLUDE_IDS' => $excludeIds,
+		]);
+	}
+
 	public function readAllInChat(int $chatId): Result
 	{
 		$lastId = $this->getLastMessageIdInChat($chatId);

@@ -3,9 +3,9 @@
 namespace Bitrix\Crm\Order\ProductManager\ProductConverter;
 
 use Bitrix\Crm\Discount;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\PriceMaths;
-use Bitrix\Sale\Tax\VatCalculator;
 
 /**
  * Converter prices.
@@ -45,7 +45,7 @@ class PricesConverter
 			$result['PRICE'] = $priceExclusive;
 		}
 
-		$result['DISCOUNT_PRICE'] = PriceMaths::roundPrecision($result['BASE_PRICE'] - $result['PRICE']);
+		$result['DISCOUNT_PRICE'] = Container::getInstance()->getAccounting()->round($result['BASE_PRICE'] - $result['PRICE']);
 
 		return $result;
 	}
@@ -63,26 +63,26 @@ class PricesConverter
 	public function convertToProductRowPrices(float $price, float $basePrice, float $vatRate, bool $vatIncluded): array
 	{
 		$result = [];
-		$vatCalculator = new VatCalculator($vatRate);
 
+		$accounting = Container::getInstance()->getAccounting();
+		$vatRatePercent = $vatRate * 100;
 		if ($vatIncluded)
 		{
 			$result['PRICE_BRUTTO'] = $basePrice;
-			$result['PRICE_NETTO'] = $vatCalculator->allocate($basePrice);
-			$result['PRICE_EXCLUSIVE'] = $vatCalculator->allocate($price);
+			$result['PRICE_NETTO'] = $accounting->calculatePriceExcludingTax($basePrice, $vatRatePercent);
+			$result['PRICE_EXCLUSIVE'] = $accounting->calculatePriceExcludingTax($price, $vatRatePercent);
 			$result['PRICE'] = $price;
 		}
 		else
 		{
-			$result['PRICE_BRUTTO'] = $vatCalculator->accrue($basePrice);
+			$result['PRICE_BRUTTO'] = $accounting->calculatePriceIncludingTax($basePrice, $vatRatePercent);
 			$result['PRICE_NETTO'] = $basePrice;
 			$result['PRICE_EXCLUSIVE'] = $price;
-			$result['PRICE'] = $vatCalculator->accrue($price);
+			$result['PRICE'] = $accounting->calculatePriceIncludingTax($price, $vatRatePercent);
 		}
-
-		$result['DISCOUNT_RATE'] = Discount::calculateDiscountRate($result['PRICE_NETTO'], $result['PRICE_EXCLUSIVE']);
-		$result['DISCOUNT_SUM'] = Discount::calculateDiscountSum($result['PRICE_EXCLUSIVE'], $result['DISCOUNT_RATE']);
-		$result['DISCOUNT_SUM'] = PriceMaths::roundPrecision($result['DISCOUNT_SUM']);
+		$result['DISCOUNT_RATE'] = $accounting->calculateDiscountRate($result['PRICE_NETTO'], $result['PRICE_EXCLUSIVE']);
+		$result['DISCOUNT_SUM'] = $accounting->calculateDiscountValue($result['PRICE_EXCLUSIVE'], $result['DISCOUNT_RATE']);
+		$result['DISCOUNT_SUM'] = $accounting->round($result['DISCOUNT_SUM']);
 
 		return $result;
 	}

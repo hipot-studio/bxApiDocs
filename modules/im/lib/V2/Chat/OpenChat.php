@@ -99,9 +99,9 @@ class OpenChat extends GroupChat
 		return $this;
 	}
 
-	protected function updateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): self
+	protected function processUpdateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): self
 	{
-		parent::updateStateAfterUserDelete($deletedUserId, $config);
+		parent::processUpdateStateAfterUserDelete($deletedUserId, $config);
 		$this->clearAllLegacyCache();
 
 		return $this;

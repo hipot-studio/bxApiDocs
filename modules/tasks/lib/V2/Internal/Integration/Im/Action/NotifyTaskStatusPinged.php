@@ -55,19 +55,19 @@ class NotifyTaskStatusPinged extends AbstractNotify implements ShouldSend
 		protected readonly ?Entity\User $triggeredBy,
 	)
 	{
-		if ($this->triggeredBy->isEquals($this->task->creator))
+		if ($this->triggeredBy?->isEquals($this->task->creator))
 		{
 			$this->role = MemberTable::MEMBER_TYPE_ORIGINATOR;
 		}
-		elseif ($this->triggeredBy->isEquals($this->task->responsible))
+		elseif ($this->triggeredBy?->isEquals($this->task->responsible))
 		{
 			$this->role = MemberTable::MEMBER_TYPE_RESPONSIBLE;
 		}
-		elseif ($this->task->accomplices->find(fn(Entity\User $user) => $user->isEquals($this->triggeredBy)))
+		elseif ($this->triggeredBy !== null && $this->task->accomplices->find(fn(Entity\User $user) => $user->isEquals($this->triggeredBy)))
 		{
 			$this->role = MemberTable::MEMBER_TYPE_ACCOMPLICE;
 		}
-		elseif ($this->task->auditors->find(fn(Entity\User $user) => $user->isEquals($this->triggeredBy)))
+		elseif ($this->triggeredBy !== null && $this->task->auditors->find(fn(Entity\User $user) => $user->isEquals($this->triggeredBy)))
 		{
 			$this->role = MemberTable::MEMBER_TYPE_AUDITOR;
 		}

@@ -9,7 +9,7 @@ use Bitrix\Mail\Grid\MailboxSettingsGrid\MailboxGrid;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Settings\MailboxSettings;
 use Bitrix\Mail\Helper\Config\Guide;
 use Bitrix\Mail\Helper\LicenseManager;
-use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\MailboxSettingsGridHelper;
 use Bitrix\Main\Localization\Loc;
 
@@ -28,7 +28,7 @@ class CMailMailboxListComponent extends CBitrixComponent
 
 	public function executeComponent(): void
 	{
-		$canManage = MailboxAccess::hasCurrentUserAccessToMailboxGrid();
+		$canManage = MailAccess::hasCurrentUserAccessToMailboxGrid();
 
 		if (!$canManage)
 		{
@@ -101,8 +101,8 @@ class CMailMailboxListComponent extends CBitrixComponent
 	{
 		$accessValues = [];
 
-		$accessValues['HAS_ACCESS_TO_MASS_CONNECT'] = MailboxAccess::hasCurrentUserAccessToMassConnect();
-		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailboxAccess::hasCurrentUserAccessToPermission();
+		$accessValues['HAS_ACCESS_TO_MASS_CONNECT'] = MailAccess::hasCurrentUserAccessToMassConnect();
+		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailAccess::hasCurrentUserAccessToPermission();
 
 		return $accessValues;
 	}

@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\MigrateRecentTasks;
 use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
+use Throwable;
 
 class MigrateRecentTaskService
 {
@@ -22,6 +23,11 @@ class MigrateRecentTaskService
 	{
 		$task = $this->taskRepository->getById($taskId);
 
+		if ($task === null)
+		{
+			return;
+		}
+
 		if (!empty($task->chat))
 		{
 			return;
@@ -31,10 +37,12 @@ class MigrateRecentTaskService
 		{
 			$this->egressService->createChatForExistingTask($task);
 		}
-		catch (\Throwable $e)
+		catch (Throwable $e)
 		{
-			$this->logger->logError($e);
-			return;
+			$this->logger->logWarning(
+				$e->getMessage() . ' Trace: ' . $e->getTraceAsString(),
+				'TASKS_MIGRATE_DEBUG'
+			);
 		}
 	}
 }

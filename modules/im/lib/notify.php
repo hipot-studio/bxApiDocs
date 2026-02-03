@@ -37,25 +37,29 @@ class Notify
 	private $users = [];
 	private $firstPage;
 	private $searchText;
-	private $searchType;
-	private $searchDate;
 	private $totalCount;
 	private string $groupTag;
 	private int $userId;
 	private Conditions $groupConditions;
+	private ?array $authors;
+	private ?array $searchTypes;
+	private ?string $searchDateFrom;
+	private ?string $searchDateTo;
 
 	public function __construct($options = [])
 	{
 		$this->convertText = $options['CONVERT_TEXT'] ?? null;
 		$this->searchText = $options['SEARCH_TEXT'] ?? null;
-		$this->searchType = $options['SEARCH_TYPE'] ?? null;
-		$this->searchDate = $options['SEARCH_DATE'] ?? null;
+		$this->searchTypes = $this->getSearchTypesData($options);
+		$this->searchDateFrom = $this->getSearchDateFromData($options);
+		$this->searchDateTo = $this->getSearchDateToData($options);
 		$this->pageLimit = $options['LIMIT'] ?? null;
 		$this->lastType = $options['LAST_TYPE'] ?? null;
 		$this->lastId = $options['LAST_ID'] ?? null;
 		$this->groupTag = (string)($options['GROUP_TAG'] ?? '');
 		$this->firstPage = !$this->lastId && !$this->lastType;
 		$this->userId = (int)\Bitrix\Im\Common::getUserId();
+		$this->authors = $options['SEARCH_AUTHORS'] ?? null;
 
 		$chatData = $this->getChatData();
 		if ($chatData !== null)
@@ -86,6 +90,57 @@ class Notify
 		}
 
 		return $chatData;
+	}
+
+	private function getSearchTypesData(array $options): ?array
+	{
+		if (array_key_exists('SEARCH_TYPES', $options))
+		{
+			return $options['SEARCH_TYPES'];
+		}
+
+		if (array_key_exists('SEARCH_TYPE', $options))
+		{
+			return [$options['SEARCH_TYPE']];
+		}
+
+		return null;
+	}
+
+	private function getSearchDateFromData(array $options): ?string
+	{
+		if (
+			array_key_exists('SEARCH_DATE_TO', $options)
+			&& array_key_exists('SEARCH_DATE_FROM', $options)
+		)
+		{
+			return $options['SEARCH_DATE_FROM'];
+		}
+
+		if (array_key_exists('SEARCH_DATE', $options))
+		{
+			return $options['SEARCH_DATE'];
+		}
+
+		return null;
+	}
+
+	private function getSearchDateToData(array $options): ?string
+	{
+		if (
+			array_key_exists('SEARCH_DATE_TO', $options)
+			&& array_key_exists('SEARCH_DATE_FROM', $options)
+		)
+		{
+			return $options['SEARCH_DATE_TO'];
+		}
+
+		if (array_key_exists('SEARCH_DATE', $options))
+		{
+			return $options['SEARCH_DATE'];
+		}
+
+		return null;
 	}
 
 	public static function getRealCounter($chatId): int
@@ -364,7 +419,12 @@ class Notify
 			return [];
 		}
 
-		if (!$this->searchText && !$this->searchType && !$this->searchDate)
+		if (
+			!$this->searchText
+			&& !$this->searchTypes
+			&& !($this->searchDateFrom && $this->searchDateTo)
+			&& empty($this->authors)
+		)
 		{
 			return [];
 		}
@@ -510,30 +570,44 @@ class Notify
 			{
 				$filter['*%MESSAGE'] = $this->searchText;
 			}
-			if ($this->searchType)
+			if (!empty($this->searchTypes))
 			{
-				$options = explode('|', $this->searchType);
-				$filter['=NOTIFY_MODULE'] = $options[0];
-				if (isset($options[1]))
+				if (count($this->searchTypes) === 1)
 				{
-					$filter['=NOTIFY_EVENT'] = $options[1];
+					$searchType = $this->searchTypes[0];
+					$options = explode('|', $searchType);
+					$filter['=NOTIFY_MODULE'] = $options[0];
+					if (isset($options[1]))
+					{
+						$filter['=NOTIFY_EVENT'] = $options[1];
+					}
 				}
+				else
+				{
+					$filter['@NOTIFY_MODULE'] = $this->searchTypes;
+				}
+
 			}
-			if ($this->searchDate)
+
+			if ($this->searchDateFrom && $this->searchDateTo)
 			{
-				$dateStart = new DateTime(
-					$this->searchDate,
+				$dateFrom = new DateTime(
+					$this->searchDateFrom,
 					\DateTimeInterface::RFC3339,
 					new \DateTimeZone('UTC')
 				);
-				$dateEnd = (
-				new DateTime(
-					$this->searchDate,
+				$dateTo = (new DateTime(
+					$this->searchDateTo,
 					\DateTimeInterface::RFC3339,
 					new \DateTimeZone('UTC')
-				)
-				)->add('1 DAY');
-				$filter['><DATE_CREATE'] = [$dateStart, $dateEnd];
+				))->add('1 DAY');
+
+				$filter['><DATE_CREATE'] = [$dateFrom, $dateTo];
+			}
+
+			if (!empty($this->authors))
+			{
+				$filter['@AUTHOR_ID'] = $this->authors;
 			}
 
 			if ($this->groupTag)

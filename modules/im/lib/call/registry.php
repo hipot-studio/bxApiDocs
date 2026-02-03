@@ -33,6 +33,18 @@ class Registry
 	}
 
 	/**
+	 * Clear cached Call object by ID
+	 * Forces next getCallWithId() to reload from database
+	 *
+	 * @param int $id Id of the call to clear from cache
+	 * @return void
+	 */
+	public static function clearCache(int $id): void
+	{
+		unset(static::$calls[$id]);
+	}
+
+	/**
 	 * @param string $uuid internal call Id
 	 * @return Call|null
 	 */

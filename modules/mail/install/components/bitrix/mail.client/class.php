@@ -1,6 +1,6 @@
 <?php
 
-use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Mail;
@@ -197,7 +197,7 @@ class CMailClientComponent extends CBitrixComponent
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/main.interface.buttons/templates/.default/style.css');
 
 		$requestSource = $_REQUEST['source'] ?? null;
-		if ($validSource = Message::getValidatedSource($componentPage, $requestSource))
+		if ($validSource = AnalyticsHelper::getValidatedSource($componentPage, $requestSource))
 		{
 			$this->arResult['ANALYTICS']['SOURCE'] = $validSource;
 		}

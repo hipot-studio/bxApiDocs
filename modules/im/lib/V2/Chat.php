@@ -742,6 +742,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return new Result();
 	}
 
+	public function onBeforeMentionsChange(Message\Send\Mention\MentionChange $mentionChange): Result
+	{
+		return new Result();
+	}
+
 	public function onAfterMessagesDelete(MessageCollection $messages, DeletionMode $deletionMode): Result
 	{
 		return new Result();
@@ -806,10 +811,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
-		$updateStateResult = $this->updateStateAfterMessageSend($message, $sendingConfig);
-		$counters = $updateStateResult->getResult()['COUNTERS'] ?? [];
+		$this->updateStateAfterMessageSend($message, $sendingConfig);
 
-		$this->getMentionService($sendingConfig)->setContext($authorContext)->processMentions($message);
+		$this->getMentionService($sendingConfig)->setContext($authorContext)->onMessageSend($message);
+		$counters = $this->updateCountersAfterMessageSend($message, $sendingConfig)->getResult()['COUNTERS'] ?? [];
 		$this->getPushService($message, $sendingConfig)->setContext($authorContext)->sendPush($counters);
 		$sendingService->fireEventAfterMessageSend($this, $message);
 		(new Im\V2\Link\LinkFacade($sendingConfig))->setContext($authorContext)->saveLinksFromMessage($message);
@@ -880,7 +885,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$result = new Result();
 		$this->updateChatAfterMessageSend($message);
 		$this->logToSyncAfterMessageSend($message);
-		(new Im\V2\Message\Sticker\RecentSticker())->setContext($message->getContext())->add($message);
+		(new Im\V2\Message\Sticker\Recent\RecentSticker())->setContext($message->getContext())->add($message);
 
 		if (!$sendingConfig->addRecent())
 		{
@@ -890,7 +895,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$this->updateRecentAfterMessageSend($message, $sendingConfig);
 		$this->updateRelationsAfterMessageSend($message);
 
-		return $this->updateCountersAfterMessageSend($message, $sendingConfig);
+		return $result;
 	}
 
 	protected function updateChatAfterMessageSend(Message $message): Result
@@ -1056,7 +1061,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	protected function getCounterRecipients(SendingConfig $sendingConfig): array
 	{
-		if (!$this->isCounterIncrementAllowed() || $sendingConfig->skipCounterIncrements())
+		if (!$this->isCounterIncrementAllowed() || $sendingConfig->skipCounterIncrements() || !$sendingConfig->addRecent())
 		{
 			return [];
 		}
@@ -1319,7 +1324,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 				'unread' => Im\Recent::isUnread($this->getContext()->getUserId(), $this->getType(), $this->getDialogId()),
 				'lines' => $this->getType() === IM_MESSAGE_OPEN_LINE,
 				'viewedMessages' => $messages->getIds(),
-				'counterType' => $this->getCounterType()->value,
+				'counterType' => $this->getCounterType(),
 				'recentConfig' => $this->getRecentConfig()->toPullFormat(),
 			],
 			'extra' => \Bitrix\Im\Common::getPullExtra()
@@ -1981,23 +1986,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $result;
 	}
 
-	public function filterUsersToMentionAnchor(array $userIds): array
-	{
-		$result = [];
-		$relations = $this->getRelationsByUserIds($userIds);
-
-		foreach ($userIds as $userId)
-		{
-			$relation = $relations->getByUserId($userId, $this->getChatId());
-			if ($relation !== null)
-			{
-				$result[$userId] = $userId;
-			}
-		}
-
-		return $result;
-	}
-
 	public function getDialogId(?int $contextUserId = null): ?string
 	{
 		if ($this->dialogId || !$this->getChatId())
@@ -2078,9 +2066,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	abstract protected function getDefaultType(): string;
 
-	public function getCounterType(): CounterType
+	public function getCounterType(): string
 	{
-		return CounterType::tryFromChat($this);
+		$config = RecentConfigManager::getInstance()->getByExtendedType($this->getExtendedType(false));
+		return $config->getCounterType();
 	}
 
 	protected function beforeSaveType(): Result
@@ -3334,7 +3323,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$userRelation->delete();
 		$this->getRelationFacade()?->onAfterRelationDelete($userId);
 
-		$this->updateStateAfterUserDelete($userId, $config)->save();
+		$this->processUpdateStateAfterUserDelete($userId, $config)->save();
 		$this->sendPushUserDelete($userId, $relations);
 		$this->sendEventUserDelete($userId);
 		$this->disableUserDeleteMessage($config->skipRecent);
@@ -3357,7 +3346,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		$relation->markAsHidden(true)->save();
 		$this->getRelationFacade()?->onAfterMembersChange();
-		$this->updateStateAfterUserDelete($userId, new DeleteUserConfig())->save();
+		$this->processUpdateStateAfterMemberDelete($userId, new DeleteUserConfig())->save();
 		$this->sendPushUserDelete($userId, $relations);
 
 		return new Result();
@@ -3461,7 +3450,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		);
 	}
 
-	protected function updateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): self
+	protected function processUpdateStateAfterMemberDelete(int $deletedUserId, DeleteUserConfig $config): self
 	{
 		\CIMContactList::DeleteRecent($this->getId(), true, $deletedUserId, $config->withoutRead);
 		\Bitrix\Im\LastSearch::delete($this->getDialogId(), $deletedUserId);
@@ -3494,11 +3483,18 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$userCount = $this->getRelationFacade()?->getUserCount();
 		$this->setUserCount($userCount);
 
-		\CIMDisk::ChangeFolderMembers($this->getId(), $deletedUserId, false);
 		self::cleanAccessCache($this->getId());
 		$this->updateIndex();
 
 		$this->clearLegacyCache($deletedUserId);
+
+		return $this;
+	}
+
+	protected function processUpdateStateAfterUserDelete(int $deletedUserId, DeleteUserConfig $config): self
+	{
+		$this->processUpdateStateAfterMemberDelete($deletedUserId, $config);
+		\CIMDisk::ChangeFolderMembers($this->getId(), $deletedUserId, false);
 
 		return $this;
 	}

@@ -656,7 +656,7 @@ abstract class Field
 
 	public function unserialize($value)
 	{
-		return unserialize((string)$value);
+		return is_null($value) ? null : unserialize((string)$value);
 	}
 
 	/**

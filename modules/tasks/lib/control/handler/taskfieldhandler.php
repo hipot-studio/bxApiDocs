@@ -1051,22 +1051,21 @@ class TaskFieldHandler
 		}
 
 		if (
-			!array_key_exists('START_DATE_PLAN', $this->fields)
-			&& !array_key_exists('END_DATE_PLAN', $this->fields)
+			array_key_exists('START_DATE_PLAN', $this->fields)
+			&& (string)$this->taskData['START_DATE_PLAN'] !== (string)$this->fields['START_DATE_PLAN']
 		)
 		{
-			return false;
+			return true;
 		}
 
-		if ((string)$this->taskData['START_DATE_PLAN'] !== (string)$this->fields['START_DATE_PLAN'])
+		if (
+			array_key_exists('END_DATE_PLAN', $this->fields)
+			&& (string)$this->taskData['END_DATE_PLAN'] !== (string)$this->fields['END_DATE_PLAN']
+		)
 		{
 			return true;
 		}
 
-		if ((string)$this->taskData['END_DATE_PLAN'] !== (string)$this->fields['END_DATE_PLAN'])
-		{
-			return true;
-		}
 
 		return false;
 	}

@@ -220,9 +220,22 @@ class Messenger
 		try
 		{
 			$taskService = new TaskService();
-			$chat = Chat::getInstance($chatId);
+			if ($messageId)
+			{
+				$message = new Message($messageId);
+				$chat = $message->getChat();
+			}
+			else
+			{
+				$message = null;
+				$chat = Chat::getInstance($chatId);
+			}
 
-			if (!$chat->checkAccess()->isSuccess() || !$chat->canDo(Action::CreateTask))
+			if (
+				!$chat->checkAccess()->isSuccess()
+				|| !$chat->canDo(Action::CreateTask)
+				|| ($message && !$message->checkAccess()->isSuccess())
+			)
 			{
 				return;
 			}

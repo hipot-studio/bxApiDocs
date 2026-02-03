@@ -83,6 +83,11 @@ class NotifyResultAdded extends AbstractNotify
 
 		$resultText = htmlspecialchars_decode(htmlspecialcharsback($this->resultText), ENT_QUOTES);
 		$resultText = trim(\CTextParser::clearAllTags($resultText));
+		$resultText = str_replace(
+			["&#91;", "&#93;"],
+			["[", "]"],
+			$resultText,
+		);
 
 		return preg_replace('/\n{3,}/', "\n\n", $resultText);
 	}
