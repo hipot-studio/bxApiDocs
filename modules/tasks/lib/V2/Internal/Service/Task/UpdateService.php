@@ -171,8 +171,15 @@ class UpdateService
 
 		(new SendPush($config))($fullTaskData, $sourceTaskData, $changes);
 
+		(new StopTimer($config))($fullTaskData);
+
+		(new RunIntegration($config))($fields, $taskObjectBeforeUpdate);
+
 		// get task object with prepopulated data
+		$this->repository->invalidate($taskObject->getId());
+
 		$taskAfterUpdate = $this->repository->getById($taskObject->getId());
+
 		if ($taskAfterUpdate === null)
 		{
 			throw new TaskNotExistsException();
@@ -203,10 +210,6 @@ class UpdateService
 			config: $config,
 			taskBeforeUpdate: $entityBefore,
 		));
-
-		(new StopTimer($config))($fullTaskData);
-
-		(new RunIntegration($config))($fields, $taskObjectBeforeUpdate);
 
 		(new RunInternalEvent())($entityBefore, $taskAfterUpdate);
 

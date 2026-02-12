@@ -77,7 +77,17 @@ trait BitrixGPTCommonTrait
 	protected function getPostParams(): array
 	{
 		$postParams = ['messages' => $this->getPreparedMessages()];
-		if ($this->isModeResponseJson)
+
+		$payload = $this->getPayload();
+		if (method_exists($payload, 'getJsonSchema') && $payload->getJsonSchema() !== null)
+		{
+			$postParams['response_format'] = [
+				'type' => 'json_schema',
+				'json_schema' => $payload->getJsonSchema(),
+			];
+			$this->isModeResponseJson = true;
+		}
+		elseif ($this->isModeResponseJson)
 		{
 			$postParams['response_format'] = ['type' => 'json_object'];
 		}
@@ -142,6 +152,11 @@ trait BitrixGPTCommonTrait
 		if (!$shouldUseB24)
 		{
 			return $availableByRegion;
+		}
+
+		if ($region === 'by')
+		{
+			return true;
 		}
 
 		$isBitrixGptEnabled = Config::getValue('bitrixgpt_enabled') === 'Y';

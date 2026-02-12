@@ -16,6 +16,9 @@ class NodeCatalogItemDtoFactory
 	public function createByDescription(ActivityDescription $description): NodeCatalogItemDto
 	{
 		$this->fillTriggerNodeTypeIfNeeded($description);
+		$defaultSettings = $description->getNodeSettings() ?? self::makeDefaultSettingsByType(
+			$description->getNodeType()
+		);
 
 		return new NodeCatalogItemDto(
 			id: $description->getClass(),
@@ -28,9 +31,7 @@ class NodeCatalogItemDtoFactory
 			colorIndex: $description->getColorIndex(),
 			properties: $description->get('PROPERTIES'),
 			returnProperties: self::makeReturnProperties($description->getClass()),
-			defaultSettings: $description->getNodeSettings()?->toArray() ?? self::makeDefaultSettingsByType(
-				$description->getNodeType()
-			),
+			defaultSettings: $defaultSettings->toArray(),
 		);
 	}
 
@@ -62,11 +63,7 @@ class NodeCatalogItemDtoFactory
 		return array_values($props);
 	}
 
-	/**
-	 * @param string|null $type
-	 * @return array{width: int, height: int, ports: array{input: array, output: array}}
-	 */
-	private static function makeDefaultSettingsByType(?string $type): array
+	private static function makeDefaultSettingsByType(?string $type): NodeSettings
 	{
 		$defaultSettings = match ($type)
 		{
@@ -78,7 +75,6 @@ class NodeCatalogItemDtoFactory
 					'output' => [
 						[
 							'id' => 'o0',
-							'position' => 1,
 						],
 					],
 				],
@@ -90,7 +86,6 @@ class NodeCatalogItemDtoFactory
 					'input' => [
 						[
 							'id' => 'i0',
-							'position' => 1,
 							'title' => 'G1',
 						],
 					],
@@ -103,7 +98,7 @@ class NodeCatalogItemDtoFactory
 				'ports' => [
 					'input' => [],
 					'output' => [],
-					'topAux' => [['id' => 't0', 'position' => 1]],
+					'topAux' => [['id' => 't0']],
 				],
 			],
 			default => [
@@ -113,20 +108,18 @@ class NodeCatalogItemDtoFactory
 					'input' => [
 						[
 							'id' => 'i0',
-							'position' => 1,
 						],
 					],
 					'output' => [
 						[
 							'id' => 'o0',
-							'position' => 1,
 						],
 					],
 				],
 			],
 		};
 
-		return $defaultSettings;
+		return NodeSettings::fromArray($defaultSettings);
 	}
 
 	private function getNodeTypeByActivityType(array $types): ?string

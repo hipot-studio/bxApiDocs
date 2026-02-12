@@ -29,12 +29,21 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 	protected $errors;
 	protected $type = 'configuration';
 	protected $contextPostfix = 'export';
-	protected $optionPath = '~tmp_export_path_configuration';
 
 	public function __construct($component = null)
 	{
 		parent::__construct($component);
 		$this->errors = new ErrorCollection();
+	}
+
+	public function onPrepareComponentParams($arParams): array
+	{
+		$arParams['MANIFEST_CODE'] ??= '';
+		$arParams['ITEM_CODE'] ??= '';
+		$arParams['ADDITIONAL'] ??= []; // data from Request
+		$arParams['CONTEXT_USER'] ??= null; // not set outside
+
+		return parent::onPrepareComponentParams($arParams);
 	}
 
 	protected function checkRequiredParams()
@@ -128,9 +137,9 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 		return $this->contextPostfix.$this->arParams['MANIFEST_CODE'];
 	}
 
-	protected function getContext()
+	protected function getUserContext()
 	{
-		return Helper::getInstance()->getContextUser($this->getContextPostFix());
+		return $this->arParams['CONTEXT_USER'] ?? Helper::getInstance()->getContextUser($this->getContextPostFix());
 	}
 
 	public function startAction()
@@ -138,14 +147,14 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 		$result = [];
 		if($this->checkRequiredParams())
 		{
-			$context = $this->getContext();
+			$userContext = $this->getUserContext();
 
-			$setting = new Setting($context);
+			$setting = new Setting($userContext);
 			$setting->deleteFull();
 			$setting->set(Setting::MANIFEST_CODE, $this->arParams['MANIFEST_CODE']);
 			$setting->set(Setting::SETTING_ACTION_ADDITIONAL_OPTION, $this->arParams['ADDITIONAL'] ?? []);
 
-			$structure = new Structure($context);
+			$structure = new Structure($userContext);
 			if($structure->getFolder())
 			{
 				$result = Controller::getEntityCodeList();
@@ -162,8 +171,8 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 		];
 		if ($this->checkRequiredParams())
 		{
-			$context = $this->getContext();
-			$setting = new Setting($context);
+			$userContext = $this->getUserContext();
+			$setting = new Setting($userContext);
 			$info = $setting->get(Setting::SETTING_FINISH_DATA);
 			if ($info === null)
 			{
@@ -207,8 +216,8 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 	{
 		$result = false;
 
-		$context = $this->getContext();
-		$structure = new Structure($context);
+		$userContext = $this->getUserContext();
+		$structure = new Structure($userContext);
 		$fileList = $structure->getFileList();
 
 		if (empty($fileList))
@@ -249,8 +258,7 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 			]
 		);
 
-		$server = Application::getInstance()->getContext()->getServer();
-		$documentRoot = $server->getDocumentRoot();
+		$documentRoot = Application::getDocumentRoot();
 
 		$deleteIdList = [];
 		while ($item = $res->fetch())
@@ -377,27 +385,28 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 				'MANIFEST_VERSION' => $manifest['VERSION'],
 				'USES' => $manifest['USES'],
 				'COMPATIBILITY_TAGS' => $manifest['COMPATIBILITY_TAGS'] ?? [],
+				'METADATA' => $manifest['METADATA'] ?? [],
 			];
-			$context = $this->getContext();
-			$structure = new Structure($context);
-			$structure->saveContent(false, 'manifest', $manifest);
+			$userContext = $this->getUserContext();
 
-			$setting = new Setting($context);
+			$setting = new Setting($userContext);
 
 			Controller::callEventFinish(
 				[
 					'TYPE' => 'EXPORT',
 					'CONTEXT' => $this->getContextPostFix(),
-					'CONTEXT_USER' => $context,
+					'CONTEXT_USER' => $userContext,
 					'USER_ID' => $setting->get(Setting::SETTING_USER_ID) ?? 0,
 					'MANIFEST_CODE' => $manifest['CODE'],
 					'IMPORT_MANIFEST' => [],//TODO: delete this after fix crm
-					'MANIFEST' => $manifest,
+					'MANIFEST' => &$manifest,
 					'ITEM_CODE' => $this->arParams['ITEM_CODE'] ?? '',
 					'SETTING' => $setting->get(Setting::SETTING_MANIFEST),
 					'ADDITIONAL_OPTION' => $setting->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION),
 				]
 			);
+			(new Structure($userContext))->saveContent(false, 'manifest', $manifest);
+
 			$result = true;
 
 			$setting->delete(Setting::SETTING_MANIFEST);
@@ -419,26 +428,25 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 		return $uri->getUri();
 	}
 
-	public function loadAction()
+	public function loadAction(?string $code = null, ?int $step = null, ?string $next = null)
 	{
 		$result = [];
 
 		if($this->checkRequiredParams())
 		{
-			$request = Application::getInstance()->getContext()->getRequest();
-			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $request->getPost("code"));
-			$step = intval($request->getPost("step"));
-			$next = htmlspecialcharsbx($request->getPost("next"));
+			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $code ?? $this->request->getPost('code'));
+			$step = $step ?? intval($this->request->getPost('step'));
+			$next = $next ?? htmlspecialcharsbx($this->request->getPost('next'));
 			if ($code)
 			{
-				$structure = new Structure($this->getContext());
+				$structure = new Structure($this->getUserContext());
 				$items = Controller::callEventExport(
 					$this->arParams['MANIFEST_CODE'],
 					$code,
 					$step,
 					$next,
 					$this->arParams['ITEM_CODE'] ?? '',
-					$this->getContext()
+					$this->getUserContext()
 				);
 				foreach ($items as $item)
 				{
@@ -510,9 +518,8 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 
 		if($this->checkRequiredParams())
 		{
-			$request = Application::getInstance()->getContext()->getRequest();
-			$step = intval($request->getPost("step"));
-			$next = htmlspecialcharsbx($request->getPost("next"));
+			$step = intval($this->request->getPost("step"));
+			$next = htmlspecialcharsbx($this->request->getPost("next"));
 			$items = Manifest::callEventInit(
 				$this->arParams['MANIFEST_CODE'],
 				[
@@ -520,7 +527,7 @@ class CRestConfigurationExportComponent extends CBitrixComponent implements Cont
 					'STEP' => $step,
 					'NEXT' => $next,
 					'ITEM_CODE' => $this->arParams['ITEM_CODE'] ?? '',
-					'CONTEXT_USER' => $this->getContext(),
+					'CONTEXT_USER' => $this->getUserContext(),
 					'ADDITIONAL_OPTION' => $this->arParams['ADDITIONAL'] ?? [],
 				]
 			);

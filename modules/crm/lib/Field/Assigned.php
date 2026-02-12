@@ -2,13 +2,10 @@
 
 namespace Bitrix\Crm\Field;
 
-use Bitrix\Crm\EventRelationsTable;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Item;
-use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
-use Bitrix\Crm\Service\Operation\FieldAfterSaveResult;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Result;
 
@@ -42,18 +39,5 @@ class Assigned extends Field
 		}
 
 		return parent::processLogic($item, $context);
-	}
-
-	public function processAfterSave(Item $itemBeforeSave, Item $item, Context $context = null): FieldAfterSaveResult
-	{
-		$result = new FieldAfterSaveResult();
-
-		if ($itemBeforeSave->remindActual($this->getName()) !== $item->get($this->getName()))
-		{
-			\Bitrix\Crm\Entity\EntityEditor::registerSelectedUser($item->get($this->getName()));
-		}
-
-		return $result;
-
 	}
 }

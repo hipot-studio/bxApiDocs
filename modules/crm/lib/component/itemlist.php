@@ -232,7 +232,6 @@ abstract class ItemList extends Base
 	protected function getToolbarParameters(): array
 	{
 		$buttons = [];
-		$spotlight = null;
 
 		$container = Service\Container::getInstance();
 		$dynamicTypesLimit = RestrictionManager::getDynamicTypesLimitRestriction();
@@ -327,19 +326,6 @@ abstract class ItemList extends Base
 					'href' => $this->router->getItemListUrlInCurrentView(\CCrmOwnerType::Invoice),
 					'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
 				];
-
-				if (InvoiceSettings::getCurrent()->isShowInvoiceTransitionNotice())
-				{
-					$spotlight = [
-						'ID' => 'crm-old-invoices-transition',
-						'JS_OPTIONS' => [
-							'targetElement' => static::TOOLBAR_SETTINGS_BUTTON_ID,
-							'content' => Loc::getMessage('CRM_COMPONENT_ITEM_LIST_OLD_INVOICES_TRANSITION_SPOTLIGHT'),
-							'targetVertex' => 'middle-center',
-							'autoSave' => true,
-						],
-					];
-				}
 			}
 
 			$currentListView = Container::getInstance()->getRouter()->getCurrentListView(\CCrmOwnerType::SmartInvoice);
@@ -390,18 +376,18 @@ abstract class ItemList extends Base
 			if (($this->arParams['isRecurring'] ?? false) === true)
 			{
 				$text = (
-					$this->entityTypeId === \CCrmOwnerType::SmartInvoice
-						? Loc::getMessage('CRM_COMPONENT_ITEM_LIST_SMART_INVOICE')
-						: Loc::getMessage('CRM_COMPONENT_ITEM_LIST')
+				$this->entityTypeId === \CCrmOwnerType::SmartInvoice
+					? Loc::getMessage('CRM_COMPONENT_ITEM_LIST_SMART_INVOICE')
+					: Loc::getMessage('CRM_COMPONENT_ITEM_LIST')
 				);
 				$link = $this->router->getItemListUrl($this->entityTypeId, $this->getCategoryId());
 			}
 			else
 			{
 				$text = (
-					$this->entityTypeId === \CCrmOwnerType::SmartInvoice
-						? Loc::getMessage('CRM_COMPONENT_ITEM_RECURRING_LIST_SMART_INVOICE')
-						: Loc::getMessage('CRM_COMPONENT_ITEM_RECURRING_LIST')
+				$this->entityTypeId === \CCrmOwnerType::SmartInvoice
+					? Loc::getMessage('CRM_COMPONENT_ITEM_RECURRING_LIST_SMART_INVOICE')
+					: Loc::getMessage('CRM_COMPONENT_ITEM_RECURRING_LIST')
 				);
 
 				$link = $this->router->getItemRecurringListUrl($this->entityTypeId, $this->getCategoryId());
@@ -413,6 +399,36 @@ abstract class ItemList extends Base
 					'text' => $text,
 					'href' => $link,
 					'onclick' => new Buttons\JsHandler('BX.Crm.Page.openSlider("' . $link . '");'),
+				];
+			}
+		}
+
+		$type = Service\Container::getInstance()->getTypeByEntityTypeId($this->entityTypeId);
+		$customSectionId = $type ? $type->getCustomSectionId() : 0;
+		if (
+			$customSectionId > 0
+			&& Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()
+			&& Loader::includeModule('rest')
+			&& is_callable('\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl')
+		)
+		{
+
+			$customSectionCode = $this->getCustomSectionCodeById($customSectionId) ?? '';
+			if ($customSectionCode !== '')
+			{
+				$settingsItems[] = [
+					'text' => Loc::getMessage('CRM_COMPONENT_ITEM_LIST_AUTOMATED_SOLUTION_EXPORT_IMPORT_ITEM'),
+					'href' =>
+						(
+							new Uri(
+								\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl(
+									'automated_solution_one',
+									'dynamic_type_list'
+								)
+							)
+						)->addParams(['additional' => ['automatedSolutionCode' => $customSectionCode]])
+					,
+					'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
 				];
 			}
 		}
@@ -448,7 +464,6 @@ abstract class ItemList extends Base
 			'isWithFavoriteStar' => true,
 			// shrink title for dynamic types, they can have very long names
 			'isTitleNoShrink' => !\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId),
-			'spotlight' => $spotlight,
 			'entityTypeName' => \CCrmOwnerType::ResolveName($this->entityTypeId),
 			'categoryId' => $this->arResult['categoryId'],
 			'pathToEntityList' => '/crm/type/' . $this->entityTypeId,

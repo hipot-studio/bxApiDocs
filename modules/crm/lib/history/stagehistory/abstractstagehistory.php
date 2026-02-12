@@ -330,7 +330,7 @@ abstract class AbstractStageHistory
 
 	final protected function getAssigned(Difference $diff): int
 	{
-		return $diff->getCurrentValue(Item::FIELD_NAME_ASSIGNED) ?? 0;
+		return $diff->getValue(Item::FIELD_NAME_ASSIGNED) ?? 0;
 	}
 
 	final protected function getEntityTypeId(): int

@@ -1,6 +1,7 @@
 <?php
+
 namespace Bitrix\Crm\Settings;
-use Bitrix\Main;
+
 class ConversionSettings
 {
 	/** @var ConversionSettings  */

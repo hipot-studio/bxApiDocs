@@ -35,12 +35,12 @@ class Configuration extends Controller implements Errorable
 			$postfix = $this->getRequest()->getQuery('postfix');
 			if (!empty($postfix))
 			{
-				$context = Helper::getInstance()->getContextUser($postfix);
-				$setting = new Setting($context);
+				$userContext = Helper::getInstance()->getContextUser($postfix);
+				$setting = new Setting($userContext);
 				$access = Manifest::checkAccess(Manifest::ACCESS_TYPE_EXPORT, $setting->get(Setting::MANIFEST_CODE));
 				if ($access['result'] === true)
 				{
-					$structure = new Structure($context);
+					$structure = new Structure($userContext);
 
 					$name = $structure->getArchiveName();
 					if(empty($name))

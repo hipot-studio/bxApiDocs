@@ -20,7 +20,6 @@ use Bitrix\Crm\Integration\Analytics\Builder\Activity\EditActivityEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\FillRepeatSaleTipsEvent;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\RepeatSale\CostManager;
 use Bitrix\Crm\RepeatSale\DataCollector\CopilotMarkerLimitManager;
 use Bitrix\Crm\RepeatSale\Logger;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItemChecker;
@@ -128,11 +127,6 @@ final class FillRepeatSaleTips extends AbstractOperation
 		);
 
 		return !empty($filtered);
-	}
-
-	protected static function isSponsoredOperation(): bool
-	{
-		return CostManager::isSponsoredOperation();
 	}
 
 	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void

@@ -4,24 +4,59 @@ namespace Bitrix\Im\V2\Sync\Recent;
 
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Recent\Query\RecentFilter;
+use Bitrix\Im\V2\Recent\Query\RecentParams;
 use Bitrix\Im\V2\Recent\Recent;
 use Bitrix\Im\V2\Rest\PopupData;
+use Bitrix\Im\V2\Service\Locator;
 
 class RecentSync extends Recent
 {
 	public static function getRecentSync(array $chatIds): self
 	{
-		$recent = new static();
-
 		if (empty($chatIds))
 		{
-			return $recent;
+			return new static();
 		}
 
-		$userId = $recent->getContext()->getUserId();
-		$recentEntities = static::getEntities($userId, $chatIds);
+		$userId = Locator::getContext()->getUserId();
 
-		foreach ($recentEntities as $entity)
+		$filter = [];
+		$filter['userId'] = $userId;
+		$filter['chatIds'] = $chatIds;
+		$queryFilter = new RecentFilter($filter);
+
+		$recentEntities = static::getSyncRecentEntities(filter: $queryFilter);
+		return static::initByArray($recentEntities);
+	}
+
+	protected static function getSyncRecentEntities(RecentFilter $filter): array
+	{
+		$query = RecentTable::query();
+
+		$query->setSelect([
+			'ITEM_TYPE',
+			'ITEM_ID',
+			'ITEM_CID',
+			'ITEM_MID',
+			'UNREAD',
+			'PINNED',
+			'DATE_LAST_ACTIVITY',
+			'DATE_UPDATE',
+			'MARKED_ID',
+		]);
+
+		$params = new RecentParams($filter);
+		$params->apply($query);
+
+		return $query->fetchAll();
+	}
+
+	public static function initByArray(array $recentArray): static
+	{
+		$recent = new static();
+
+		foreach ($recentArray as $entity)
 		{
 			$recentItem = new RecentSyncItem();
 			$recentItem
@@ -38,27 +73,6 @@ class RecentSync extends Recent
 		}
 
 		return $recent;
-	}
-
-	protected static function getEntities(int $userId, array $chatIds): array
-	{
-		$query = RecentTable::query()
-			->setSelect([
-				'ITEM_TYPE',
-				'ITEM_ID',
-				'ITEM_CID',
-				'ITEM_MID',
-				'UNREAD',
-				'PINNED',
-				'DATE_LAST_ACTIVITY',
-				'DATE_UPDATE',
-				'MARKED_ID',
-			])
-			->where('USER_ID', $userId)
-			->whereIn('ITEM_CID', $chatIds)
-		;
-
-		return $query->fetchAll();
 	}
 
 	public function getEntityIds(): array

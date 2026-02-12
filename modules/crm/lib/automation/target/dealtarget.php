@@ -9,6 +9,7 @@ use Bitrix\Crm\PhaseSemantics;
 class DealTarget extends BaseTarget
 {
 	protected $entityStages;
+	protected ?int $categoryId = null;
 
 	public function isAvailable()
 	{
@@ -53,16 +54,21 @@ class DealTarget extends BaseTarget
 
 	public function getEntityStatus()
 	{
-		$entity = $this->getEntityFields(['STAGE_ID']);
+		$entity = $this->getEntityFields(['STAGE_ID', 'CATEGORY_ID']);
+		$this->categoryId = $entity['CATEGORY_ID'] ?? null;
 
 		return $entity['STAGE_ID'] ?? '';
 	}
 
 	public function getDocumentCategory(): int
 	{
-		$entity = $this->getEntityFields(['CATEGORY_ID']);
+		if ($this->categoryId === null)
+		{
+			$entity = $this->getEntityFields(['CATEGORY_ID']);
+			$this->categoryId = (int)$entity['CATEGORY_ID'];
+		}
 
-		return (int)$entity['CATEGORY_ID'];
+		return $this->categoryId;
 	}
 
 	public function setEntityStatus($statusId, $executeBy = null)
@@ -93,8 +99,7 @@ class DealTarget extends BaseTarget
 	{
 		if ($this->entityStages === null)
 		{
-			$entity = $this->getEntityFields(['CATEGORY_ID']);
-			$categoryId = isset($entity['CATEGORY_ID']) ? (int)$entity['CATEGORY_ID'] : 0;
+			$categoryId = $this->getDocumentCategory();
 			$this->entityStages = array_keys(DealCategory::getStageList($categoryId));
 		}
 
@@ -103,10 +108,9 @@ class DealTarget extends BaseTarget
 
 	public function getStatusInfos($categoryId = 0)
 	{
-		$entity = $this->getEntityFields(['CATEGORY_ID']);
-		if ($entity && !empty($entity['CATEGORY_ID']))
+		if ($this->getEntityId() > 0)
 		{
-			$categoryId = (int)$entity['CATEGORY_ID'];
+			$categoryId = $this->getDocumentCategory();
 		}
 
 		$processColor = \CCrmViewHelper::PROCESS_COLOR;

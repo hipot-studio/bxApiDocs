@@ -3,23 +3,61 @@
 namespace Bitrix\Bizproc\Internal\Service\Activity;
 
 use Bitrix\Bizproc\Activity\ActivityDescription;
+use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Entity\Activity\Interface\FixedDocumentComplexActivity;
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Activities;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
-use Bitrix\Main\Localization\Loc;
 use CBPRuntime;
+
+use Bitrix\Main\Localization\Loc;
 
 class ComplexActivityService
 {
+	private readonly Searcher $searcher;
+
+	public function __construct(
+		?Searcher $searcher = null,
+	)
+	{
+		$this->searcher = $searcher ?? Container::instance()->getActivitySearcherService();
+	}
+
 	private const RULES_PARAM = 'Rules';
+
+	public function getActivityDescriptionByCode(string $complexActivityCode): ?ActivityDescription
+	{
+		$description = $this->searcher->searchByCode($complexActivityCode);
+		if (!$description)
+		{
+			return null;
+		}
+
+		if (!$description->getComplexActivitySettings())
+		{
+			return null;
+		}
+
+		if (!in_array(ActivityType::NODE->value, $description->getType(), true))
+		{
+			return null;
+		}
+
+		if ($description->getNodeType() !== ActivityNodeType::COMPLEX->value)
+		{
+			return null;
+		}
+
+		return $description;
+	}
 
 	public function getFixedDocumentTypeForNodeAction(string $activityType): ?array
 	{
 		CBPRuntime::getRuntime()->includeActivityFile($activityType);
-		$className = 'CBP' . $activityType;
 
+		$className = 'CBP' . $activityType;
 		if (
 			!class_exists($className)
 			|| !isset(class_implements($className, false)[FixedDocumentComplexActivity::class])
@@ -32,32 +70,47 @@ class ComplexActivityService
 		return $className::getDocumentTypeForNodeAction();
 	}
 
-	public function getCorrespondingNodeActionActivityByName(string $complexActivityName): Activities
+	public function getCorrespondingNodeActionActivityByName(string $complexActivityCode): Activities
 	{
-		/** @var Searcher $activitySearcher */
-		$activitySearcher = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
+		$complexActivityDescription = $this->getActivityDescriptionByCode($complexActivityCode);
+		if (!$complexActivityDescription)
+		{
+			return new Activities();
+		}
 
-		$filterLogic = function (ActivityDescription $description) use ($complexActivityName) {
-			if (!in_array(ActivityType::NODE_ACTION->value, $description->getType(), true))
-			{
-				return false;
-			}
+		$settings = $complexActivityDescription->getComplexActivitySettings();
+		if (!$settings || $settings->actionDictionary->isEmpty())
+		{
+			return new Activities();
+		}
 
-			$nodeActionSettings = $description->getNodeActionSettings();
-			if (empty($nodeActionSettings))
-			{
-				return true;
-			}
-
-			return in_array($complexActivityName, $nodeActionSettings['INCLUDE'] ?? [],true);
-		};
-
-		return $activitySearcher
+		$nodeActionDescriptionCollection = $this->searcher
 			->searchByType(ActivityType::NODE_ACTION->value)
-			->filter($filterLogic)
-			->sort()
+			->filter(
+				fn(ActivityDescription $description)
+					=> $settings->actionDictionary->get(
+						$this->searcher->normalizeActivityCode($description->getClass())
+					) !== null
+			)
 		;
+
+		return (new Activities(
+			$nodeActionDescriptionCollection->map(
+				function (ActivityDescription $description) use ($settings): ActivityDescription
+				{
+					$normalizedActivityCode = $this->searcher->normalizeActivityCode($description->getClass());
+					$nodeActionPreset = $settings->actionDictionary->get($normalizedActivityCode)?->toPreset();
+					if (empty($nodeActionPreset))
+					{
+						return $description;
+					}
+
+					return $description->applyPreset($nodeActionPreset);
+				},
+			),
+		))->sort();
 	}
+
 
 	public function configureRuleProperty(): array
 	{

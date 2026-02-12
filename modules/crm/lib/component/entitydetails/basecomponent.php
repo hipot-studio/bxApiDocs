@@ -533,6 +533,10 @@ abstract class BaseComponent extends Crm\Component\Base
 			$this->getEntityID(),
 			$this->getFileHandlerUrl()
 		);
+		if ($this->isCopyMode())
+		{
+			$this->userFieldInfos = Crm\Service\EditorAdapter::convertUserFieldInfosForCopyMode($this->userFieldInfos);
+		}
 
 		return $this->userFieldInfos;
 	}

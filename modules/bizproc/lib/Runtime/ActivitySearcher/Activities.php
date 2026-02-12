@@ -88,6 +88,15 @@ final class Activities implements \IteratorAggregate, \JsonSerializable
 	}
 
 	/**
+	 * @param callable(ActivityDescription):mixed $callback
+	 * @return array
+	 */
+	public function map(callable $callback): array
+	{
+		return array_map($callback, $this->items);
+	}
+
+	/**
 	 * @return Array<string, Array<string, mixed>> - ['key' => ['NAME' => '', 'DESCRIPTION' => '', ...]]
 	 */
 	public function toArray(): array

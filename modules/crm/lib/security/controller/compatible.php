@@ -82,6 +82,11 @@ class Compatible extends Crm\Security\Controller
 		return $attributes;
 	}
 
+	public function getPreloadedPermissionCategoryAttribute(int $entityId): ?int
+	{
+		return null; // Not supported in Compatible controller
+	}
+
 	protected function clearPermissionAttributesCache(string $permissionEntityType, int $entityId): void
 	{
 		$entityPrefix = mb_strtoupper($permissionEntityType);

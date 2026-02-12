@@ -627,7 +627,7 @@ abstract class Factory
 
 	public function getItemsOpportunityAccountAmount(array $filter = [], ?int $ttl = null): int
 	{
-		if (!isset($this->getFieldsInfo()['OPPORTUNITY_ACCOUNT']))
+		if (!$this->getFieldsCollection()->hasField(Item::FIELD_NAME_OPPORTUNITY_ACCOUNT))
 		{
 			throw new InvalidOperationException('Error calc amount for opportunity_account field for entity ' . $this->getEntityTypeId());
 		}
@@ -2162,6 +2162,13 @@ abstract class Factory
 	{
 		$filter = $parameters['filter'] ?? [];
 		$select = $parameters['select'] ?? [];
+		$limit = $parameters['limit'] ?? 0;
+		$offset = $parameters['offset'] ?? 0;
+
+		if ($limit > 0 || $offset > 0)
+		{
+			return false;
+		}
 
 		if (count($filter) === 1 && $this->isFilterContainStrictFilterByField($filter, Item::FIELD_NAME_ID))
 		{

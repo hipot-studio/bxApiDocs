@@ -21,6 +21,7 @@ abstract class OAuth
 	public const WEB_TYPE = 'web';
 	public const MOBILE_TYPE = 'mobile';
 	protected UserData $publicUserData;
+	private $storedTokenRow = null;
 
 	/**
 	 * Returns the list of supported services
@@ -329,16 +330,101 @@ abstract class OAuth
 	 *
 	 * @return array|false
 	 */
-	protected function fetchStoredToken()
+	protected function fetchStoredToken(): bool|array
 	{
-		return Mail\Internals\OAuthTable::getList(array(
-			'filter' => array(
+		if (!is_null($this->storedTokenRow))
+		{
+			return $this->storedTokenRow;
+		}
+
+		$this->storedTokenRow = Mail\Internals\OAuthTable::getList([
+			'select' => [
+				'ID',
+				'UID',
+				'TOKEN',
+				'REFRESH_TOKEN',
+				'TOKEN_EXPIRES',
+			],
+			'filter' => [
 				'=UID' => $this->storedUid,
-			),
-			'order' => array(
+			],
+			'order' => [
 				'ID' => 'DESC',
-			),
-		))->fetch();
+			],
+		])->fetch();
+
+		if ($this->storedTokenRow === false)
+		{
+			$this->storedTokenRow = null;
+
+			return false;
+		}
+
+		return $this->storedTokenRow;
+	}
+
+	protected function setStoredToken(array $row, int $id): void
+	{
+		$result = Mail\Internals\OAuthTable::update(
+			$id,
+			$row,
+		);
+
+		if ($result->isSuccess())
+		{
+			$this->storedTokenRow = array_merge($row, [
+				'ID' => $id,
+				'UID' => $this->storedUid,
+			]);
+		}
+	}
+
+	public function renewTokens(): bool
+	{
+		$storedTokenRow = $this->fetchStoredToken();
+
+		if (empty($storedTokenRow) || !isset($storedTokenRow['REFRESH_TOKEN']))
+		{
+			return false;
+		}
+
+		$this->setOAuthEntityTokens($storedTokenRow);
+		$this->oauthEntity->setToken(null);
+
+		if ($this->oauthEntity->getNewAccessToken($storedTokenRow['REFRESH_TOKEN']))
+		{
+			$tokenData = $this->oauthEntity->getTokenData();
+
+			$this->setStoredToken(
+				[
+					'TOKEN' => $tokenData['access_token'],
+					'REFRESH_TOKEN' => $tokenData['refresh_token'],
+					'TOKEN_EXPIRES' => $tokenData['expires_in'],
+				],
+				(int)$storedTokenRow['ID']
+			);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Sets token, refresh token and token expiration for the OAuth entity.
+	 *
+	 * @param array{
+	 *     TOKEN: string|null,
+	 *     REFRESH_TOKEN: string,
+	 *     TOKEN_EXPIRES?: int
+	 * } $tokenData Array with token data.
+	 * @return void
+	 */
+	private function setOAuthEntityTokens(array $tokenData): void
+	{
+		$this->oauthEntity->setToken($tokenData['TOKEN']);
+		$this->oauthEntity->setRefreshToken($tokenData['REFRESH_TOKEN']);
+		$this->oauthEntity->setAccessTokenExpires((int)($tokenData['TOKEN_EXPIRES'] ?? 0));
 	}
 
 	/**
@@ -362,31 +448,15 @@ abstract class OAuth
 
 		if (!empty($item))
 		{
-			$this->oauthEntity->setToken($token = $item['TOKEN']);
-			$this->oauthEntity->setRefreshToken($item['REFRESH_TOKEN']);
-			$this->oauthEntity->setAccessTokenExpires((int)($item['TOKEN_EXPIRES'] ?? 0));
+			$this->setOAuthEntityTokens($item);
+
 			$expireThreshold = time() + $expireGapSeconds;
+
+			$token = $item['TOKEN'];
 
 			if (empty($token) || $item['TOKEN_EXPIRES'] > 0 && $item['TOKEN_EXPIRES'] < $expireThreshold)
 			{
-				$this->oauthEntity->setToken(null);
-
-				if (!empty($item['REFRESH_TOKEN']))
-				{
-					if ($this->oauthEntity->getNewAccessToken($item['REFRESH_TOKEN']))
-					{
-						$tokenData = $this->oauthEntity->getTokenData();
-
-						Mail\Internals\OAuthTable::update(
-							$item['ID'],
-							array(
-								'TOKEN' => $tokenData['access_token'],
-								'REFRESH_TOKEN' => $tokenData['refresh_token'],
-								'TOKEN_EXPIRES' => $tokenData['expires_in'],
-							)
-						);
-					}
-				}
+				$this->renewTokens();
 
 				$token = $this->oauthEntity->getToken();
 			}

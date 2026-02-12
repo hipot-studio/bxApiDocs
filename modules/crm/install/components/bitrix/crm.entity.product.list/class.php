@@ -10,6 +10,8 @@ use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Access\Permission\PermissionDictionary;
 use Bitrix\Catalog\Component\ImageInput;
+use Bitrix\Catalog\GroupTable;
+use Bitrix\Catalog\PriceTable;
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreProductTable;
 use Bitrix\Catalog\StoreTable;
@@ -30,11 +32,14 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Grid\Editor\Types;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
 use Bitrix\Sale;
 use Bitrix\UI\Util;
 use Bitrix\Catalog\Store\EnableWizard\Manager;
+use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\DB\SqlExpression;
 
 if (!Loader::includeModule('crm'))
 {
@@ -343,6 +348,10 @@ final class CCrmEntityProductListComponent
 				'ENTERED_PRICE' => CCrmCurrency::ConvertMoney($fields['ENTERED_PRICE'], $oldCurrencyId, $currencyId),
 				'DISCOUNT_ROW' => CCrmCurrency::ConvertMoney($fields['DISCOUNT_ROW'], $oldCurrencyId, $currencyId),
 				'DISCOUNT_SUM' => CCrmCurrency::ConvertMoney($fields['DISCOUNT_SUM'], $oldCurrencyId, $currencyId),
+				'CATALOG_PRICE' => isset($fields['CATALOG_PRICE'])
+					? CCrmCurrency::ConvertMoney($fields['CATALOG_PRICE'], $oldCurrencyId, $currencyId)
+					: null
+				,
 			];
 		}
 
@@ -1112,10 +1121,7 @@ final class CCrmEntityProductListComponent
 			}
 			if (
 				$this->arParams['IS_COPY_MODE']
-				&& !AccessController::getCurrent()->checkByValue(
-					\Bitrix\Catalog\Access\ActionDictionary::ACTION_PRICE_ENTITY_EDIT,
-					$this->entity['TYPE_ID'],
-				)
+				&& !$this->crmSettings['ALLOW_CATALOG_PRICE_EDIT']
 			)
 			{
 				$this->rows = Container::getInstance()->getProductRowChecker()->updateCatalogPrices(
@@ -3329,12 +3335,33 @@ final class CCrmEntityProductListComponent
 			'VAT_ID',
 			'MEASURE',
 		];
-		$rows = ProductTable::getList([
+		$getListParameters = [
 			'select' => $select,
 			'filter' => [
 				'=ID' => $ids,
 			],
-		]);
+		];
+		if (!$this->crmSettings['ALLOW_CATALOG_PRICE_EDIT'])
+		{
+			$basePriceTypeId = GroupTable::getBasePriceTypeId();
+			if ($basePriceTypeId)
+			{
+				$getListParameters['select']['CATALOG_PRICE'] = 'BASE_PRICE.PRICE';
+				$getListParameters['select']['CATALOG_CURRENCY'] = 'BASE_PRICE.CURRENCY';
+				$getListParameters['runtime'] = [
+					new ReferenceField(
+						'BASE_PRICE',
+						PriceTable::class,
+						[
+							'=this.ID' => 'ref.PRODUCT_ID',
+							'=ref.CATALOG_GROUP_ID' => new SqlExpression('?i', $basePriceTypeId),
+						],
+						['join_type' => Join::TYPE_LEFT],
+					),
+				];
+			}
+		}
+		$rows = ProductTable::getList($getListParameters);
 		foreach ($rows as $row)
 		{
 			$productId = (int)$row['PRODUCT_ID'];
@@ -3370,6 +3397,16 @@ final class CCrmEntityProductListComponent
 				$row['MEASURE_RATIO'] = $measure['RATIO'];
 			}
 			#endregion prepare measure
+
+			$row['CATALOG_PRICE'] =
+				isset($row['CATALOG_PRICE'])
+					? CCrmCurrency::ConvertMoney(
+						$row['CATALOG_PRICE'],
+						$row['CATALOG_CURRENCY'],
+						$this->currency['ID'],
+					)
+					: null
+			;
 
 			// TODO: prepare sets
 			/*

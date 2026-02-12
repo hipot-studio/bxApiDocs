@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Security;
 
+use Bitrix\Crm\Integration\Disk\DiskRepository;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
@@ -104,6 +105,12 @@ class DiskSecurityContext extends SecurityContext
 	{
 		if (!isset($this->entityTypeId, $this->entityId))
 		{
+			$file = DiskRepository::getInstance()->getFileById($objectId);
+			if ($file?->getCreatedBy() == $this->getUserId()) // I always have access to my own files
+			{
+				return true;
+			}
+
 			return false;
 		}
 

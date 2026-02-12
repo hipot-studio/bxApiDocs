@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Entity\User\UserError;
 use Bitrix\Im\V2\Integration\AI\CopilotError;
+use Bitrix\Im\V2\Integration\AI\Transcription\LaunchType;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Message;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -130,7 +131,7 @@ class File extends BaseController
 			(int)$message->getMessageId()
 		);
 
-		$transcriptionResult = $transcribeManager->transcribeFile();
+		$transcriptionResult = $transcribeManager->transcribeFile(LaunchType::Manual);
 
 		if (!$transcriptionResult->isSuccess())
 		{

@@ -1685,6 +1685,11 @@ class CCrmDealDetailsComponent
 				'HELP_MESSAGE' => $userField['HELP_MESSAGE'] ?? '',
 				'SETTINGS' => $userField['SETTINGS'] ?? null,
 			);
+			if ($this->isCopyMode)
+			{
+				$fieldInfo['ENTITY_VALUE_ID'] = 0;
+				$fieldInfo['ADDITIONAL']['FORCE_USE_VALUE'] = 'Y';
+			}
 
 			if($userField['USER_TYPE_ID'] === 'enumeration')
 			{

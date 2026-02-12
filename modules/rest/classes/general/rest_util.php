@@ -577,6 +577,17 @@ class CRestUtil
 	{
 		global $USER;
 
+		static $cache = [];
+
+		$userId = $USER->GetID();
+		$accessRights = $appInfo['ACCESS'] ?? null;
+		$cacheKey = $appId . '_' . $userId . '_' . md5(serialize($accessRights));
+
+		if (isset($cache[$cacheKey]))
+		{
+			return $cache[$cacheKey];
+		}
+
 		$hasAccess = false;
 
 		if($appInfo === null)
@@ -601,6 +612,8 @@ class CRestUtil
 		{
 			$hasAccess = \CRestUtil::isAdmin();
 		}
+
+		$cache[$cacheKey] = $hasAccess;
 
 		return $hasAccess;
 	}

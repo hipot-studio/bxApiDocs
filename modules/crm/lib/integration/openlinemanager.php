@@ -91,19 +91,36 @@ class OpenLineManager
 			return null;
 		}
 
-		$items = explode('|', $value);
-		if (!(is_array($items) && count($items) > 2 && $items[0] === 'imol'))
+		$lineId = self::getLineId($value);
+		if (!$lineId)
 		{
 			return null;
 		}
 
-		$typeID = $items[1];
-		$suffix = mb_strtoupper(preg_replace('/[^a-z0-9]/i', '', $typeID));
-		$text =
-			Loc::getMessage("CRM_OPEN_LINE_{$suffix}")
-			?? Loc::getMessage("CRM_OPEN_LINE_{$suffix}_MSGVER_1")
-			?? Loc::getMessage('CRM_OPEN_LINE_SEND_MESSAGE')
-		;
+		$text = '';
+		if (\Bitrix\ImOpenLines\Config::canViewHistory($lineId))
+		{
+			$text = self::isImOpenLinesValue($value)
+				? self::getOpenLineTitle($value)
+				: self::getLineTitle($value)
+			;
+		}
+		if (!$text)
+		{
+			$items = explode('|', $value);
+			if (!(is_array($items) && count($items) > 2 && $items[0] === 'imol'))
+			{
+				return null;
+			}
+
+			$typeID = $items[1];
+			$suffix = mb_strtoupper(preg_replace('/[^a-z0-9]/i', '', $typeID));
+			$text =
+				Loc::getMessage("CRM_OPEN_LINE_{$suffix}")
+				?? Loc::getMessage("CRM_OPEN_LINE_{$suffix}_MSGVER_1")
+				?? Loc::getMessage('CRM_OPEN_LINE_SEND_MESSAGE')
+			;
+		}
 
 		return [
 			'HREF' => '#',
@@ -181,6 +198,19 @@ class OpenLineManager
 		}
 
 		return $connectorId;
+	}
+
+	public static function getLineId(?string $code): ?string
+	{
+		if (!isset($code) || !self::isEnabled())
+		{
+			return null;
+		}
+
+		return self::isImOpenLinesValue($code)
+			? Chat::parseLinesChatEntityId(mb_substr($code, 5))['lineId']
+			: Chat::parseLinesChatEntityId($code)['lineId']
+		;
 	}
 
 	public static function getLineTitle(?string $code): ?string

@@ -13,12 +13,16 @@ use Bitrix\Crm\Automation;
 use Bitrix\Crm\EntityAddress;
 use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\EntityManageFacility;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integration\UserConsent as CrmIntegrationUserConsent;
 use Bitrix\Crm\Integrity\ActualEntitySelector;
 use Bitrix\Crm\Merger\EntityMerger;
 use Bitrix\Crm\Order\TradingPlatform;
 use Bitrix\Crm\WebForm\Debug\ResultEntityDebugLogger;
 use Bitrix\Main;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Event;
@@ -243,6 +247,8 @@ class ResultEntity
 				$dynamicResult = $dynamicOperation
 					->disableCheckAccess()
 					->disableCheckFields()
+					->disableBizProc()
+					->disableAutomation()
 					->launch();
 				$dynamicResult->isSuccess();
 
@@ -510,7 +516,11 @@ class ResultEntity
 		foreach ($fields as $presetField)
 		{
 			$fieldCode = $presetField['ENTITY_NAME'] . '_'. $presetField['FIELD_NAME'];
-			$field = EntityFieldProvider::getField($fieldCode);
+			$field = EntityFieldProvider::getField(
+				fieldCode: $fieldCode,
+				entityType: $presetField['ENTITY_NAME'],
+			);
+
 			if (!$field)
 			{
 				continue;
@@ -732,6 +742,8 @@ class ResultEntity
 				$dynamicResult = $dynamicOperation
 					->disableCheckAccess()
 					->disableCheckFields()
+					->disableBizProc()
+					->disableAutomation()
 					->launch();
 				$id = $dynamicResult->isSuccess() ? $dynamicItem->getId() : null;
 			}
@@ -1874,29 +1886,26 @@ class ResultEntity
 			$entityTypeName = $entity['ENTITY_NAME'];
 			$entityId = $entity['ITEM_ID'];
 
-			$wasAutomationLaunchedInOperation =
-				\CCrmOwnerType::isUseDynamicTypeBasedApproach(\CCrmOwnerType::ResolveID($entityTypeName))
-				|| (
-					$entityTypeName === \CCrmOwnerType::QuoteName
-					&& Crm\Settings\QuoteSettings::getCurrent()->isFactoryEnabled()
-				)
-			;
-
-			if (!$wasAutomationLaunchedInOperation)
+			try
 			{
-				$errors = array();
-				\CCrmBizProcHelper::AutoStartWorkflows(
+				$starter = new CrmStarter(new DocumentDto(
 					\CCrmOwnerType::ResolveID($entityTypeName),
 					$entityId,
-					$isEntityAdded ? \CCrmBizProcEventType::Create : \CCrmBizProcEventType::Edit,
-					$errors
-				);
-
-				if($isEntityAdded && empty($entity['IS_AUTOMATION_RUN']))
-				{
-					$starter = new Automation\Starter(\CCrmOwnerType::ResolveID($entityTypeName), $entityId);
-					$starter->runOnAdd();
-				}
+				));
+			}
+			catch (ArgumentException $exception)
+			{
+				$starter = null;
+			}
+			$starter?->runProcess(
+				new RunDataDto(
+					delay: 0, // move to background
+				),
+				$isEntityAdded ? \CCrmBizProcEventType::Create : \CCrmBizProcEventType::Edit,
+			);
+			if($isEntityAdded && empty($entity['IS_AUTOMATION_RUN']))
+			{
+				$starter?->runAutomation(new RunDataDto(delay: 0), \CCrmBizProcEventType::Create);
 			}
 
 			$bindings[] = array(

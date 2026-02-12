@@ -65,6 +65,14 @@ final class PermissionEntityBuilder
 
 	public function include(Permission $permission): self
 	{
+		/*
+			Very important!
+
+			If you add new permissions to the CRM, you need to add them here [crm/lib/integration/rest/configuration/
+			entity/role.php, method getEntityList] if you want them to be imported/exported from/to the industry CRM or
+			automated solutions.
+		*/
+
 		$entity = match ($permission) {
 			Permission::Contact => new Contact(),
 			Permission::Company => new Company(),

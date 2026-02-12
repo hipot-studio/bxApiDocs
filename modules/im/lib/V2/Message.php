@@ -43,11 +43,12 @@ use Bitrix\Im\V2\Message\MessageParameter;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
+use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 
 /**
  * Chat version #2
  */
-class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, DateFilterable
+class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, DateFilterable, AccessCheckable, ChatActionAccessCheckable
 {
 	use FieldAccessImplementation;
 	use ActiveRecordImplementation
@@ -713,6 +714,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	public function getSticker(): ?StickerItem
 	{
 		$stickerParam = $this->getParams()->get(Params::STICKER_PARAMS)->getValue();
+		if (empty($stickerParam))
+		{
+			return null;
+		}
 
 		$stickerId = (int)$stickerParam['ID'];
 		$packId = (int)$stickerParam['PACK_ID'];
@@ -1659,7 +1664,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			foreach ($files as $file)
 			{
 				$hasFiles = true;
-				$previewMessage .= " [{$file->getDiskFile()->getName()}]";
+				$previewMessage .= " [{$file->getDiskFile()->getName()}] ";
 			}
 		}
 
@@ -1750,6 +1755,11 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		return $result;
+	}
+
+	public function canDo(Im\V2\Permission\Action $action, mixed $target = null): bool
+	{
+		return $this->getChat()->canDo($action, $target);
 	}
 
 	public static function getRestEntityName(): string
@@ -1866,17 +1876,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getContextId(): string
 	{
-		$chat = $this->getChat();
-
-		if ($chat instanceof Im\V2\Chat\PrivateChat)
-		{
-			$userIds = $chat->getRelations()->getUserIds();
-			$implodeUserIds = implode(':', $userIds);
-
-			return "{$implodeUserIds}/{$this->getMessageId()}";
-		}
-
-		return "{$chat->getDialogId()}/{$this->getMessageId()}";
+		return "{$this->getChat()->getDialogContextId()}/{$this->getMessageId()}";
 	}
 
 	protected function getContextTag(): string

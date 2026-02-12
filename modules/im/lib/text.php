@@ -296,7 +296,7 @@ class Text
 
 		$innerText =
 			$userId === 'all'
-			? Loc::getMessage('IM_MESSAGE_MENTION_ALL')
+			? Loc::getMessage('IM_MESSAGE_MENTION_ALL_MSGVER_1')
 			: \Bitrix\Im\User::getInstance($userId)->getFullName(false)
 		;
 

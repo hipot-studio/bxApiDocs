@@ -1207,7 +1207,7 @@ class CAllIMContactList
 		return CUser::SetLastActivityDate($userId, $cache);
 	}
 
-	public static function SetOffline($userId = null)
+	public static function SetOffline($userId = null, bool $needUserLogout = true)
 	{
 		global $USER, $DB;
 
@@ -1241,7 +1241,10 @@ class CAllIMContactList
 			unset($_SESSION['IM_LAST_ONLINE'], $_SESSION['USER_LAST_ONLINE_'.$userId]);
 		}
 
-		$USER->Logout();
+		if ($needUserLogout)
+		{
+			$USER->Logout();
+		}
 
 		return true;
 	}

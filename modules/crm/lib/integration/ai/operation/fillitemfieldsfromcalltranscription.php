@@ -354,8 +354,6 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 				// disable all checks except check access
 				->disableAllChecks()
 				->enableCheckAccess()
-				->disableBizProc()
-				->disableAutomation()
 		;
 
 		$updateResult = $operation->launch();

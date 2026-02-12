@@ -1226,6 +1226,12 @@ class CCrmContactDetailsComponent
 				//'CONTEXT' => $this->guid
 			);
 
+			if ($this->isCopyMode)
+			{
+				$fieldInfo['ENTITY_VALUE_ID'] = 0;
+				$fieldInfo['ADDITIONAL']['FORCE_USE_VALUE'] = 'Y';
+			}
+
 			if($userField['USER_TYPE_ID'] === 'enumeration')
 			{
 				$enumerationFields[$fieldName] = $userField;

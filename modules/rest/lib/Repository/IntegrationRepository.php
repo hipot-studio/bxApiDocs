@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\Repository;
 
-use Bitrix\Main\Entity\Query;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Rest\Entity\Collection\IntegrationCollection;
 use Bitrix\Rest\Entity\Integration;
 use Bitrix\Rest\Enum\APAuth\PasswordType;
@@ -55,6 +55,28 @@ class IntegrationRepository implements \Bitrix\Rest\Contract\Repository\Integrat
 			->addFilter('!=ELEMENT_CODE', ElementCodeType::IN_WEBHOOK->value);
 
 		return !empty($query->fetch());
+	}
+
+	public function getCloudCount(): int
+	{
+		$query = $this->buildNotSystemIntegrationsQuery()
+			->addSelect('ID')
+			->countTotal(true)
+		;
+
+		return (int)$query->exec()->getCount();
+
+	}
+
+	public function getBoxedCount(): int
+	{
+		$query = $this->buildNotSystemIntegrationsQuery()
+			->setSelect(['ID'])
+			->addFilter('!=ELEMENT_CODE', ElementCodeType::IN_WEBHOOK->value)
+			->countTotal(true)
+		;
+
+		return (int)$query->exec()->getCount();
 	}
 
 	/**

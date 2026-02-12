@@ -15,6 +15,7 @@ use Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessages;
 use Bitrix\Im\V2\Message\Reaction\ReactionPopupItem;
 use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Message\Sticker\StickerCollection;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
@@ -35,13 +36,14 @@ use Bitrix\Im\V2\Rest\RestConvertible;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 
 /**
  * @extends Collection<Message>
  * @method self filter(callable $predicate)
  * @method Message offsetGet($key)
  */
-class MessageCollection extends Collection implements RestConvertible, PopupDataAggregatable, DateFilterable
+class MessageCollection extends Collection implements RestConvertible, PopupDataAggregatable, DateFilterable, AccessCheckable, ChatActionAccessCheckable
 {
 	use ContextCustomer;
 
@@ -779,6 +781,26 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	}
 
 	//endregion
+
+	public function checkAccess(?int $userId = null): Result
+	{
+		foreach ($this as $message)
+		{
+			$checkResult = $message->checkAccess();
+
+			if (!$checkResult->isSuccess())
+			{
+				return $checkResult;
+			}
+		}
+
+		return new Result();
+	}
+
+	public function canDo(Action $action, mixed $target = null): bool
+	{
+		return $this->getCommonChat()->canDo($action, $target);
+	}
 
 	public function unpin(bool $clearParams = true): Result
 	{

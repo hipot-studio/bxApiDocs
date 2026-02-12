@@ -1,4 +1,4 @@
-<?
+<?php
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -6,12 +6,10 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\ActionFilter;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Application;
-use Bitrix\Main\Web\Json;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Rest\Configuration\Controller;
@@ -20,10 +18,9 @@ use Bitrix\Rest\Configuration\Manifest;
 use Bitrix\Rest\Configuration\Setting;
 use Bitrix\Rest\Configuration\Helper;
 use Bitrix\Rest\Configuration\DataProvider;
-use Bitrix\Disk\Internals\FolderTable;
-use Bitrix\Disk\SystemUser;
 use Bitrix\Rest\Configuration\Action\Import;
 use Bitrix\Rest\Configuration\Notification;
+use Bitrix\Rest\Internal;
 
 Loc::loadMessages(__FILE__);
 
@@ -34,6 +31,19 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 	protected $actionError;
 	protected $diskFolder = false;
 	protected $savedActionUserContextPostfix = 'saved';
+
+	public function onPrepareComponentParams($arParams): array
+	{
+		$arParams['IMPORT_DISK_FOLDER_ID'] = $arParams['IMPORT_DISK_FOLDER_ID'] ?? null;
+		$arParams['IMPORT_DISK_STORAGE_PARAMS'] = $arParams['IMPORT_DISK_STORAGE_PARAMS'] ?? null;
+		$arParams['MODE'] = $arParams['MODE'] ?? null;
+		$arParams['MANIFEST_CODE'] = $arParams['MANIFEST_CODE'] ?? null;
+		$arParams['UNINSTALL_APP_ON_FINISH'] = $arParams['UNINSTALL_APP_ON_FINISH'] ?? false;
+		$arParams['PROCESS_ID'] = (int) ($arParams['PROCESS_ID'] ?? 0);
+		$arParams['IMPORT_MANIFEST'] = is_array($arParams['IMPORT_MANIFEST'] ?? null) ? $arParams['IMPORT_MANIFEST'] : [];
+
+		return $arParams;
+	}
 
 	protected function checkRequiredParams()
 	{
@@ -283,7 +293,7 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 					$result['COUNT'] = $count;
 				}
 
-				if ($result['ERROR_CODE'] === $provider::ERROR_DECODE_DATA)
+				if (isset($result['ERROR_CODE']) && $result['ERROR_CODE'] === $provider::ERROR_DECODE_DATA)
 				{
 					$this->setActionError(
 						Loc::getMessage(
@@ -295,7 +305,7 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 					);
 				}
 
-				if ($result['SANITIZE'])
+				if (isset($result['SANITIZE']) && $result['SANITIZE'])
 				{
 					$this->setActionError(
 						Loc::getMessage(
@@ -349,11 +359,10 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 				)
 				{
 					$result['next'] = 'save';
-					$setting = new Setting(
-						$this->getUserContext(
-							$this->savedActionUserContextPostfix
-						)
+					$userContext = $this->getUserContext(
+						$this->savedActionUserContextPostfix
 					);
+					$setting = new Setting($userContext);
 					$setting->deleteFull();
 					$this->deleteBackupFolder();
 				}
@@ -486,7 +495,10 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 		{
 			$import = new Import();
 			$import->setContext($this->getUserContext());
-			$import->setManifestCode($this->arParams['MANIFEST_CODE']);
+			$import
+				->setManifestCode($this->arParams['MANIFEST_CODE'])
+				->setManifestData($this->arParams['IMPORT_MANIFEST'])
+			;
 			$result = $import->doFinish(
 				$this->arParams['MODE'] ?? Helper::MODE_IMPORT
 			);
@@ -496,22 +508,24 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 		return $result;
 	}
 
-	public function clearAction()
+	public function clearAction(?string $code = null, ?int $step = null, mixed $clearFull = null)
 	{
 		$result = [];
 		if($this->checkRequiredParams())
 		{
-			$request = Application::getInstance()->getContext()->getRequest();
-			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $request->getPost('code'));
-			$step = (int) $request->getPost('step');
-			$next = htmlspecialcharsbx($request->getPost('next'));
-			$clearFull = $request->getPost('clear') == 'true' ? : false;
+			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $code ?? $this->request->getPost('code'));
+			$step = (int) ($step ?? $this->request->getPost('step'));
+			$next = htmlspecialcharsbx($this->request->getPost('next'));
+			$clearFull = ($clearFull ?? ($this->request->getPost('clear') === 'true'));
 
 			if ($code)
 			{
 				$import = new Import();
 				$import->setContext($this->getUserContext());
-				$import->setManifestCode($this->arParams['MANIFEST_CODE']);
+				$import
+					->setManifestCode($this->arParams['MANIFEST_CODE'])
+					->setManifestData($this->arParams['IMPORT_MANIFEST'])
+				;
 				$result = $import->doClean(
 					$code,
 					$step,
@@ -532,7 +546,7 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 		return $result;
 	}
 
-	public function importAction()
+	public function importAction(?string $code = null, ?int $step = null): array
 	{
 		$result = [
 			'result' => true
@@ -541,13 +555,15 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 		$import->setContext($this->getUserContext());
 		if ($this->checkRequiredParams())
 		{
-			$request = Application::getInstance()->getContext()->getRequest();
-			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $request->getPost("code"));
-			$step = (int) $request->getPost("step");
+			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $code ?? $this->request->getPost("code"));
+			$step = (int) ($step ?? $this->request->getPost("step"));
 			if ($code)
 			{
 				$content = $this->getItemContent($code, $step);
-				$import->setManifestCode($this->arParams['MANIFEST_CODE']);
+				$import
+					->setManifestCode($this->arParams['MANIFEST_CODE'])
+					->setManifestData($this->arParams['IMPORT_MANIFEST'])
+				;
 				$result = $import->doLoad(
 					$step,
 					$code,
@@ -569,7 +585,7 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 		$result = [];
 		if($this->checkRequiredParams())
 		{
-			$request = Application::getInstance()->getContext()->getRequest();
+			$request = $this->request;
 			$code = preg_replace('/[^a-zA-Z0-9_]/', '', $request->getPost("code"));
 			$step = intval($request->getPost("step"));
 			$next = htmlspecialcharsbx($request->getPost("next"));
@@ -609,7 +625,7 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 
 		if($this->checkRequiredParams())
 		{
-			$request = Application::getInstance()->getContext()->getRequest();
+			$request = $this->request;
 			$step = intval($request->getPost("step"));
 			$next = htmlspecialcharsbx($request->getPost("next"));
 			$type = $request->getPost("type");
@@ -626,7 +642,10 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 
 			$import = new Import();
 			$import->setContext($contextUser);
-			$import->setManifestCode($this->arParams['MANIFEST_CODE']);
+			$import
+				->setManifestCode($this->arParams['MANIFEST_CODE'])
+				->setManifestData($this->arParams['IMPORT_MANIFEST'])
+			;
 			$result = $import->doInitManifest(
 				$next,
 				$step,

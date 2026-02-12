@@ -33,14 +33,14 @@ class Rest
 	 * Delete trace.
 	 *
 	 * @param array $query Query parameters.
-	 * @param int $nav Navigation.
-	 * @param \CRestServer $server Rest server.
+	 *
 	 * @return void
+	 *
 	 * @throws RestException
 	 */
-	public static function deleteTrace($query, $nav = 0, \CRestServer $server)
+	public static function deleteTrace($query)
 	{
-		$id = empty($query['id']) ? null : (int) $query['id'];
+		$id = empty($query['id']) ? null : (int)$query['id'];
 		if (!$id)
 		{
 			self::printErrors(["Parameter `id` required."]);
@@ -71,12 +71,12 @@ class Rest
 	 * Add trace.
 	 *
 	 * @param array $query Query parameters.
-	 * @param int $nav Navigation.
-	 * @param \CRestServer $server Rest server.
+	 *
 	 * @return int
+	 * 
 	 * @throws RestException
 	 */
-	public static function addTrace($query, $nav = 0, \CRestServer $server)
+	public static function addTrace($query)
 	{
 		$trace = empty($query['TRACE']) ? null : $query['TRACE'];
 		if (!$trace)
@@ -93,7 +93,7 @@ class Rest
 			self::printErrors(["Can not parse JSON in parameter `TRACE`."]);
 		}
 
-		$entities = isset($query['ENTITIES']) ? $query['ENTITIES'] : [];
+		$entities = $query['ENTITIES'] ?? [];
 		$entities = is_array($entities) ? $entities : [];
 		$allowedEntityTypes = [
 			\CCrmOwnerType::CompanyName,

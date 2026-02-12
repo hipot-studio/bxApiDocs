@@ -7,6 +7,7 @@ use Bitrix\Crm;
 use CCrmOwnerType;
 use Bitrix\Crm\Reservation\QuantityCheckerTrait;
 use Bitrix\Crm\Reservation\AvailabilityServicesCheckerTrait;
+use Bitrix\Crm\Reservation\Validator;
 
 final class InventoryManagementChecker
 {
@@ -169,5 +170,101 @@ final class InventoryManagementChecker
 	private function isProcessInventoryManagementAvailable(): bool
 	{
 		return $this->factory->isInventoryManagementEnabled();
+	}
+
+	public function checkProductRows(array $currentRows, array $actualRows): Main\Result
+	{
+		if (!$this->isProcessInventoryManagementAvailable())
+		{
+			return new Main\Result();
+		}
+
+		if ($this->item->isNew())
+		{
+			return $this->checkProductRowsBeforeAdd($currentRows, $actualRows);
+		}
+		else
+		{
+			return $this->checkProductRowsBeforeUpdate($currentRows, $actualRows);
+		}
+	}
+
+	private function checkProductRowsBeforeAdd(array $currentRows, array $actualRows): Main\Result
+	{
+		if (empty($currentRows))
+		{
+			return new Main\Result();
+		}
+
+		return $this->runProductRowValidators(
+			[
+				Validator\Factory::VALIDATOR_CUSTOM_PRODUCT_RESERVE,
+			],
+			$currentRows,
+			$actualRows
+		);
+	}
+
+	private function checkProductRowsBeforeUpdate(array $currentRows, array $actualRows): Main\Result
+	{
+		if (empty($currentRows))
+		{
+			return new Main\Result();
+		}
+
+		return $this->runProductRowValidators(
+			[
+				Validator\Factory::VALIDATOR_AVAILABLE_PRODUCT,
+				Validator\Factory::VALIDATOR_CUSTOM_PRODUCT_RESERVE,
+			],
+			$currentRows,
+			$actualRows
+		);
+	}
+
+	private function runProductRowValidators(array $validatorCodes, array $currentRows, array $actualRows): Main\Result
+	{
+		$currentRows = $this->prepareProductRows($currentRows);
+		$actualRows = $this->prepareProductRows($actualRows);
+
+		$validatorList = Validator\Factory::getInstance()->getValidatorCollection($validatorCodes);
+		foreach ($validatorList as $validator)
+		{
+			$validatorResult = $validator->validateRows($currentRows, $actualRows);
+			if (!$validatorResult->isSuccess())
+			{
+				return $validatorResult;
+			}
+		}
+		unset(
+			$validatorResult,
+			$validatorList,
+		);
+
+		return new Main\Result();
+	}
+
+	private function prepareProductRows(array $productRows): array
+	{
+		if (empty($productRows))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($productRows as $index => $row)
+		{
+			$id = (int)($row['ID'] ?? 0);
+			if ($id > 0)
+			{
+				$result[$id] = $row;
+			}
+			else
+			{
+				$result['n' . $index] = $row;
+			}
+		}
+
+		return $result;
 	}
 }

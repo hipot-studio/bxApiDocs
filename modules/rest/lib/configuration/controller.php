@@ -48,6 +48,7 @@ class Controller
 		if (!is_null($manifest))
 		{
 			$setting = new Setting($contextUser);
+			$runtimeData = $setting->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION) ?? [];
 
 			$event = new Event(
 				'rest',
@@ -59,7 +60,7 @@ class Controller
 					'MANIFEST' => $manifest,
 					'ITEM_CODE' => $itemCode,
 					'SETTING' => $setting->get(Setting::SETTING_MANIFEST),
-					'ADDITIONAL_OPTION' => $setting->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION),
+					'ADDITIONAL_OPTION' => $runtimeData,
 					'USER_ID' => $setting->get(Setting::SETTING_USER_ID) ?? 0,
 				]
 			);
@@ -71,11 +72,25 @@ class Controller
 					'FILE_NAME' => $parameters['FILE_NAME'],
 					'CONTENT' => $parameters['CONTENT'],
 					'FILES' => $parameters['FILES'] ?? null,
-					'NEXT' => $parameters['NEXT'],
+					'NEXT' => $parameters['NEXT'] ?? null,
 					'ERROR_MESSAGES' => $parameters['ERROR_MESSAGES'] ?? null,
 					'ERROR_ACTION' => $parameters['ERROR_ACTION'] ?? null,
 					'ERROR_EXCEPTION' => $parameters['ERROR_EXCEPTION'] ?? null,
 				];
+				if (!empty($parameters['ADDITIONAL_OPTION']) && is_array($parameters['ADDITIONAL_OPTION']))
+				{
+					$newRuntimeData = array_replace_recursive(
+						($newRuntimeData ?? $runtimeData),
+						$parameters['ADDITIONAL_OPTION']
+					);
+				}
+			}
+			if (isset($newRuntimeData))
+			{
+				$setting->set(
+					Setting::SETTING_ACTION_ADDITIONAL_OPTION,
+					$newRuntimeData,
+				);
 			}
 		}
 
@@ -88,18 +103,27 @@ class Controller
 			'NEXT' => false
 		];
 
-		$data['SETTING'] = null;
-		if (isset($data['CONTEXT_USER']))
-		{
-			$setting = new Setting($data['CONTEXT_USER']);
-			$data['SETTING'] = $setting->get(Setting::SETTING_MANIFEST);
-			$data['USER_ID'] = $setting->get(Setting::SETTING_USER_ID) ?? 0;
-		}
+		$settingSession = new Setting($data['CONTEXT_USER']);
+		$runtimeData = $settingSession->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION) ?? [];
 
 		$event = new Event(
 			'rest',
 			static::ON_REST_APP_CONFIGURATION_CLEAR,
-			$data
+			[
+				'CODE' => $data['CODE'],
+				'STEP' => $data['STEP'],
+				'NEXT' => $data['NEXT'],
+				'CONTEXT' => $data['CONTEXT'],
+				'CONTEXT_USER' => $data['CONTEXT_USER'],
+				'CLEAR_FULL' => $data['CLEAR_FULL'],
+				'PREFIX_NAME' => $data['PREFIX_NAME'],
+				'MANIFEST_CODE' => $data['MANIFEST_CODE'],
+				'IMPORT_MANIFEST' => $data['IMPORT_MANIFEST'],
+				'MANIFEST' => Manifest::get($data['MANIFEST_CODE']),
+				'SETTING' => $settingSession->get(Setting::SETTING_MANIFEST),
+				'ADDITIONAL_OPTION' => $runtimeData,
+				'USER_ID' => $settingSession->get(Setting::SETTING_USER_ID) ?? 0,
+			]
 		);
 		EventManager::getInstance()->send($event);
 		foreach ($event->getResults() as $eventResult)
@@ -116,6 +140,21 @@ class Controller
 			{
 				OwnerEntityTable::deleteMulti($parameters['OWNER_DELETE']);
 			}
+
+			if (!empty($parameters['ADDITIONAL_OPTION']) && is_array($parameters['ADDITIONAL_OPTION']))
+			{
+				$newRuntimeData = array_replace_recursive(
+					($newRuntimeData ?? $runtimeData),
+					$parameters['ADDITIONAL_OPTION']
+				);
+			}
+		}
+		if (isset($newRuntimeData))
+		{
+			$settingSession->set(
+				Setting::SETTING_ACTION_ADDITIONAL_OPTION,
+				$newRuntimeData,
+			);
 		}
 
 		return $result;
@@ -126,9 +165,11 @@ class Controller
 		$result = [];
 		$params['CONTEXT_USER'] = $params['CONTEXT_USER'] ?: false;
 		$setting = new Setting($params['CONTEXT_USER']);
+		$entityMapping = $setting->get(Setting::SETTING_RATIO);
+		$runtimeData = $setting->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION) ?? [];
 
 		$app = $setting->get(Setting::SETTING_APP_INFO);
-		if ($app['ID'] > 0)
+		if (!empty($app['ID']) && $app['ID'] > 0)
 		{
 			$owner = $app['ID'];
 			$ownerType = OwnerEntityTable::ENTITY_TYPE_APPLICATION;
@@ -145,29 +186,37 @@ class Controller
 			[
 				'CODE' => $params['CODE'],
 				'CONTENT' => $params['CONTENT'],
-				'RATIO' => $params['RATIO'],
+				'RATIO' => $entityMapping ?? [],
 				'CONTEXT' => $params['CONTEXT'],
 				'CONTEXT_USER' => $params['CONTEXT_USER'],
 				'SETTING' => $setting->get(Setting::SETTING_MANIFEST),
 				'USER_ID' => $setting->get(Setting::SETTING_USER_ID) ?? 0,
 				'MANIFEST_CODE' => $params['MANIFEST_CODE'],
-				'IMPORT_MANIFEST' => $params['IMPORT_MANIFEST'],
-				'ADDITIONAL_OPTION' => is_array($params['ADDITIONAL_OPTION']) ? $params['ADDITIONAL_OPTION'] : [],
+				'IMPORT_MANIFEST' => $params['IMPORT_MANIFEST'] ?? [],
+				'MANIFEST' => Manifest::get($params['MANIFEST_CODE']),
+				'ADDITIONAL_OPTION' => $runtimeData,
 				'APP_ID' => intVal($owner),
 			]
 		);
 
 		EventManager::getInstance()->send($event);
+		$saveEntityMapping = false;
 		foreach ($event->getResults() as $eventResult)
 		{
 			$parameters = $eventResult->getParameters();
 			$result[] = [
-				'RATIO' => $parameters['RATIO'],
+				'RATIO' => $parameters['RATIO'] ?? null,
 				'ERROR_MESSAGES' => $parameters['ERROR_MESSAGES'] ?? null,
 				'ERROR_ACTION' => $parameters['ERROR_ACTION'] ?? null,
-				'ERROR_EXCEPTION' => $parameters['ERROR_EXCEPTION']
+				'ERROR_EXCEPTION' => $parameters['ERROR_EXCEPTION'] ?? null
 			];
 
+			if (!empty($parameters['RATIO']))
+			{
+				$saveEntityMapping = true;
+				$entityMapping[$params['CODE']] ??= [];
+				$entityMapping[$params['CODE']] = array_replace($entityMapping[$params['CODE']], $parameters['RATIO']);
+			}
 			if (isset($parameters['OWNER_DELETE']) && is_array($parameters['OWNER_DELETE']))
 			{
 				OwnerEntityTable::deleteMulti($parameters['OWNER_DELETE']);
@@ -177,6 +226,26 @@ class Controller
 			{
 				OwnerEntityTable::saveMulti($owner, $ownerType, $parameters['OWNER']);
 			}
+
+			if (!empty($parameters['ADDITIONAL_OPTION']) && is_array($parameters['ADDITIONAL_OPTION']))
+			{
+				$newRuntimeData = array_replace_recursive(
+					($newRuntimeData ?? $runtimeData),
+					$parameters['ADDITIONAL_OPTION']
+				);
+			}
+		}
+
+		if ($saveEntityMapping)
+		{
+			$setting->set(Setting::SETTING_RATIO, $entityMapping);
+		}
+		if (isset($newRuntimeData))
+		{
+			$setting->set(
+				Setting::SETTING_ACTION_ADDITIONAL_OPTION,
+				$newRuntimeData
+			);
 		}
 
 		return $result;
@@ -185,6 +254,10 @@ class Controller
 	public static function callEventFinish($params)
 	{
 		$result = [];
+		if (!empty($params['MANIFEST_CODE']))
+		{
+			$params['MANIFEST'] = Manifest::get($params['MANIFEST_CODE']);
+		}
 		$event = new Event(
 			'rest',
 			static::ON_REST_APP_CONFIGURATION_FINISH,

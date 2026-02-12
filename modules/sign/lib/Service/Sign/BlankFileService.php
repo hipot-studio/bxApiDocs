@@ -115,7 +115,7 @@ class BlankFileService
 	{
 		$result = new Result();
 
-		if (!in_array($file->type, self::ALLOWED_EXTENSIONS, true))
+		if (!in_array(strtolower($file->type), self::ALLOWED_EXTENSIONS, true))
 		{
 			$result->addError(
 				new \Bitrix\Main\Error(

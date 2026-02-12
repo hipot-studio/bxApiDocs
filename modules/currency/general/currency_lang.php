@@ -42,7 +42,7 @@ class CCurrencyLang extends CAllCurrencyLang
 
 	protected static int $useHideZero = 0;
 
-	private static string $region;
+	private static ?string $region;
 
 	public static function enableUseHideZero(): void
 	{

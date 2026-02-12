@@ -17,7 +17,6 @@ use Bitrix\Crm\Entity\Traits\UserFieldPreparer;
 use Bitrix\Crm\FieldContext\EntityFactory;
 use Bitrix\Crm\FieldContext\ValueFiller;
 use Bitrix\Crm\Format\TextHelper;
-use Bitrix\Crm\History\DealStageHistoryEntry;
 use Bitrix\Crm\Integration\Channel\DealChannelBinding;
 use Bitrix\Crm\Integration\Im\ProcessEntity\NotificationManager;
 use Bitrix\Crm\Integration\PullManager;
@@ -4777,7 +4776,14 @@ class CAllCrmDeal
 				}
 				unset($arFilter[$k]);
 			}
-			elseif ($k != 'ID' && $k != 'LOGIC' && $k != '__INNER_FILTER' && mb_strpos($k, 'UF_') !== 0 && preg_match('/^[^\=\%\?\>\<]{1}/', $k) === 1)
+			elseif (
+				$k !== 'ID'
+				&& $k !== 'LOGIC'
+				&& $k !== '__INNER_FILTER'
+				&& !str_starts_with($k, 'UF_')
+				&& preg_match('/^[^\=\%\?\>\<]{1}/', $k) === 1
+				&& str_ends_with($k, '_numsel') === false
+			)
 			{
 				$arFilter['%'.$k] = $v;
 				unset($arFilter[$k]);
@@ -5205,15 +5211,11 @@ class CAllCrmDeal
 
 		if(!isset($options['REGISTER_STATISTICS']) || $options['REGISTER_STATISTICS'] === true)
 		{
-			$stageHistoryFields = [
-				'CATEGORY_ID' => $newCategoryID,
-				'STAGE_ID' => $newStageID,
-			];
 			self::getStageHistoryAdapter()
 				->setPreviousFields($ID, $fields)
 				->performUpdate(
 					$ID,
-					$stageHistoryFields,
+					$currentFields,
 					[],
 				);
 			DealSumStatisticEntry::processCagegoryChange($ID);

@@ -40,7 +40,7 @@ class Item
 	 */
 	public function canRead(int $entityTypeId, int $entityId): bool
 	{
-		$itemIdentifier = ItemIdentifier::createByParams($entityTypeId, $entityId);
+		$itemIdentifier = ItemIdentifier::createByParams($entityTypeId, $entityId, $this->getPreloadedPermissionCategoryAttribute($entityTypeId, $entityId));
 
 		return $itemIdentifier && $this->canReadItemIdentifier($itemIdentifier);
 	}
@@ -53,7 +53,7 @@ class Item
 	 */
 	public function canUpdate(int $entityTypeId, int $entityId): bool
 	{
-		$itemIdentifier = ItemIdentifier::createByParams($entityTypeId, $entityId);
+		$itemIdentifier = ItemIdentifier::createByParams($entityTypeId, $entityId, $this->getPreloadedPermissionCategoryAttribute($entityTypeId, $entityId));
 
 		return $itemIdentifier && $this->canUpdateItemIdentifier($itemIdentifier);
 	}
@@ -66,7 +66,7 @@ class Item
 	 */
 	public function canDelete(int $entityTypeId, int $entityId): bool
 	{
-		$itemIdentifier = ItemIdentifier::createByParams($entityTypeId, $entityId);
+		$itemIdentifier = ItemIdentifier::createByParams($entityTypeId, $entityId, $this->getPreloadedPermissionCategoryAttribute($entityTypeId, $entityId));
 
 		return $itemIdentifier && $this->canDeleteItemIdentifier($itemIdentifier);
 	}
@@ -372,5 +372,12 @@ class Item
 		return $this->permissionsManager
 			->hasPermissionByEntityAttributes(PermissionEntityTypeHelper::getPermissionEntityTypeForItem($item), $permissionType, $itemPermissionAttributes)
 		;
+	}
+
+	private function getPreloadedPermissionCategoryAttribute(int $entityTypeId, int $entityId): ?int
+	{
+		$permissionEntity = (new PermissionEntityTypeHelper($entityTypeId))->getPermissionEntityTypeForCategory(0);
+
+		return \Bitrix\Crm\Security\Manager::resolveController($permissionEntity)?->getPreloadedPermissionCategoryAttribute($entityId);
 	}
 }

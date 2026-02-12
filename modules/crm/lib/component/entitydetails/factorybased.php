@@ -44,6 +44,7 @@ use Bitrix\Main\ObjectException;
 use Bitrix\Main\Request;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserField\Dispatcher;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 use Bitrix\Main\UserField\Types\DateTimeType;
 use Bitrix\Main\UserField\Types\DoubleType;
 use Bitrix\Main\Web\Uri;
@@ -51,7 +52,6 @@ use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use CCrmComponentHelper;
 use CLists;
-use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 abstract class FactoryBased extends BaseComponent implements Controllerable, SupportsEditorProvider
 {
@@ -1617,7 +1617,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 					}
 					if ($this->isCopyMode())
 					{
-						$newUploadedItems = [];
 						// clone values used in copied item
 						$previousValue = $this->getCopiedItemFrom()?->get($field->getName());
 						if (is_array($previousValue) && is_array($value) && $field->isMultiple())
@@ -1636,7 +1635,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 								else
 								{
 									$clonedValue[] = $singleValue;
-									$newUploadedItems[] = $singleValue;
 								}
 							}
 							$value = $clonedValue;
@@ -1647,16 +1645,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 							{
 								$value = CopyFilesOnItemClone::getInstance()->cloneValue($field, $previousValue);
 							}
-							elseif ($value)
-							{
-								$newUploadedItems[] = $value;
-							}
-						}
-
-						if (!empty($newUploadedItems))
-						{
-							// when copy of element is creating, user field assume they bound to old element, so need to clear this binding
-							(new UiFileUploaderResultValidator($field->getUserField()))->updateEntityValueId($newUploadedItems);
 						}
 					}
 				}
@@ -1976,13 +1964,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$request = Application::getInstance()->getContext()->getRequest();
 		}
 		$this->parentIdentifiers = [];
+		$userPermissions = Container::getInstance()->getUserPermissions();
 		$parentRelations = Container::getInstance()->getRelationManager()->getParentRelations($this->getEntityTypeID());
 		foreach ($parentRelations as $relation)
 		{
 			$parentEntityTypeId = $relation->getParentEntityTypeId();
 			$entityName = mb_strtolower(\CCrmOwnerType::ResolveName($parentEntityTypeId)) . '_id';
 			$entityId = (int)$request->get($entityName);
-			if ($entityId > 0)
+			if ($entityId > 0 && $userPermissions->item()->canRead($parentEntityTypeId, $entityId))
 			{
 				$fieldName = $this->getEditorFieldNameForParent($relation);
 				if ($fieldName)

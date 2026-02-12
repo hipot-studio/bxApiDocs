@@ -244,6 +244,7 @@ class Sign
 			$item->setActive($item->getEntityTypeID() === \CCrmOwnerType::SmartDocument);
 			$item->enableSynchronization(false);
 		}
+		$config->setEnableAutocreationCheck(false);
 
 		$operation = $factory->getConversionOperation($deal, $config);
 		$operation->disableAllChecks();

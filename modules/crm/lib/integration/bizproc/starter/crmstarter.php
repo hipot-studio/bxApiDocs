@@ -288,6 +288,11 @@ final class CrmStarter
 			->setParameters($dto->parameters ?? [])
 			->setUser($dto->userId)
 		;
+
+		if ($dto->delay !== null && method_exists($starter, 'setDelay'))
+		{
+			$starter->setDelay($dto->delay);
+		}
 	}
 
 	private function computeChangedFields(array $actualFields, array $previousFields): array

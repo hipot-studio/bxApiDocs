@@ -70,9 +70,10 @@ class Email extends Activity\Provider\Base
 		array $activityFields,
 		string $quotedText,
 		bool $uncompressed = false,
-		bool $sanitized = false): string
+		bool $sanitized = false,
+	): string
 	{
-		if (!IsModuleInstalled('mail'))
+		if (!Loader::includeModule('mail'))
 		{
 			return '';
 		}

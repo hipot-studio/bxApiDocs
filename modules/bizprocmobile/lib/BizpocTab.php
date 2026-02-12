@@ -2,6 +2,7 @@
 
 namespace Bitrix\BizprocMobile;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Context;
@@ -35,7 +36,17 @@ class BizpocTab implements Tabable
 			return false;
 		}
 
-		return \CBPRuntime::isFeatureEnabled();
+		return $this->isToolAvailable('bizproc') && \CBPRuntime::isFeatureEnabled();
+	}
+
+	private function isToolAvailable(string $toolId): bool
+	{
+		if (Loader::includeModule('intranet'))
+		{
+			return ToolsManager::getInstance()->checkAvailabilityByToolId($toolId);
+		}
+
+		return true;
 	}
 
 	public function getData(): ?array

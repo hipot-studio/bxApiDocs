@@ -10,7 +10,6 @@ use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\Analytics\Builder\Activity\AddActivityEvent;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\RepeatSale\CostManager;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
 use Bitrix\Crm\RepeatSale\Service\Context;
 use Bitrix\Main\Error;
@@ -141,6 +140,6 @@ final class CreateActivityAction implements ActionInterface
 			return false;
 		}
 
-		return CostManager::isSponsoredOperation() || AIManager::isBaasServiceHasPackage();
+		return AIManager::isBaasServiceHasPackage();
 	}
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\Integration\AiAssistant\ToolSets;
 
 use Bitrix\AiAssistant\Definition\Dto\DefinitionMetadataDto;
@@ -29,7 +31,7 @@ final class TuningToolSet extends BaseToolSet
 	{
 		return new DefinitionMetadataDto(
 			'CRM tuning tools',
-			'Public CRM tuning tools',
+			'Public CRM tuning tools for MCP. Use these tools to manage and customize CRM categories and stages.',
 		);
 	}
 

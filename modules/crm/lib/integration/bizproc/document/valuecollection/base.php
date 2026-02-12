@@ -243,7 +243,7 @@ abstract class Base extends ValueCollection
 			$text .= sprintf(
 				'[tr][td]%s[/td][td]%s[/td][/tr]',
 				$row['CP_PRODUCT_NAME'],
-				\CCrmCurrency::MoneyToString($row['SUM_ACCOUNT'], $currencyId)
+				html_entity_decode(\CCrmCurrency::MoneyToString($row['SUM_ACCOUNT'], $currencyId))
 			);
 		}
 

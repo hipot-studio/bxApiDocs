@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Controller\Mail;
 
+use Bitrix\Crm\Activity\Mail\MailMessageChainProvider;
 use Bitrix\Crm\Activity\Mail\SanitizedDescriptionCache;
 use Bitrix\Crm\Integration\Mail\Client;
 use Bitrix\Crm\ItemIdentifier;
@@ -1907,104 +1908,6 @@ class Message extends Controller
 	}
 
 	/**
-	 * @throws LoaderException
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	protected function getMessageFilesLinkMessages(int $id, bool $forMobile = true): array
-	{
-		if (!$this->checkModules())
-		{
-			return [];
-		}
-
-		$activities = $this->getActivities(
-			[
-				'ID' => $id,
-			],
-			self::SUPPORTED_ACTIVITY_TYPE,
-			[
-				'STORAGE_ELEMENT_IDS',
-			]
-		);
-
-		if (!$this->checkActivityPermission(self::PERMISSION_READ, $activities))
-		{
-			return [];
-		}
-
-		if ($activities[0])
-		{
-			$activity = $activities[0];
-
-			$filesInfo = [
-				'ID' => $activity['ID'],
-				'FILES' => [],
-			];
-
-			$filesIDs = [];
-
-			if(is_array($activity['STORAGE_ELEMENT_IDS']))
-			{
-				$filesIDs = array_unique($activity['STORAGE_ELEMENT_IDS'], SORT_NUMERIC);
-			}
-
-			foreach ($filesIDs as $fileID)
-			{
-				if($forMobile)
-				{
-					$file = File::loadById($fileID);
-					if($file)
-					{
-						if (\Bitrix\Main\Loader::includeModule('mobile'))
-						{
-							$diskFileInfo = UI\File::loadWithPreview($file->getFileId());
-
-							if($diskFileInfo)
-							{
-								$filesInfo['FILES'][] = $diskFileInfo->getInfo();
-							}
-						}
-					}
-				}
-				else
-				{
-					$diskFileInfo = \Bitrix\Crm\Integration\DiskManager::getFileInfo(
-						(int)$fileID,
-						false,
-						[
-							'OWNER_TYPE_ID' => \CCrmOwnerType::Activity,
-							'OWNER_ID' => $activity['ID'],
-						]
-					);
-
-					if ($diskFileInfo)
-					{
-						$fileName = explode(".", $diskFileInfo['NAME']);
-						$clearedInfo = [
-							'ID' => (int)$fileID,
-							'NAME' => $diskFileInfo['NAME'],
-							'VIEW_URL' => $diskFileInfo['VIEW_URL'],
-							'PREVIEW_URL' => $diskFileInfo['PREVIEW_URL'],
-							'TYPE' => end($fileName),
-						];
-
-						$filesInfo['FILES'][] = $clearedInfo;
-					}
-				}
-			}
-
-			return $filesInfo;
-		}
-		else
-		{
-			$this->addError(new Error('Entity not found'));
-			return [];
-		}
-	}
-
-	/**
 	 * Get activity description html
 	 *
 	 * @param int $id Activity ID
@@ -2085,7 +1988,13 @@ class Message extends Controller
 			return [];
 		}
 
-		$descriptionHtml = Email::getDescriptionHtmlByActivityFields($activity);
+		$mailMessageChainProvider = new MailMessageChainProvider();
+
+		$descriptionHtml = $mailMessageChainProvider->replaceAttachmentPlaceholders(
+			Email::getDescriptionHtmlByActivityFields($activity),
+			$mailMessageChainProvider->getAttachmentsWithMessageId($id, false, false)['FILES'],
+		);
+
 		(new SanitizedDescriptionCache())->set($id, $descriptionHtml);
 		$quote = Email::getMessageQuote($activity, $descriptionHtml, true, true);
 

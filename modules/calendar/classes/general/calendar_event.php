@@ -6248,13 +6248,7 @@ class CCalendarEvent
 		$fromTs = \CCalendar::Timestamp($params['eventDate'], true, false) - $params['timezoneOffset'];
 		$userDateFrom = \CCalendar::Date($fromTs);
 
-		$entry = self::GetList([
-			'arFilter' => [
-				"ID" => $entryId,
-				"DELETED" => "N",
-				"FROM_LIMIT" => $userDateFrom,
-				"TO_LIMIT" => $userDateFrom,
-			],
+		$defaultParams = [
 			'parseRecursion' => true,
 			'maxInstanceCount' => 1,
 			'preciseLimits' => true,
@@ -6262,6 +6256,16 @@ class CCalendarEvent
 			'checkPermissions' => true,
 			'setDefaultLimit' => false,
 			'getUserfields' => true,
+		];
+
+		$entry = self::GetList([
+			'arFilter' => [
+				"ID" => $entryId,
+				"DELETED" => "N",
+				"FROM_LIMIT" => $userDateFrom,
+				"TO_LIMIT" => $userDateFrom,
+			],
+			...$defaultParams,
 		]);
 
 		if (
@@ -6280,13 +6284,7 @@ class CCalendarEvent
                     "FROM_LIMIT" => $params['eventDate'],
                     "TO_LIMIT" => $params['eventDate'],
                 ],
-                'parseRecursion' => true,
-                'maxInstanceCount' => 1,
-                'preciseLimits' => true,
-                'fetchAttendees' => true,
-                'checkPermissions' => true,
-                'setDefaultLimit' => false,
-                'getUserfields' => true,
+				...$defaultParams,
             ]);
 		}
 
@@ -6337,13 +6335,7 @@ class CCalendarEvent
 						'TO_LIMIT' => $userDateFrom,
 						'DELETED' => false,
 					],
-					'parseRecursion' => true,
-					'maxInstanceCount' => 1,
-					'preciseLimits' => true,
-					'fetchAttendees' => true,
-					'checkPermissions' => true,
-					'setDefaultLimit' => false,
-                    'getUserfields' => true,
+					...$defaultParams,
 				]);
 
 				if (!empty($parentEntryList[0]) && is_array($parentEntryList[0]))
@@ -6356,13 +6348,17 @@ class CCalendarEvent
 					if ($parentEntry['DELETED'] === 'Y')
 					{
 						self::cleanEventsWithDeletedParent($parentId);
-						$entry = false;
+
+						return false;
 					}
 
 					if ((int)$parentEntry['MEETING_HOST'] === (int)$params['userId'])
 					{
 						$entry = $parentEntry;
 					}
+
+					$entry['UF_WEBDAV_CAL_EVENT'] = $parentEntry['UF_WEBDAV_CAL_EVENT'] ?? null;
+					$entry['UF_CRM_CAL_EVENT'] = $parentEntry['UF_CRM_CAL_EVENT'] ?? null;
 				}
 			}
 
@@ -6396,13 +6392,11 @@ class CCalendarEvent
 							'OWNER_ID' => $params['userId'],
 							'DELETED' => 'N',
 						],
+						...$defaultParams,
 						'parseRecursion' => false,
 						'maxInstanceCount' => 1,
 						'preciseLimits' => false,
 						'fetchAttendees' => false,
-						'checkPermissions' => true,
-						'setDefaultLimit' => false,
-                        'getUserfields' => true,
 					]);
 
 					if ($entry && is_array($entry[0]) && $entry[0]['CAL_TYPE'] === 'location')

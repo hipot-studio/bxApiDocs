@@ -17,7 +17,7 @@ class Channel extends BaseController
 	public function tailAction(int $limit = 50, array $filter = []): ?array
 	{
 		$limit = $this->getLimit($limit);
-		$recent = RecentChannel::getOpenChannels($limit, $filter['lastMessageId'] ?? null);
+		$recent = RecentChannel::getOpenChannels($limit, $filter);
 
 		return $this->toRestFormatWithPaginationData([$recent], $limit, $recent->count());
 	}

@@ -104,12 +104,31 @@ class DynamicExist extends DynamicEntity
 	{
 		$this->templateItem->setIsRecurring(false);
 
-		if ($factory->isStagesEnabled())
+		$this->templateItem->setBegindate($this->calculateBeginDate() ?? new Date());
+		$this->templateItem->setClosedate($this->calculateCloseDate());
+
+		$this->prepareTemplateItemCategoryAndStage($factory);
+	}
+
+	private function prepareTemplateItemCategoryAndStage(Factory $factory): void
+	{
+		if (!$factory->isCategoriesEnabled())
+		{
+			return;
+		}
+
+		$categoryId = (int)$this->getField('CATEGORY_ID');
+		if (!$factory->getCategory($categoryId))
+		{
+			return;
+		}
+
+		if ($factory->isStagesEnabled() && $categoryId !== $this->templateItem->getCategoryId())
 		{
 			$this->templateItem->setStageId($this->getDefaultStageId($factory));
 		}
-		$this->templateItem->setBegindate($this->calculateBeginDate() ?? new Date());
-		$this->templateItem->setClosedate($this->calculateCloseDate());
+
+		$this->templateItem->setCategoryId($categoryId);
 	}
 
 	private function getDefaultStageId(Factory $factory): ?string

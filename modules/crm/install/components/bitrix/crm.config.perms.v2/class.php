@@ -1,6 +1,5 @@
 <?php
 
-use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
@@ -13,14 +12,26 @@ use Bitrix\Crm\Security\Role\Manage\Manager\ContractorSelection;
 use Bitrix\Crm\Security\Role\Manage\Manager\WebFormSelection;
 use Bitrix\Crm\Security\Role\Manage\RoleManagerSelectionFactory;
 use Bitrix\Crm\Security\Role\Manage\RoleSelectionManager;
-use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\AccessRightsDTO;
-use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Queries\QueryRoles;
+use Bitrix\Crm\Security\Role\Utils\RoleManagerUtils;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
-use \Bitrix\UI\AccessRights\V2\Config;
+use Bitrix\UI\AccessRights\V2\Options;
+use Bitrix\UI\AccessRights\V2\Config;
+use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\DeleteRoleCommand;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\DTO\UserGroupsData;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\UpdateRoleCommand;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Queries\QueryAccessRights;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\UserGroupsProvider;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Utils\PermCodeTransformer;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Validators\UserGroupDataValidator;
+use Bitrix\Crm\Security\Role\Validators\DeleteRoleValidator;
+use Bitrix\Main\ArgumentException;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -34,63 +45,37 @@ if (!CModule::IncludeModule('crm'))
 	return;
 }
 
+if (!CModule::IncludeModule('ui'))
+{
+	ShowError('UI module is not installed');
+
+	return;
+}
+
 class CrmConfigPermsV2 extends Base implements Controllerable
 {
 	private ?string $criterion;
 	private ?string $sectionCode = null;
 	private bool $isAutomation = false;
 	private ?RoleSelectionManager $manager = null;
-	private Config $config;
+	private ?Config $config = null;
 
-	public function getDataAction(array $controllerData): ?array
+	private function initManager(array $params): void
 	{
-		$this->criterion = $controllerData['criterion'] ?? null;
-		$this->sectionCode = $controllerData['sectionCode'] ?? null;
-		$this->isAutomation = $controllerData['isAutomation'] === 'true';
+		$this->criterion = $params['criterion'] ?? null;
+		$this->sectionCode = $params['sectionCode'] ?? null;
+		$this->isAutomation = $params['isAutomation'] ?? false;
+
 		$this->manager = (new RoleManagerSelectionFactory())
 			->setCustomSectionCode($this->sectionCode)
 			->setAutomation($this->isAutomation)
 			->create($this->criterion)
 		;
-
-		if ($this->manager === null)
-		{
-			$this->addError(ErrorCode::getNotFoundError());
-
-			return null;
-		}
-
-		if (!$this->manager->hasPermissionsToEditRights())
-		{
-			$this->addError(ErrorCode::getAccessDeniedError());
-
-			return null;
-		}
-
-		$accessRightsDto = (new QueryRoles($this->manager))->execute();
-
-		return [
-			'accessRightsData' => $accessRightsDto,
-			'maxVisibleUserGroups' => $this->getMaxVisibleUserGroups($accessRightsDto),
-			'additionalSaveParams' => $this->getControllerData(),
-			'userSortConfigName' => $this->getConfig()->getContext(),
-			'userSortConfig' => $this->getConfig()->getUserGroupsSortConfig(),
-		];
 	}
 
 	public function init(): void
 	{
 		parent::init();
-
-		$this->criterion = $this->arParams['criterion'] ?? null;
-		$this->sectionCode = $this->arParams['sectionCode'] ?? null;
-		$this->isAutomation = $this->arParams['isAutomation'] ?? false;
-
-		$this->manager = (new RoleManagerSelectionFactory())
-			->setCustomSectionCode($this->sectionCode)
-			->setAutomation($this->isAutomation)
-			->create($this->criterion)
-		;
 
 		if ($this->manager === null)
 		{
@@ -107,6 +92,7 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 
 	public function executeComponent(): void
 	{
+		$this->initManager($this->arParams);
 		$this->init();
 		if ($this->getErrors())
 		{
@@ -122,16 +108,9 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 			return;
 		}
 
-		$accessRightsDto = (new QueryRoles($this->manager))->execute();
-		$this->config = $this->getConfig();
+		$this->arResult['options'] = $this->prepareOptions();
 
-		$this->arResult['accessRightsData'] = $accessRightsDto;
-		$this->arResult['maxVisibleUserGroups'] = $this->getMaxVisibleUserGroups($accessRightsDto);
-		$this->arResult['controllerData'] = $this->getControllerData();
 		$this->arResult['isSharedCrmPermissionsSlider'] = $this->criterion === AllSelection::CRITERION;
-		$this->arResult['analytics'] = $this->getAnalytics();
-		$this->arResult['userSortConfigName'] = $this->config->getContext();
-		$this->arResult['userSortConfig'] = $this->config->getUserGroupsSortConfig();
 
 		$shouldDisplayLeftMenu = false;
 		$this->arResult['menuId'] = $this->manager->getMenuId();
@@ -142,19 +121,226 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		}
 		$this->arResult['shouldDisplayLeftMenu'] = $shouldDisplayLeftMenu;
 
-		$this->IncludeComponentTemplate();
+		$this->includeComponentTemplate();
 	}
 
 	public function configureActions(): array
 	{
-		return [];
+		return [
+			'save' => [
+				'+prefilters' => [
+					new ActionFilter\ContentType([ActionFilter\ContentType::JSON]),
+				],
+			],
+			'getData' => [
+				'+prefilters' => [
+					new ActionFilter\ContentType([ActionFilter\ContentType::JSON]),
+				],
+			],
+		];
+	}
+
+	public function saveAction(array $userGroups = [], array $deletedUserGroups = [], array $parameters = []): ?array
+	{
+		$this->initManager($parameters);
+		$this->init();
+		if ($this->getErrors())
+		{
+			return null;
+		}
+
+		$tariffResult = RoleManagerUtils::getInstance()->checkTariffRestriction();
+		if (!$tariffResult->isSuccess())
+		{
+			$this->addErrors($tariffResult->getErrors());
+
+			return null;
+		}
+
+		return $this->wrapInPermissionLogContext($parameters, function () use ($userGroups, $deletedUserGroups) {
+			$deleteResult = $this->deleteUserGroups($deletedUserGroups);
+			if (!$deleteResult->isSuccess())
+			{
+				$this->addErrors($deleteResult->getErrors());
+
+				return null;
+			}
+
+			$userGroupDTOs = UserGroupsData::makeFromArray($userGroups, $this->manager->getGroupCode());
+
+			$validationResult = UserGroupDataValidator::getInstance()->validate($userGroupDTOs);
+			if (!$validationResult->isSuccess())
+			{
+				$this->addErrors($validationResult->getErrors());
+
+				return null;
+			}
+
+			if (!$this->isSaveUserGroupsAllowed($userGroupDTOs))
+			{
+				$this->addError(ErrorCode::getAccessDeniedError());
+
+				return null;
+			}
+
+			$preSaveCheckResult = $this->manager->preSaveChecks($userGroupDTOs);
+			if (!$preSaveCheckResult->isSuccess())
+			{
+				$this->addErrors($preSaveCheckResult->getErrors());
+
+				return null;
+			}
+
+			$updateResult = UpdateRoleCommand::getInstance()->execute($userGroupDTOs);
+			if (!$updateResult->isSuccess())
+			{
+				$this->addErrors($updateResult->getErrors());
+
+				return null;
+			}
+
+			$accessRights = (new QueryAccessRights($this->manager))->execute();
+
+			return [
+				'USER_GROUPS' => UserGroupsProvider::createByManager($this->manager, $accessRights)
+					->loadAll()
+				,
+			];
+		});
+	}
+
+	private function wrapInPermissionLogContext(array $parameters, callable $callback): mixed
+	{
+		RolePermissionLogContext::getInstance()->set([
+			'component' => 'crm.config.perms.v2',
+			'criterion' => (string)($parameters['criterion'] ?? null),
+			'sectionCode' => (string)($parameters['sectionCode'] ?? null),
+			'isAutomation' => (bool)($parameters['isAutomation'] ?? false),
+		]);
+
+		$result = $callback();
+
+		RolePermissionLogContext::getInstance()->clear();
+
+		return $result;
+	}
+
+	private function deleteUserGroups(array $userGroupsToDelete): Result
+	{
+		$result = new Result();
+
+		$validator = DeleteRoleValidator::getInstance();
+		$command = DeleteRoleCommand::getInstance();
+
+		foreach ($userGroupsToDelete as $roleId)
+		{
+			$validationResult = $validator->validate($roleId);
+			if (!$validationResult->isSuccess())
+			{
+				$result->addErrors($validationResult->getErrors());
+				continue;
+			}
+
+			$deleteResult = $command->execute($roleId);
+			if (!$deleteResult->isSuccess())
+			{
+				$result->addErrors($deleteResult->getErrors());
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param UserGroupsData[] $userGroups
+	 * @return bool
+	 */
+	private function isSaveUserGroupsAllowed(array $userGroups): bool
+	{
+		$checkedEntities = [];
+		$transformer = PermCodeTransformer::getInstance();
+
+		foreach ($userGroups as $userGroup)
+		{
+			foreach ($userGroup->accessRights as $accessRight)
+			{
+				try
+				{
+					$permission = $transformer->decodeAccessRightCode($accessRight->id);
+				}
+				catch (ArgumentException)
+				{
+					return false;
+				}
+
+				$isChecked = in_array($permission->entityCode, $checkedEntities, true);
+				if ($isChecked)
+				{
+					continue;
+				}
+
+				if (!$this->userPermissions->permission()->canEdit($permission))
+				{
+					return false;
+				}
+
+				$checkedEntities[] = $permission->entityCode;
+			}
+		}
+
+		return true;
+	}
+
+	public function getDataAction(array $controllerData): ?Options
+	{
+		$this->initManager($controllerData);
+		$this->init();
+		if ($this->getErrors())
+		{
+			return null;
+		}
+
+		return $this->prepareOptions();
+	}
+
+	private function prepareOptions(): Options
+	{
+		$accessRights = (new QueryAccessRights($this->manager))->execute();
+		$userGroups = UserGroupsProvider::createByManager($this->manager, $accessRights)->loadAll();
+
+		$options = new Options(
+			$this->getName(),
+			'bx-crm-perms-config-permissions'
+		);
+
+		$options
+			->setModuleId('crm')
+			->setActionSave('save')
+			->setMode('class')
+			->setBodyType('json')
+			->setSearchContainerSelector('#crm-config-perms-v2-search-container')
+			->setAccessRights($accessRights)
+			->setUserGroups($userGroups)
+			->setAdditionalSaveParams($this->getControllerData())
+			->setAnalytics($this->getAnalytics())
+			->setIsSaveOnlyChangedRights(true)
+			->setMaxVisibleUserGroups($this->getMaxVisibleUserGroups($accessRights))
+			->setUserSortConfigName($this->getConfig()->getContext())
+			->setSortConfigForAllUserGroups($this->getConfig()->getUserGroupsSortConfig())
+		;
+
+		return $options;
 	}
 
 	/**
 	 * Limit max visible roles based on total cells estimate. Since CRM perms can have A LOT of content, browser
 	 * can die if it renders everything at once.
+	 *
+	 * @param \Bitrix\UI\AccessRights\V2\Options\RightSection[] $accessRights
+	 *
+	 * @return int|null
 	 */
-	private function getMaxVisibleUserGroups(AccessRightsDTO $rolesData): ?int
+	private function getMaxVisibleUserGroups(array $accessRights): ?int
 	{
 		$limitFromOptions = Option::get('crm', 'perms_v2_config_max_roles');
 		if (is_numeric($limitFromOptions) && (int)$limitFromOptions > 0)
@@ -163,9 +349,14 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		}
 
 		$countAccessRights = 0;
-		foreach ($rolesData->accessRights as $accessRight)
+		foreach ($accessRights as $accessRight)
 		{
-			$countAccessRights += count($accessRight['rights']);
+			$countAccessRights += count($accessRight->getRightItems());
+		}
+
+		if ($countAccessRights === 0)
+		{
+			return null;
 		}
 
 		$limit = (int)(50000 / $countAccessRights);
@@ -311,14 +502,11 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		$menuItems[] = $buttonMenu;
 	}
 
-	private function getComponentName(): string
-	{
-		return str_replace('bitrix:', '', $this->getName());
-	}
-
 	private function getConfig(): Config
 	{
-		return Config::getInstanceByContext($this->getConfigContext());
+		$this->config ??= Config::getInstanceByContext($this->getConfigContext());
+
+		return $this->config;
 	}
 
 	private function getConfigContext(): string
@@ -327,7 +515,7 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		ksort($additionalSaveParams);
 
 		return Json::encode([
-			'component' => $this->getComponentName(),
+			'component' => $this->getName(),
 			$additionalSaveParams,
 		]);
 	}

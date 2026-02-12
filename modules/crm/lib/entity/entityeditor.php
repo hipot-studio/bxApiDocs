@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Entity;
 use Bitrix\Crm\UI\EntitySelector;
 use Bitrix\Main;
 use Bitrix\Crm;
+use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 
 class EntityEditor
 {
@@ -81,6 +82,13 @@ class EntityEditor
 				continue;
 			}
 
+			$validator = new UiFileUploaderResultValidator(array_merge(
+				$userField,
+				[
+					'ENTITY_VALUE_ID' => 0,
+				]
+			));
+
 			$deletionKey = "{$fieldName}_del";
 			if(isset($userField['MULTIPLE']) && $userField['MULTIPLE'] === 'Y')
 			{
@@ -95,6 +103,10 @@ class EntityEditor
 						{
 							continue;
 						}
+						if (is_numeric($fileInfo) && !$validator->validate($fileInfo))
+						{
+							continue;
+						}
 
 						$results[] = $fileInfo;
 					}
@@ -104,9 +116,16 @@ class EntityEditor
 			else
 			{
 				$fileInfo = $entityFields[$fieldName];
-				if(is_numeric($fileInfo)
+				if (is_numeric($fileInfo)
 					&& isset($request[$deletionKey])
 					&& ($request[$deletionKey] === 'Y' || $request[$deletionKey] == $fileInfo)
+				)
+				{
+					$entityFields[$fieldName] = false;
+				}
+				if (
+					is_numeric($fileInfo)
+					&& !$validator->validate($fileInfo)
 				)
 				{
 					$entityFields[$fieldName] = false;
@@ -148,28 +167,7 @@ class EntityEditor
 	{
 		return EntitySelector::CONTEXT;
 	}
-	/**
-	 * Save selected User in Finder API
-	 * @param int $userID User ID.
-	 * @return void
-	 */
-	public static function registerSelectedUser($userID)
-	{
-		if(!is_int($userID))
-		{
-			$userID = (int)$userID;
-		}
 
-		if($userID > 0)
-		{
-			Main\FinderDestTable::merge(
-				array(
-					'CONTEXT' => self::getUserSelectorContext(),
-					'CODE' => Main\FinderDestTable::convertRights(array("U{$userID}"))
-				)
-			);
-		}
-	}
 	protected static function setDataField($typeName, $name, $value, array &$entityData,  array &$userFields)
 	{
 		if(!isset(self::$allowedTypesMap[$typeName]))

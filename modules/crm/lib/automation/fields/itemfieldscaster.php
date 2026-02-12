@@ -176,7 +176,7 @@ class ItemFieldsCaster implements ICaster
 			case FieldType::DATETIME:
 				if ($value && is_string($value))
 				{
-					return new DateTime($value);
+					return DateTime::createFromUserTime($value);
 				}
 
 			default:

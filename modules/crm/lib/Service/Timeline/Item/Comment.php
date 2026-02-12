@@ -207,18 +207,20 @@ class Comment extends Configurable
 			->setHasInlineFiles($this->getHistoryItemModel()->get('HAS_INLINE_ATTACHMENT') === 'Y')
 		;
 
-		$data = TimelineEntry::getByID($this->getModel()->getId()) ?? [];
-
 		$block->setEditable($this->isCurrentUserAuthor());
+		$comment = $this->getHistoryItemModel()->get('COMMENT_RAW') ?? '';
+
 		if ($scope === ContentBlock::SCOPE_MOBILE)
 		{
-			$comment = $data['COMMENT'] ?? '';
 			$content = TextHelper::sanitizeBbCode($comment);
 			$block->setScopeMobile();
 		}
 		else
 		{
-			$content = CommentController::convertToHtml($data)['COMMENT'] ?? '';
+			$content = CommentController::convertToHtml([
+				'COMMENT' => $comment,
+				'ID' => $this->getModel()->getId(),
+			])['COMMENT'] ?? '';
 			$content = htmlspecialcharsbx($content);
 			$block->setScopeWeb();
 		}

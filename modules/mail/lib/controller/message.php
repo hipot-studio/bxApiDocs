@@ -215,7 +215,6 @@ class Message extends Controller
 				$systemDirMap,
 				$directoriesWithNumberOfUnreadMessages,
 				$mailboxHelper,
-				false // isHidden = false для синхронизированных папок
 			);
 
 			$flat[$id] = $folderData;

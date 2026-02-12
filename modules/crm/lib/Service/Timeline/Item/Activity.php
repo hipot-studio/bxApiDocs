@@ -538,10 +538,8 @@ abstract class Activity extends Configurable implements Deadlinable
 					->addActionParamString('activityLabel', $title)
 					->addActionParamString(
 						'filterId',
-						sprintf('%s_%d_timeline_history',
-							strtolower(CCrmOwnerType::ResolveName($this->getContext()->getEntityTypeId())),
-							$this->getContext()->getEntityId()
-						)
+						(new \Bitrix\Crm\Component\EntityDetails\Config\ScopeIdResolver($this->getContext()->getEntityTypeId(), $this->getContext()->getIdentifier()->getCategoryId()))
+							->getScopeId('timeline_history')
 					)
 			)->setScopeWeb() // temporary disable action for mobile app
 		;

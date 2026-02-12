@@ -28,7 +28,7 @@ class Collab extends BaseController
 		}
 
 		$limit = $this->getLimit($limit);
-		$recent = RecentCollab::getCollabs($limit, $filter['lastMessageDate'] ?? null);
+		$recent = RecentCollab::getCollabs($limit, $filter);
 
 		return $this->toRestFormatWithPaginationData([$recent], $limit, $recent->count());
 	}

@@ -140,8 +140,18 @@ class MessageContent
 		return $this->message->getParams()->isSet(Params::COMPONENT_ID);
 	}
 
+	protected function isSticker(): bool
+	{
+		return $this->message->getSticker() !== null;
+	}
+
 	public function getComponentName(): string
 	{
+		if ($this->isSticker())
+		{
+			return 'StickerMessage';
+		}
+
 		if ($this->isDeletedMessage())
 		{
 			return 'DeletedMessage';

@@ -27,11 +27,11 @@ final class CounterServiceAgent
 	 * @throws SystemException
 	 * @throws ArgumentException
 	 */
-	private static function getLastUnreadId(int $userId, bool $withNotify): int
+	private static function getLastUnreadId(array $filter = []): int
 	{
 		$result = MessageUnreadTable::getList([
 			'select' => ['ID'],
-			'filter' => self::buildDeleteAllFilter($userId, $withNotify),
+			'filter' => $filter,
 			'order' => ['ID' => 'DESC'],
 			'limit' => 1,
 		]);
@@ -74,7 +74,8 @@ final class CounterServiceAgent
 	 */
 	public static function deleteAllViaAgent(int $userId, bool $withNotify): void
 	{
-		$lastUnreadId = self::getLastUnreadId($userId, $withNotify);
+		$filter = self::buildDeleteAllFilter($userId, $withNotify);
+		$lastUnreadId = self::getLastUnreadId($filter);
 		$agentName = self::deleteAll($userId,$withNotify, $lastUnreadId);
 
 		if ($agentName !== '')
@@ -127,12 +128,46 @@ final class CounterServiceAgent
 		return self::formatDeleteAllAgentName($userId, $withNotify, $lastUnreadId);
 	}
 
-	public static function cleanGhostCountersAgent(): string
+	public static function cleanGhostCountersAgent(?int $lastId = null): string
 	{
-		return '';
+		if ($lastId === null)
+		{
+			$currentMaxId = self::getLastUnreadId();
 
-		//TODO: Optimize this query
-		$query = MessageUnreadTable::query()
+			return __METHOD__ . "({$currentMaxId});";
+		}
+
+		$batchResult = MessageUnreadTable::query()
+			->setSelect(['ID'])
+			->where('ID', '>', $lastId)
+			->whereNot('CHAT_TYPE', \IM_MESSAGE_SYSTEM)
+			->setOrder(['ID' => 'ASC'])
+			->setLimit(self::CLEANUP_GHOST_COUNTERS_LIMIT)
+			->fetchAll()
+		;
+
+		if (empty($batchResult))
+		{
+			return __METHOD__ . "({$lastId});";
+		}
+
+		$batchIds = array_column($batchResult, 'ID');
+		$newLastId = (int)end($batchIds);
+
+		/** @var array<int, array{ID:mixed, USER_ID:mixed, CHAT_ID:mixed}> $ghostCounters */
+		$ghostCounters = self::findGhostCounters($batchIds);
+
+		if (!empty($ghostCounters))
+		{
+			self::cleanCounters($ghostCounters);
+		}
+
+		return __METHOD__ . "({$newLastId});";
+	}
+
+	private static function findGhostCounters(array $counters): array
+	{
+		$ghostQuery = MessageUnreadTable::query()
 			->setSelect(['ID', 'USER_ID', 'CHAT_ID'])
 			->registerRuntimeField(
 				new Reference(
@@ -143,24 +178,24 @@ final class CounterServiceAgent
 					['join_type' => Join::TYPE_LEFT]
 				)
 			)
-			->whereNot('CHAT_TYPE', \IM_MESSAGE_SYSTEM)
+			->whereIn('ID', $counters)
 			->whereNull('RELATION.ID')
-			->setLimit(self::CLEANUP_GHOST_COUNTERS_LIMIT)
 		;
 
-		/** @var array<int, array{ID:mixed, USER_ID:mixed, CHAT_ID:mixed}> $results */
-		$results = $query->fetchAll();
+		return $ghostQuery->fetchAll();
+	}
 
-		if (empty($results))
-		{
-			return __METHOD__ . '();';
-		}
-
+	/**
+	 * @param array<int, array{ID:mixed, USER_ID:mixed, CHAT_ID:mixed}> $countersBatch
+	 * @throws ArgumentException
+	 */
+	private static function cleanCounters(array $countersBatch): void
+	{
 		$idsToDelete = [];
 		$overflowToCleanMap = [];
 		$usersToClearCache = [];
 
-		foreach ($results as $row)
+		foreach ($countersBatch as $row)
 		{
 			$idsToDelete[] = (int)$row['ID'];
 			$userId = (int)$row['USER_ID'];
@@ -177,7 +212,5 @@ final class CounterServiceAgent
 		{
 			CounterService::clearCache($userId);
 		}
-
-		return __METHOD__ . '();';
 	}
 }

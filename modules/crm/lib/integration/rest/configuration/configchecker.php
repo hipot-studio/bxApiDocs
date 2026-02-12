@@ -27,6 +27,11 @@ class ConfigChecker
 				"CHECKED" => false
 			]));
 		}
+
+		if ($event->getParameter('TYPE') === 'EXPORT')
+		{
+			$event->getParameters()['MANIFEST']['METADATA']['crm']['enableRole'] = true;
+		}
 	}
 
 	/**

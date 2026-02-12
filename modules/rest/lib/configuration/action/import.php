@@ -42,28 +42,45 @@ class Import extends Base
 
 	private const COUNT_ADD_FILES_BY_STEP = 200;
 
-	private $manifestCode;
+	private string $manifestCode = '';
+	// data from manifest.json file
+	private array $manifestData = [
+		'CODE' => '',
+		'VERSION' => null,
+		'MANIFEST_VERSION' => null,
+		'USES' => [],
+		'COMPATIBILITY_TAGS' => [],
+		'METADATA' => [],
+	];
 
 	/**
 	 * Sets uses manifest
 	 * @param $code
 	 *
-	 * @return bool
+	 * @return $this
 	 */
-	public function setManifestCode($code): bool
+	public function setManifestCode($code): static
 	{
 		$this->manifestCode = $code;
+		$this->manifestData['CODE'] = $code;
 
-		return true;
+		return $this;
+	}
+
+	public function setManifestData(array $data): static
+	{
+		$this->manifestData = array_merge($this->manifestData, $data);
+
+		return $this;
 	}
 
 	/**
 	 * Return uses manifest
 	 * @return string
 	 */
-	public function getManifestCode()
+	public function getManifestCode(): string
 	{
-		return $this->manifestCode ?? '';
+		return $this->manifestCode;
 	}
 
 	/**
@@ -325,7 +342,6 @@ class Import extends Base
 
 		if ($code)
 		{
-			$additionalOption = $this->getSetting()->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION);
 			$data = Controller::callEventClear(
 				[
 					'CODE' => $code,
@@ -335,9 +351,8 @@ class Import extends Base
 					'CONTEXT_USER' => $this->getContext(),
 					'CLEAR_FULL' => $clearFull,
 					'PREFIX_NAME' => Loc::getMessage('REST_CONFIGURATION_INSTALL_CLEAR_PREFIX_NAME'),//todo: lang file
-					'MANIFEST_CODE' => $this->getManifestCode(),
-					'IMPORT_MANIFEST' => Manifest::get($this->getManifestCode()),
-					'ADDITIONAL_OPTION' => $additionalOption,
+					'MANIFEST_CODE' => $this->manifestCode,
+					'IMPORT_MANIFEST' => $this->manifestData,
 				]
 			);
 
@@ -365,46 +380,28 @@ class Import extends Base
 			'result' => true,
 		];
 
-		if ($content['COUNT'] > $step)
+		if (!empty($content['COUNT']) && $content['COUNT'] > $step)
 		{
 			$result['result'] = false;
 		}
 
-		if (!is_null($content['DATA']))
+		if (!empty($content['DATA']))
 		{
-			$ratio = $this->getSetting()->get(Setting::SETTING_RATIO);
-			$additionalOption = $this->getSetting()->get(Setting::SETTING_ACTION_ADDITIONAL_OPTION);
 			$dataList = Controller::callEventImport(
 				[
 					'CODE' => $code,
 					'CONTENT' => $content,
-					'RATIO' => $ratio,
 					'CONTEXT' => $this->getContextEntity(),
 					'CONTEXT_USER' => $this->getContext(),
-					'MANIFEST_CODE' => $this->getManifestCode(),
-					'IMPORT_MANIFEST' => Manifest::get($this->getManifestCode()),
-					'ADDITIONAL_OPTION' => $additionalOption,
+					'MANIFEST_CODE' => $this->manifestCode,
+					'IMPORT_MANIFEST' => $this->manifestData,
 				]
 			);
 
 			foreach ($dataList as $data)
 			{
-				if (is_array($data['RATIO']))
-				{
-					if (empty($ratio[$code]))
-					{
-						$ratio[$code] = [];
-					}
-					foreach ($data['RATIO'] as $old => $new)
-					{
-						$ratio[$code][$old] = $new;
-					}
-				}
-
 				$this->getNotificationInstance()->save($data);
 			}
-
-			$this->getSetting()->set(Setting::SETTING_RATIO, $ratio);
 		}
 
 		return $result;
@@ -598,9 +595,9 @@ class Import extends Base
 				'CONTEXT' => $this->getContextEntity(),
 				'CONTEXT_USER' => $this->getContext(),
 				'RATIO' => $ratio,
-				'MANIFEST_CODE' => $this->getManifestCode(),
-				'IMPORT_MANIFEST' => Manifest::get($this->getManifestCode()) ?? [],
-				'APP_ID' => ($app['ID'] > 0) ? $app['ID'] : 0,
+				'MANIFEST_CODE' => $this->manifestCode,
+				'IMPORT_MANIFEST' => $this->manifestData,
+				'APP_ID' => $app['ID'] ?? 0,
 				'USER_ID' => $userId,
 				'ADDITIONAL_OPTION' => $additionalOption,
 			]

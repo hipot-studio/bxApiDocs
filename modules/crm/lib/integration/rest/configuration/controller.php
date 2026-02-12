@@ -24,6 +24,7 @@ class Controller
 		Entity\DetailConfiguration::ENTITY_CODE => 500,
 		Entity\Setting::ENTITY_CODE => 600,
 		Entity\WebForm::ENTITY_CODE => 800,
+		Entity\Role::ENTITY_CODE => 900,
 	];
 
 	/**
@@ -107,6 +108,9 @@ class Controller
 					case Entity\AutomatedSolution::ENTITY_CODE:
 						$result = Entity\AutomatedSolution::getInstance()->export($data);
 						break;
+					case Entity\Role::ENTITY_CODE:
+						$result = Entity\Role::getInstance()->export($data);
+						break;
 				}
 			}
 			catch (Exception $e)
@@ -162,6 +166,9 @@ class Controller
 					case Entity\DynamicTypes::ENTITY_CODE:
 						$result = Entity\DynamicTypes::getInstance()->clear($data);
 						break;
+					case Entity\Role::ENTITY_CODE:
+						$result = Entity\Role::getInstance()->clear($data);
+						break;
 				}
 			}
 			catch (Exception $e)
@@ -216,6 +223,9 @@ class Controller
 						break;
 					case Entity\AutomatedSolution::ENTITY_CODE:
 						$result = Entity\AutomatedSolution::getInstance()->import($data);
+						break;
+					case Entity\Role::ENTITY_CODE:
+						$result = Entity\Role::getInstance()->import($data);
 						break;
 				}
 			}

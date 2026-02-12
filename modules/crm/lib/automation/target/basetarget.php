@@ -16,6 +16,7 @@ if (!Loader::includeModule('bizproc'))
 
 abstract class BaseTarget extends \Bitrix\Bizproc\Automation\Target\BaseTarget
 {
+	private const CACHE_TTL = 7200;
 	protected $entityId;
 
 	/**
@@ -96,6 +97,9 @@ abstract class BaseTarget extends \Bitrix\Bizproc\Automation\Target\BaseTarget
 				'=ENTITY_TYPE_ID' => $this->getEntityTypeId(),
 				'@ENTITY_STATUS' => $statuses,
 			],
+			'cache' => [
+				'ttl' => self::CACHE_TTL
+			]
 		]);
 
 		while ($row = $iterator->fetch())

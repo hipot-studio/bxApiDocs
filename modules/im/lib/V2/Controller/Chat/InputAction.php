@@ -36,10 +36,8 @@ class InputAction extends BaseController
 
 	/**
 	 * @restMethod im.v2.Chat.InputAction.notify
-	 *
-	 * The second parameter is needed for correct rights checking. @see \Bitrix\Im\V2\Controller\Filter\CheckChatAccess
 	 */
-	public function notifyAction(Action $action, Chat $chat): ?array
+	public function notifyAction(Action $action): ?array
 	{
 		$result = $action->notify();
 

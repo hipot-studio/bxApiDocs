@@ -2,13 +2,14 @@
 
 namespace Bitrix\Im\V2\Chat\InputAction;
 
+use Bitrix\Im\V2\AccessCheckable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Pull\Event\InputActionNotify;
 use Bitrix\Im\V2\Pull\Event\StartWriting;
 use Bitrix\Im\V2\Result;
 
-class Action
+class Action implements AccessCheckable
 {
 	use ContextCustomer;
 
@@ -177,5 +178,10 @@ class Action
 		}
 
 		return $array;
+	}
+
+	public function checkAccess(?int $userId = null): Result
+	{
+		return $this->chat->checkAccess($userId);
 	}
 }

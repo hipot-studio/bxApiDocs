@@ -23,7 +23,7 @@ class Desktop extends BaseController
 	public function logoutAction(): ?array
 	{
 		\CIMMessenger::SetDesktopStatusOffline();
-		\CIMContactList::SetOffline();
+		\CIMContactList::SetOffline(needUserLogout: false);
 
 		return [];
 	}

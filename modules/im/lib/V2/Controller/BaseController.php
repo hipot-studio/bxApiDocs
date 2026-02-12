@@ -8,7 +8,7 @@ use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Controller\Filter\ActionUuidHandler;
 use Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter;
 use Bitrix\Im\V2\Controller\Filter\AutoJoinToChat;
-use Bitrix\Im\V2\Controller\Filter\CheckChatAccess;
+use Bitrix\Im\V2\Controller\Filter\CheckEntityAccess;
 use Bitrix\Im\V2\Controller\Filter\SameChatMessageFilter;
 use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Link\Pin\PinCollection;
@@ -20,6 +20,9 @@ use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Rest\RestConvertible;
+use Bitrix\Im\V2\SharingLink\SharingLinkError;
+use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
+use Bitrix\Im\V2\SharingLink\SharingLink;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
@@ -86,6 +89,21 @@ abstract class BaseController extends Controller
 					return $this->getPackType($packType);
 				}
 			),
+			new ExactParameter(
+				SharingLink::class,
+				'sharingLink',
+				function ($className, string $code) {
+					$sharingLink = SharingLinkFactory::getInstance()->getLinkByCode($code);
+					if (!isset($sharingLink))
+					{
+						$this->addError(new SharingLinkError(SharingLinkError::NOT_FOUND));
+
+						return null;
+					}
+
+					return $sharingLink;
+				}
+			),
 		];
 	}
 
@@ -100,7 +118,7 @@ abstract class BaseController extends Controller
 			[
 				new CloseSession(true),
 				new SameChatMessageFilter(),
-				new CheckChatAccess(),
+				new CheckEntityAccess(),
 				new ActionUuidHandler(),
 				new AutoJoinToChat(),
 			]

@@ -9,6 +9,12 @@ class PhaseSemantics
 	public const PROCESS = 'P';
 	public const SUCCESS = 'S';
 	public const FAILURE = 'F';
+	public const ALLOWED_SEMANTICS = [
+		self::PROCESS,
+		self::SUCCESS,
+		self::FAILURE,
+	];
+
 	//const APOLOGY = 'A';
 	private static $messagesLoaded = false;
 	private static $descriptions = null;

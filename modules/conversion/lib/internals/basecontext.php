@@ -99,7 +99,7 @@ class BaseContext
 	 */
 	public function subCounter($day, $name, $value = 1)
 	{
-		return $this->addCounter($day, $name, -$value);
+		$this->addCounter($day, $name, -$value);
 	}
 
 	/** Set attribute with value.

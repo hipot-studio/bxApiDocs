@@ -28,7 +28,6 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\VoxImplant;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\RepeatSale\CostManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
@@ -386,7 +385,7 @@ final class EventHandler
 			return; // AI is disabled in global settings
 		}
 
-		$isAutoStartPossible = CostManager::isSponsoredOperation() || AIManager::isBaasServiceHasPackage();
+		$isAutoStartPossible = AIManager::isBaasServiceHasPackage();
 		if (!$isAutoStartPossible)
 		{
 			return;

@@ -195,74 +195,40 @@ final class Flow extends Base
 
 		if ($flow->templateId)
 		{
-			// todo remove this check after tasks 24.200.0 release
-			if (method_exists(TemplateProvider::class, 'getById'))
+			$select = [
+				'TITLE',
+				'DESCRIPTION',
+				'PRIORITY',
+				'ACCOMPLICES',
+				'AUDITORS',
+				'TAGS',
+				CRM\UserField::getMainSysUFCode(),
+			];
+			$data = TemplateProvider::getById($flow->templateId, $select);
+
+			if ($data)
 			{
-				$select = [
-					'TITLE',
-					'DESCRIPTION',
-					'PRIORITY',
-					'ACCOMPLICES',
-					'AUDITORS',
-					'TAGS',
-					CRM\UserField::getMainSysUFCode(),
-				];
-				$data = TemplateProvider::getById($flow->templateId, $select);
+				$accomplices = unserialize($data['ACCOMPLICES'], ['allowed_classes' => false]);
+				$auditors = unserialize($data['AUDITORS'], ['allowed_classes' => false]);
 
-				if ($data)
-				{
-					$accomplices = unserialize($data['ACCOMPLICES'], ['allowed_classes' => false]);
-					$auditors = unserialize($data['AUDITORS'], ['allowed_classes' => false]);
+				$template = new TaskTemplateDto(
+					name: $data['TITLE'],
+					description: $data['DESCRIPTION'],
+					priority: TaskPriority::tryFrom((int)$data['PRIORITY']) ?? TaskPriority::Normal,
+					accomplices: array_map('intval', $accomplices ?? []),
+					auditors: array_map('intval', $auditors ?? []),
+					files: $this->prepareDiskFiles($flow->templateId, $user->getId()),
+					checklist: $this->prepareChecklist($flow->templateId, $user->getId()),
+					tags: array_map(
+						fn($tag) => new TaskTemplateTagDto(id: $tag, name: $tag),
+						$data['TAGS'] ?? [],
+					),
+					crm: $this->prepareCrmElements($data),
+				);
 
-					$template = new TaskTemplateDto(
-						name: $data['TITLE'],
-						description: $data['DESCRIPTION'],
-						priority: TaskPriority::tryFrom((int)$data['PRIORITY']) ?? TaskPriority::Normal,
-						accomplices: array_map('intval', $accomplices ?? []),
-						auditors: array_map('intval', $auditors ?? []),
-						files: $this->prepareDiskFiles($flow->templateId, $user->getId()),
-						checklist: $this->prepareChecklist($flow->templateId, $user->getId()),
-						tags: array_map(
-							fn($tag) => new TaskTemplateTagDto(id: $tag, name: $tag),
-							$data['TAGS'] ?? [],
-						),
-						crm: $this->prepareCrmElements($data),
-					);
-
-					$userIds = array_unique(
-						array_merge($template->accomplices, $template->auditors)
-					);
-				}
-			}
-			else
-			{
-				$result = (new \Bitrix\Tasks\Item\Task\Template($flow->templateId, $user->getId()))
-					->skipAccessCheck()
-					->transform(new \Bitrix\Tasks\Item\Converter\Task\Template\ToTask());
-
-				if ($result->isSuccess())
-				{
-					$data = \Bitrix\Tasks\Manager\Task::convertFromItem($result->getInstance());
-
-					$template = new TaskTemplateDto(
-						name: $data['TITLE'],
-						description: $data['DESCRIPTION'],
-						priority: TaskPriority::tryFrom((int)$data['PRIORITY']) ?? TaskPriority::Normal,
-						accomplices: array_map('intval', $data['ACCOMPLICES'] ?? []),
-						auditors: array_map('intval', $data['AUDITORS'] ?? []),
-						files: $this->prepareDiskFiles($flow->templateId, $user->getId()),
-						checklist: $this->prepareChecklist($flow->templateId, $user->getId()),
-						tags: array_map(
-							fn($tag) => new TaskTemplateTagDto(id: $tag, name: $tag),
-							$data['TAGS'] ?? [],
-						),
-						crm: $this->prepareCrmElements($data),
-					);
-
-					$userIds = array_unique(
-						array_merge($template->accomplices, $template->auditors)
-					);
-				}
+				$userIds = array_unique(
+					array_merge($template->accomplices, $template->auditors)
+				);
 			}
 		}
 

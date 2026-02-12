@@ -4,6 +4,7 @@
 namespace Bitrix\Crm\Format;
 
 
+use Bitrix\Main\Context;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 
@@ -69,12 +70,24 @@ class Date
 	 */
 	public function getDateFormat(?string $type)
 	{
+		$culture = Context::getCurrent()?->getCulture();
+
+		if ($type === 'short' && $culture)
+		{
+			return $culture->getDayMonthFormat();
+		}
+
+		if ($type === 'full' && $culture)
+		{
+			return $culture->getLongDateFormat();
+		}
+
 		$lang = 'ru';
 		if (LANGUAGE_ID === 'de' || LANGUAGE_ID === 'en')
 		{
 			$lang = LANGUAGE_ID;
 		}
 
-		return ($type === null ? $this->dateFormats : $this->dateFormats[$type][$lang]);
+		return $type === null ? $this->dateFormats : $this->dateFormats[$type][$lang];
 	}
 }

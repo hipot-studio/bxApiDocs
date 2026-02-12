@@ -28,6 +28,7 @@ class EntityConversionConfig
 	protected $context;
 
 	protected bool $useTemporaryFilesForUF = true;
+	protected bool $enableAutocreationCheck = true;
 
 	public function __construct(array $options = null)
 	{
@@ -292,6 +293,16 @@ class EntityConversionConfig
 			$enable = (bool)$enable;
 		}
 		$this->enablePermissionCheck = $enable;
+	}
+
+	public function setEnableAutocreationCheck(bool $enable): void
+	{
+		$this->enableAutocreationCheck = $enable;
+	}
+
+	public function isAutocreationCheckEnabled(): bool
+	{
+		return $this->enableAutocreationCheck;
 	}
 
 	public function toJavaScript()

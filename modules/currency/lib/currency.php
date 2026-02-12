@@ -88,7 +88,7 @@ class CurrencyTable extends ORM\Data\DataManager
 			,
 			'NUMCODE' => (new ORM\Fields\StringField('NUMCODE'))
 				->addValidator(new ORM\Fields\Validators\LengthValidator(null, 3))
-				->configureTitle(Loc::getMessage('CURRENCY_ENTITY_NUMCODE_FIELD'))
+				->configureTitle(Loc::getMessage('CURRENCY_ENTITY_NUMERIC_CODE_FIELD'))
 			,
 			'BASE' => (new ORM\Fields\BooleanField('BASE'))
 				->configureValues('N', 'Y')

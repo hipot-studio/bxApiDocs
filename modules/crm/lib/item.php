@@ -249,6 +249,8 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	private LastCommunicationTable|string $lastCommunicationDataClass = LastCommunicationTable::class;
 	private bool $isLastCommunicationDataLoaded = false;
 
+	private ?array $entityFieldNames = null;
+
 	public function __construct(
 		int $entityTypeId,
 		EntityObject $entityObject,
@@ -758,26 +760,29 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		//todo temporary decision to avoid error on jsonSerialization of EntityObjects
 		$fieldTypeMask = FieldTypeMask::SCALAR|FieldTypeMask::USERTYPE|FieldTypeMask::EXPRESSION;
 
-		$entityFieldNames = array_merge(
-			$this->getEntityFieldNames($fieldTypeMask),
-			$this->utmTableClassName::getCodeList(),
-			$this->lastCommunicationDataClass::getCodeList(),
-		);
-
-		if ($this->hasField(static::FIELD_NAME_OBSERVERS))
+		if (is_null($this->entityFieldNames))
 		{
-			$entityFieldNames[] = $this->getEntityFieldNameByMap(static::FIELD_NAME_OBSERVERS);
-		}
+			$this->entityFieldNames = array_merge(
+				$this->getEntityFieldNames($fieldTypeMask),
+				$this->utmTableClassName::getCodeList(),
+				$this->lastCommunicationDataClass::getCodeList(),
+			);
 
-		/** @var string[][] $fromImplementation */
-		$fromImplementation = [];
-		foreach ($this->getAllImplementations() as $implementation)
-		{
-			$fromImplementation[] = $implementation->getSerializableFieldNames();
-		}
-		$entityFieldNames = array_merge($entityFieldNames, ...$fromImplementation);
+			if ($this->hasField(static::FIELD_NAME_OBSERVERS))
+			{
+				$this->entityFieldNames[] = $this->getEntityFieldNameByMap(static::FIELD_NAME_OBSERVERS);
+			}
 
-		$data = $this->collectValues($entityFieldNames, $valuesType);
+			/** @var string[][] $fromImplementation */
+			$fromImplementation = [];
+			foreach ($this->getAllImplementations() as $implementation)
+			{
+				$fromImplementation[] = $implementation->getSerializableFieldNames();
+			}
+			$this->entityFieldNames = array_merge($this->entityFieldNames, ...$fromImplementation);
+			$this->entityFieldNames = array_unique($this->entityFieldNames);
+		}
+		$data = $this->collectValues($this->entityFieldNames, $valuesType);
 
 		$commonFieldNames = array_map([$this, 'getCommonFieldNameByMap'], array_keys($data));
 

@@ -34,6 +34,19 @@ class AppRepository implements \Bitrix\Rest\Contract\Repository\AppRepository
 		return !empty($collection);
 	}
 
+	public function getInstalledAppsCount(): int
+	{
+		return (int)AppTable::query()
+			->addFilter('!=STATUS', AppTable::STATUS_LOCAL)
+			->addFilter('=ACTIVE', AppTable::ACTIVE)
+			->addFilter('=INSTALLED', AppTable::INSTALLED)
+			->addSelect('ID')
+			->countTotal(true)
+			?->exec()
+			->getCount()
+		;
+	}
+
 	/**
 	 * @return EO_App_Query
 	 */

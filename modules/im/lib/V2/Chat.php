@@ -35,6 +35,7 @@ use Bitrix\Im\V2\Relation\RelationError;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Rest\RestEntity;
+use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
@@ -67,11 +68,13 @@ use CIMNotify;
 use CPushManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Chat\Add\AddResult;
+use Bitrix\Im\V2\SharingLink\Entity\ShareableEntity;
+use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 
 /**
  * Chat version #2
  */
-abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable
+abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, ShareableEntity, AccessCheckable, ChatActionAccessCheckable
 {
 	use ContextCustomer
 	{
@@ -535,29 +538,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 
 		$selfRelation = $this->getSelfRelation();
-
-		if ($selfRelation === null)
-		{
-			$this->role = self::ROLE_GUEST;
-
-			return $this->role;
-		}
-
-		if ($this->getContext()->getUserId() === (int)$this->getAuthorId())
-		{
-			$this->role = self::ROLE_OWNER;
-
-			return $this->role;
-		}
-
-		elseif ($selfRelation->getManager())
-		{
-			$this->role = self::ROLE_MANAGER;
-		}
-		else
-		{
-			$this->role = self::ROLE_MEMBER;
-		}
+		$this->role = $selfRelation?->getRole() ?? self::ROLE_GUEST;
 
 		return $this->role;
 	}
@@ -593,9 +574,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	//region Access & Permissions
 
-	final public function checkAccess(int|User|null $user = null): Result
+	final public function checkAccess(?int $userId = null): Result
 	{
-		$userId = $this->getUserId($user);
+		$userId = $this->getUserId($userId);
 
 		if (isset($this->accessCache[$userId]))
 		{
@@ -2940,6 +2921,13 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $this->addUsers([$this->getContext()->getUserId()], $config);
 	}
 
+	public function joinBySharingLink(Im\V2\SharingLink\ChatLink $sharingLink, int $userId): self
+	{
+		$config = (new AddUsersConfig(hideHistory: false, withMessage: true, sharingLink: $sharingLink));
+
+		return $this->addUsers([$userId], $config);
+	}
+
 	/**
 	 * @param array $userIds
 	 * @return self
@@ -3055,7 +3043,21 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		{
 			$userIdToAdd = current($usersToAdd);
 			$userToAdd = Im\V2\Entity\User\User::getInstance($userIdToAdd);
-			$messageText = Loc::getMessage("IM_CHAT_SELF_JOIN_{$userToAdd->getGender()}", ['#USER_NAME#' => $userCodesString]);
+
+			if ($config->bySharingLink())
+			{
+				$linkAuthorBbCode = Message\Text\BbCode\User::build($config->sharingLink->getAuthorId())->compile();
+				$userToAddBbCode = Message\Text\BbCode\User::build($userIdToAdd)->compile();
+
+				$messageText = Loc::getMessage(
+					"IM_CHAT_SELF_JOIN_VIA_SHARING_LINK_{$userToAdd->getGender()}",
+					['#LINK_AUTHOR_NAME#' => $linkAuthorBbCode, '#INVITED_USER_NAME#' => $userToAddBbCode],
+				);
+			}
+			else
+			{
+				$messageText = Loc::getMessage("IM_CHAT_SELF_JOIN_{$userToAdd->getGender()}", ['#USER_NAME#' => $userCodesString]);
+			}
 		}
 		elseif ($currentUserId === 0 && count($usersToAdd) > 1)
 		{
@@ -4155,5 +4157,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	{
 		$chat = self::$chatStaticCache[$id];
 		$chat?->onAfterOrmUpdate($fields);
+	}
+
+	public static function getSharingLinkEntityType(): LinkEntityType
+	{
+		return LinkEntityType::Chat;
 	}
 }

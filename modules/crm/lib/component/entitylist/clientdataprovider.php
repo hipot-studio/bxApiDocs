@@ -6,6 +6,7 @@ use Bitrix\Crm\Component\EntityList\UserField\GridHeaders;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Field;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Crm\Service\UserPermissions;
 
 abstract class ClientDataProvider
 {
@@ -25,6 +26,8 @@ abstract class ClientDataProvider
 	private const CACHE_TIME = 86400;
 	private const CACHE_DIR = '/crm/entity_list/client_data_provider/';
 
+	protected UserPermissions $userPermissionsService;
+
 	public function __construct(int $clientEntityTypeId)
 	{
 		$this->clientEntityTypeId = $clientEntityTypeId;
@@ -35,6 +38,7 @@ abstract class ClientDataProvider
 		$this->ufManager->setFieldNamePrefix($this->fieldHelper->getFieldPrefix());
 
 		$this->multifieldsManager = new \CCrmFieldMulti();
+		$this->userPermissionsService = Container::getInstance()->getUserPermissions();
 	}
 
 	public static function getPriorityEntityTypeId(): int
@@ -287,7 +291,7 @@ abstract class ClientDataProvider
 
 	protected function hasPermissions(): bool
 	{
-		return \Bitrix\Crm\Security\EntityAuthorization::checkReadPermission($this->clientEntityTypeId, 0);
+		return $this->userPermissionsService->entityType()->canReadItems($this->clientEntityTypeId);
 	}
 
 	protected function hasClientFields(array $fields): bool

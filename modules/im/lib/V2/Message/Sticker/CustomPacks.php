@@ -6,6 +6,8 @@ namespace Bitrix\Im\V2\Message\Sticker;
 
 use Bitrix\Im\Model\StickerPackTable;
 use Bitrix\Im\Model\StickerTable;
+use Bitrix\Im\V2\Analytics\StickerAnalytics;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message\Sticker\CustomPacks\UserPack;
 use Bitrix\Im\V2\Message\Sticker\Recent\RecentCollection;
@@ -36,10 +38,12 @@ class CustomPacks implements StickerPacks
 	protected static self $instance;
 	protected static array $packs = [];
 	protected PackNameManager $packNameManager;
+	protected StickerAnalytics $analytics;
 
 	private function __construct()
 	{
 		$this->packNameManager = new PackNameManager();
+		$this->analytics = new StickerAnalytics(Chat::getInstance(null));
 	}
 
 	public static function getInstance(): self
@@ -151,6 +155,7 @@ class CustomPacks implements StickerPacks
 		if ($pack !== null)
 		{
 			(new StickerPackAdd($pack, $fileUuidMap))->send();
+			$this->analytics->addAddPack($this->getType());
 		}
 
 		return $result->setResult($pack);
@@ -236,6 +241,7 @@ class CustomPacks implements StickerPacks
 			}
 
 			$result->setResult($pack);
+			$this->analytics->addAddSticker($this->getType(), count($newStickers));
 		}
 
 		return $result;
@@ -313,7 +319,9 @@ class CustomPacks implements StickerPacks
 		StickerTable::deleteBatch(['=PACK_ID' => $packId]);
 
 		$this->cleanCache($packId);
+
 		(new StickerPackDelete($packId, $pack->type, $userIds))->send();
+		$this->analytics->addDeletePack($this->getType());
 
 		$this->deleteFiles($pack->stickers->getFileIds());
 
@@ -336,7 +344,9 @@ class CustomPacks implements StickerPacks
 
 		$filter = ['=USER_ID' => $this->getContext()->getUserId(), '=PACK_ID' => $packId];
 		UserPack::getInstance()->deleteByFilter($filter, [$this->getContext()->getUserId()]);
+
 		(new StickerPackUnlink($packId, $pack->type))->send();
+		$this->analytics->addUnlinkPack($this->getType());
 
 		return $result;
 	}

@@ -14,4 +14,6 @@ interface IntegrationRepository
 	public function getBoxedPaidIntegrations(): IntegrationCollection;
 	public function hasUserIntegrations(): bool;
 	public function hasNotInWebhookUserIntegrations(): bool;
+	public function getCloudCount(): int;
+	public function getBoxedCount(): int;
 }

@@ -3593,7 +3593,14 @@ class CAllCrmContact
 				}
 				unset($arFilter[$k]);
 			}
-			elseif ($k != 'ID' && $k != 'LOGIC' && $k != '__INNER_FILTER' && mb_strpos($k, 'UF_') !== 0 && preg_match('/^[^\=\%\?\>\<]{1}/', $k) === 1)
+			elseif (
+				$k !== 'ID'
+				&& $k !== 'LOGIC'
+				&& $k !== '__INNER_FILTER'
+				&& !str_starts_with($k, 'UF_')
+				&& preg_match('/^[^\=\%\?\>\<]{1}/', $k) === 1
+				&& str_ends_with($k, '_numsel') === false
+			)
 			{
 				$arFilter['%'.$k] = $v;
 				unset($arFilter[$k]);

@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Badge\Model;
 use Bitrix\Crm\Badge\SourceIdentifier;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Main\Application;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -30,6 +31,8 @@ use CCrmOwnerType;
  */
 class BadgeTable extends \Bitrix\Main\Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getTableName()
 	{
 		return 'b_crm_item_badge';

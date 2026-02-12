@@ -12,6 +12,8 @@ class DocumentProvider extends BaseProvider
 {
 	protected const ENTITY_ID = 'bizproc-document';
 	protected const ENTITY_TYPE_DOCUMENT = 'document';
+	protected const CUSTOM_DATA_ID_TEMPLATE = 'idTemplate';
+	protected const CUSTOM_DATA_FIELD_INFO = 'field';
 
 	public function __construct(array $options = [])
 	{
@@ -53,7 +55,7 @@ class DocumentProvider extends BaseProvider
 
 		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
 		$fields = $documentService->getDocumentFields($complexDocumentType);
-		$template = $documentItem->getCustomData()->get('idTemplate') ?? '#FIELD#';
+		$template = $documentItem->getCustomData()->get(self::CUSTOM_DATA_ID_TEMPLATE) ?? '#FIELD#';
 
 		foreach ($fields as $id => $field)
 		{
@@ -62,6 +64,15 @@ class DocumentProvider extends BaseProvider
 				'entityId' => static::ENTITY_ID,
 				'title' => $field['Name'] ?? $id,
 				'supertitle' => $documentItem->getTitle(),
+				'customData' => [
+					self::CUSTOM_DATA_FIELD_INFO => [
+						'type' => $field['Type'] ?? 'string',
+						'multiple' => (bool)($field['Multiple'] ?? 0),
+						'required' => (bool)($field['Required'] ?? 0),
+						'options' => $field['Options'] ?? [],
+						...$documentItem->getCustomData()->get(self::CUSTOM_DATA_FIELD_INFO) ?? [],
+					],
+				],
 			]);
 			$documentItem->addChild($item);
 		}

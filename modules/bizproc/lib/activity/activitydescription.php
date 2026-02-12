@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Activity;
 
 use Bitrix\Bizproc\Activity\Dto\NodeSettings;
+use Bitrix\Bizproc\Activity\Dto\Complex;
 
 final class ActivityDescription implements \JsonSerializable
 {
@@ -31,6 +32,7 @@ final class ActivityDescription implements \JsonSerializable
 	private ?array $robotSettings = null;
 	private ?array $filter = null;
 	private ?array $nodeActionSettings = null;
+	private ?Complex\Settings $complexActivitySettings = null;
 	private ?array $presets = null;
 	private ?string $presetId = null;
 	private bool $excluded = false;
@@ -40,8 +42,7 @@ final class ActivityDescription implements \JsonSerializable
 		?string $name,
 		?string $description,
 		array $type,
-	)
-	{
+	) {
 		$this->name = (string)$name;
 		$this->description = (string)$description;
 		$this->type = $type;
@@ -268,6 +269,47 @@ final class ActivityDescription implements \JsonSerializable
 		return $this->presetId;
 	}
 
+	public function setComplexActivitySettings(?Complex\Settings $settings): self
+	{
+		$this->complexActivitySettings = $settings;
+		
+		return $this;
+	}
+	
+	public function getComplexActivitySettings(): ?Complex\Settings
+	{
+		return $this->complexActivitySettings;
+	}
+
+	public function setNodeActionSettings(array $nodeActionSettings): self
+	{
+		$this->nodeActionSettings = $nodeActionSettings;
+
+		return $this;
+	}
+
+	public function getNodeActionSettings(): ?array
+	{
+		return $this->nodeActionSettings;
+	}
+
+	/**
+	 * @param string $aiDescription
+	 *
+	 * @return ActivityDescription
+	 */
+	public function setAiDescription(string $aiDescription): self
+	{
+		$this->aiDescription = $aiDescription;
+
+		return $this;
+	}
+
+	private function getAiDescription(): string
+	{
+		return $this->aiDescription ?? '';
+	}
+
 	public function applyPreset(array $preset): self
 	{
 		$data = $this->toArray();
@@ -300,6 +342,11 @@ final class ActivityDescription implements \JsonSerializable
 		if (!empty($preset['ID']))
 		{
 			$data['PRESET_ID'] = $preset['ID'];
+		}
+
+		if (!empty($preset['SORT']))
+		{
+			$data['SORT'] = $preset['SORT'];
 		}
 
 		return self::makeFromArray($data);
@@ -375,6 +422,9 @@ final class ActivityDescription implements \JsonSerializable
 			case 'NODE_ACTION_SETTINGS':
 				$this->setNodeActionSettings($value);
 				break;
+			case 'COMPLEX_ACTIVITY_SETTINGS':
+				$this->setComplexActivitySettings($value);
+				break;
 			case 'PRESETS':
 				$this->setPresets($value);
 				break;
@@ -415,6 +465,7 @@ final class ActivityDescription implements \JsonSerializable
 			'EXCLUDED' => $this->getExcluded(),
 			'FILTER' => $this->getFilter(),
 			'NODE_ACTION_SETTINGS' => $this->getNodeActionSettings(),
+			'COMPLEX_ACTIVITY_SETTINGS' => $this->getComplexActivitySettings(),
 			'PRESETS' => $this->getPresets(),
 			'PRESET_ID' => $this->getPresetId(),
 			'ADDITIONAL_RESULT' => $this->getAdditionalResult(),
@@ -549,6 +600,11 @@ final class ActivityDescription implements \JsonSerializable
 			$description['NODE_ACTION_SETTINGS'] = $this->getNodeActionSettings();
 		}
 
+		if ($this->getComplexActivitySettings())
+		{
+			$description['COMPLEX_ACTIVITY_SETTINGS'] = $this->getComplexActivitySettings();
+		}
+
 		if ($this->getAdditionalResult())
 		{
 			$description['ADDITIONAL_RESULT'] = $this->getAdditionalResult();
@@ -570,34 +626,5 @@ final class ActivityDescription implements \JsonSerializable
 	public function jsonSerialize(): array
 	{
 		return $this->toArray();
-	}
-
-	public function setNodeActionSettings(array $nodeActionSettings): self
-	{
-		$this->nodeActionSettings = $nodeActionSettings;
-
-		return $this;
-	}
-
-	public function getNodeActionSettings(): ?array
-	{
-		return $this->nodeActionSettings;
-	}
-
-	/**
-	 * @param string $aiDescription
-	 *
-	 * @return ActivityDescription
-	 */
-	public function setAiDescription(string $aiDescription): ActivityDescription
-	{
-		$this->aiDescription = $aiDescription;
-
-		return $this;
-	}
-
-	private function getAiDescription(): string
-	{
-		return $this->aiDescription ?? '';
 	}
 }

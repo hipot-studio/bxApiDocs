@@ -291,6 +291,7 @@ class Permission
 			Action::ChangeRight->value => Chat::ROLE_GUEST,
 			Action::ChangeOwner->value => Chat::ROLE_GUEST,
 			Action::ChangeManagers->value => Chat::ROLE_GUEST,
+			Action::ManageSharingLinks->value => Chat::ROLE_NONE,
 		];
 	}
 

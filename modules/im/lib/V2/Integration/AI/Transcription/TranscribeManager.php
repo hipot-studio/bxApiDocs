@@ -53,7 +53,7 @@ final class TranscribeManager
 		$this->messageId = $messageId;
 	}
 
-	public function transcribeFile(): TranscribeResult
+	public function transcribeFile(LaunchType $launchType = LaunchType::Auto): TranscribeResult
 	{
 		$result = new TranscribeResult($this->createErrorFileItem());
 
@@ -90,7 +90,7 @@ final class TranscribeManager
 			Application::getConnection()->unlock($this->getLockName());
 		}
 
-		$result = $this->sendAiQuery();
+		$result = $this->sendAiQuery($launchType);
 
 		if ($result->isSuccess())
 		{
@@ -101,12 +101,12 @@ final class TranscribeManager
 			TranscribeQueueManager::getInstance()->delete($this->fileId, $this->chatId);
 		}
 
-		(new FileAnalytics(Chat::getInstance($this->chatId)))->addStartTranscript($result);
+		(new FileAnalytics(Chat::getInstance($this->chatId)))->addStartTranscript($result, $launchType);
 
 		return $result;
 	}
 
-	public function handleTranscriptionResponse(TranscribeResult $transcribeResult): void
+	public function handleTranscriptionResponse(TranscribeResult $transcribeResult, LaunchType $launchType): void
 	{
 		$transcribeFileItem = $transcribeResult->getFileItem();
 
@@ -134,7 +134,7 @@ final class TranscribeManager
 		}
 
 		$this->sendTranscribeEvent($transcribeFileItem, null, $chatIds);
-		(new FileAnalytics(Chat::getInstance($this->chatId)))->addFinishTranscript($transcribeResult);
+		(new FileAnalytics(Chat::getInstance($this->chatId)))->addFinishTranscript($transcribeResult, $launchType);
 	}
 
 	/**
@@ -229,7 +229,7 @@ final class TranscribeManager
 		return TranscribeQueueManager::getInstance()->inQueue($this->fileId, $this->chatId);
 	}
 
-	protected function sendAiQuery(): TranscribeResult
+	protected function sendAiQuery(LaunchType $launchType): TranscribeResult
 	{
 		$result = new TranscribeResult($this->createErrorFileItem());
 
@@ -238,6 +238,7 @@ final class TranscribeManager
 			'fileId' => $this->fileId,
 			'diskFileId' => $this->diskFileId,
 			'messageId' => $this->messageId,
+			'launchType' => $launchType->value,
 		];
 
 		$fileId = $this->fileId;

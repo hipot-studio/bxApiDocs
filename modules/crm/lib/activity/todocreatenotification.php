@@ -33,7 +33,7 @@ class TodoCreateNotification
 		{
 			[$period, $skipFrom] = explode('.', $value, 2);
 		}
-		if (!$this->isPeriodExists($period))
+		if ($value !== '' && !$this->isPeriodExists($period))
 		{
 			\CUserOptions::DeleteOption('crm', $this->getOptionName());
 
@@ -73,7 +73,7 @@ class TodoCreateNotification
 				break;
 		}
 
-		if (!$isSkipped)
+		if ($value !== '' && !$isSkipped)
 		{
 			\CUserOptions::DeleteOption('crm', $this->getOptionName());
 		}
@@ -102,7 +102,7 @@ class TodoCreateNotification
 
 		return $period;
 	}
-	
+
 	public function skipForPeriod(string $period): Result
 	{
 		$result = new Result();

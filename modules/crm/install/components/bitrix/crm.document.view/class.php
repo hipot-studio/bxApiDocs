@@ -102,7 +102,7 @@ class CrmDocumentViewComponent extends ViewComponent
 		)
 		{
 			$this->arResult['isTransformationError'] = true;
-			$this->arResult['transformationErrorMessage'] = Loc::getMessage('CRM_DOCUMENT_VIEW_COMPONENT_PROCESSED_NO_PDF_ERROR');
+			$this->arResult['transformationErrorMessage'] = Loc::getMessage('CRM_DOCUMENT_VIEW_COMPONENT_PROCESSED_NO_PDF_ERROR_MSGVER_1');
 		}
 		if (!$result->isSuccess())
 		{

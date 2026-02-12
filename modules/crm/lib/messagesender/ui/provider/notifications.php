@@ -126,7 +126,7 @@ final class Notifications extends Provider
 					Icon::notifications(),
 					(string)Loc::getMessage('CRM_MESSAGESENDER_NOTIFICATIONS_CHANNEL_TITLE'),
 					$this->makeViaCaption($channel->getShortName()),
-					(string)Loc::getMessage('CRM_MESSAGESENDER_NOTIFICATIONS_CHANNEL_DESCRIPTION'),
+					(string)Loc::getMessage('CRM_MESSAGESENDER_NOTIFICATIONS_CHANNEL_DESCRIPTION_MSGVER_1'),
 				),
 				[$from],
 				NotificationsManager::canSendMessage(),

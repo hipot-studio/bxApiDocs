@@ -281,15 +281,6 @@ class SmartInvoice extends Dynamic
 					'>DATE_INSERT' => DateTime::createFromTimestamp(time() - 30 * 24 * 3600),
 				]);
 				InvoiceSettings::getCurrent()->setOldInvoicesEnabled($lastMonthCreatedInvoicesCount > 0);
-
-				// if there is at least one old invoice - show notification where to find them
-				if ($lastMonthCreatedInvoicesCount <= 0)
-				{
-					$lastSixMonthgsCreatedInvoicesCount = InvoiceTable::getCount([
-						'>DATE_INSERT' => DateTime::createFromTimestamp(time() - 183 * 24 * 3600),
-					]);
-					InvoiceSettings::getCurrent()->setShowInvoiceTransitionNotice($lastSixMonthgsCreatedInvoicesCount > 10);
-				}
 			}
 			else
 			{
@@ -299,8 +290,11 @@ class SmartInvoice extends Dynamic
 
 		if (!$result->isSuccess())
 		{
+			$errorLogMessage = 'Error while trying to create SmartInvoice type: ' . implode(', ', $result->getErrorMessages());
+
+			Container::getInstance()->getLogger('Default')->error($errorLogMessage);
 			AddMessage2Log(
-				'Error while trying to create SmartInvoice type: ' . implode(', ', $result->getErrorMessages()),
+				$errorLogMessage,
 				'crm',
 			);
 		}

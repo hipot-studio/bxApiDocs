@@ -204,7 +204,10 @@ class EntityConverter
 
 	private function createDestinationItem(Factory $destinationFactory): Item
 	{
-		if (!ConversionSettings::getCurrent()->isAutocreationEnabled())
+		if (
+			!ConversionSettings::getCurrent()->isAutocreationEnabled()
+			&& $this->getConfig()->isAutocreationCheckEnabled()
+		)
 		{
 			throw new AutocreationDisabledException($destinationFactory->getEntityTypeId());
 		}

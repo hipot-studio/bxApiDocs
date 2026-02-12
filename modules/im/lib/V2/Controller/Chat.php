@@ -26,7 +26,7 @@ use Bitrix\Im\V2\Chat\Update\UpdateFields;
 use Bitrix\Im\V2\Controller\Chat\Pin;
 use Bitrix\Im\V2\Controller\Filter\ChatTypeFilter;
 use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
-use Bitrix\Im\V2\Controller\Filter\CheckChatAccess;
+use Bitrix\Im\V2\Controller\Filter\CheckEntityAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckFileAccess;
 use Bitrix\Im\V2\Controller\Filter\ExtendPullWatchPrefilter;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
@@ -36,6 +36,9 @@ use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Chat\Update\UpdateService;
 use Bitrix\Im\V2\Result;
+use Bitrix\Im\V2\SharingLink\ChatLink;
+use Bitrix\Im\V2\SharingLink\SharingLinkError;
+use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -83,50 +86,50 @@ class Chat extends BaseController
 			],
 			'setOwner' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeOwner),
 				]
 			],
 			'setTitle' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::Rename),
 				]
 			],
 			'setDescription' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeDescription),
 				]
 			],
 			'setColor' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeColor),
 				]
 			],
 			'setAvatarId' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeAvatar),
 					new CheckFileAccess(['avatarId']),
 				]
 			],
 			'setAvatar' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeAvatar),
 				]
 			],
 			'addUsers' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::Extend),
 				]
 			],
 			'deleteUser' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(
 						Permission\Action::Kick,
 						fn (Base $filter) => (int)($filter->getAction()->getArguments()['userId'] ?? 0)
@@ -135,57 +138,57 @@ class Chat extends BaseController
 			],
 			'setManagers' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeManagers),
 				]
 			],
 			'addManagers' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeManagers),
 					new ChatTypeFilter([GroupChat::class]),
 				]
 			],
 			'deleteManagers' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeManagers),
 					new ChatTypeFilter([GroupChat::class]),
 				]
 			],
 			'setManageUsersAdd' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeRight),
 				]
 			],
 			'setManageUsersDelete' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeRight),
 				]
 			],
 			'setManageUI' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeRight),
 				]
 			],
 			'setManageSettings' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeRight),
 				]
 			],
 			'setMessagesAutoDeleteDelay' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeMessagesAutoDeleteDelay),
 				]
 			],
 			'setManageMessages' => [
 				'+prefilters' => [
-					new CheckChatAccess(),
+					new CheckEntityAccess(),
 					new CheckActionAccess(Permission\Action::ChangeRight),
 				]
 			],
@@ -246,6 +249,13 @@ class Chat extends BaseController
 		return array_merge(
 			parent::getAutoWiredParameters(),
 			[
+				new ExactParameter(
+					\Bitrix\Im\V2\Chat::class,
+					'chat',
+					function ($className, ChatLink $sharingLink) {
+						return $sharingLink->getEntity();
+					}
+				),
 				new ExactParameter(
 					Type::class,
 					'chatType',
@@ -511,6 +521,30 @@ class Chat extends BaseController
 		return ['result' => true];
 	}
 
+
+	/**
+	 * @restMethod im.v2.Chat.joinByCode
+	 */
+	public function joinByCodeAction(ChatLink $sharingLink, CurrentUser $currentUser): ?array
+	{
+		if ($sharingLink->isRevoked())
+		{
+			$this->addError(new SharingLinkError(SharingLinkError::REVOKED));
+
+			return null;
+		}
+
+		$result = $sharingLink->apply((int)$currentUser->getId());
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return ['dialogId' => $sharingLink->getEntity()->getDialogId($currentUser->getId())];
+	}
+
 	/**
 	 * @restMethod im.v2.Chat.extendPullWatch
 	 */
@@ -681,6 +715,14 @@ class Chat extends BaseController
 		{
 			return $this->convertKeysToCamelCase($result->getErrors());
 		}
+
+		$eventData = [
+			'chatId' => $chat->getChatId(),
+			'userIds' => [$ownerId],
+			'role' => \Bitrix\Im\V2\Chat::ROLE_OWNER,
+		];
+		$event = new \Bitrix\Main\Event('im', 'OnChangeUserRoles', $eventData);
+		$event->send();
 
 		return $result->isSuccess();
 	}

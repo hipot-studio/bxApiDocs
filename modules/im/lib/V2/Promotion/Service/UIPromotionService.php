@@ -233,6 +233,16 @@ class UIPromotionService implements PromotionServiceInterface
 			];
 		}
 
+		if (Features::get()->unreadRecentModeAvailable)
+		{
+			$result[] = [
+				"ID" => 'im:unread-recent-mode:10112025:all',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::ALL->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+		}
+
 		if (Features::get()->isTasksRecentListAvailable)
 		{
 			$result[] = [

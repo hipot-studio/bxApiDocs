@@ -143,17 +143,25 @@ final class SetStage extends Base
 	{
 		if ($this->progress->hasSuccessIds())
 		{
-			$this->submitChangeStageEvent($data->entityTypeId, $this->progress->getSuccessIds(), Dictionary::STATUS_SUCCESS);
+			$this->submitChangeStageEvent($data->entityTypeId, count($this->progress->getSuccessIds()), Dictionary::STATUS_SUCCESS);
 		}
 
 		if ($this->progress->hasErrorIds())
 		{
-			$this->submitChangeStageEvent($data->entityTypeId, $this->progress->getErrorIds(), Dictionary::STATUS_ERROR);
+			$canceledCount = $this->getCanceledEntityCount();
+			$errorCount = count($this->progress->getErrorIds()) - $canceledCount;
+			$this->submitChangeStageEvent($data->entityTypeId, $errorCount, Dictionary::STATUS_ERROR);
+			$this->submitChangeStageEvent($data->entityTypeId, $canceledCount, Dictionary::STATUS_ERROR_FILLING_FIELDS);
 		}
 	}
 
-	private function submitChangeStageEvent(int $entityTypeId, array $ids, string $status): void
+	private function submitChangeStageEvent(int $entityTypeId, int $entityCount, string $status): void
 	{
+		if ($entityCount < 1)
+		{
+			return;
+		}
+
 		$builder = ChangeStageEvent::createDefault($entityTypeId)
 			->setSection(Dictionary::getAnalyticsEntityType($entityTypeId) . '_section')
 			->setSubSection(Dictionary::SUB_SECTION_LIST)
@@ -161,10 +169,24 @@ final class SetStage extends Base
 		;
 
 		$statusData = $builder
-			->setP2('entityCount', count($ids))
+			->setP2('entityCount', $entityCount)
 			->setStatus($status)
 		;
 
 		$statusData->buildEvent()->send();
+	}
+
+	private function getCanceledEntityCount(): int
+	{
+		$errors = $this->progress->getErrors();
+
+		$filtered = array_filter($errors, function($error) {
+			$cancelCodes = [
+				\Bitrix\Crm\Field::ERROR_CODE_REQUIRED_FIELD_ATTRIBUTE
+			];
+			return in_array($error->getCode(), $cancelCodes);
+		});
+
+		return count($filtered);
 	}
 }

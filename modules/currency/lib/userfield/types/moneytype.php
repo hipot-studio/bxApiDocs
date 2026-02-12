@@ -143,7 +143,12 @@ class MoneyType extends BaseType
 	 */
 	public static function prepareSettings(array $userField): array
 	{
-		[$value, $currency] = static::unFormatFromDb($userField['SETTINGS']['DEFAULT_VALUE'] ?? null);
+		$defaultValue = $userField['SETTINGS']['DEFAULT_VALUE'] ?? null;
+		if (!is_string($defaultValue))
+		{
+			$defaultValue = null;
+		}
+		[$value, $currency] = static::unFormatFromDb($defaultValue);
 		if ($value !== '')
 		{
 			if($currency === '')

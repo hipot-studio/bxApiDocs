@@ -95,6 +95,7 @@ class FieldChangedTrigger extends BaseTrigger
 				|| $id === 'CATEGORY_ID'
 				|| $id === 'ORIGINATOR_ID'
 				|| $id === 'ORIGIN_ID'
+				|| $id === 'PRODUCT_IDS'
 				|| $field['Type'] === 'phone'
 				|| $field['Type'] === 'web'
 				|| $field['Type'] === 'email'

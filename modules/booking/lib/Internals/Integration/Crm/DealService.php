@@ -8,9 +8,9 @@ use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
-use CCrmDeal;
 use CCrmOwnerType;
 use Bitrix\Crm\ProductType;
+use Bitrix\Crm\Service\Factory;
 
 class DealService
 {
@@ -136,28 +136,30 @@ class DealService
 
 	private function createDeal(string|null $clientTypeCode = null, int|null $clientId = null): int|null
 	{
-		$fields = [
-			'SOURCE_ID' => 'BOOKING',
-			'TYPE_ID' => 'SERVICES',
-		];
-
-		if ($clientId && $clientTypeCode === CCrmOwnerType::CompanyName)
+		/** @var Factory\Deal $factory */
+		$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+		if (!$factory)
 		{
-			$fields['COMPANY_ID'] = $clientId;
-		}
-		elseif ($clientId && $clientTypeCode === CCrmOwnerType::ContactName)
-		{
-			$fields['CONTACT_IDS'] = [$clientId];
+			return null;
 		}
 
-		$dealId = (int)(new CCrmDeal(false))->add(
-			$fields,
-			true,
-			[
-				'DISABLE_USER_FIELD_CHECK' => true,
-			]
-		);
+		$item = $factory->createItem()
+			->setSourceId('BOOKING')
+			->setTypeId('SERVICES')
+		;
 
-		return $dealId > 0 ? $dealId : null;
+		if ($clientId)
+		{
+			match ($clientTypeCode)
+			{
+				CCrmOwnerType::CompanyName => $item->setCompanyId($clientId),
+				CCrmOwnerType::ContactName => $item->setContactId($clientId),
+				default => null,
+			};
+		}
+
+		$addResult = $factory->getAddOperation($item)->disableCheckAccess()->launch();
+
+		return $addResult->isSuccess() ? $item->getId() : null;
 	}
 }

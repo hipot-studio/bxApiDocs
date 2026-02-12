@@ -11,6 +11,7 @@ use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Component\EntityList\Grid;
 use Bitrix\Crm\Component\EntityList\Settings\PermissionItem;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Security\Role\Manage\Manager\CustomSectionListSelection;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Summary\SummaryFactory;
@@ -161,7 +162,7 @@ class CrmAutomatedSolutionListComponent extends Base
 			Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()
 			&& \Bitrix\Main\Loader::includeModule('rest')
 			&& is_callable('\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl')
-			&& \Bitrix\Crm\Restriction\RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
+			&& RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
 		)
 		{
 			$items[] = [

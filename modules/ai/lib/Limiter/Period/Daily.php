@@ -64,13 +64,13 @@ class Daily implements IPeriod
 	 */
 	public function getMaximumUsage(): int
 	{
+		if (Bitrix24::isMarketAvailable())
+		{
+			return self::MAX_WITH_MARKET_IN_PERIOD;
+		}
+
 		if (!Bitrix24::isFreeLicense())
 		{
-			if (Bitrix24::isMarketAvailable())
-			{
-				return self::MAX_WITH_MARKET_IN_PERIOD;
-			}
-
 			// +1 - tricky hack, because otherwise we will be always fall in daily limit
 			return Plan::createByB24()?->getMaxUsage() + 1;
 		}

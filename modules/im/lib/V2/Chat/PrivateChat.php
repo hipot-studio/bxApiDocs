@@ -107,7 +107,9 @@ class PrivateChat extends Chat
 
 	public function getDialogContextId(): ?string
 	{
-		return $this->getDialogId() . ':' .$this->getContext()->getUserId();
+		$userIds = $this->getRelations()->getUserIds();
+
+		return implode(':', $userIds);
 	}
 
 	public function getStartId(?int $userId = null): int

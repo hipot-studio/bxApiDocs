@@ -27,7 +27,7 @@ class ExternalChat extends BaseController
 		}
 
 		$limit = $this->getLimit($limit);
-		$recent = RecentExternalChat::getExternalChats($type, $limit, $filter['lastMessageDate'] ?? null);
+		$recent = RecentExternalChat::getExternalChats($type, $limit, $filter);
 
 		return $this->toRestFormatWithPaginationData([$recent], $limit, $recent->count());
 	}

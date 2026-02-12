@@ -35,4 +35,13 @@ class IntegrationService implements Contract\Service\IntegrationService
 			? $this->integrationRepository->hasUserIntegrations()
 			: $this->integrationRepository->hasNotInWebhookUserIntegrations();
 	}
+
+	public function getCount(): int
+	{
+		return
+			ModuleManager::isModuleInstalled('bitrix24')
+			? $this->integrationRepository->getCloudCount()
+			: $this->integrationRepository->getBoxedCount()
+		;
+	}
 }

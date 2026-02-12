@@ -24,7 +24,7 @@ class InvoiceSettings
 	/** @var BooleanSetting  */
 	private $isOpened = null;
 	private $isOldInvoicesEnabled;
-	private $isShowInvoiceTransitionNotice;
+
 	/** @var BooleanSetting  */
 	private $isEnableSign = null;
 	/** @var IntegerSetting */
@@ -37,8 +37,7 @@ class InvoiceSettings
 		$this->defaultListView = new IntegerSetting('invoice_default_list_view', self::VIEW_KANBAN);
 		$this->isOpened = new BooleanSetting('invoice_opened_flag', true);
 		$this->isEnableSign = new BooleanSetting('invoice_enable_public_b24_sign', true);
-		$this->isShowInvoiceTransitionNotice = new BooleanSetting('invoice_show_transition_notice', true);
-		$this->isOldInvoicesEnabled = new BooleanSetting('old_invoice_enable', true);
+		$this->isOldInvoicesEnabled = new BooleanSetting('old_invoice_enable', false);
 		$this->initIsUseNumberInTitlePlaceholderSettings(\CCrmOwnerType::SmartInvoice);
 	}
 	/**
@@ -205,15 +204,5 @@ class InvoiceSettings
 	public function isOldInvoicesEnablingPossible(): bool
 	{
 		return $this->isSmartInvoiceEnabled() && $this->isOldInvoicesEnabled();
-	}
-
-	public function isShowInvoiceTransitionNotice(): bool
-	{
-		return $this->isShowInvoiceTransitionNotice->get();
-	}
-
-	public function setShowInvoiceTransitionNotice(bool $isShowInvoiceTransitionNotice): void
-	{
-		$this->isShowInvoiceTransitionNotice->set($isShowInvoiceTransitionNotice);
 	}
 }

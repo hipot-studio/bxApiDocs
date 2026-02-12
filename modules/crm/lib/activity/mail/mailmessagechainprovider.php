@@ -2,21 +2,24 @@
 
 namespace Bitrix\Crm\Activity\Mail;
 
-use Bitrix\Crm\Activity\Mail\Message;
 use Bitrix\Crm\Activity\Provider\Email;
 use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Disk\File;
 use Bitrix\Main\Error;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail\Helper\Dto\MailMessageChain;
 use Bitrix\Mail\Helper\Dto\MailMessage;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\NotImplementedException;
 use Bitrix\Mobile\UI;
 use Bitrix\UI\EntitySelector\ItemCollection;
 use Bitrix\UI\EntitySelector\Item;
+use Bitrix\Mail\Helper\AbstractMailMessageChainProvider;
+use Bitrix\Mail\Helper\Message\Parsers;
 
-class MailMessageChainProvider
+class MailMessageChainProvider extends AbstractMailMessageChainProvider
 {
 	protected const PERMISSION_READ = 1;
 	protected const SUPPORTED_ACTIVITY_TYPE = 'CRM_EMAIL';
@@ -26,6 +29,12 @@ class MailMessageChainProvider
 	public function __construct()
 	{
 		$this->errorCollection = new ErrorCollection();
+	}
+
+	protected function replaceAttachmentPlaceholderWithUrl(string $body, int $imageId, string $url): string
+	{
+		$newBody = parent::replaceAttachmentPlaceholderWithUrl($body, $imageId, $url);
+		return Parsers\ReplacingUrlImagesToAbsolute::parse($newBody, $imageId, $url);
 	}
 
 	private function checkActivityIsType(array $activity, string $type = self::SUPPORTED_ACTIVITY_TYPE): bool
@@ -116,18 +125,27 @@ class MailMessageChainProvider
 		return $headerResult->getData();
 	}
 
+	/**
+	 * @param int $id
+	 * @param bool $takeBody
+	 * @param bool $takeFiles
+	 * @return MailMessage
+	 * @throws LoaderException
+	 * @throws NotImplementedException
+	 */
 	public function getMessage(int $id, bool $takeBody = false, bool $takeFiles = false): MailMessage
 	{
 		$message = new MailMessage();
 
 		if ($takeBody)
 		{
-			$message->body = $this->getMessageBody($id);
+			$message->body = $this->cleanCharset($this->getMessageBody($id));
 		}
 
 		if ($takeFiles)
 		{
-			$message->attachments = $this->getMessageFilesLinkMessages($id)['FILES'];
+			$message->attachments = $this->getAttachmentsWithMessageId($id)['FILES'];
+			$message->body = $this->replaceAttachmentPlaceholders($message->body, $message->attachments);
 		}
 
 		return $message;
@@ -178,8 +196,28 @@ class MailMessageChainProvider
 		return $body;
 	}
 
-	protected function getMessageFilesLinkMessages(int $id, bool $forMobile = true): array
+
+	/**
+	 * @param int $id
+	 * @param bool $forMobile
+	 * @param bool $checkPermissions
+	 * @return array {FILES: array, ID: int} - array of files info and activity ID
+	 * (TODO: return DTO)
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\NotImplementedException
+	 */
+	public function getAttachmentsWithMessageId(int $id, bool $forMobile = true, bool $checkPermissions = true): array
 	{
+		$filesInfo = [
+			'FILES' => [],
+			'ID' => 0,
+		];
+
+		if (!\Bitrix\Main\Loader::includeModule('disk'))
+		{
+			return $filesInfo;
+		}
+
 		$activities = $this->getActivities(
 			[
 				'ID' => $id,
@@ -190,24 +228,21 @@ class MailMessageChainProvider
 			]
 		);
 
-		if (!$this->checkActivityPermission(self::PERMISSION_READ, $activities))
+		if ($checkPermissions === true && !$this->checkActivityPermission(self::PERMISSION_READ, $activities))
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('CRM_LIB_MESSAGE_CHAIN_PROVIDER_PERMISSION_DENIED'));
 
-			return [];
+			return $filesInfo;
 		}
 
 		if (count($activities) === 0)
 		{
-			return [];
+			return $filesInfo;
 		}
 
 		$activity = $activities[0];
 
-		$filesInfo = [
-			'ID' => $activity['ID'],
-			'FILES' => [],
-		];
+		$filesInfo['ID'] = (int)$activity['ID'];
 
 		$filesIDs = [];
 
@@ -216,54 +251,76 @@ class MailMessageChainProvider
 			$filesIDs = array_unique($activity['STORAGE_ELEMENT_IDS'], SORT_NUMERIC);
 		}
 
-		foreach ($filesIDs as $fileID)
+		$diskFiles = File::loadBatchById($filesIDs);
+
+		$realToDiskMap = [];
+		$realFileIds = [];
+
+		/** @var \Bitrix\Disk\File $diskFile */
+		foreach ($diskFiles as $diskFile)
 		{
-			if($forMobile)
-			{
-				$file = File::loadById($fileID);
-				if($file)
-				{
-					if (\Bitrix\Main\Loader::includeModule('mobile'))
-					{
-						$diskFileInfo = UI\File::loadWithPreview($file->getFileId());
+			$realId = (int)$diskFile->getFileId();
+			$diskId = (int)$diskFile->getId();
 
-						if($diskFileInfo)
-						{
-							$filesInfo['FILES'][] = $diskFileInfo->getInfo();
-						}
-					}
+			$realFileIds[] = $realId;
+			$realToDiskMap[$realId] = $diskId;
+		}
+
+		if ($forMobile)
+		{
+			if (!\Bitrix\Main\Loader::includeModule('mobile'))
+			{
+				return $filesInfo;
+			}
+
+			foreach ($realToDiskMap as $realId => $diskId)
+			{
+				$diskFile = UI\File::loadWithPreview($realId);
+
+				if ($diskFile)
+				{
+					$diskFileInfo = $diskFile->getInfo();
+					$diskFileInfo[self::KEY_ID_IN_MESSAGE_BODY] = $diskId;
+					$filesInfo['FILES'][] = $diskFileInfo;
 				}
 			}
-			else
+
+			return $filesInfo;
+		}
+
+		$filesRows = \CFile::getList(arFilter: [
+			'@ID' => $realFileIds,
+		]);
+
+		while ($fileInfo = $filesRows->Fetch())
+		{
+			if (!isset($file['SRC']))
 			{
-				$diskFileInfo = \Bitrix\Crm\Integration\DiskManager::getFileInfo(
-					(int)$fileID,
-					false,
-					[
-						'OWNER_TYPE_ID' => \CCrmOwnerType::Activity,
-						'OWNER_ID' => $activity['ID'],
-					]
-				);
-
-				if ($diskFileInfo)
-				{
-					$fileName = explode(".", $diskFileInfo['NAME']);
-					$clearedInfo = [
-						'ID' => (int)$fileID,
-						'NAME' => $diskFileInfo['NAME'],
-						'VIEW_URL' => $diskFileInfo['VIEW_URL'],
-						'PREVIEW_URL' => $diskFileInfo['PREVIEW_URL'],
-						'TYPE' => end($fileName),
-					];
-
-					$filesInfo['FILES'][] = $clearedInfo;
-				}
+				$fileInfo['SRC'] = \CFile::GetFileSRC($fileInfo);
 			}
+
+			$fileId = (int)$fileInfo['ID'];
+
+			if (!array_key_exists($fileId, $realToDiskMap))
+			{
+				continue;
+			}
+
+			$filesInfo['FILES'][] = [
+				self::KEY_ID_IN_MESSAGE_BODY => $realToDiskMap[$fileId],
+				'url' => $fileInfo['SRC'],
+				'name' => (string)($fileInfo['ORIGINAL_NAME'] ?? ''),
+			];
 		}
 
 		return $filesInfo;
 	}
 
+	/**
+	 * @param array $contacts
+	 * @param bool $isUser
+	 * @return ItemCollection
+	 */
 	private function convertToMailContactList(array $contacts, bool $isUser = false): ItemCollection
 	{
 		$list = new ItemCollection();
@@ -290,6 +347,12 @@ class MailMessageChainProvider
 		return $list;
 	}
 
+	/**
+	 * @param int $messageId
+	 * @return MailMessageChain
+	 * @throws LoaderException
+	 * @throws NotImplementedException
+	 */
 	public function getChain(int $messageId): MailMessageChain
 	{
 		$mailMessageChain = new MailMessageChain();
@@ -334,8 +397,6 @@ class MailMessageChainProvider
 
 			return $mailMessageChain;
 		}
-
-		$activity = $activities[0];
 
 		$threadId = $activity['THREAD_ID'];
 		$select = [
@@ -410,19 +471,14 @@ class MailMessageChainProvider
 			$message->bcc = $this->convertToMailContactList($header['bcc'] ?? []);
 			$message->to = $this->convertToMailContactList($header['to'] ?? []);
 
-			if ($item['ID'] == $messageId)
+			if ((int)$item['ID'] === $messageId)
 			{
 				/*
 				 * Load the body only for the selected message in the chain
 				 */
-				$message->body = $this->getMessageBody($messageId);
-
-				if (is_null($message->body))
-				{
-					$this->errorCollection[] = new Error(Loc::getMessage('CRM_LIB_MESSAGE_CHAIN_PROVIDER_PERMISSION_DENIED'));
-				}
-
-				$message->attachments = $this->getMessageFilesLinkMessages($messageId)['FILES'];
+				$message->body = $this->cleanCharset($this->getMessageBody($messageId));
+				$message->attachments = $this->getAttachmentsWithMessageId($messageId)['FILES'];
+				$message->body = $this->replaceAttachmentPlaceholders($message->body, $message->attachments);
 			}
 
 			$mailMessageChain->list[] = $message;
@@ -437,10 +493,15 @@ class MailMessageChainProvider
 		/*
 			Upload the content of the last read message to be able to transfer it to the sending component for citation
 		 */
-		if (!is_null($lastIncomingKey))
+		if (
+			!is_null($lastIncomingKey)
+			&& !isset($mailMessageChain->list[$lastIncomingKey])
+			&& $lastIncomingKey !== $messageId
+		)
 		{
-			$mailMessageChain->list[$lastIncomingKey]->body = $this->getMessageBody($lastIncomingId);
-			$mailMessageChain->list[$lastIncomingKey]->attachments = $this->getMessageFilesLinkMessages($lastIncomingId)['FILES'];
+			$mailMessageChain->list[$lastIncomingKey]->body = $this->cleanCharset($this->getMessageBody($lastIncomingId));
+			$mailMessageChain->list[$lastIncomingKey]->attachments = $this->getAttachmentsWithMessageId($lastIncomingId)['FILES'];
+			$mailMessageChain->list[$lastIncomingKey]->body = $this->replaceAttachmentPlaceholders($mailMessageChain->list[$lastIncomingKey]->body, $mailMessageChain->list[$lastIncomingKey]->attachments);
 		}
 
 		$mailMessageChain->properties = [

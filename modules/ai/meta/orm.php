@@ -5886,3 +5886,154 @@ namespace Bitrix\AI\ShareRole\Model {
 	 */
 	class EO_Share_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\AI\Engine\Model\BitrixEngineTable:ai/lib/engine/model/bitrixengintable.php */
+namespace Bitrix\AI\Engine\Model {
+	/**
+	 * EO_BitrixEngin
+	 * @see \Bitrix\AI\Engine\Model\BitrixEngineTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getClass()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin setClass(\string|\Bitrix\Main\DB\SqlExpression $class)
+	 * @method bool hasClass()
+	 * @method bool isClassFilled()
+	 * @method bool isClassChanged()
+	 * @method \string remindActualClass()
+	 * @method \string requireClass()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin resetClass()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin unsetClass()
+	 * @method \string fillClass()
+	 * @method \string getCategory()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin setCategory(\string|\Bitrix\Main\DB\SqlExpression $category)
+	 * @method bool hasCategory()
+	 * @method bool isCategoryFilled()
+	 * @method bool isCategoryChanged()
+	 * @method \string remindActualCategory()
+	 * @method \string requireCategory()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin resetCategory()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin unsetCategory()
+	 * @method \string fillCategory()
+	 * @method \boolean getIsActive()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin setIsActive(\boolean|\Bitrix\Main\DB\SqlExpression $isActive)
+	 * @method bool hasIsActive()
+	 * @method bool isIsActiveFilled()
+	 * @method bool isIsActiveChanged()
+	 * @method \boolean remindActualIsActive()
+	 * @method \boolean requireIsActive()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin resetIsActive()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin unsetIsActive()
+	 * @method \boolean fillIsActive()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin set($fieldName, $value)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin reset($fieldName)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Engine\Model\EO_BitrixEngin wakeUp($data)
+	 */
+	class EO_BitrixEngin {
+		/* @var \Bitrix\AI\Engine\Model\BitrixEngineTable */
+		static public $dataClass = '\Bitrix\AI\Engine\Model\BitrixEngineTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Engine\Model {
+	/**
+	 * EO_BitrixEngin_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getClassList()
+	 * @method \string[] fillClass()
+	 * @method \string[] getCategoryList()
+	 * @method \string[] fillCategory()
+	 * @method \boolean[] getIsActiveList()
+	 * @method \boolean[] fillIsActive()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Engine\Model\EO_BitrixEngin $object)
+	 * @method bool has(\Bitrix\AI\Engine\Model\EO_BitrixEngin $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin getByPrimary($primary)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin[] getAll()
+	 * @method bool remove(\Bitrix\AI\Engine\Model\EO_BitrixEngin $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection merge(?\Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_BitrixEngin_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Engine\Model\BitrixEngineTable */
+		static public $dataClass = '\Bitrix\AI\Engine\Model\BitrixEngineTable';
+	}
+}
+namespace Bitrix\AI\Engine\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_BitrixEngin_Result exec()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin fetchObject()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection fetchCollection()
+	 */
+	class EO_BitrixEngin_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin fetchObject()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection fetchCollection()
+	 */
+	class EO_BitrixEngin_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection createCollection()
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin wakeUpObject($row)
+	 * @method \Bitrix\AI\Engine\Model\EO_BitrixEngin_Collection wakeUpCollection($rows)
+	 */
+	class EO_BitrixEngin_Entity extends \Bitrix\Main\ORM\Entity {}
+}

@@ -46,6 +46,12 @@ class Catalog extends JsonController
 		/** @var ActivityDescription $activityData */
 		foreach ($activities as $activityData)
 		{
+			// Will be removed in bizprocdesigner 26.0.0 update
+			if ($activityData->getClass() === 'CrmDynamicComplexActivity')
+			{
+				continue;
+			}
+
 			$activityGroups = $activityData->getGroups();
 
 			foreach ($activityGroups as $activityGroup)

@@ -3,28 +3,30 @@
 namespace Bitrix\Im\V2\Recent;
 
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\Im\V2\Recent\Query\RecentFilter;
+use Bitrix\Im\V2\Recent\Query\RecentParams;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Engine\Response\Converter;
-use Bitrix\Main\Type\DateTime;
 
 class RecentExternalChat extends Recent
 {
-	public static function getExternalChats(string $type, int $limit, ?DateTime $lastMessageDate = null): self
+	public static function getExternalChats(string $type, int $limit, array $filter = []): self
 	{
-		$recent = new static();
-		$userId = $recent->getContext()->getUserId();
-		$entityType = self::getEntityTypeByType($type);
-		$recentEntities = static::getOrmEntities($limit, $userId, Chat::IM_TYPE_EXTERNAL, $lastMessageDate, $entityType);
+		$userId = Locator::getContext()->getUserId();
 
-		$chatIds = $recentEntities->getItemCidList();
-		$counters = (new CounterService($userId))->getForEachChat($chatIds);
+		$filter['itemType'] = Chat::IM_TYPE_EXTERNAL;
+		$filter['entityType'] = self::getEntityTypeByType($type);
+		$filter['userId'] = $userId;
 
-		foreach ($recentEntities as $entity)
-		{
-			$recent[] = RecentItem::initByEntity($entity, $counters[$entity->getItemCid()] ?? 0);
-		}
+		$queryFilter = new RecentFilter($filter);
+		$recentParams = new RecentParams(
+			filter: $queryFilter,
+			limit: $limit,
+			order: Recent::getOrder($userId)
+		);
 
-		return $recent;
+		$recentEntities = static::getRecentEntities($recentParams);
+		return static::initByArray($recentEntities);
 	}
 
 	protected static function getEntityTypeByType(string $type): string

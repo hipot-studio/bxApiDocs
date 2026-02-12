@@ -132,8 +132,10 @@ class DiskManager
 			}
 		}
 
-		$isMedia = TypeFile::isImage($file) || TypeFile::isVideo($file);
-		if (isset($viewUri) && $isMedia)
+		if (
+			isset($viewUri)
+			&& TypeFile::isImage($file)
+		)
 		{
 			$tokenService = new ScopeToken('owner_id_' . $ownerTypeID);
 			$tokenParams = $tokenService->getUrlParamsForFile($file);

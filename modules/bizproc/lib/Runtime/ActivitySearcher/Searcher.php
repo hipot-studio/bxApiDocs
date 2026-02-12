@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Runtime\ActivitySearcher;
 
+use Bitrix\Bizproc\Activity\ActivityDescription;
 use Bitrix\Bizproc\RestActivityTable;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Activity\Mixins\ActivityDescriptionBuilder;
@@ -12,6 +13,8 @@ use Bitrix\Main\Loader;
 class Searcher
 {
 	use ActivityDescriptionBuilder;
+
+	private const DESCRIPTION_FILE_NAME = '.description.php';
 
 	public readonly array $folders;
 
@@ -101,6 +104,48 @@ class Searcher
 		}
 
 		return $activities;
+	}
+
+	public function searchByCode(string $code, ?string $lang = null): ?ActivityDescription
+	{
+		if (!$this->isCorrectActivityCode($code))
+		{
+			return null;
+		}
+
+		$normalizedCode = $this->normalizeActivityCode($code);
+		if (!$normalizedCode)
+		{
+			return null;
+		}
+
+		if ($this->isRestActivityCode($normalizedCode))
+		{
+			$activity = $this->findRestActivityByInternalCode($this->extractRestInternalCode($normalizedCode));
+			if (!$activity)
+			{
+				return null;
+			}
+
+			return $this->buildRestActivityDescription($activity, $lang);
+		}
+
+		[, $dirPath] = $this->findActivityFile($normalizedCode);
+		if (empty($dirPath))
+		{
+			return null;
+		}
+
+		$activityDescription = $this->includeActivityDescriptionByDirectoryPath($dirPath);
+		if (empty($activityDescription))
+		{
+			return null;
+		}
+
+		return $this
+			->buildActivityDescription($activityDescription)
+			->setPathToActivity($dirPath)
+		;
 	}
 
 	/**
@@ -200,6 +245,10 @@ class Searcher
 		return $normalizedCode;
 	}
 
+	/**
+	 * @param string $code
+	 * @return array{0: string|null, 1: string|null}
+	 */
 	private function findActivityFile(string $code): array
 	{
 		foreach ($this->folders as $folder)
@@ -260,8 +309,17 @@ class Searcher
 	private function includeActivityDescription(string $folder, string $dir, ?array $documentType): array
 	{
 		$arActivityDescription = []; // forbidden to rename
-		$this->loadLocalization($folder . '/' . $dir, '.description.php');
-		include($folder . '/' . $dir . '/.description.php');
+		$this->loadLocalization($folder . '/' . $dir, self::DESCRIPTION_FILE_NAME);
+		include($folder . '/' . $dir . '/' . self::DESCRIPTION_FILE_NAME);
+
+		return is_array($arActivityDescription) ? $arActivityDescription : [];
+	}
+
+	private function includeActivityDescriptionByDirectoryPath(string $dirPath): array
+	{
+		$arActivityDescription = []; // forbidden to rename
+		$this->loadLocalization($dirPath, self::DESCRIPTION_FILE_NAME);
+		include($dirPath . '/' . self::DESCRIPTION_FILE_NAME);
 
 		return is_array($arActivityDescription) ? $arActivityDescription : [];
 	}

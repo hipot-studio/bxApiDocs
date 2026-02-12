@@ -37,9 +37,9 @@ class WorkflowUserGridView extends \Bitrix\Bizproc\UI\WorkflowUserGridView
 			$tasks[] = [
 				'id' => $task['ID'],
 				'name' => $task['~NAME'],
-				'activity' => $task['ACTIVITY'],
+				'activity' => $task['ACTIVITY'] ?? null,
 				'hash' => $this->getTaskHash($task),
-				'isInline' => \CBPHelper::getBool($task['IS_INLINE']),
+				'isInline' => \CBPHelper::getBool($task['IS_INLINE'] ?? null),
 				'buttons' => $this->getTaskControls($task)['buttons'] ?? null,
 			];
 		}

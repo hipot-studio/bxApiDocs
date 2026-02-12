@@ -186,6 +186,9 @@ class ConvertRuleCommand extends AbstractCommand
 	{
 		$field = $expression->field;
 
+		// Handle fieldId of document typed properties
+		$fieldId = str_replace('.', '', $field->fieldId);
+
 		$errors = [];
 		$value = CBPRuntime::getRuntime()
 			->getDocumentService()
@@ -193,12 +196,12 @@ class ConvertRuleCommand extends AbstractCommand
 				$this->documentType,
 				[
 					'Multiple' => $field->multiple,
-					'Id' => $field->fieldId,
+					'Id' => $fieldId,
 					'Type' => $field->type,
 				],
-				$field->fieldId,
+				$fieldId,
 				[
-					$field->fieldId . '_text' => $expression->value,
+					$fieldId . '_text' => $expression->value,
 				],
 			$errors,
 			) ?? ''

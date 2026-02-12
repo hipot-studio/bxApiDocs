@@ -481,7 +481,7 @@ class Recent
 				'messagesAutoDeleteConfigs' => $messagesAutoDeleteConfigs,
 			];
 
-			if (!isset($options['LAST_MESSAGE_DATE']))
+			if (!isset($options['LAST_MESSAGE_DATE']) && !$unreadOnly)
 			{
 				$objectToReturn['birthdayList'] = \Bitrix\Im\Integration\Intranet\User::getBirthdayForToday();
 			}

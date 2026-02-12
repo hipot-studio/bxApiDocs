@@ -32,6 +32,8 @@ enum Action: string
 	case ChangeMessagesAutoDeleteDelay = 'CHANGE_MESSAGES_AUTO_DELETE_DELAY';
 	case PinChat = 'PIN_CHAT';
 	case HideChat = 'HIDE_CHAT';
+	case ManageSharingLinks = 'MANAGE_SHARING_LINKS';
+	case UpdateSharingLink = 'UPDATE_SHARING_LINK';
 
 	public function getRelatedGlobalAction(): ?GlobalAction
 	{

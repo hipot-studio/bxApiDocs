@@ -15,7 +15,7 @@ class TemplateFolder implements Contract\Item, Contract\Item\ItemWithOwner, Cont
 		public int $createdById,
 		public ?int $id = null,
 		public ?int $modifiedById = null,
-		public ?Type\DateTime $dateModify = null,
+		public ?Type\DateTime $dateModify = new Type\DateTime(),
 		public Type\DateTime $dateCreate = new Type\DateTime(),
 		public Type\Template\Visibility $visibility = Type\Template\Visibility::VISIBLE,
 		public Type\Template\Status $status = Type\Template\Status::NEW,

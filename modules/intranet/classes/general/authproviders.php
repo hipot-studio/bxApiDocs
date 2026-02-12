@@ -34,6 +34,8 @@ class CIntranetAuthProvider extends CAuthProvider implements IProviderInterface
 		$companyStructure = \Bitrix\HumanResources\Util\StructureHelper::getDefaultStructure();
 		if ($companyStructure)
 		{
+			self::clearHrCache();
+
 			$userDepartments = \Bitrix\HumanResources\Service\Container::getNodeService()
 				->getNodesByUserId($USER_ID)
 				->filter(fn($node) => $node->type === \Bitrix\HumanResources\Type\NodeEntityType::DEPARTMENT)
@@ -702,5 +704,13 @@ WHERE hsnm2.ENTITY_ID = " . $USER_ID . "
 		}
 
 		return $arPhoto;
+	}
+
+	private static function clearHrCache(): void
+	{
+		\Bitrix\HumanResources\Service\Container::getCacheManager()->cleanDir(
+			\Bitrix\HumanResources\Repository\NodeMemberRepository::NODE_MEMBER_CACHE_DIR
+		);
+		\Bitrix\HumanResources\Model\NodeTable::cleanCache();
 	}
 }

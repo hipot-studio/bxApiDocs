@@ -18,7 +18,7 @@ use CAgent;
 
 abstract class Base
 {
-	public const CONTEXT_PREFIX = 'configuration_action';
+	private const CONTEXT_PREFIX = 'configuration_action';
 	public const ACTION = 'base';
 	public const ERROR_PROCESS_NOT_FOUND = 'PROCESS_NOT_FOUND';
 	public const ERROR_PROCESS_DID_NOT_CREATE = 'PROCESS_DID_NOT_CREATE';
@@ -102,7 +102,7 @@ abstract class Base
 	 */
 	public function getContext(): string
 	{
-		return !empty($this->context) ? $this->context : static::CONTEXT_PREFIX . static::ACTION . $this->processId;
+		return !empty($this->context) ? $this->context : self::CONTEXT_PREFIX . static::ACTION . $this->processId;
 	}
 
 	/**
@@ -131,7 +131,7 @@ abstract class Base
 	 */
 	public function getContextEntity(): string
 	{
-		return !empty($this->contextEntity) ? $this->contextEntity : static::CONTEXT_PREFIX . static::ACTION . $this->processId;
+		return !empty($this->contextEntity) ? $this->contextEntity : self::CONTEXT_PREFIX . static::ACTION . $this->processId;
 	}
 
 	/**

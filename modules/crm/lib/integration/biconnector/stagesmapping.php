@@ -121,7 +121,12 @@ class StagesMapping
 		if ($name === '')
 		{
 			$messages = Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/crm/lib/category/dealcategory.php', $languageId);
-			$name = $messages['CRM_DEAL_CATEGORY_DEFAULT'];
+			$name = $messages['CRM_DEAL_CATEGORY_DEFAULT'] ?? null;
+		}
+		if (empty($name))
+		{
+			$messages = Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/crm/lib/category/dealcategory.php', 'en');
+			$name = $messages['CRM_DEAL_CATEGORY_DEFAULT'] ?? '';
 		}
 
 		return $name;

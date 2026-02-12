@@ -158,6 +158,13 @@ class MailboxSyncManager
 			return true;
 		}
 
+		if ($mailboxHelper->renewOauthTokens() && $mailboxHelper->isAuthenticated())
+		{
+			$this->removeConnectErrorCache($mailboxId);
+
+			return true;
+		}
+
 		$error = $this->getConnectError($mailboxId);
 
 		$dateAttempt = new DateTime();

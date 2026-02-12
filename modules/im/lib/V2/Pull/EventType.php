@@ -14,6 +14,8 @@ enum EventType: string
 	case ChatUserAdd = 'chatUserAdd';
 	case ChatUserLeave = 'chatUserLeave';
 	case FileTranscription = 'fileTranscription';
+	case SharingLinkGenerate = 'sharingLinkGenerate';
+	case SharingLinkUpdate = 'sharingLinkUpdate';
 	case ChatHide = 'chatHide';
 	case MessageSend = 'messageChat';
 	case PrivateMessageSend = 'message';

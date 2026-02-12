@@ -163,7 +163,6 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		$communications = [];
 		if (!$isClientEmpty)
 		{
-			/** @noinspection PhpParamsInspection */
 			$communications = array_merge($this->getCommunications($company), $this->getCommunications($contact));
 			if (!empty($communications))
 			{
@@ -483,6 +482,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 
 		$convertButton->getMainButton()->addAttribute('id', 'crm-quote-details-convert-main-button');
 		$convertButton->getMenuButton()->addAttribute('id', 'crm-quote-details-convert-button');
+		$convertButton->setStyle(Buttons\AirButtonStyle::FILLED);
 
 		return $convertButton;
 	}
@@ -848,6 +848,11 @@ class CrmQuoteDetailsComponent extends FactoryBased
 
 	protected function getProductRowsFromParent(ItemIdentifier $identifier): array
 	{
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItemIdentifier($identifier))
+		{
+			return [];
+		}
+
 		return \CCrmProductRow::LoadRows(\CCrmOwnerTypeAbbr::ResolveByTypeID($identifier->getEntityTypeId()), $identifier->getEntityId());
 	}
 
@@ -867,7 +872,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 			foreach ($parentFieldNamesToPassProducts as $entityTypeId => $fieldName)
 			{
 				$entityId = $this->item->get($fieldName);
-				if ($entityId > 0)
+				if ($entityId > 0 && Container::getInstance()->getUserPermissions()->item()->canRead($entityTypeId, $entityId))
 				{
 					$parentRows = $this->getProductRowsFromParent(new ItemIdentifier($entityTypeId, $entityId));
 					if (!empty($parentRows))
@@ -885,78 +890,97 @@ class CrmQuoteDetailsComponent extends FactoryBased
 	{
 		parent::fillParentFields();
 
+		$userPermissions = Container::getInstance()->getUserPermissions();
+
 		$parentFieldNamesToPassProducts = $this->getParentEntityTypeIdsToLoadProducts();
 		foreach ($parentFieldNamesToPassProducts as $parentEntityTypeId => $parentFieldName)
 		{
 			$entityId = $this->item->get($parentFieldName);
-			if ($entityId > 0)
+			if ($entityId <= 0)
 			{
-				$parentIdentifier = new ItemIdentifier($parentEntityTypeId, $entityId);
+				continue;
+			}
 
-				$factory = Container::getInstance()->getFactory($parentEntityTypeId);
-				if (!$factory)
-				{
-					return;
-				}
-				$entityObject = $factory->getDataClass()::getById($entityId)->fetchObject();
-				if (!$entityObject)
-				{
-					return;
-				}
+			if (!$userPermissions->item()->canRead($parentEntityTypeId, $entityId))
+			{
+				continue;
+			}
 
-				$fieldsToPass = [
+			$parentIdentifier = new ItemIdentifier($parentEntityTypeId, $entityId);
+
+			$factory = Container::getInstance()->getFactory($parentEntityTypeId);
+			if (!$factory)
+			{
+				continue;
+			}
+
+			$fieldsToPass = array_filter(
+				[
 					Item::FIELD_NAME_CURRENCY_ID,
 					Item::FIELD_NAME_COMPANY_ID,
 					Item::FIELD_NAME_IS_MANUAL_OPPORTUNITY,
 					Item::FIELD_NAME_OPPORTUNITY,
-				];
-				foreach ($fieldsToPass as $fieldName)
-				{
-					$value = $entityObject->get($fieldName);
-					if ($value)
-					{
-						$this->item->set($fieldName, $value);
-					}
-				}
+				],
+				$factory->isFieldExists(...),
+			);
 
-				$parentRows = $this->getProductRowsFromParent($parentIdentifier);
-				if (!empty($parentRows))
-				{
-					$this->item->setProductRowsFromArrays($parentRows);
-					$productRows = $this->item->getProductRows();
-					if ($productRows && !$this->item->getIsManualOpportunity())
-					{
-						$this->item->set(
-							Item::FIELD_NAME_OPPORTUNITY,
-							Container::getInstance()->getAccounting()->calculateByItem($this->item)->getPrice()
-						);
-					}
-				}
+			$item = $factory->getItem(
+				$entityId,
+				$fieldsToPass,
+			);
 
-				$contactRelation = Container::getInstance()->getRelationManager()->getRelation(new RelationIdentifier(
-					\CCrmOwnerType::Contact,
-					$parentEntityTypeId
-				));
-				if ($contactRelation)
-				{
-					$contactIds = [];
-					$contactIdentifiers = $contactRelation->getParentElements($parentIdentifier);
-					foreach ($contactIdentifiers as $contactIdentifier)
-					{
-						$contactIds[] = $contactIdentifier->getEntityId();
-					}
-					if (!empty($contactIds))
-					{
-						$bindings = \Bitrix\Crm\Binding\EntityBinding::prepareEntityBindings(
-							\CCrmOwnerType::Contact,
-							$contactIds
-						);
-						$this->item->bindContacts($bindings);
-					}
-				}
-
-				return;
+			if (!$item)
+			{
+				continue;
 			}
+
+			foreach ($fieldsToPass as $fieldName)
+			{
+				$value = $item->get($fieldName);
+				if ($value)
+				{
+					$this->item->set($fieldName, $value);
+				}
+			}
+
+			$parentRows = $this->getProductRowsFromParent($parentIdentifier);
+			if (!empty($parentRows))
+			{
+				$this->item->setProductRowsFromArrays($parentRows);
+				$productRows = $this->item->getProductRows();
+				if ($productRows && !$this->item->getIsManualOpportunity())
+				{
+					$this->item->set(
+						Item::FIELD_NAME_OPPORTUNITY,
+						Container::getInstance()->getAccounting()->calculateByItem($this->item)->getPrice()
+					);
+				}
+			}
+
+			$contactRelation = Container::getInstance()->getRelationManager()->getRelation(new RelationIdentifier(
+				\CCrmOwnerType::Contact,
+				$parentEntityTypeId
+			));
+			if ($contactRelation)
+			{
+				$contactIds = [];
+				$contactIdentifiers = $contactRelation->getParentElements($parentIdentifier);
+				foreach ($contactIdentifiers as $contactIdentifier)
+				{
+					$contactIds[] = $contactIdentifier->getEntityId();
+				}
+				if (!empty($contactIds))
+				{
+					$bindings = \Bitrix\Crm\Binding\EntityBinding::prepareEntityBindings(
+						\CCrmOwnerType::Contact,
+						$contactIds
+					);
+					$this->item->bindContacts($bindings);
+				}
+			}
+
+			// fill only from one parent
+			return;
 		}
 	}
 

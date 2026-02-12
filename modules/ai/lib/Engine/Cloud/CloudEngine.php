@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\AI\Engine\Cloud;
 
 use Bitrix\AI\Engine;
+use Bitrix\AI\Engine\Service\RuleService;
 use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Engine\IEngine;
@@ -14,6 +15,8 @@ use Bitrix\AI\Result;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
+use Bitrix\Main;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
@@ -27,14 +30,21 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 
 	protected const AGREEMENT_CODE = 'AI_BOX_AGREEMENT';
 
+	protected const ERROR_CODE_FORCE = 'ERROR_CODE_FORCE';
+
 	abstract protected function getDefaultModel(): string;
+
+	public static function getEngineCodeProvider(): string
+	{
+		return static::ENGINE_CODE;
+	}
 
 	public function checkLimits(): bool
 	{
 		return false;
 	}
 
-	final protected function exportPromtData(): array
+	final protected function exportPromptData(): array
 	{
 		$data = [
 			'moduleId' => $this->getContext()->getModuleId(),
@@ -109,13 +119,25 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		$responseResult = $sendQuery->queue([
 			'provider' => $this->getCode(),
 			'moduleId' => $this->getContext()->getModuleId(),
-			'promptData' => $this->exportPromtData(),
+			'promptData' => $this->exportPromptData(),
 
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),
 			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
 			'url' => $this->getCompletionsUrl(),
 			'params' => $params,
 		]);
+
+		$this->updateSettingsByRules($responseResult);
+
+		$errorCollection = $responseResult->getErrorCollection();
+
+		$forceError = $this->getForceErrorFromCollection($errorCollection);
+		if (!empty($forceError))
+		{
+			$this->queueJob->cancel();
+			$this->callErrorCallback($forceError);
+			return;
+		}
 
 		if ($responseResult->isSuccess())
 		{
@@ -135,8 +157,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			return;
 		}
 
-		$errorCollection = $responseResult->getErrorCollection();
-		/** @see \Bitrix\AiProxy\Controller\Query::ERROR_CODE_EXCEEDED_LIMIT */
+		/** @see \Bitrix\AiProxy\Service\Queue\QueueService::ERROR_CODE_EXCEEDED_LIMIT */
 		$errorLimit = $errorCollection->getErrorByCode('exceeded_limit');
 		if ($errorLimit !== null)
 		{
@@ -146,6 +167,85 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 
 		$error = $errorCollection[0];
 		$this->onResponseError($error->getMessage(), (string)$error->getCode());
+	}
+
+	protected function callErrorCallback(array $forceError): void
+	{
+		if (is_callable($this->onErrorCallback))
+		{
+			call_user_func(
+				$this->onErrorCallback,
+				new Error(
+					$forceError['msgPlainText'] ?? '',
+					static::ERROR_CODE_FORCE,
+					[
+						'code' => (string)($forceError['code'] ?? ''),
+						'msgPlainText' => (string)($forceError['msgPlainText'] ?? ''),
+						'msgHtml' => (string)($forceError['msgHtml'] ?? ''),
+						'sliderCode' => (string)($forceError['sliderCode'] ?? ''),
+						'msgBBCode' => (string)($forceError['msgBBCode'] ?? ''),
+					]
+				)
+			);
+		}
+	}
+
+	protected function getForceErrorFromCollection(ErrorCollection $errorCollection): array
+	{
+		if ($errorCollection->isEmpty())
+		{
+			return [];
+		}
+
+		$forceError = [];
+		foreach ($errorCollection->toArray() as $error)
+		{
+			if (!($error instanceof Error) || empty($error->getCustomData()))
+			{
+				continue;
+			}
+
+			$forceErrorData = $error->getCustomData();
+
+			/** @see \Bitrix\AiProxy\Service\Queue\QueueService::ERROR_CODE_FORCE_ERROR */
+			if (!empty($forceErrorData['forceError']))
+			{
+				/** @see \Bitrix\AiProxy\Dto\ForceErrorDto::toArray() */
+				$forceError = $forceErrorData['forceError'];
+				break;
+			}
+		}
+
+		if (
+			empty($forceError['msgPlainText'])
+			&& empty($forceError['msgHtml'])
+			&& empty($forceError['msgBBCode'])
+			&& empty($forceError['sliderCode'])
+		)
+		{
+			return [];
+		}
+
+		return $forceError;
+	}
+
+	protected function updateSettingsByRules(Main\Result $responseResult): void
+	{
+		$resultData = $responseResult->getData();
+
+		$data = [];
+		if (!empty($resultData['rules']) && is_array($resultData['rules']))
+		{
+			$data = $resultData['rules'];
+		}
+
+		if (!empty($data))
+		{
+			ServiceLocator::getInstance()
+				->get(RuleService::class)
+				->initUpdate($data)
+			;
+		}
 	}
 
 	final public function completions(): void

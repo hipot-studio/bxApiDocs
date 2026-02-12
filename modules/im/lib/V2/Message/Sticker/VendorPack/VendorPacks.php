@@ -198,7 +198,7 @@ class VendorPacks implements StickerPacks
 
 		foreach ($files as $id => $file)
 		{
-			$uri = $publicDir . $file['name'];
+			$uri = $publicDir . $file['name'] . VendorConfig::VERSION;
 			$sticker = (new StickerItem($id, $uri, StickerType::Image, $file['width'], $file['height'], $packId, PackType::Vendor));
 			$stickerCollection->offsetSet($id, $sticker);
 		}

@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Controller\Filter;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Permission\GlobalAction;
@@ -44,17 +45,18 @@ class CheckActionAccess extends Base
 
 	private function canDoAction(Action $action, mixed $target): ?EventResult
 	{
-		$chat = $this->getChat();
-		if (!$chat instanceof Chat)
-		{
-			$this->addError(new Chat\ChatError(Chat\ChatError::NOT_FOUND));
+		$entity = $this->getEntity();
 
-			return new EventResult(EventResult::ERROR, null, null, $this);
-		}
-
-		if (!$chat->canDo($action, $target))
+		$error = match (true)
 		{
-			$this->addError(new Chat\ChatError(Chat\ChatError::ACCESS_DENIED));
+			!isset($entity) => new Chat\ChatError(Chat\ChatError::NOT_FOUND),
+			!$entity->canDo($action, $target) => new Chat\ChatError(Chat\ChatError::ACCESS_DENIED),
+			default => null,
+		};
+
+		if (isset($error))
+		{
+			$this->addError($error);
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
@@ -75,10 +77,16 @@ class CheckActionAccess extends Base
 		return null;
 	}
 
-	private function getChat(): ?Chat
+	private function getEntity(): ?ChatActionAccessCheckable
 	{
-		$arguments = $this->getAction()->getArguments();
+		foreach ($this->getAction()->getArguments() as $argument)
+		{
+			if ($argument instanceof ChatActionAccessCheckable)
+			{
+				return $argument;
+			}
+		}
 
-		return $arguments['chat'] ?? $arguments['message']?->getChat() ?? $arguments['messages']?->getCommonChat() ?? null;
+		return null;
 	}
 }

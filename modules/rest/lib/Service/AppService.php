@@ -26,4 +26,9 @@ class AppService implements Contract\Service\AppService
 	{
 		return $this->appRepository->hasPaidApps();
 	}
+
+	public function getInstalledAppsCount(): int
+	{
+		return $this->appRepository->getInstalledAppsCount();
+	}
 }

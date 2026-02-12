@@ -9,6 +9,7 @@ use Bitrix\Sign\Callback\Messages\Member\MemberResultFile;
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
 use Bitrix\Sign\Callback\Messages\Mobile\SigningConfirm;
 use Bitrix\Sign\Callback\Messages\Member\MemberResultFileReady;
+use Bitrix\Sign\Callback\Messages\Member\MemberPrintVersionFileReady;
 
 class Factory
 {
@@ -27,6 +28,7 @@ class Factory
 			MemberResultFile::Type => new MemberResultFile(),
 			MemberResultFileReady::Type => new MemberResultFileReady(),
 			MemberPrintVersionFile::Type => new MemberPrintVersionFile(),
+			MemberPrintVersionFileReady::Type => new MemberPrintVersionFileReady(),
 			SigningConfirm::Type => new SigningConfirm(),
 			default => new Message(),
 		};

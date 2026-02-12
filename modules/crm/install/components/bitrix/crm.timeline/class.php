@@ -29,8 +29,6 @@ class CCrmTimelineComponent extends CBitrixComponent
 	/** @var int */
 	protected $entityTypeID = \CCrmOwnerType::Undefined;
 	/** @var int */
-	protected $categoryId = 0;
-	/** @var int */
 	protected $entityID = 0;
 	/** @var array|null  */
 	private $entityInfo = null;
@@ -266,7 +264,12 @@ class CCrmTimelineComponent extends CBitrixComponent
 
 	public function prepareHistoryFilter()
 	{
-		$this->arResult['HISTORY_FILTER_ID'] = $this->historyFilterID = mb_strtolower($this->entityTypeName).'_'.$this->entityID.'_timeline_history';
+		$this->arResult['HISTORY_FILTER_ID'] =
+			(new \Bitrix\Crm\Component\EntityDetails\Config\ScopeIdResolver($this->entityTypeID, $this->extras['CATEGORY_ID'] ?? 0))
+				->getScopeId('timeline_history')
+		;
+		$this->historyFilterID = $this->arResult['HISTORY_FILTER_ID'];
+
 		$this->arResult['HISTORY_FILTER_PRESET_ID'] = mb_strtolower($this->entityTypeName).'_timeline_history';
 		$this->arResult['HISTORY_FILTER_PRESETS'] = array(
 			'communications' => array(
@@ -434,22 +437,23 @@ class CCrmTimelineComponent extends CBitrixComponent
 			if ($toolsManager->checkBizprocAvailability())
 			{
 				$this->arResult['BIZPROC_AVAILABLE'] = true;
-				$documentId = \CCrmBizProcHelper::ResolveDocumentId($this->entityTypeID, $this->entityID);
-				$runningIds = \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable::getIdsByDocument($documentId);
 
 				$bpTaskAddInTimelineOption = CUserOptions::getOption(
 					'crm.tour',
 					\Bitrix\Crm\Tour\Bizproc\WorkflowTaskAddInTimeline::OPTION_NAME,
 				);
 
+				if (($bpTaskAddInTimelineOption['closed'] ?? null) === 'Y')
+				{
+					return;
+				}
+
+				$documentId = \CCrmBizProcHelper::ResolveDocumentId($this->entityTypeID, $this->entityID);
+				$runningIds = \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable::getIdsByDocument($documentId);
+
 				if (!empty($runningIds))
 				{
 					$this->arResult['DOCUMENT_HAS_RUNNING_WORKFLOW'] = true;
-
-					if (($bpTaskAddInTimelineOption['closed'] ?? null) === 'Y')
-					{
-						return;
-					}
 
 					$taskIterator = CBPTaskService::GetList(
 						['ID' => 'ASC'],

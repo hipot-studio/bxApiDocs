@@ -12,6 +12,7 @@ final class RunDataDto
 		public readonly int $userId = 0,
 		public readonly array | string | null $parameters = null,
 		public readonly string $scope = '',
+		public readonly ?int $delay = null,
 	)
 	{}
 }

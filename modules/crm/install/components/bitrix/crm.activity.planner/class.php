@@ -520,6 +520,20 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 		}
 
 		$activity += $this->getHtmlDescriptionFields($activity);
+
+		if (
+			(int)$activity['TYPE_ID'] === CCrmActivityType::Email
+			&& (!isset($activity['IS_AJAX_EMAIL_BODY']) || $activity['IS_AJAX_EMAIL_BODY'] === false)
+			&& !empty($activity['STORAGE_ELEMENT_IDS'])
+		)
+		{
+			$mailMessageChainProvider = new \Bitrix\Crm\Activity\Mail\MailMessageChainProvider();
+			$activity['DESCRIPTION_HTML'] = $mailMessageChainProvider->replaceAttachmentPlaceholders(
+				$activity['DESCRIPTION_HTML'],
+				$mailMessageChainProvider->getAttachmentsWithMessageId($activityId, false, false)['FILES'],
+			);
+		}
+
 		$activity['COMMUNICATIONS'] = $this->prepareCommunicationsForView($activity['COMMUNICATIONS']);
 
 		$this->arResult['COMMUNICATIONS'] = $activity['COMMUNICATIONS'];
@@ -1888,6 +1902,7 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 		{
 			$html = Activity\Provider\Email::getDescriptionHtmlByActivityFields($activity);
 		}
+
 		return Emoji::decode($html);
 	}
 

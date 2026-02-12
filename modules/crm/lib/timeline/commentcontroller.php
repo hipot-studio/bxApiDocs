@@ -102,26 +102,27 @@ class CommentController extends EntityController
 
 	private static function getFilesIds(int $id): array
 	{
+		$values = self::getCommentUserFields($id)[self::UF_COMMENT_FILE_NAME]['VALUE'] ?? [];
+
+		return is_array($values) ? $values : [$values];
+	}
+
+	private static function getCommentUserFields(int $id): array
+	{
+		static $cache = [];
 		if ($id <= 0 || !ModuleManager::isModuleInstalled('disk'))
 		{
 			return [];
 		}
+		if (isset($cache[$id]))
+		{
+			return $cache[$id];
+		}
 
 		$fileFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields(self::UF_FIELD_NAME, $id);
+		$cache[$id] = $fileFields ?? [];
 
-		if (!isset($fileFields[self::UF_COMMENT_FILE_NAME]))
-		{
-			return [];
-		}
-
-		$ids = $fileFields[self::UF_COMMENT_FILE_NAME]['VALUE'] ?? [];
-
-		if (empty($ids))
-		{
-			return [];
-		}
-
-		return (is_array($ids) ? $ids : [$ids]);
+		return $cache[$id];
 	}
 
 	private static function loadFilesData(array $ids, int $ownerId, int $ownerTypeId): array
@@ -147,7 +148,7 @@ class CommentController extends EntityController
 
 		if (($options['INCLUDE_FILES'] ?? null) === 'Y' && ModuleManager::isModuleInstalled('disk'))
 		{
-			$fileFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields(self::UF_FIELD_NAME, $data['ID']);
+			$fileFields = self::getCommentUserFields($data['ID']);
 
 			if ($fileFields && !empty($fileFields[self::UF_COMMENT_FILE_NAME]['VALUE']))
 			{
@@ -398,6 +399,8 @@ class CommentController extends EntityController
 	public function prepareHistoryDataModel(array $data, array $options = null)
 	{
 		$data['HAS_FILES'] = $data['SETTINGS']['HAS_FILES'] ?? 'N';
+		$data['COMMENT_RAW'] = $data['COMMENT']; // COMMENT field is not accessible in HistoryItemModel, so make a copy
+
 		if (
 			$data['HAS_FILES'] === 'Y'
 			&& preg_match("/\\[(\\/?)(file|document id|disk file id)(.*?)\\]/isu", $data['COMMENT'])

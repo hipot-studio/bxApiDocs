@@ -20,6 +20,8 @@ abstract class Controller
 	 */
 	abstract public function getPermissionAttributes(string $permissionEntityType, array $entityIDs): array;
 
+	abstract public function getPreloadedPermissionCategoryAttribute(int $entityId): ?int;
+
 	abstract public function register(string $permissionEntityType, int $entityId, ?RegisterOptions $options = null): void;
 
 	abstract public function unregister(string $permissionEntityType, int $entityId): void;

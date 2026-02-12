@@ -5,28 +5,18 @@ namespace Bitrix\Sign\Operation\Member;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\MimeType;
-use Bitrix\Sign\Contract\Operation;
 use Bitrix\Sign\File;
 use Bitrix\Sign\Item\Fs\File as FsFile;
 use Bitrix\Main\Web\HttpClient;
+use Bitrix\Sign\Operation\GetPrintVersionPdfUrl;
 use Bitrix\Sign\Operation\GetSignedFilePdfUrl;
 
-class DownloadResultFile implements Operation
+class DownloadResultFile extends AbstractDownloadMemberFile
 {
-	private string $documentUid;
-	private string $memberUid;
-	private ?FsFile $file = null;
-
-	public function __construct(string $documentUid, string $memberUid)
-	{
-		$this->documentUid = $documentUid;
-		$this->memberUid = $memberUid;
-	}
-
 	public function launch(): Result
 	{
 		// FIXME this operation provides the required link as a fallback, but needs to be reworked to use the API
-		$operation = new GetSignedFilePdfUrl($this->documentUid, $this->memberUid);
+		$operation = $this->getPdfUrlOperation();
 		$result = $operation->launch();
 
 		if (!$result->isSuccess()) {
@@ -63,19 +53,9 @@ class DownloadResultFile implements Operation
 		return new Result();
 	}
 
-	public function getFile(): ?FsFile
+	protected function getPdfUrlOperation(): GetPrintVersionPdfUrl|GetSignedFilePdfUrl
 	{
-		return $this->file;
-	}
-
-	private function detectExtensionByType(string $mimeType): ?string
-	{
-		return match ($mimeType)
-		{
-			'application/zip' => 'zip',
-			'application/pdf' => 'pdf',
-			default => MimeType::getExtensionByMimeType($mimeType),
-		};
+		return new GetSignedFilePdfUrl($this->documentUid, $this->memberUid);
 	}
 }
 

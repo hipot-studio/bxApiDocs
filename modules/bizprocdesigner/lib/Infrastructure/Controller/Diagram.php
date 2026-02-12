@@ -3,6 +3,7 @@
 namespace Bitrix\BizprocDesigner\Infrastructure\Controller;
 
 use Bitrix\Bizproc\Activity\ActivityDescription;
+use Bitrix\Bizproc\Activity\Dto\NodePorts;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Api;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
@@ -430,7 +431,7 @@ class Diagram extends JsonController
 					'type' => $nodeType,
 					'position' => $node['position'],
 					'dimensions' => $node['dimensions'],
-					'ports' => $node['ports'],
+					'ports' => NodePorts::fromArray($node['ports'])->toArray(), // normalize ports structure
 					'activity' => $child,
 					'node' => [
 						'type' => $nodeType,

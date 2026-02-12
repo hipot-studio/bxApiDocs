@@ -271,9 +271,10 @@ class CrmKanbanComponent extends CBitrixComponent
 					$result = $this->actionUpdateEntityStatus($id, $status, $statuses);
 					if (!$result->isSuccess())
 					{
-						foreach ($result->getErrorMessages() as $errorMessage)
+						foreach ($result->getErrors() as $error)
 						{
-							$this->arResult['ERROR'] = $errorMessage;
+							$this->arResult['ERROR'] = $error->getMessage();
+							$this->arResult['ERROR_CODE'] = $error->getCode();
 						}
 					}
 					else

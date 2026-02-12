@@ -315,12 +315,25 @@ class GroupChat extends Chat
 			}
 		}
 
-		$relations->save(true);
+		$saveResult = $relations->save(true);
+
+		if (!$saveResult->isSuccess())
+		{
+			return $this;
+		}
 
 		if ($sendPush)
 		{
 			$this->sendPushManagersChange();
 		}
+
+		$eventData = [
+			'chatId' => $this->getChatId(),
+			'userIds' => $this->getManagerList(),
+			'role' => Chat::ROLE_MANAGER,
+		];
+		$event = new \Bitrix\Main\Event('im', 'OnChangeUserRoles', $eventData);
+		$event->send();
 
 		return $this;
 	}

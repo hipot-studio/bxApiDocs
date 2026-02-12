@@ -22,10 +22,24 @@ class EntityFieldProvider
 	protected static $statusTypes = null;
 	protected static $fieldsTreeCache = [];
 
-	public static function getFields(array $hiddenTypes = [], ?int $presetId = null)
+	protected static function normalizeEntityTypes(array $entityTypes): array
+	{
+		if(empty($entityTypes))
+		{
+			return [];
+		}
+
+		$normalized = array_map('strtoupper', $entityTypes);
+		$normalized = array_values(array_unique($normalized));
+		sort($normalized);
+
+		return $normalized;
+	}
+
+	public static function getFields(array $hiddenTypes = [], ?int $presetId = null, array $entityTypes = [])
 	{
 		$plainFields = array();
-		$fieldsByEntity = static::getFieldsTree($hiddenTypes, $presetId);
+		$fieldsByEntity = static::getFieldsTree($hiddenTypes, $presetId, $entityTypes);
 		foreach($fieldsByEntity as $entityName => $entity)
 		{
 			foreach($entity['FIELDS'] as $field)
@@ -40,9 +54,19 @@ class EntityFieldProvider
 		return $plainFields;
 	}
 
-	public static function getField($fieldCode, $hiddenTypes = [], ?int $presetId = null)
+	public static function getField($fieldCode, $hiddenTypes = [], ?int $presetId = null, ?string $entityType = null)
 	{
-		$fields = static::getFields($hiddenTypes, $presetId);
+		if ($entityType !== null && \CCrmOwnerType::ResolveId($entityType))
+		{
+			$entityType = [$entityType];
+		}
+
+		if ($entityType === null)
+		{
+			$entityType = [];
+		}
+
+		$fields = static::getFields($hiddenTypes, $presetId, $entityType);
 		foreach($fields as $field)
 		{
 			if($field['name'] == $fieldCode)
@@ -98,9 +122,10 @@ class EntityFieldProvider
 		return $fieldsTree;
 	}
 
-	public static function getFieldsTree(array $hiddenTypes = [], ?int $presetId = null)
+	public static function getFieldsTree(array $hiddenTypes = [], ?int $presetId = null, array $entityTypes = [])
 	{
-		$cacheKey = md5(Json::encode($hiddenTypes) . '_' . ($presetId ?? 'null'));
+		$normalizedEntityTypes = self::normalizeEntityTypes($entityTypes);
+		$cacheKey = md5(Json::encode($hiddenTypes) . '_' . ($presetId ?? 'null') . '_' . Json::encode($normalizedEntityTypes));
 		if (isset(self::$fieldsTreeCache[$cacheKey]))
 		{
 			return self::$fieldsTreeCache[$cacheKey];
@@ -155,6 +180,18 @@ class EntityFieldProvider
 		$hideVirtual = in_array(self::TYPE_VIRTUAL, $hiddenTypes);
 		$hideRequisites = in_array(\CCrmOwnerType::Requisite, $hiddenTypes);
 		$map = Entity::getMap();
+
+		if (!empty($normalizedEntityTypes))
+		{
+			foreach ($map as $key => $entity)
+			{
+				if (!in_array(strtoupper($key), $normalizedEntityTypes, true))
+				{
+					unset($map[$key]);
+				}
+			}
+		}
+
 		foreach($map as $entityName => $entity)
 		{
 			$entityTypeId = \CCrmOwnerType::ResolveID($entityName);
@@ -197,6 +234,7 @@ class EntityFieldProvider
 		}
 
 		self::$fieldsTreeCache[$cacheKey] = $fields;
+
 		return $fields;
 	}
 
@@ -220,17 +258,35 @@ class EntityFieldProvider
 
 	public static function getFieldsDescription(array $fields, ?int $presetId = null)
 	{
-		$fieldCodeList = array();
-		foreach($fields as $field)
+		if (empty($fields))
 		{
-			$fieldCodeList[] = $field['CODE'];
+			return $fields;
+		}
+
+		$fieldCodeList = array_column($fields, 'CODE');
+		$entityNames = [];
+
+		foreach ($fieldCodeList as $code)
+		{
+			$fieldParts = explode('_', $code);
+			$entityName = '';
+			foreach ($fieldParts as $fieldPart)
+			{
+				$entityName .= (empty($entityName) ? '' : '_') . $fieldPart;
+				$entityTypeId = \CCrmOwnerType::ResolveID($entityName);
+
+				if ($entityTypeId)
+				{
+					$entityNames[$entityName] = true;
+				}
+			}
 		}
 
 		$hiddenTypes = [
 			\CCrmOwnerType::SmartDocument,
 		];
 
-		$availableFields = EntityFieldProvider::getFields($hiddenTypes, $presetId);
+		$availableFields = EntityFieldProvider::getFields($hiddenTypes, $presetId, array_keys($entityNames));
 		foreach($availableFields as $fieldAvailable)
 		{
 			if(!in_array($fieldAvailable['name'], $fieldCodeList))

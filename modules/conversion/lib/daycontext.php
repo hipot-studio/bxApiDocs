@@ -471,7 +471,7 @@ final class DayContext extends Internals\BaseContext
 	{
 		$request = Main\Context::getCurrent()->getRequest();
 
-		$cookie = $request->getCookie(self::getVarName());
+		$cookie = $request->getCookieRaw(self::getVarName());
 		if ($cookie === null || $cookie === '')
 		{
 			return null;

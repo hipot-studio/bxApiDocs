@@ -391,6 +391,23 @@ abstract class Mailbox
 		}
 	}
 
+	public function renewOauthTokens(): bool
+	{
+		if (empty($this->mailbox['PASSWORD']))
+		{
+			return false;
+		}
+
+		$oauth = OAuth::getInstanceByMeta($this->mailbox['PASSWORD']);
+
+		if (empty($oauth))
+		{
+			return false;
+		}
+
+		return $oauth->renewTokens();
+	}
+
 	public function getMailbox()
 	{
 		return $this->mailbox;

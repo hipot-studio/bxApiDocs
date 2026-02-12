@@ -10,4 +10,5 @@ interface AppService
 {
 	public function getPaidApplications(): AppCollection;
 	public function hasPaidApps(): bool;
+	public function getInstalledAppsCount();
 }

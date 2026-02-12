@@ -46,4 +46,30 @@ class SignedFileLoadService
 
 		return $response;
 	}
+
+	public function loadPrintVersion(Item\Api\Document\PrintVersionLoadRequest $request): Item\Api\Document\PrintVersionLoadResponse
+	{
+		$result = new Main\Result();
+		if ($request->documentId === '')
+		{
+			$result->addError(new Main\Error('Request: field `documentId` is empty'));
+		}
+
+		if ($result->isSuccess())
+		{
+			$result = $this->api->get("v1/document.printversion.load/$request->documentId/$request->memberId/");
+		}
+
+		$data = $result->getData();
+		$response = new Item\Api\Document\PrintVersionLoadResponse(
+			(bool) ($data['ready'] ?? false),
+			!empty($data['file']['url'])
+				? new Item\Api\Property\Response\Page\List\Page($data['file']['url'])
+				: null
+		);
+
+		$response->addErrors($result->getErrors());
+
+		return $response;
+	}
 }

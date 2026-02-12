@@ -508,13 +508,13 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity
 		{
 			return Chat::ROLE_GUEST;
 		}
-		if ($this->getManager())
-		{
-			return Chat::ROLE_MANAGER;
-		}
 		if ($this->getChat()->getAuthorId() === $this->getUserId())
 		{
 			return Chat::ROLE_OWNER;
+		}
+		if ($this->getManager())
+		{
+			return Chat::ROLE_MANAGER;
 		}
 
 		return Chat::ROLE_MEMBER;

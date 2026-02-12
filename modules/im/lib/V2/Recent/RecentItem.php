@@ -42,6 +42,25 @@ class RecentItem implements RestConvertible
 		return $recentItem;
 	}
 
+	public static function initByArray(array $entity, int $counter): self
+	{
+		$recentItem = new static();
+
+		$recentItem
+			->setMessageId($entity["ITEM_MID"] ?? 0)
+			->setChatId($entity["ITEM_CID"] ?? 0)
+			->setDialogId('chat' . $entity["ITEM_CID"]) // TODO: replace
+			->setCounter($counter)
+			->setUnread($entity["UNREAD"] === 'Y')
+			->setPinned($entity["PINNED"] === 'Y')
+			->setLastReadMessageId((int)$entity['RELATION.LAST_ID'])
+			->setDateUpdate($entity['DATE_UPDATE'])
+			->setDateLastActivity($entity['DATE_LAST_ACTIVITY'])
+		;
+
+		return $recentItem;
+	}
+
 	public function getDialogId(): string
 	{
 		return $this->dialogId;

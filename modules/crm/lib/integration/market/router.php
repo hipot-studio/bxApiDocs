@@ -33,4 +33,14 @@ class Router
 	{
 		return self::getBasePath() . "detail/$appCode/";
 	}
+
+	public static function getPlacementPath(): string
+	{
+		$path = new \Bitrix\Main\Web\Uri(self::getBasePath());
+		$path->addParams([
+			'placement' => 'crm',
+		]);
+
+		return $path->getUri();
+	}
 }

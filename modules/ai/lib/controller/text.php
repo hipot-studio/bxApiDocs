@@ -44,9 +44,16 @@ class Text extends Controller
 
 		Config::setPersonalValue('first_launch', 'N');
 
-		$engine = $engineCode === null
-			? Engine::getByCategory($this->category, $this->context)
-			: Engine::getByCode($engineCode, $this->context, $this->category);
+		$engine = null;
+		if (!empty($engineCode))
+		{
+			$engine = Engine::getByCode($engineCode, $this->context, $this->category);
+		}
+
+		if ($engine === null)
+		{
+			$engine = Engine::getByCategory($this->category, $this->context);
+		}
 
 		if (!$engine)
 		{

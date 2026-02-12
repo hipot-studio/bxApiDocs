@@ -28,7 +28,6 @@ class UpdateTaskService
 		private readonly EgressController $egressController,
 	)
 	{
-
 	}
 
 	/**
@@ -55,12 +54,7 @@ class UpdateTaskService
 			[$task, $fields, $taskBefore, $taskObjectBefore, $sourceTaskData] = $this->updateService->update($task, $config);
 		}
 
-		if ((new UpdateUserFields($config))($fields, $task->id))
-		{
-			$this->taskRepository->invalidate($task->id);
-
-			$task = $this->getTask($task->id);
-		}
+		(new UpdateUserFields($config))($fields, $task->id);
 
 		(new RunUpdateEvent($config))(
 			$fields,
@@ -70,25 +64,20 @@ class UpdateTaskService
 
 		(new RunCrm($config))($fields, $taskObjectBefore);
 
+		$this->taskRepository->invalidate($task->id);
+
+		$task = $this->taskRepository->getById($task->id);
+
+		if ($task === null)
+		{
+			throw new TaskNotExistsException();
+		}
+
 		$this->egressController->processUserFields(new UpdateTaskCommand(
 			task: $task,
 			config: $config,
 			taskBeforeUpdate: $taskBefore,
 		));
-
-		return $this->getTask($task->id);
-	}
-
-	/**
-	 * @throws TaskNotExistsException
-	 */
-	protected function getTask(int $taskId): Task
-	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
 
 		return $task;
 	}

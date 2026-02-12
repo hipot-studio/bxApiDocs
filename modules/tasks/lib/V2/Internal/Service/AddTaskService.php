@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service;
 
-use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddUserFields;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
@@ -19,14 +19,13 @@ class AddTaskService
 	public function __construct(
 		private readonly AddService $addService,
 		private readonly ConsistencyResolverInterface $consistencyResolver,
+		private readonly TaskRepositoryInterface $taskRepository,
 	)
 	{
-
 	}
 
 	/**
 	 * @throws TaskNotExistsException
-	 * @throws TaskAddException
 	 */
 	public function add(Task $task, AddConfig $config): Task
 	{
@@ -46,6 +45,15 @@ class AddTaskService
 		(new RunBizProc($config))($fields);
 
 		(new RunCrm($config))($fields);
+
+		$this->taskRepository->invalidate($task->id);
+
+		$task = $this->taskRepository->getById($task->id);
+
+		if ($task === null)
+		{
+			throw new TaskNotExistsException();
+		}
 
 		return $task;
 	}

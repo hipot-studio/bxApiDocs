@@ -61,10 +61,17 @@ class EntityEditorConfig
 		return $this->scope;
 	}
 
-	public function setCurrentScope()
+	private function setCurrentScope()
 	{
 		$configId = $this->getConfigId();
-		$configScope = $this->configuration->getScope($configId);
+		$configScope = $this->configuration->getScope(
+			Scope::getScopeNameOnUpdate('crm', $configId), true
+		);
+		if (!$configScope)
+		{
+			$configScope = $this->configuration->getScope($configId);
+		}
+
 		$userScopeId = 0;
 		if (is_array($configScope))
 		{

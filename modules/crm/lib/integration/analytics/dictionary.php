@@ -192,6 +192,7 @@ final class Dictionary
 	public const STATUS_ERROR_LIMIT_BAAS = 'error_limit_baas';
 	public const STATUS_ERROR_PROVIDER = 'error_provider';
 	public const STATUS_ERROR_B24 = 'error_b24';
+	public const STATUS_ERROR_FILLING_FIELDS = 'error_fillingFields';
 	// endregion
 
 	private function __construct()

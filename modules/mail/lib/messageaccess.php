@@ -25,7 +25,12 @@ class MessageAccess
 	/** @var IMessageAccessStorage */
 	private $storage;
 
-	protected function __construct(int $userId, \Bitrix\Mail\Item\Message $message, IMessageAccessStorage $storage)
+	/**
+	 * @param int|string $userId (Can take the value \Bitrix\Disk\Security\SecurityContext::GUEST_USER)
+	 * @param Item\Message $message
+	 * @param IMessageAccessStorage $storage
+	 */
+	protected function __construct(int|string $userId, \Bitrix\Mail\Item\Message $message, IMessageAccessStorage $storage)
 	{
 		$this->userId = $userId;
 		$this->message = $message;

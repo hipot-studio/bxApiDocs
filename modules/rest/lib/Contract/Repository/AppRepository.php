@@ -10,4 +10,5 @@ interface AppRepository
 {
 	public function getPaidApplications(): AppCollection;
 	public function hasPaidApps(): bool;
+	public function getInstalledAppsCount();
 }

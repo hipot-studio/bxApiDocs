@@ -193,6 +193,11 @@ class EditorAdapter
 			$fileHandlerUrl
 		);
 
+		if ($mode === ComponentMode::COPING)
+		{
+			$this->entityUserFields = static::convertUserFieldInfosForCopyMode($this->entityUserFields);
+		}
+
 		$fields = array_merge($this->entityFields, array_values($this->entityUserFields));
 
 		$this->processedEntityFields = $this->processFieldsAttributes($fields, $mode, $item);
@@ -2722,5 +2727,25 @@ class EditorAdapter
 	public function saveRecurringData(Item $item, array $recurringData): Result
 	{
 		return $this->recurringEditorAdapter->saveRecurringData($item, $recurringData);
+	}
+
+	public static function convertUserFieldInfosForCopyMode(?array $userFieldInfos): ?array
+	{
+		if (!is_array($userFieldInfos))
+		{
+			return null;
+		}
+
+		foreach($userFieldInfos as &$fieldInfo)
+		{
+			if (!isset($fieldInfo['data']['fieldInfo']))
+			{
+				continue;
+			}
+			$fieldInfo['data']['fieldInfo']['ENTITY_VALUE_ID'] = 0;
+			$fieldInfo['data']['fieldInfo']['ADDITIONAL']['FORCE_USE_VALUE'] = 'Y';
+		}
+
+		return $userFieldInfos;
 	}
 }

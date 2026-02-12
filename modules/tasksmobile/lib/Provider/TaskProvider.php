@@ -2666,6 +2666,13 @@ final class TaskProvider
 		{
 			ViewedTable::set($taskId, $this->userId);
 
+			// TODO: Replace after release with normal dependency.
+			if (class_exists('\Bitrix\Tasks\V2\Public\Command\Task\ReadTaskMessagesCommand'))
+			{
+				$command = new \Bitrix\Tasks\V2\Public\Command\Task\ReadTaskMessagesCommand($taskId, $this->userId);
+				$command->run();
+			}
+
 			return true;
 		}
 

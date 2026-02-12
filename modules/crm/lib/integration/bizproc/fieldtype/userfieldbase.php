@@ -71,17 +71,18 @@ class UserFieldBase extends BaseType\Base
 		$APPLICATION->IncludeComponent(
 			'bitrix:system.field.view',
 			$sType,
-			array(
+			[
 				'arUserField' => $arUserField,
 				'bVarsFromForm' => false,
 				'form_name' => "",
 				'printable' => true,
 				'FILE_MAX_HEIGHT' => 400,
 				'FILE_MAX_WIDTH' => 400,
-				'FILE_SHOW_POPUP' => true
-			),
+				'FILE_SHOW_POPUP' => true,
+				'SKIP_CHECK_PERMISSIONS' => ($sType === 'iblock_element' || $sType === 'iblock_section'),
+			],
 			false,
-			array('HIDE_ICONS' => 'Y')
+			['HIDE_ICONS' => 'Y'],
 		);
 
 		return HTMLToTxt(ob_get_clean(), maxlen: 0);

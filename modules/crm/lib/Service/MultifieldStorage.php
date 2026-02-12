@@ -113,13 +113,23 @@ class MultifieldStorage
 
 	private function fetchExtraData(ItemIdentifier $owner): array
 	{
+		static $cache = [];
+
+		$cacheKey = $owner->getHash();
+		if (isset($cache[$cacheKey]))
+		{
+			return $cache[$cacheKey];
+		}
+
 		$phoneIds = $this->dataManager::fetchPhoneIdsByOwner($owner);
 		if (empty($phoneIds))
 		{
 			return [];
 		}
 
-		return CCrmFieldMulti::GetPhoneCountryList($phoneIds);
+		$cache[$cacheKey] = CCrmFieldMulti::GetPhoneCountryList($phoneIds);
+
+		return $cache[$cacheKey];
 	}
 
 	/**

@@ -51,6 +51,7 @@ class Features
 		public readonly bool $aiAssistantAvailable,
 		public readonly bool $isCopilotMentionAvailable,
 		public readonly bool $aiFileTranscriptionAvailable,
+		public readonly bool $chatSharingLinkAvailable,
 		public readonly bool $isTasksRecentListAvailable,
 		public readonly bool $videoNoteAvailable,
 		public readonly bool $mentionAllAvailable,
@@ -104,6 +105,7 @@ class Features
 			self::isAiAssistantAvailable(),
 			self::isCopilotMentionAvailable(),
 			self::isAiFileTranscriptionAvailable(),
+			self::isChatSharingLinkAvailable(),
 			self::isTasksRecentListAvailable(),
 			self::isVideoNoteAvailable(),
 			self::isMentionAllAvailable(),
@@ -200,6 +202,16 @@ class Features
 		return Option::get('im', 'file_transcription_available', 'N') === 'Y'
 			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
 		;
+	}
+
+	public static function isChatSharingLinkAvailable(): bool
+	{
+		if (\CUserOptions::GetOption('im', 'chat_sharing_link_available_user', 'N') === 'Y')
+		{
+			return true;
+		}
+
+		return Option::get('im', 'chat_sharing_link_available', 'N') === 'Y';
 	}
 
 	public static function isVideoNoteTranscriptionAvailable(): bool

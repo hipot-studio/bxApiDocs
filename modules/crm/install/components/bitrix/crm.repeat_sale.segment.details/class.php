@@ -12,7 +12,6 @@ use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
-use Bitrix\Crm\RepeatSale\CostManager;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
 use Bitrix\Crm\Service\Container;
@@ -137,7 +136,6 @@ class CCrmRepeatSaleSegmentDetailsComponent extends Base
 	private function getAiSettings(): array
 	{
 		return [
-			'isSponsored' => CostManager::isSponsoredOperation(),
 			'isAvailable' => AIManager::isAiCallProcessingEnabled() && Scenario::isEnabledScenario(Scenario::REPEAT_SALE_TIPS_SCENARIO),
 			'aiDisabledSliderCode' => Scenario::REPEAT_SALE_TIPS_SCENARIO_SLIDER_CODE,
 		];

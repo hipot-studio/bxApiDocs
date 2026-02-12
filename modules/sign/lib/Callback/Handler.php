@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Callback;
 
 use Bitrix\Main;
 use Bitrix\Pull\Event;
+use Bitrix\Sign\Agent\Member\DownloadPrintVersionFileAgent;
 use Bitrix\Sign\Agent\Member\DownloadResultFileAgent;
 use Bitrix\Sign\Callback\Messages\Member\InviteToSign;
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
@@ -167,6 +168,13 @@ class Handler
 
 				break;
 			}
+			case Messages\Member\MemberPrintVersionFileReady::Type:
+			{
+				/** @var Messages\Member\MemberPrintVersionFileReady $message */
+				$this->startDownloadPrintVersionFile($message, $result);
+
+				break;
+			}
 			case Messages\ResultFile::Type:
 			{
 				/** @var Messages\ResultFile $message */
@@ -284,6 +292,37 @@ class Handler
 		}
 
 		DownloadResultFileAgent::start($document->id, $member->id);
+	}
+
+	private function startDownloadPrintVersionFile(
+		Messages\Member\MemberPrintVersionFileReady $message,
+		Main\Result $result,
+	): void
+	{
+		$document = Container::instance()->getDocumentRepository()->getByUid($message->getDocumentUid());
+		if (!$document)
+		{
+			$result->addError(new Main\Error('Invalid callback token.'));
+
+			return;
+		}
+
+		$member = $this->memberRepository->getByUid($message->getMemberUid());
+		if (!$member)
+		{
+			$result->addError(new Main\Error('Member not found'));
+
+			return;
+		}
+
+		if ($member->documentId !== $document->id)
+		{
+			$result->addError(new Main\Error('Document id mismatch'));
+
+			return;
+		}
+
+		DownloadPrintVersionFileAgent::start($document->id, $member->id);
 	}
 
 	private function processSaveResultFileForMember(

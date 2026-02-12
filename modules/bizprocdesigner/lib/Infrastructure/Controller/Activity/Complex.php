@@ -73,11 +73,6 @@ class Complex extends \Bitrix\Main\Engine\JsonController
 		$nodeActionCollection = $complexActivityService
 			->getCorrespondingNodeActionActivityByName($complexActivityName)
 		;
-		if ($nodeActionCollection->isEmpty())
-		{
-			$this->addError(ErrorMessage::UNKNOWN_ERROR->getError());
-			return null;
-		}
 
 		$portRuleDtoDictionary = $this->extractRulePropertyValue($configurator, $activity);
 		if (!$portRuleDtoDictionary)

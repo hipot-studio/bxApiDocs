@@ -1,4 +1,4 @@
-<?
+<?php
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -37,10 +37,10 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 
 	protected function getContextPostFix()
 	{
-		return $this->contextPostfix.$this->arParams['MANIFEST_CODE'].$this->arParams['APP'];
+		return $this->contextPostfix.$this->arParams['MANIFEST_CODE'].($this->arParams['APP'] ?? '');
 	}
 
-	protected function getContext()
+	protected function getUserContext()
 	{
 		return Helper::getInstance()->getContextUser($this->getContextPostFix());
 	}
@@ -86,15 +86,15 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 
 			if ($result['ERRORS_UPLOAD_FILE'] === '')
 			{
-				$context = $this->getContext();
+				$userContext = $this->getUserContext();
 
-				$setting = new Setting($context);
+				$setting = new Setting($userContext);
 				$setting->deleteFull();
 
-				$structure = new Structure($context);
+				$structure = new Structure($userContext);
 				if ($structure->unpack($fileInfo))
 				{
-					$result['IMPORT_CONTEXT'] = $context;
+					$result['IMPORT_CONTEXT'] = $userContext;
 					$result['APP'] = $app;
 					$result['IMPORT_FOLDER_FILES'] = $structure->getFolder();
 					$result['IMPORT_ACCESS'] = true;
@@ -172,17 +172,14 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 		return true;
 	}
 
-	protected function areCompatibleManifests(array $manifestData1, $manifestData2): bool
+	protected function areCompatibleManifests(array $manifestData1, array $manifestData2): bool
 	{
-		foreach ([$manifestData1, $manifestData2] as $manifestData)
-		{
-			if (!is_array($manifestData['COMPATIBILITY_TAGS']) || empty($manifestData['COMPATIBILITY_TAGS']))
-			{
-				return false;
-			}
-		}
-
-		return !empty(array_intersect($manifestData['COMPATIBILITY_TAGS'], $manifestData['COMPATIBILITY_TAGS']));
+		return !empty(
+			array_intersect(
+				$manifestData1['COMPATIBILITY_TAGS'] ?? [],
+				$manifestData2['COMPATIBILITY_TAGS'] ?? [],
+			)
+		);
 	}
 
 	protected function prepareResult()
@@ -377,7 +374,7 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 			$app = AppTable::getByClientId($this->arParams['APP']);
 			if ($app['ACTIVE'] === 'Y')
 			{
-				$request = Application::getInstance()->getContext()->getRequest();
+				$request = $this->request;
 				$check_hash = $request->getQuery("check_hash");
 				$install_hash = $request->getQuery("install_hash");
 				$appInfo = Client::getApp(
@@ -434,15 +431,15 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 				{
 					try
 					{
-						$context = $this->getContext();
+						$userContext = $this->getUserContext();
 
-						$setting = new Setting($context);
+						$setting = new Setting($userContext);
 						$setting->deleteFull();
 
-						$structure = new Structure($context);
+						$structure = new Structure($userContext);
 						if($structure->unpack($_FILES["CONFIGURATION"]))
 						{
-							$result['IMPORT_CONTEXT'] = $context;
+							$result['IMPORT_CONTEXT'] = $userContext;
 							$result['IMPORT_FOLDER_FILES'] = $structure->getFolder();
 						}
 					}
@@ -540,8 +537,7 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 						);
 						if($file && $file->getFileId() > 0)
 						{
-							$server = Application::getInstance()->getContext()->getServer();
-							$documentRoot = $server->getDocumentRoot();
+							$documentRoot = Application::getDocumentRoot();
 							$filePath = $documentRoot.\CFile::GetPath(
 									$file->getFileId()
 							);

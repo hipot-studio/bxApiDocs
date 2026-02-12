@@ -148,7 +148,7 @@ class Manager
 			$this->removeEngineFromGroups($availableInItems, $config['engineCode']);
 		}
 
-		if (Bitrix24::shouldUseB24() && in_array(Bitrix24::getPortalZone(), ['ru', 'by'], true))
+		if (Bitrix24::shouldUseB24() && Bitrix24::getPortalZone() === 'ru')
 		{
 			$this->removeEngineFromGroups(['landing_site_text_provider'], 'ChatGPT');
 		}

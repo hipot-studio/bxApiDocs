@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\Type;
 
-use Bitrix\AI\Config;
 use Bitrix\Crm\Integration\AI\Operation\OperationState;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\SuitableAudiosChecker;
@@ -40,10 +39,7 @@ final class CopilotButtonCall extends BaseButton
 
 	protected function addCustomJsEventParams(JsEvent $jsEvent): JsEvent
 	{
-		return $jsEvent
-			->addActionParamString('scenario', Scenario::FULL_SCENARIO)
-			->addActionParamBoolean('isCopilotBannerNeedShow', $this->isCopilotBannerNeedShow())
-		;
+		return $jsEvent->addActionParamString('scenario', Scenario::FULL_SCENARIO);
 	}
 
 	protected function determineButtonState(): string
@@ -220,10 +216,5 @@ final class CopilotButtonCall extends BaseButton
 		}
 
 		return $isAudiosValidList[$originId];
-	}
-
-	private function isCopilotBannerNeedShow(): bool
-	{
-		return Config::getPersonalValue('first_launch') !== 'N';
 	}
 }

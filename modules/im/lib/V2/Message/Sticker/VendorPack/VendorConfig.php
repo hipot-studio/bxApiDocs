@@ -6,6 +6,8 @@ namespace Bitrix\Im\V2\Message\Sticker\VendorPack;
 
 class VendorConfig
 {
+	public const VERSION = '?v1';
+
 	public static function getBitrixVibe(): array
 	{
 		return [

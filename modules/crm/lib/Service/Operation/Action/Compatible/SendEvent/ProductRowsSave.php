@@ -68,3 +68,4 @@ class ProductRowsSave extends Compatible\SendEvent
 		return new Result();
 	}
 }
+

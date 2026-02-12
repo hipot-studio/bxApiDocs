@@ -3,6 +3,7 @@
 namespace Bitrix\AI;
 
 use Bitrix\AI\Engine\Cloud;
+use Bitrix\AI\Engine\Service\BitrixEngineService;
 use Bitrix\AI\Engine\Enum\Category;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Engine\IQueue;
@@ -21,6 +22,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\DI\ServiceLocator;
 
 Loc::loadMessages(__FILE__);
 
@@ -73,6 +75,7 @@ class Engine
 	public static function isExistByCode(string $category, string $code): bool
 	{
 		self::loadThirdParty();
+		self::getBitrixEngineService()->initDefaultEngines();
 
 		$code = mb_strtolower($code);
 		foreach (self::$engines[$category] ?? [] as $engine)
@@ -147,6 +150,7 @@ class Engine
 	public static function getList(string $category, Context $context): array
 	{
 		self::loadThirdParty();
+		self::getBitrixEngineService()->initDefaultEngines();
 
 		$engines = [];
 		foreach (self::$engines[$category] ?? [] as $item)
@@ -267,6 +271,7 @@ class Engine
 	public static function getByCode(string $code, Context $context, ?string $category = null): ?self
 	{
 		self::loadThirdParty();
+		self::getBitrixEngineService()->initDefaultEngines();
 
 		foreach (self::getCategories() as $cCode)
 		{
@@ -315,6 +320,7 @@ class Engine
 		}
 
 		self::loadThirdParty();
+		self::getBitrixEngineService()->initDefaultEngines();
 
 		$selectedEngine = Config::getValue(self::getConfigCode($category, $quality));
 
@@ -949,7 +955,7 @@ class Engine
 		if ($suffixErrorCode === '_BAAS' && Bitrix24::isMarketAvailable())
 		{
 			$customData['msgForIm'] = Loc::getMessage(
-				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET',
+				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_1',
 				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_subscription_market_access_buy_marketplus']
 			);
 			$customData['showSliderWithMsg'] = false;
@@ -984,5 +990,10 @@ class Engine
 	{
 		$event = new Event('ai', self::EVENT_NAME_ENGINE_ADDED);
 		$event->send();
+	}
+
+	protected static function getBitrixEngineService()
+	{
+		return ServiceLocator::getInstance()->get(BitrixEngineService::class);
 	}
 }

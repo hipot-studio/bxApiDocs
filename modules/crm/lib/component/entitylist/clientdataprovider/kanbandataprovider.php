@@ -42,7 +42,7 @@ class KanbanDataProvider extends \Bitrix\Crm\Component\EntityList\ClientDataProv
 		{
 			if ($this->addRawIdToSelect)
 			{
-				$this->addRawIdToResult($deals);
+				$this->addRawIdToResult($items);
 			}
 			return;
 		}
@@ -55,6 +55,8 @@ class KanbanDataProvider extends \Bitrix\Crm\Component\EntityList\ClientDataProv
 		{
 			return;
 		}
+		$this->userPermissionsService->item()->preloadPermissionAttributes($this->clientEntityTypeId, $clientIds);
+
 		$clientsInfo = $this->loadClientsInfo($clientIds);
 
 		$rawIdFieldId = $this->fieldHelper->addPrefixToFieldId(self::RAW_ID_FIELD);

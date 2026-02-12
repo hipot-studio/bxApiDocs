@@ -474,6 +474,35 @@ class CCrmBizProcHelper
 
 		return $result;
 	}
+
+	public static function getDocumentNotNodesInstanceIds(array $documentId): array
+	{
+		$rows = Bizproc\WorkflowInstanceTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=MODULE_ID' => $documentId[0],
+				'=ENTITY' => $documentId[1],
+				'=DOCUMENT_ID' => $documentId[2],
+				'!=TEMPLATE.TYPE' => Bizproc\Api\Enum\Template\WorkflowTemplateType::Nodes->value,
+			]
+		])->fetchAll();
+
+		$instanceIds = array_column($rows, 'ID');
+
+		$workflows = \CBPRuntime::getRuntime()->getWorkflows();
+		foreach ($workflows as $id => $workflow)
+		{
+			if (
+				!($workflow->getRootActivity() instanceof \CBPNodeWorkflowActivity)
+				&& \CBPHelper::isEqualDocument($workflow->getDocumentId(), $documentId)
+			)
+			{
+				$instanceIds[] = $id;
+			}
+		}
+
+		return array_unique($instanceIds);
+	}
 }
 
 class CCrmBizProcEventType

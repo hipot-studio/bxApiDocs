@@ -546,7 +546,7 @@ class CBPRuntime
 		return false;
 	}
 
-	public function getActivityDescription($code, $lang = false)
+	public function getActivityDescription($code, $lang = false): ?array
 	{
 		if (empty($code) || preg_match("#\W#", (string)$code))
 		{

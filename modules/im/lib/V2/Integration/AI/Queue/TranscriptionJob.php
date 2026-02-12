@@ -8,6 +8,7 @@ use Bitrix\AI\Result;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\AI\TaskCreationManager;
 use Bitrix\Im\V2\Integration\AI\Transcription\Item\Status;
+use Bitrix\Im\V2\Integration\AI\Transcription\LaunchType;
 use Bitrix\Im\V2\Integration\AI\Transcription\Result\TranscribeResult;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Message;
@@ -32,25 +33,30 @@ class TranscriptionJob extends QueueJob
 		$diskFileId = (int)$parameters['diskFileId'];
 		$chatId = (int)$parameters['chatId'];
 		$messageId = (int)$parameters['messageId'];
+		$launchType = LaunchType::fromString(
+			isset($parameters['launchType']) && is_string($parameters['launchType'])
+				? $parameters['launchType']
+				: null
+		);
 
 		$transcribeManager = new TranscribeManager($fileId, $diskFileId, $chatId, $messageId);
 
 		if (!empty($text) && mb_strlen($text) <= TranscribeManager::MAX_TRANSCRIPTION_CHARS)
 		{
 			$transcribeFileItem = $transcribeManager->createFileItem(Status::Success, trim($text));
-			$result = (new TranscribeResult($transcribeFileItem));
+			$transcribeResult = new TranscribeResult($transcribeFileItem);
 		}
 		else
 		{
 			$transcribeFileItem = $transcribeManager->createErrorFileItem();
 			$error = new Error('', 'MAX_TRANSCRIPTION_CHARS');
-			$result = (new TranscribeResult($transcribeFileItem))->addError($error);
+			$transcribeResult = (new TranscribeResult($transcribeFileItem))->addError($error);
 		}
 
-		$transcribeManager->handleTranscriptionResponse($result);
+		$transcribeManager->handleTranscriptionResponse($transcribeResult, $launchType);
 
 		if (
-			$result->isSuccess()
+			$transcribeResult->isSuccess()
 			&& (new Restriction())->isAutoTaskActive()
 		)
 		{
@@ -76,11 +82,16 @@ class TranscriptionJob extends QueueJob
 		$diskFileId = (int)$parameters['diskFileId'];
 		$chatId = (int)$parameters['chatId'];
 		$messageId = (int)$parameters['messageId'];
+		$launchType = LaunchType::fromString(
+			isset($parameters['launchType']) && is_string($parameters['launchType'])
+				? $parameters['launchType']
+				: null
+		);
 
 		$transcribeManager = new TranscribeManager($fileId, $diskFileId, $chatId, $messageId);
 		$transcribeFileItem = $transcribeManager->createErrorFileItem();
 
 		$transcribeResult = (new TranscribeResult($transcribeFileItem))->addError($error);
-		$transcribeManager->handleTranscriptionResponse($transcribeResult);
+		$transcribeManager->handleTranscriptionResponse($transcribeResult, $launchType);
 	}
 }

@@ -2,6 +2,8 @@
 
 namespace Bitrix\Im\V2\Relation;
 
+use Bitrix\Im\V2\SharingLink\ChatLink;
+
 final class AddUsersConfig
 {
 	public readonly array $managerIds;
@@ -13,6 +15,7 @@ final class AddUsersConfig
 	public readonly bool $skipAnalytics;
 	public readonly array $hiddenUserIds;
 	public readonly bool $byAutoJoin;
+	public readonly ?ChatLink $sharingLink;
 
 	public function __construct(
 		array $managerIds = [],
@@ -24,6 +27,7 @@ final class AddUsersConfig
 		array $hiddenUserIds = [],
 		bool $skipAnalytics = true,
 		bool $byAutoJoin = false,
+		?ChatLink $sharingLink = null
 	)
 	{
 		$this->managerIds = $this->normalizeIds($managerIds);
@@ -35,6 +39,7 @@ final class AddUsersConfig
 		$this->hiddenUserIds = $this->normalizeIds($hiddenUserIds);
 		$this->skipAnalytics = $skipAnalytics;
 		$this->byAutoJoin = $byAutoJoin;
+		$this->sharingLink = $sharingLink;
 	}
 
 	public function isManager(int $userId): bool
@@ -76,6 +81,11 @@ final class AddUsersConfig
 	public function isHidden(int $userId): bool
 	{
 		return isset($this->hiddenUserIds[$userId]);
+	}
+
+	public function bySharingLink(): bool
+	{
+		return isset($this->sharingLink);
 	}
 
 	private function normalizeIds(array $ids): array

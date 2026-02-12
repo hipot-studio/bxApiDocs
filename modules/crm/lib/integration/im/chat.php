@@ -250,6 +250,8 @@ class Chat
 			? $params['CURRENT_FIELDS'] : [];
 		$previousFields = isset($params['PREVIOUS_FIELDS']) && is_array($params['PREVIOUS_FIELDS'])
 			? $params['PREVIOUS_FIELDS'] : [];
+		$addedObserverIDs = isset($params['ADDED_OBSERVER_IDS']) && is_array($params['ADDED_OBSERVER_IDS'])
+			? $params['ADDED_OBSERVER_IDS'] : [];
 		$removedObserverIDs = isset($params['REMOVED_OBSERVER_IDS']) && is_array($params['REMOVED_OBSERVER_IDS'])
 			? $params['REMOVED_OBSERVER_IDS'] : [];
 
@@ -271,31 +273,56 @@ class Chat
 			}
 		}
 
-		if($currentOwnerID > 0 || $currentTitle !== '' || !empty($removedObserverIDs))
+		$hasChatChanges =
+			$currentOwnerID > 0
+			|| $currentTitle !== ''
+			|| !empty($addedObserverIDs)
+			|| !empty($removedObserverIDs)
+		;
+
+		if (!$hasChatChanges) {
+			return;
+		}
+
+		/*
+		Chat with admin permissions (user_id: 0)
+		to add assignee and observers to chat
+		for case when the current user is not a member of the chat
+		*/
+		$chatWithAdminPermissions = new \CIMChat(0);
+
+		if ($currentOwnerID > 0)
 		{
-			$chat = new \CIMChat();
-			if($currentOwnerID > 0)
-			{
-				$chat->AddUser($chatID, [ $currentOwnerID ], false, false);
-				$chatWithAdminPermissions = new \CIMChat(0);
-				$chatWithAdminPermissions->SetOwner($chatID, $currentOwnerID, false);
-			}
+			$chatWithAdminPermissions->AddUser($chatID, [$currentOwnerID], false, false);
+			$chatWithAdminPermissions->SetOwner($chatID, $currentOwnerID, false);
+		}
 
-			if($currentTitle !== '')
-			{
-				$currentTitle = self::buildChatName(
-					[
-						'ENTITY_TYPE' => \CCrmOwnerType::ResolveName($entityTypeID),
-						'ENTITY_TITLE' => $currentTitle,
-					]
-				);
-				$chat->Rename($chatID, $currentTitle, false, false);
-			}
+		if ($currentTitle !== '')
+		{
+			$currentTitle = self::buildChatName(
+				[
+					'ENTITY_TYPE' => \CCrmOwnerType::ResolveName($entityTypeID),
+					'ENTITY_TITLE' => $currentTitle,
+				]
+			);
+			$chatWithAdminPermissions->Rename($chatID, $currentTitle, false, false);
+		}
 
-			foreach($removedObserverIDs as $removedObserverID)
-			{
-				$chat->DeleteUser($chatID, $removedObserverID, false, false);
-			}
+		if (!empty($addedObserverIDs))
+		{
+			$chatWithAdminPermissions->AddUser($chatID, $addedObserverIDs, false, false);
+		}
+
+		foreach ($removedObserverIDs as $removedObserverID)
+		{
+			/*
+			Chat with current user as removed observer
+			to display leave message
+			to protect current chat author from remove
+			for case when the current user is not a manager of the chat
+			*/
+			$chatWithRemovedUser = new \CIMChat($removedObserverID);
+			$chatWithRemovedUser->DeleteUser($chatID, $removedObserverID, false, false);
 		}
 	}
 
@@ -626,19 +653,10 @@ class Chat
 
 	protected static function getChatCardTitle(string $entityType): string
 	{
-		$message = Loc::getMessage('CRM_INTEGRATION_IM_CHAT_CARD_TITLE_'.$entityType);
-
+		$message = Loc::getMessage('CRM_INTEGRATION_IM_CHAT_CARD_TITLE_' . $entityType);
 		if (empty($message))
 		{
-			$entityTypeId = \CCrmOwnerType::ResolveID($entityType);
-			$factory = Container::getInstance()->getFactory($entityTypeId);
-			if ($factory)
-			{
-				$message = Loc::getMessage(
-					'CRM_INTEGRATION_IM_CHAT_CARD_TITLE',
-					['#ENTITY_DESCRIPTION#' => $factory->getEntityDescription()]
-				);
-			}
+			$message = Loc::getMessage('CRM_INTEGRATION_IM_CHAT_CARD_TITLE');
 		}
 
 		return "[b]{$message}[/b]";

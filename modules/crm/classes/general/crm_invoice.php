@@ -3025,6 +3025,27 @@ class CAllCrmInvoice
 			);
 		}
 
+		$repeatSaleTryHiddenEnabled = '~CRM_REPEAT_SALE_TRY_HIDDEN_ENABLED';
+		if ((string)COption::GetOptionString('crm', $repeatSaleTryHiddenEnabled, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $repeatSaleTryHiddenEnabled, 'Y');
+
+			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+			$minSuccessDealsForBannerShow = 2;
+
+			$hasMoreSuccessDeals = $factory->checkIfTotalItemsCountExceeded(
+				$minSuccessDealsForBannerShow,
+				[
+					'=STAGE_SEMANTIC_ID' => Bitrix\Crm\PhaseSemantics::SUCCESS,
+				],
+			);
+
+			if (!$hasMoreSuccessDeals)
+			{
+				(new Flow())->enableAction();
+			}
+		}
+
 		$recurringColumnAppendAgent = '~CRM_RECURRING_COLUMN_APPEND_AGENT';
 		if ((string)COption::GetOptionString('crm', $recurringColumnAppendAgent, 'N') === 'N')
 		{

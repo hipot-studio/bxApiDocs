@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddGanttLinks;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddParent;
@@ -52,8 +51,9 @@ class AddService
 	}
 
 	/**
+	 * @return array{Entity\Task, array}
+	 *
 	 * @throws TaskNotExistsException
-	 * @throws TaskAddException
 	 */
 	public function add(Entity\Task $task, AddConfig $config): array
 	{
@@ -136,11 +136,13 @@ class AddService
 		(new SendTranscribedTaskAnalytics($config))($task);
 
 		// get task object with prepopulated data
+		$this->repository->invalidate($id);
+
 		$task = $this->repository->getById($id);
 
 		if ($task === null)
 		{
-			throw new TaskAddException();
+			throw new TaskNotExistsException();
 		}
 
 		return [$task, $fields];

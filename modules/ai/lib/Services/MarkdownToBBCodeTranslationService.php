@@ -6,6 +6,38 @@ namespace Bitrix\Ai\Services;
 
 class MarkdownToBBCodeTranslationService
 {
+	private const UNICODE_ESCAPES_MAP = [
+		'\\\\' => '\\',
+		'\\n' => "\n",
+		'\\r' => "\r",
+		'\\t' => "\t",
+		'\\"' => '"',
+		"\\'" => "'",
+	];
+
+	/**
+	 * Whitespace characters to normalize to regular space
+	 * Based on HTML attribute whitespace specification plus additional problematic characters:
+	 */
+	private const WHITESPACE_PATTERN = '/[\x{0009}-\x{000D}\x{0020}\x{00A0}\x{1680}\x{180E}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}]/u';
+
+	/**
+	 * Zero-width and directional characters to remove entirely
+	 * These are invisible characters that can break parsing:
+	 */
+	private const ZERO_WIDTH_PATTERN = '/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}\x{FEFF}]/u';
+
+	/**
+	 * Pattern to match leading whitespace (spaces and tabs) at the start of a line
+	 */
+	private const LEADING_WHITESPACE_PATTERN = '/^([ \t]*)(.*?)$/u';
+
+	/**
+	 * Pattern to match multiple consecutive spaces or tabs (2 or more)
+	 * Used to collapse multiple whitespace to single space
+	 */
+	private const MULTIPLE_WHITESPACE_PATTERN = '/[ \t]{2,}/u';
+
 	/**
 	 * @var array<string, array{0:string,1:string}>
 	 */
@@ -27,6 +59,8 @@ class MarkdownToBBCodeTranslationService
 	{
 		$this->text = $text;
 		$this->extractCodeBlocks();
+		$this->processUnicodeEscapes();
+		$this->normalizeWhitespace();
 		$this->extractHtmlTags();
 		$this->extractAndProcessImages();
 		$this->processHeadings();
@@ -41,6 +75,72 @@ class MarkdownToBBCodeTranslationService
 		$this->restoreImages();
 
 		return $this->text;
+	}
+
+	private function processUnicodeEscapes(): void
+	{
+		$placeholder = "\x00BACKSLASH\x00";
+		$this->text = str_replace('\\\\', $placeholder, $this->text);
+
+		foreach (self::UNICODE_ESCAPES_MAP as $escape => $actual)
+		{
+			if ($escape === '\\\\')
+			{
+				continue;
+			}
+			$this->text = str_replace($escape, $actual, $this->text);
+		}
+
+		$this->text = str_replace($placeholder, '\\', $this->text);
+	}
+
+	private function normalizeWhitespace(): void
+	{
+		// First, remove zero-width and directional characters entirely
+		$this->text = preg_replace(self::ZERO_WIDTH_PATTERN, '', $this->text);
+
+		// Then normalize all various whitespace characters to regular space
+		// but preserve newlines (\n), carriage returns (\r), and tabs (\t)
+		$this->text = preg_replace_callback(
+			self::WHITESPACE_PATTERN,
+			static function (array $matches): string {
+				$char = $matches[0];
+
+				// Preserve line breaks (LF, CR) and tabs using direct comparison
+				if ($char === "\t" || $char === "\n" || $char === "\r")
+				{
+					return $char;
+				}
+
+				// Replace all other whitespace with regular space
+				return ' ';
+			},
+			$this->text
+		);
+
+		// Normalize line endings to \n for consistent processing
+		// Handle Windows (\r\n), old Mac (\r), and Unix (\n) line endings
+		$this->text = str_replace(["\r\n", "\r"], "\n", $this->text);
+
+		// Clean up multiple consecutive spaces within lines (but preserve leading spaces)
+		// Process line by line to avoid collapsing important indentation
+		$lines = explode("\n", $this->text);
+		$processedLines = [];
+
+		foreach ($lines as $line)
+		{
+			// Match leading whitespace and the rest of the line separately
+			preg_match(self::LEADING_WHITESPACE_PATTERN, $line, $matches);
+			$leadingSpaces = $matches[1];
+			$restOfLine = $matches[2];
+
+			// Collapse multiple spaces/tabs in the rest of the line (not leading)
+			$restOfLine = preg_replace(self::MULTIPLE_WHITESPACE_PATTERN, ' ', $restOfLine);
+
+			$processedLines[] = $leadingSpaces . $restOfLine;
+		}
+
+		$this->text = implode("\n", $processedLines);
 	}
 
 	private function extractCodeBlocks(): void
@@ -78,7 +178,9 @@ class MarkdownToBBCodeTranslationService
 		{
 			$tag = $kind === 'code_block' ? 'CODEBLOCK' : 'INLINE';
 			$ph = "@@{$tag}{$hash}@@";
-			$bb = "[code]{$code}[/code]";
+			$bb = $kind === 'code_block'
+				? "[code]{$code}[/code]"
+				: "[i]`{$code}`[/i]";
 			$this->text = str_replace($ph, $bb, $this->text);
 		}
 	}

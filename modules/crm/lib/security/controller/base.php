@@ -20,6 +20,7 @@ abstract class Base extends Crm\Security\Controller
 	}
 
 	protected $cachedAttrs = [];
+	protected array $cachedCategoryIds = [];
 
 	public function isEntityTypeSupported(int $entityTypeId): bool
 	{
@@ -78,6 +79,11 @@ abstract class Base extends Crm\Security\Controller
 		}
 
 		return $result;
+	}
+
+	public function getPreloadedPermissionCategoryAttribute(int $entityId): ?int
+	{
+		return $this->cachedCategoryIds[$entityId] ?? null;
 	}
 
 	public function clearPermissionAttributesCache(int $entityId): void
@@ -140,6 +146,8 @@ abstract class Base extends Crm\Security\Controller
 				$fields['OBSERVER_IDS'] = $observerMap[$ID];
 			}
 			$results[$ID] = $this->preparePermissionAttributes($fields);
+
+			$this->cachedCategoryIds[$ID] = $fields['CATEGORY_ID'] ?? null;
 		}
 
 		return $results;

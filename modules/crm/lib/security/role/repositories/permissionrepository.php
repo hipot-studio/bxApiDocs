@@ -26,7 +26,7 @@ class PermissionRepository
 
 	public function getRole(int $roleId): ?array
 	{
-		$roles = CCrmRole::GetList(array(), array('ID' => $roleId));
+		$roles = CCrmRole::GetList([], ['ID' => $roleId]);
 		$roleRow = $roles->Fetch();
 
 		if ($roleRow)
@@ -35,24 +35,6 @@ class PermissionRepository
 		}
 
 		return null;
-	}
-
-	/**
-	 * @param bool $excludeSystemRoles
-	 * @return array
-	 */
-	public function getAllRoles(bool $excludeSystemRoles = true): array
-	{
-		$query = RoleTable::query()
-			->setSelect(['ID', 'NAME', 'IS_SYSTEM', 'CODE', 'GROUP_CODE'])
-		;
-
-		if ($excludeSystemRoles)
-		{
-			$query->where('IS_SYSTEM', 'N');
-		}
-
-		return $query->fetchAll();
 	}
 
 	public function getRoleAssignedPermissions(int $roleId): array

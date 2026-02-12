@@ -3,25 +3,27 @@
 namespace Bitrix\Im\V2\Recent;
 
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Message\CounterService;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Im\V2\Recent\Query\RecentFilter;
+use Bitrix\Im\V2\Recent\Query\RecentParams;
+use Bitrix\Im\V2\Service\Locator;
 
 class RecentCollab extends Recent
 {
-	public static function getCollabs(int $limit, ?DateTime $lastMessageDate = null): self
+	public static function getCollabs(int $limit, array $filter = []): self
 	{
-		$recent = new static();
-		$userId = $recent->getContext()->getUserId();
-		$recentEntities = static::getOrmEntities($limit, $userId, Chat::IM_TYPE_COLLAB, $lastMessageDate);
+		$userId = Locator::getContext()->getUserId();
 
-		$chatIds = $recentEntities->getItemCidList();
-		$counters = (new CounterService($userId))->getForEachChat($chatIds);
+		$filter['itemType'] = Chat::IM_TYPE_COLLAB;
+		$filter['userId'] = $userId;
 
-		foreach ($recentEntities as $entity)
-		{
-			$recent[] = $recent[] = RecentItem::initByEntity($entity, $counters[$entity->getItemCid()] ?? 0);
-		}
+		$queryFilter = new RecentFilter($filter);
+		$recentParams = new RecentParams(
+			filter: $queryFilter,
+			limit: $limit,
+			order: Recent::getOrder($userId)
+		);
 
-		return $recent;
+		$recentEntities = static::getRecentEntities($recentParams);
+		return static::initByArray($recentEntities);
 	}
 }
