@@ -25,6 +25,7 @@ class UserRepository
 			'WORK_POSITION',
 			'EMAIL',
 			'WORK_PHONE',
+			'PERSONAL_MOBILE',
 			'LAST_ACTIVITY_DATE',
 			'PERSONAL_GENDER',
 			'TIME_ZONE',

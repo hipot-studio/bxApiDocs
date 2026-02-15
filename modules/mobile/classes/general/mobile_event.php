@@ -1,14 +1,15 @@
 <?php
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Menu\Analytics;
 use Bitrix\Mobile\Tab\Manager;
 use Bitrix\MobileApp\Janative\Entity\Component;
 use Bitrix\MobileApp\Janative\Entity\Extension;
-use Bitrix\Mobile\Context;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -154,7 +155,7 @@ class CMobileEvent
 					{
 						$componentId = 'knowledge.list';
 						$componentVersion = \Bitrix\MobileApp\Janative\Manager::getComponentVersion(
-							$componentId
+							$componentId,
 						);
 						$data[$sectionIndex]['items'] = array_merge(
 							$data[$sectionIndex]['items'] ?? [],
@@ -224,6 +225,7 @@ class CMobileEvent
 							}
 
 							array_unshift($section["items"], $item);
+
 							break;
 						}
 					}
@@ -241,6 +243,7 @@ class CMobileEvent
 					if (isset($dataTab['code']) && $tabId === $dataTab['code'])
 					{
 						$dataTab['hidden'] = true;
+
 						break;
 					}
 				}
@@ -252,12 +255,12 @@ class CMobileEvent
 
 	private static function addDevelopmentItems(array $menu): array
 	{
-		if (\Bitrix\Main\Config\Option::get('mobile', 'developers_menu_section', 'N') !== 'Y')
+		if (Option::get('mobile', 'developers_menu_section', 'N') !== 'Y')
 		{
 			return $menu;
 		}
 
-		$sectionId = CMobileEvent::getSectionIndexByCode($menu, 'development');
+		$sectionId = self::getSectionIndexByCode($menu, 'development');
 		if ($sectionId === null)
 		{
 			return $menu;
@@ -265,24 +268,18 @@ class CMobileEvent
 
 
 		$developerMenuItems = [];
-		$isEnableStoryBook = false;
 
-		foreach (\Bitrix\Main\EventManager::getInstance()->findEventHandlers("mobileapp", "onJNComponentWorkspaceGet", ['mobile']) as $event)
+		foreach (EventManager::getInstance()->findEventHandlers("mobileapp", "onJNComponentWorkspaceGet", ['mobile']) as $event)
 		{
 			if ($event['TO_METHOD'] === 'getJNDevWorkspace')
 			{
-				$isEnableStoryBook = true;
+				$developerMenuItems[] = [
+					'id' => 'storybook',
+					'title' => 'StoryBook',
+					'imageUrl' => '/bitrix/images/mobile/dev/storybook.png',
+					'path' => '/development/storybook',
+				];
 			}
-		}
-
-		if ($isEnableStoryBook)
-		{
-			$developerMenuItems[] = [
-				'id' => 'storybook',
-				'title' => 'StoryBook',
-				'imageName' => 'form',
-				'path' => '/development/storybook',
-			];
 		}
 
 		$developerMenuItems[] = [
@@ -360,7 +357,6 @@ class CMobileEvent
 
 		return null;
 	}
-
 }
 
 class MobileApplication extends Bitrix\Main\Authentication\Application
@@ -392,7 +388,7 @@ class MobileApplication extends Bitrix\Main\Authentication\Application
 
 	public function __construct()
 	{
-		$diskEnabled = \Bitrix\Main\Config\Option::get('disk', 'successfully_converted', false)
+		$diskEnabled = Option::get('disk', 'successfully_converted', false)
 			&& CModule::includeModule('disk');
 
 		if (!$diskEnabled)
@@ -409,14 +405,16 @@ class MobileApplication extends Bitrix\Main\Authentication\Application
 
 		if (ModuleManager::isModuleInstalled('extranet'))
 		{
-			$extranetSiteId = \Bitrix\Main\Config\Option::get('extranet', 'extranet_site', false);
+			$extranetSiteId = Option::get('extranet', 'extranet_site', false);
 			if ($extranetSiteId)
 			{
-				$res = \Bitrix\Main\SiteTable::getList([
+				$site = \Bitrix\Main\SiteTable::getRow([
 					'filter' => ['=LID' => $extranetSiteId],
 					'select' => ['DIR'],
+					'cache' => ['ttl' => 86400],
 				]);
-				if ($site = $res->fetch())
+
+				if ($site)
 				{
 					$this->validUrls = array_merge(
 						$this->validUrls,

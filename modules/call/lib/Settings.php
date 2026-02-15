@@ -24,7 +24,7 @@ class Settings
 			'turnServer' => \Bitrix\Im\Call\Call::getTurnServer(),
 			'turnServerLogin' => Option::get('call', 'turn_server_login', ''),
 			'turnServerPassword' => Option::get('call', 'turn_server_password', ''),
-			'callLogService' => Option::get('call', 'call_log_service', ''),
+			'callLogService' => \Bitrix\Im\Call\Call::getLogService(),
 			'sfuServerEnabled' => Im\Call\Call::isCallServerEnabled(),
 			'bitrixCallsEnabled' => Im\Call\Call::isBitrixCallEnabled(),
 			'callBetaIosEnabled' => Im\Call\Call::isIosBetaEnabled(),
@@ -54,7 +54,6 @@ class Settings
 			'isCloudRecordTariffEnabled' => static::isCloudRecordingAvailable(),
 			'isCloudRecordCisRegion' => static::isCisRegion(),
 			'isCloudRecordLogEnabled' => static::isCloudRecordLogEnabled(),
-			'isCreateCallButtonEnabled' => static::isCreateCallButtonEnabled(),
 		], self::getAdditionalMobileOptions());
 	}
 
@@ -214,6 +213,16 @@ class Settings
 		return (bool)\CUserOptions::GetOption('call', 'plain_call_cloud_recording_enabled', false);
 	}
 
+	public static function isNoiseSuppressionEnabled(): bool
+	{
+		if ((bool)Option::get('call', 'noise_suppression_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'noise_suppression_enabled', false);
+	}
+
 	/**
 	 * @deprecated
 	 */
@@ -344,15 +353,5 @@ class Settings
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_cloud_record_log', false);
-	}
-
-	// TODO: Remove empty plug
-	/**
-	 * Create Call Button is enabled.
-	 * @return bool
-	 */
-	public static function isCreateCallButtonEnabled(): bool
-	{
-		return true;
 	}
 }

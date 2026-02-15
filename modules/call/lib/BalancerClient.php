@@ -75,11 +75,28 @@ class BalancerClient
 	{
 		$data = [
 			'portalId' => Settings::getPortalId(),
+			'version' => \Bitrix\Main\ModuleManager::getVersion('call'),
 			'minTokenVersion' => $tokenVersion,
 			'chatId' => $chatId
 		];
 
 		return $this->performRequest('/v2/update-token-version', $data);
+	}
+
+	public function changeUserRole(\Bitrix\Im\Call\Call $call, array $userIds, string $role): Result
+	{
+		$data = [
+			'portalId' => Settings::getPortalId(),
+			'version' => \Bitrix\Main\ModuleManager::getVersion('call'),
+			'fromUserId' => (string)$call->getInitiatorId(),
+			'userIds' => array_map(function($v){return (string)$v;}, $userIds),
+			'role' => $role,
+			'roomId' => $call->getUuid(),
+			'chatId' => $call->getChatId(),
+			'callId' => $call->getId(),
+		];
+
+		return $this->performRequest('/change-role', $data);
 	}
 
 	/**
@@ -105,7 +122,6 @@ class BalancerClient
 			Method::POST,
 			$uri,
 			[
-				'bx_call_portal_jwt' => $jwt,
 				'User-Agent' => 'Bitrix Call Client '.\Bitrix\Main\Service\MicroService\Client::getPortalType(),
 				'Referer' => \Bitrix\Main\Service\MicroService\Client::getServerName(),
 			],
@@ -186,10 +202,20 @@ class BalancerClient
 		}
 		else
 		{
-			$result->addError(new Error(
-				Error::BALANCER_ERROR,
-				'Wrong balancer response '.$response->getStatusCode().' '.$response->getReasonPhrase()
-			));
+			$errorMessage = 'Wrong balancer response '.$response->getStatusCode().' '.$response->getReasonPhrase();
+			try
+			{
+				$answer = (array)\json_decode($answerContent, true, 512, \JSON_THROW_ON_ERROR);
+				if (isset($answer['error']))
+				{
+					$errorMessage = 'Balancer error ['.$answer['error']['code'].']: '.$answer['error']['message'];
+				}
+			}
+			catch (\JsonException $exception)
+			{
+			}
+
+			$result->addError(new Error(Error::BALANCER_ERROR, $errorMessage));
 		}
 
 		return $result;

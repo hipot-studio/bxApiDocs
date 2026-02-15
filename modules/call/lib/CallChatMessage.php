@@ -39,7 +39,7 @@ class CallChatMessage
 	public static function makeCloudRecordErrorMessage(Call $call, Chat $chat, string $errorText): ?Message
 	{
 		return self::makeMessageWithCallLink(
-			'CALL_CLOUD_RECORDING_ERROR_MESSAGE',
+			'CALL_CLOUD_RECORDING_ERROR_MESSAGE_MSGVER_2',
 			$call->getId(),
 			$chat,
 			['#ERROR#' => $errorText]
@@ -113,6 +113,7 @@ class CallChatMessage
 		}
 		$params['#CALL_ID#'] = $callId;
 		$params['#CALL_START#'] = $linkMess ?: '-';
+		$params['#CALL_LINK#'] = $linkMess ?: '-';
 		$phrase = static::getMessage($phraseCode, $params);
 		if (!$linkMess)
 		{

@@ -3,9 +3,12 @@
 namespace Bitrix\Call;
 
 use Bitrix\Main\Event;
-use Bitrix\Main\EventResult;
+use Bitrix\Main\ORM\EventResult;
+use Bitrix\Main\ORM\EntityError;
+use Bitrix\Main\Config\Option;
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\V2\Call\CallFactory;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\Call\Integration\EntityType;
 use Bitrix\Call\Service\CallLogService;
 
@@ -20,7 +23,7 @@ class EventHandler
 	 */
 	public static function onChatUserLeave(Event $event): EventResult
 	{
-		$result = new EventResult(EventResult::SUCCESS);
+		$result = new EventResult();
 
 		/** @var array{chatId: int, userIds: int[]} $eventData */
 		$eventData = $event->getParameters();
@@ -29,7 +32,7 @@ class EventHandler
 			['chatId' => $chatId, 'userIds' => $userIds] = $eventData;
 
 			$type = Call::TYPE_INSTANT;
-			$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+			$chat = Chat::getInstance($chatId);
 			if ($chat->getEntityType() == \Bitrix\Im\V2\Chat\ExtendedType::Videoconference->value)
 			{
 				$type = Call::TYPE_PERMANENT;
@@ -66,6 +69,56 @@ class EventHandler
 	}
 
 	/**
+	 * @event 'main:OnAfterSetOption_~controller_group_name'
+	 * @param Event $event
+	 * @return EventResult
+	 */
+	public static function onControllerGroupNameChange(Event $event): EventResult
+	{
+		$result = new EventResult(EventResult::SUCCESS);
+
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		{
+			return $result;
+		}
+
+		$eventData = $event->getParameters();
+		if (!empty($eventData['value']))
+		{
+			\Bitrix\Main\Loader::includeModule('bitrix24');
+			$newRegion = '';
+			if (preg_match("/^([a-z]+)_/is", $eventData['value'], $matches))
+			{
+				$newRegion = mb_strtolower($matches[1]);
+			}
+			$currentRegion = \CBitrix24::getPortalZone(\CBitrix24::LICENSE_TYPE_CURRENT) ?: '';
+			if ($newRegion !== $currentRegion)
+			{
+				/** @see \Bitrix\Call\JwtCall::registerPortalAgent */
+				$existingAgents = \CAgent::getList([], [
+					'MODULE_ID' => 'call',
+					'NAME' => '%Bitrix\Call\JwtCall::registerPortalAgent%',
+				]);
+				if (!$existingAgents->fetch())
+				{
+					/* @see \Bitrix\Call\JwtCall::registerPortalAgent */
+					\CAgent::AddAgent(
+						'Bitrix\Call\JwtCall::registerPortalAgent();',
+						'call',
+						'N',
+						60,
+						'',
+						'Y',
+						\ConvertTimeStamp(time()+\CTimeZone::GetOffset() + 10, 'FULL')
+					);
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Handles call finished event: update active calls cache for all participants
 	 *
 	 * @event 'call:onCallFinished'
@@ -92,7 +145,7 @@ class EventHandler
 	 */
 	public static function onChatUserAdd(Event $event): EventResult
 	{
-		$result = new EventResult(EventResult::SUCCESS);
+		$result = new EventResult();
 
 		/** @var array{CHAT_ID: int, NEW_USERS: int[], CHAT: \Bitrix\Im\V2\Chat, ENTITY_TYPE: string, ENTITY_ID: string} $eventData */
 		$eventData = $event->getParameters();
@@ -192,7 +245,7 @@ class EventHandler
 	 */
 	public static function onCallUserStateChange(Event $event): EventResult
 	{
-		$result = new EventResult(EventResult::SUCCESS);
+		$result = new EventResult();
 
 		$eventData = $event->getParameters();
 		$callId = $eventData['callId'] ?? null;
@@ -263,6 +316,67 @@ class EventHandler
 				\ConvertTimeStamp(time()+\CTimeZone::GetOffset() + rand(5, 20), 'FULL')
 			);
 		}
+
+		return $result;
+	}
+
+	/**
+	 * Handles im changes roles.
+	 *
+	 * @event 'im:OnChangeUserRoles'
+	 * @param Event $event
+	 * @return EventResult
+	 */
+	public static function onChangeUserRoles(Event $event): EventResult
+	{
+		$result = new EventResult();
+
+		$eventData = $event->getParameters();
+
+		if (
+			empty($eventData['userIds'])
+			|| empty($eventData['chatId'])
+			|| empty($eventData['role'])
+		)
+		{
+			return $result;
+		}
+
+		if (!in_array(
+			$eventData['role'],
+			[
+				Chat::ROLE_OWNER,
+				Chat::ROLE_MANAGER,
+				Chat::ROLE_MEMBER,
+				Chat::ROLE_GUEST,
+				Chat::ROLE_NONE,
+			],
+			true
+		))
+		{
+			return $result;
+		}
+
+		$call = CallFactory::searchActive(
+			type: Call::TYPE_INSTANT,
+			provider: Call::PROVIDER_BITRIX,
+			entityType: EntityType::CHAT,
+			entityId: 'chat' . $eventData['chatId']
+		);
+		if (!$call)
+		{
+			return $result;
+		}
+
+		$balancerClient = new BalancerClient();
+		$changeResult = $balancerClient->changeUserRole($call, $eventData['userIds'], $eventData['role']);
+		if (!$changeResult->isSuccess())
+		{
+			foreach ($changeResult->getErrors() as $error)
+			{
+				$result->addError(new EntityError($error->getMessage(), $error->getCode()));
+			}
+ 		}
 
 		return $result;
 	}

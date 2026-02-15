@@ -44,6 +44,12 @@ class GetListAction extends Action
 
 		$result = $entity->getList();
 
+		$hasCustomPresets = $entity->checkIfCustomPresetsExist(0);
+		if ($hasCustomPresets)
+		{
+			$result['hasCustomPresets'] = true;
+		}
+
 		if ($pageNavigation->getOffset() === 0)
 		{
 			$result['permissions'] = $permissions;
@@ -82,6 +88,7 @@ class GetListAction extends Action
 			'read' => $userPermissions->entityType()->canReadItemsInCategory($entityTypeId, $categoryId),
 			'write' =>$userPermissions->entityType()->canUpdateItemsInCategory($entityTypeId, $categoryId),
 			'add' => $userPermissions->entityType()->canAddItemsInCategory($entityTypeId, $categoryId),
+			'import' => $userPermissions->entityType()->canImportItemsInCategory($entityTypeId, $categoryId),
 		];
 	}
 

@@ -43,6 +43,11 @@ class Wizard extends Base
 		];
 	}
 
+	public function getProductGridAction(Item $entity, array $resendData = []): array
+	{
+		return $this->getProductStepProps($entity, $resendData);
+	}
+
 	private function getClientStepProps()
 	{
 		return [

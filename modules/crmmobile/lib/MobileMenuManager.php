@@ -2,6 +2,8 @@
 
 namespace Bitrix\CrmMobile;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Menu\Manager\MobileMenuManager as BaseMobileMenuManager;
 use Bitrix\Mobile\Menu\MenuList;
@@ -12,9 +14,12 @@ class MobileMenuManager extends BaseMobileMenuManager
 	public static function onMobileMenuStructureBuilt(array $menu, $context): array
 	{
 		if (
-			method_exists(\Bitrix\Crm\Service\UserPermissions::class, 'entityType')
-				? \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canReadSomeItemsInCrmOrAutomatedSolutions()
-				: \CCrmPerms::IsAccessEnabled()
+			self::isToolAvailable('crm')
+			&& (
+				method_exists(\Bitrix\Crm\Service\UserPermissions::class, 'entityType')
+					? \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canReadSomeItemsInCrmOrAutomatedSolutions()
+					: \CCrmPerms::IsAccessEnabled()
+			)
 		)
 		{
 			$activityItem = self::prepareActivityItem();
@@ -39,5 +44,15 @@ class MobileMenuManager extends BaseMobileMenuManager
 				'analytics' => Analytics::crmActivity(),
 			],
 		];
+	}
+
+	private static function isToolAvailable(string $toolId): bool
+	{
+		if (Loader::includeModule('intranet'))
+		{
+			return ToolsManager::getInstance()->checkAvailabilityByToolId($toolId);
+		}
+
+		return true;
 	}
 }

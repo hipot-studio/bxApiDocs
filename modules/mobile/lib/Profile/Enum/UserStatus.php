@@ -9,4 +9,5 @@ enum UserStatus: string
 	case DND = 'DND';
 	case ON_VACATION = 'ON_VACATION';
 	case OFFLINE = 'OFFLINE';
+	case INVITED = 'INVITED';
 }

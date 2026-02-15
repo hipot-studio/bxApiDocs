@@ -99,4 +99,8 @@ final class Analytics
 		return self::menuOpen('landing', 'kb', 'open_start_page');
 	}
 
+	public static function callList(): array
+	{
+		return self::menuOpen('im', 'messenger', 'open_call_tab', 'menu');
+	}
 }

@@ -740,11 +740,13 @@ class LogList  extends \Bitrix\Socialnetwork\Component\LogListCommon
 		$result['extranetSiteDir'] = '';
 		if ($result['extranetSiteId'])
 		{
-			$res = \Bitrix\Main\SiteTable::getList([
-				'filter' => [ '=LID' => $result['extranetSiteId'] ],
-				'select' => [ 'DIR' ]
+			$siteFields = \Bitrix\Main\SiteTable::getRow([
+				'filter' => ['=LID' => $result['extranetSiteId']],
+				'select' => ['DIR'],
+				'cache' => ['ttl' => 86400],
 			]);
-			if ($siteFields = $res->fetch())
+
+			if ($siteFields)
 			{
 				$result['extranetSiteDir'] = $siteFields['DIR'];
 			}

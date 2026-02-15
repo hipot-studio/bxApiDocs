@@ -136,6 +136,7 @@ class MenuList
 						$itemData['id'],
 						$itemData['title'] ?? '',
 						$itemData['imageName'] ?? '',
+						$itemData['imageUrl'] ?? '',
 						$itemData['sort'] ?? 100,
 						$itemData['path'] ?? null,
 						$itemData['tag'] ?? null,

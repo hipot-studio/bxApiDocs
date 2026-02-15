@@ -3,15 +3,15 @@
 namespace Bitrix\Call\Track\Downloader;
 
 use Bitrix\Main\IO;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
-use Bitrix\Call;
+use Bitrix\Main\Loader;
 use Bitrix\Call\Track;
 use Bitrix\Call\Track\TrackError;
-use Bitrix\Call\Track\TrackService;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Analytics\FollowUpAnalytics;
+use Bitrix\Im\Call\Registry;
 
 /**
  * Downloads track file in chunks with time limit awareness and resume capability
@@ -20,8 +20,6 @@ class ChunkedDownloader extends AbstractDownloader
 {
 	private const CHUNK_SIZE = 10485760; // 10 MB
 	private const EXECUTION_TIME_LIMIT = 25; // seconds
-	private const CHUNK_RESUME_DELAY = 5; // seconds between chunk resumptions
-	private const SYNC_MAX_RETRIES = 5; // max retries waiting for file sync
 
 	private int $fileSize;
 	private float $startTime;
@@ -29,7 +27,6 @@ class ChunkedDownloader extends AbstractDownloader
 
 	/**
 	 * @param int $fileSize Known file size from Range support check
-	 * @param float|null $startTime Request start time (defaults to START_EXEC_TIME or current time)
 	 */
 	public function __construct(int $fileSize)
 	{
@@ -84,6 +81,15 @@ class ChunkedDownloader extends AbstractDownloader
 			$log && $logger->info("ChunkedDownloader::download: Resuming. Downloaded: {$this->downloadedBytes}/{$this->fileSize} bytes. TrackId: {$track->getId()}");
 		}
 
+		// Check if execution time already exceeded - reschedule immediately
+		if ($this->isExecutionLimitReached())
+		{
+			$this->sendTelemetry($track, 'in_progress', null, $this->getEventName($track, 'finished_by_execution_timelimit'));
+
+			$log && $logger->info("ChunkedDownloader::download: Time limit exceeded at start, rescheduling. TrackId: {$track->getId()}");
+			return $this->progress($result, $this->downloadedBytes);
+		}
+
 		// Ensure directory exists
 		IO\Directory::createDirectory(\dirname($tempPath));
 
@@ -92,6 +98,9 @@ class ChunkedDownloader extends AbstractDownloader
 			. "FileSize: {$this->fileSize}, Downloaded: {$this->downloadedBytes}, ChunkSize: " . self::CHUNK_SIZE
 		);
 
+		// Send telemetry about download start
+		$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_started'));
+
 		try
 		{
 			$fileHandle = $file->open('a');
@@ -99,6 +108,10 @@ class ChunkedDownloader extends AbstractDownloader
 		catch (IO\FileOpenException $e)
 		{
 			$log && $logger->error("ChunkedDownloader::download: Cannot open file: {$tempPath}");
+
+			// Send telemetry about error
+			$this->sendTelemetry($track, 'error', 'file_open_error', $this->getEventName($track, 'download_failed'));
+
 			return $this->fail($result->addError(new TrackError(
 				TrackError::DOWNLOAD_ERROR,
 				'Cannot open temp file for writing: ' . $tempPath
@@ -125,6 +138,15 @@ class ChunkedDownloader extends AbstractDownloader
 				if (!$chunkResult->isSuccess())
 				{
 					$log && $logger->error("ChunkedDownloader::download: Chunk #{$chunkCount} failed. TrackId: {$track->getId()}");
+
+					// Send telemetry about chunk error (only for records, not preview)
+					if ($track->getType() !== Track::TYPE_VIDEO_PREVIEW)
+					{
+						$errors = $chunkResult->getErrors();
+						$errorCode = !empty($errors) ? $errors[0]->getCode() : 'unknown';
+						$this->sendTelemetry($track, 'error', $errorCode, $this->getEventName($track, 'download_chunk_failed'));
+					}
+
 					$result->addErrors($chunkResult->getErrors());
 					return $this->fail($result);
 				}
@@ -154,19 +176,23 @@ class ChunkedDownloader extends AbstractDownloader
 				"ChunkedDownloader::download: Completed. {$this->fileSize} bytes, "
 				. "{$chunkCount} chunks, {$totalTime}s. TrackId: {$track->getId()}"
 			);
+
+			// Send telemetry about successful download completion
+			$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_completed'));
+
 			return $this->complete($result, $track);
 		}
 
-		// Download not finished — schedule agent for continuation
+		// Download not finished — return progress status
 		$percent = round(($this->downloadedBytes / $this->fileSize) * 100, 1);
 		$log && $logger->info(
 			"ChunkedDownloader::download: Time limit. {$percent}% ({$this->downloadedBytes}/{$this->fileSize}), "
 			. "{$chunkCount} chunks, {$totalTime}s. TrackId: {$track->getId()}"
 		);
 
-		self::scheduleChunkResume($track->getId(), $this->downloadedBytes);
+		$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_in_progress'));
 
-		return $this->progress($result);
+		return $this->progress($result, $this->downloadedBytes);
 	}
 
 	/**
@@ -239,149 +265,49 @@ class ChunkedDownloader extends AbstractDownloader
 	}
 
 	/**
-	 * Schedule agent for chunk resume (НЕ retry, а продолжение)
+	 * Get event name based on track type
 	 *
-	 * @param int $trackId
-	 * @param int $expectedBytes Expected file size after current session (for sync check)
-	 * @param int $delay Delay in seconds
+	 * @param Track $track Track entity
+	 * @param string $action Action suffix (e.g., 'download_started')
+	 * @return string Event name
 	 */
-	public static function scheduleChunkResume(int $trackId, int $expectedBytes, int $delay = self::CHUNK_RESUME_DELAY): void
+	protected function getEventName(Track $track, string $action): string
 	{
-		$log = CallAISettings::isLoggingEnable();
-		$logger = Logger::getInstance();
-
-		$agentName = self::class . "::chunkResumeAgent({$trackId}, {$expectedBytes}, 0);";
-
-		$agents = \CAgent::getList([], [
-			'MODULE_ID' => 'call',
-			'NAME' => $agentName
-		]);
-
-		if ($agents->fetch())
-		{
-			$log && $logger->info("ChunkedDownloader::scheduleChunkResume: Agent already exists. TrackId: {$trackId}");
-			return;
-		}
-
-		$log && $logger->info("ChunkedDownloader::scheduleChunkResume: Creating agent. TrackId: {$trackId}, ExpectedBytes: {$expectedBytes}, Delay: {$delay}s");
-
-		/** @see self::chunkResumeAgent() */
-		\CAgent::AddAgent(
-			$agentName,
-			'call',
-			'N',
-			$delay,
-			'',
-			'Y',
-			\ConvertTimeStamp(\time() + \CTimeZone::GetOffset() + $delay, 'FULL')
-		);
+		return "chunked_downloader_{$action}_{$track->getId()}";
 	}
 
 	/**
-	 * Agent for resuming chunked download.
-	 * Calls download() directly without going through TrackService::downloadTrackFile().
+	 * Send telemetry if call can be loaded
 	 *
-	 * @param int $trackId
-	 * @param int $expectedBytes Expected file size from previous session (for sync check)
-	 * @param int $syncRetry Current retry count for waiting file sync
-	 * @return string Empty string to stop, or agent call to reschedule
+	 * @param Track $track Track entity
+	 * @param string $status Status ('success' or 'error')
+	 * @param string|null $errorCode Optional error code
+	 * @param string $event Event name
 	 */
-	public static function chunkResumeAgent(int $trackId, int $expectedBytes = 0, int $syncRetry = 0): string
+	protected function sendTelemetry(
+		Track $track,
+		string $status,
+		?string $errorCode,
+		string $event
+	): void
 	{
-		if (!Loader::includeModule('call'))
+		if (!Loader::includeModule('im'))
 		{
-			return '';
+			return;
 		}
 
-		$log = CallAISettings::isLoggingEnable();
-		$logger = Logger::getInstance();
-
-		$log && $logger->info("ChunkedDownloader::chunkResumeAgent: Started. TrackId: {$trackId}");
-
-		$track = Call\Model\CallTrackTable::getById($trackId)->fetchObject();
-		if (!$track)
+		$call = Registry::getCallWithId($track->getCallId());
+		if (!$call)
 		{
-			$log && $logger->error("ChunkedDownloader::chunkResumeAgent: Track not found. TrackId: {$trackId}");
-			return '';
+			return;
 		}
 
-		if ($track->getDownloaded() === true)
-		{
-			$log && $logger->info("ChunkedDownloader::chunkResumeAgent: Track already downloaded. TrackId: {$trackId}");
-			return '';
-		}
-
-		$tempPath = $track->getTempPath();
-		$actualBytes = 0;
-		if (!empty($tempPath))
-		{
-			\clearstatcache(true, $tempPath);
-			$file = new IO\File($tempPath);
-			$actualBytes = $file->isExists() ? (int)$file->getSize() : 0;
-		}
-
-		$log && $logger->info(
-			"ChunkedDownloader::chunkResumeAgent: Expected: {$expectedBytes}, Actual: {$actualBytes}. TrackId: {$trackId}"
-		);
-
-		if ($expectedBytes > 0 && $actualBytes < $expectedBytes)
-		{
-			if ($syncRetry < self::SYNC_MAX_RETRIES)
-			{
-				$log && $logger->info(
-					"ChunkedDownloader::chunkResumeAgent: File not synced. "
-					. "Retry " . ($syncRetry + 1) . "/" . self::SYNC_MAX_RETRIES . ". TrackId: {$trackId}"
-				);
-				return __METHOD__ . "({$trackId}, {$expectedBytes}, " . ($syncRetry + 1) . ");";
-			}
-
-			$log && $logger->warning(
-				"ChunkedDownloader::chunkResumeAgent: Max sync retries reached. "
-				. "Restarting from scratch. TrackId: {$trackId}"
+		(new FollowUpAnalytics($call))
+			->sendTelemetry(
+				source: null,
+				status: $status,
+				errorCode: $errorCode,
+				event: $event
 			);
-
-			// Delete corrupted temp file
-			$tempPath = $track->getTempPath();
-			if ($tempPath)
-			{
-				$tempFile = new \Bitrix\Main\IO\File($tempPath);
-				if ($tempFile->isExists())
-				{
-					$tempFile->delete();
-				}
-			}
-
-			// Generate new temp path and save
-			$track->generateTemporaryPath()->save();
-		}
-
-		$downloader = new self($track->getFileSize());
-		$downloader->setOnComplete(
-			TrackService::getInstance()->onDownloadCompleteCallback()
-		);
-
-		$result = $downloader->download($track);
-		$resultData = $result->getData();
-
-		// Check if download is still in progress
-		if (isset($resultData['status']) && $resultData['status'] === 'in_progress')
-		{
-			$log && $logger->info("ChunkedDownloader::chunkResumeAgent: Still in progress. TrackId: {$trackId}");
-			return '';
-		}
-
-		if ($result->isSuccess())
-		{
-			$log && $logger->info("ChunkedDownloader::chunkResumeAgent: Completed successfully. TrackId: {$trackId}");
-		}
-		else
-		{
-			$log && $logger->error(
-				"ChunkedDownloader::chunkResumeAgent: Failed. TrackId: {$trackId}. "
-				. "Errors: " . implode('; ', $result->getErrorMessages())
-			);
-		}
-
-		return '';
 	}
 }

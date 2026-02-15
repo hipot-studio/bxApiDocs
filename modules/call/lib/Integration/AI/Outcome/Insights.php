@@ -129,6 +129,10 @@ class Insights extends AISenseContent
 				$originalSpeakerAnalysis = $outcome->getProperty('speaker_analysis')?->getStructure() ?? [];
 				foreach ($this->speakerAnalysis as $pos => &$analysis)
 				{
+					if (!is_object($analysis))
+					{
+						continue;
+					}
 					$originalAnalysis = $originalSpeakerAnalysis[$pos] ?? [];
 					$analysis->efficiencyValue = null;
 					$analysis->userId = $this->getMentionService()->detectUserIdByBBMentions($analysis->speaker);

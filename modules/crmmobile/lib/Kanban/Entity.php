@@ -290,6 +290,33 @@ final class Entity
 		];
 	}
 
+	public function checkIfCustomPresetsExist(?int $currentCategoryId = null): bool
+	{
+		if ($currentCategoryId === null)
+		{
+			return false;
+		}
+
+		$presets = $this->getSearchPresets($currentCategoryId);
+
+		if (empty($presets))
+		{
+			return false;
+		}
+
+		foreach ($presets as $preset)
+		{
+			$id = $preset['id'] ?? null;
+
+			if (is_string($id) && preg_match('/^filter_\d+$/', $id))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private function getSearchPresets(int $currentCategoryId = 0): array
 	{
 		$entity = \Bitrix\Crm\Kanban\Entity::getInstance($this->getEntityTypeName());

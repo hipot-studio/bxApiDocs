@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
@@ -23,18 +24,31 @@ class Track extends EO_CallTrack
 		TYPE_VIDEO_PREVIEW = 'video_preview'
 	;
 
-
-	public function attachTempFile(): Result
+	/**
+	 * Attach file from filesystem path to this track
+	 *
+	 * @param string $filePath Path to file (can be temp or permanent)
+	 * @param string|null $mimeType MIME type (if null, uses track's FileMimeType)
+	 * @return Result Contains fileId in data on success
+	 */
+	public function attachFileFromPath(string $filePath, ?string $mimeType = null): Result
 	{
-		$result = new Result;
+		$result = new Result();
 
-		$mimeFileType = $this->getFileMimeType();
-		$attachFile = \CFile::makeFileArray($this->getTempPath(), $mimeFileType);
+		// Use provided mime type or fall back to track's mime type
+		$mimeType = $mimeType ?: $this->getFileMimeType();
+
+		// Create file array from path
+		$attachFile = \CFile::makeFileArray($filePath, $mimeType);
 		if (empty($attachFile))
 		{
-			return $result->addError(new TrackError(TrackError::SAVE_FILE_ERROR, 'Temporaraly file not found'));
+			return $result->addError(new TrackError(
+				TrackError::FILE_ARRAY_ERROR,
+				'Could not create file array from path: ' . $filePath
+			));
 		}
 
+		// Set metadata
 		$attachFile['MODULE_ID'] = 'call';
 		if ($this->getFileName())
 		{
@@ -42,30 +56,53 @@ class Track extends EO_CallTrack
 			$attachFile['ORIGINAL_NAME'] = $this->getFileName();
 		}
 
+		// Save file to storage
 		$fileId = \CFile::saveFile($attachFile, 'call');
-
 		if (!$fileId)
 		{
-			return $result->addError(new TrackError(TrackError::SAVE_FILE_ERROR, 'Could not save file'));
+			return $result->addError(new TrackError(
+				TrackError::SAVE_FILE_ERROR,
+				'Could not save file to disk'
+			));
 		}
 
-		// Schedule temp file cleanup via agent
+		// Update track with file ID and size
+		$this
+			->setFileId($fileId)
+			->setFileSize((int)$attachFile['size']);
+
+		return $result->setData(['fileId' => $fileId, 'fileSize' => (int)$attachFile['size']]);
+	}
+
+	public function attachTempFile(): Result
+	{
 		$tempPath = $this->getTempPath();
+		if (!$tempPath)
+		{
+			return (new Result())->addError(new TrackError(
+				TrackError::SAVE_FILE_ERROR,
+				'Temp path is not set'
+			));
+		}
+
+		$result = $this->attachFileFromPath($tempPath);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
 		if ($tempPath)
 		{
 			self::scheduleTempCleanup($tempPath);
 		}
 
 		$this
-			->setFileId($fileId)
-			->setFileSize((int)$attachFile['size'])
 			->setTempPath(null)
-			->unsetDownloadUrl()
+			->setDownloadUrl(null)
 			->setDownloaded(true)
-			->save()
-		;
+			->save();
 
-		return $result->setData(['fileId' => $fileId]);
+		return $result;
 	}
 
 	public function attachToDisk(): Result
@@ -266,12 +303,13 @@ class Track extends EO_CallTrack
 		}
 		elseif ($this->getType() == self::TYPE_VIDEO_RECORD)
 		{
+			$isVideo = str_starts_with($this->getFileMimeType(), 'video/');
 			$fileName =
 				Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
 					'#CALL_ID#' => $callId,
 					'#CALL_START#' => (new DateTime())->format('Y-m-d')
 				])
-				. ".mp4";
+				. ($isVideo ? ".mp4" : ".ogg");
 
 			$this->setFileName($fileName ?: "composed-{$callId}.mp4");
 		}
@@ -331,42 +369,25 @@ class Track extends EO_CallTrack
 	}
 
 	/**
-	 * Schedule temp file cleanup via agent
+	 * Schedule temp file cleanup via background job
 	 */
-	public static function scheduleTempCleanup(string $tempPath, int $delay = 5): void
+	public static function scheduleTempCleanup(string $tempPath): void
 	{
-		$escapedPath = addslashes($tempPath);
-		$agentName = self::class . "::cleanupTempFileAgent('{$escapedPath}');";
-
-		$agents = \CAgent::getList([], [
-			'MODULE_ID' => 'call',
-			'NAME' => $agentName,
-		]);
-
-		if ($agents->fetch())
-		{
-			return;
-		}
-
-		\CAgent::AddAgent(
-			$agentName,
-			'call',
-			'N',
-			60,
-			'',
-			'Y',
-			\ConvertTimeStamp(\time() + \CTimeZone::GetOffset() + $delay, 'FULL')
+		Application::getInstance()->addBackgroundJob(
+			[self::class, 'cleanupTempFile'],
+			['tempPath' => $tempPath],
+			Application::JOB_PRIORITY_LOW
 		);
 	}
 
 	/**
-	 * Agent for cleaning up temp files
+	 * Clean up temp file and its empty parent directory
 	 */
-	public static function cleanupTempFileAgent(string $tempPath): string
+	public static function cleanupTempFile(string $tempPath): void
 	{
 		if (empty($tempPath))
 		{
-			return '';
+			return;
 		}
 
 		$tempFile = new \Bitrix\Main\IO\File($tempPath);
@@ -375,13 +396,11 @@ class Track extends EO_CallTrack
 			$tempFile->delete();
 		}
 
-		$tempDir = new \Bitrix\Main\IO\Directory(dirname($tempPath));
+		$tempDir = $tempFile->getDirectory();
 		if ($tempDir->isExists() && self::isDirectoryEmpty($tempDir))
 		{
 			$tempDir->delete();
 		}
-
-		return '';
 	}
 
 	/**

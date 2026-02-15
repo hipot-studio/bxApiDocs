@@ -6,7 +6,6 @@ use Bitrix\Call\Logger\Logger;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Call\Model\CallUserLogTable;
 use Bitrix\Call\Model\CallUserLogCountersTable;
-use Bitrix\Call\Service\CallLogPushService;
 use Bitrix\Call\Counter;
 use Bitrix\Im\Call\Call;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -616,9 +615,9 @@ class CallLogService
 		{
 			$existingRecord = CallUserLogTable::getList([
 				'filter' => [
-					'SOURCE_TYPE' => $sourceType,
-					'SOURCE_CALL_ID' => $sourceCallId,
-					'USER_ID' => $userId
+					'=SOURCE_TYPE' => $sourceType,
+					'=SOURCE_CALL_ID' => $sourceCallId,
+					'=USER_ID' => $userId
 				],
 				'select' => ['ID', 'STATUS'],
 				'limit' => 1
@@ -739,7 +738,11 @@ class CallLogService
 			return null;
 		}
 
-		$entity = $factory->getItem($entityId);
+		$field = $entityTypeId === \CCrmOwnerType::Contact
+			? \Bitrix\Crm\Item::FIELD_NAME_FULL_NAME
+			: \Bitrix\Crm\Item::FIELD_NAME_TITLE
+		;
+		$entity = $factory->getItem($entityId, [$field]);
 		if (!$entity)
 		{
 			return null;
