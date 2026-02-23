@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Public\Service\Template;
 
 use Bitrix\Bizproc\FieldType;
-use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
-use Bitrix\Main\DI\ServiceLocator;
 use CBPActivity;
 use CBPHelper;
 use CBPRuntime;
@@ -110,11 +108,8 @@ class ActivityUsageAnalyzer
 
 	private function includeActivity(string $code): void
 	{
-		CBPRuntime::getRuntime()->includeActivityFile($code);
-
-		// /** @var Searcher $searcher */
-		// $searcher = ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
-		// $searcher->includeActivityFile($code);
+		$searcher = \Bitrix\Bizproc\Internal\Service\Container::instance()->getActivitySearcherService();
+		$searcher->includeActivityFile($code);
 	}
 
 	private function getActivityUsages(array $activity): array

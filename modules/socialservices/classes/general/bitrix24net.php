@@ -15,6 +15,7 @@ Loc::loadMessages(__FILE__);
 if(!defined('B24NETWORK_NODE'))
 {
 	$defaultValue = \Bitrix\Main\Config\Option::get('socialservices', 'network_url', '');
+	$licenseRegion = Application::getInstance()->getLicense()->getRegion();
 
 	if($defaultValue <> '')
 	{
@@ -24,7 +25,11 @@ if(!defined('B24NETWORK_NODE'))
 	{
 		define('B24NETWORK_NODE', B24NETWORK_URL);
 	}
-	elseif (in_array(Application::getInstance()->getLicense()->getRegion(), ['ru','by','kz','uz']))
+	elseif ($licenseRegion === 'by')
+	{
+		define('B24NETWORK_NODE', 'https://auth2.bitrix24.by');
+	}
+	elseif (in_array($licenseRegion, ['ru','kz','uz']))
 	{
 		define('B24NETWORK_NODE', 'https://auth2.bitrix24.net');
 	}
@@ -1014,7 +1019,7 @@ class CBitrix24NetTransport
 			$res = false;
 		}
 
-		if(!$res)
+		if(!$res || $http->getStatus() !== 200)
 		{
 			CSocServBitrix24NetLogger::log("CBitrix24NetTransport:call", [
 				'method' => $methodName,

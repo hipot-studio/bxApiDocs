@@ -98,6 +98,20 @@ class Site24
 	}
 
 	/**
+	 * Update domain type by name.
+	 *
+	 * @param string $domain Current domain name.
+	 * @param string $type Site type.
+	 *
+	 * @return mixed
+	 * @throws SystemException
+	 */
+	public static function updateTypeDomain($domain, $type)
+	{
+		return self::Execute('updatetype', array('domain' => $domain, 'type' => $type));
+	}
+
+	/**
 	 * General executable method.
 	 * @param string $operation Operation code.
 	 * @param array $params Additional params.

@@ -49,7 +49,7 @@ class DeleteAction extends JsGridAction
 
 	protected function isEnabled(array $rawFields): bool
 	{
-		$isNotSystemTemplate = empty($rawFields['SYSTEM_CODE']);
+		$isNotSystemTemplate = !$this->isSystemTemplate($rawFields);
 		$startedByCurrentUser = $this->isStartedByCurrentUser($rawFields['ACTIVATED_BY'] ?? null);
 		$isCurrentUserAdmin = $this->isUserAdmin();
 

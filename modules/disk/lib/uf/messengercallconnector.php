@@ -7,7 +7,7 @@ use Bitrix\Disk\FileLink;
 use Bitrix\Disk\Sharing;
 use Bitrix\Disk\User;
 use Bitrix\Im;
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Im\Dialog;
 use Bitrix\Main\Localization\Loc;
 
@@ -30,6 +30,7 @@ final class MessengerCallConnector extends StubConnector
 
 	private function getCall(): ?Call
 	{
+		\Bitrix\Main\Loader::includeModule('call');
 		if (!$this->call)
 		{
 			$this->call = Call::loadWithId($this->callId);

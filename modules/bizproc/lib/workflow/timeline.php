@@ -3,10 +3,12 @@
 namespace Bitrix\Bizproc\Workflow;
 
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
+use Bitrix\Bizproc\Public\Service\Task\UnArchiveTaskService;
 use Bitrix\Bizproc\UI\Helpers\DurationFormatter;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
+use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
 use Bitrix\Bizproc\Workflow\Task\TimelineTask;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
@@ -42,6 +44,7 @@ class Timeline implements \JsonSerializable
 				'TASKS.TASK_USERS.USER_ID',
 				'TASKS.TASK_USERS.STATUS',
 				'TASKS.TASK_USERS.DATE_UPDATE',
+				'TASKS_ARCHIVE.TASKS_DATA',
 			])
 			->setOrder(['TASKS.ID' => 'ASC'])
 			->setFilter(['=ID' => $workflowId])
@@ -105,7 +108,8 @@ class Timeline implements \JsonSerializable
 	 */
 	public function getTasks(): array
 	{
-		$tasks = $this->workflow->getTasks();
+		$archiveTasks = $this->getTasksFromArchive();
+		$tasks = $archiveTasks ?: $this->workflow->getTasks();
 
 		$timelineTasks = [];
 		foreach ($tasks as $task)
@@ -120,6 +124,30 @@ class Timeline implements \JsonSerializable
 		}
 
 		return $timelineTasks;
+	}
+
+	private function getTasksFromArchive(): array
+	{
+		$tasks = [];
+		$archives =
+			TaskArchiveTable::query()
+				->setSelect(['ID', 'TASKS_DATA'])
+				->where('WORKFLOW_ID', $this->workflow->getId())
+				->fetchAll()
+		;
+		$archives = array_column($archives, 'TASKS_DATA', 'ID');
+		if ($archives)
+		{
+			$unArchiveTaskService = new UnArchiveTaskService($archives);
+			$tasksData = $unArchiveTaskService->getTasks(sort: ['ID' => SORT_ASC]);
+
+			foreach ($tasksData as $task)
+			{
+				$tasks[] = Task::createFromArchive($task);
+			}
+		}
+
+		return $tasks;
 	}
 
 	public function jsonSerialize(): array

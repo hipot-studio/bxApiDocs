@@ -12,6 +12,7 @@ use Bitrix\AI\Chatbot\Message\SystemMessage;
 use Bitrix\Landing\Copilot\Data\Wishes;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Data;
+use Bitrix\Landing\Copilot\Services\NameService;
 use Bitrix\Landing\Metrika;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
@@ -265,7 +266,8 @@ class CreateSiteChatBot extends CopilotChatBot
 	 */
 	protected function getRestrictedRequestMessage(ChatBotMessageDto $message): Message
 	{
-		$answer = new SystemMessage(Loc::getMessage('LANDING_CHATBOT_SITE_ERROR_RESTRICTED_REQUEST'));
+		$phrase = NameService::replaceCopilotName(Loc::getMessage('LANDING_CHATBOT_SITE_ERROR_RESTRICTED_REQUEST_MSGVER_1'));
+		$answer = new SystemMessage($phrase);
 		$answer->addButton(
 			Loc::getMessage('LANDING_CHATBOT_SITE_START_OVER_SITE_BUTTON'),
 			Loc::getMessage('LANDING_CHATBOT_SITE_START_OVER_SITE_BUTTON'),

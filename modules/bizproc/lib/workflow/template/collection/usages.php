@@ -39,7 +39,7 @@ class Usages
 	{
 		$result = $this->getBySourceType($sourceType);
 		$result = array_column($result, 1);
-		return array_unique($result);
+		return array_values(array_unique($result));
 	}
 
 	public function getByOwner($ownerId)

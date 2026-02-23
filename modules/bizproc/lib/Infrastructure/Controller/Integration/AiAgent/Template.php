@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Infrastructure\Controller\Integration\AiAgent;
 
+use CBPWorkflowTemplateUser;
+
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Request;
 use Bitrix\Main\Result;
@@ -16,7 +18,7 @@ use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGridHelper;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\TemplateCreatedResult;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\SystemTemplateActivationService;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\TemplateDeleteService;
-use CBPWorkflowTemplateUser;
+use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 
 
 class Template extends JsonController
@@ -24,6 +26,7 @@ class Template extends JsonController
 	private readonly SystemTemplateActivationService $activationService;
 	private readonly TemplateDeleteService $templateDeleteService;
 	private readonly AiAgentsGridHelper $aiAgentGridHelper;
+	private readonly AiAgentsFeature $aiAgentsFeature;
 
 	public function __construct(Request $request = null)
 	{
@@ -32,6 +35,13 @@ class Template extends JsonController
 		$this->activationService = ServiceLocator::getInstance()->get(SystemTemplateActivationService::class);
 		$this->templateDeleteService = ServiceLocator::getInstance()->get(TemplateDeleteService::class);
 		$this->aiAgentGridHelper = ServiceLocator::getInstance()->get(AiAgentsGridHelper::class);
+		$this->aiAgentsFeature = ServiceLocator::getInstance()->get(AiAgentsFeature::class);
+	}
+
+	protected function processBeforeAction(\Bitrix\Main\Engine\Action $action): bool
+	{
+		parent::processBeforeAction($action);
+		return $this->isAgentsFeatureAvailable();
 	}
 
 	public function startAction(int $templateId): array
@@ -99,13 +109,17 @@ class Template extends JsonController
 	/**
 	 * @param array<int> $agentIds
 	 */
-	public function deleteAction(array $agentIds): Result
+	public function deleteAction(array $agentIds): array
 	{
 		$currentUser = new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
-		return $this->templateDeleteService->deleteTemplates(
+		$deleteResult = $this->templateDeleteService->deleteTemplates(
 			templateIds: $agentIds,
 			initiator: $currentUser,
 		);
+
+		$this->addErrors($deleteResult->getErrors());
+
+		return [];
 	}
 	
 	public function fetchRowAction(int $templateId): array
@@ -124,5 +138,20 @@ class Template extends JsonController
 		}
 
 		return $this->aiAgentGridHelper->prepareGridRowDataFromTemplateFields($rawFields);
+	}
+
+	private function isAgentsFeatureAvailable(): bool
+	{
+		$isAiAgentFeatureAvailable = $this->aiAgentsFeature->isAvailable();
+
+		if ($isAiAgentFeatureAvailable)
+		{
+			return true;
+		}
+
+		$error = $this->aiAgentsFeature->makeUnavailableByTariffError();
+		$this->addError($error);
+
+		return false;
 	}
 }

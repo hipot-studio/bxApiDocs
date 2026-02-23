@@ -15,6 +15,7 @@ class Variable implements JsonSerializable, Arrayable
 	protected array $requires = [];
 	protected ?bool $isSecondary = null;
 	protected ?string $hint = null;
+	protected ?bool $isUseGroupHeadValuesInHint = null;
 
 	public function __construct(
 		protected int|string $id,
@@ -157,6 +158,18 @@ class Variable implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function getIsUseGroupHeadValuesInHint(): ?bool
+	{
+		return $this->isUseGroupHeadValuesInHint;
+	}
+
+	public function setIsUseGroupHeadValuesInHint(?bool $isUseGroupHeadValuesInHint): static
+	{
+		$this->isUseGroupHeadValuesInHint = $isUseGroupHeadValuesInHint;
+
+		return $this;
+	}
+
 	public function toArray(): array
 	{
 		return [
@@ -170,6 +183,7 @@ class Variable implements JsonSerializable, Arrayable
 			'requires' => $this->getRequires(),
 			'secondary' => $this->isSecondary(),
 			'hint' => $this->getHint(),
+			'isUseGroupHeadValuesInHint' => $this->getIsUseGroupHeadValuesInHint(),
 		];
 	}
 
@@ -233,6 +247,11 @@ class Variable implements JsonSerializable, Arrayable
 		if (isset($data['hint']))
 		{
 			$variable->setHint((string)$data['hint']);
+		}
+
+		if (isset($data['isUseGroupHeadValuesInHint']))
+		{
+			$variable->setIsUseGroupHeadValuesInHint((bool)$data['isUseGroupHeadValuesInHint']);
 		}
 
 		return $variable;

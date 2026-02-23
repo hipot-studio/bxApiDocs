@@ -26,6 +26,7 @@ class UnifiedLinkFileRenderer
 		private readonly File $file,
 		private readonly ?AttachedObject $attachedObject = null,
 		private readonly ?Version $version = null,
+		private readonly array $analytics = [],
 	) {
 		$serviceLocator = ServiceLocator::getInstance();
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
@@ -33,6 +34,7 @@ class UnifiedLinkFileRenderer
 			$this->file,
 			$this->attachedObject,
 			$this->version,
+			$this->analytics,
 		);
 	}
 

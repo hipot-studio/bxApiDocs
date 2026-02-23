@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Copilot\Generation\Step;
 
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
+use Bitrix\Landing\Copilot\Connector\Schema;
 use Bitrix\Landing\Copilot\Converter;
 use Bitrix\Landing\Copilot\Data\Type\NodeType;
 use Bitrix\Landing\Copilot\Generation\Error;
@@ -54,6 +55,8 @@ class RequestBlockContent extends RequestSingle
 	{
 		$prompt = new Prompt('landing_ai_block_content');
 		$prompt->setMarkers(Markers::getBlockContentPromptMarkers($this->siteData));
+		$schema = new Schema\BlockContent($this->siteData);
+		$prompt->setSchema($schema);
 
 		return $prompt;
 	}

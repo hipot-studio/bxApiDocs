@@ -238,6 +238,11 @@ trait ActivityRuntimePropertyGetter
 			}
 		}
 
+		if (($property['Type'] ?? '') === Bizproc\FieldType::JSON && isset($property['BaseType']))
+		{
+			$property['Type'] = $property['BaseType'];
+		}
+
 		if (!$property)
 		{
 			$property = ['Type' => 'string'];

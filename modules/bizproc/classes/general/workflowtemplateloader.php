@@ -20,7 +20,6 @@ define("BP_EI_DIRECTION_IMPORT", 1);
 class CBPWorkflowTemplateLoader
 {
 	protected $useGZipCompression = false;
-	protected $templateType = null;
 	protected static $workflowConstants = array();
 	const CONSTANTS_CACHE_TAG_PREFIX = 'b_bp_wf_constants_';
 	protected static $typesStates = array();
@@ -247,9 +246,9 @@ class CBPWorkflowTemplateLoader
 	public static function add($fields, $systemImport = false)
 	{
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
-		$loader->getTemplateType($fields);
+		$templateType = $loader->getTemplateType($fields);
 		$loader->setShowInTimelineBeforeAdd($fields);
-		$loader->setTemplateType($fields);
+		$loader->setTemplateType($fields, $templateType);
 
 		$fields['CREATED_BY'] = (int)CurrentUser::get()->getId();
 		$fields['UPDATED_BY'] = (int)CurrentUser::get()->getId();
@@ -289,9 +288,9 @@ class CBPWorkflowTemplateLoader
 	public static function update($id, $fields, $systemImport = false, $validationRequired = true)
 	{
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
-		$loader->getTemplateType($fields, $id);
-		$loader->setShowInTimelineBeforeUpdate($fields);
-		$loader->setTemplateType($fields);
+		$templateType = $loader->getTemplateType($fields, $id);
+		$loader->setShowInTimelineBeforeUpdate($fields, $templateType);
+		$loader->setTemplateType($fields, $templateType);
 
 		if (isset($fields['TEMPLATE']) && !$systemImport)
 		{
@@ -309,8 +308,6 @@ class CBPWorkflowTemplateLoader
 
 	public function setTemplateType(array &$fields, ?string $templateType = null)
 	{
-		$fields['TYPE'] = $this->templateType;
-
 		if (!empty($templateType))
 		{
 			$fields['TYPE'] = $templateType;
@@ -359,7 +356,7 @@ class CBPWorkflowTemplateLoader
 		}
 	}
 
-	public function getTemplateType(array $fields, int $id = 0)
+	public function getTemplateType(array $fields, int $id = 0): ?string
 	{
 		if (
 			empty($fields['DOCUMENT_TYPE'])
@@ -369,48 +366,42 @@ class CBPWorkflowTemplateLoader
 		{
 			if ($id > 0)
 			{
-				$template = self::getList(
-					arFilter: ['ID' => $id],
-					arSelectFields: ['DOCUMENT_TYPE', 'TEMPLATE', 'AUTO_EXECUTE']
-				);
-				if ($row = $template->fetch())
-				{
-					$fields['DOCUMENT_TYPE'] = $row['DOCUMENT_TYPE'];
-					$fields['TEMPLATE'] = $row['TEMPLATE'];
-					$fields['AUTO_EXECUTE'] = $row['AUTO_EXECUTE'];
-				}
+				return null;
 			}
-			else
-			{
-				$this->templateType = WorkflowTemplateType::Default->value; // Not enough data to determine type
 
-				return;
-			}
+			return WorkflowTemplateType::Default->value;  // Not enough data to determine type
 		}
 
-		$this->templateType = WorkflowTemplateType::Default->value;
+		$templateType = WorkflowTemplateType::Default->value;
 		if ($this->isNodes($fields['TEMPLATE']))
 		{
-			$this->templateType = WorkflowTemplateType::Nodes->value;
+			$templateType = WorkflowTemplateType::Nodes->value;
 		}
 		elseif ($this->isRobot((int)$fields['AUTO_EXECUTE']))
 		{
-			$this->templateType = WorkflowTemplateType::Robots->value;
+			$templateType = WorkflowTemplateType::Robots->value;
 			if ($this->isExternalModified($fields))
 			{
-				$this->templateType = WorkflowTemplateType::CustomRobots->value;
+				$templateType = WorkflowTemplateType::CustomRobots->value;
 			}
 		}
+
+		return $templateType;
 	}
 
-	public function setShowInTimelineBeforeUpdate(array &$fields): void
+	public function setShowInTimelineBeforeUpdate(array &$fields, ?string $templateType = null): void
 	{
+		if (!$templateType)
+		{
+			return;
+		}
+
 		$isCrm = array_key_exists('DOCUMENT_TYPE', $fields) && $fields['DOCUMENT_TYPE'][0] === 'crm';
 
 		$customRobotToRobot =
 			array_key_exists('TYPE', $fields)
 			&& $fields['TYPE'] !== WorkflowTemplateType::Robots->value
-			&& $this->templateType === WorkflowTemplateType::Robots->value
+			&& $templateType === WorkflowTemplateType::Robots->value
 		;
 
 		if ($isCrm && $customRobotToRobot)

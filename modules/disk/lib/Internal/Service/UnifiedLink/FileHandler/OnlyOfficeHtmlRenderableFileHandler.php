@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
+use Bitrix\Disk\Analytics\Enum\DocumentTypeEnum;
+use Bitrix\Disk\Analytics\Enum\OpenTypeEnum;
 use Bitrix\Disk\Document\DocumentSessionResult;
 use Bitrix\Disk\Document\DocumentSource;
 use Bitrix\Disk\Document\Models\DocumentSession;
@@ -12,9 +14,11 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TrackedObjectManager;
 use Bitrix\Disk\Internal\Service\SessionCommandFactory;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\Engine\CurrentUser;
 
@@ -27,6 +31,7 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 	public function __construct(
 		private readonly File $file,
 		private readonly DocumentSource $documentSource,
+		private readonly array $analytics = [],
 	) {
 		$this->trackedObjectManager = Driver::getInstance()->getTrackedObjectManager();
 
@@ -73,6 +78,61 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 			$this->trackObject();
 		}
 
+		if (in_array($type, [DocumentSession::TYPE_VIEW, DocumentSession::TYPE_EDIT], true))
+		{
+			Application::getInstance()->addBackgroundJob(function () use ($type, $documentSession) {
+				$analyticsDocsOpenEvent = (new AnalyticsEvent(
+					event: 'open',
+					tool: 'docs',
+					category: 'docs',
+				))
+					->setElement($this->analytics['c_element'] ?? 'docs_attach')
+					->setSubSection($this->file->isNewByCreateTime() ? 'new_element' : 'old_element')
+					->setP4("fileId_{$this->file->getId()}")
+				;
+
+				$analyticsUserSessionStartEvent = (new AnalyticsEvent(
+					event: 'user_session_start',
+					tool: 'docs',
+					category: 'docs',
+				))
+					->setP2("sessionHash_{$documentSession->getExternalHash()}")
+					->setP4("fileId_{$this->file->getId()}")
+					->setP5("sessionId_{$documentSession->getId()}")
+				;
+
+				$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
+
+				if (is_string($domain))
+				{
+					$analyticsUserSessionStartEvent->setSection($domain);
+				}
+
+				$openType = OpenTypeEnum::getByDocumentSessionType($type);
+
+				if ($openType instanceof OpenTypeEnum)
+				{
+					$analyticsDocsOpenEvent->setType($openType->value);
+					$analyticsUserSessionStartEvent->setType($openType->value);
+				}
+
+				$analyticsDocType = DocumentTypeEnum::getByExtension($this->file->getExtension());
+
+				if ($analyticsDocType instanceof DocumentTypeEnum)
+				{
+					$analyticsDocsOpenEvent->setP3($analyticsDocType->value);
+					$analyticsUserSessionStartEvent->setP3($analyticsDocType->value);
+				}
+
+				$analyticsDocsOpenEvent->send();
+
+				if ($documentSession->isNew())
+				{
+					$analyticsUserSessionStartEvent->send();
+				}
+			});
+		}
+
 		return $this->showEditor($documentSession);
 	}
 
@@ -104,6 +164,7 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 					'UNIFIED_LINK_MODE' => true,
 					'UNIFIED_LINK_ACCESS_ONLY' => !$documentSession->canUserRead($this->getCurrentUser()),
 					'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
+					'ANALYTICS' => $this->analytics,
 				],
 				'PLAIN_VIEW' => true,
 				'IFRAME_MODE' => true,

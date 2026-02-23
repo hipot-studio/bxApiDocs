@@ -8,10 +8,13 @@ use Bitrix\AI\Payload\Audio;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Payload\StyledPicture;
 use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\Converter;
 
 class Analytics
 {
+
+	private const DEFAULT_TOOL = 'ai';
 	private const PROMPT_SECTION_REWRITE = [
 		'set_ai_session_name' => 'system_chat',
 
@@ -95,5 +98,16 @@ class Analytics
 			->setP3($p3)
 			->setP5($converter->process($engine->getContext()->getContextId()))
 			->send();
+	}
+
+	public static function sendAiQueryLimitEvent(string $errorLimit, string $moduleId)
+	{
+		$event = new AnalyticsEvent('limit_exceeded', self::DEFAULT_TOOL, 'limits');
+		$event
+			->setType('bitrixgpt_limit')
+			->setP1('moduleId_' . $moduleId)
+			->setSection(strtolower(str_replace('_', '-', $errorLimit)))
+			->send()
+		;
 	}
 }

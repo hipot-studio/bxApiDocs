@@ -42,11 +42,6 @@ class ChatHistoryAiEventHandler
 		}
 
 		$chat = $message->getChat();
-		if ($chat->getType() !== Chat::IM_TYPE_PRIVATE)
-		{
-			return self::makeEmptyResponse();
-		}
-
 		if (!in_array($botId, $chat->getBotInChat(), true))
 		{
 			return self::makeEmptyResponse();

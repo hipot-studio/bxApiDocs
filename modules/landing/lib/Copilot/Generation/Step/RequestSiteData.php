@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Copilot\Generation\Step;
 
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
+use Bitrix\Landing\Copilot\Connector\Schema;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Generation\Error;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
@@ -50,6 +51,8 @@ class RequestSiteData extends RequestSingle
 	{
 		$prompt = new Prompt('landing_ai_data');
 		$prompt->setMarkers(Markers::getSiteDataPromptMarkers($this->siteData));
+		$schema = new Schema\SiteData();
+		$prompt->setSchema($schema);
 
 		return $prompt;
 	}

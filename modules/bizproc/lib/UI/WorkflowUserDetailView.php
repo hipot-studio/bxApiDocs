@@ -132,6 +132,7 @@ class WorkflowUserDetailView extends WorkflowUserView
 				'name' => html_entity_decode($task['~NAME']),
 				'description' => $task['~DESCRIPTION'],
 				'userId' => $this->userId,
+				'status' => $task['STATUS'],
 				'controls' => $isRunning ? $this->getTaskControls($task) : [],
 				'isRunning' => $isRunning,
 				'activityName' => $task['~ACTIVITY_NAME'],

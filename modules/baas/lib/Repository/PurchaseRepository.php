@@ -357,12 +357,59 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 
 	public function getPurchasesToNotifyAbout(): Baas\Model\EO_Purchase_Collection
 	{
-		return Baas\Model\PurchaseTable::query()
-			->whereNot('NOTIFIED', 'Y')
+		$purchases = Baas\Model\PurchaseTable::query()
 			->where('PURCHASED_PACKAGE.SERVICE_IN_PURCHASED_PACKAGE.CURRENT_VALUE', '>', '0')
 			->where('PURCHASED_PACKAGE.EXPIRED', 'N')
+			->where(
+				Main\ORM\Query\Query::filter()
+					->logic('or')
+					->where('NOTIFIED', 'N')
+					->where(
+						Main\ORM\Query\Query::filter()
+							->where(
+								'PURCHASED_PACKAGE.START_DATE',
+								'>',
+								new Main\Type\Date(
+									Main\Config\Option::get('baas', 'ticket_236784_notified_date', '10.12.2025'),
+									'd.m.Y',
+								))
+							->whereLike('PURCHASED_PACKAGE.PACKAGE_CODE', 'COPILOT_MARKET%')
+					)
+			)
 			->fetchCollection()
 		;
+
+		$result = Baas\Model\PurchaseTable::createCollection();
+		foreach ($purchases as $purchase)
+		{
+			if (
+				$purchase->getNotified() === false ||
+				Main\Config\Option::get('baas', 'ticket_236784_notified_package_' . $purchase->getPurchasedPackage()->getCode(), 'N') === 'N'
+			)
+			{
+				$result->add($purchase);
+			}
+		}
+
+		return $result;
+	}
+
+	public function setPurchaseNotified(string $purchaseCode): void
+	{
+		if ($purchase = $this->findPurchaseByCode($purchaseCode))
+		{
+			$purchase->setNotified(true)->save();
+			$purchasedPackages = Baas\Model\PurchasedPackageTable::query()
+				->setSelect(['CODE'])
+				->where('PURCHASE_CODE', $purchaseCode)
+				->fetchCollection()
+			;
+			foreach ($purchasedPackages as $purchasedPackage)
+			{
+				$purchasedPackageCode = $purchasedPackage->getCode();
+				Main\Config\Option::set('baas', 'ticket_236784_notified_package_' . $purchasedPackageCode, 'Y');
+			}
+		}
 	}
 
 	private function getNotExpiredServicesQuery(): Main\ORM\Query\Query | Baas\Model\EO_ServiceInPurchasedPackage_Query

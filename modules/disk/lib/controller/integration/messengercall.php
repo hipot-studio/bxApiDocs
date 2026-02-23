@@ -13,7 +13,7 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\RightsManager;
 use Bitrix\Disk\Sharing;
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Im\Disk\Sender;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\Action;
@@ -155,7 +155,7 @@ final class MessengerCall extends Engine\Controller
 				'filter' => $filter,
 				'runtime' => [
 					new Reference('CALL',
-						\Bitrix\Im\Model\CallTable::class,
+						\Bitrix\Call\Model\CallTable::class,
 						Join::on('this.ENTITY_ID', 'ref.ID'),
 					),
 				],

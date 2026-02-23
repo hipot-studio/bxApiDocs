@@ -50,7 +50,7 @@ class RestartAction extends JsGridAction
 
 	protected function isEnabled(array $rawFields): bool
 	{
-		$isNotSystemTemplate = empty($rawFields['SYSTEM_CODE']);
+		$isNotSystemTemplate = !$this->isSystemTemplate($rawFields);
 		$startedByCurrentUser = $this->isStartedByCurrentUser($rawFields['ACTIVATED_BY'] ?? null);
 		$isStarted = !empty($rawFields['ACTIVATED_AT']);
 		$isCurrentUserAdmin = $this->isUserAdmin();

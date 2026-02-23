@@ -11,7 +11,9 @@ use Bitrix\Bizproc\Api\Request\WorkflowFacesService\GetDataRequest;
 use Bitrix\Bizproc\Api\Response\Error;
 use Bitrix\Bizproc\Api\Response\WorkflowFacesService\GetDataResponse;
 use Bitrix\Bizproc\Api\Response\WorkflowFacesService\GetDataByStepsResponse;
+use Bitrix\Bizproc\Public\Service\Task\UnArchiveTaskService;
 use Bitrix\Bizproc\UI\Helpers\DurationFormatter;
+use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
 use Bitrix\Bizproc\Workflow\Task\TaskTable;
 use Bitrix\Bizproc\Workflow\WorkflowState;
 use Bitrix\Bizproc\WorkflowStateTable;
@@ -82,26 +84,39 @@ final class WorkflowFacesService
 
 		$response->setWorkflowIsFinished(\CBPHelper::isWorkflowFinished($request->workflowId));
 
-		$response->setCompletedTasksCount(
-			TaskTable::getCount([
-				'=WORKFLOW_ID' => $request->workflowId,
-				'!=STATUS' => \CBPTaskStatus::Running,
-			])
-		);
-
-		$completedTasks =
-			$response->getCompletedTasksCount() > 0
-				? $this->getCompletedTasks($request->workflowId)
-				: []
-		;
-
 		$runningTasks =
 			$response->getWorkflowIsFinished()
 				? []
 				: $this->getRunningTasks($request->workflowId, $request->runningTaskId)
 		;
 
-		$response->setTasksUserIds($this->getTasksUserIds($completedTasks, $runningTasks, $request->taskUsersLimit));
+		$archiveTaskData = $this->getCompletedTasksFromArchive($request->workflowId);
+		if ($archiveTaskData)
+		{
+			$completedTasksCount = count($archiveTaskData);
+			$response->setCompletedTasksCount($completedTasksCount);
+
+			$completedTasks = $archiveTaskData;
+			$taskUsers = array_column($archiveTaskData, 'USERS', 'ID');
+		}
+		else
+		{
+			$completedTasksCount = TaskTable::getCount([
+				'=WORKFLOW_ID' => $request->workflowId,
+				'!=STATUS' => \CBPTaskStatus::Running,
+				]);
+			$response->setCompletedTasksCount($completedTasksCount);
+
+			$completedTasks =
+				$response->getCompletedTasksCount() > 0
+					? $this->getCompletedTasks($request->workflowId)
+					: []
+			;
+			$taskUsers = $this->getTaskUsers($completedTasks, $runningTasks);
+		}
+
+		$taskUserIds = $this->getTasksUserIds($taskUsers, $request->taskUsersLimit);
+		$response->setTasksUserIds($taskUserIds);
 
 		$runningTask = current($runningTasks);
 		if ($runningTask)
@@ -141,6 +156,27 @@ final class WorkflowFacesService
 		$response->setDurations(new StepDurations($authorDuration, $runningDuration, $completedDuration, $doneDuration));
 
 		return $response;
+	}
+
+	private function getCompletedTasksFromArchive(string $workflowId): array
+	{
+		$query =
+			TaskArchiveTable::query()
+				->setSelect(['ID', 'TASKS_DATA'])
+				->where('WORKFLOW_ID', $workflowId)
+				->setOrder(['TASKS.COMPLETED_AT' => 'DESC'])
+				->setLimit(self::COMPLETED_TASK_LIMIT)
+		;
+		$archives = $query->fetchAll();
+		$archives = array_column($archives, 'TASKS_DATA', 'ID');
+
+		return
+			(new UnArchiveTaskService($archives, true))
+				->getTasks(
+					self::COMPLETED_TASK_LIMIT,
+					['MODIFIED' => SORT_DESC]
+				)
+			;
 	}
 
 	private function getCompletedTasks(string $workflowId): array
@@ -211,11 +247,15 @@ final class WorkflowFacesService
 		return $runningTasks;
 	}
 
-	private function getTasksUserIds(array $completedTasks, array $runningTasks, int $usersLimit): array
+	private function getTaskUsers(array $completedTasks, array $runningTasks): array
 	{
 		$taskIds = array_merge(array_keys($runningTasks), array_keys($completedTasks));
-		$taskUsers = $taskIds ? \CBPTaskService::getTaskUsers($taskIds) : [];
 
+		return $taskIds ? \CBPTaskService::getTaskUsers($taskIds) : [];
+	}
+
+	private function getTasksUserIds(array $taskUsers, int $usersLimit): array
+	{
 		$taskUserIdsMap = [];
 		foreach ($taskUsers as $taskId => $users)
 		{

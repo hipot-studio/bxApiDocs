@@ -1,12 +1,13 @@
 <?php
 namespace Bitrix\Landing;
 
-use \Bitrix\Main\Localization\Loc;
-use \Bitrix\Main\Config\Option;
-use \Bitrix\Main\Application;
-use \Bitrix\Main\Loader;
-use \Bitrix\Main\ModuleManager;
-use \Bitrix\Landing\Assets;
+use Bitrix\AI\Services\CopilotNameService;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Security\Filter;
 
 Loc::loadMessages(__FILE__);
 
@@ -1000,29 +1001,17 @@ class Manager
 	}
 
 	/**
-	 * Return ID for market collection, by zone
-	 * @param string $type name of collection type
-	 * @return int
+	 * Return code for market collection
+	 * @param string $collection Name of collection.
+	 * @return string
 	 */
-	public static function getMarketCollectionId(string $type): int
+	public static function getMarketCollectionCode(string $collection): string
 	{
-		$zone = self::getZone();
-		switch ($type)
-		{
-			case 'form_minisite':
-				$minisites = [
-					'ru' => 18108954,
-					'uz' => 18108954,
-					'by' => 18108962,
-					'kz' => 18108964,
-					'en' => 18108970,
-				];
+		$codes = [
+			'form_minisite' => 'crm_form_templates',
+		];
 
-				return $minisites[$zone] ?? $minisites['en'];
-
-			default:
-				return 0;
-		}
+		return $codes[$collection] ?? '';
 	}
 
 	/**
@@ -1301,64 +1290,16 @@ class Manager
 	}
 
 	/**
-	 * Sanitize bad value.
+	 * @deprecated @use \Bitrix\Landing\Sanitizer::sanitizeText())
+	 *
 	 * @param string $value Bad value.
 	 * @param bool &$bad Return true, if value is bad.
 	 * @param string $splitter Splitter for bad content.
 	 * @return string Good value.
 	 */
-	public static function sanitize($value, &$bad = false, $splitter = ' ')
+	public static function sanitize($value, bool &$bad = false, string $splitter = ' '): string
 	{
-		static $sanitizer = null;
-
-		if (!is_bool($bad))
-		{
-			$bad = false;
-		}
-
-		if ($sanitizer === null)
-		{
-			$sanitizer = false;
-			if (Loader::includeModule('security'))
-			{
-				$sanitizer = new \Bitrix\Security\Filter\Auditor\Xss(
-					$splitter
-				);
-			}
-		}
-
-		if ($sanitizer)
-		{
-			// bad value exists
-			if (is_array($value))
-			{
-				foreach ($value as &$val)
-				{
-					$val = self::sanitize($val, $bad, $splitter);
-				}
-				unset($val);
-			}
-			else if ($sanitizer->process($value))
-			{
-				$bad = true;
-				$value = $sanitizer->getFilteredValue();
-				$value = str_replace(
-					[' bxstyle="', '<sv g ', '<?', '?>', '<fo rm '],
-					[' style="', '<svg ', '< ?', '? >', '<form '],
-					$value
-				);
-			}
-			else
-			{
-				$value = str_replace(
-					[' bxstyle="', '<sv g ', '<?', '?>', '<fo rm '],
-					[' style="', '<svg ', '< ?', '? >', '<form '],
-					$value
-				);
-			}
-		}
-
-		return $value;
+		return (new Sanitizer())->sanitizeText($value, $bad, $splitter);
 	}
 
 	/**
@@ -1544,6 +1485,7 @@ class Manager
 
 	/**
 	 * Get preview domain based on region.
+	 *
 	 * @return string
 	 */
 	private static function getPreviewDomain(): string

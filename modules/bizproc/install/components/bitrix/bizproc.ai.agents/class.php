@@ -5,11 +5,12 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-
 use Bitrix\Main\Web\Uri;
 
+use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGrid;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGridHelper;
 
@@ -23,11 +24,17 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 	private ?AiAgentsGrid $grid = null;
 	private AiAgentsGridHelper $gridHelper;
+	private AiAgentsFeature $aiAgentFeature;
 
-	public function __construct($component = null, AiAgentsGridHelper $gridHelper = new AiAgentsGridHelper())
+	public function __construct(
+		$component = null,
+		AiAgentsGridHelper $gridHelper = null,
+		AiAgentsFeature $aiAgentFeature = null,
+	)
 	{
 		parent::__construct($component);
-		$this->gridHelper = $gridHelper;
+		$this->gridHelper = $gridHelper ?? ServiceLocator::getInstance()->get(AiAgentsGridHelper::class);;
+		$this->aiAgentFeature = $aiAgentFeature ?? ServiceLocator::getInstance()->get(AiAgentsFeature::class);
 	}
 
 	private function loadModules(): bool
@@ -88,6 +95,9 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 		$result['BASE_BIZPROC_DESIGNER_URI'] = $this->getBaseBizprocDesignerUri();
 		$result['AI_AGENTS_HEADER_ADD_BUTTON_UNIQUE_ID'] = 'BIZPROC_AI_AGENTS_HEADER_ADD_BUTTON';
+
+		$result['IS_AI_AGENTS_AVAILABLE_BY_TARIFF'] = $this->aiAgentFeature->isAvailable();
+		$result['AI_AGENTS_TARIFF_SLIDER_CODE'] = $this->aiAgentFeature->getTariffSliderCode();
 
 		return $result;
 	}

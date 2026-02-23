@@ -22,6 +22,7 @@ use Bitrix\AI\Limiter\Enums\ErrorLimit;
 use Bitrix\Baas\Baas;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
+use Bitrix\Landing\Copilot\Services\NameService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -134,6 +135,12 @@ class RequestLimiter
 	{
 		$code = $error->getCode();
 
+		if ($code === ErrorCode::ErrorForceCode->value)
+		{
+			return $this->getForceError($error);
+		}
+
+
 		//right 4 in board
 		if ($code === ErrorCode::BaasRateLimit->value)
 		{
@@ -198,6 +205,22 @@ class RequestLimiter
 		}
 
 		return $this->createLimitResult(LimitType::None, false);
+	}
+
+	private function getForceError(Error $error): LimitCheckResult
+	{
+		$customData = $error->getCustomData();
+
+		return $this->createLimitResult(
+			LimitType::Force,
+			$customData['isExceeded'] ?? false,
+			match (true)
+			{
+				!empty($customData['msgBBCode']) => $customData['msgBBCode'],
+				!empty($customData['msgPlainText']) => $customData['msgPlainText'],
+				default => $error->getMessage()
+			}
+		);
 	}
 
 	/**
@@ -473,22 +496,25 @@ class RequestLimiter
 	{
 		if ($featurePromoterCode !== null)
 		{
-			return Loc::getMessage($phraseCode->value, [
+			$message = Loc::getMessage($phraseCode->value, [
 				'#LINK#' => "[url=/?FEATURE_PROMOTER=$featurePromoterCode->value]",
 				'#/LINK#' => '[/url]',
 			]);
+
+			return NameService::replaceCopilotName($message);
 		}
 
 		if ($helpdeskCode !== null)
 		{
 			$helpUrl = Util::getArticleUrlByCode($helpdeskCode->value);
-
-			return Loc::getMessage($phraseCode->value, [
+			$message = Loc::getMessage($phraseCode->value, [
 				'#HELP#' => "[url=$helpUrl]",
 				'#/HELP#' => '[/url]',
 			]);
+
+			return NameService::replaceCopilotName($message);
 		}
 
-		return Loc::getMessage($phraseCode->value);
+		return NameService::replaceCopilotName(Loc::getMessage($phraseCode->value));
 	}
 }

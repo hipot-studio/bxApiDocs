@@ -3,6 +3,7 @@
 use Bitrix\Bizproc;
 use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable;
 use Bitrix\Main;
 
 /**
@@ -772,7 +773,11 @@ class CBPWorkflow
 			return;
 		}
 
-		WorkflowUserTable::syncOnWorkflowUpdated($this, $status);
+		$hasUsers = WorkflowUserTable::syncOnWorkflowUpdated($this, $status);
+		if ($hasUsers)
+		{
+			WorkflowFilterTable::addByWorkflowId($this->getInstanceId());
+		}
 	}
 
 	/**

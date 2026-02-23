@@ -739,16 +739,28 @@ class CSocServAuth
 		Application::getInstance()->end(0, $httpResponse);
 	}
 
+	/**
+	 * @param  bool $addParams if `false`, that $url with only hash(#) part will be added to current URL, otherwise $url will replace current URL
+	 * @param  mixed $mode
+	 * @param  mixed $url
+	 *
+	 * @return void
+	 */
 	protected function onAfterWebAuth($addParams, $mode, $url)
 	{
-		if($addParams)
+		if ($addParams)
 		{
-			$location = ($mode === self::OPENER_MODE) ? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();' : ' window.location = \''.$url.'\';';
+			$location = ($mode === self::OPENER_MODE)
+				? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();'
+				: ' window.location = \''.$url.'\';'
+			;
 		}
 		else
 		{
-			//fix for chrome
-			$location = ($mode === self::OPENER_MODE) ? 'if(window.opener) window.opener.location = window.opener.location.href + \''.$url.'\'; window.close();' : ' window.location = window.location.href + \''.$url.'\';';
+			$location = ($mode === self::OPENER_MODE)
+				? 'if(window.opener) window.opener.location = window.opener.location.href + \''.$url.'\'; window.close();'
+				: ' window.location = window.location.href + \''.$url.'\';'
+			;
 		}
 
 		$JSScript = '
@@ -758,5 +770,25 @@ class CSocServAuth
 			';
 
 		echo $JSScript;
+	}
+
+	protected static function log(string $provider, string $message, ?array $context = null)
+	{
+		$optionName = 'enable_auth_log_' . $provider;
+		$isEnabled = Option::get('socialservices', $optionName) === 'Y';
+		if (!$isEnabled)
+		{
+			return;
+		}
+
+		AddMessage2Log(
+			[
+				'CSocServAuth',
+				'provider' => $provider,
+				'message' => $message,
+				'context' => $context,
+			],
+			'socialservices',
+		);
 	}
 }

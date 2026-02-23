@@ -29,11 +29,10 @@ class JsonHelper
 	 * }
 	 *
 	 * @param string $jsonSchema
-	 * @param string $activityName
 	 *
 	 * @return array|null
 	 */
-	public static function buildJsonPath(string $jsonSchema, string $activityName): ?array
+	public static function buildJsonPath(string $jsonSchema): ?array
 	{
 		$jsonSchema = trim($jsonSchema);
 		if ($jsonSchema === '')
@@ -50,7 +49,7 @@ class JsonHelper
 			return null;
 		}
 
-		return self::extractProperties($properties, $activityName);
+		return self::extractProperties($properties);
 	}
 
 	/**
@@ -61,47 +60,63 @@ class JsonHelper
 	 * @return array
 	 */
 	private static function extractProperties(
-		mixed $element,
-		string $activityName,
+		mixed  $element,
 		string $parentPath = '',
 	): array
 	{
+		$result = [];
+
 		if (!is_array($element) || !isset($element['properties']))
 		{
-			return [];
+			if (($element['type'] ?? '') === 'object')
+			{
+				$result[$parentPath] = self::normalizeProperty($parentPath, $element);
+			}
+
+			return $result;
 		}
 
-		$result = [];
 		foreach ($element['properties'] as $key => $value)
 		{
 			$fullKey = $parentPath === '' ? $key : "$parentPath.$key";
 
 			if (is_array($value) && isset($value['properties']))
 			{
-				$result += self::extractProperties($value, $activityName, $fullKey);
+				$result += self::extractProperties($value, $fullKey);
 			}
 			else
 			{
-				$result[$fullKey] = self::normalizeProperty($fullKey, $activityName);
+				$result[$fullKey] = self::normalizeProperty($fullKey, $value);
 			}
 		}
 
 		return $result;
 	}
 
-	/**
-	 * @param string $fullKey
-	 * @param string $activityName
-	 *
-	 * @return array
-	 */
-	private static function normalizeProperty(string $fullKey, string $activityName): array
+	private static function normalizeProperty(string $fullKey, mixed $element): array
 	{
+		$elementType = $element['type'] ?? null;
+		$multiple = $elementType === 'array';
+
+		if ($multiple)
+		{
+			$elementType = $element['items']['type'] ?? 'string';
+		}
+
 		return FieldType::normalizeProperty(
 			[
 				'Id' => $fullKey,
 				'Name' => 'JSON:' . $fullKey,
 				'Type' => FieldType::JSON,
+				'BaseType' => match ($elementType)
+				{
+					'string', 'null' => FieldType::STRING,
+					'integer' => FieldType::INT,
+					'number' => FieldType::DOUBLE,
+					'boolean' => FieldType::BOOL,
+					default => null,
+				},
+				'Multiple' => $multiple,
 			],
 		);
 	}
@@ -175,7 +190,6 @@ class JsonHelper
 
 		return $raw;
 	}
-
 
 	public static function extractValueByPath(array $path, string $json)
 	{

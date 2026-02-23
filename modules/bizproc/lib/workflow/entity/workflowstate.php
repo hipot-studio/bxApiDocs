@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Workflow\Entity;
 
+use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
 use Bitrix\Bizproc\Workflow\Task\TaskTable;
 use Bitrix\Bizproc\Workflow\WorkflowState;
 use Bitrix\Main;
@@ -130,6 +131,11 @@ class WorkflowStateTable extends ORM\Data\DataManager
 				WorkflowMetadataTable::class,
 				\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.WORKFLOW_ID'),
 			),
+			new Main\ORM\Fields\Relations\Reference(
+				'TASKS_ARCHIVE',
+				TaskArchiveTable::class,
+				\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.WORKFLOW_ID'),
+			)
 		];
 	}
 
@@ -208,22 +214,6 @@ class WorkflowStateTable extends ORM\Data\DataManager
 		}
 
 		return $result;
-	}
-
-	public static function onAfterAdd(ORM\Event $event)
-	{
-		$fields = $event->getParameter('fields');
-
-		// users sync automatically in WorkflowUserTable::syncOnWorkflowUpdated
-
-		WorkflowFilterTable::add([
-			'WORKFLOW_ID' => $fields['ID'] ?? '',
-			'MODULE_ID' => $fields['MODULE_ID'] ?? '',
-			'ENTITY' => $fields['ENTITY'] ?? '',
-			'DOCUMENT_ID' => $fields['DOCUMENT_ID'] ?? '',
-			'TEMPLATE_ID' => $fields['WORKFLOW_TEMPLATE_ID'] ?? 0,
-			'STARTED' => $fields['STARTED'] ?? 0,
-		]);
 	}
 
 	public static function onAfterDelete(ORM\Event $event)

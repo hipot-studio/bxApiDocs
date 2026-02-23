@@ -47,4 +47,9 @@ class StorageTypeProvider
 	{
 		return $this->repository->getAllForActivity();
 	}
+
+	public function getStoragesByFilter(array $filter = [], array $select = ['*']): StorageTypeCollection
+	{
+		return $this->repository->getStoragesByFilter($filter, $select);
+	}
 }

@@ -11,7 +11,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\User;
-use Bitrix\Im\Call\Call;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
@@ -485,7 +485,7 @@ final class OnlyOffice extends Engine\Controller
 				break;
 
 			case self::STATUS_CLOSE_WITHOUT_CHANGES:
-				$this->handleDocumentClosedWithoutChanges($documentSession);
+				$this->handleDocumentClosedWithoutChanges($documentSession, $payloadData);
 				break;
 
 			case self::STATUS_FORCE_SAVE:
@@ -553,7 +553,10 @@ final class OnlyOffice extends Engine\Controller
 
 	}
 
-	protected function handleDocumentClosedWithoutChanges(Models\DocumentSession $documentSession): void
+	protected function handleDocumentClosedWithoutChanges(
+		Models\DocumentSession $documentSession,
+		array $payloadData,
+	): void
 	{
 		AddEventToStatFile(
 			'disk',
@@ -575,6 +578,22 @@ final class OnlyOffice extends Engine\Controller
 		{
 			$this->commentAttachedObjectsOnBackground($documentSession);
 		}
+
+		$userId = $payloadData['actions'][0]['userid'] ?? null;
+		$userDocumentSession = null;
+
+		if (is_string($userId) || is_int($userId))
+		{
+			$userId = (int)$userId;
+			$userDocumentSession = $this->getDocumentSessionsByKeyForUser($documentSession->getExternalHash(), $userId);
+
+			if ($userDocumentSession instanceof DocumentSession)
+			{
+				$this->sendUserSessionEndAnalyticsEvent($userDocumentSession);
+			}
+		}
+
+		$this->sendSessionEndAnalyticsEvent($userDocumentSession ?? $documentSession);
 	}
 
 	protected function handleDocumentIsEditing(Models\DocumentSession $documentSession, array $payloadData): void
@@ -626,6 +645,7 @@ final class OnlyOffice extends Engine\Controller
 				if (!in_array($userId, $onlineUsers, true))
 				{
 					$userSession->setAsNonActive();
+					$this->sendUserSessionEndAnalyticsEvent($userSession);
 				}
 			}
 			elseif (($type === self::STATUS_IS_BEING_EDITED) && $userSession->isNonActive())
@@ -633,6 +653,130 @@ final class OnlyOffice extends Engine\Controller
 				$userSession->setAsActive();
 			}
 		}
+
+		if (
+			count($onlineUsers) === 1
+			&& ($actions[0]['type'] ?? null) === 1
+			&& ($actions[0]['userid'] ?? null) === $payloadData['users'][0]
+		)
+		{
+			$this->sendSessionStartAnalyticsEvent($documentSession);
+		}
+	}
+
+	protected function sendUserSessionEndAnalyticsEvent(DocumentSession $documentSession): void
+	{
+		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
+			$analyticsEvent = (new AnalyticsEvent(
+				event: 'user_session_end',
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setUserId($documentSession->getUserId())
+				->setType($documentSession->isEdit() ? 'edit' : 'view')
+				->setP2("sessionHash_{$documentSession->getExternalHash()}")
+				->setP5("sessionId_{$documentSession->getId()}")
+			;
+
+			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
+
+			if (is_string($domain))
+			{
+				$analyticsEvent->setSection($domain);
+			}
+
+			$file = $documentSession->getFile();
+
+			if ($file instanceof Disk\File)
+			{
+				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
+
+				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
+				{
+					$analyticsEvent->setP3($docType->value);
+				}
+
+				$analyticsEvent->setP4("fileId_{$file->getId()}");
+			}
+
+			$analyticsEvent->send();
+		});
+	}
+
+	protected function sendSessionStartAnalyticsEvent(DocumentSession $documentSession): void
+	{
+		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
+			$analyticsEvent = (new AnalyticsEvent(
+				event: 'session_start',
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setUserId($documentSession->getUserId())
+				->setType($documentSession->isEdit() ? 'edit' : 'view')
+				->setP2("sessionHash_{$documentSession->getExternalHash()}")
+			;
+
+			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
+
+			if (is_string($domain))
+			{
+				$analyticsEvent->setSection($domain);
+			}
+
+			$file = $documentSession->getFile();
+
+			if ($file instanceof Disk\File)
+			{
+				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
+
+				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
+				{
+					$analyticsEvent->setP3($docType->value);
+				}
+
+				$analyticsEvent->setP4("fileId_{$file->getId()}");
+			}
+
+			$analyticsEvent->send();
+		});
+	}
+
+	protected function sendSessionEndAnalyticsEvent(DocumentSession $documentSession): void
+	{
+		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
+			$analyticsEvent = (new AnalyticsEvent(
+				event: 'session_end',
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setUserId($documentSession->getUserId())
+				->setType($documentSession->isEdit() ? 'edit' : 'view')
+				->setP2("sessionHash_{$documentSession->getExternalHash()}")
+			;
+
+			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
+
+			if (is_string($domain))
+			{
+				$analyticsEvent->setSection($domain);
+			}
+
+			$file = $documentSession->getFile();
+
+			if ($file instanceof Disk\File)
+			{
+				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
+
+				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
+				{
+					$analyticsEvent->setP3($docType->value);
+				}
+
+				$analyticsEvent->setP4("fileId_{$file->getId()}");
+			}
+
+			$analyticsEvent->send();
+		});
 	}
 
 	protected function getDocumentSessionsByKeyForUsers(string $documentSessionHash, array $userIds): array
@@ -651,6 +795,19 @@ final class OnlyOffice extends Engine\Controller
 		}
 
 		return $byUser;
+	}
+
+	protected function getDocumentSessionsByKeyForUser(string $documentSessionHash, int $userId): ?DocumentSession
+	{
+		$sessions = DocumentSession::getModelList([
+			'filter' => [
+				'=EXTERNAL_HASH' => $documentSessionHash,
+				'=USER_ID' => $userId,
+			],
+			'limit' => 1,
+		]);
+
+		return $sessions[0] ?? null;
 	}
 
 	/**
@@ -831,9 +988,13 @@ final class OnlyOffice extends Engine\Controller
 		}
 	}
 
-	public function createDocumentAction(string $typeFile, ?\Bitrix\Disk\Folder $targetFolder = null): ?array
+	public function createDocumentAction(
+		string $typeFile,
+		?\Bitrix\Disk\Folder $targetFolder = null,
+		array $analytics = [],
+	): ?array
 	{
-		$newFile = $this->createDocument($typeFile, $targetFolder);
+		$newFile = $this->createDocument($typeFile, $targetFolder, $analytics);
 
 		if (!$newFile)
 		{
@@ -844,13 +1005,21 @@ final class OnlyOffice extends Engine\Controller
 			'id' => $newFile->getId(),
 			'name' => $newFile->getName(),
 			'size' => $newFile->getSize(),
-			'openUrl' => Driver::getInstance()->getUrlManager()->getUnifiedEditLink($newFile),
+			'openUrl' => Driver::getInstance()->getUrlManager()->getUnifiedEditLink($newFile, [
+				'additionalQueryParams' => [
+					'analytics' => $analytics,
+				],
+			]),
 		];
 	}
 
-	public function loadCreateDocumentEditorAction(string $typeFile, ?\Bitrix\Disk\Folder $targetFolder = null): ?HttpResponse
+	public function loadCreateDocumentEditorAction(
+		string $typeFile,
+		?\Bitrix\Disk\Folder $targetFolder = null,
+		array $analytics = [],
+	): ?HttpResponse
 	{
-		$newFile = $this->createDocument($typeFile, $targetFolder);
+		$newFile = $this->createDocument($typeFile, $targetFolder, $analytics);
 
 		if (!$newFile)
 		{
@@ -860,7 +1029,11 @@ final class OnlyOffice extends Engine\Controller
 		return $this->loadDocumentEditorAction($newFile);
 	}
 
-	private function createDocument(string $typeFile, ?\Bitrix\Disk\Folder $targetFolder = null): ?Disk\File
+	private function createDocument(
+		string $typeFile,
+		?\Bitrix\Disk\Folder $targetFolder = null,
+		array $analytics = [],
+	): ?Disk\File
 	{
 		$createBlankDocumentScenario = new Document\OnlyOffice\CreateBlankDocumentScenario(
 			$this->getCurrentUser()?->getId(),
@@ -869,11 +1042,11 @@ final class OnlyOffice extends Engine\Controller
 
 		if ($targetFolder)
 		{
-			$result = $createBlankDocumentScenario->createBlank($typeFile, $targetFolder);
+			$result = $createBlankDocumentScenario->createBlank($typeFile, $targetFolder, $analytics);
 		}
 		else
 		{
-			$result = $createBlankDocumentScenario->createBlankInDefaultFolder($typeFile);
+			$result = $createBlankDocumentScenario->createBlankInDefaultFolder($typeFile, $analytics);
 		}
 
 		if (!$result->isSuccess())

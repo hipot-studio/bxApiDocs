@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Internal\Entity\BaseEntityCollection;
 
 /**
  * @method WorkflowState|null getFirstCollectionItem()
+ * @method WorkflowState|null getLastCollectionItem()
  * @method \ArrayIterator<WorkflowState> getIterator()
  */
 class WorkflowStateCollection extends BaseEntityCollection

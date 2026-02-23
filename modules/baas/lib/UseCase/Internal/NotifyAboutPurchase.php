@@ -57,9 +57,7 @@ class NotifyAboutPurchase
 			Baas\Internal\Diag\Logger::getInstance()->info('NotifyAboutPurchase', $eventData);
 			(new Main\Event('baas', 'onPackagePurchased', $eventData))->send();
 
-			$purchase = $this->purchaseRepository->findPurchaseByCode($purchaseCode);
-			$purchase?->setNotified(true);
-			$purchase?->save();
+			$this->purchaseRepository->setPurchaseNotified($purchaseCode);
 		}
 
 		return new Main\Result();

@@ -88,7 +88,7 @@ enum ActivityGroup: string
 		}
 
 	public function getTitle(): string
-		{
+	{
 		$messageId = match ($this)
 		{
 			self::STARTER => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_STARTER',
@@ -128,10 +128,10 @@ enum ActivityGroup: string
 		};
 
 		return Loc::getMessage($messageId);
-		}
+	}
 
 	public static function toArray(): array
-		{
+	{
 		$result = [];
 		foreach (self::cases() as $case)
 		{
@@ -144,5 +144,5 @@ enum ActivityGroup: string
 		}
 
 		return $result;
-		}
+	}
 }

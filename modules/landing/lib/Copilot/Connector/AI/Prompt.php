@@ -3,15 +3,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Connector\AI;
 
+use Bitrix\Landing\Copilot\Connector\Schema\Builder\JsonShape;
+use Bitrix\Landing\Copilot\Connector\Schema\Schema;
+use Bitrix\Main\SystemException;
+
 class Prompt
 {
 	private const DEFAULT_REQUEST_TEMPERATURE = 0.7;
 	private string $code;
-	private string $category;
-	private int $maxTokens;
 	private array $markers;
+	private ?Schema $schema = null;
 	private float $temperature;
-	private array $result;
 
 	public function __construct(string $code)
 	{
@@ -34,6 +36,35 @@ class Prompt
 	public function getMarkers(): array
 	{
 		return $this->markers;
+	}
+
+	public function setSchema(Schema $schema): self
+	{
+		$this->schema = $schema;
+
+		return $this;
+	}
+
+	public function getSchema(): ?Schema
+	{
+		return $this->schema;
+	}
+
+	public function getJsonSchema(): ?array
+	{
+		if (!$this->schema)
+		{
+			return null;
+		}
+
+		try
+		{
+			return (new JsonShape($this->schema))->build();
+		}
+		catch (SystemException)
+		{
+			return null;
+		}
 	}
 
 	public function setTemperature($temperature): self

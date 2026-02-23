@@ -8,6 +8,7 @@ use Bitrix\AI\Cloud\HttpClient\ResponseBuilder;
 use Bitrix\AI\Cloud\Result\RegistrationResult;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
@@ -53,6 +54,7 @@ final class Registration extends BaseSender
 		$data = [
 			'domain' => $hostUrl,
 			'languageId' => $this->languageId,
+			'moduleVersion' => ModuleManager::getVersion('ai'),
 		];
 
 		$result = $this->performRequest('aiproxy.Registration.registerClient', $data);

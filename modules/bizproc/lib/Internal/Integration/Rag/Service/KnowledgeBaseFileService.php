@@ -5,11 +5,15 @@ namespace Bitrix\Bizproc\Internal\Integration\Rag\Service;
 
 use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\FileUploader\KnowledgeBaseUploaderController;
+use Bitrix\Bizproc\Internal\Integration\Rag\Dto\KnowledgeBaseFileStatusDtoCollection;
+use Bitrix\Bizproc\Internal\Integration\Rag\Dto\KnowledgeBaseFileStatusDto;
+use Bitrix\Bizproc\Internal\Integration\Rag\FileStatus;
 use Bitrix\Bizproc\Internal\Integration\UI\UploaderHelper;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
+use Bitrix\Rag\Public\Enum\FileState;
 use Bitrix\Rag\Public\Service\FileKnowledgeBasePublicService;
 use Bitrix\UI\FileUploader\PendingFileCollection;
 use Bitrix\UI\FileUploader\Uploader;
@@ -20,6 +24,7 @@ class KnowledgeBaseFileService
 
 	public function __construct(
 		protected RagService $ragService,
+		protected KnowledgeBaseFileCacheService $cacheService,
 	)
 	{
 		if ($this->ragService->isAvailable())
@@ -37,6 +42,7 @@ class KnowledgeBaseFileService
 		int $knowledgeBaseId,
 		int $userId,
 		array $fileIds,
+		string $uid,
 	): Result
 	{
 		if (!$this->ragService->isAvailable())
@@ -48,6 +54,8 @@ class KnowledgeBaseFileService
 		{
 			return new Result();
 		}
+
+		$this->cacheService->cleanCacheInfoUploadFiles($uid);
 
 		try
 		{
@@ -119,7 +127,7 @@ class KnowledgeBaseFileService
 		return new Result();
 	}
 
-	public function savePendingFiles(int $id, int $userId, PendingFileCollection $pendingFiles): Result
+	public function savePendingFiles(int $id, int $userId, PendingFileCollection $pendingFiles, string $uid): Result
 	{
 		if (!$this->ragService->isAvailable())
 		{
@@ -131,6 +139,8 @@ class KnowledgeBaseFileService
 		{
 			return new Result();
 		}
+
+		$this->cacheService->cleanCacheInfoUploadFiles($uid);
 
 		$result = $this->addMany($id, $pendingFiles->getFileIds(), $userId);
 		if (!$result->isSuccess())
@@ -157,5 +167,47 @@ class KnowledgeBaseFileService
 		}
 
 		return $map;
+	}
+
+	public function getInfoUploadFiles(int $knowledgeBaseId): KnowledgeBaseFileStatusDtoCollection
+	{
+		$collection = new KnowledgeBaseFileStatusDtoCollection();
+
+		if (!$this->ragService->isAvailable())
+		{
+			return $collection;
+		}
+
+		try {
+			$files = $this->ragModuleFileService->getFilesForBaseWithState($knowledgeBaseId);
+		}
+		catch (SystemException)
+		{
+			return $collection;
+		}
+
+		foreach ($files as $fileId => $state)
+		{
+			$fileStatus = match ($state)
+			{
+				FileState::New,
+				FileState::Ingesting,
+				FileState::ReadyForUpload,
+				FileState::Uploading => FileStatus::Uploading,
+				FileState::ReadyForVectorize,
+				FileState::Vectorizing => FileStatus::Processing,
+				FileState::Active => FileStatus::Success,
+				FileState::Failed,
+				FileState::Deleted => FileStatus::FailedUpload,
+				default => FileStatus::FailedUpload,
+			};
+
+			$collection->add(new KnowledgeBaseFileStatusDto(
+				fileId: $fileId,
+				status: $fileStatus,
+			));
+		}
+
+		return $collection;
 	}
 }

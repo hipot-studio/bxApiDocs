@@ -8,6 +8,7 @@ use Bitrix\AI\Engine\Enum\Category;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\Engine\IQueueOptional;
+use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Limiter\Enums\ErrorLimit;
@@ -875,6 +876,11 @@ class Engine
 
 	public function throwErrorLimit(ReserveRequest $reservedRequest): void
 	{
+		Analytics::sendAiQueryLimitEvent(
+			$reservedRequest->getErrorLimit()->value . '-' . $reservedRequest->getPromoLimitCode(),
+			$this->getIEngine()->getContext()->getModuleId(),
+		);
+
 		if ($reservedRequest->getErrorLimit() === ErrorLimit::BAAS_LIMIT)
 		{
 			$this->throwError(self::ERRORS['LIMIT_IS_EXCEEDED'], '_BAAS');

@@ -4,6 +4,19 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal\Grid\AiAgents;
 
+use Bitrix\Bizproc\Integration\ImBot\BizprocBot;
+use Bitrix\Bizproc\Internal\Factory\Workflow\TriggerStageWorkflowFactory;
+use Bitrix\Bizproc\Internal\Integration\Rag\DocumentFieldTypes\RagKnowledgeBaseType;
+use Bitrix\Bizproc\Internal\Integration\Rag\Dto\KnowledgeBaseFileStatusDtoCollection;
+use Bitrix\Bizproc\Internal\Integration\Rag\FileStatus;
+use Bitrix\Bizproc\Internal\Integration\Rag\Result\KnowledgeBaseGetInfoResult;
+use Bitrix\Bizproc\Internal\Integration\Rag\Service\KnowledgeBaseFileCacheService;
+use Bitrix\Bizproc\Internal\Integration\Rag\Service\KnowledgeBaseFileService;
+use Bitrix\Bizproc\Internal\Integration\Rag\Service\KnowledgeBaseService;
+use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable;
+use Bitrix\Im\Model\RelationTable;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\FileTable;
 use CBPHelper;
 
 use Bitrix\HumanResources\Enum\DepthLevel;
@@ -34,7 +47,9 @@ class AiAgentsGridHelper
 	private const GRID_ID = 'BIZPROC_AI_AGENTS_GRID';
 	private const AI_SECTION_ID = 'AI_AGENT';
 	private const DEFAULT_PAGE_SIZE = 20;
-
+	private const IM_BOT_NEW_MESSAGE_TRIGGER = 'ImBotNewMessageTrigger';
+	private const IM_BOT_PARAM_BOT_CODE = 'BotCode';
+	private const IM_BOT_PARAM_BOT_ID = 'BotId';
 	private string $navParamName;
 	private ?AiAgentsGrid $grid = null;
 
@@ -68,7 +83,7 @@ class AiAgentsGridHelper
 		$settings = new AiAgentsSettings([
 			'ID' => self::GRID_ID,
 			'SHOW_ROW_CHECKBOXES' => false,
-			'MODE' => $arParams['EXPORT_TYPE'] ?? 'html'
+			'MODE' => $arParams['EXPORT_TYPE'] ?? 'html',
 		]);
 
 		$this->grid = new AiAgentsGrid($settings);
@@ -76,6 +91,7 @@ class AiAgentsGridHelper
 		$this->grid->setTotalCountCalculator(function ()
 		{
 			$query = $this->getAiAgentsTemplatesQuery();
+
 			return $query->fetchCollection()?->count();
 		});
 
@@ -137,7 +153,7 @@ class AiAgentsGridHelper
 		$templateData = $this->enrichTemplatesWithRelatedData(
 			[
 				$templateId => $templateFields,
-			]
+			],
 		);
 
 		$grid = $this->createGrid([]);
@@ -222,8 +238,8 @@ class AiAgentsGridHelper
 				new \Bitrix\Main\ORM\Fields\Relations\Reference(
 					'SECTION',
 					WorkflowTemplateSectionTable::class,
-					Join::on('this.ID', 'ref.TEMPLATE_ID')
-				)
+					Join::on('this.ID', 'ref.TEMPLATE_ID'),
+				),
 			)
 			->where('SECTION.SECTION_ID', self::AI_SECTION_ID)
 			->setOrder([
@@ -271,10 +287,13 @@ class AiAgentsGridHelper
 		$allDepartmentIds = [];
 		$allRecursiveDepartmentIds = [];
 		$idMapByTemplate = [];
+		$ragFileIds = [];
+		$templateIds = [];
 
 		foreach ($templates as $template)
 		{
 			$templateId = (int)$template['ID'];
+			$templateIds[] = $templateId;
 			$launchedById = $this->getUserIdFromString($template['ACTIVATED_BY']);
 			if ($launchedById)
 			{
@@ -286,14 +305,23 @@ class AiAgentsGridHelper
 			$allUserIds = [...$allUserIds, ...$extractedIds['userIds']];
 			$allDepartmentIds = [...$allDepartmentIds, ...$extractedIds['departmentIds']];
 			$allRecursiveDepartmentIds = [...$allRecursiveDepartmentIds, ...$extractedIds['recursiveDepartmentIdsFromConstant']];
+			$ragFilesStatuses = $this->getRagFilesStatuses($template);
+			$ragFileIds = [...$ragFileIds, ...(array)$ragFilesStatuses?->getFileIds()];
 
 			$idMapByTemplate[$templateId] = [
 				'launchedById' => $launchedById,
 				'usedByUserIds' => $extractedIds['userIds'],
 				'departmentIds' => $extractedIds['departmentIds'],
 				'recursiveDepartmentIds' => $extractedIds['recursiveDepartmentIdsFromConstant'],
+				'ragFilesStatuses' => $ragFilesStatuses,
 			];
 		}
+
+		$templateBotIdMap = $this->fetchTemplateBotIdMap($templateIds);
+		$templateGroupChatMap = $this->fetchTemplateGroupChatMap($templateBotIdMap);
+
+		$allBotIds = array_merge(...array_values($templateBotIdMap));
+		$allUserIds = [...$allUserIds, ...$allBotIds];
 
 		$childDepartmentMap = [];
 		if (!empty($allRecursiveDepartmentIds))
@@ -311,7 +339,19 @@ class AiAgentsGridHelper
 		$users = $this->fetchUsersByIds(array_values(array_unique($allUserIds)));
 		$departments = $this->fetchDepartmentsByIds(array_values(array_unique($allDepartmentIds)));
 
-		return $this->attachRelatedDataToTemplates($templates, $idMapByTemplate, $users, $departments, $childDepartmentMap);
+		$ragFileNames = $this->fetchRagFileNameByFileIds($ragFileIds);
+		$this->fileRagFileNamesToIdMapByTemplate($idMapByTemplate, $ragFileNames);
+
+		$templateChatsMap = $this->prepareTemplateChatsMap($templateBotIdMap, $users, $templateGroupChatMap);
+
+		return $this->attachRelatedDataToTemplates(
+			$templates,
+			$idMapByTemplate,
+			$users,
+			$departments,
+			$childDepartmentMap,
+			$templateChatsMap,
+		);
 	}
 
 	/**
@@ -351,7 +391,7 @@ class AiAgentsGridHelper
 					$documentType,
 					$userIds,
 					$departmentIds,
-					$recursiveDepartmentIds
+					$recursiveDepartmentIds,
 				);
 			}
 		}
@@ -374,10 +414,10 @@ class AiAgentsGridHelper
 	 */
 	private function parseConstantValue(
 		string $value,
-		array  $documentType,
-		array  &$userIds,
-		array  &$departmentIds,
-		array  &$recursiveDepartmentIds
+		array $documentType,
+		array &$userIds,
+		array &$departmentIds,
+		array &$recursiveDepartmentIds,
 	): void
 	{
 		if (str_starts_with($value, 'user'))
@@ -430,6 +470,193 @@ class AiAgentsGridHelper
 	}
 
 	/**
+	 * @param array<int> $templateIds
+	 * @return array<int, list<int>>
+	 */
+	private function fetchTemplateBotIdMap(array $templateIds): array
+	{
+		$triggersToFetch = [self::IM_BOT_NEW_MESSAGE_TRIGGER];
+		$templatesTriggers = $this->fetchTemplatesTriggers($templateIds, $triggersToFetch);
+
+		$templateBotIdMap = [];
+
+		foreach ($templatesTriggers as $trigger)
+		{
+			$botId = $this->getBotIdByTrigger($trigger);
+
+			if ($botId)
+			{
+				$templateBotIdMap[$trigger['TEMPLATE_ID']][] = $botId;
+			}
+		}
+
+		return $templateBotIdMap;
+	}
+
+	/**
+	 * Extract logic for getting Bot ID from a trigger array.
+	 *
+	 * @param array $trigger
+	 * @return int|null
+	 */
+	private function getBotIdByTrigger(array $trigger): ?int
+	{
+		if (!Loader::includeModule('imbot'))
+		{
+			return null;
+		}
+
+		$triggerType = $trigger['TRIGGER_TYPE'] ?? null;
+		$templateId = $trigger['TEMPLATE_ID'] ?? null;
+		$applyRules = $trigger['APPLY_RULES'] ?? [];
+		$properties = $applyRules['Properties'] ?? [];
+
+		if (is_null($triggerType) || is_null($templateId) || empty($properties))
+		{
+			return null;
+		}
+
+		if (!\CBPRuntime::getRuntime()->includeActivityFile($triggerType))
+		{
+			return null;
+		}
+
+		$activity = \CBPActivity::createInstance($triggerType, '');
+		if (!$activity)
+		{
+			return null;
+		}
+
+		$activity->initializeFromArray($properties);
+		$documentId = [$trigger['MODULE_ID'], $trigger['ENTITY'], $trigger['DOCUMENT_TYPE']];
+
+		$stubWorkflow = (new TriggerStageWorkflowFactory())->create((int)$templateId, $documentId);
+		$activity->setWorkflow($stubWorkflow);
+
+		$botId = $activity->{self::IM_BOT_PARAM_BOT_ID};
+		$botId = filter_var($botId, FILTER_VALIDATE_INT, [
+			'options' => [
+				'min_range' => 0,
+			],
+		]);
+
+		if (!$botId)
+		{
+			$botCode = (string)$activity->{self::IM_BOT_PARAM_BOT_CODE};
+
+			$botId = (int)BizprocBot::getBotIdByCode($botCode);
+		}
+
+		return $botId > 0 ? $botId : null;
+	}
+
+	/**
+	 * Fetches group chats associated with the bots in the templates.
+	 *
+	 * @param array<int, list<int>> $templateBotIdMap
+	 * @return array<int, array>
+	 */
+	private function fetchTemplateGroupChatMap(array $templateBotIdMap): array
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return [];
+		}
+
+		$templateGroupChatMap = [];
+		$allBotIds = [];
+
+		foreach ($templateBotIdMap as $botIds)
+		{
+			foreach ($botIds as $botId)
+			{
+				$allBotIds[$botId] = $botId;
+			}
+		}
+
+		if (empty($allBotIds))
+		{
+			return [];
+		}
+
+		$query = RelationTable::query()
+			->setSelect([
+				'USER_ID',
+				'CHAT_ID',
+				'CHAT_TITLE' => 'CHAT.TITLE',
+			])
+			->registerRuntimeField(
+				'CHAT',
+				new \Bitrix\Main\ORM\Fields\Relations\Reference(
+					'CHAT',
+					\Bitrix\Im\Model\ChatTable::class,
+					Join::on('this.CHAT_ID', 'ref.ID'),
+				),
+			)
+			->whereIn('USER_ID', array_values($allBotIds))
+			->where('MESSAGE_TYPE', \Bitrix\Im\Chat::TYPE_GROUP)
+		;
+
+		$groupChats = $query->fetchAll();
+		$chatsByBotId = [];
+
+		foreach ($groupChats as $chat)
+		{
+			$chatsByBotId[$chat['USER_ID']][] = $chat;
+		}
+
+		foreach ($templateBotIdMap as $templateId => $botIds)
+		{
+			foreach ($botIds as $botId)
+			{
+				if (isset($chatsByBotId[$botId]))
+				{
+					foreach ($chatsByBotId[$botId] as $chat)
+					{
+						$templateGroupChatMap[$templateId][] = $chat;
+					}
+				}
+			}
+		}
+
+		return $templateGroupChatMap;
+	}
+
+	/**
+	 * Fetches workflow template triggers for given template IDs and trigger type.
+	 *
+	 * @param list<int> $templateIds
+	 * @param list<string> $triggerTypes (e.g., ['ImBotNewMessageTrigger', ...])
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function fetchTemplatesTriggers(array $templateIds, array $triggerTypes = []): array
+	{
+		if (empty($templateIds))
+		{
+			return [];
+		}
+
+		$query = WorkflowTemplateTriggerTable::query()
+			->setSelect([
+				'TEMPLATE_ID',
+				'TRIGGER_TYPE',
+				'APPLY_RULES',
+				'MODULE_ID',
+				'ENTITY',
+				'DOCUMENT_TYPE',
+			])
+			->whereIn('TEMPLATE_ID', $templateIds)
+		;
+
+		if (!empty($triggerTypes))
+		{
+			$query->whereIn('TRIGGER_TYPE', $triggerTypes);
+		}
+
+		return $query->fetchAll();
+	}
+
+	/**
 	 * Fetches user data for a given list of user IDs.
 	 *
 	 * @param list<int> $userIds
@@ -451,7 +678,8 @@ class AiAgentsGridHelper
 				'LAST_NAME',
 			])
 			->whereIn('ID', $userIds)
-			->fetchAll();
+			->fetchAll()
+		;
 
 		$userMap = [];
 		foreach ($usersList as $user)
@@ -481,7 +709,7 @@ class AiAgentsGridHelper
 				entityTypeFilter: NodeTypeFilter::createForDepartment(),
 				direction: Direction::ROOT,
 				depthLevel: DepthLevel::NONE,
-			)
+			),
 		)
 			->getAll()
 		;
@@ -518,7 +746,7 @@ class AiAgentsGridHelper
 					entityTypeFilter: NodeTypeFilter::createForDepartment(),
 					direction: Direction::CHILD,
 					depthLevel: DepthLevel::FULL,
-				)
+				),
 			)
 				->getAll()
 			;
@@ -557,6 +785,7 @@ class AiAgentsGridHelper
 	 * @param array $users A map of [userId => userData].
 	 * @param array $departments A map of [departmentId => departmentName].
 	 * @param array $childDepartmentMap A map of [parentId => [childIds...]].
+	 * @param array $templateChatsMap A map of [templateId => [[chatId, chatName], ...]].
 	 * @return array The final, enriched templates array.
 	 */
 	private function attachRelatedDataToTemplates(
@@ -564,7 +793,8 @@ class AiAgentsGridHelper
 		array $idMapByTemplate,
 		array $users,
 		array $departments,
-		array $childDepartmentMap
+		array $childDepartmentMap,
+		array $templateChatsMap,
 	): array
 	{
 		$result = [];
@@ -576,6 +806,7 @@ class AiAgentsGridHelper
 			if (!$idMap || empty($template['ACTIVATED_BY']))
 			{
 				$result[] = $template;
+
 				continue;
 			}
 
@@ -622,13 +853,23 @@ class AiAgentsGridHelper
 				$template['LAUNCHED_BY_USER_DATA'] = $users[$idMap['launchedById']];
 			}
 
+			if (isset($idMap['ragFilesStatuses']) && !empty($idMap['ragFilesStatuses']))
+			{
+				$template['RAG_FILES_STATUS'] = $idMap['ragFilesStatuses'];
+			}
+
+			if (!empty($templateChatsMap[$templateId]))
+			{
+				$template['CHATS'] = $templateChatsMap[$templateId];
+			}
+
 			$result[] = $template;
 		}
 
 		return $result;
 	}
 
-	private function getUserIdFromString(string | int | null $value): ?int
+	private function getUserIdFromString(string|int|null $value): ?int
 	{
 		if (empty($value))
 		{
@@ -642,5 +883,172 @@ class AiAgentsGridHelper
 		]);
 
 		return $userId === false ? null : $userId;
+	}
+
+	private function getRagFilesStatuses(array $template): ?KnowledgeBaseFileStatusDtoCollection
+	{
+		if (
+			!is_null($template['SYSTEM_CODE'])
+			|| empty($template['CONSTANTS'])
+			|| !Loader::includeModule('rag')
+		)
+		{
+			return null;
+		}
+
+		$cache = ServiceLocator::getInstance()->get(KnowledgeBaseFileCacheService::class);
+		foreach ((array)$template['CONSTANTS'] as $constantInfo)
+		{
+			if (
+				$constantInfo['Type'] !== RagKnowledgeBaseType::getType()
+				|| empty($constantInfo['Default'])
+			)
+			{
+				continue;
+			}
+
+			foreach ((array)($constantInfo['Default'] ?? []) as $value)
+			{
+				if ($cacheItem = $cache->getCacheInfoUploadFiles($value))
+				{
+					if ($cacheItem->getStatus() == FileStatus::Success)
+					{
+						continue;
+					}
+
+					return $cacheItem;
+				}
+
+				$result = ServiceLocator::getInstance()
+					->get(KnowledgeBaseService::class)
+					->getInfo($value)
+				;
+
+				if (!$result instanceof KnowledgeBaseGetInfoResult)
+				{
+					continue;
+				}
+
+				$info = ServiceLocator::getInstance()
+					->get(KnowledgeBaseFileService::class)
+					->getInfoUploadFiles($result->info->id)
+				;
+
+				if ($status = $info->getStatus())
+				{
+					if (!in_array($status, [FileStatus::Uploading, FileStatus::Processing]))
+					{
+						$cache->setCacheInfoUploadFiles($value, $info);
+					}
+
+					if ($status != FileStatus::Success)
+					{
+						return $info;
+					}
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private function fetchRagFileNameByFileIds(array $ids): array
+	{
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		$fileList = FileTable::getList([
+			'select' => [
+				'ID',
+				'ORIGINAL_NAME',
+			],
+			'filter' => [
+				'ID' => $ids,
+			],
+		])->fetchAll();
+
+		$list = [];
+		foreach ($fileList as $file)
+		{
+			if (empty($file['ID']))
+			{
+				continue;
+			}
+
+			$list[$file['ID']] = $file['ORIGINAL_NAME'] ?? null;
+		}
+
+		return $list;
+	}
+
+	private function fileRagFileNamesToIdMapByTemplate(array &$dMapByTemplate, array $fileNameList): void
+	{
+		foreach ($dMapByTemplate as $templateId => $item)
+		{
+			$ragFilesStatuses = $item['ragFilesStatuses'] ?? null;
+			if (!$ragFilesStatuses instanceof KnowledgeBaseFileStatusDtoCollection)
+			{
+				continue;
+			}
+
+			foreach ($ragFilesStatuses->getAll() as $file)
+			{
+				$file->fileName = $fileNameList[$file->fileId] ?? null;
+			}
+			$dMapByTemplate[$templateId]['ragFilesStatuses'] = $ragFilesStatuses;
+		}
+	}
+
+	/**
+	 * @param array<int, list<int>> $templateBotIdMap [templateId => [botUserId, ...]]
+	 * @param array $users [userId => userData]
+	 * @param array<int, array<array<string, mixed>>> $templateGroupChatIdMap [templateId => [0 => [CHAT_ID=>1, ...]]]
+	 * @return array<int, list<array{chatId: int, chatName: string}>>
+	 */
+	private function prepareTemplateChatsMap(array $templateBotIdMap, array $users, array $templateGroupChatIdMap): array
+	{
+		$chatsMap = [];
+
+		foreach ($templateGroupChatIdMap as $templateId => $chats)
+		{
+			foreach ($chats as $chat)
+			{
+				$chatId = 'chat' . $chat['CHAT_ID'];
+				$chatTitle = $chat['CHAT_TITLE'] ?? null;
+
+				if (empty($chatTitle))
+				{
+					continue;
+				}
+
+				$chatsMap[$templateId][] = [
+					'chatId' => $chatId,
+					'chatName' => $chatTitle,
+				];
+			}
+		}
+
+		foreach ($templateBotIdMap as $templateId => $botIds)
+		{
+			foreach ($botIds as $botId)
+			{
+				$bot = $users[$botId] ?? null;
+				$botName = $bot['NAME'] ?? null;
+
+				if (empty($botName))
+				{
+					continue;
+				}
+
+				$chatsMap[$templateId][] = [
+					'chatId' => $botId,
+					'chatName' => $botName,
+				];
+			}
+		}
+
+		return $chatsMap;
 	}
 }

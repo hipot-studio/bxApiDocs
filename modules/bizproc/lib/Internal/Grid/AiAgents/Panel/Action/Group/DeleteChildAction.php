@@ -26,4 +26,9 @@ class DeleteChildAction extends AiAgentsGroupChildAction
 	{
 		return null;
 	}
+
+	protected function getActionParams(): array
+	{
+		return [];
+	}
 }

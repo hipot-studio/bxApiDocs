@@ -2,7 +2,7 @@
 
 use Bitrix\Disk\Document\OnlyOffice\Templates\TemplateManager;
 use Bitrix\Disk\Internals\BaseComponent;
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Main\Engine\Contract\Controllerable;
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
@@ -20,6 +20,8 @@ class CDiskFileEditorTemplatesComponent extends BaseComponent implements Control
 	protected function prepareParams()
 	{
 		parent::prepareParams();
+
+		\Bitrix\Main\Loader::includeModule('call');
 
 		if (!($this->arParams['MESSENGER']['CALL'] instanceof Call))
 		{

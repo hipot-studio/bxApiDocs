@@ -364,7 +364,14 @@ final class DocumentService extends Engine\Controller
 		}
 	}
 
-	public function goToCreateAction($serviceCode, $typeFile, $attachedObjectId = null, $targetFolderId = null, bool $createByUnifiedLink = false)
+	public function goToCreateAction(
+		$serviceCode,
+		$typeFile,
+		$attachedObjectId = null,
+		$targetFolderId = null,
+		bool $createByUnifiedLink = false,
+		array $analytics = [],
+	)
 	{
 		$driver = Driver::getInstance();
 		$handlersManager = $driver->getDocumentHandlersManager();
@@ -381,6 +388,7 @@ final class DocumentService extends Engine\Controller
 			$parameters = [
 				'typeFile' => $typeFile,
 				'targetFolderId' => $targetFolderId,
+				'analytics' => $analytics,
 			];
 
 			if ($createByUnifiedLink && $unifiedLinkSupportService->supportsDocumentHandler($documentHandler))

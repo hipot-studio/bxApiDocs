@@ -667,6 +667,7 @@ class LandingViewComponent extends LandingBaseComponent
 				$options['allow_svg'] = Manager::getOption('allow_svg_content') === 'Y';
 				$options['ai_text_available'] = $arResult['AI_TEXT_AVAILABLE'];
 				$options['copilot_available'] = $arResult['COPILOT_AVAILABLE'];
+				$options['copilot_name'] = Copilot\Services\NameService::getCopilotName();
 				$options['ai_text_active'] = $arResult['AI_TEXT_ACTIVE'];
 				$options['ai_image_available'] = $arResult['AI_IMAGE_AVAILABLE'];
 				$options['ai_image_active'] = $arResult['AI_IMAGE_ACTIVE'];
@@ -1378,7 +1379,7 @@ class LandingViewComponent extends LandingBaseComponent
 				$urlAddStyle = $this->getUrlAdd(
 					false,
 					$urlAddParamsStyle,
-					Manager::getMarketCollectionId('form_minisite')
+					Manager::getMarketCollectionCode('form_minisite')
 				);
 				$this->arParams['PAGE_URL_LANDING_REPLACE_FROM_STYLE'] =
 					$metrikaStyle

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Infrastructure\Controller;
 
+use Bitrix\Bizproc\Public\Activity\ActivityControlsBuilder;
 use Bitrix\BizprocDesigner\Internal\Trait\ActivitySettingsDecoder;
 use Bitrix\BizprocDesigner\Public\Command;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 
 class Activity extends JsonController
@@ -24,10 +24,21 @@ class Activity extends JsonController
 	public function getSettingsControlsAction(
 		array $documentType,
 		array $activity,
+		array $workflow = [],
 	): ?array
 	{
+		$brokenLinks = [];
+		$activityName = $activity['Name'] ?? '';
+		[
+			'template' => $workflowTemplate,
+			'parameters' => $workflowParameters,
+			'variables' => $workflowVariables,
+			'constants' => $workflowConstants,
+		] = $this->decodeActivitySettings($workflow, $documentType);
+
 		$description = \CBPRuntime::getRuntime()->getActivityDescription($activity['Type']);
 		$result = [
+			'brokenLinks' => $brokenLinks,
 			'controls' => null,
 			'useDocumentContext' => isset($description['FILTER']),
 		];
@@ -37,54 +48,24 @@ class Activity extends JsonController
 		{
 			return $result;
 		}
-		$propertiesMap = $configurator->getPropertiesMap();
 
-		$properties = [];
-		foreach ($propertiesMap as $key => $property)
+		if ($activityName && $workflowTemplate)
 		{
-			$properties[] = [
-				'property' => $property,
-				'fieldName' => $property['FieldName'] ?? $key,
-				'value' => $activity['Properties'][$key] ?? $property['Default'] ?? null,
-			];
+			$analyzer =
+				(new \Bitrix\Bizproc\Public\Service\Template\ActivityUsageAnalyzer($workflowTemplate))
+					->setParameters($workflowParameters)
+					->setVariables($workflowVariables)
+					->setConstants($workflowConstants)
+					->setGlobalConstants(\Bitrix\Bizproc\Workflow\Type\GlobalConst::getAll($documentType))
+					->setGlobalVariables(\Bitrix\Bizproc\Workflow\Type\GlobalVar::getAll($documentType))
+					->setDocumentFields(\Bitrix\Bizproc\Automation\Helper::getDocumentFields($documentType))
+			;
+			$brokenLinks = $analyzer->analyzeUsages($activityName);
 		}
 
-		$defaultControls = [
-			[
-				'property' => [
-					'Name' => Loc::getMessage('BIZPROCDESIGNER_CONTROLLER_ACTIVITY_CONTROL_TITLE') ?? '',
-					'Type' => \Bitrix\Bizproc\FieldType::STRING,
-					'Required' => true,
-				],
-				'fieldName' => 'title',
-				'value' => $activity['Properties']['Title'] ?? null,
-				'controlId' => 'title',
-			],
-			[
-				'property' => [
-					'Name' => Loc::getMessage('BIZPROCDESIGNER_CONTROLLER_ACTIVITY_CONTROL_ID') ?? '',
-					'Type' => \Bitrix\Bizproc\FieldType::STRING,
-					'Required' => true,
-					'Hidden' => true,
-				],
-				'fieldName' => 'activity_id',
-				'value' => $activity['Name'] ?? null,
-				'controlId' => 'activity_id',
-			],
-			[
-				'property' => [
-					'Name' => Loc::getMessage('BIZPROCDESIGNER_CONTROLLER_ACTIVITY_CONTROL_COMMENT') ?? '',
-					'Type' => \Bitrix\Bizproc\FieldType::STRING,
-					'Required' => false,
-					'Hidden' => true,
-				],
-				'fieldName' => 'activity_editor_comment',
-				'value' => $activity['Properties']['EditorComment'] ?? null,
-				'controlId' => 'activity_editor_comment',
-			],
-		];
-
-		$result['controls'] = array_merge($defaultControls, $properties);
+		$controlsBuilder = new ActivityControlsBuilder($configurator, $activity);
+		$result['controls'] = $controlsBuilder->build();
+		$result['brokenLinks'] = $brokenLinks;
 
 		return $result;
 	}

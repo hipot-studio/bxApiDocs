@@ -46,7 +46,7 @@ abstract class BaseTarget
 	/**
 	 * @return \Bitrix\Bizproc\Automation\Engine\Runtime
 	 */
-	public function getRuntime()
+	public function getRuntime(): Runtime
 	{
 		if ($this->runtime === null)
 		{

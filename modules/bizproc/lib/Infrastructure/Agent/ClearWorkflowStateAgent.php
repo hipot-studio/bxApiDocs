@@ -6,13 +6,23 @@ use Bitrix\Bizproc\Public\Command\WorkflowState\ClearStaleWorkflowCommand\ClearS
 use Bitrix\Bizproc\Public\Command\WorkflowState\ClearStaleWorkflowCommand\ClearStaleWorkflowResult;
 use Bitrix\Main\Config\Option;
 
-class ClearWorkflowStateAgent extends BaseAgent
+class ClearWorkflowStateAgent
 {
 	private const DEFAULT_OFFSET = 20;
 
-	public static function run()
+	protected static function next(?int $lastStarted = null): string
 	{
-		$command = new ClearStaleWorkflowCommand();
+		if ($lastStarted)
+		{
+			return self::class . "::run($lastStarted);";
+		}
+
+		return self::class . '::run();';
+	}
+
+	public static function run(?int $lastStarted = null): string
+	{
+		$command = new ClearStaleWorkflowCommand($lastStarted);
 		/** @var ClearStaleWorkflowResult $result */
 		$result = $command->run();
 
@@ -24,8 +34,10 @@ class ClearWorkflowStateAgent extends BaseAgent
 		else
 		{
 			$pPERIOD = strtotime('tomorrow 01:00') - time();
+
+			return self::next();
 		}
 
-		return self::next();
+		return self::next($result->lastStarted);
 	}
 }

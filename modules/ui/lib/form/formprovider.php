@@ -53,4 +53,31 @@ class FormProvider
 			['zones' => ['uz'], 'id' => 7, 'lang' => 'ru', 'sec' => 'xjkuqu'],
 		];
 	}
+
+	public function getPartnerFeedbackFormList(): array
+	{
+		return [
+			['zones' => ['ru'], 'id' => 3594, 'lang' => 'ru', 'sec' => '3xe3ye'],
+			['zones' => ['by'], 'id' => 85, 'lang' => 'ru', 'sec' => 'ygosc1'],
+			['zones' => ['kz'], 'id' => 104, 'lang' => 'ru', 'sec' => '3k8fn5'],
+			['zones' => ['uz'], 'id' => 39, 'lang' => 'ru', 'sec' => 'uxsiwm'],
+		];
+	}
+
+	public function getPartnerRefusalFormList(): array
+	{
+		return [
+			['zones' => ['ru'], 'id' => 3593, 'lang' => 'ru', 'sec' => 'amp2bn'],
+			['zones' => ['by'], 'id' => 83, 'lang' => 'ru', 'sec' => '2s1mg3'],
+			['zones' => ['kz'], 'id' => 102, 'lang' => 'ru', 'sec' => 'rsa332'],
+			['zones' => ['uz'], 'id' => 37, 'lang' => 'ru', 'sec' => 'x34spz'],
+		];
+	}
+
+	public function getPartnerRefusalCheckoutFormList(): array
+	{
+		return [
+			['zones' => ['ru'], 'id' => 3613, 'lang' => 'ru', 'sec' => 'shrvf7'],
+		];
+	}
 }

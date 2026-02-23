@@ -21,6 +21,7 @@ abstract class AiAgentsGroupChildAction extends GroupChildAction
 	}
 
 	abstract public static function getActionType(): AiAgentsActionType;
+	abstract protected function getActionParams(): array;
 
 	final public static function getId(): string
 	{
@@ -34,16 +35,21 @@ abstract class AiAgentsGroupChildAction extends GroupChildAction
 
 	protected function getJsCallBack(): ?string
 	{
-		$actionParams = Json::encode([
+		$extension = $this->settings->getExtensionName();
+		$gridId = $this->settings->getID();
+		$actionParams = $this->getActionParams();
+		$params = Json::encode([
 			'actionId' => static::getId(),
-			'gridId' => $this->getSettings()->getID(),
+			'isGroupAction' => true,
+			'params' => $actionParams,
 			'filter' => $this->getSettings()->getFilterFields(),
 		]);
 
 		return sprintf(
-			"BX.%s.Panel.executeAction(%s)",
-			$this->settings->getExtensionName(),
-			$actionParams,
+			"BX.%s.GridManager.getInstance('%s').runAction(%s)",
+			$extension,
+			$gridId,
+			$params
 		);
 	}
 

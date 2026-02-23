@@ -15,7 +15,7 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\JsonPayload;
 use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Security\SecurityException;
-use JetBrains\PhpStorm\ArrayShape;
+use Bitrix\Main\Web\Json;
 
 /**
  * Class B24CloudAi
@@ -100,7 +100,7 @@ class B24CloudAi extends Controller
 		$queueJob = QueueJob::createFromHash($hash);
 		if ($queueJob)
 		{
-			$queueJob->execute($result->getData());
+			$queueJob->execute(Json::decode($result->getRaw()));
 
 			return true;
 		}

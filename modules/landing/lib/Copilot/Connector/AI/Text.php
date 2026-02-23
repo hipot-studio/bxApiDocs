@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot\Connector\AI;
 
 use Bitrix\Main;
-use Bitrix\Landing;
+use Bitrix\Landing\Connector;
 use Bitrix\AI;
 use Bitrix\AI\Payload;
 use Bitrix\AI\Tuning;
@@ -36,6 +36,11 @@ class Text extends BaseConnector
 		$payload = new Payload\Prompt($promptCode);
 		$payload->setPromptCategory(static::PROMPT_CATEGORY);
 		$payload->setMarkers($prompt->getMarkers());
+
+		if ($jsonSchema = $prompt->getJsonSchema())
+		{
+			$payload->setJsonSchema($jsonSchema);
+		}
 
 		$this->engine->setPayload($payload);
 		$this->engine->setParameters($this->getParams());
@@ -69,7 +74,7 @@ class Text extends BaseConnector
 	{
 		$manager = new Tuning\Manager();
 
-		return $manager->getItem(Landing\Connector\Ai::TUNING_CODE_SITE_TEXT_PROVIDER)?->getValue();
+		return $manager->getItem(Connector\Ai::TUNING_CODE_SITE_TEXT_PROVIDER)?->getValue();
 	}
 
 	private function getParams(): array

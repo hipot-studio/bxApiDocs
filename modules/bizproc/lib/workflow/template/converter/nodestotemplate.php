@@ -81,6 +81,7 @@ final class NodesToTemplate
 				return [
 					$connection['sourceBlockId'] . self::LINK_DELIMITER . $connection['sourcePortId'],
 					$connection['targetBlockId'] . self::LINK_DELIMITER . $connection['targetPortId'],
+					$connection['createdAt'],
 				];
 			},
 			$connections,

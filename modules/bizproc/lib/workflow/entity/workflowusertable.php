@@ -31,6 +31,8 @@ use Bitrix\Bizproc\Integration\Push\WorkflowPush;
  */
 class WorkflowUserTable extends DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\MergeTrait;
+
 	public const WORKFLOW_STATUS_ACTIVE = 0;
 	public const WORKFLOW_STATUS_COMPLETED = 1;
 
@@ -93,7 +95,13 @@ class WorkflowUserTable extends DataManager
 		];
 	}
 
-	public static function syncOnWorkflowUpdated(\CBPWorkflow $workflow, int $status): void
+	/**
+	 * @internal
+	 * @param \CBPWorkflow $workflow
+	 * @param int $status
+	 * @return bool
+	 */
+	public static function syncOnWorkflowUpdated(\CBPWorkflow $workflow, int $status): bool
 	{
 		$workflowId = $workflow->getInstanceId();
 		$users = static::getTaskUsers($workflowId);
@@ -101,7 +109,7 @@ class WorkflowUserTable extends DataManager
 
 		if (!$hasUsers && !static::isLiveFeedProcess($workflow->getDocumentId()))
 		{
-			return;
+			return false;
 		}
 
 		$authorId = $workflow->getStartedBy();
@@ -122,6 +130,8 @@ class WorkflowUserTable extends DataManager
 		}
 
 		static::syncUsers($workflowId, $users);
+
+		return true;
 	}
 
 	public static function syncOnTaskUpdated(string $workflowId): array
@@ -241,14 +251,21 @@ class WorkflowUserTable extends DataManager
 
 		foreach ($toAdd as $userId => $user)
 		{
-			static::add([
-				'USER_ID' => $userId,
-				'WORKFLOW_ID' => $workflowId,
+			$update = [
 				'IS_AUTHOR' => $user['IS_AUTHOR'] ?? 0,
 				'WORKFLOW_STATUS' => $user['WORKFLOW_STATUS'] ?? static::WORKFLOW_STATUS_ACTIVE,
 				'TASK_STATUS' => $user['TASK_STATUS'] ?? static::TASK_STATUS_NONE,
 				'MODIFIED' => new DateTime(),
-			]);
+			];
+
+			static::merge(
+				[
+					'USER_ID' => $userId,
+					'WORKFLOW_ID' => $workflowId,
+					...$update,
+				],
+				$update,
+			);
 		}
 
 		WorkflowPush::pushAdded($workflowId, array_keys($toAdd));

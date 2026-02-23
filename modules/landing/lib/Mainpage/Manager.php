@@ -89,7 +89,7 @@ class Manager
 			$cacheParams = [];
 			if (!$this->isProcessing())
 			{
-				$cacheParams = ['ttl' => 180];
+				$cacheParams = ['ttl' => 86400];
 			}
 			$connectedSite = (Landing\Site::getList([
 				'select' => ['LANDING_ID_INDEX'],
@@ -186,7 +186,7 @@ class Manager
 			$cacheParams = [];
 			if (!$this->isProcessing())
 			{
-				$cacheParams = ['ttl' => 180];
+				$cacheParams = ['ttl' => 86400];
 			}
 			$exists = (Landing\Landing::getList([
 				'select' => ['ID'],

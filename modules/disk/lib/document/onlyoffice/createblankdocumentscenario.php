@@ -4,10 +4,12 @@ namespace Bitrix\Disk\Document\OnlyOffice;
 
 use Bitrix\Disk\Analytics\DiskAnalytics;
 use Bitrix\Disk\Analytics\Enum\DocumentHandlerType;
+use Bitrix\Disk\Analytics\Enum\DocumentTypeEnum;
 use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\User;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -36,7 +38,11 @@ final class CreateBlankDocumentScenario
 		return $userStorage->getFolderForCreatedFiles();
 	}
 
-	public function createBlank(string $typeFile, Folder $targetFolder): Result
+	public function createBlank(
+		string $typeFile,
+		Folder $targetFolder,
+		array $analytics = [],
+	): Result
 	{
 		$result = new Result();
 
@@ -72,8 +78,37 @@ true
 			return $result;
 		}
 
-		Application::getInstance()->addBackgroundJob(function () use ($newFile) {
-			DiskAnalytics::sendCreationFileEvent($newFile, DocumentHandlerType::Bitrix24);
+		Application::getInstance()->addBackgroundJob(function () use ($newFile, $analytics) {
+			$analyticsEvent = (new AnalyticsEvent(
+				event: 'create',
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setP4("fileId_{$newFile->getId()}")
+			;
+
+			$cElement = $analytics['c_element'] ?? null;
+
+			if (is_string($cElement))
+			{
+				$analyticsEvent->setElement($cElement);
+			}
+
+			$openFromDetail = $analytics['p2'] ?? null;
+
+			if (is_string($openFromDetail))
+			{
+				$analyticsEvent->setP2($openFromDetail);
+			}
+
+			$docType = DocumentTypeEnum::getByExtension($newFile->getExtension());
+
+			if ($docType instanceof DocumentTypeEnum)
+			{
+				$analyticsEvent->setP3($docType->value);
+			}
+
+			$analyticsEvent->send();
 		});
 
 		$result->setData([
@@ -83,8 +118,11 @@ true
 		return $result;
 	}
 
-	public function createBlankInDefaultFolder(string $typeFile): Result
+	public function createBlankInDefaultFolder(
+		string $typeFile,
+		array $analytics = [],
+	): Result
 	{
-		return $this->createBlank($typeFile, $this->getDefaultFolderForUser());
+		return $this->createBlank($typeFile, $this->getDefaultFolderForUser(), $analytics);
 	}
 }

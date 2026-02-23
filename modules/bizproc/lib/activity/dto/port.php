@@ -14,6 +14,7 @@ final class Port implements Arrayable, \JsonSerializable
 		/**	@deprecated */
 		public readonly int $position = 0,
 		public readonly string $title = '',
+		public readonly bool $isConnectionPort = false,
 		public readonly ?ActivityPortType $type = null,
 	) {}
 
@@ -23,17 +24,24 @@ final class Port implements Arrayable, \JsonSerializable
 			(string)($array['id'] ?? ''),
 			(int)($array['position'] ?? ''),
 			(string)($array['title'] ?? ''),
+			(bool)($array['isConnectionPort'] ?? false),
 			ActivityPortType::tryFrom((string)($array['type'] ?? '')),
 		);
 	}
 
 	public function toArray(): array
 	{
-		return [
+		$port = [
 			'id' => $this->id,
 			'title' => $this->title,
 			'type' => $this->type?->value,
 		];
+		if ($this->isConnectionPort === true)
+		{
+			$port['isConnectionPort'] = true;
+		}
+
+		return $port;
 	}
 
 	public function jsonSerialize(): array

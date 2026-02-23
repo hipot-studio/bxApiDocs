@@ -1,10 +1,10 @@
 <?php
 
 use Bitrix\Bizproc\Debugger\Workflow\DebugWorkflow;
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Main;
 use Bitrix\Bizproc;
-use Bitrix\Bizproc\RestActivityTable;
 
 /**
  * Workflow runtime.
@@ -38,13 +38,9 @@ class CBPRuntime
 	private static $instance;
 	private static $featuresCache = [];
 
-	private $services = [];
+	private array $services = [];
 	private $debugServices = [];
-	private $workflows = [];
-
-	private $loadedActivities = [];
-
-	private $activityFolders = [];
+	private array $workflows = [];
 	private $workflowChains = [];
 
 	/*********************  SINGLETON PATTERN  **************************************************/
@@ -55,26 +51,18 @@ class CBPRuntime
 	*/
 	private function __construct()
 	{
-		$this->workflows = array();
-		$this->services = array(
-			"SchedulerService" => null,
-			"StateService" => null,
-			"TrackingService" => null,
-			"TaskService" => null,
-			"HistoryService" => null,
-			"DocumentService" => null,
-			"AnalyticsService" => null,
-			"UserService" => null,
-			"AiDescriptionService" => null,
-		);
-		$this->loadedActivities = array();
-		$this->activityFolders = array(
-			$_SERVER["DOCUMENT_ROOT"]."/local/activities",
-			$_SERVER["DOCUMENT_ROOT"]."/local/activities/custom",
-			$_SERVER["DOCUMENT_ROOT"].BX_ROOT."/activities/custom",
-			$_SERVER["DOCUMENT_ROOT"].BX_ROOT."/activities/bitrix",
-			$_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/bizproc/activities",
-		);
+		$this->workflows = [];
+		$this->services = [
+			'SchedulerService' => null,
+			'StateService' => null,
+			'TrackingService' => null,
+			'TaskService' => null,
+			'HistoryService' => null,
+			'DocumentService' => null,
+			'AnalyticsService' => null,
+			'UserService' => null,
+			'AiDescriptionService' => null,
+		];
 	}
 
 	/**
@@ -332,13 +320,19 @@ class CBPRuntime
 	public function getWorkflow($workflowId, $silent = false)
 	{
 		if ($workflowId == '')
+		{
 			throw new Exception("workflowId");
+		}
 
 		if (!$this->isStarted)
+		{
 			$this->StartRuntime();
+		}
 
 		if (array_key_exists($workflowId, $this->workflows))
+		{
 			return $this->workflows[$workflowId];
+		}
 
 		$workflow = $this->getWorkflowInstance($workflowId);
 		$rootActivity = $workflow->getPersister()->LoadWorkflow($workflowId, $silent);
@@ -351,6 +345,7 @@ class CBPRuntime
 		$workflow->reload($rootActivity);
 
 		$this->workflows[$workflowId] = $workflow;
+
 		return $workflow;
 	}
 
@@ -405,7 +400,7 @@ class CBPRuntime
 
 	public static function generateWorkflowId(): string
 	{
-		return uniqid("", true);
+		return uniqid('', true);
 	}
 
 	/*******************  SERVICES  *********************************************************/
@@ -445,16 +440,24 @@ class CBPRuntime
 	public function addService($name, CBPRuntimeService $service)
 	{
 		if ($this->isStarted)
+		{
 			throw new Exception("Runtime is started");
+		}
 
 		$name = trim($name);
 		if ($name == '')
+		{
 			throw new Exception("Service code is empty");
+		}
 		if (!$service)
+		{
 			throw new Exception("Service is null");
+		}
 
 		if (array_key_exists($name, $this->services))
+		{
 			throw new Exception("Service is already exists");
+		}
 
 		$this->services[$name] = $service;
 	}
@@ -522,24 +525,10 @@ class CBPRuntime
 	*/
 	public function includeActivityFile($code)
 	{
-		if (in_array($code, $this->loadedActivities, true))
-		{
-			return true;
-		}
-
-		$searcher = Bizproc\Internal\Service\Container::instance()->getActivitySearcherService();
-
-		$normalizedCode = $searcher->normalizeActivityCode((string)$code);
-		if (in_array($normalizedCode, $this->loadedActivities, true))
-		{
-			return true;
-		}
-
-		$loadedActivityCode = $searcher->includeActivityFile($normalizedCode);
+		$searcher = Container::instance()->getActivitySearcherService();
+		$loadedActivityCode = $searcher->includeActivityFile((string)$code);
 		if ($loadedActivityCode)
 		{
-			$this->loadedActivities[] = $loadedActivityCode;
-
 			return true;
 		}
 
@@ -548,60 +537,39 @@ class CBPRuntime
 
 	public function getActivityDescription($code, $lang = false): ?array
 	{
-		if (empty($code) || preg_match("#\W#", (string)$code))
+		if (!is_string($code))
 		{
 			return null;
 		}
 
-		$code = mb_strtolower($code);
-		if (mb_substr($code, 0, 3) == "cbp")
+		if (!is_string($lang))
 		{
-			$code = mb_substr($code, 3);
+			$lang = null;
 		}
-		if ($code == '')
+
+		$activityDescription = Container::instance()
+			->getActivitySearcherService()
+			->searchByCode($code, $lang)
+		;
+		if (!$activityDescription)
 		{
 			return null;
 		}
 
-		$filePath = "";
-		$fileDir = "";
-		foreach ($this->activityFolders as $folder)
+		if (!$activityDescription->getFilter())
 		{
-			if (file_exists($folder."/".$code."/".$code.".php") && is_file($folder."/".$code."/".$code.".php"))
-			{
-				$filePath = $folder."/".$code."/.description.php";
-				$fileDir = $folder."/".$code;
-				break;
-			}
+			return $activityDescription->toArray();
 		}
 
-		if ($filePath <> '')
+		if (
+			mb_strpos($activityDescription->getClass() ?? '', static::REST_ACTIVITY_PREFIX) === 0
+			&& !$this->checkActivityFilter($activityDescription->getFilter())
+		)
 		{
-			$arActivityDescription = array();
-			if (file_exists($filePath) && is_file($filePath))
-			{
-				$this->LoadActivityLocalization($fileDir, ".description.php");
-				include($filePath);
-			}
-			$arActivityDescription["PATH_TO_ACTIVITY"] = $fileDir;
-
-			return $arActivityDescription;
+			$activityDescription->setExcluded(true);
 		}
 
-		if (mb_strpos($code, static::REST_ACTIVITY_PREFIX) === 0)
-		{
-			$code = mb_substr($code, mb_strlen(static::REST_ACTIVITY_PREFIX));
-			$result = RestActivityTable::getList(array(
-				'filter' => array('=INTERNAL_CODE' => $code),
-			));
-			$activity = $result->fetch();
-			if ($activity)
-			{
-				return $this->makeRestActivityDescription($activity, $lang);
-			}
-		}
-
-		return null;
+		return $activityDescription->toArray();
 	}
 
 	public function getActivityReturnProperties($codeOrActivity, $lang = false): array
@@ -640,39 +608,11 @@ class CBPRuntime
 
 	public function includeActivityAiDescriptionFile(string $code): bool
 	{
-		if (preg_match("#[^a-zA-Z0-9_]#", $code))
-		{
-			return false;
-		}
-
-		if ($code == '')
-		{
-			return false;
-		}
-
-		$filePath = '';
-		$fileDir = '';
-		foreach ($this->activityFolders as $folder)
-		{
-			$testFile = $folder . '/' . $code . '/.ai.php';
-			if (file_exists($testFile) && is_file($testFile))
-			{
-				$filePath = $testFile;
-				$fileDir = $folder . '/' . $code;
-				break;
-			}
-		}
-
-		if ($filePath === '')
-		{
-			return false;
-		}
-
-		$this->LoadActivityLocalization($fileDir, '.ai.php');
-
-		include_once($filePath);
-
-		return true;
+		return (
+			Container::instance()
+				->getActivitySearcherService()
+				->includeActivityAiDescriptionFile($code)
+		);
 	}
 
 	private function loadActivityLocalization($path, $file, $lang = false)
@@ -721,7 +661,7 @@ class CBPRuntime
 			return false;
 		}
 
-		$searcher = Bizproc\Internal\Service\Container::instance()->getActivitySearcherService();
+		$searcher = Container::instance()->getActivitySearcherService();
 
 		$activities =
 			$searcher->searchByType($type, $documentType)
@@ -744,7 +684,7 @@ class CBPRuntime
 	 */
 	public function getRestActivities($lang = false, $documentType = null)
 	{
-		$searcher = Bizproc\Internal\Service\Container::instance()->getActivitySearcherService();
+		$searcher = Container::instance()->getActivitySearcherService();
 
 		$activities =
 			$searcher->searchRestByType(Bizproc\Activity\Enum\ActivityType::ACTIVITY, $lang ?: null)
@@ -762,7 +702,7 @@ class CBPRuntime
 	 */
 	public function getRestRobots($lang = false, $documentType = null)
 	{
-		$searcher = Bizproc\Internal\Service\Container::instance()->getActivitySearcherService();
+		$searcher = Container::instance()->getActivitySearcherService();
 
 		$activities =
 			$searcher->searchRestByType(Bizproc\Activity\Enum\ActivityType::ROBOT, $lang ?: null)
@@ -778,20 +718,20 @@ class CBPRuntime
 		$usedActivities = mb_substr($stream, 0, $pos);
 		$stream = mb_substr($stream, $pos + 1);
 
+		$searcher = Container::instance()->getActivitySearcherService();
 		foreach (explode(',', $usedActivities) as $activityCode)
 		{
-			$this->IncludeActivityFile($activityCode);
+			$searcher->includeActivityFile((string)$activityCode);
 		}
 
 		$classesList = array_map(
-			function ($name)
+			static function ($name)
 			{
-				return 'cbp'.$name;
+				return 'cbp' . $name;
 			},
-			$this->loadedActivities
+			$searcher->getLoadedActivities()
 		);
 
-		/** @bug 0135642 */
 		if (in_array('cbpstateactivity', $classesList))
 		{
 			$classesList[] = CBPStateEventActivitySubscriber::class;

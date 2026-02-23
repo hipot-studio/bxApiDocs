@@ -17,7 +17,8 @@ class WorkflowStateRepository
 	public function getStaleWorkflowsWithoutTasks(
 		array $select,
 		Date $beforeDate,
-		int $limit
+		int $limit,
+		Date $afterDate = null,
 	): WorkflowStateCollection
 	{
 		$query =
@@ -25,9 +26,17 @@ class WorkflowStateRepository
 				->setSelect($select)
 				->whereNull('INSTANCE.ID')
 				->whereNull('TASKS.ID')
+				->whereNull('TASKS_ARCHIVE.ID')
 				->where('STARTED', '<', $beforeDate)
 				->setLimit($limit)
+				->setOrder(['STARTED' => 'ASC'])
 		;
+
+		if ($afterDate)
+		{
+			$query->where('STARTED', '>=', $afterDate);
+		}
+
 		$ormWorkflowStates = $query->fetchCollection();
 
 		return $this->mapper->convertCollectionFromOrm($ormWorkflowStates);

@@ -3,9 +3,13 @@
 namespace Bitrix\Bizproc\Starter\Dto;
 
 use Bitrix\Bizproc\Starter\Enum\Scenario;
+use Bitrix\Bizproc\Starter\Constraint\ConstraintInterface;
 
 final class StarterConfigDto
 {
+	/**
+	 * @param ConstraintInterface[] $constraints
+	 */
 	public function __construct(
 		public readonly Scenario $scenario,
 		public bool $checkFeature = true,
@@ -13,6 +17,7 @@ final class StarterConfigDto
 		public bool $validateParameters = true,
 		public bool $checkConstants = true,
 		public bool $isDebug = false,
+		public array $constraints = [],
 	)
 	{}
 }

@@ -1177,13 +1177,13 @@ EOS;
 		return CBPHelper::SetGUIFieldEdit($parameterDocumentType, $fieldName, $arRequest, $arErrors, $arDocumentField);
 	}
 
-	public function getDocumentAdminPage($parameterDocumentId)
+	public function getDocumentAdminPage($parameterDocumentId): string
 	{
 		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
 		if ($this->isCallable($moduleId, $entity, 'GetDocumentAdminPage'))
 		{
-			return $this->call($entity, 'GetDocumentAdminPage', $documentId);
+			return (string)$this->call($entity, 'GetDocumentAdminPage', $documentId);
 		}
 
 		return '';

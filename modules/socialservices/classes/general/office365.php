@@ -228,8 +228,29 @@ class CSocServOffice365OAuth extends CSocServAuth
 					{
 						$arFields = $this->prepareUser($office365User);
 						$bSuccess = $this->AuthorizeUser($arFields);
+
+						if ($bSuccess !== true)
+						{
+							$this->log(static::ID, 'Authorize user error: ' . $bSuccess);
+						}
+					}
+					else
+					{
+						$this->log(static::ID, 'Invalid tenant');
 					}
 				}
+				else
+				{
+					$this->log(
+						static::ID,
+						'Not found current user',
+						is_array($office365User) ? $office365User : null,
+					);
+				}
+			}
+			else
+			{
+				$this->log(static::ID, 'Cannot load access token');
 			}
 		}
 
@@ -305,7 +326,7 @@ class CSocServOffice365OAuth extends CSocServAuth
 		{
 			$this->onAfterMobileAuth();
 		}
-		else
+		elseif (!isset($_REQUEST['auth_service_error']))
 		{
 			$this->onAfterWebAuth($addParams, $mode, $url);
 		}

@@ -53,7 +53,24 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 					$arFields = $this->prepareUser($arGoogleUser);
 					$arFields['USER_ID'] = $this->user->getId();
 					$authError = $this->AuthorizeUser($arFields);
+
+					if ($authError !== true)
+					{
+						$this->log(static::ID, 'Authorize user error: ' . $authError);
+					}
 				}
+				elseif (isset($arGoogleUser["error"]))
+				{
+					$this->log(static::ID, 'Google error: ' . $arGoogleUser["error"]);
+				}
+				else
+				{
+					$this->log(static::ID, 'Not found current user');
+				}
+			}
+			else
+			{
+				$this->log(static::ID, 'Cannot load access token');
 			}
 		}
 
@@ -128,7 +145,7 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 		{
 			$this->onAfterMobileAuth();
 		}
-		else
+		elseif (!isset($_REQUEST['auth_service_error']))
 		{
 			$this->onAfterWebAuth($addParams, $mode, $url);
 		}

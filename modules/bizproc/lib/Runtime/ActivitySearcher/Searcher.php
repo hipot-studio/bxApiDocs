@@ -5,23 +5,28 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Runtime\ActivitySearcher;
 
 use Bitrix\Bizproc\Activity\ActivityDescription;
+use Bitrix\Bizproc\Activity\Mixins\ActivityFilterChecker;
 use Bitrix\Bizproc\RestActivityTable;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Activity\Mixins\ActivityDescriptionBuilder;
+use Bitrix\Main\IO;
 use Bitrix\Main\Loader;
+use CBPRuntime;
 
 class Searcher
 {
 	use ActivityDescriptionBuilder;
 
 	private const DESCRIPTION_FILE_NAME = '.description.php';
+	private const AI_DESCRIPTION_FILE_NAME = '.ai.php';
 
-	public readonly array $folders;
+	private readonly array $folders;
+
+	private array $loadedActivities = [];
 
 	public function __construct()
 	{
 		$root = $_SERVER['DOCUMENT_ROOT'];
-
 		$this->folders = [
 			$root . '/local/activities',
 			$root . '/local/activities/custom',
@@ -33,45 +38,56 @@ class Searcher
 		Loader::requireModule('ui');
 	}
 
+	private function addLoadedActivity(string $code): void
+	{
+		$this->loadedActivities[$code] = true;
+	}
+
+	private function isLoadedActivity(string $code): bool
+	{
+		return isset($this->loadedActivities[$code]);
+	}
+
+	public function getLoadedActivities(): array
+	{
+		return array_keys($this->loadedActivities);
+	}
+
 	public function searchByType(string|array $type, ?array $documentType = null): Activities
 	{
 		$targetTypes = array_map(
 			static fn($t) => mb_strtolower(trim((string)$t)),
-			\CBPHelper::flatten($type)
+			\CBPHelper::flatten($type),
 		);
 
 		$activities = new Activities();
 		foreach ($this->folders as $folder)
 		{
-			if (is_dir($folder) && $handle = opendir($folder))
+			$directory = new IO\Directory($folder);
+			if ($directory->isExists())
 			{
-				while (false !== ($dir = readdir($handle)))
+				foreach ($directory->getChildren() as $dir)
 				{
-					if ($dir === '.' || $dir === '..')
+					if (!$dir->isDirectory())
 					{
 						continue;
 					}
 
-					if (!is_dir($folder . '/' . $dir))
-					{
-						continue;
-					}
-
-					$key = mb_strtolower($dir);
+					$dirName = $dir->getName();
+					$key = mb_strtolower($dirName);
 					if ($activities->has($key))
 					{
 						continue;
 					}
 
-					if (!file_exists($folder . '/' . $dir . '/.description.php'))
+					if (!IO\File::isFileExists($dir->getPath() . '/' . self::DESCRIPTION_FILE_NAME))
 					{
 						continue;
 					}
 
-					$arActivityDescription = $this->includeActivityDescription($folder, $dir, $documentType);
-
+					$description = $this->includeActivityDescription($folder, $dirName, $documentType);
 					//Support multiple types
-					$activityType = (array)($arActivityDescription['TYPE'] ?? null);
+					$activityType = (array)($description['TYPE'] ?? null);
 					foreach ($activityType as $i => $singleType)
 					{
 						$activityType[$i] = mb_strtolower(trim($singleType));
@@ -79,12 +95,10 @@ class Searcher
 
 					if (count(array_intersect($targetTypes, $activityType)) > 0)
 					{
-						$arActivityDescription['PATH_TO_ACTIVITY'] = $folder . '/' . $dir;
-						$activities->add($key, $this->buildActivityDescription($arActivityDescription));
+						$description['PATH_TO_ACTIVITY'] = $folder . '/' . $dirName;
+						$activities->add($key, $this->buildActivityDescription($description));
 					}
 				}
-
-				closedir($handle);
 			}
 		}
 
@@ -121,7 +135,7 @@ class Searcher
 
 		if ($this->isRestActivityCode($normalizedCode))
 		{
-			$activity = $this->findRestActivityByInternalCode($this->extractRestInternalCode($normalizedCode));
+			$activity = $this->findRestActivityByInternalCode($this->extractRestInternalCode($normalizedCode), ['*']);
 			if (!$activity)
 			{
 				return null;
@@ -159,8 +173,8 @@ class Searcher
 		$targetTypes = array_filter(
 			array_map(
 				static fn($t) => $t instanceof ActivityType ? $t : null,
-				\CBPHelper::flatten($type)
-			)
+				\CBPHelper::flatten($type),
+			),
 		);
 
 		$activities = [];
@@ -170,7 +184,7 @@ class Searcher
 			$iterator = RestActivityTable::getList(['filter' => ['=IS_ROBOT' => 'N'], 'cache' => ['ttl' => 3600]]);
 			while ($activity = $iterator->fetch())
 			{
-				$key = \CBPRuntime::REST_ACTIVITY_PREFIX . $activity['INTERNAL_CODE'];
+				$key = CBPRuntime::REST_ACTIVITY_PREFIX . $activity['INTERNAL_CODE'];
 				$activities[$key] = $this->buildRestActivityDescription($activity, $lang);
 			}
 		}
@@ -180,7 +194,7 @@ class Searcher
 			$iterator = RestActivityTable::getList(['filter' => ['=IS_ROBOT' => 'Y'], 'cache' => ['ttl' => 3600]]);
 			while ($activity = $iterator->fetch())
 			{
-				$key = \CBPRuntime::REST_ACTIVITY_PREFIX . $activity['INTERNAL_CODE'];
+				$key = CBPRuntime::REST_ACTIVITY_PREFIX . $activity['INTERNAL_CODE'];
 				$activities[$key] = $this->buildRestRobotDescription($activity, $lang);
 			}
 		}
@@ -214,35 +228,68 @@ class Searcher
 	public function includeActivityFile(string $code): bool | string
 	{
 		$normalizedCode = $this->normalizeActivityCode($code);
+		if ($this->isLoadedActivity($normalizedCode))
+		{
+			return $normalizedCode;
+		}
+
+		$isRestActivity = $this->isRestActivityCode($normalizedCode);
+
 		if (
 			!$this->isCorrectActivityCode($normalizedCode)
-			|| (!$this->isActivityExists($normalizedCode) && !$this->isRestActivityCode($normalizedCode))
+			|| (!$this->isActivityExists($normalizedCode) && !$isRestActivity)
 		)
 		{
 			return false;
 		}
 
-		if ($this->isRestActivityCode($normalizedCode))
+		if ($isRestActivity)
 		{
 			$internalCode = $this->extractRestInternalCode($normalizedCode);
 			$activity = $this->findRestActivityByInternalCode($internalCode);
+
 			eval(
 				'class CBP'
-				. \CBPRuntime::REST_ACTIVITY_PREFIX
+				. CBPRuntime::REST_ACTIVITY_PREFIX
 				. $internalCode
 				. ' extends CBPRestActivity {const REST_ACTIVITY_ID = '
 				. ($activity ? $activity['ID'] : 0)
 				. ';}'
 			);
 
-			return \CBPRuntime::REST_ACTIVITY_PREFIX . $internalCode;
+			$restLoadedActivity = CBPRuntime::REST_ACTIVITY_PREFIX . $internalCode;
+			$this->addLoadedActivity($restLoadedActivity);
+
+			return $restLoadedActivity;
 		}
 
 		[$filePath, $dirPath] = $this->findActivityFile($normalizedCode);
 		$this->loadLocalization($dirPath, $normalizedCode . '.php');
 		include_once($filePath);
 
+		$this->addLoadedActivity($normalizedCode);
+
 		return $normalizedCode;
+	}
+
+	public function includeActivityAiDescriptionFile(string $code): bool
+	{
+		$normalizedCode = $this->normalizeActivityCode($code);
+		if (!$this->isCorrectActivityCode($normalizedCode))
+		{
+			return false;
+		}
+
+		[$filePath, $dirPath] = $this->findActivityAiDescriptionFile($normalizedCode);
+		if (!$filePath)
+		{
+			return false;
+		}
+
+		$this->loadLocalization($dirPath, static::AI_DESCRIPTION_FILE_NAME);
+		include_once($filePath);
+
+		return true;
 	}
 
 	/**
@@ -254,7 +301,26 @@ class Searcher
 		foreach ($this->folders as $folder)
 		{
 			$fileName = $folder . '/' . $code . '/' . $code . '.php';
-			if (file_exists($fileName) && is_file($fileName))
+			if (IO\File::isFileExists($fileName))
+			{
+				return [$fileName, $folder . '/' . $code];
+			}
+		}
+
+		return [null, null];
+	}
+
+	/**
+	 * @param string $code
+	 *
+	 * * @return array{0: string|null, 1: string|null}
+	 */
+	private function findActivityAiDescriptionFile(string $code): array
+	{
+		foreach ($this->folders as $folder)
+		{
+			$fileName = $folder . '/' . $code . '/' . static::AI_DESCRIPTION_FILE_NAME;
+			if (IO\File::isFileExists($fileName))
 			{
 				return [$fileName, $folder . '/' . $code];
 			}
@@ -276,28 +342,23 @@ class Searcher
 
 	private function isRestActivityCode(string $code): bool
 	{
-		return str_starts_with($code, \CBPRuntime::REST_ACTIVITY_PREFIX);
+		return str_starts_with($code, CBPRuntime::REST_ACTIVITY_PREFIX);
 	}
 
 	private function isCorrectActivityCode(string $code): bool
 	{
-		if (empty($code) || preg_match("#\W#", $code))
-		{
-			return false;
-		}
-
-		return true;
+		return !(empty($code) || preg_match("#\W#", $code));
 	}
 
 	private function extractRestInternalCode(string $code): string
 	{
-		return mb_substr($code, mb_strlen(\CBPRuntime::REST_ACTIVITY_PREFIX));
+		return mb_substr($code, mb_strlen(CBPRuntime::REST_ACTIVITY_PREFIX));
 	}
 
-	private function findRestActivityByInternalCode(string $internalCode): ?array
+	private function findRestActivityByInternalCode(string $internalCode, array $fieldsToSelect = ['ID']): ?array
 	{
 		$activity = RestActivityTable::getList([
-			'select' => ['ID'],
+			'select' => $fieldsToSelect,
 			'filter' => ['=INTERNAL_CODE' => $internalCode],
 			'cache' => ['ttl' => 3600],
 			'limit' => 1,
@@ -326,6 +387,6 @@ class Searcher
 
 	private function loadLocalization(string $path, string $filename): void
 	{
-		\Bitrix\Main\Localization\Loc::loadLanguageFile($path. '/'. $filename);
+		\Bitrix\Main\Localization\Loc::loadLanguageFile($path . '/' . $filename);
 	}
 }

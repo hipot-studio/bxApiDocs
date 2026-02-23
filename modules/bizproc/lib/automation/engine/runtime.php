@@ -20,6 +20,7 @@ class Runtime
 
 	protected $target;
 	protected static $startedTemplates = [];
+	protected ?int $startDelay = null;
 	private static array $clearMap = [];
 
 	public function setTarget(BaseTarget $target)
@@ -40,6 +41,13 @@ class Runtime
 		}
 
 		return $this->target;
+	}
+
+	public function setStartDelay(?int $delay): static
+	{
+		$this->startDelay = $delay;
+
+		return $this;
 	}
 
 	protected function getWorkflowInstanceIds()
@@ -147,6 +155,7 @@ class Runtime
 				\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE =>
 					$isDebug ? \CBPDocumentEventType::Debug : \CBPDocumentEventType::Automation,
 				\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID => $preGeneratedWorkflowId ?? null,
+				\CBPDocument::PARAM_START_WORKFLOW_DELAY => $this->startDelay,
 			];
 
 			if (isset($trigger['RETURN']) && is_array($trigger['RETURN']))
@@ -196,7 +205,7 @@ class Runtime
 
 	protected function writeTriggerTracking($workflowId, $trigger)
 	{
-		$trackingService = \CBPRuntime::getRuntime(true)->getTrackingService();
+		$trackingService = \CBPRuntime::getRuntime()->getTrackingService();
 
 		$trackingService->write(
 			$workflowId,

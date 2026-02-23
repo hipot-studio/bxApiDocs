@@ -13,20 +13,29 @@ use Bitrix\Disk\Version;
 
 class HtmlRenderableFileHandlerFactory
 {
-	public function createHandler(File $file, ?AttachedObject $attachedObject = null, ?Version $version = null): HtmlRenderableFileHandler
+	public function createHandler(
+		File $file,
+		?AttachedObject $attachedObject = null,
+		?Version $version = null,
+		array $analytics = [],
+	): HtmlRenderableFileHandler
 	{
 		$typeFile = (int)$file->getTypeFile();
 		$documentSource = $this->getDocumentSource($file, $attachedObject, $version);
 
 		return match ($typeFile)
 		{
-			TypeFile::DOCUMENT, TypeFile::PDF => $this->getDocumentHandler($file, $documentSource),
+			TypeFile::DOCUMENT, TypeFile::PDF => $this->getDocumentHandler($file, $documentSource, $analytics),
 			TypeFile::FLIPCHART => new BoardHtmlRenderableFileHandler($file, $documentSource),
 			default => new DefaultHtmlRenderableFileHandler($file),
 		};
 	}
 
-	private function getDocumentHandler(File $file, DocumentSource $documentSource): HtmlRenderableFileHandler
+	private function getDocumentHandler(
+		File $file,
+		DocumentSource $documentSource,
+		array $analytics = [],
+	): HtmlRenderableFileHandler
 	{
 		$driver = Driver::getInstance();
 		$handlersManager = $driver->getDocumentHandlersManager();
@@ -37,7 +46,7 @@ class HtmlRenderableFileHandlerFactory
 			return new DefaultHtmlRenderableFileHandler($file);
 		}
 
-		return new OnlyOfficeHtmlRenderableFileHandler($file, $documentSource);
+		return new OnlyOfficeHtmlRenderableFileHandler($file, $documentSource, $analytics);
 	}
 
 	private function getDocumentSource(File $file, ?AttachedObject $attachedObject, ?Version $version = null): DocumentSource

@@ -28,6 +28,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	private $fullFormatWithoutSec;
 
 	private Disk\Type\DocumentGridVariant $variant = Disk\Type\DocumentGridVariant::All;
+	private ?array $analytics = null;
 
 	public function __construct($component = null)
 	{
@@ -76,6 +77,8 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		{
 			$this->arResult['HIDE_BUTTONS'] = true;
 		}
+
+		$this->analytics = $this->arParams['ANALYTICS'] ?? ['c_element' => 'docs_page'];
 
 		return parent::prepareParams();
 	}
@@ -235,6 +238,15 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 						];
 					},  $this->arResult['DOCUMENT_HANDLERS']),
 				]);
+
+				if ($file->supportsUnifiedLink() && !empty($this->analytics))
+				{
+					$attr->setUnifiedLinkOptions([
+						'additionalQueryParams' => [
+							'analytics' => $this->analytics,
+						],
+					]);
+				}
 			}
 
 			$item['ATTRIBUTES'] = $attr;
@@ -603,6 +615,8 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			'IS_VIEWED' => $this->isBoardsGuideViewed(),
 			'IS_BOARDS_PAGE' => $this->variant === DocumentGridVariant::FlipchartList,
 		];
+
+		$this->arResult['ANALYTICS'] = $this->analytics;
 
 		$this->includeComponentTemplate();
 

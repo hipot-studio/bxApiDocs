@@ -6,6 +6,7 @@ namespace Bitrix\Bizproc\Starter;
 
 use Bitrix\Bizproc\Public\Service\Document\InspectorService;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
+use Bitrix\Bizproc\Starter\Constraint\BPDesignerConstraint;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\MetaDataDto;
@@ -13,7 +14,9 @@ use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
+
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\ModuleManager;
 
@@ -32,6 +35,14 @@ final class Starter
 		$processDto = new StarterConfigDto(scenario: $scenario);
 		$automationDto = new StarterConfigDto(scenario: $scenario, validateParameters: false, checkConstants: false);
 
+		if ($scenario === Scenario::onEvent)
+		{
+			$processDto->constraints[] = ServiceLocator::getInstance()->get(BPDesignerConstraint::class);
+
+			$processDto->validateParameters = false;
+			$processDto->checkConstants = false;
+		}
+
 		return match ($scenario)
 		{
 			Scenario::onDocumentInnerAdd,
@@ -44,12 +55,10 @@ final class Starter
 			),
 			Scenario::onDocumentAdd,
 			Scenario::onDocumentUpdate,
+			Scenario::onEvent,
 				=> new self(
 					new StarterDto(process: $processDto, automation: $automationDto)
 				),
-			Scenario::onEvent => new self(
-				new StarterDto(process: $automationDto, automation: $automationDto)
-			),
 			Scenario::onScript => new self(
 				new StarterDto(automation: $automationDto)
 			),
@@ -184,6 +193,14 @@ final class Starter
 
 		$this->processStarter?->setContext($context);
 		$this->automationStarter?->setContext($context);
+
+		return $this;
+	}
+
+	public function setDelay(?int $delay = null): self
+	{
+		$this->processStarter?->setDelay($delay);
+		$this->automationStarter?->setDelay($delay);
 
 		return $this;
 	}

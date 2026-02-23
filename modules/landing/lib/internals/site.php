@@ -1019,23 +1019,31 @@ class SiteTable extends Entity\DataManager
 									{
 										$row = self::getList(array(
 											'select' => array(
-												'TYPE'
+												'TYPE', 'CODE'
 											),
 											'filter' => array(
 												'ID' => $primary['ID']
 											)
 									 	))->fetch();
+
+										$type = 'site';
 										if ($row['TYPE'] == 'STORE')// fix for controller
 										{
-											$row['TYPE'] = 'shop';
+											$type = 'shop';
 										}
+										$isFormSpecialType = Site\Type::getSiteSpecialType($row['CODE']) === Site\Type::PSEUDO_SCOPE_CODE_FORMS;
+										if ($isFormSpecialType)
+										{
+											$type = 'form';
+										}
+
 										if ($domainName)
 										{
 											$siteController::addDomain(
 												$domainName,
 												$publicUrl,
 												'N',
-												$row['TYPE'],
+												$type,
 												self::prepareLangForController(Manager::getZone())
 											);
 										}
@@ -1043,7 +1051,7 @@ class SiteTable extends Entity\DataManager
 										{
 											$domainName = $siteController::addRandomDomain(
 												$publicUrl,
-												$row['TYPE'],
+												$type,
 												self::prepareLangForController(Manager::getZone())
 											);
 										}
@@ -1137,6 +1145,7 @@ class SiteTable extends Entity\DataManager
 		$res = self::getList([
 			'select' => [
 				'ID',
+				'CODE',
 				'TYPE',
 				'LANG',
 				'DOMAIN_ID',
@@ -1150,6 +1159,7 @@ class SiteTable extends Entity\DataManager
 		{
 			$domains[] = [
 				'ID' => $row['ID'],
+				'CODE' => $row['CODE'],
 				'TYPE' => $row['TYPE'],
 				'LANG' => $row['LANG'],
 				'DOMAIN_ID' => $row['DOMAIN_ID'],
@@ -1179,11 +1189,20 @@ class SiteTable extends Entity\DataManager
 				for ($i = 0; $i <= 1; $i++)
 				{
 					$siteController::deleteDomain($domains[$i]['DOMAIN_NAME']);
+					$type = $domains[$i]['TYPE'];
+					if ($domains[$i]['TYPE'] === 'STORE')
+					{
+						$type = 'shop';
+					}
+					if (Site\Type::getSiteSpecialType($domains[$i]['CODE']) === Site\Type::PSEUDO_SCOPE_CODE_FORMS)
+					{
+						$type = 'form';
+					}
 					$siteController::addDomain(
 						$domains[$i]['DOMAIN_NAME'],
 						Manager::getPublicationPath($domains[$i == 0 ? 1 : 0]['ID']),
 						'Y',
-						($domains[$i]['TYPE'] == 'STORE') ? 'shop' : $domains[$i]['TYPE'],
+						$type,
 						self::prepareLangForController($domains[$i]['LANG'] ?? Manager::getZone())
 					);
 				}
@@ -1204,6 +1223,7 @@ class SiteTable extends Entity\DataManager
 		$res = self::getList([
 			'select' => [
 				'ID',
+				'CODE',
 				'TYPE',
 				'DOMAIN_ID',
 				'DOMAIN_NAME' => 'DOMAIN.DOMAIN'
@@ -1218,10 +1238,20 @@ class SiteTable extends Entity\DataManager
 			$publicUrl = Manager::getPublicationPath($row['ID']);
 			try
 			{
+				$isFormSpecialType = Site\Type::getSiteSpecialType($row['CODE']) === Site\Type::PSEUDO_SCOPE_CODE_FORMS;
 				$siteController::deleteDomain($row['DOMAIN_NAME']);
+				$type = $row['TYPE'];
+				if ($row['TYPE'] === 'STORE')
+				{
+					$type = 'shop';
+				}
+				if ($isFormSpecialType)
+				{
+					$type = 'form';
+				}
 				$domainName = $siteController::addRandomDomain(
 					$publicUrl,
-					($row['TYPE'] == 'STORE') ? 'shop' : $row['TYPE'],
+					$type,
 					self::prepareLangForController(Manager::getZone())
 				);
 				if ($domainName)

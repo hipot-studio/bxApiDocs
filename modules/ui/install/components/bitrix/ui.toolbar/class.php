@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UI\Extension;
@@ -30,7 +31,8 @@ class UIToolbarComponent extends CBitrixComponent
 		$this->arResult["CONTAINER_ID"] = (
 			$this->toolbarId === Toolbar::DEFAULT_ID
 				? 'uiToolbarContainer'
-				: 'toolbar_' . $this->randString());
+				: 'toolbar_' . $this->randString()
+		);
 
 		$GLOBALS["APPLICATION"]->addBufferContent([$this, "includeTemplate"]);
 
@@ -57,34 +59,7 @@ class UIToolbarComponent extends CBitrixComponent
 
 		ob_start();
 
-		$pageTitle = $GLOBALS["APPLICATION"]->getViewContent("pagetitle");
-		$insidePageTitle = $GLOBALS["APPLICATION"]->getViewContent("inside_pagetitle");
-		$inPageTitle = $GLOBALS["APPLICATION"]->getViewContent("in_pagetitle");
-
-		$isBitrix24Cloud = ModuleManager::isModuleInstalled("bitrix24");
-		/** @var \CIntranetToolbar $oldToolbar */
-		$oldToolbar = null;
-		if (isset($GLOBALS["INTRANET_TOOLBAR"]))
-		{
-			$oldToolbar = $GLOBALS["INTRANET_TOOLBAR"];
-		}
-		$oldToolbarButtons = (
-			!$isBitrix24Cloud
-			&& (
-				$oldToolbar instanceof \CIntranetToolbar
-				&& $oldToolbar->isEnabled()
-				&& count($oldToolbar->getButtons()) > 0
-			));
-
-		$shouldUseOldTemplate = $pageTitle <> '' || $insidePageTitle <> '' || $inPageTitle <> '' || $oldToolbarButtons;
-		if ($shouldUseOldTemplate && $this->toolbarId === Toolbar::DEFAULT_ID)
-		{
-			$this->includeComponentTemplate("old");
-		}
-		else
-		{
-			$this->includeComponentTemplate();
-		}
+		$this->includeComponentTemplate();
 
 		return ob_get_clean();
 	}
@@ -109,6 +84,11 @@ class UIToolbarComponent extends CBitrixComponent
 			{
 				return true;
 			}
+		}
+
+		if (Application::getInstance()->getContext()->getRequest()->get('disableToolbarBuffering') === 'Y') // used for debugging
+		{
+			return true;
 		}
 
 		return false;

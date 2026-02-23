@@ -27,7 +27,7 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 	protected const REQUIRES_PERSONAL_DATA_OBFUSCATION = false;
 
 	protected const ABSENT_QUALITIES = [
-		Quality::QUALITIES['ai_site'],
+//		Quality::QUALITIES['ai_site'],
 	];
 
 	protected int $modelContextLimit = 15745;

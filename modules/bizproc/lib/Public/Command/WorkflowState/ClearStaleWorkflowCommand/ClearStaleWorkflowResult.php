@@ -6,7 +6,10 @@ use Bitrix\Main\Result;
 
 class ClearStaleWorkflowResult extends Result
 {
-	public function __construct(public readonly bool $isReachedLimit = false)
+	public function __construct(
+		public readonly bool $isReachedLimit = false,
+		public readonly ?int $lastStarted = null,
+	)
 	{
 		parent::__construct();
 	}

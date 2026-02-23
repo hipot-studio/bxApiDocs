@@ -6,6 +6,9 @@ use ArrayIterator;
 use Bitrix\Bizproc\Activity\ActivityDescription;
 use Bitrix\Bizproc\Activity\Mixins\ActivityFilterChecker;
 
+/**
+ * @extends \IteratorAggregate<ActivityDescription>
+ */
 final class Activities implements \IteratorAggregate, \JsonSerializable
 {
 	use ActivityFilterChecker;

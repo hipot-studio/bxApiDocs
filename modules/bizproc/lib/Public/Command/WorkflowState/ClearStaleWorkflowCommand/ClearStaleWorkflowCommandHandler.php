@@ -11,12 +11,19 @@ class ClearStaleWorkflowCommandHandler
 	public function __construct()
 	{}
 
-	public function __invoke(ClearStaleWorkflowCommand $command): bool
+	public function __invoke(ClearStaleWorkflowCommand $command): ClearStaleWorkflowHandlerResult
 	{
+		$afterDate = null;
+		if ($command->afterDate)
+		{
+			$afterDate = Date::createFromTimestamp($command->afterDate);
+		}
+
 		$workflows = (new WorkflowStateProvider)->getStaleWorkflowsWithoutTasks(
-			['ID'],
+			['ID', 'STARTED'],
 			Date::createFromTimestamp(strtotime('-1 year')),
 			$command->limit,
+			$afterDate,
 		);
 
 		foreach ($workflows as $workflow)
@@ -24,6 +31,9 @@ class ClearStaleWorkflowCommandHandler
 			\CBPDocument::killCompletedWorkflowWithoutTasks($workflow->getId());
 		}
 
-		return $workflows->count() === $command->limit;
+		return new ClearStaleWorkflowHandlerResult(
+			$workflows->count() === $command->limit,
+			$workflows->getLastCollectionItem()?->getStarted()
+		);
 	}
 }

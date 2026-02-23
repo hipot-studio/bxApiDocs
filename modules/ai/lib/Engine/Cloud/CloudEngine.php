@@ -8,6 +8,7 @@ use Bitrix\AI\Engine\Service\RuleService;
 use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Engine\IEngine;
+use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Payload\Text;
 use Bitrix\AI\QueueJob;
@@ -279,6 +280,11 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 	 */
 	protected function initErrorLimit(Error $errorLimit): void
 	{
+		Analytics::sendAiQueryLimitEvent(
+			$errorLimit->getCustomData()['errorLimitType'] ?? $errorLimit->getCode(),
+			$this->getContext()->getModuleId(),
+		);
+
 		$this->queueJob->cancel();
 
 		call_user_func(

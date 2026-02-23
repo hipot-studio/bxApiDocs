@@ -10,6 +10,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Document\OnlyOffice;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
@@ -193,6 +194,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			'NAME' => $documentSession->getObject()->getName(),
 			'SIZE' => $documentSession->getObject()->getSize(),
 			'SIZE_READABLE' => CFile::FormatSize($documentSession->getObject()->getSize()),
+			'DOC_TYPE' => Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($documentSession->getObject()->getExtension())?->value,
 		];
 		$this->arResult['ATTACHED_OBJECT'] = [
 			'ID' => $documentSession->getContext()->getAttachedObjectId(),
@@ -485,7 +487,12 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	{
 		if ($this->unifiedLinkMode)
 		{
-			$unifiedLinkOptions = [];
+			$unifiedLinkOptions = [
+				'additionalQueryParams' => [
+					'analytics' => $this->arParams['ANALYTICS'] ?? null,
+				],
+			];
+
 			$attachedObjectId = (int)$documentSession->getContext()?->getAttachedObjectId();
 			if ($attachedObjectId > 0)
 			{
@@ -710,6 +717,35 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		$documentSession->transformToView();
+
+		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
+			$file = $documentSession->getFile();
+
+			$analyticsEvent = (new AnalyticsEvent(
+				event: 'oo_limit_edit',
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setSubSection('old_element')
+				->setP4("fileId_{$file->getId()}")
+			;
+
+			$cElement = $this->arParams['ANALYTICS']['c_element'] ?? null;
+
+			if (is_string($cElement))
+			{
+				$analyticsEvent->setElement($cElement);
+			}
+
+			$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
+
+			if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
+			{
+				$analyticsEvent->setP3($docType->value);
+			}
+
+			$analyticsEvent->send();
+		});
 
 		return $this->getLinkToView($documentSession, true);
 	}

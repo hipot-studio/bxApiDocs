@@ -100,6 +100,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private bool $isUserCollaber = false;
 	private ?Cookie $readOnlyCollabFolderStateCookie = null;
 	private ScopeTokenService $scopeTokenService;
+	private ?array $analytics = null;
 
 	public function __construct($component = null)
 	{
@@ -215,6 +216,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		{
 			$this->trashMode = true;
 		}
+
+		$this->analytics = $this->arParams['ANALYTICS'] ?? ['c_element' => 'disk_page'];
 
 		return $this;
 	}
@@ -364,6 +367,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'COLLABER_TOUR_ON_ADD_BUTTON_ID' => self::COLLABER_TOUR_ON_ADD_BUTTON_ID,
 			'IS_COLLABER_TOUR_ON_ADD_BUTTON_VIEWED' => $this->isCollaberTourOnAddButtonViewed(),
 			'READONLY_COLLAB_FOLDER_STATE_COOKIE_NAME' => $this->getReadOnlyCollabFolderStateCookie()->getName(),
+			'ANALYTICS' => $this->analytics,
 		];
 
 		if ($this->gridOptions->getViewMode() === FolderListOptions::VIEW_MODE_TILE)
@@ -663,7 +667,15 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 				if ($isFile && !$isBoard && $supportsUnifiedLink)
 				{
-					$viewUnifiedLink = $urlManager->getUnifiedLink($object);
+					$viewUnifiedLinkOptions = [];
+
+					if (!empty($this->analytics))
+					{
+						$viewUnifiedLinkOptions['additionalQueryParams']['analytics'] = $this->analytics;
+					}
+
+					$viewUnifiedLink = $urlManager->getUnifiedLink($object, $viewUnifiedLinkOptions);
+
 					$actions[] = [
 						'id' => 'view',
 						'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_OPEN'),
@@ -1153,6 +1165,14 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 							],
 						);
 					}
+				}
+				elseif ($isFile && $supportsUnifiedLink && !empty($this->analytics))
+				{
+					$attr->setUnifiedLinkOptions([
+						'additionalQueryParams' => [
+							'analytics' => $this->analytics,
+						],
+					]);
 				}
 
 				if ($grid['MODE'] === FolderListOptions::VIEW_MODE_TILE)

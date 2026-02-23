@@ -34,26 +34,28 @@ class Tpl extends Entity\EO_WorkflowTemplate
 	 */
 	public function collectUsages()
 	{
-		/** @var \CBPActivity $rootActivity */
 		if ($this->getId())
 		{
-			$rootActivity = CBPWorkflowTemplateLoader::GetLoader()->LoadWorkflow($this->getId())[0];
-		}
-		else
-		{
-			$rootActivity = CBPWorkflowTemplateLoader::GetLoader()->loadWorkflowFromArray([
-				'ID' => '0',
-				'TEMPLATE' => $this->getTemplate(),
-				'VARIABLES' => $this->getVariables(),
-				'PARAMETERS' => $this->getParameters(),
-			])[0];
+			$this->fill(['TEMPLATE', 'VARIABLES', 'PARAMETERS']);
 		}
 
-		$rootActivity->SetProperties($this->getParameters());
-		$rootActivity->SetVariablesTypes($this->getVariables());
+		/** @var \CBPActivity $rootActivity */
+		$rootActivity = CBPWorkflowTemplateLoader::GetLoader()->loadWorkflowFromArray([
+			'ID' => $this->getId() ?? 0,
+			'TEMPLATE' => $this->getTemplate(),
+			'VARIABLES' => $this->getVariables(),
+			'PARAMETERS' => $this->getParameters(),
+		])[0];
+
+		$rootActivity->setProperties($this->getParameters());
+		$rootActivity->setVariablesTypes($this->getVariables());
 
 		$usages = new Collection\Usages();
-		$this->findActivityUsagesRecursive($rootActivity, $usages);
+		foreach ($rootActivity->walkRecursive() as $child)
+		{
+			$sources = $child->collectUsages();
+			$usages->addOwnerSources($child->getName(), $sources);
+		}
 
 		return $usages;
 	}
@@ -67,22 +69,6 @@ class Tpl extends Entity\EO_WorkflowTemplate
 
 		$usages = $this->collectUsages();
 		return array_unique(array_column($usages->getBySourceType($sourceType), 1));
-	}
-
-	private function findActivityUsagesRecursive(\CBPActivity $activity, Collection\Usages $usages)
-	{
-		$sources = $activity->collectUsages();
-		$usages->addOwnerSources($activity->GetName(), $sources);
-
-		$children = $activity->CollectNestedActivities();
-		if (is_array($children))
-		{
-			foreach ($children as $child)
-			{
-				$this->findActivityUsagesRecursive($child, $usages);
-			}
-		}
-		return $usages;
 	}
 
 	public function getUsedActivityTypes()

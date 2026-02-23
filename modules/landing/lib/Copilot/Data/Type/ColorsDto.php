@@ -13,7 +13,6 @@ class ColorsDto
 	public string $theme = self::DEFAULT_THEME_COLOR;
 	public string $themeName = '';
 	public string $background = self::DEFAULT_BG_COLOR;
-	public string $backgroundName = '';
 	public string $headersBg = self::DEFAULT_TEXT_BG;
 	public string $headersTheme = self::DEFAULT_TEXT_THEME;
 	public string $textsBg = self::DEFAULT_TEXT_BG;

@@ -4,38 +4,26 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\QuickAccess;
 
-use Bitrix\Main\Config;
+use Bitrix\Disk\QuickAccess\Config\ConfigInterface;
+use Bitrix\Disk\QuickAccess\Config\JsonConfig;
+use Bitrix\Disk\QuickAccess\Config\SettingsConfig;
 
-final class Configuration
+final class Configuration implements ConfigInterface
 {
-	private const CONFIG_SECTION = 'main.token_service';
-	private const CONFIG_STORAGE = 'storage';
-	private const CONFIG_KEY = 'key';
+	private ConfigInterface $config;
 
-	public function __construct()
+	public function __construct(JsonConfig $jsonConfig, SettingsConfig $settingsConfig)
 	{
-	}
-
-	private function getTokenService(): ?array
-	{
-		$value = Config\Configuration::getValue(self::CONFIG_SECTION) ?: null;
-//		if (empty($value))
-//		{
-//			throw new \LogicException(
-//				sprintf('Value for key %s is not configured in .settings.php.', self::CONFIG_SECTION)
-//			);
-//		}
-
-		return $value;
+		$this->config = $jsonConfig->isset() ? $jsonConfig : $settingsConfig;
 	}
 
 	public function getKey(): ?string
 	{
-		return $this->getTokenService()[self::CONFIG_KEY] ?? null;
+		return $this->config->getKey();
 	}
 
 	public function getTokenStorage(): array
 	{
-		return $this->getTokenService()[self::CONFIG_STORAGE] ?? [];
+		return $this->config->getTokenStorage();
 	}
 }

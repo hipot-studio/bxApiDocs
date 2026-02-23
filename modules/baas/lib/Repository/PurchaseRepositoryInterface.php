@@ -33,4 +33,6 @@ interface PurchaseRepositoryInterface {
 	public function findPurchaseByCode(string $purchaseCode): ?Baas\Model\EO_Purchase;
 
 	public function getPurchasesToNotifyAbout(): Baas\Model\EO_Purchase_Collection;
+
+	public function setPurchaseNotified(string $purchaseCode): void;
 }

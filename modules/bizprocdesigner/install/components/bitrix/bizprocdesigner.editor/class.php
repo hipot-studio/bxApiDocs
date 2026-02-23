@@ -10,6 +10,9 @@ use Bitrix\BizprocDesigner\Infrastructure\Enum\StartTrigger;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Api;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
+use Bitrix\Bizproc\Internal\Service\Feature\BpDesignerFeature;
+
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Main\ErrorCollection;
@@ -21,8 +24,9 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 	use ErrorableImplementation;
 	private \CMain $application;
 	private bool $isLegacyPropertiesDialog;
+	private BpDesignerFeature $bpDesignerFeature;
 
-	public function __construct($component = null)
+	public function __construct($component = null, ?BpDesignerFeature $bpDesignerFeature = null)
 	{
 		parent::__construct($component);
 		Loader::requireModule('bizproc');
@@ -31,6 +35,8 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 		$this->errorCollection = new ErrorCollection();
 		$this->application = $GLOBALS['APPLICATION'];
 		$this->isLegacyPropertiesDialog = (bool)\Bitrix\Main\Config\Option::get('bizproc', 'legacy_properties_dialog', 1);
+
+		$this->bpDesignerFeature = $bpDesignerFeature ?? ServiceLocator::getInstance()->get(BpDesignerFeature::class);
 	}
 
 	/**
@@ -53,7 +59,7 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 			[
 				$params['MODULE_ID'],
 				$params['ENTITY'],
-				$params['DOCUMENT_TYPE']
+				$params['DOCUMENT_TYPE'],
 			] = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 		}
 
@@ -77,6 +83,16 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 
 	public function executeComponent(): void
 	{
+		if (!$this->bpDesignerFeature->isAvailable())
+		{
+			$this->arResult['ERROR_TITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_TARIFF_ERROR_TITLE') ?? '';
+			$this->arResult['ERROR_SUBTITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_TARIFF_ERROR_SUBTITLE') ?? '';
+
+			$this->includeComponentTemplate('error');
+
+			return;
+		}
+
 		$this->setTemplateTitle(Loc::getMessage('BIZPROCDESIGNER_EDITOR_MAIN_PAGE_TITLE'));
 
 		if (!empty($this->arParams['START_TRIGGER']))
@@ -88,7 +104,10 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 
 		if (!$user->isAdmin())
 		{
-			ShowError('Access denied');
+			$this->arResult['ERROR_TITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_ACCESS_RIGHTS_ERROR_TITLE') ?? '';
+			$this->arResult['ERROR_SUBTITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_ACCESS_RIGHTS_ERROR_SUBTITLE') ?? '';
+
+			$this->includeComponentTemplate('error');
 
 			return;
 		}
@@ -103,8 +122,8 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 			[
 				$this->arParams['MODULE_ID'] ?? '',
 				$this->arParams['ENTITY'] ?? '',
-				$this->arParams['DOCUMENT_TYPE'] ?? ''
-			]
+				$this->arParams['DOCUMENT_TYPE'] ?? '',
+			],
 		);
 
 		$this->includeComponentTemplate();
@@ -129,14 +148,9 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 		$activitySearcher = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
 		$documentType = [$this->arParams['MODULE_ID'], $this->arParams['ENTITY'], $this->arParams['DOCUMENT_TYPE']];
 
-		$this->arResult['ACTIVITIES'] =
-			$activitySearcher->searchByType(ActivityType::ACTIVITY->value, $documentType)
-				->addCollection($activitySearcher->searchByType(ActivityType::NODE->value, $documentType))
-				->computeDescriptionFilter($documentType)
-				->sort()
-		;
-		$this->arResult['TRIGGERS'] =
-			$activitySearcher->searchByType(ActivityType::TRIGGER->value, $documentType)
+		$this->arResult['ALL_NODES'] =
+			$activitySearcher
+				->searchByType([ActivityType::NODE->value, ActivityType::ACTIVITY->value, ActivityType::TRIGGER->value], $documentType)
 				->computeDescriptionFilter($documentType)
 				->sort()
 		;

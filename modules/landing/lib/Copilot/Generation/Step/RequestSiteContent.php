@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Copilot\Generation\Step;
 
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
+use Bitrix\Landing\Copilot\Connector\Schema;
 use Bitrix\Landing\Copilot\Converter;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Data\Type\NodeType;
@@ -57,6 +58,8 @@ class RequestSiteContent extends RequestSingle
 	{
 		$prompt = new Prompt('landing_ai_content');
 		$prompt->setMarkers(Markers::getSiteContentPromptMarkers($this->siteData));
+		$schema = new Schema\SiteContent($this->siteData);
+		$prompt->setSchema($schema);
 
 		return $prompt;
 	}

@@ -44,7 +44,7 @@ class EditAction extends JsGridAction
 
 	protected function isEnabled(array $rawFields): bool
 	{
-		return empty($rawFields['SYSTEM_CODE']) && $this->isUserAdmin();
+		return !$this->isSystemTemplate($rawFields) && $this->isUserAdmin();
 	}
 
 	protected function prepareEditUri(int $templateId): string

@@ -8,6 +8,7 @@ use Bitrix\Bizproc\WorkflowTemplateTable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -40,13 +41,14 @@ class TemplateProvider extends BaseProvider
 		$ids = array_filter(array_map('intval', $ids));
 		$templates = $this->getTemplatesByIds($ids);
 		$currentUserId = $this->getCurrentUserId();
+		$isAdmin = $this->isUserWorkflowTemplateAdmin($currentUserId);
 
 		$items = [];
 		foreach ($templates as $template)
 		{
 			if ($this->canUserStartWorkflow($currentUserId, $template->getDocumentComplexType()))
 			{
-				$items[] = $this->makeItem(['id' => $template->getId(), 'title' => $template->getName()], false);
+				$items[] = $this->makeTemplateItem($template, $isAdmin, false);
 			}
 		}
 
@@ -161,10 +163,7 @@ class TemplateProvider extends BaseProvider
 		$moduleItem = $dialog->getItemCollection()->get(static::ENTITY_ID, $id);
 		if ($moduleItem === null)
 		{
-			$title =
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_TEMPLATES_MODULE_' . mb_strtoupper($moduleId))
-					?: $moduleId
-			;
+			$title = \CBPHelper::getModuleName($moduleId) ?: $moduleId;
 			$moduleItem = $this->makeItem(['id' => $id, 'title' => $title]);
 			$moduleItem->setCustomData(['moduleId' => $moduleId]);
 			$moduleItem->setSearchable(false);
@@ -245,11 +244,12 @@ class TemplateProvider extends BaseProvider
 		if ($moduleId && $documentType && IsModuleInstalled($moduleId))
 		{
 			$templates = $this->getTemplatesByDocumentType($moduleId, $documentType);
+			$isAdmin = $this->isUserWorkflowTemplateAdmin($currentUserId);
 			foreach ($templates as $template)
 			{
 				if ($this->canUserStartWorkflow($currentUserId, $template->getDocumentComplexType()))
 				{
-					$item = $this->makeItem(['id' => $template->getId(), 'title' => $template->getName()]);
+					$item = $this->makeTemplateItem($template, $isAdmin);
 					$documentItem->addChild($item);
 				}
 			}
@@ -325,21 +325,32 @@ class TemplateProvider extends BaseProvider
 	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
 	{
 		$currentUserId = $this->getCurrentUserId();
+		$isAdmin = $this->isUserWorkflowTemplateAdmin($currentUserId);
 
-		$templates =
+		$query =
 			WorkflowTemplateTable::query()
 				->setSelect(['ID', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE', 'NAME'])
-				->whereLike('NAME', "%{$searchQuery->getQuery()}%")
 				->where($this->getDefaultTemplateFilter())
-				->exec()
-				->fetchCollection();
+		;
+
+		$search = $searchQuery->getQuery();
+		if ($isAdmin && is_numeric($search))
+		{
+			$query->whereLike(Query::expr()->concat('NAME', 'ID'), "%$search%");
+		}
+		else
+		{
+			$query->whereLike('NAME', "%$search%");
+		}
+
+		$templates = $query->exec()->fetchCollection();
 
 		$items = [];
 		foreach ($templates as $template)
 		{
 			if ($this->canUserStartWorkflow($currentUserId, $template->getDocumentComplexType()))
 			{
-				$items[] = $this->makeItem(['id' => $template->getId(), 'title' => $template->getName()], false);
+				$items[] = $this->makeTemplateItem($template, $isAdmin, false);
 			}
 		}
 
@@ -351,11 +362,11 @@ class TemplateProvider extends BaseProvider
 
 	protected function getDefaultTemplateFilter(): ConditionTree
 	{
-		$filter = \Bitrix\Main\ORM\Query\Query::filter();
+		$filter = Query::filter();
 		$filter->where('ACTIVE', 'Y');
 
 		$autoExecuteFilter =
-			\Bitrix\Main\ORM\Query\Query::filter()
+			Query::filter()
 				->logic(ConditionTree::LOGIC_OR)
 				->where('AUTO_EXECUTE', '<', \CBPDocumentEventType::Automation)
 		;
@@ -406,6 +417,16 @@ class TemplateProvider extends BaseProvider
 		return $item;
 	}
 
+	private function makeTemplateItem(Tpl $template, bool $isAdmin, bool $addTab = true): Item
+	{
+		$postfix = $isAdmin ? $this->makeTitlePostfix($template->getId()) : '';
+
+		return $this->makeItem(
+			['id' => $template->getId(), 'title' => $template->getName() . $postfix],
+			$addTab
+		);
+	}
+
 	protected function isUserWorkflowTemplateAdmin(int $userId): bool
 	{
 		return (new \CBPWorkflowTemplateUser($userId))->isAdmin();
@@ -438,5 +459,10 @@ class TemplateProvider extends BaseProvider
 		$document = mb_substr($documentItemId, strlen(static::ITEM_DOCUMENT_TYPE_PREFIX));
 
 		return [$this->parseModuleItemId($moduleItemId), $document];
+	}
+
+	protected function makeTitlePostfix(string | int $id): string
+	{
+		return sprintf(' [%s]', $id);
 	}
 }

@@ -14,7 +14,9 @@ use Bitrix\Bizproc\Api\Response;
 use Bitrix\Bizproc\Api\Response\TaskService\DelegateTasksResponse;
 use Bitrix\Bizproc\Api\Response\TaskService\GetUserTaskListResponse;
 use Bitrix\Bizproc\Api\Response\TaskService\GetUserTaskByWorkflowIdResponse;
+use Bitrix\Bizproc\Public\Service\Task\UnArchiveTaskService;
 use Bitrix\Bizproc\Result;
+use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
 use Bitrix\Bizproc\Workflow\Task\TaskTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -296,6 +298,35 @@ class TaskService
 				'DELEGATION_TYPE',
 			],
 		)->fetch();
+
+		if (!$task)
+		{
+			$archive =
+				TaskArchiveTable::query()
+					->setSelect(['TASKS_DATA', 'WORKFLOW_ID'])
+					->where('TASKS.TASK_ID', $request->taskId)
+					->setLimit(1)
+					->fetchObject()
+			;
+
+			if ($archive)
+			{
+				$unArchiveTaskService = new UnArchiveTaskService($archive->getTasksData());
+				$taskData = $unArchiveTaskService->getTask($request->taskId);
+				$neededTaskUser = current(array_filter($taskData['USERS'], fn($taskUser) => $taskUser['USER_ID'] === $request->userId));
+				$userStatus = $neededTaskUser['STATUS'];
+
+				$task = [
+					'ID' => $taskData['ID'],
+					'NAME' => $taskData['NAME'],
+					'WORKFLOW_ID' => $archive->getWorkflowId(),
+					'DESCRIPTION' => $taskData['DESCRIPTION'],
+					'STATUS' => $taskData['STATUS'],
+					'USER_STATUS' => $userStatus,
+					'DELEGATION_TYPE' => null,
+				];
+			}
+		}
 
 		if (!$task)
 		{

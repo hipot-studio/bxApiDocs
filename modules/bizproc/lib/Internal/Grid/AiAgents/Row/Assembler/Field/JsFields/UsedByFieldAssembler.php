@@ -29,8 +29,7 @@ class UsedByFieldAssembler extends JsExtensionFieldAssembler
 
 		return [
 			'users' => $users,
-			'chatId' => $rawValue['CHAT_ID'] ?? null,
-			'chatName' => $rawValue['CHAT_NAME'] ?? null,
+			'chats' => $rawValue['CHATS'] ?? null,
 			'departments' => $rawValue['DEPARTMENTS'] ?? null,
 		];
 	}

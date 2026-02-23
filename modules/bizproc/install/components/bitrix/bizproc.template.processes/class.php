@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\GridTemplateRequest;
 use Bitrix\Bizproc\Api\Response\WorkflowTemplateService\GridTemplateResponse;
 use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
@@ -16,6 +17,9 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Grid;
+use Bitrix\Main\Grid\Panel\Actions;
+use Bitrix\Main\Grid\Panel\Snippet;
+use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Search\Content;
@@ -53,55 +57,70 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 		return [];
 	}
 
-	public function deleteTemplateAction(int $id): void
+	public function checkPermission(): bool
 	{
 		$this->checkModules();
 
 		if ($this->hasErrors())
 		{
-			return;
+			return false;
 		}
 
-		$user = new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
+		$user = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
 
 		if (!$user->isAdmin())
 		{
-			$this->setError(new Error(Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_DELETE_UNAUTHORIZED')));
+			$this->setError(new Error(ErrorMessage::DELETE_TEMPLATE_UNAUTHORIZED->get()));
 
+			return false;
+		}
+
+		return true;
+	}
+
+	public function deleteTemplateAction(int $id): void
+	{
+		if (!$this->checkPermission())
+		{
 			return;
 		}
 
-		$workflowsRequest = new GridTemplateRequest();
-		$workflowsRequest->setLimit(1);
-		$workflowsRequest->setFilterUserId($this->getCurrentUserId());
-		$workflowsRequest->setFilter(['=ID' => $id]);
+		$this->deleteTemplates([$id]);
+	}
 
-		$response = (new WorkflowTemplateService())->getList($workflowsRequest);
-
-		if (!$response->isSuccess())
+	public function deleteBulkTemplateAction(array $ids): void
+	{
+		if (!$this->checkPermission())
 		{
-			$this->addErrors($response->getErrors());
-
 			return;
 		}
 
-		if ($response->getTotalCount() <= 0)
+		$this->deleteTemplates($ids);
+	}
+
+	private function deleteTemplates(array $ids): void
+	{
+		$user = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
+
+		if (!$user->isAdmin())
 		{
-			$this->setError(new Error(Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_DELETE_ERROR')));
+			$this->setError(new Error(ErrorMessage::DELETE_TEMPLATE_UNAUTHORIZED->get()));
 
 			return;
 		}
 
 		try
 		{
-			$currentUser = new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
-
+			$currentUser = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
 			$templateDeleteService = new TemplateDeleteService();
-			$templateDeleteService->deleteTemplates(
-				[$id],
-				initiator: $currentUser,
-			);
-			$templateDeleteService->killWorkflow([$id]);
+			$result = $templateDeleteService->deleteTemplates($ids, $currentUser);
+
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+
+				return;
+			}
 		}
 		catch (Throwable $exception)
 		{
@@ -138,7 +157,7 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 
 	private function checkAdmin(): void
 	{
-		$user = new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
+		$user = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
 
 		if ($user->isAdmin())
 		{
@@ -177,11 +196,13 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 		$this->arResult['gridColumns'] = $this->getGridColumns();
 		$this->arResult['pageNavigation'] = $this->getPageNavigation();
 		$this->arResult['pageSizes'] = $this->getPageSizes();
+		$this->arResult['gridActions'] = $this->getGridActions();
 	}
 
 	private function getSortColumns(): array
 	{
 		return [
+			'identifier' => 'ID',
 			'name' => 'NAME',
 			'updated_user' => 'UPDATED_USER.NAME',
 			'created_user' => 'CREATED_USER.NAME',
@@ -192,6 +213,12 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 	private function getGridColumns(): array
 	{
 		return [
+			[
+				'id' => 'ID',
+				'name' => 'ID',
+				'default' => true,
+				'sort' => 'identifier',
+			],
 			[
 				'id' => 'NAME',
 				'name' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_COLUMN_NAME'),
@@ -221,6 +248,65 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 				'name' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_COLUMN_MODIFIED'),
 				'default' => true,
 				'sort' => 'modified',
+			],
+		];
+	}
+
+	private function getGridActions(): array
+	{
+		$gridActionId = static::GRID_ID . '_group_action';
+
+		$snippet = new Snippet();
+
+		return [
+			'GROUPS' => [
+				[
+					'ITEMS' => [
+						[
+							'TYPE' => Types::DROPDOWN,
+							'ID' => $gridActionId,
+							'NAME' => 'groupAction',
+							'ITEMS' => [
+								[
+									'NAME' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_ACTION_PANEL_PLACEHOLDER_BUTTON'),
+									'VALUE' => 'default',
+									'ONCHANGE' => [
+										[
+											'ACTION' => Actions::RESET_CONTROLS,
+										],
+									],
+								],
+								[
+									'ID' => static::GRID_ID . '_delete_button',
+									'TYPE' => Types::BUTTON,
+									'VALUE' => 'delete',
+									'NAME' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_ACTION_PANEL_DELETE_BUTTON'),
+									'ONCHANGE' => [
+										[
+											'ACTION' => Actions::CREATE,
+											'DATA' => [
+												$snippet->getApplyButton([
+													'ONCHANGE' => [
+														[
+															'ACTION' => Actions::CALLBACK,
+															'CONFIRM' => true,
+															'CONFIRM_APPLY_BUTTON' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_DELETE_CONFIRM_BUTTON'),
+															'DATA' => [
+																[
+																	'JS' => 'BX.Bizproc.Component.TemplateProcesses.Instance.applyActionPanelValues()',
+																],
+															],
+														],
+													],
+												]),
+											],
+										],
+									],
+								],
+							],
+						],
+					],
+				],
 			],
 		];
 	}

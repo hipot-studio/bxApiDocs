@@ -23,7 +23,8 @@ class RobotIndexRepository
 			->setSelect(['ID', 'ROBOT_CODE', 'VERSION', 'DATE_CHANGED'])
 			->where('DATE_CHANGED', '>=', $threshold)
 			->setOrder(['DATE_CHANGED' => 'DESC'])
-			->fetchAll();
+			->fetchAll()
+		;
 	}
 
 	private static function getDateForNewRobots(): Date
@@ -59,7 +60,8 @@ class RobotIndexRepository
 
 			foreach ($existingRecords as $record)
 			{
-				$existingMap[$record['ROBOT_CODE']] = $record;
+				$loweredRobotCode = strtolower((string)($record['ROBOT_CODE'] ?? ''));
+				$existingMap[$loweredRobotCode] = $record;
 			}
 		}
 
@@ -89,7 +91,7 @@ class RobotIndexRepository
 							'data' => [
 								'VERSION' => $version,
 								'DATE_CHANGED' => $dateChanged,
-							]
+							],
 						];
 					}
 					$groupedUpdates[$groupKey]['ids'][] = $id;

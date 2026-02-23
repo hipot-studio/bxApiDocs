@@ -137,7 +137,7 @@ class KnowledgeBaseService
 		$uid = $result->uuid;
 		$fileIdReplaces = $this->fileService->getFileIdReplaceMap($pendingFiles);
 
-		$fileSaveResult = $this->fileService->savePendingFiles($id, $userId, $pendingFiles);
+		$fileSaveResult = $this->fileService->savePendingFiles($id, $userId, $pendingFiles, $uid);
 		if (!$fileSaveResult->isSuccess())
 		{
 			$this->delete($id);
@@ -210,14 +210,14 @@ class KnowledgeBaseService
 		}
 
 		$filesToDelete = array_diff($info->fileIds, $persistentFileIds);
-		$result = $this->fileService->deleteMany($id, $userId, $filesToDelete);
+		$result = $this->fileService->deleteMany($id, $userId, $filesToDelete, $uid);
 		if (!$result->isSuccess())
 		{
 			return $result;
 		}
 
 		$fileIdReplaces = $this->fileService->getFileIdReplaceMap($pendingFiles);
-		$result = $this->fileService->savePendingFiles($id, $userId, $pendingFiles);
+		$result = $this->fileService->savePendingFiles($id, $userId, $pendingFiles, $uid);
 		if (!$result->isSuccess())
 		{
 			return $result;

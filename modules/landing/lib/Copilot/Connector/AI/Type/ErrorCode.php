@@ -14,4 +14,7 @@ enum ErrorCode: string
 	case Daily = 'LIMIT_IS_EXCEEDED_DAILY';
 	case Monthly = 'LIMIT_IS_EXCEEDED_MONTHLY';
 	case BaasRateLimit = 'LIMIT_IS_EXCEEDED_BAAS_RATE_LIMIT';
+
+	/** @see \Bitrix\AI\Engine\Cloud\CloudEngine::ERROR_CODE_FORCE */
+	case ErrorForceCode = 'ERROR_CODE_FORCE';
 }

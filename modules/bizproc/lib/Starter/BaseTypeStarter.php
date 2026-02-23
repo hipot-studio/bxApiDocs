@@ -25,6 +25,7 @@ abstract class BaseTypeStarter
 	protected array $events = [];
 	protected array $templateIds = [];
 	protected int $userId = 0;
+	protected ?int $delay = null;
 	protected bool $isTriggerApplied = false;
 
 	protected array $startedWorkflows = [];
@@ -81,6 +82,13 @@ abstract class BaseTypeStarter
 	public function setContext(Context $context): self
 	{
 		$this->context = $context;
+
+		return $this;
+	}
+
+	public function setDelay(?int $delay = null): self
+	{
+		$this->delay = $delay;
 
 		return $this;
 	}
@@ -238,6 +246,7 @@ abstract class BaseTypeStarter
 	protected function startWorkflow(int $templateId, array $complexDocumentId, array $parameters): ?string
 	{
 		$errors = [];
+		$parameters[\CBPDocument::PARAM_START_WORKFLOW_DELAY] = $this->delay;
 		$workflowId = \CBPDocument::startWorkflow($templateId, $complexDocumentId, $parameters, $errors);
 		if ($errors)
 		{

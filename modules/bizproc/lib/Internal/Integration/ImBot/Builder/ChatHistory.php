@@ -117,6 +117,7 @@ class ChatHistory
 			/** @var Message $message */
 			foreach ($messages as $message)
 			{
+				$lastMessageId = $message->getMessageId();
 				if (
 					$message->isSystem()
 					|| $message->getParams()->get(Params::COMPONENT_ID)->getValue() === 'ErrorMessage'
@@ -125,7 +126,6 @@ class ChatHistory
 					continue;
 				}
 
-				$lastMessageId = $message->getMessageId();
 				$this->addMessageToPool($message);
 
 				$messageIds[] = $message->getId();

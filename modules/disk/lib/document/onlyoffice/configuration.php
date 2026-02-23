@@ -142,6 +142,20 @@ final class Configuration
 		return $this->server;
 	}
 
+	public function getDomain(): ?string
+	{
+		$server = $this->getServer();
+
+		if (!is_string($server))
+		{
+			return null;
+		}
+
+		$server = preg_replace('/^https?:\/\//', '', $server);
+
+		return rtrim($server, '/');
+	}
+
 	public function getSecretKey(): ?string
 	{
 		if ($this->secretKey === null)

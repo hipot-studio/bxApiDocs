@@ -94,6 +94,19 @@ class StorageTypeRepository implements StorageTypeRepositoryInterface
 		return $this->convertStorageTypesFromOrm($ormStorageTypes);
 	}
 
+	public function getStoragesByFilter(array $filter, array $select): Entity\StorageType\StorageTypeCollection
+	{
+		$query =
+			StorageTypeTable::query()
+				->setSelect($select)
+				->setFilter($filter)
+		;
+		$ormStorageTypes = QueryHelper::decompose($query);
+
+		/** @var EO_StorageType_Collection $ormStorageTypes */
+		return $this->convertStorageTypesFromOrm($ormStorageTypes);
+	}
+
 	public function getById(int $id, array $select = []): ?Entity\StorageType\StorageType
 	{
 		return $this->getList(

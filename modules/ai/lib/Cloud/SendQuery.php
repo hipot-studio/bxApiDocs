@@ -6,6 +6,7 @@ namespace Bitrix\AI\Cloud;
 use Bitrix\AI\Facade\User;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
@@ -36,7 +37,8 @@ final class SendQuery extends BaseSender
 		$data = [
 			'clientId' => $cloudRegistrationData->clientId,
 			'queryBody' => $body,
-			'userLanguage' => User::getUserLanguage()
+			'userLanguage' => User::getUserLanguage(),
+			'moduleVersion' => ModuleManager::getVersion('ai'),
 		];
 
 		/** @see \Bitrix\AiProxy\Controller\Query::queueAction */

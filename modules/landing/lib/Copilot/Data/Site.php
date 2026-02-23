@@ -10,6 +10,7 @@ use Bitrix\Landing\Copilot\Data\Node\Node;
 use Bitrix\Landing\Copilot\Data\Type\ColorsDto;
 use Bitrix\Landing\Copilot\Data\Type\FontsDto;
 use Bitrix\Landing\Copilot\Data\Type\NodeType;
+use Bitrix\Landing\Copilot\Services\NameService;
 use Bitrix\Landing\Internals\BlockTable;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Block;
@@ -52,9 +53,9 @@ class Site
 	 */
 	public function __construct()
 	{
-		$this->siteTitle = Loc::getMessage('LANDING_COPILOT_DEFAULT_SITE_TITLE');
-		$this->pageTitle = Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_TITLE');
-		$this->pageDescription = Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_DESCRIPTION');
+		$this->siteTitle = NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_SITE_TITLE_MSGVER_1'));
+		$this->pageTitle = NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_TITLE_MSGVER_1'));
+		$this->pageDescription = NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_DESCRIPTION_MSGVER_1'));
 		$this->siteTopic = '';
 		$this->imageStyle = '';
 

@@ -1,11 +1,11 @@
 <?php
 namespace Bitrix\Landing\Hook\Page;
 
+use Bitrix\Landing;
 use Bitrix\Landing\Field;
 use Bitrix\Landing\Manager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Page\Asset;
 use Bitrix\UI;
 
 class Fonts extends \Bitrix\Landing\Hook\Page
@@ -170,7 +170,7 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 
 		if ($setFonts)
 		{
-			Asset::getInstance()->addString(implode('', $setFonts));
+			Landing\Assets\Manager::getInstance()->addString(implode('', $setFonts));
 		}
 	}
 

@@ -45,6 +45,16 @@ interface StorageTypeRepositoryInterface
 	public function getAllForActivity(): Entity\StorageType\StorageTypeCollection;
 
 	/**
+	 * @param array $filter
+	 * @param array $select
+	 * @return Entity\StorageType\StorageTypeCollection
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getStoragesByFilter(array $filter, array $select): Entity\StorageType\StorageTypeCollection;
+
+	/**
 	 * @param int $id
 	 * @param array $select
 	 * @return Entity\StorageType\StorageType|null

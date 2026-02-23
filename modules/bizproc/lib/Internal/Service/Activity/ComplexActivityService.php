@@ -99,13 +99,24 @@ class ComplexActivityService
 				function (ActivityDescription $description) use ($settings): ActivityDescription
 				{
 					$normalizedActivityCode = $this->searcher->normalizeActivityCode($description->getClass());
-					$nodeActionPreset = $settings->actionDictionary->get($normalizedActivityCode)?->toPreset();
-					if (empty($nodeActionPreset))
+					$action = $settings->actionDictionary->get($normalizedActivityCode);
+					if ($action === null)
 					{
 						return $description;
 					}
 
-					return $description->applyPreset($nodeActionPreset);
+					$descriptionWithPreset = $action->presetId
+						? $description->applyPresetById($action->presetId)
+						: $description
+					;
+
+					$nodeActionPreset = $action->toPreset();
+					if (empty($nodeActionPreset))
+					{
+						return $descriptionWithPreset;
+					}
+
+					return $descriptionWithPreset->applyPreset($nodeActionPreset);
 				},
 			),
 		))->sort();

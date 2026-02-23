@@ -93,6 +93,7 @@ final class AutomationStarter extends BaseTypeStarter
 			$context->setUserId($this->userId);
 		}
 
+		$target->getRuntime()->setStartDelay($this->delay);
 		$workflowId = $target->getRuntime()->onDocumentAdd($context);
 		if ($workflowId)
 		{
@@ -109,6 +110,8 @@ final class AutomationStarter extends BaseTypeStarter
 		{
 			return true;
 		}
+
+		$target->getRuntime()->setStartDelay($this->delay);
 
 		if ($this->document?->hasChangedFields())
 		{
@@ -172,6 +175,8 @@ final class AutomationStarter extends BaseTypeStarter
 				{
 					continue;
 				}
+
+				$target->getRuntime()->setStartDelay($this->delay);
 
 				/** @var BaseTrigger $trigger */
 				$trigger =

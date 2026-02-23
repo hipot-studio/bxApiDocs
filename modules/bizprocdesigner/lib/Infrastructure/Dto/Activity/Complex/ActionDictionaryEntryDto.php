@@ -12,10 +12,8 @@ class ActionDictionaryEntryDto implements JsonSerializable
 		public string $id,
 		public string $title,
 		public bool $handlesDocument,
-	)
-	{
-
-	}
+		public ?array $properties = null,
+	) {}
 
 	public function jsonSerialize(): array
 	{
@@ -23,6 +21,7 @@ class ActionDictionaryEntryDto implements JsonSerializable
 			'id' => $this->id,
 			'title' => $this->title,
 			'handlesDocument' => $this->handlesDocument,
+			'properties' => $this->properties,
 		];
 	}
 }

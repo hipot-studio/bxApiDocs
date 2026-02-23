@@ -3,9 +3,13 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Agents;
 
+use Bitrix\AI\Cloud\Configuration;
+use Bitrix\AI\Cloud\SendClientModuleVersion;
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Engine\Repository\BitrixEngineRepository;
 use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Facade\Portal;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Services\EngineSettingsService;
 use Bitrix\AI\Tuning\Manager;
@@ -17,6 +21,39 @@ use Bitrix\Main\DI\ServiceLocator;
  */
 final class EngineSettings
 {
+
+	public static function resetBoxEngineToBitrixGPTAgent(): string
+	{
+		if (!in_array(Portal::getRegion(), ['ru', 'by'], true))
+		{
+			return '';
+		}
+
+		$cloudRegistrationData = (new Configuration())->getCloudRegistrationData();
+		if (!$cloudRegistrationData)
+		{
+			return '';
+		}
+
+		$sender = (new SendClientModuleVersion($cloudRegistrationData->serverHost));
+		$result = $sender->send($cloudRegistrationData);
+		if (!$result->isSuccess())
+		{
+			return self::class;
+		}
+
+		ServiceLocator::getInstance()->get(BitrixEngineRepository::class)?->deactivateEnginesByClass(
+			[
+				Engine\Cloud\ItSolution::class,
+				Engine\Cloud\ItSolutionAudio::class,
+				Engine\Cloud\ChatGPT::class,
+			]
+		);
+
+		return '';
+	}
+
+
 	/**
 	 * Resets the user's choice of the engine for text operations.
 	 *

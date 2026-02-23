@@ -10,7 +10,7 @@ class BitrixEngineRepository
 	{
 		return BitrixEngineTable::query()
 			->setSelect([
-				'CLASS', 'CATEGORY'
+				'CLASS', 'CATEGORY',
 			])
 			->where('IS_ACTIVE', '=', 1)
 			->fetchAll()
@@ -27,7 +27,7 @@ class BitrixEngineRepository
 	{
 		return BitrixEngineTable::query()
 			->setSelect([
-				'ID', 'CLASS', 'CATEGORY', 'IS_ACTIVE'
+				'ID', 'CLASS', 'CATEGORY', 'IS_ACTIVE',
 			])
 			->fetchAll()
 		;
@@ -85,6 +85,21 @@ class BitrixEngineRepository
 			$providersIds,
 			['IS_ACTIVE' => false],
 			true
+		);
+	}
+
+	public function deactivateEnginesByClass(array $providersClasses): void
+	{
+		if (empty($providersClasses))
+		{
+			return;
+		}
+
+		$this->deactivateEngines(
+			BitrixEngineTable::query()
+				->setSelect(['ID'])
+				->whereIn('CLASS', $providersClasses)
+				->fetchAll()
 		);
 	}
 

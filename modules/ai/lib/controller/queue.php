@@ -9,7 +9,6 @@ use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\JsonPayload;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
-use JetBrains\PhpStorm\ArrayShape;
 
 class Queue extends Controller
 {
@@ -58,7 +57,8 @@ class Queue extends Controller
 		$queueJob = QueueJob::createFromHash($hash);
 		if ($queueJob)
 		{
-			$queueJob->execute($result->getData());
+			$resultData = $result->getDataList();
+			$queueJob->execute($resultData->toArrayRaw() ?? $resultData->toArray());
 
 			return true;
 		}

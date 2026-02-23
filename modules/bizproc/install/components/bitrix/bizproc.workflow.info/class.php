@@ -2,8 +2,8 @@
 
 use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CanViewTimelineRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowAccessService;
-use Bitrix\Bizproc\UI\WorkflowUserView;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
+use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable;
 use Bitrix\Bizproc\Workflow\Task\TaskTable;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -233,7 +233,7 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 
 		$fastClose = true;
 		$task = $workflowView->getTaskById($this->getTaskId());
-		if ($task)
+		if ($task && $task['status'] === CBPTaskStatus::Running)
 		{
 			if (count($workflowView->getTasks()) > 1)
 			{
@@ -285,10 +285,23 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 	{
 		$taskId = $this->getTaskId();
 
-		$row = TaskTable::query()
-			->where('ID', $taskId)
-			->setSelect(['WORKFLOW_ID'])
-			->fetch()
+		$row =
+			TaskTable::query()
+				->where('ID', $taskId)
+				->setSelect(['WORKFLOW_ID'])
+				->fetch()
+		;
+
+		if ($row['WORKFLOW_ID'])
+		{
+			return $row['WORKFLOW_ID'];
+		}
+
+		$row =
+			TaskArchiveTasksTable::query()
+				->where('TASK_ID', $taskId)
+				->setSelect(['WORKFLOW_ID' => 'ARCHIVE.WORKFLOW_ID'])
+				->fetch()
 		;
 
 		return $row['WORKFLOW_ID'] ?? null;

@@ -627,4 +627,34 @@ final class ActivityDescription implements \JsonSerializable
 	{
 		return $this->toArray();
 	}
+
+	public function applyPresetById(string $presetId): self
+	{
+		$preset = $this->getPresetById($presetId);
+		if ($preset === null)
+		{
+			return $this;
+		}
+
+		return $this->applyPreset($preset);
+	}
+
+	public function getPresetById(string $presetId): ?array
+	{
+		if ($this->presets === null || $presetId === '')
+		{
+			return null;
+		}
+
+		foreach ($this->presets as $preset)
+		{
+			$id = $preset['ID'] ?? null;
+			if ($id === $presetId)
+			{
+				return $preset;
+			}
+		}
+
+		return null;
+	}
 }

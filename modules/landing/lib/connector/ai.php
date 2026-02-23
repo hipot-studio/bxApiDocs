@@ -7,6 +7,7 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning;
+use Bitrix\Landing\Copilot\Services\NameService;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Copilot;
 use Bitrix\Main\Event;
@@ -141,8 +142,8 @@ class Ai
 		$relations = [];
 
 		$groups[self::TUNING_CODE_GROUP] = [
-			'title' => Loc::getMessage('LANDING_CONNECTOR_AI_GROUP_TITLE'),
-			'description' => Loc::getMessage('LANDING_CONNECTOR_AI_GROUP_DESC'),
+			'title' => NameService::replaceCopilotName(Loc::getMessage('LANDING_CONNECTOR_AI_GROUP_TITLE_MSGVER_1')),
+			'description' => NameService::replaceCopilotName(Loc::getMessage('LANDING_CONNECTOR_AI_GROUP_DESC_MSGVER_1')),
 			'helpdesk' => 24409174,
 		];
 
@@ -152,7 +153,7 @@ class Ai
 			$items[self::TUNING_CODE_ALLOW_SITE_COPILOT] = [
 				'group' => self::TUNING_CODE_GROUP,
 				'title' => Loc::getMessage('LANDING_CONNECTOR_AI_ALLOW_SITE'),
-				'header' => Loc::getMessage('LANDING_CONNECTOR_AI_ALLOW_SITE_DESC'),
+				'header' => NameService::replaceCopilotName(Loc::getMessage('LANDING_CONNECTOR_AI_ALLOW_SITE_DESC_MSGVER_1')),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
 				'sort' => 100,
@@ -208,7 +209,7 @@ class Ai
 		$items[self::TUNING_CODE_ALLOW_COPILOT] = [
 			'group' => self::TUNING_CODE_GROUP,
 			'title' => Loc::getMessage('LANDING_CONNECTOR_AI_ALLOW_TITLE'),
-			'header' => Loc::getMessage('LANDING_CONNECTOR_AI_ALLOW_DESC'),
+			'header' => NameService::replaceCopilotName(Loc::getMessage('LANDING_CONNECTOR_AI_ALLOW_DESC_MSGVER_1')),
 			'type' => Tuning\Type::BOOLEAN,
 			'default' => true,
 			'sort' => 200,

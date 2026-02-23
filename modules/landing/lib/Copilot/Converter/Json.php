@@ -487,7 +487,14 @@ class Json
 		return $encodedJsonSkeletonString;
 	}
 
-	//todo: add phpdoc
+	/**
+	 * Generates a JSON skeleton string for a single block content response.
+	 * Decodes the JSON request data, iterates over blocks and builds a response skeleton.
+	 *
+	 * @param string $jsonDataForRequest JSON-encoded string with block data used to build the skeleton.
+	 *
+	 * @return string JSON-encoded skeleton for block content response, or an empty string on failure.
+	 */
 	public static function getSkeletonForBlockContentResponse(string $jsonDataForRequest): string
 	{
 		try
@@ -739,7 +746,14 @@ class Json
 		}
 	}
 
-	//todo: add phpdoc and typing
+	/**
+	 * Converts a block object into an associative array with its content.
+	 * Prepares block data for JSON serialization by extracting the block identifier,block code and all block nodes.
+	 *
+	 * @param Block $block Block object containing nodes and their content.
+	 *
+	 * @return array Prepared associative array representing the block with its nodes and content.
+	 */
 	private static function getBlockArrayWithContent($block): array
 	{
 		$preparedBlock = [

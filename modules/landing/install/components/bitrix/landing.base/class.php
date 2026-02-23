@@ -1313,9 +1313,10 @@ class LandingBaseComponent extends \CBitrixComponent
 	 * Get URI for create new ...
 	 * @param bool $isSite - if true - create new site, false - new page in current site
 	 * @param array $urlParams - additional url params, join with url (old or new type)
+	 * @param string $collectionCode - marketplace collection code
 	 * @return string
 	 */
-	public function getUrlAdd(bool $isSite = true, array $urlParams = [], int $collectionId = 0): string
+	public function getUrlAdd(bool $isSite = true, array $urlParams = [], string $collectionCode = ''): string
 	{
 		$paramName = $isSite ? 'PAGE_URL_SITE_EDIT' : 'PAGE_URL_LANDING_EDIT';
 
@@ -1371,8 +1372,8 @@ class LandingBaseComponent extends \CBitrixComponent
 		}
 
 		// NEW - create via market module
-		$marketUrl = $collectionId > 0
-			? '/market/collection/' . $collectionId . '/?placement=landings'
+		$marketUrl = $collectionCode !== ''
+			? '/market/collection/' . $collectionCode . '/?placement=landings'
 			: '/market/?placement=landings'
 		;
 		$createViaMarketUrl = new Uri($marketUrl);

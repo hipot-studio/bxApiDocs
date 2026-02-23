@@ -858,6 +858,23 @@ abstract class CBPActivity
 		return null;
 	}
 
+	public function walkRecursive(): iterable
+	{
+		yield $this;
+
+		$children = $this->collectNestedActivities();
+		if (is_array($children))
+		{
+			foreach ($children as $child)
+			{
+				foreach ($child->walkRecursive() as $descendant)
+				{
+					yield $descendant;
+				}
+			}
+		}
+	}
+
 	public function collectUsages()
 	{
 		$usages = [];

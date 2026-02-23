@@ -81,8 +81,9 @@ class UnifiedLinkController extends Controller
 					}
 					$attachedObject = AttachedObject::loadById((int)$this->request->get('attachedId'));
 					$version = Version::loadById((int)$this->request->get('versionId'));
+					$analytics = $this->request->getQuery('analytics') ?? [];
 
-					return new UnifiedLinkFileRenderer($file, $attachedObject, $version);
+					return new UnifiedLinkFileRenderer($file, $attachedObject, $version, $analytics);
 				},
 			),
 		];

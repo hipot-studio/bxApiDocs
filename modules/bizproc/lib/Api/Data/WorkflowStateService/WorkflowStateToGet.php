@@ -242,11 +242,7 @@ class WorkflowStateToGet
 		{
 			$find = Query\Filter\Helper::matchAgainstWildcard($this->filterSearchQuery);
 
-			$filter[] = [
-				'LOGIC' => 'AND',
-				'*' . static::SEARCH_REF_NAME . '.SEARCH_CONTENT' => $find,
-				'=' . static::SEARCH_REF_NAME . '.USERS.USER_ID' => $this->filterUserId,
-			];
+			$filter['*' . static::SEARCH_REF_NAME . '.SEARCH_CONTENT'] = $find;
 		}
 
 		return $filter;

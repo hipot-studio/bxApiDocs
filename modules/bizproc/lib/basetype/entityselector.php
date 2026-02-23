@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\BaseType;
 
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Internal\Entity\DocumentField\EntitySelectorConfigBuilder;
 use Bitrix\Main;
-use Bitrix\Main\Loader;
 use Bitrix\UI\EntitySelector\Entity;
 use Bitrix\UI\EntitySelector\Configuration;
 
-Loader::requireModule('ui');
-
 /**
- * Class Text
+ * Class EntitySelector
  * @package Bitrix\Bizproc\BaseType
  */
 class EntitySelector extends Base
@@ -42,23 +40,6 @@ class EntitySelector extends Base
 		return parent::extractValueMultiple($fieldType, $field, $request);
 	}
 
-	private static function getPreselectedItems(array $value, string $entityId): array
-	{
-		if (!class_exists(\Bitrix\UI\EntitySelector\Dialog::class) || !$entityId)
-		{
-			return [];
-		}
-
-		$preselectedItems = array_map(
-			static fn($item) => [$entityId, $item],
-			$value
-		);
-
-		$options = [];
-
-		return \Bitrix\UI\EntitySelector\Dialog::getPreselectedItems($preselectedItems, $options)->toArray();
-	}
-
 	/**
 	 * @param FieldType $fieldType
 	 * @param array $field
@@ -74,43 +55,10 @@ class EntitySelector extends Base
 		$name = static::generateControlName($field);
 		$controlId = static::generateControlId($field);
 
-		$settings = $fieldType->getSettings();
-		$options = $fieldType->getOptions();
-
-		$config = [
-			'multiple' => $fieldType->isMultiple(),
-			'tagMaxWidth' => 400,
-			'dialogOptions' => [
-				'showAvatars' => false,
-				'dropdownMode' => true,
-				'compactView' => true,
-				'height' => 240,
-				'enableSearch' => $settings['enableSearch'] ?? false,
-			]
-		];
-
-		if (isset($settings['entity']) && is_array($settings['entity']))
-		{
-			$config['dialogOptions']['entities'][] = static::prepareEntity($settings['entity']);
-		}
-
-		if (isset($options) && is_array($options))
-		{
-			$config['dialogOptions']['items'] = $options;
-		}
-
-		if ($value)
-		{
-			$config['items'] = static::getPreselectedItems((array)$value, ($settings['entity']['id'] ?? ''));
-		}
-
-		if (isset($settings['dialogOptions']) && is_array($settings['dialogOptions']))
-		{
-			$config['dialogOptions'] = array_merge($config['dialogOptions'], $settings['dialogOptions']);
-		}
+		$config = static::getEntitySelectorConfig($fieldType, $value);
 
 		$property = $fieldType->getProperty();
-		$property['Type'] = static::getType();
+		$property['Type'] = self::getType();
 
 		$jsParams = [
 			'containerId' => $controlId,
@@ -149,34 +97,17 @@ HTML;
 		return parent::renderControlSingle($fieldType, $field, $value, $allowSelection, $renderMode);
 	}
 
-	protected static function prepareEntity(array $entity): array
+	protected static function getEntitySelectorConfig(FieldType $fieldType, mixed $value): array
 	{
-		if (empty($entity))
-		{
-			return $entity;
-		}
+		$settings = $fieldType->getSettings();
+		$options = $fieldType->getOptions();
 
-		$booleanFields = [
-			'dynamicLoad',
-			'dynamicSearch',
-			'searchable',
-			'showLink'
-		];
-
-		return self::convertFieldsToBoolean($entity, $booleanFields);
-	}
-
-	private static function convertFieldsToBoolean(array $entity, array $fields): array
-	{
-		foreach ($fields as $field)
-		{
-			if (isset($entity[$field]))
-			{
-				$entity[$field] = \CBPHelper::getBool($entity[$field]);
-			}
-		}
-
-		return $entity;
+		return
+			(new EntitySelectorConfigBuilder($fieldType, $value))
+				->setSettings(is_array($settings) ? $settings : null)
+				->setOptions(is_array($options) ? $options : null)
+				->build()
+		;
 	}
 
 	/**
@@ -197,7 +128,7 @@ HTML;
 
 	private static function getSelectedItem(FieldType $fieldType, mixed $value): ?array
 	{
-		if (empty($value))
+		if ($value === null || $value === '')
 		{
 			return null;
 		}
@@ -205,10 +136,21 @@ HTML;
 		$settings = $fieldType->getSettings();
 		if (!isset($settings['entity']) || !is_array($settings['entity']))
 		{
-			return null;
+			$options = $fieldType->getOptions();
+			$item =
+				(new EntitySelectorConfigBuilder($fieldType, $value))
+					->setOptions(is_array($options) ? $options : null)
+					->buildSelectedItemFromOptions()
+			;
+
+			return $item;
 		}
 
-		$preparedEntity = static::prepareEntity($settings['entity']);
+		$preparedEntity =
+			(new EntitySelectorConfigBuilder($fieldType, $value))
+				->setSettings($settings)
+				->prepareEntity()
+		;
 
 		$entityOptions = [
 			'id' => $preparedEntity['id'],

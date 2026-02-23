@@ -17,6 +17,18 @@ class Task extends Base
 	{
 		$isRobotDeleted = false;
 		$documentType = \Bitrix\Rpa\Integration\Bizproc\Document\Item::makeComplexType($typeId);
+
+		$canDelete = \CBPDocument::CanUserOperateDocumentType(
+			\CBPCanUserOperateOperation::CreateAutomation,
+			$this->getCurrentUser()->getId(),
+			$documentType
+		);
+
+		if (!$canDelete)
+		{
+			return false;
+		}
+
 		$template = new \Bitrix\Bizproc\Automation\Engine\Template($documentType, $stageId);
 
 		$robots = [];
@@ -51,6 +63,17 @@ class Task extends Base
 	{
 		$updatedRobot = null;
 		$documentType = \Bitrix\Rpa\Integration\Bizproc\Document\Item::makeComplexType($typeId);
+
+		$canModify = \CBPDocument::CanUserOperateDocumentType(
+			\CBPCanUserOperateOperation::CreateAutomation,
+			$this->getCurrentUser()->getId(),
+			$documentType
+		);
+
+		if (!$canModify)
+		{
+			return false;
+		}
 
 		$errors = [];
 		$user = current(\CBPHelper::UsersStringToArray($userValue, $documentType, $errors));

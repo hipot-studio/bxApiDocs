@@ -3,6 +3,7 @@
 namespace Bitrix\Bizproc;
 
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\AppLangTable;
@@ -1840,41 +1841,47 @@ class RestService extends \IRestService
 		}
 	}
 
-	private static function upsertAppPlacement(int $appId, string $code,  string $handler)
+	private static function upsertAppPlacement(int $appId, string $code, string $handler)
 	{
 		$filter = [
 			'=APP_ID' => $appId,
 			'=ADDITIONAL' => $code,
 			'=PLACEMENT' => static::PLACEMENT_ACTIVITY_PROPERTIES_DIALOG,
 		];
-
-		$dbRes = PlacementTable::getList(array(
-			'filter' => $filter
-		));
-
+		$dbRes = PlacementTable::getList([
+			'filter' => $filter,
+		]);
 		$placementHandler = $dbRes->fetch();
 
-		if ($placementHandler)
+		try
 		{
-			$result = PlacementTable::update($placementHandler['ID'], ['PLACEMENT_HANDLER' => $handler]);
+			if ($placementHandler)
+			{
+				$result = PlacementTable::update($placementHandler['ID'], ['PLACEMENT_HANDLER' => $handler]);
+			}
+			else
+			{
+				$placementBind = [
+					'APP_ID' => $appId,
+					'ADDITIONAL' => $code,
+					'PLACEMENT' => static::PLACEMENT_ACTIVITY_PROPERTIES_DIALOG,
+					'PLACEMENT_HANDLER' => $handler,
+				];
+				$result = PlacementTable::add($placementBind);
+			}
 		}
-		else
+		catch (DuplicateEntryException $e)
 		{
-			$placementBind = array(
-				'APP_ID' => $appId,
-				'ADDITIONAL' => $code,
-				'PLACEMENT' => static::PLACEMENT_ACTIVITY_PROPERTIES_DIALOG,
-				'PLACEMENT_HANDLER' => $handler,
+			throw new RestException(
+				'Unable to set placement handler: You should use unique placement handler for each CODE!',
+				RestException::ERROR_CORE
 			);
-
-			$result = PlacementTable::add($placementBind);
 		}
-
-		if(!$result->isSuccess())
+		if (!$result->isSuccess())
 		{
 			$errorMessage = $result->getErrorMessages();
 			throw new RestException(
-				'Unable to set placement handler: '.implode(', ', $errorMessage),
+				'Unable to set placement handler: ' . implode(', ', $errorMessage),
 				RestException::ERROR_CORE
 			);
 		}

@@ -61,6 +61,7 @@ final class DocumentSession extends Model
 	protected $context;
 	/** @var string|null */
 	protected $service;
+	protected bool $isNew = false;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -75,7 +76,11 @@ final class DocumentSession extends Model
 	{
 		self::trackFirstEditForLimitedEdit($data);
 
-		return parent::add($data, $errorCollection);
+		$model = parent::add($data, $errorCollection);
+
+		$model->markAsNew();
+
+		return $model;
 	}
 
 	protected function update(array $data)
@@ -548,6 +553,11 @@ final class DocumentSession extends Model
 		]) <= 1;
 	}
 
+	protected function markAsNew(bool $isNew = true): void
+	{
+		$this->isNew = $isNew;
+	}
+
 	public function delete(): bool
 	{
 		return $this->deleteInternal();
@@ -561,6 +571,11 @@ final class DocumentSession extends Model
 		]);
 
 		return $countActiveSessions;
+	}
+
+	public function isNew(): bool
+	{
+		return $this->isNew;
 	}
 
 	public static function getMapAttributes()

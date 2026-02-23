@@ -25,6 +25,8 @@ use Bitrix\Main\ORM\Fields\DatetimeField;
  */
 class WorkflowFilterTable extends DataManager
 {
+	use \Bitrix\Main\ORM\Data\Internal\MergeTrait;
+
 	public static function getTableName()
 	{
 		return 'b_bp_workflow_filter';
@@ -53,5 +55,45 @@ class WorkflowFilterTable extends DataManager
 				->configureNullable(false)
 			,
 		];
+	}
+
+	public static function addByWorkflowId(string $workflowId): void
+	{
+		$current = static::query()
+			->setSelect(['WORKFLOW_ID'])
+			->where('WORKFLOW_ID', $workflowId)
+			->setLimit(1)
+			->fetch()
+		;
+		if ($current)
+		{
+			return;
+		}
+
+		$state = WorkflowStateTable::query()
+			->setSelect(['ID', 'MODULE_ID', 'ENTITY', 'DOCUMENT_ID', 'WORKFLOW_TEMPLATE_ID', 'STARTED'])
+			->where('ID', $workflowId)
+			->setLimit(1)
+			->fetch()
+		;
+
+		if (!$state)
+		{
+			return;
+		}
+
+		$toAdd = [
+			'WORKFLOW_ID' => $workflowId,
+			'MODULE_ID' => $state['MODULE_ID'],
+			'ENTITY' => $state['ENTITY'],
+			'DOCUMENT_ID' => $state['DOCUMENT_ID'],
+			'TEMPLATE_ID' => $state['WORKFLOW_TEMPLATE_ID'],
+			'STARTED' => $state['STARTED'],
+		];
+		$toUpdate = [
+			'STARTED' => $state['STARTED'],
+		];
+
+		static::merge($toAdd, $toUpdate, ['WORKFLOW_ID']);
 	}
 }

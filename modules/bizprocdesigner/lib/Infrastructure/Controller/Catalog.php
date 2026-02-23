@@ -29,8 +29,7 @@ class Catalog extends JsonController
 		$documentType = Workflow::getComplexType();
 
 		$activities =
-			$searcher->searchByType(ActivityType::NODE->value, $documentType)
-				->addCollection($searcher->searchByType(ActivityType::TRIGGER->value, $documentType))
+			$searcher->searchByType([ActivityType::NODE->value, ActivityType::TRIGGER->value], $documentType)
 				//->computeDescriptionFilter($documentType)
 				->filter(static fn(ActivityDescription $description) => !$description->getExcluded())
 				->sort()
@@ -46,12 +45,6 @@ class Catalog extends JsonController
 		/** @var ActivityDescription $activityData */
 		foreach ($activities as $activityData)
 		{
-			// Will be removed in bizprocdesigner 26.0.0 update
-			if ($activityData->getClass() === 'CrmDynamicComplexActivity')
-			{
-				continue;
-			}
-
 			$activityGroups = $activityData->getGroups();
 
 			foreach ($activityGroups as $activityGroup)

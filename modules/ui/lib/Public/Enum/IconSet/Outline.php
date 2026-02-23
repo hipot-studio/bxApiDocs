@@ -627,4 +627,5 @@ enum Outline: string
 	case WEBHOOK = 'o-webhook';
 	case TEXT_FORMAT_RESET = 'o-text-format-reset';
 	case SPOILER = 'o-spoiler';
+	case OPEN_NEW = 'o-open-new';
 }

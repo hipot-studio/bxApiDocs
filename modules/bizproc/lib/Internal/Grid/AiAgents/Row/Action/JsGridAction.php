@@ -4,6 +4,7 @@ namespace Bitrix\Bizproc\Internal\Grid\AiAgents\Row\Action;
 
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Settings\AiAgentsSettings;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 use CBPWorkflowTemplateUser;
 
@@ -21,16 +22,17 @@ abstract class JsGridAction extends BaseAction
 	}
 
 	abstract protected function isEnabled(array $rawFields): bool;
-	abstract protected function getActionParams(array $rawFields): array;
 
-	protected function getActionOptions(): array
-	{
-		return [];
-	}
+	abstract protected function getActionParams(array $rawFields): array;
 
 	protected function isUserAdmin(): bool
 	{
 		return (new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
+	}
+
+	protected function isSystemTemplate($rawFields): bool
+	{
+		return !empty($rawFields['SYSTEM_CODE']);
 	}
 
 	protected function isStartedByCurrentUser(int|string|null $userIdStartedBy): bool
@@ -61,16 +63,13 @@ abstract class JsGridAction extends BaseAction
 		return false;
 	}
 
-
 	public function getControl(array $rawFields): ?array
 	{
 		$extension = $this->extensionName;
 		$gridId = $this->gridId;
-		$actionOptions = $this->getActionOptions();
 		$actionParams = $this->getActionParams($rawFields);
 		$params = Json::encode([
 			'actionId' => $this->actionId,
-			'options' => $actionOptions,
 			'params' => $actionParams,
 		]);
 
@@ -80,16 +79,32 @@ abstract class JsGridAction extends BaseAction
 
 		if (isset($control) && !$this->isEnabled($rawFields))
 		{
-			$disabledClass = 'menu-popup-item-disabled menu-popup-no-icon';
-			$control['className'] =
-				isset($control['className'])
+			$control['title'] = $this->getActionTitleMessage($rawFields);
+
+			$disabledClass = 'bizproc-ai-agent-grid-menu-popup-item-disabled menu-popup-item-disabled menu-popup-no-icon';
+			$control['className']
+				= isset($control['className'])
 					? $control['className'] . ' ' . $disabledClass
-					: $disabledClass
-			;
+					: $disabledClass;
 
 			unset($control['ONCLICK']);
 		}
 
 		return $control;
+	}
+
+	private function getActionTitleMessage(array $rawFields): string
+	{
+		if (!$this->isUserAdmin())
+		{
+			return Loc::getMessage('BIZPROC_AI_AGENTS_GRID_NO_ACCESS_RIGHTS') ?? '';
+		}
+
+		if ($this->isSystemTemplate($rawFields))
+		{
+			return Loc::getMessage('BIZPROC_AI_AGENTS_GRID_CAN_NOT_EDIT_SYSTEM_AGENT') ?? '';
+		}
+
+		return '';
 	}
 }

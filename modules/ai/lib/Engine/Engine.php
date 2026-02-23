@@ -673,7 +673,21 @@ abstract class Engine
 		elseif (is_callable($this->onErrorCallback))
 		{
 			$error = $http->getError();
-			$this->onResponseError(current($error), array_key_first($error));
+
+			$message = 'Unknown error';
+			$code    = '';
+
+			if (is_array($error) && !empty($error))
+			{
+				$code    = (string)array_key_first($error);
+				$message = (string)$error[$code];
+			}
+			elseif (is_string($error) && $error !== '')
+			{
+				$message = $error;
+			}
+
+			$this->onResponseError($message, $code);
 		}
 	}
 

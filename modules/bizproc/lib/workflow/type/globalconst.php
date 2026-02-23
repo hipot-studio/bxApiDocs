@@ -2,13 +2,16 @@
 
 namespace Bitrix\Bizproc\Workflow\Type;
 
+use Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable;
+
 class GlobalConst extends GlobalsManager
 {
 	const CONF_NAME = 'global_const';
+	private const ONE_WEEK = 604800; // 3600 * 24 * 7;
 
 	protected static function getTableEntity(): string
 	{
-		return \Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable::class;
+		return GlobalConstTable::class;
 	}
 
 	protected static function getCacheId(): string
@@ -79,14 +82,14 @@ class GlobalConst extends GlobalsManager
 
 		foreach ($all as $id => $property)
 		{
-			Entity\GlobalConstTable::upsertByProperty($id, $property, $userId);
+			GlobalConstTable::upsertByProperty($id, $property, $userId);
 		}
 
 		if ($diff)
 		{
 			foreach ($diff as $toDelete)
 			{
-				Entity\GlobalConstTable::delete($toDelete);
+				GlobalConstTable::delete($toDelete);
 			}
 		}
 
@@ -94,5 +97,24 @@ class GlobalConst extends GlobalsManager
 		static::clearStaticCache(self::getCacheId());
 
 		return true;
+	}
+
+	protected static function getAllRows(): array
+	{
+		$cacheId = self::getCacheId();
+
+		if (!isset(static::$allCache[$cacheId]))
+		{
+			$all = [];
+			$rows = GlobalConstTable::getList(['cache' => ['ttl' => self::ONE_WEEK]]);
+			foreach ($rows as $row)
+			{
+				$all[$row['ID']] = GlobalConstTable::convertToProperty($row);
+			}
+
+			static::$allCache[$cacheId] = $all;
+		}
+
+		return static::$allCache[$cacheId];
 	}
 }

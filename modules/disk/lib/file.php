@@ -1910,4 +1910,9 @@ class File extends BaseObject
 
 		return $unifiedLinkSupportService->supports($realObject);
 	}
+
+	public function isNewByCreateTime(): bool
+	{
+		return time() - $this->getCreateTime()->getTimestamp() < 30;
+	}
 }

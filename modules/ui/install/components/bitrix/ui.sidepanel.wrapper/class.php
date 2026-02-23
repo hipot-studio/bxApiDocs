@@ -96,7 +96,6 @@ class UIPageSliderWrapperComponent extends \CBitrixComponent
 		$this->arParams['HIDE_TOOLBAR'] = (bool)($this->arParams['HIDE_TOOLBAR'] ?? false);
 		$this->arParams['USE_PADDING'] = !isset($this->arParams['USE_PADDING']) || $this->arParams['USE_PADDING'];
 		$this->arParams['USE_UI_TOOLBAR_MARGIN'] = !isset($this->arParams['USE_UI_TOOLBAR_MARGIN']) || $this->arParams['USE_UI_TOOLBAR_MARGIN'];
-		$this->arParams['USE_UI_TOOLBAR'] = isset($this->arParams['USE_UI_TOOLBAR']) && $this->arParams['USE_UI_TOOLBAR'] === 'Y';
 		$this->arParams['USE_BACKGROUND_CONTENT'] = !isset($this->arParams['USE_BACKGROUND_CONTENT']) || $this->arParams['USE_BACKGROUND_CONTENT'];
 		$this->arParams['BUTTONS'] = $this->arParams['BUTTONS'] ?? [];
 		$this->arParams['PAGE_MODE'] = !isset($this->arParams['PAGE_MODE']) || $this->arParams['PAGE_MODE'];
@@ -171,6 +170,13 @@ class UIPageSliderWrapperComponent extends \CBitrixComponent
 				? $this->arParams['DESIGN_SYSTEM_CONTEXT']
 				: ''
 		);
+
+		$this->arResult['SHOW_TOOLBAR'] = !($this->arParams['PLAIN_VIEW'] || $this->arParams['HIDE_TOOLBAR']);
+		if (isset($this->arParams['USE_UI_TOOLBAR']) && $this->arParams['USE_UI_TOOLBAR'] === 'Y')
+		{
+			// Compatibility
+			$this->arResult['SHOW_TOOLBAR'] = true;
+		}
 
 		if ($this->isPageSliderContext() && !self::$isWrapperCalled)
 		{

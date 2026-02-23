@@ -9,6 +9,7 @@ class ClearFilterAgent
 {
 	protected const CLEAR_LOG_SELECT_LIMIT = 50000;
 	protected const CLEAR_LOG_DELETE_LIMIT = 1000;
+	private const AGENT_INTERVAL = 15 * 60;
 
 	public static function getName()
 	{
@@ -36,24 +37,33 @@ class ClearFilterAgent
 		$partLimit = static::CLEAR_LOG_DELETE_LIMIT;
 		$sqlInterval = $helper->addDaysToDateTime(-1 * $days);
 
-		$strSql = "SELECT DISTINCT WORKFLOW_ID FROM b_bp_workflow_user "
-			. "WHERE WORKFLOW_STATUS = 1 AND MODIFIED < {$sqlInterval} LIMIT {$limit}";
+		$strSql = "SELECT WORKFLOW_ID FROM b_bp_workflow_filter "
+			. "WHERE STARTED < {$sqlInterval} LIMIT {$limit}";
 		$ids = $connection->query($strSql)->fetchAll();
+		$idsCount = count($ids);
 
-		if (!$ids)
+		if ($idsCount > 0)
 		{
-			return;
+			while ($partIds = array_splice($ids, 0, $partLimit))
+			{
+				$inSql = "'" . implode("','", array_column($partIds, 'WORKFLOW_ID')) . "'";
+				$connection->query(
+					sprintf(
+						'DELETE from b_bp_workflow_filter WHERE WORKFLOW_ID IN(%s)',
+						$inSql,
+					)
+				);
+			}
 		}
 
-		while ($partIds = array_splice($ids, 0, $partLimit))
+		global $pPERIOD;
+		if ($idsCount === $limit)
 		{
-			$inSql = "'" . implode("','", array_column($partIds, 'WORKFLOW_ID')) . "'";
-			$connection->query(
-				sprintf(
-					'DELETE from b_bp_workflow_filter WHERE WORKFLOW_ID IN(%s)',
-					$inSql,
-				)
-			);
+			$pPERIOD = self::AGENT_INTERVAL;
+		}
+		else
+		{
+			$pPERIOD = strtotime('tomorrow 01:00') - time();
 		}
 	}
 }

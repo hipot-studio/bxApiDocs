@@ -5,8 +5,8 @@ namespace Bitrix\Disk\Document\OnlyOffice\Templates;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\User;
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\Integration\AbstractEntity;
+use Bitrix\Call\Call;
+use Bitrix\Call\Integration\AbstractEntity;
 use Bitrix\Im\Dialog;
 use Bitrix\Main\Context;
 use Bitrix\Main\Error;
@@ -17,6 +17,8 @@ use Bitrix\Main\Result;
 use Bitrix\DocumentGenerator;
 use Bitrix\Main\Type\DateTime;
 use CFile;
+
+\Bitrix\Main\Loader::includeModule('call');
 
 final class CreateDocumentByCallTemplateScenario
 {

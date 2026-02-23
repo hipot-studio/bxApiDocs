@@ -19,6 +19,11 @@ class BaseEntityCollection implements \IteratorAggregate, Arrayable, \Countable
 		return current($this->collectionItems) ?: null;
 	}
 
+	public function getLastCollectionItem(): EntityInterface|null
+	{
+		return end($this->collectionItems) ?: null;
+	}
+
 	public function toArray(): array
 	{
 		return array_map(static fn ($collectionItem): array => $collectionItem->toArray(), $this->collectionItems);

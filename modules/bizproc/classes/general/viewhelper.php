@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Bizproc\Public\Service\Task\UnArchiveTaskService;
+use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
 use Bitrix\Bizproc\Integration\ScopeTokenService;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Main\ArgumentException;
@@ -11,10 +13,13 @@ use Bitrix\Main\UI\Viewer\ItemAttributes;
 class CBPViewHelper
 {
 	private static $cachedTasks = array();
+	private const COMPLETED_STATUS = 'COMPLETED';
+	private const RUNNING_STATUS = 'RUNNING';
 	private static ScopeTokenService $scopeTokenService;
 
 	public const DESKTOP_CONTEXT = 'desktop';
 	public const MOBILE_CONTEXT = 'mobile';
+	public const TASK_LIMIT = 50;
 
 	public static function renderUserSearch($ID, $searchInputID, $dataInputID, $componentName, $siteID = '', $nameFormat = '', $delay = 0)
 	{
@@ -74,52 +79,153 @@ class CBPViewHelper
 
 		if (!$workflowId)
 		{
-			return ['COMPLETED' => [], 'RUNNING' => []];
+			return [self::COMPLETED_STATUS => [], self::RUNNING_STATUS => []];
 		}
 
 		if (!isset(self::$cachedTasks[$workflowId][$withUsers][$extendUserInfo]))
 		{
-			$tasks = array('COMPLETED' => array(), 'RUNNING' => array());
-			$ids = array();
-			$taskIterator = CBPTaskService::GetList(
-				['ID' => 'DESC'],
-				['WORKFLOW_ID' => $workflowId],
-				false,
-				['nTopCount' => 50],
-				[
-					'ID',
-					'MODIFIED',
-					'NAME',
-					'DESCRIPTION',
-					'PARAMETERS',
-					'STATUS',
-					'IS_INLINE',
-					'ACTIVITY',
-					'ACTIVITY_NAME',
-					'CREATED_DATE',
-					'DELEGATION_TYPE',
-					'OVERDUE_DATE',
-				],
-			);
-			while ($task = $taskIterator->getNext())
+			$tasks = [self::COMPLETED_STATUS => [], self::RUNNING_STATUS => []];
+			$taskData = self::getTasksData($workflowId);
+			foreach ($taskData as $task)
 			{
-				$key = $task['STATUS'] == CBPTaskStatus::Running ? 'RUNNING' : 'COMPLETED';
+				$key = (int)$task['STATUS'] === CBPTaskStatus::Running ? self::RUNNING_STATUS : self::COMPLETED_STATUS;
 				$tasks[$key][] = $task;
-				$ids[] = $task['ID'];
 			}
-			if ($withUsers && sizeof($ids))
+
+			if ($withUsers && $taskData)
 			{
-				$taskUsers = \CBPTaskService::getTaskUsers($ids);
-				self::joinUsersToTasks($tasks['COMPLETED'], $taskUsers, $extendUserInfo);
-				$tasks['RUNNING_ALL_USERS'] = self::joinUsersToTasks($tasks['RUNNING'], $taskUsers, $extendUserInfo);
+				$taskUsers = static::getTaskUsers($taskData);
+				self::joinUsersToTasks($tasks[self::COMPLETED_STATUS], $taskUsers, $extendUserInfo);
+				$tasks['RUNNING_ALL_USERS'] = self::joinUsersToTasks($tasks[self::RUNNING_STATUS], $taskUsers, $extendUserInfo);
 			}
-			$tasks['COMPLETED_CNT'] = sizeof($tasks['COMPLETED']);
-			$tasks['RUNNING_CNT'] = sizeof($tasks['RUNNING']);
+
+			$tasks['COMPLETED_CNT'] = count($tasks[self::COMPLETED_STATUS]);
+			$tasks['RUNNING_CNT'] = count($tasks[self::RUNNING_STATUS]);
 
 			self::$cachedTasks[$workflowId][$withUsers][$extendUserInfo] = $tasks;
 		}
 
 		return self::$cachedTasks[$workflowId][$withUsers][$extendUserInfo];
+	}
+
+	private static function getTasksData(string $workflowId)
+	{
+		$query =
+			TaskArchiveTable::query()
+				->setSelect(['ID', 'TASKS_DATA'])
+				->where('WORKFLOW_ID', $workflowId)
+				->setOrder(['TASKS.TASK_ID' => 'DESC'])
+				->setLimit(50)
+		;
+		$archives = $query->fetchAll();
+
+		if ($archives)
+		{
+			$archives = array_column($archives, 'TASKS_DATA', 'ID');
+
+			return (new UnArchiveTaskService($archives, true))->getTasks(self::TASK_LIMIT, ['ID' => SORT_DESC]);
+		}
+
+		$taskIterator = CBPTaskService::GetList(
+			['ID' => 'DESC'],
+			['WORKFLOW_ID' => $workflowId],
+			false,
+			['nTopCount' => self::TASK_LIMIT],
+			[
+				'ID',
+				'MODIFIED',
+				'NAME',
+				'DESCRIPTION',
+				'PARAMETERS',
+				'STATUS',
+				'IS_INLINE',
+				'ACTIVITY',
+				'ACTIVITY_NAME',
+				'CREATED_DATE',
+				'DELEGATION_TYPE',
+				'OVERDUE_DATE',
+			],
+		);
+
+		$taskData = [];
+		while ($task = $taskIterator->getNext())
+		{
+			$taskData[$task['ID']] = $task;
+		}
+
+		return $taskData;
+	}
+
+	private static function getTaskUsers(array $tasks): array
+	{
+		$taskUsers = [];
+		$toFillTasks = [];
+		$toGetTasksIds = [];
+		foreach ($tasks as $task)
+		{
+			if (!empty($task['USERS']))
+			{
+				foreach ($task['USERS'] as $taskUser)
+				{
+					$taskId = $task['ID'];
+					$toFillTasks[$taskId][] = [
+						'ID' => null,
+						'TASK_ID' => $taskId,
+						...$taskUser,
+					];
+				}
+
+			}
+			else
+			{
+				$toGetTasksIds[] = $task['ID'];
+			}
+		}
+
+		if ($toFillTasks)
+		{
+			$taskUsers = static::fillTaskUsers($toFillTasks);
+		}
+
+		if ($toGetTasksIds)
+		{
+			$taskUsers = CBPTaskService::getTaskUsers($toGetTasksIds) + $taskUsers;
+		}
+
+		return $taskUsers;
+	}
+
+	private static function fillTaskUsers(array $tasks)
+	{
+		$filledTaskUsers = [];
+		$userIds = array_merge(
+			...array_map(
+				static fn(array $task): array => array_column($task, 'USER_ID'),
+				$tasks
+			)
+		);
+
+		$users = \Bitrix\Main\UserTable::wakeUpCollection($userIds);
+		$users->fill([
+			'PERSONAL_PHOTO',
+			'NAME',
+			'LAST_NAME',
+			'SECOND_NAME',
+			'LOGIN',
+			'TITLE',
+		]);
+		foreach ($tasks as $task)
+		{
+			foreach ($task as $taskUser)
+			{
+				$user = $users->getByPrimary($taskUser['USER_ID']);
+				$userData = $user->collectValues();
+				$filledTaskUsers[$taskUser['TASK_ID']][] = array_merge($userData, $taskUser);
+			}
+
+		}
+
+		return $filledTaskUsers;
 	}
 
 	protected static function joinUsersToTasks(&$tasks, &$taskUsers, $extendUserInfo = false)
