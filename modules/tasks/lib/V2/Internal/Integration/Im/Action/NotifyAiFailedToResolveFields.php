@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
+use Bitrix\Tasks\Integration\AI;
 use Bitrix\Tasks\V2\Internal\Entity;
 
 #[Recipients(creator: true, responsible: false, accomplices: false, auditors: false)]
@@ -28,9 +29,9 @@ class NotifyAiFailedToResolveFields extends AbstractNotify
 
 		return match (true)
 		{
-			$hasDeadline && $hasResponsible => 'TASKS_IM_AI_UNRESOLVED_DEADLINE_AND_RESPONSIBLE',
-			$hasDeadline => 'TASKS_IM_AI_UNRESOLVED_DEADLINE',
-			$hasResponsible => 'TASKS_IM_AI_UNRESOLVED_RESPONSIBLE',
+			$hasDeadline && $hasResponsible => 'TASKS_IM_AI_UNRESOLVED_DEADLINE_AND_RESPONSIBLE_MSGVER_1',
+			$hasDeadline => 'TASKS_IM_AI_UNRESOLVED_DEADLINE_MSGVER_1',
+			$hasResponsible => 'TASKS_IM_AI_UNRESOLVED_RESPONSIBLE_MSGVER_1',
 			default => null,
 		};
 	}
@@ -39,6 +40,7 @@ class NotifyAiFailedToResolveFields extends AbstractNotify
 	{
 		return [
 			'#CREATOR#' => $this->formatUser($this->task->creator),
+			'#COPILOT_NAME#' => AI\Settings::getCopilotName(),
 		];
 	}
 }

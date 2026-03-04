@@ -228,7 +228,7 @@ abstract class BaseController extends JsonController
 			),
 			new ExactParameter(
 				Entity\Task\ElapsedTime::class,
-				'elapsedTimeId',
+				'elapsedTime',
 				fn (string $className, int $elapsedTimeId): ?EntityInterface
 				=> $this->getWithAccess($this, 'elapsedTime', new Entity\Task\ElapsedTime(id: $elapsedTimeId)),
 			),

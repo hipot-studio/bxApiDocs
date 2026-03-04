@@ -595,17 +595,19 @@ abstract class ClosureTree
 		$tableName = static::getTableName();
 
 		$connection = Main\HttpApplication::getConnection();
+		$helper = $connection->getSqlHelper();
+		$insert = $helper->prepareInsert($tableName, [
+			$cName => (int)$id,
+			$pCName => (int)$id,
+			'DIRECT' => 0,
+		]);
+		$query = $helper->getInsertIgnore(
+			$tableName,
+			" ({$insert[0]})",
+			" VALUES ({$insert[1]})"
+		);
 
-		try
-		{
-			$connection->query("insert into ".$tableName." (".$cName.", ".$pCName.", DIRECT) values (
-				".intval($id).", ".intval($id).", '0'
-			)");
-		}
-		catch(DB\SqlException $e)
-		{
-			return false;
-		}
+		$connection->queryExecute($query);
 
 		return true;
 	}

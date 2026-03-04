@@ -9,12 +9,13 @@ use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\Validator\EmailValidator;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Email extends AbstractPropertyValidationAttribute
+class Email extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly bool $strict = false,
 		private readonly bool $domainCheck = false,
-		protected string|LocalizableMessageInterface|null $errorMessage = null
+		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
 	}
@@ -24,5 +25,10 @@ class Email extends AbstractPropertyValidationAttribute
 		return [
 			(new EmailValidator($this->strict, $this->domainCheck)),
 		];
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 }

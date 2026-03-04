@@ -512,7 +512,7 @@ abstract class DataManager
 					}
 					break;
 				case 'cache':
-					$query->setCacheTtl($value["ttl"]);
+					$query->setCacheTtl($value["ttl"] ?? 0);
 					if(isset($value["cache_joins"]))
 					{
 						$query->cacheJoins($value["cache_joins"]);

@@ -85,7 +85,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 
 	public function del($key)
 	{
-		self::$engine->del($key);
+		self::$engine->unlink($key);
 	}
 
 	public function setNotExists($key, $ttl, $value)
@@ -221,5 +221,20 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		}
 
 		$this->unlock($this->sid . '|cacheClean');
+	}
+
+	public function hdel($key, $field)
+	{
+		return self::$engine->hdel($key, $field);
+	}
+
+	public function hget($key, $field)
+	{
+		return self::$engine->hget($key, $field);
+	}
+
+	public function rawCommand(string $command, mixed ...$args)
+	{
+		return self::$engine->rawCommand($command, ...$args);
 	}
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Provider;
 
+use Bitrix\Main\Loader;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\Permission\GroupDictionary;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Flow\Access\FlowAction;
@@ -105,6 +107,7 @@ class TaskProvider
 		}
 
 		$modifiers = [
+			fn (): array => $this->prepareDescription($task),
 			fn (): array => $this->prepareFlow($taskParams, $task),
 			fn (): array => $this->prepareGroup($taskParams, $task),
 			fn (): array => $this->prepareCrmItems($taskParams, $task),
@@ -311,5 +314,25 @@ class TaskProvider
 		$email = $this->emailAccessService->getWithToken($task->email, $access, $taskParams->userId);
 
 		return ['email' => $email];
+	}
+
+	protected function prepareDescription(Task $task): array
+	{
+		$description = $task->description;
+
+		$suitableCreationDate = Loader::includeModule('bitrix24')
+			? new DateTime('2025-11-26', 'Y-m-d')
+			: new DateTime('2026-01-21', 'Y-m-d')
+		;
+
+		$isOldTask = $task->createdTs < $suitableCreationDate->getTimestamp();
+
+		if ($isOldTask && !empty($description) && preg_match('/<\s*\/?\s*[a-zA-Z][a-zA-Z0-9-]*\b[^>]*>/u', $description))
+		{
+			$parse = new \CTextParser();
+			$description = $parse->convertHTMLToBB($description);
+		}
+
+		return ['description' => $description];
 	}
 }

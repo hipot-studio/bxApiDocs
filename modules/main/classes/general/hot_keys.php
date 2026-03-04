@@ -3,8 +3,10 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
+
+use Bitrix\Main\UserTable;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -254,7 +256,7 @@ class CHotKeysCode
 
 		if($strUpdate != "")
 		{
-			$strSql = "UPDATE b_hot_keys_code SET ".$strUpdate." WHERE ID=".intval($ID); //." AND IS_CUSTOM <> 0"
+			$strSql = "UPDATE b_hot_keys_code SET ".$strUpdate." WHERE ID=".intval($ID);
 			if(!$DB->Query($strSql))
 				return false;
 		}
@@ -454,16 +456,15 @@ class CHotKeys
 	{
 		global $USER, $CACHE_MANAGER;
 
-		if(is_array($this->arList) || !self::$optUse)
+		if (is_array($this->arList) || !self::$optUse)
+		{
 			return false;
-
-		if(isset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]) && !\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"])
-			return false;
+		}
 
 		$uid = $USER->GetID();
 		$cacheId = static::getCacheId($uid);
 
-		if($CACHE_MANAGER->Read($this->hkCacheTtl, $cacheId))
+		if ($CACHE_MANAGER->Read($this->hkCacheTtl, $cacheId))
 		{
 			$this->arList = $CACHE_MANAGER->Get($cacheId);
 		}
@@ -473,33 +474,13 @@ class CHotKeys
 
 			$this->CheckStickers();
 
-			while($arTemp = $res->Fetch())
+			$this->arList = [];
+			while ($arTemp = $res->Fetch())
+			{
 				$this->arList[$arTemp["ID"]] = $arTemp;
-		}
+			}
 
-		if(is_array($this->arList))
-		{
 			$CACHE_MANAGER->Set($cacheId, $this->arList);
-			\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] = true;
-		}
-		else  //for the first user's login let's try to set default keys
-		{
-			if(!$this->IsDefaultOpt())
-			{
-				\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] = false;
-				return false;
-			}
-
-			$setDef = $this->SetDefault($uid);
-			$setNoDef = $this->SetNotDefaultOpt();
-
-			if(!$setDef || !$setNoDef)
-			{
-				\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] = false;
-				return false;
-			}
-
-			return $this->LoadToCache();
 		}
 
 		return true;
@@ -827,7 +808,6 @@ class CHotKeys
 
 		$result = $DB->Add("b_hot_keys", $arPrepFields);
 
-		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 		static::CleanCache();
 
 		return $result;
@@ -848,7 +828,6 @@ class CHotKeys
 			if(!$DB->Query($strSql))
 				return false;
 
-			unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 			static::CleanCache();
 		}
 		return true;
@@ -861,7 +840,6 @@ class CHotKeys
 		$sql = "DELETE FROM b_hot_keys WHERE ID=".intval($ID);
 		$res = $DB->Query($sql);
 
-		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 		static::CleanCache();
 
 		return $res->AffectedRowsCount();
@@ -893,7 +871,7 @@ class CHotKeys
 				return '';
 			}
 
-			$res = \Bitrix\Main\UserTable::getList(
+			$res = UserTable::getList(
 				[
 					'filter' => [
 						'=ID' => $next_user['MIN_USER_ID'],
@@ -919,8 +897,6 @@ class CHotKeys
 
 		$uid = intval($userID);
 
-		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
-
 		$sql = "DELETE FROM b_hot_keys WHERE USER_ID=".$uid;
 		$delRes = $DB->Query($sql);
 
@@ -940,6 +916,8 @@ class CHotKeys
 			if(!$insRes)
 				$insErr = true;
 		}
+
+		static::CleanCache($userID);
 
 		return ($delRes && !$insErr);
 	}
@@ -1067,20 +1045,6 @@ class CHotKeys
 		return $retJS;
 	}
 
-	protected function IsDefaultOpt()
-	{
-		return
-			CUserOptions::GetOption("hot_keys", "user_defined", "a") === "a"
-			&& CUserOptions::GetOption("hot_keys", "user_defined", "b") === "b"
-		;
-	}
-
-	protected function SetNotDefaultOpt()
-	{
-		CUserOptions::SetOption("hot_keys", "user_defined", true);
-		return true;
-	}
-
 	//for old stickers hotkeys compability
 	protected function CheckStickers()
 	{
@@ -1104,10 +1068,6 @@ class CHotKeys
 
 	public function PrintGlobalUrlVar()
 	{
-
-		if(!$GLOBALS["APPLICATION"]->PanelShowed)
-			return "";
-
 		$Execs = $this->GetCodeByClassName("Global");
 		$out = $this->PrintJSExecs($Execs);
 

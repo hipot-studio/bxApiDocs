@@ -9,4 +9,5 @@ enum TaskUpdatedV2Action: string
 	case RemoveUser = 'removeUser';
 	case AddAsAuditor = 'addAsAuditor';
 	case AddAsAccomplice = 'addAsAccomplice';
+	case AddAsResponsible = 'addAsResponsible';
 }

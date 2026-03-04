@@ -346,24 +346,36 @@ class MailboxSyncManager
 			return [];
 		}
 
+		$mailboxIds = MailboxTable::query()
+			->setSelect(['ID'])
+			->whereIn('USER_ID', $userIds)
+			->where('ACTIVE', 'Y')
+			->fetchAll()
+		;
+
+		$mailboxIds = array_map('strval', array_column($mailboxIds, 'ID'));
+		if (empty($mailboxIds))
+		{
+			return [];
+		}
+
+		global $DB;
+
 		$query = MailEntityOptionsTable::query()
 			->registerRuntimeField(
-				'MAILBOX',
-				[
-					'data_type' => MailboxTable::class,
-					'reference' => [
-						'=this.ENTITY_ID' => 'ref.ID',
-					],
-					'join_type' => 'INNER',
-				],
+				new \Bitrix\Main\ORM\Fields\ExpressionField(
+					'VALUE_INT',
+					$DB->ToNumber('%s'),
+					['VALUE', 'VALUE'],
+				),
 			)
 			->setSelect([
 				'ENTITY_ID',
 			])
 			->where('ENTITY_TYPE', '=', MailEntityOptionsTable::MAILBOX_TYPE_NAME)
 			->where('PROPERTY_NAME', '=', MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME)
-			->where('VALUE', '>=', self::MAX_CONNECTION_ATTEMPTS_BEFORE_UNAVAILABLE)
-			->whereIn('MAILBOX.USER_ID', $userIds)
+			->whereIn('ENTITY_ID', $mailboxIds)
+			->where('VALUE_INT', '>=', self::MAX_CONNECTION_ATTEMPTS_BEFORE_UNAVAILABLE)
 		;
 
 		$result = $query->exec();

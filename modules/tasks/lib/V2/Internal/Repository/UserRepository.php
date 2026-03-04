@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
-use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UserTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserMapper;
-use Bitrix\Tasks\Util;
 use CGroup;
 
 class UserRepository implements UserRepositoryInterface
@@ -83,11 +81,11 @@ class UserRepository implements UserRepositoryInterface
 		}
 
 		$result = UserTable::query()
-			->setSelect([new ExpressionField('CNT', 'COUNT(1)')])
+			->setSelect(['ID'])
 			->where('ID', $userId)
 			->setLimit(1)
 			->fetch();
 
-		return is_array($result) && (int)$result['CNT'] > 0;
+		return $result !== false;
 	}
 }

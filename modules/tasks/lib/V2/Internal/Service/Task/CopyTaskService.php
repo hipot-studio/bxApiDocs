@@ -213,7 +213,7 @@ class CopyTaskService
 	{
 		$task = new Entity\Task(
 			title: $sourceTask->title,
-			creator: new Entity\User(id: $config->userId),
+			creator: $sourceTask->creator,
 			responsible: $sourceTask->responsible,
 			deadlineTs: $sourceTask->deadlineTs,
 			needsControl: $sourceTask->needsControl,
@@ -221,6 +221,8 @@ class CopyTaskService
 			endPlanTs: $sourceTask->endPlanTs,
 			checklist: $sourceTask->checklist,
 			group: $sourceTask->group,
+			epicId: $sourceTask->epicId,
+			storyPoints: $sourceTask->storyPoints,
 			flow: $sourceTask->flow,
 			priority: $sourceTask->priority,
 			accomplices: $sourceTask->accomplices,

@@ -874,6 +874,18 @@ class CVoxImplantHttp
 
 	}
 
+	public function GetAccountVerifications()
+	{
+		$query = $this->Query('GetAccountVerifications', []);
+		if (isset($query->error))
+		{
+			$this->error = new CVoxImplantError(__METHOD__, $query->error->code, $query->error->msg);
+			return false;
+		}
+
+		return $query;
+	}
+
 	public function GetDocumentStatus()
 	{
 		$query = $this->Query(

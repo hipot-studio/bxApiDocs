@@ -10,6 +10,13 @@ use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 
 class RelationTemplateMapper
 {
+	public function __construct(
+		private readonly TypeMapper $typeMapper,
+	)
+	{
+
+	}
+
 	public function mapToEntity(
 		array $template,
 		?UserCollection $responsibles = null,
@@ -22,6 +29,7 @@ class RelationTemplateMapper
 			'responsibleCollection' => $responsibles,
 			'deadlineAfter' => $template['DEADLINE_AFTER'] ?? null,
 			'rights' => $rights,
+			'type' => $this->typeMapper->mapToEnum((int)$template['TPARAM_TYPE']),
 		];
 
 		return Template::mapFromArray($fields);

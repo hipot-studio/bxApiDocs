@@ -21,7 +21,7 @@ class ResultAccessController extends BaseAccessController implements AccessError
 		$key = 'RESULT_' . $itemId;
 		if (!array_key_exists($key, static::$cache))
 		{
-			static::$cache[$key] = ResultModel::createFromId($itemId);
+			static::$cache[$key] = ResultModel::createFromId((int)$itemId);
 		}
 
 		return static::$cache[$key];

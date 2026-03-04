@@ -8,6 +8,7 @@
  * @deprecated
  */
 
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Item\Workgroup;
@@ -2527,8 +2528,15 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		{
 			if (!$this->checkAccess(ActionDictionary::ACTION_TASK_DEADLINE, $arFields))
 			{
+				/** @var TaskAccessController $accessController */
+				$accessController = self::getAccessController((int) $this->executiveUserId);
+				$userError = $accessController->getUserErrors()[0] ?? null;
+				$errorMessage = $userError instanceof Error
+					? $userError->getMessage()
+					: GetMessage('TASKS_ACCESS_DENIED_TO_DEADLINE_UPDATE');
+
 				throw new TasksException(
-					GetMessage('TASKS_ACCESS_DENIED_TO_DEADLINE_UPDATE'),
+					$errorMessage,
 					TasksException::TE_ACTION_NOT_ALLOWED
 				);
 			}

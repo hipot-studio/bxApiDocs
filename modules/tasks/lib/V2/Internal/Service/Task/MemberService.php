@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
@@ -96,8 +97,18 @@ class MemberService
 		}
 
 		$task = Task::mapFromArray($data);
+		$updatedTask = $this->updateService->update($task, $config);
 
-		return $this->updateService->update($task, $config);
+		if ($updatedTask->allowsTimeTracking && ($config->getUserId() !== $responsibleId))
+		{
+			$timeManagementService = Container::getInstance()->getTimeManagementService();
+			$timeManagementService->stopTimer(
+				userId: $config->getUserId(),
+				taskId: $taskId,
+			);
+		}
+
+		return $updatedTask;
 	}
 
 	public function setAuditors(

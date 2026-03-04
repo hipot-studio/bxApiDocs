@@ -22,7 +22,6 @@ use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Repository\ElapsedTimeRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
-use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StartTimerCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StopTimerCommand;
 use Bitrix\Tasks\V2\Public\Provider\TaskElapsedTimeProvider;
@@ -54,14 +53,14 @@ class TimeManagementService
 		bool $syncPlan = true,
 		bool $canStart = false,
 		bool $canRenew = false,
-	): Timer
+	): ?Timer
 	{
 		$this->stopTimer($userId);
 
 		$task = $this->taskRepository->getById($taskId);
 		if ($task === null)
 		{
-			throw new TaskNotFoundException('Task not found');
+			return null;
 		}
 
 		$timer = $this->timerService->start($userId, $taskId);
@@ -145,7 +144,7 @@ class TimeManagementService
 		$task = $this->taskRepository->getById($timer->taskId);
 		if ($task === null)
 		{
-			throw new TaskNotFoundException('Task not found');
+			return null;
 		}
 
 		$affectedUserIds = $this->getAffectedUserIds($task, $userId);

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Main\Messenger\Internals\Storage\Db;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Messenger\Entity\MessageBox;
 use Bitrix\Main\Messenger\Entity\MessageBoxCollection;
+use Bitrix\Main\Messenger\Internals\Config\QueueConfigRegistry;
 use Bitrix\Main\Messenger\Internals\Exception\Storage\PersistenceException;
 use Bitrix\Main\Messenger\Internals\Storage\Db\Model\MessageStatus;
 use Bitrix\Main\Messenger\Internals\Storage\StorageInterface;
@@ -23,11 +25,14 @@ class DbStorage implements StorageInterface
 
 	private MessageRepository $repository;
 
+	private QueueConfigRegistry $queueRegistry;
+
 	private static bool $locked = false;
 
 	public function __construct(Entity $tableEntity)
 	{
 		$this->repository = new MessageRepository($tableEntity);
+		$this->queueRegistry = ServiceLocator::getInstance()->get(QueueConfigRegistry::class);
 
 		$this->requeueStaleMessages($tableEntity);
 	}
@@ -99,7 +104,9 @@ class DbStorage implements StorageInterface
 			return [];
 		}
 
-		$messageBoxes = $this->repository->getReadyMessagesOfQueue($queueId, $limit);
+		$queueConfig = $this->queueRegistry->getQueueConfig($queueId);
+
+		$messageBoxes = $this->repository->getReadyMessagesOfQueue($queueId, $limit, $queueConfig->totalProcessingLimit);
 
 		$this->repository->updateStatus($messageBoxes, MessageStatus::Processing);
 

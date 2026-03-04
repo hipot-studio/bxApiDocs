@@ -81,6 +81,16 @@ class Options
 		}
 	}
 
+	/**
+	 * @internal not stable
+	 *
+	 * @return array
+	 */
+	public function getMiddlewares(): array
+	{
+		return $this->middleware;
+	}
+
 	public function prefix($prefix)
 	{
 		$this->prefix = $prefix;

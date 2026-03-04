@@ -11,6 +11,8 @@ use Bitrix\Main\Loader;
 
 class StructureDepartment extends EntityBase
 {
+	private static array $modelsCache = [];
+
 	/**
 	 * @return ?Node
 	 */
@@ -41,10 +43,19 @@ class StructureDepartment extends EntityBase
 
 	protected function loadModel(): void
 	{
-		if (
-			!$this->model
-			&& Loader::includeModule('humanresources')
-		)
+		if ($this->model)
+		{
+			return;
+		}
+
+		if (array_key_exists($this->getId(), self::$modelsCache))
+		{
+			$this->model = self::$modelsCache[$this->getId()];
+
+			return;
+		}
+
+		if (Loader::includeModule('humanresources'))
 		{
 			$this->model =
 				NodeDataBuilder::createWithFilter(
@@ -52,6 +63,8 @@ class StructureDepartment extends EntityBase
 				)
 				->get()
 			;
+
+			self::$modelsCache[$this->getId()] = $this->model;
 		}
 	}
 }

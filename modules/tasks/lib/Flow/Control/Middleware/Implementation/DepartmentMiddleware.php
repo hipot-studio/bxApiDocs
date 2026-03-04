@@ -2,40 +2,42 @@
 
 namespace Bitrix\Tasks\Flow\Control\Middleware\Implementation;
 
-use Bitrix\Main\Loader;
 use Bitrix\Tasks\Flow\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\MiddlewareException;
 use Bitrix\Tasks\Flow\Control\Middleware\AbstractMiddleware;
-use Bitrix\Tasks\Integration\Intranet\Flow\Department;
+use Bitrix\Tasks\Flow\Internal\DI\Container;
+use Bitrix\Tasks\Flow\Provider\DepartmentExistsProvider;
 
 class DepartmentMiddleware extends AbstractMiddleware
 {
+	private DepartmentExistsProvider $departmentProvider;
+
+	public function __construct()
+	{
+		$this->departmentProvider = Container::getInstance()->get(DepartmentExistsProvider::class);
+	}
+
 	/**
 	 * @throws MiddlewareException
 	 */
 	public function handle(AbstractCommand $request)
 	{
 		$departmentIds = $request->getDepartmentIdList();
-		$departments = $this->load(...$departmentIds);
-
-		foreach ($departments as $departmentId => $departmentTitle)
+		if (empty($departmentIds))
 		{
-			if ($departmentTitle === null)
-			{
-				throw new MiddlewareException("Department {$departmentId} doesn't exists");
-			}
+			return parent::handle($request);
+		}
+
+		$existsDepartmentIds = $this->departmentProvider->filterExists($departmentIds);
+
+		$notExistsIds = array_diff($departmentIds, $existsDepartmentIds);
+		if (!empty($notExistsIds))
+		{
+			$firstDepartmentId = reset($notExistsIds);
+
+			throw new MiddlewareException("Department {$firstDepartmentId} doesn't exist");
 		}
 
 		return parent::handle($request);
-	}
-
-	private function load(int ...$departmentIds): array
-	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return [];
-		}
-
-		return Department::getDepartmentsData(...$departmentIds);
 	}
 }

@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Extranet;
@@ -29,6 +29,7 @@ use Bitrix\Main\GroupTable;
 use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Type\Date;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -218,6 +219,7 @@ class CUser extends CDBResult
 		{
 			unset($arFields["ID"]);
 			unset($arFields["STORED_HASH"]);
+			unset($arFields["PERSONAL_BIRTHDATE"]);
 
 			$arFields['ACTIVE'] = (is_set($arFields, 'ACTIVE') && $arFields['ACTIVE'] != 'Y' ? 'N' : 'Y');
 			$arFields['BLOCKED'] = (is_set($arFields, 'BLOCKED') && $arFields['BLOCKED'] == 'Y' ? 'Y' : 'N');
@@ -247,6 +249,17 @@ class CUser extends CDBResult
 			if (is_set($arFields, "PERSONAL_COUNTRY"))
 			{
 				$arFields["PERSONAL_COUNTRY"] = intval($arFields["PERSONAL_COUNTRY"]);
+			}
+
+			// calculated indexed field for sorting
+			if (!empty($arFields["PERSONAL_BIRTHDAY"]))
+			{
+				$birthDate = new Date($arFields["PERSONAL_BIRTHDAY"]);
+				$arFields["PERSONAL_BIRTHDATE"] = $birthDate->format('m-d');
+			}
+			elseif (isset($arFields["PERSONAL_BIRTHDAY"]))
+			{
+				$arFields["PERSONAL_BIRTHDATE"] = false;
 			}
 
 			if (
@@ -672,10 +685,18 @@ class CUser extends CDBResult
 						}
 						break;
 					case "PERSONAL_BIRTHDATE_1":
-						$arSqlSearch[] = "U.PERSONAL_BIRTHDATE>=" . $DB->CharToDateFunction($val);
+						$arSqlSearch[] = "U.PERSONAL_BIRTHDATE >= '" . $DB->ForSql($val) . "'";
 						break;
 					case "PERSONAL_BIRTHDATE_2":
-						$arSqlSearch[] = "U.PERSONAL_BIRTHDATE<=" . $DB->CharToDateFunction($val . " 23:59:59");
+						$arSqlSearch[] = "U.PERSONAL_BIRTHDATE <= '" . $DB->ForSql($val) . "'";
+						break;
+					case "CURRENT_BIRTHDAY_DAYS":
+						$currentYear = (int)date('Y');
+						$nextDate = mktime(0, 0, 0, date('n'), (int)date('d') + (int)$val, $currentYear);
+						$nextYear = (int)date('Y', $nextDate);
+						// include bithdays within the next year with OR, within the current year with AND
+						$operation = $nextYear > $currentYear ? 'OR' : 'AND';
+						$arSqlSearch[] = "(U.PERSONAL_BIRTHDATE >= '" . date("m-d") . "' " . $operation . " U.PERSONAL_BIRTHDATE <= '" . date("m-d", $nextDate) . "')";
 						break;
 					case "PERSONAL_BIRTHDAY_1":
 						$arSqlSearch[] = "U.PERSONAL_BIRTHDAY>=" . $DB->CharToDateFunction($DB->ForSql($val), "SHORT");
@@ -763,11 +784,12 @@ class CUser extends CDBResult
 
 			if ($field == "CURRENT_BIRTHDAY")
 			{
-				$cur_year = intval(date('Y'));
+				$currentYear = intval(date('Y'));
+				$currentDay = date('m-d');
 				$arSelectFields[$field] = "case
-					when U.PERSONAL_BIRTHDAY is null then '9999-99-99'
-					when " . $helper->formatDate($cur_year . '-MM-DD', 'U.PERSONAL_BIRTHDAY') . ' < ' . $helper->formatDate('YYYY-MM-DD', $helper->addSecondsToDateTime(CTimeZone::GetOffset())) . " then " . $helper->formatDate(($cur_year + 1) . '-MM-DD', 'U.PERSONAL_BIRTHDAY') . "
-					else " . $helper->formatDate($cur_year . '-MM-DD', 'U.PERSONAL_BIRTHDAY') . "
+					when U.PERSONAL_BIRTHDATE is null then '9999-99-99'
+					when U.PERSONAL_BIRTHDATE < '" . $currentDay . "' then " . $helper->getConcatFunction("'" . ($currentYear + 1) . "-'", 'U.PERSONAL_BIRTHDATE') . "
+					else " . $helper->getConcatFunction("'" . $currentYear . "-'", 'U.PERSONAL_BIRTHDATE') . "
 				end CURRENT_BIRTHDAY";
 				$arSqlOrder[$field] = "CURRENT_BIRTHDAY " . $dir;
 			}
@@ -3938,6 +3960,7 @@ class CUser extends CDBResult
 		else
 		{
 			unset($arFields["ID"]);
+			unset($arFields["PERSONAL_BIRTHDATE"]);
 
 			if (is_set($arFields, "ACTIVE") && $arFields["ACTIVE"] != 'Y')
 			{
@@ -4026,6 +4049,17 @@ class CUser extends CDBResult
 			if (is_set($arFields, "PERSONAL_COUNTRY"))
 			{
 				$arFields["PERSONAL_COUNTRY"] = intval($arFields["PERSONAL_COUNTRY"]);
+			}
+
+			// calculated indexed field for sorting
+			if (!empty($arFields["PERSONAL_BIRTHDAY"]))
+			{
+				$birthDate = new Date($arFields["PERSONAL_BIRTHDAY"]);
+				$arFields["PERSONAL_BIRTHDATE"] = $birthDate->format('m-d');
+			}
+			elseif (isset($arFields["PERSONAL_BIRTHDAY"]))
+			{
+				$arFields["PERSONAL_BIRTHDATE"] = false;
 			}
 
 			if (
@@ -6094,5 +6128,35 @@ class CUser extends CDBResult
 				$CACHE_MANAGER->ClearByTag('USER_NAME');
 			}
 		}
+	}
+
+	public static function SyncBithdaysAgent(?int $lastId = null)
+	{
+		$lastId = (int)$lastId;
+		$nextId = $lastId + 1000;
+
+		$connection = Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$res = $connection->query("select 'x' from b_user where ID > $lastId limit 1");
+		if ($res->fetch())
+		{
+			$connection->query("
+				UPDATE b_user SET
+					PERSONAL_BIRTHDATE = NULL 
+				WHERE ID > $lastId AND ID <= $nextId
+					AND PERSONAL_BIRTHDATE IS NOT NULL
+			");
+			$connection->query("
+				UPDATE b_user SET 
+					PERSONAL_BIRTHDATE = " . $helper->formatDate('MM-DD', 'PERSONAL_BIRTHDAY') . " 
+				WHERE ID > $lastId AND ID <= $nextId 
+					AND PERSONAL_BIRTHDAY IS NOT NULL
+			");
+
+			return "CUser::SyncBithdaysAgent($nextId);";
+		}
+
+		return '';
 	}
 }

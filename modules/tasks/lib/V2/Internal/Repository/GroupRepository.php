@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Integration\Extranet\User;
@@ -14,6 +15,7 @@ use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\GroupMapper;
 use CSocNetGroup;
+use CSocNetUserToGroup;
 
 class GroupRepository implements GroupRepositoryInterface
 {
@@ -49,6 +51,48 @@ class GroupRepository implements GroupRepositoryInterface
 		return $this->groupMapper->mapToUserCollection($members);
 	}
 
+	public function getMemberRoles(array $userIds, int $groupId): Entity\UserCollection
+	{
+		Collection::normalizeArrayValuesByInt($userIds, false);
+
+		if (empty($userIds) || $groupId <= 0 || !Loader::includeModule('socialnetwork'))
+		{
+			return new Entity\UserCollection();
+		}
+
+		$result = CSocNetUserToGroup::GetList(
+			arFilter: [
+				'@USER_ID' => $userIds,
+				'GROUP_ID' => $groupId,
+			],
+			arSelectFields: [
+				'ID',
+				'USER_ID',
+				'ROLE',
+			],
+		);
+
+		$data = array_map(
+			static fn(int $id): array => [
+				'id' => $id,
+				'role' => false,
+			],
+			$userIds
+		);
+
+		$members = Entity\UserCollection::mapFromArray($data);
+
+		while ($member = $result->Fetch())
+		{
+			$members->replace(new Entity\User(
+				id: (int)$member['USER_ID'],
+				role: $member['ROLE'],
+			));
+		}
+
+		return $members;
+	}
+
 	public function getType(int $id): ?string
 	{
 		return GroupProvider::getInstance()?->getGroupType($id)?->value;
@@ -56,7 +100,7 @@ class GroupRepository implements GroupRepositoryInterface
 
 	public function getByIds(array $ids): Entity\GroupCollection
 	{
-		if (empty($ids))
+		if (empty($ids) || !Loader::includeModule('socialnetwork'))
 		{
 			return new Entity\GroupCollection();
 		}

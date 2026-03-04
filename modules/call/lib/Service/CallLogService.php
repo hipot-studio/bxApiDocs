@@ -503,7 +503,7 @@ class CallLogService
 
 		$newCounterValue = $this->getMissedCounter($userId);
 
-		CallLogPushService::sendCounterUpdate($userId, $newCounterValue);
+		CallLogPushService::sendCounterUpdate($userId, $newCounterValue, $callIds);
 
 		return $newCounterValue;
 	}
@@ -516,14 +516,15 @@ class CallLogService
 	 */
 	public function markAllAsSeen(int $userId): int
 	{
-		// Delete all counters for user
-		CallUserLogCountersTable::deleteByFilter(['USER_ID' => $userId]);
+		$callIds = array_column(
+			CallUserLogCountersTable::query()
+				->setSelect(['USERLOG_ID'])
+				->where('USER_ID', $userId)
+				->fetchAll(),
+			'USERLOG_ID'
+		);
 
-		Counter::clearCache($userId);
-
-		CallLogPushService::sendCounterUpdate($userId, 0);
-
-		return 0;
+		return $this->markAsSeen($userId, $callIds);
 	}
 
 	/**

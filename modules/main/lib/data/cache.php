@@ -207,14 +207,14 @@ class Cache
 			return false;
 		}
 
-		$kernelSession = $application->getKernelSession();
-
 		if (isset(static::$clearCacheSession) || isset(static::$clearCache))
 		{
 			if ($USER instanceof \CUser && $USER->CanDoOperation('cache_control'))
 			{
 				if (isset(static::$clearCacheSession))
 				{
+					$kernelSession = $application->getKernelSession();
+
 					if (static::$clearCacheSession === true)
 					{
 						$kernelSession['SESS_CLEAR_CACHE'] = 'Y';
@@ -232,9 +232,14 @@ class Cache
 			}
 		}
 
-		if (isset($kernelSession['SESS_CLEAR_CACHE']) && $kernelSession['SESS_CLEAR_CACHE'] === 'Y')
+		// only after the start, to start the session as late as possible
+		if (defined('BX_STARTED'))
 		{
-			return true;
+			$kernelSession = $application->getKernelSession();
+			if ($kernelSession->get('SESS_CLEAR_CACHE') === 'Y')
+			{
+				return true;
+			}
 		}
 
 		return false;

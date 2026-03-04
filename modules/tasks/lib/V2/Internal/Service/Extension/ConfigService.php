@@ -99,6 +99,7 @@ class ConfigService
 			'restrictions' => Container::getInstance()->getTariffProvider()->getRestrictions(),
 			'taskUserFieldScheme' => $this->userFieldSchemeRepository->getCollection($userId, Task::getEntityCode())->toArray(),
 			'templateUserFieldScheme' => $this->userFieldSchemeRepository->getCollection($userId, Template::getEntityCode())->toArray(),
+			'copilotName' => AI\Settings::getCopilotName(),
 		];
 	}
 

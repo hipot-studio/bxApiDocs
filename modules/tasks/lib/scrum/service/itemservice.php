@@ -12,11 +12,11 @@ use Bitrix\Main\ORM\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Socialnetwork\UserToGroupTable;
-use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Form\ItemForm;
 use Bitrix\Tasks\Scrum\Form\ItemInfo;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
 use Bitrix\Tasks\Scrum\Internal\ItemTable;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class ItemService implements Errorable
 {
@@ -221,7 +221,7 @@ class ItemService implements Errorable
 
 			$queryObject = ItemTable::getList([
 				'filter' => ['ID' => $itemIds],
-				'order' => ['SORT' => 'ASC', 'ID' => 'DESC'],
+				'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
 			]);
 			while ($itemData = $queryObject->fetch())
 			{
@@ -325,7 +325,7 @@ class ItemService implements Errorable
 				'filter' => [
 					'SOURCE_ID' => $sourceId
 				],
-				'order' => ['SORT' => 'ASC', 'ID' => 'DESC'],
+				'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
 			]);
 			if ($itemData = $queryObject->fetch())
 			{
@@ -362,10 +362,7 @@ class ItemService implements Errorable
 		$queryParams = [
 			'select' => ['ID'],
 			'filter' => $filter,
-			'order' => [
-				'SORT' => 'ASC',
-				'ID' => 'DESC',
-			],
+			'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
 		];
 
 		$queryObject = ItemTable::getList($queryParams);
@@ -392,10 +389,7 @@ class ItemService implements Errorable
 			$queryParams = [
 				'select' => ['ID'],
 				'filter' => ['ENTITY_ID' => $entityId],
-				'order' => [
-					'SORT' => 'ASC',
-					'ID' => 'DESC',
-				],
+				'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
 			];
 
 			$queryObject = ItemTable::getList($queryParams);
@@ -478,10 +472,9 @@ class ItemService implements Errorable
 	 * @return void
 	 */
 	public function moveItemsToEntity(
-		int $groupId,
 		array $itemIds,
 		int $entityId,
-		PushService $pushService = null,
+		?PushService $pushService = null,
 	): void
 	{
 		if (empty($itemIds))
@@ -491,35 +484,40 @@ class ItemService implements Errorable
 
 		try
 		{
-			$sortInfo = [];
+			$firstSortValue = $this->getFirstItemSort();
 
-			foreach ($itemIds as $key => $itemId)
+			$updatedItems = [];
+			$sortWhens = [];
+			$entityWhens = [];
+			$count = 1;
+			foreach (array_reverse($itemIds) as $itemId)
 			{
-				$sortInfo[$itemId] = [
-					'sort' => $key + 1,
+				$sort = $firstSortValue / (2 * $count);
+				$updatedItems[$itemId] = [
+					'sort' => $sort,
 					'entityId' => $entityId,
-					'updatedItemId' => $itemId,
 				];
+				$sortWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $sort;
+				$entityWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $entityId;
+
+				$count++;
 			}
 
-			$limit = count($itemIds);
-
-			$queryObject = ItemTable::getList([
-				'select' => ['ID', 'SORT'],
-				'filter' => ['ENTITY_ID' => $entityId],
-				'order' => ['SORT' => 'ASC', 'ID' => 'DESC'],
-				'limit' => $limit,
-			]);
-			while ($itemData = $queryObject->fetch())
+			$data = [];
+			if ($sortWhens && $entityWhens && count($entityWhens) === count($sortWhens))
 			{
-				$sortInfo[$itemData['ID']] = [
-					'sort' => $itemData['SORT'] + $limit,
-					'entityId' => $entityId,
-					'updatedItemId' => $itemData['ID'],
-				];
+				$data['SORT_FLOAT'] = new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)');
+				$data['ENTITY_ID'] = new SqlExpression('(CASE ' . implode(' ', $entityWhens) . ' END)');
+
+				ItemTable::updateMulti($itemIds, $data);
 			}
 
-			$this->sortItems($groupId, $sortInfo, $pushService);
+			if ($pushService)
+			{
+				$pushService->sendSortItemEvent($updatedItems);
+			}
+
+			$this->normalizeEntitySort($entityId);
 		}
 		catch (\Exception $exception)
 		{
@@ -530,6 +528,56 @@ class ItemService implements Errorable
 				)
 			);
 		}
+	}
+
+	private function normalizeEntitySort(int $entityId): void
+	{
+		$offset = 0;
+		$limit = 500;
+		$sortValue = ItemForm::DEFAULT_SORT_VALUE;
+
+		do {
+			$items = ItemTable::getList([
+				'select' => ['ID', 'SORT_FLOAT'],
+				'filter' => ['ENTITY_ID' => $entityId],
+				'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
+				'limit' => $limit,
+				'offset' => $offset
+			])->fetchAll();
+			if (empty($items))
+			{
+				break;
+			}
+
+			$sortWhens = [];
+			$itemIds = [];
+			$currentSort = $sortValue;
+
+			foreach ($items as $item)
+			{
+				$itemIds[] = $item['ID'];
+				$sortWhens[] = 'WHEN ID = ' . $item['ID'] . ' THEN ' . $currentSort;
+				$currentSort += ItemForm::DEFAULT_SORT_VALUE;
+			}
+
+			if (!empty($sortWhens))
+			{
+				try
+				{
+					ItemTable::updateMulti($itemIds, [
+						'SORT_FLOAT' => new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)')
+					]);
+				}
+				catch (\Exception $e)
+				{
+					Container::getInstance()->getLogger()->logError($e);
+				}
+			}
+
+			$offset += $limit;
+			$sortValue = $currentSort;
+
+		} while (count($items) === $limit);
 	}
 
 	public function updateEntityIdToItems(int $entityId, array $itemIds): void
@@ -619,21 +667,180 @@ class ItemService implements Errorable
 		}
 	}
 
-	public function sortItems(int $groupId, array $sortInfo, PushService $pushService = null): void
+	public function sortItems(array $sortInfo, ?PushService $pushService = null): void
 	{
-		$entities = $this->getActiveEntities($groupId);
-		$allItems = $this->getAllItemsForEntities($entities);
+		if (empty($sortInfo))
+		{
+			return;
+		}
 
-		$visibleItems = $this->prepareVisibleItemsData($sortInfo, $allItems);
-		$sortedVisibleItemIds = $this->sortVisibleItemsByNewOrder($visibleItems);
+		$allItemIds = $this->collectAllItemIds($sortInfo);
+		$itemIds = array_keys($sortInfo);
 
-		$newOrder = $this->buildNewItemOrder($allItems, $sortedVisibleItemIds);
-		$newSortMap = $this->createSortMapFromOrder($newOrder);
+		if (empty($itemIds))
+		{
+			return;
+		}
 
-		$updatedItems = $this->prepareUpdatedItemsData($visibleItems, $newSortMap);
-		$this->updateItemsSortOrder($newSortMap, $sortInfo);
+		$currentItemsData = $this->getCurrentItemsData($allItemIds);
 
-		$this->sendSortEventsIfNeeded($updatedItems, $pushService);
+		$sortWhens = [];
+		$entityWhens = [];
+		$updatedItems = [];
+
+		foreach ($sortInfo as $itemId => $info)
+		{
+			$itemId = (int)$itemId;
+			if (!$itemId)
+			{
+				continue;
+			}
+
+			$currentData = $currentItemsData[$itemId] ?? null;
+			if (!$currentData)
+			{
+				continue;
+			}
+
+			$previousItemId = isset($info['previousItemId']) ? (int)$info['previousItemId'] : null;
+			$nextItemId = isset($info['nextItemId']) ? (int)$info['nextItemId'] : null;
+			$newEntityId = isset($info['entityId']) ? (int)$info['entityId'] : null;
+			$tmpId = $info['tmpId'] ?? '';
+			$updatedItemId = isset($info['updatedItemId']) ? (int)$info['updatedItemId'] : 0;
+
+			$newSort = $this->calculateNewSortPosition(
+				$previousItemId,
+				$nextItemId,
+				$currentItemsData
+			);
+
+			$sortWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $newSort;
+			if ($newEntityId)
+			{
+				$entityWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $newEntityId;
+			}
+
+			if ($updatedItemId)
+			{
+				$updatedItems[$itemId] = [
+					'sort' => $newSort,
+					'tmpId' => $tmpId,
+				];
+
+				if ($newEntityId)
+				{
+					$updatedItems[$itemId]['entityId'] = $newEntityId;
+				}
+			}
+		}
+
+		if (!empty($sortWhens))
+		{
+			ItemTable::updateMulti($itemIds, [
+				'SORT_FLOAT' => new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)'),
+			]);
+		}
+
+		if (!empty($entityWhens))
+		{
+			ItemTable::updateMulti($itemIds, [
+				'ENTITY_ID' => new SqlExpression('(CASE ' . implode(' ', $entityWhens) . ' ELSE ENTITY_ID END)'),
+			]);
+		}
+
+		if ($updatedItems && $pushService)
+		{
+			$pushService->sendSortItemEvent($updatedItems);
+		}
+	}
+
+	private function collectAllItemIds(array $sortInfo): array
+	{
+		$allItemIds = [];
+
+		foreach ($sortInfo as $itemId => $info)
+		{
+			$itemId = (int)$itemId;
+			if ($itemId)
+			{
+				$allItemIds[$itemId] = true;
+			}
+
+			if (isset($info['previousItemId']))
+			{
+				$previousItemId = (int)$info['previousItemId'];
+				if ($previousItemId)
+				{
+					$allItemIds[$previousItemId] = true;
+				}
+			}
+
+			if (isset($info['nextItemId']))
+			{
+				$nextItemId = (int)$info['nextItemId'];
+				if ($nextItemId)
+				{
+					$allItemIds[$nextItemId] = true;
+				}
+			}
+		}
+
+		return array_keys($allItemIds);
+	}
+
+	private function getCurrentItemsData(array $itemIds): array
+	{
+		$items = ItemTable::getList([
+			'select' => ['ID', 'SORT_FLOAT', 'ENTITY_ID'],
+			'filter' => ['ID' => $itemIds],
+			'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
+		])->fetchAll();
+
+		$result = [];
+		foreach ($items as $item)
+		{
+			$result[$item['ID']] = [
+				'SORT_FLOAT' => (float)$item['SORT_FLOAT'],
+				'ENTITY_ID' => (int)$item['ENTITY_ID']
+			];
+		}
+
+		return $result;
+	}
+
+	private function calculateNewSortPosition(?int $previousItemId, ?int $nextItemId, array $currentItemsData): float
+	{
+		$previousSort = null;
+		$nextSort = null;
+
+		if ($previousItemId && isset($currentItemsData[$previousItemId]))
+		{
+			$previousSortValue = $currentItemsData[$previousItemId]['SORT_FLOAT'];
+			$previousSort = ($previousSortValue !== 0.0) ? $previousSortValue : null;
+		}
+
+		if ($nextItemId && isset($currentItemsData[$nextItemId]))
+		{
+			$nextSortValue = $currentItemsData[$nextItemId]['SORT_FLOAT'];
+			$nextSort = ($nextSortValue !== 0.0) ? $nextSortValue : null;
+		}
+
+		if ($previousSort === null && $nextSort !== null)
+		{
+			return $nextSort / 2.0;
+		}
+		elseif ($previousSort !== null && $nextSort === null)
+		{
+			return $previousSort + ItemForm::DEFAULT_SORT_VALUE;
+		}
+		elseif ($previousSort !== null && $nextSort !== null)
+		{
+			return ($previousSort + $nextSort) / 2.0;
+		}
+		else
+		{
+			return ItemForm::DEFAULT_SORT_VALUE;
+		}
 	}
 
 	/**
@@ -717,7 +924,7 @@ class ItemService implements Errorable
 				'filter' => [
 					'SOURCE_ID' => $sourceIds
 				],
-				'order' => ['SORT' => 'ASC', 'ID' => 'DESC'],
+				'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
 			]);
 			while ($itemData = $queryObject->fetch())
 			{
@@ -797,7 +1004,7 @@ class ItemService implements Errorable
 			'id' => $item->getId(),
 			'tmpId' => $item->getTmpId(),
 			'entityId' => $item->getEntityId(),
-			'sort' => $item->getSort(),
+			'sort' => $item->getSortFloat(),
 			'storyPoints' => $item->getStoryPoints(),
 			'sourceId' => $item->getSourceId(),
 			'epicId' => $item->getEpicId(),
@@ -833,167 +1040,19 @@ class ItemService implements Errorable
 		return $this->errorCollection->getErrorByCode($code);
 	}
 
-	private function getActiveEntities(int $groupId): array
+	public function getFirstItemSort(): float
 	{
-		return EntityTable::getList([
-			'select' => ['ID'],
-			'filter' => [
-				'GROUP_ID' => $groupId,
-				'!=STATUS' => EntityForm::SPRINT_COMPLETED,
-			],
-			'order' => ['ID' => 'ASC']
-		])->fetchAll();
-	}
-
-	private function getAllItemsForEntities(array $entities): array
-	{
-		$entityIds = array_map(fn($data) => $data['ID'], $entities);
-
-		return ItemTable::getList([
-			'select' => ['ID', 'SORT', 'ENTITY_ID'],
-			'filter' => ['ENTITY_ID' => $entityIds],
-			'order' => ['SORT' => 'ASC']
-		])->fetchAll();
-	}
-
-	private function prepareVisibleItemsData(array $sortInfo, array $allItems): array
-	{
-		$visibleItems = [];
-
-		$currentSortMap = array_column($allItems, 'SORT', 'ID');
-
-		foreach ($sortInfo as $itemId => $info)
-		{
-			$itemId = (is_numeric($itemId ?? null) ? (int)$itemId : 0);
-			$newRelativeSort = (is_numeric($info['sort'] ?? null) ? (int)$info['sort'] : 0);
-			$currentEntityId = (is_numeric($info['entityId'] ?? null) ? (int)$info['entityId'] : 0);
-			$updatedItemId = (is_numeric($info['updatedItemId'] ?? null) ? (int)$info['updatedItemId'] : 0);
-			$tmpId = (is_string($info['tmpId'] ?? null) ? $info['tmpId'] : '');
-
-			if ($itemId)
-			{
-				$visibleItems[$itemId] = [
-					'newRelativeSort' => $newRelativeSort,
-					'currentSort' => $currentSortMap[$itemId] ?? 0,
-					'entityId' => $currentEntityId,
-					'updatedItemId' => $updatedItemId,
-					'tmpId' => $tmpId
-				];
-			}
-		}
-
-		return $visibleItems;
-	}
-
-	private function sortVisibleItemsByNewOrder(array $visibleItems): array
-	{
-		uasort($visibleItems, fn($a, $b) => $a['newRelativeSort'] <=> $b['newRelativeSort']);
-
-		return array_keys($visibleItems);
-	}
-
-	private function buildNewItemOrder(array $allItems, array $sortedVisibleItemIds): array
-	{
-		$newOrder = [];
-
-		$allItemIds = array_column($allItems, 'ID');
-
-		$visibleIndex = 0;
-		$visibleCount = count($sortedVisibleItemIds);
-		foreach ($allItemIds as $itemId)
-		{
-			if (in_array($itemId, $sortedVisibleItemIds))
-			{
-				if ($visibleIndex < $visibleCount)
-				{
-					$newOrder[] = $sortedVisibleItemIds[$visibleIndex++];
-				}
-			}
-			else
-			{
-				$newOrder[] = $itemId;
-			}
-		}
-
-		return $newOrder;
-	}
-
-	private function createSortMapFromOrder(array $itemOrder): array
-	{
-		$sortMap = [];
-		$sortValue = 0;
-
-		foreach ($itemOrder as $itemId)
-		{
-			$sortMap[$itemId] = $sortValue++;
-		}
-
-		return $sortMap;
-	}
-
-	private function prepareUpdatedItemsData(array $visibleItems, array $sortMap): array
-	{
-		$updatedItems = [];
-
-		foreach ($visibleItems as $itemId => $itemData)
-		{
-			if ($itemData['updatedItemId'])
-			{
-				$updatedItems[$itemId] = [
-					'sort' => $sortMap[$itemId],
-					'tmpId' => $itemData['tmpId'],
-				];
-
-				if ($itemData['entityId'])
-				{
-					$updatedItems[$itemId]['entityId'] = $itemData['entityId'];
-				}
-			}
-		}
-
-		return $updatedItems;
-	}
-
-	private function updateItemsSortOrder(array $sortMap, array $sortInfo): void
-	{
-		$itemIds = [];
-		$sortWhens = [];
-		$entityWhens = [];
-
-		foreach ($sortMap as $itemId => $sort)
-		{
-			$itemIds[] = $itemId;
-			$sortWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $sort;
-
-			if (isset($sortInfo[$itemId]['entityId']) && $sortInfo[$itemId]['entityId'])
-			{
-				$entityWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . (int)$sortInfo[$itemId]['entityId'];
-			}
-		}
-
-		if (empty($itemIds))
-		{
-			return;
-		}
-
-		ItemTable::updateMulti($itemIds, [
-			'SORT' => new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)')
+		$queryObject = ItemTable::getList([
+			'select' => ['SORT_FLOAT'],
+			'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
+			'limit' => 1,
 		]);
-
-		if (!empty($entityWhens))
+		if ($itemData = $queryObject->fetch())
 		{
-			$entityCase = '(CASE ' . implode(' ', $entityWhens) . ' ELSE ENTITY_ID END)';
-
-			ItemTable::updateMulti($itemIds, ['ENTITY_ID' => new SqlExpression($entityCase)]);
+			return (float)$itemData['SORT_FLOAT'];
 		}
-	}
 
-	private function sendSortEventsIfNeeded(array $updatedItems, ?PushService $pushService): void
-	{
-		if ($updatedItems && $pushService)
-		{
-			$pushService->sendSortItemEvent($updatedItems);
-		}
+		return ItemForm::DEFAULT_SORT_VALUE;
 	}
 
 	private function getItemsFromDb(array $select = [], array $filter = [], array $order = []): array

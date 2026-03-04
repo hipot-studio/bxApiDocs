@@ -15,6 +15,25 @@ class Signaling extends \Bitrix\Im\Call\Signaling
 	public const MODE_WEB = 'web';
 	public const MODE_MOBILE = 'mobile';
 
+	public function sendLogToken(int $toUserId,): void
+	{
+		if (\Bitrix\Main\Loader::includeModule('pull'))
+		{
+			$uuid = $this->call->getUuid();
+
+			$pushMessage = [
+				'module_id' => 'call',
+				'command' => 'Call::logTokenUpdate',
+				'params' => [
+					'uuid' => $uuid,
+					'logToken' => $this->call->getLogToken($toUserId),
+				],
+			];
+
+			\Bitrix\Pull\Event::add([$toUserId], $pushMessage);
+		}
+	}
+
 	public function sendPushTokenUpdate(string $callToken, array $userIds): void
 	{
 		if (\Bitrix\Main\Loader::includeModule('pull'))

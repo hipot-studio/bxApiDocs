@@ -2559,9 +2559,29 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		{
 			StagesTable::disableLinkForUser($params['USER_ID']);
 		}
-		$task = CTaskItem::add($fields, $this->userId, [
-			'DISABLE_BIZPROC_RUN' => true,
-		]);
+		try
+		{
+			$task = CTaskItem::add($fields, $this->userId, [
+				'DISABLE_BIZPROC_RUN' => true,
+			]);
+		}
+		catch (Exception $e)
+		{
+			$error = $e->getMessage();
+			if (
+				$e instanceof TasksException
+				&& $e->isSerialized()
+			)
+			{
+				$errors = unserialize($e->getMessage(), ['allowed_classes' => false]);
+				$error = $errors[0]['text'] ?? '';
+			}
+
+			$this->errors[] = new Error($error);
+
+			return [];
+		}
+
 		if ($task->getId() > 0)
 		{
 			$newId = $task->getId();

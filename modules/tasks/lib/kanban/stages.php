@@ -704,7 +704,9 @@ class StagesTable extends DataManager
 		}
 		$userId = intval($userId);
 
-		$stageList = array_map('intval', array_keys($stageList));
+		$stageIds = array_map('intval', array_keys($stageList));
+
+		$firstStageId = self::findFirstStageIdForGroupMode($stageList);
 
 		if (
 			self::getWorkMode() == self::WORK_MODE_USER
@@ -712,7 +714,7 @@ class StagesTable extends DataManager
 		)
 		{
 			$filter = [
-				'STAGES_ID' => $stageList,
+				'STAGES_ID' => $stageIds,
 				'::SUBFILTER-1' => $filter,
 			];
 			$select = [
@@ -725,8 +727,10 @@ class StagesTable extends DataManager
 		}
 		else
 		{
+			$stageIdsForCount = self::addZeroStageIdForFirstStage($stageIds, $firstStageId);
+
 			$filter = [
-				'STAGE_ID' => $stageList,
+				'STAGE_ID' => $stageIdsForCount,
 				'::SUBFILTER-1' => $filter,
 			];
 			$select = [
@@ -762,7 +766,54 @@ class StagesTable extends DataManager
 			$res[$stageId] = $row['COUNT'];
 		}
 
+		self::mergeZeroStageCountIntoFirstStage($res, $firstStageId);
+
 		return $res;
+	}
+
+	private static function findFirstStageIdForGroupMode(array $stageList): ?int
+	{
+		if (self::getWorkMode() != self::WORK_MODE_GROUP)
+		{
+			return null;
+		}
+
+		foreach ($stageList as $stageId => $stage)
+		{
+			if (isset($stage['SYSTEM_TYPE']) && $stage['SYSTEM_TYPE'] === self::SYS_TYPE_NEW)
+			{
+				return (int)$stageId;
+			}
+		}
+
+		return null;
+	}
+
+	private static function addZeroStageIdForFirstStage(array $stageIds, ?int $firstStageId): array
+	{
+		$stageIdsForCount = $stageIds;
+		if ($firstStageId !== null && !in_array(0, $stageIdsForCount))
+		{
+			$stageIdsForCount[] = 0;
+		}
+
+		return $stageIdsForCount;
+	}
+
+	private static function mergeZeroStageCountIntoFirstStage(array &$res, ?int $firstStageId): void
+	{
+		if (
+			self::getWorkMode() != self::WORK_MODE_GROUP
+			|| $firstStageId === null
+		)
+		{
+			return;
+		}
+
+		$countForFirstStage = $res[$firstStageId] ?? 0;
+		$countForZero = $res[0] ?? 0;
+		$res[$firstStageId] = $countForFirstStage + $countForZero;
+		unset($res[0]);
 	}
 
 	/**

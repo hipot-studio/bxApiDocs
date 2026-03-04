@@ -570,7 +570,8 @@ class CControllerTask
 				//Command was saved in another task record (for db size optimization)
 				if (is_numeric($ar_task['INIT_EXECUTE']))
 				{
-					if ($source_task = static::GetArrayByID($ar_task['INIT_EXECUTE']))
+					$db_res = static::GetList([], ['ID' => intval($ar_task['INIT_EXECUTE'])], ['INIT_EXECUTE']);
+					if ($source_task = $db_res->Fetch())
 					{
 						$ar_task['INIT_EXECUTE'] = $source_task['INIT_EXECUTE'];
 					}

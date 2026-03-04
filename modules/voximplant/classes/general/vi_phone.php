@@ -443,6 +443,14 @@ class CVoxImplantPhone
 					'TO_DELETE' => $value->to_delete ? 'Y' : 'N',
 					'DATE_DELETE' => $value->delete_date != '' ? new \Bitrix\Main\Type\Date($value->delete_date, DATE_ATOM) : null,
 				];
+
+				if (property_exists($value, 'activation_status'))
+				{
+					$activation_status = mb_strtoupper(trim($value->activation_status));
+					$arResult[$value->phone_number]['ACTIVATION_STATUS'] = $activation_status;
+					$arResult[$value->phone_number]['ACTIVATION_STATUS_NAME'] = self::GetActivationStatusName($activation_status);
+					$arResult[$value->phone_number]['ACTIVATION_STATUS_DESC'] = self::GetActivationStatusDesc($activation_status);
+				}
 			}
 		}
 
@@ -497,8 +505,13 @@ class CVoxImplantPhone
 					'PHONE_NUMBER_LOCAL' => $parsedNumber->format(\Bitrix\Main\PhoneNumber\Format::NATIONAL),
 					'COUNTRY_CODE' => $country,
 					'REGION_ID' => $regionId,
-					'CURRENCY' => $currency
+					'CURRENCY' => $currency,
 				);
+
+				if (property_exists($value, 'confirmation_type'))
+				{
+					$arResult[$value->phone_number]['CONFIRMATION_TYPE'] = mb_strtoupper(trim($value->confirmation_type));
+				}
 			}
 		}
 
@@ -1007,6 +1020,16 @@ class CVoxImplantPhone
 		{
 			return Loc::getMessage("VI_PHONE_DESCRIPTION_LINK_UNVERIFIED");
 		}
+	}
+
+	public static function GetActivationStatusName($status)
+	{
+		return Loc::getMessage('VI_ACTIVATION_STATUS_NAME_'.$status) ?: $status;
+	}
+
+	public static function GetActivationStatusDesc($status)
+	{
+		return Loc::getMessage('VI_ACTIVATION_STATUS_DESC_'.$status) ?: $status;
 	}
 
 	public static function formatInternational($number)

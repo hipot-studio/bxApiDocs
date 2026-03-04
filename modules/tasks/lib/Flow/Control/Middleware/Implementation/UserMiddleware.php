@@ -2,21 +2,22 @@
 
 namespace Bitrix\Tasks\Flow\Control\Middleware\Implementation;
 
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Type\Collection;
-use Bitrix\Main\UserTable;
 use Bitrix\Tasks\Flow\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\MiddlewareException;
 use Bitrix\Tasks\Flow\Control\Middleware\AbstractMiddleware;
+use Bitrix\Tasks\Flow\Internal\DI\Container;
+use Bitrix\Tasks\Flow\Provider\UserStatusProvider;
 use Bitrix\Tasks\Internals\Log\Logger;
 
 class UserMiddleware extends AbstractMiddleware
 {
-	use CacheTrait;
+	private UserStatusProvider $userProvider;
 
-	private static array $cache = [];
+	public function __construct()
+	{
+		$this->userProvider = Container::getInstance()->get(UserStatusProvider::class);
+	}
 
 	/**
 	 * @throws MiddlewareException
@@ -24,11 +25,10 @@ class UserMiddleware extends AbstractMiddleware
 	public function handle(AbstractCommand $request)
 	{
 		$userIds = $request->getUserIdList();
-		Collection::normalizeArrayValuesByInt($userIds, false);
 
 		try
 		{
-			$this->load(...$userIds);
+			$existsUserIds = $this->userProvider->filterExists($userIds);
 		}
 		catch (SystemException $e)
 		{
@@ -36,36 +36,14 @@ class UserMiddleware extends AbstractMiddleware
 			throw new MiddlewareException("Error");
 		}
 
-		foreach ($userIds as $userId)
+		$notExistsIds = array_diff($userIds, $existsUserIds);
+		if (!empty($notExistsIds))
 		{
-			if (false === $this->has($userId))
-			{
-				throw new MiddlewareException("User {$userId} doesn't exists");
-			}
+			$firstUserIds = reset($notExistsIds);
+
+			throw new MiddlewareException("User {$firstUserIds} doesn't exists");
 		}
 
 		return parent::handle($request);
-	}
-
-	/**
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	private function load(int ...$userIds): void
-	{
-		$notLoaded = $this->getNotLoaded(...$userIds);
-		if (empty($notLoaded))
-		{
-			return;
-		}
-
-		$users = UserTable::query()
-			->setSelect(['ID'])
-			->whereIn('ID', $notLoaded)
-			->exec()
-			->fetchCollection();
-
-		$this->store(...$users->getIdList());
 	}
 }

@@ -7,7 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 use Bitrix\Main\Error;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
@@ -19,7 +19,7 @@ class DescriptionService
 		private readonly ChecksumService $checksumService,
 		private readonly UpdateTaskService $updateTaskService,
 		private readonly UserRepositoryInterface $userRepository,
-		private readonly TaskReadRepositoryInterface $taskReadRepository,
+		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly TaskLogRepositoryInterface $taskLogRepository,
 	)
 	{
@@ -30,7 +30,7 @@ class DescriptionService
 	{
 		$result = new Result();
 
-		$currentTask = $this->taskReadRepository->getById((int)$task->getId());
+		$currentTask = $this->taskRepository->getById((int)$task->getId());
 		if ($currentTask === null)
 		{
 			return $result->addError(new Error('Task not found'));

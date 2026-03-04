@@ -11,6 +11,8 @@ use Bitrix\Main\Loader;
 
 class StructureTeam extends EntityBase
 {
+	private static array $modelsCache = [];
+
 	/**
 	 * @return ?Node
 	 */
@@ -41,17 +43,27 @@ class StructureTeam extends EntityBase
 
 	protected function loadModel(): void
 	{
-		if (
-			!$this->model
-			&& Loader::includeModule('humanresources')
-			&& class_exists(NodeDataBuilder::class)
-		)
+		if ($this->model)
+		{
+			return;
+		}
+
+		if (array_key_exists($this->getId(), self::$modelsCache))
+		{
+			$this->model = self::$modelsCache[$this->getId()];
+
+			return;
+		}
+
+		if (Loader::includeModule('humanresources'))
 		{
 			$this->model = NodeDataBuilder::createWithFilter(
 				new NodeFilter(IdFilter::fromId($this->getId()))
 			)
 				->get()
 			;
+
+			self::$modelsCache[$this->getId()] = $this->model;
 		}
 	}
 }

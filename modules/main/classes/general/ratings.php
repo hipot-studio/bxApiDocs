@@ -2875,7 +2875,6 @@ class CRatings
 			";
 		}
 
-//		$DB->Query("TRUNCATE TABLE b_rating_prepare");
 		$DB->Query("DELETE FROM b_rating_prepare");
 
 		$strSql = '';

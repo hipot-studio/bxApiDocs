@@ -17,12 +17,15 @@ use Bitrix\Mail\Internals\MailEntityOptionsTable;
 use Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable;
 use Bitrix\Mail\MailServicesTable;
 use Bitrix\Main\Access\AccessCode;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Mail\Internals\MailboxAccessTable;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\Helper\Entity\User\UserProvider;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\Content;
 use Bitrix\Main\UserTable;
@@ -488,12 +491,31 @@ class MailboxSettingsGridHelper
 		return !empty($mailbox['__crm']);
 	}
 
+	private function getCrmConnectRegexpSql(): string
+	{
+		$crmConnectRegexp = 's:5:"flags";a:[0-9]+:\\{.*s:11:"crm_connect".*\\}';
+
+		return (new SqlExpression('?s', $crmConnectRegexp))->compile();
+	}
+
+	private function getCrmLeadRespRegexpSql(int $userId): string
+	{
+		$pattern = sprintf(
+			's:13:"crm_lead_resp";a:[0-9]+:\\{.*i:[0-9]+;i:%d;.*\\}',
+			$userId,
+		);
+
+		return (new SqlExpression('?s', $pattern))->compile();
+	}
+
 	private function buildMailboxesWithOwnersQuery(): Query
 	{
 		$typeFile = \Bitrix\Disk\Internals\ObjectTable::TYPE_FILE;
 		$deletedTypeNone = \Bitrix\Disk\Internals\ObjectTable::DELETED_TYPE_NONE;
 		$moduleId = 'mail';
 		$entityType = 'Bitrix\\\Mail\\\Disk\\\ProxyType\\\Mail';
+		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$mailboxIdCast = $sqlHelper->castToChar('%s');
 
 		$sqlTotalVolumeBytes = <<<SQL
 		(
@@ -509,7 +531,7 @@ class MailboxSettingsGridHelper
 			FROM b_disk_storage S
 			LEFT JOIN b_disk_object O ON O.STORAGE_ID = S.ID AND O.TYPE = {$typeFile} AND O.DELETED_TYPE = {$deletedTypeNone}
 			LEFT JOIN b_file PF ON PF.ID = O.PREVIEW_ID
-			WHERE S.ENTITY_ID = %s AND S.MODULE_ID = '{$moduleId}' AND S.ENTITY_TYPE = '{$entityType}'
+			WHERE S.ENTITY_ID = {$mailboxIdCast} AND S.MODULE_ID = '{$moduleId}' AND S.ENTITY_TYPE = '{$entityType}'
 		)
 		SQL;
 
@@ -547,7 +569,7 @@ class MailboxSettingsGridHelper
 				->registerRuntimeField(
 					new \Bitrix\Main\ORM\Fields\ExpressionField(
 						'UNSEEN_CNT',
-						'(SELECT COALESCE(SUM(VALUE), 0) FROM b_mail_counter WHERE ENTITY_TYPE = "MAILBOX" AND ENTITY_ID = %s)',
+						"(SELECT COALESCE(SUM(VALUE), 0) FROM b_mail_counter WHERE ENTITY_TYPE = 'MAILBOX' AND ENTITY_ID = {$mailboxIdCast})",
 						['ID'],
 					),
 				)
@@ -931,15 +953,23 @@ class MailboxSettingsGridHelper
 					break;
 
 				case 'CRM_INTEGRATION':
+					$sqlHelper = Application::getConnection()->getSqlHelper();
+					$crmConnectRegexpSql = $this->getCrmConnectRegexpSql();
+
 					if ($value === 'Y')
 					{
-						$query->whereExpr("OPTIONS REGEXP 's:5:\"flags\";a:[0-9]+:\\\\{.*s:11:\"crm_connect\".*\\\\}'", []);
+						$query->whereExpr($sqlHelper->getRegexpOperator('OPTIONS', $crmConnectRegexpSql), []);
 					}
 					elseif ($value === 'N')
 					{
-						$query->whereExpr(
-							'(OPTIONS NOT LIKE "%%s:5:\"flags\"%%" OR OPTIONS NOT REGEXP "s:5:\"flags\";a:[0-9]+:\\\\{.*s:11:\"crm_connect\".*\\\\}")', [],
+						$subFilter = new ConditionTree();
+						$subFilter->logic(ConditionTree::LOGIC_OR);
+						$subFilter->whereNotLike('OPTIONS', '%s:5:"flags"%');
+						$subFilter->whereExpr(
+							sprintf('NOT (%s)', $sqlHelper->getRegexpOperator('OPTIONS', $crmConnectRegexpSql)),
+							[],
 						);
+						$query->where($subFilter);
 					}
 
 					break;
@@ -974,16 +1004,22 @@ class MailboxSettingsGridHelper
 
 						if (!empty($userIds))
 						{
-							$conditions = [];
+							$sqlHelper = Application::getConnection()->getSqlHelper();
+							$crmConnectRegexpSql = $this->getCrmConnectRegexpSql();
+
+							$queueFilter = new ConditionTree();
+							$queueFilter->whereExpr($sqlHelper->getRegexpOperator('OPTIONS', $crmConnectRegexpSql), []);
+
+							$userQueueFilter = new ConditionTree();
+							$userQueueFilter->logic(ConditionTree::LOGIC_OR);
 							foreach ($userIds as $id)
 							{
-								$conditions[] = "OPTIONS REGEXP 's:13:\"crm_lead_resp\";a:[0-9]+:\\\\{.*i:[0-9]+;i:$id;.*\\\\}'";
+								$patternSql = $this->getCrmLeadRespRegexpSql((int)$id);
+								$userQueueFilter->whereExpr($sqlHelper->getRegexpOperator('OPTIONS', $patternSql), []);
 							}
 
-							if ($conditions)
-							{
-								$query->whereExpr('(' . implode(' OR ', $conditions) . ')', []);
-							}
+							$queueFilter->where($userQueueFilter);
+							$query->where($queueFilter);
 						}
 					}
 

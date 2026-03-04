@@ -165,7 +165,9 @@ class UserDataProvider extends EntityDataProvider
 	 */
 	protected function getFieldName($fieldID)
 	{
-		$name = Loc::getMessage("MAIN_USER_FILTER_{$fieldID}");
+		$name = $fieldID === 'INTEGRATOR'
+			? $this->getIntegratorFieldName()
+			: Loc::getMessage("MAIN_USER_FILTER_{$fieldID}");
 
 		if($name === null)
 		{
@@ -173,6 +175,21 @@ class UserDataProvider extends EntityDataProvider
 		}
 
 		return $name;
+	}
+
+	private function getIntegratorFieldName(): string
+	{
+		if (
+			Loader::includeModule('intranet')
+			&& class_exists('\Bitrix\Intranet\Public\Service\IntegratorService')
+			&& method_exists(\Bitrix\Intranet\Public\Service\IntegratorService::class, 'isRenamedIntegrator')
+			&& \Bitrix\Intranet\Public\Service\IntegratorService::createByDefault()->isRenamedIntegrator()
+		)
+		{
+			return Loc::getMessage('MAIN_USER_FILTER_INTEGRATOR_RENAMED');
+		}
+
+		return Loc::getMessage('MAIN_USER_FILTER_INTEGRATOR');
 	}
 
 	public function prepareFieldData($fieldID)

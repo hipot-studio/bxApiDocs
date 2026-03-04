@@ -389,68 +389,107 @@ class CControllerCounter
 	public static function UpdateMemberValues($CONTROLLER_MEMBER_ID, $arValues, $preserve = false)
 	{
 		global $DB;
+		CTimeZone::Disable();
 		$CONTROLLER_MEMBER_ID = intval($CONTROLLER_MEMBER_ID);
 
-		if (!$preserve)
+		$res = $DB->Query('
+			SELECT
+				cc.ID as CONTROLLER_COUNTER_ID
+			FROM
+				b_controller_member cm
+				INNER JOIN b_controller_counter_group ccg ON ccg.CONTROLLER_GROUP_ID = cm.CONTROLLER_GROUP_ID
+				INNER JOIN b_controller_counter cc ON cc.ID = ccg.CONTROLLER_COUNTER_ID
+			WHERE
+				cm.ID = ' . $CONTROLLER_MEMBER_ID . '
+		');
+		$memberCounters = [];
+		while ($ar = $res->Fetch())
 		{
-			$DB->Query('
-				DELETE FROM b_controller_counter_value
-				WHERE CONTROLLER_MEMBER_ID = ' . $CONTROLLER_MEMBER_ID . '
-			');
+			$CONTROLLER_COUNTER_ID = intval($ar['CONTROLLER_COUNTER_ID']);
+			$memberCounters[$CONTROLLER_COUNTER_ID] = true;
 		}
 
-		foreach ($arValues as $CONTROLLER_COUNTER_ID => $value)
+		$res = $DB->Query('
+			SELECT *
+			FROM b_controller_counter_value
+			WHERE CONTROLLER_MEMBER_ID = ' . $CONTROLLER_MEMBER_ID . '
+			ORDER BY CONTROLLER_COUNTER_ID
+		');
+		$memberCounterValues = [];
+		while ($ar = $res->Fetch())
 		{
+			$CONTROLLER_COUNTER_ID = intval($ar['CONTROLLER_COUNTER_ID']);
+			$memberCounterValues[$CONTROLLER_COUNTER_ID] = [
+				'VALUE_INT' => intval($ar['VALUE_INT']),
+				'VALUE_FLOAT' => roundDB($ar['VALUE_FLOAT']),
+				'VALUE_DATE' => $ar['VALUE_DATE'],
+				'VALUE_STRING' => $ar['VALUE_STRING'],
+			];
+		}
+
+		$insertValues = [];
+		$counters = array_keys($arValues);
+		sort($counters);
+		foreach ($counters as $CONTROLLER_COUNTER_ID)
+		{
+			$value = $arValues[$CONTROLLER_COUNTER_ID];
 			$CONTROLLER_COUNTER_ID = intval($CONTROLLER_COUNTER_ID);
 			if ($CONTROLLER_COUNTER_ID > 0)
 			{
+				$newValues = [
+					'VALUE_INT' => intval($value),
+					'VALUE_FLOAT' => roundDB($value),
+					'VALUE_DATE' => null,
+					'VALUE_STRING' => mb_substr($value, 0, 255),
+				];
+
 				if (isset($arValues['DATE_FORMAT']) && CheckDateTime($value, $arValues['DATE_FORMAT']))
 				{
 					$sqlDate = $DB->CharToDateFunction($DB->FormatDate($value, $arValues['DATE_FORMAT'], CLang::GetDateFormat('FULL', LANGUAGE_ID)));
+					$newValues['VALUE_DATE'] = $DB->FormatDate($value, $arValues['DATE_FORMAT'], 'YYYY-MM-DD HH:MI:SS');
 				}
 				elseif (CheckDateTime($value, 'YYYY-MM-DD HH:MI:SS'))
 				{
 					$sqlDate = $DB->CharToDateFunction($DB->FormatDate($value, 'YYYY-MM-DD HH:MI:SS', CLang::GetDateFormat('FULL', LANGUAGE_ID)));
+					$newValues['VALUE_DATE'] = $value;
 				}
 				else
 				{
 					$sqlDate = 'NULL';
+					$newValues['VALUE_DATE'] = null;
 				}
 
-				if ($preserve)
+				if (isset($memberCounters[$CONTROLLER_COUNTER_ID]))
 				{
-					$DB->Query('
-						DELETE FROM b_controller_counter_value
-						WHERE CONTROLLER_MEMBER_ID = ' . $CONTROLLER_MEMBER_ID . '
-						AND CONTROLLER_COUNTER_ID = ' . $CONTROLLER_COUNTER_ID . '
-					');
-				}
-
-				$res = $DB->Query('
-					INSERT INTO b_controller_counter_value
-					(CONTROLLER_MEMBER_ID, CONTROLLER_COUNTER_ID, VALUE_INT, VALUE_FLOAT, VALUE_DATE, VALUE_STRING)
-					SELECT
-						cm.ID
-						,cc.ID
-						,' . intval($value) . '
-						,' . roundDB($value) . '
-						,' . $sqlDate . "
-						,'" . $DB->ForSQL($value, 255) . "'
-					FROM
-						b_controller_member cm
-						INNER JOIN b_controller_counter_group ccg ON ccg.CONTROLLER_GROUP_ID = cm.CONTROLLER_GROUP_ID
-						INNER JOIN b_controller_counter cc ON cc.ID = ccg.CONTROLLER_COUNTER_ID
-					WHERE
-						cm.ID = " . $CONTROLLER_MEMBER_ID . '
-						and cc.ID = ' . $CONTROLLER_COUNTER_ID . '
-				', true);
-
-				if (!$res)
-				{
-					break;
+					if (!isset($memberCounterValues[$CONTROLLER_COUNTER_ID]) || $newValues !== $memberCounterValues[$CONTROLLER_COUNTER_ID])
+					{
+						$insertValues[$CONTROLLER_COUNTER_ID] = '(' . $CONTROLLER_MEMBER_ID . ',' . $CONTROLLER_COUNTER_ID . ',' . intval($value) . ',' . roundDB($value) . ',' . $sqlDate . ',\'' . $DB->ForSQL($value, 255) . '\')';
+					}
+					unset($memberCounterValues[$CONTROLLER_COUNTER_ID]);
 				}
 			}
 		}
+
+		if (!$preserve && $memberCounterValues)
+		{
+			$DB->Query('
+				DELETE FROM b_controller_counter_value
+				WHERE CONTROLLER_MEMBER_ID = ' . $CONTROLLER_MEMBER_ID . '
+				AND CONTROLLER_COUNTER_ID in (' . implode(',', array_keys($memberCounterValues)) . ')
+			');
+		}
+
+		if ($insertValues)
+		{
+			$DB->Query('
+				INSERT INTO b_controller_counter_value
+				(CONTROLLER_MEMBER_ID, CONTROLLER_COUNTER_ID, VALUE_INT, VALUE_FLOAT, VALUE_DATE, VALUE_STRING)
+				VALUES ' . implode(',', $insertValues) . '
+				ON DUPLICATE KEY UPDATE VALUE_INT = VALUES(VALUE_INT), VALUE_FLOAT = VALUES(VALUE_FLOAT), VALUE_DATE = VALUES(VALUE_DATE), VALUE_STRING = VALUES(VALUE_STRING)
+			');
+		}
+
+		CTimeZone::Enable();
 
 		return true;
 	}

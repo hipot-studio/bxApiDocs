@@ -17,8 +17,7 @@ use Bitrix\Tasks\V2\Internal\Exception\Task\ReminderException;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ReminderMapper;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ReminderRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
@@ -32,7 +31,7 @@ class ReminderService
 		private readonly LinkService $linkService,
 		private readonly TaskRightService $taskRightService,
 		private readonly RRuleService $rruleService,
-		private readonly TaskReadRepositoryInterface $taskReadRepository,
+		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly UserRepositoryInterface $userRepository,
 		private readonly ReminderRepositoryInterface $reminderRepository,
 		private readonly ReminderReadRepositoryInterface $reminderReadRepository,
@@ -52,7 +51,7 @@ class ReminderService
 
 	public function add(Reminder $reminder): int
 	{
-		$task = $this->taskReadRepository->getById($reminder->taskId);
+		$task = $this->taskRepository->getById($reminder->taskId);
 		if ($task === null || $task->status === Task\Status::Completed)
 		{
 			throw new ReminderException('Task not found or closed');
@@ -76,7 +75,7 @@ class ReminderService
 
 	public function recalculateDeadlineRemindersByTaskId(int $taskId, int $deadlineTs): void
 	{
-		$task = $this->taskReadRepository->getById($taskId);
+		$task = $this->taskRepository->getById($taskId);
 		if ($task === null || $task->deadlineTs === null)
 		{
 			return;
@@ -107,7 +106,7 @@ class ReminderService
 	{
 		$result = new Result();
 
-		$task = $this->taskReadRepository->getById((int)$reminder->taskId, new Select(members: true));
+		$task = $this->taskRepository->getById((int)$reminder->taskId);
 		if ($task === null)
 		{
 			return $result->addError(new Error('Failed to find task'));
@@ -151,7 +150,7 @@ class ReminderService
 				continue;
 			}
 
-			$task = $this->taskReadRepository->getById($reminder->taskId);
+			$task = $this->taskRepository->getById($reminder->taskId);
 			if ($task === null || !$this->canSendReminderByStatus($task))
 			{
 				$toDelete->add($reminder);
@@ -274,7 +273,7 @@ class ReminderService
 	{
 		if ($reminder->remindBy === Reminder\RemindBy::Deadline && $reminder->before > 0)
 		{
-			$task = $this->taskReadRepository->getById($reminder->taskId);
+			$task = $this->taskRepository->getById($reminder->taskId);
 			if ($task === null || $task->deadlineTs === null)
 			{
 				throw new ReminderException('Task not found or no deadline');

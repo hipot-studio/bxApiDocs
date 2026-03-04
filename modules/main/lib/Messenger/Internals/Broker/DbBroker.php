@@ -33,7 +33,7 @@ final class DbBroker implements BrokerInterface
 
 	public function __construct(
 		Entity $tableEntity,
-		RetryStrategyInterface $retryStrategy = new MultiplierRetryStrategy()
+		RetryStrategyInterface $retryStrategy = new MultiplierRetryStrategy(),
 	)
 	{
 		$this->storage = new DbStorage($tableEntity);
@@ -82,7 +82,7 @@ final class DbBroker implements BrokerInterface
 			throw new BrokerReadException(
 				'Unable to lock messages: ' . $e->getMessage(),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 		catch (SystemException $e)
@@ -90,7 +90,7 @@ final class DbBroker implements BrokerInterface
 			throw new BrokerReadException(
 				'Unable to read messages: ' . $e->getMessage(),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 	}
@@ -106,7 +106,7 @@ final class DbBroker implements BrokerInterface
 			throw new BrokerReadException(
 				'Unable to lock message: ' . $e->getMessage(),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 		catch (SystemException $e)
@@ -114,7 +114,7 @@ final class DbBroker implements BrokerInterface
 			throw new BrokerReadException(
 				'Unable to read message: ' . $e->getMessage(),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 	}
@@ -200,7 +200,7 @@ final class DbBroker implements BrokerInterface
 			if (!$param instanceof ProcessingParamInterface)
 			{
 				throw new ArgumentException(
-					sprintf('The type of message processing params should be "%s"', ProcessingParamInterface::class)
+					sprintf('The type of message processing params should be "%s"', ProcessingParamInterface::class),
 				);
 			}
 
@@ -213,6 +213,7 @@ final class DbBroker implements BrokerInterface
 		return ServiceLocator::getInstance()
 			->get(QueueConfigRegistry::class)
 			->getQueueConfig($queueId)
-			->retryStrategy;
+			->retryStrategy
+		;
 	}
 }

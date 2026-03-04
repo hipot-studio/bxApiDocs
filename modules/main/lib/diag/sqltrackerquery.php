@@ -29,7 +29,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	protected bool $hasBigFields = false;
 
 	/**
-	 * @param SqlTracker $tracker This sql tracker.
+	 * @param SqlTracker $tracker This SQL tracker.
 	 */
 	public function __construct(SqlTracker $tracker)
 	{
@@ -54,7 +54,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	/**
 	 * Ends sql timer.
 	 *
-	 * @param integer $skip How many backtrace skip. By default 3.
+	 * @param integer $skip How many backtrace skip. By default, 3.
 	 *
 	 * @return void
 	 */
@@ -69,7 +69,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Resets sql timer start.
+	 * Resets SQL timer start.
 	 * combined with refinishQuery allows additional time to be included into execution.
 	 *
 	 * @return void
@@ -107,7 +107,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	/**
 	 * Returns size of the fetched rows.
 	 * 
-	 * @return float|int
+	 * @return int
 	 */
 	public function getLength(): int
 	{
@@ -187,7 +187,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Returns tracked sql text.
+	 * Returns tracked SQL text.
 	 *
 	 * @return string
 	 */
@@ -197,7 +197,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Sets tracked sql text.
+	 * Sets tracked SQL text.
 	 * Returns the object for call chaining.
 	 *
 	 * @param string $sql Sql text.
@@ -211,7 +211,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Returns sql binds used for query execution.
+	 * Returns SQL binds used for query execution.
 	 *
 	 * @return array|null
 	 */
@@ -221,7 +221,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Sets tracked sql binds.
+	 * Sets tracked SQL binds.
 	 * Returns the object for call chaining.
 	 *
 	 * @param array $binds Sql binds.
@@ -245,7 +245,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Sets tracked sql page state.
+	 * Sets tracked SQL page state.
 	 * Returns the object for call chaining.
 	 *
 	 * @param string $state Page state.
@@ -269,7 +269,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Sets tracked sql connection node id.
+	 * Sets tracked SQL connection node id.
 	 * Returns the object for call chaining.
 	 *
 	 * @param string $node Cluster node identifier.
@@ -293,10 +293,10 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Sets tracked sql execution time.
+	 * Sets tracked SQL execution time.
 	 * Returns the object for call chaining.
 	 *
-	 * @param float $time Sql execution time in seconds.
+	 * @param float $time SQL execution time in seconds.
 	 *
 	 * @return SqlTrackerQuery
 	 */
@@ -333,7 +333,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	}
 
 	/**
-	 * Sets tracked sql backtrace.
+	 * Sets tracked SQL backtrace.
 	 * Returns the object for call chaining.
 	 *
 	 * @param array|null $trace Query backtrace.

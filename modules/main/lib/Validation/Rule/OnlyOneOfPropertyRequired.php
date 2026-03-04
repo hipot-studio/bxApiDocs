@@ -15,13 +15,19 @@ use ReflectionClass;
 use ReflectionProperty;
 
 #[Attribute(Attribute::TARGET_CLASS)]
-final class OnlyOneOfPropertyRequired extends AbstractClassValidationAttribute
+final class OnlyOneOfPropertyRequired extends AbstractClassValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly array $propertyNames,
 		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 
 	public function validateObject(object $object): ValidationResult

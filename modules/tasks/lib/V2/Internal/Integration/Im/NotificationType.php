@@ -41,7 +41,6 @@ enum NotificationType: string
 	case ResultModified = 'result_modified';
 	case ResultDeleted = 'result_deleted';
 	case ResultFromMessage = 'result_from_message';
-	case ResultRequested = 'result_requested';
 	case TaskDescriptionChanged = 'task_description_changed';
 	case TaskPriorityChanged = 'task_priority_changed';
 	case TaskCrmItemsChanged = 'task_crm_items_changed';
@@ -55,5 +54,7 @@ enum NotificationType: string
 	case OnboardingInvitedResponsibleNotAcceptOneDay = 'onboarding_invited_responsible_not_accept_one_day';
 	case OnboardingInvitedResponsibleNotViewTaskTwoDays = 'onboarding_invited_responsible_not_view_task_two_days';
 	case ElapsedTimeAdded = 'elapsed_time_added';
+	case TaskMarkChanged = 'task_mark_changed';
+
 	// Add more as needed
 }

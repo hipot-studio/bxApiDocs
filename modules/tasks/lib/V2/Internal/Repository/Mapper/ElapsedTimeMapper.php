@@ -65,14 +65,22 @@ class ElapsedTimeMapper
 			$data['createdAtTs'] = $this->castDateTime($elapsedTime['CREATED_DATE']);
 		}
 
-		if (isset($elapsedTime['START_DATE']))
+		if (isset($elapsedTime['DATE_START']))
 		{
-			$data['startTs'] = $this->castDateTime($elapsedTime['START_DATE']);
+			$data['startTs'] = $this->castDateTime($elapsedTime['DATE_START']);
+		}
+		else
+		{
+			$data['startTs'] = DateTime::createFromUserTime(null)->getTimestamp();
 		}
 
-		if (isset($elapsedTime['STOP_DATE']))
+		if (isset($elapsedTime['DATE_STOP']))
 		{
-			$data['stopTs'] = $this->castDateTime($elapsedTime['STOP_DATE']);
+			$data['stopTs'] = $this->castDateTime($elapsedTime['DATE_STOP']);
+		}
+		else
+		{
+			$data['stopTs'] = DateTime::createFromUserTime(null)->getTimestamp();
 		}
 
 		return Entity\Task\ElapsedTime::mapFromArray($data);
@@ -129,10 +137,18 @@ class ElapsedTimeMapper
 		{
 			$data['DATE_START'] = DateTime::createFromTimestamp($elapsedTime->startTs);
 		}
+		else
+		{
+			$data['DATE_START'] = DateTime::createFromUserTime($elapsedTime->startTs);
+		}
 
 		if ($elapsedTime->stopTs !== null)
 		{
 			$data['DATE_STOP'] = DateTime::createFromTimestamp($elapsedTime->stopTs);
+		}
+		else
+		{
+			$data['DATE_STOP'] = DateTime::createFromUserTime($elapsedTime->stopTs);
 		}
 
 		return $data;

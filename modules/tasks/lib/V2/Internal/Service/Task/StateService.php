@@ -42,6 +42,10 @@ class StateService
 		{
 			$value['defaultRequireResult'] = $this->castBoolValue($state->defaultRequireResult);
 		}
+		if ($state->allowsTimeTracking !== null)
+		{
+			$value['allowsTimeTracking'] = $this->castBoolValue($state->allowsTimeTracking);
+		}
 
 		if (!empty($value))
 		{
@@ -61,6 +65,7 @@ class StateService
 		$data = [
 			'defaultDeadline' => $deadlineUserOption,
 			'userId' => $userId,
+			'matchesWorkTime' => true,
 		];
 
 		$state = CUserOptions::GetOption(
@@ -86,6 +91,10 @@ class StateService
 			if (isset($state['defaultRequireResult']))
 			{
 				$data['defaultRequireResult'] = $state['defaultRequireResult'] === 'Y';
+			}
+			if (isset($state['allowsTimeTracking']))
+			{
+				$data['allowsTimeTracking'] = $state['allowsTimeTracking'] === 'Y';
 			}
 		}
 

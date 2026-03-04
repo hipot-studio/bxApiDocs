@@ -131,6 +131,7 @@ class DoubleType extends BaseType
 		if(
 			$value != ''
 			&& !preg_match('/^[-+]?\d*[.,]?\d+?$/', $value)
+			&& !preg_match('/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)$/', $value)
 		)
 		{
 			$msg[] = [

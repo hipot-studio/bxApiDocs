@@ -24,8 +24,15 @@ class Delete implements AttributeAccessInterface
 			return false;
 		}
 
+		$entityId = $entity->getId();
+
+		if ($entityId === null || $entityId <= 0)
+		{
+			return false;
+		}
+
 		return
 			$this->getAccessController(Type::Result, $context)
-				->checkByItemId(ActionDictionary::ACTION_RESULT_REMOVE, $entity->getId());
+				->checkByItemId(ActionDictionary::ACTION_RESULT_REMOVE, $entityId);
 	}
 }

@@ -56,10 +56,13 @@ class RelatedTaskService
 			new: $new,
 		);
 
-		return $this->updateChanges(
+		$updatedTask = $this->updateChanges(
 			taskId: $taskId,
 			userId: $userId,
-		)->cloneWith(['dependsOn' => $new]);
+			dependsOn: $new,
+		);
+
+		return $updatedTask->cloneWith(['dependsOn' => $new]);
 	}
 
 	public function delete(int $taskId, array $relatedTaskIds, int $userId): Task
@@ -83,10 +86,13 @@ class RelatedTaskService
 			new: $new,
 		);
 
-		return $this->updateChanges(
+		$updatedTask = $this->updateChanges(
 			taskId: $taskId,
 			userId: $userId,
-		)->cloneWith(['dependsOn' => $new]);
+			dependsOn: $new,
+		);
+
+		return $updatedTask->cloneWith(['dependsOn' => $new]);
 	}
 
 	public function set(int $taskId, array $relatedTaskIds, int $userId): Task
@@ -124,10 +130,13 @@ class RelatedTaskService
 			new: $new,
 		);
 
-		return $this->updateChanges(
+		$updatedTask = $this->updateChanges(
 			taskId: $taskId,
 			userId: $userId,
-		)->cloneWith(['dependsOn' => $new]);
+			dependsOn: $new,
+		);
+
+		return $updatedTask->cloneWith(['dependsOn' => $new]);
 	}
 
 	private function updateHistory(int $taskId, int $userId, array $previous, array $new): void
@@ -144,12 +153,13 @@ class RelatedTaskService
 		$this->historyService->add($log);
 	}
 
-	private function updateChanges(int $taskId, int $userId): Task
+	private function updateChanges(int $taskId, int $userId, array $dependsOn): Task
 	{
 		$task = new Task(
 			id: $taskId,
 			changedTs: time(),
 			changedBy: new User(id: $userId),
+			dependsOn: $dependsOn,
 		);
 
 		return $this->updateService->update(

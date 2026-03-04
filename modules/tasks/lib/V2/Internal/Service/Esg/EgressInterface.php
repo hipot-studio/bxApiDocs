@@ -15,4 +15,5 @@ interface EgressInterface
 	public function processUserFields(UpdateTaskCommand $command): void;
 	public function processAddTaskCommand(AddTaskCommand $command): Task;
 	public function createChatForExistingTask(Task $task): Task;
+	public function createChatForRestoringTask(Task $task): Task;
 }

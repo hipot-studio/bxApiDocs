@@ -52,7 +52,9 @@ use Bitrix\Tasks\Scrum\Internal\ItemTable;
 use Bitrix\Tasks\Util\Entity\DateTimeField;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity as V2Entity;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskRestoredEvent;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use CCrmActivity;
@@ -319,6 +321,8 @@ class Task implements Recyclebinable
 				return false;
 			}
 
+			self::checkTaskShouldCreateTaskChat($taskId, $entity);
+
 			// we should to restore task first
 			$taskRestored = false;
 			foreach ($taskData as $key => $value)
@@ -368,17 +372,23 @@ class Task implements Recyclebinable
 			$log = new CTaskLog();
 			$log->Add($logFields);
 
-			// this event will up task's chat
-			Container::getInstance()->getEventDispatcher()::dispatch(
-				new OnTaskRestoredEvent(
-					task: new \Bitrix\Tasks\V2\Internal\Entity\Task(id: $taskId, title: $task['TITLE']),
-					triggeredBy: new \Bitrix\Tasks\V2\Internal\Entity\User(id: User::getId())
-				)
-			);
+			if (FormV2Feature::isOn())
+			{
+				// this event will up task's chat
+				Container::getInstance()->getEventDispatcher()::dispatch(
+					new OnTaskRestoredEvent(
+						task: new V2Entity\Task(id: $taskId, title: $task['TITLE']),
+						triggeredBy: new V2Entity\User(id: User::getId())
+					)
+				);
+			}
 
 			Counter\CounterService::addEvent(
 				Counter\Event\EventDictionary::EVENT_AFTER_TASK_RESTORE,
-				$task->getData(false)
+				$task->getData(
+					returnEscapedData: false,
+					bCheckPermissions: false,
+				)
 			);
 
 			Integration\SocialNetwork\Log::showLogByTaskId($taskId);
@@ -397,6 +407,30 @@ class Task implements Recyclebinable
 		}
 
 		return $result;
+	}
+
+	private static function checkTaskShouldCreateTaskChat(int $taskId, Entity $entity): void
+	{
+		if (!FormV2Feature::isOn())
+		{
+			return;
+		}
+
+		$chat = Container::getInstance()->getChatRepository()->getByTaskId($taskId);
+
+		if ($chat?->getId() === null)
+		{
+			$task = new V2Entity\Task(
+				id: $taskId,
+				title: $entity->getTitle(),
+				creator: new V2Entity\User(id: User::getId()),
+			);
+
+			Container::getInstance()
+				->getEgressController()
+				->createChatForRestoringTask($task)
+			;
+		}
 	}
 
 	/**

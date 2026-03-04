@@ -27,11 +27,16 @@ class UrlProvider
 	];
 	private const FEEDBACK_DOMAINS = [
 		'ru' => 'product-feedback.bitrix24.ru',
+		'by' => 'product-feedback.bitrix24.ru',
+		'kz' => 'product-feedback.bitrix24.ru',
+		'uz' => 'product-feedback.bitrix24.ru',
 		'en' => 'product-feedback.bitrix24.com',
 	];
-	private const PRIVACY_DOMAINS = [
+	private const PUBLIC_DOMAINS = [
 		'ru' => 'https://www.bitrix24.ru',
 		'kz' => 'https://www.bitrix24.kz',
+		'uz' => 'https://www.bitrix24.uz',
+		'by' => 'https://www.bitrix24.by',
 		'en' => 'https://www.bitrix24.com',
 		'de' => 'https://www.bitrix24.de',
 	];
@@ -82,7 +87,7 @@ class UrlProvider
 	public function getPrivacyPolicyUrl(): Uri
 	{
 		$region = $this->license->getRegion();
-		$url = new Uri(self::PRIVACY_DOMAINS[$region ?? 'en'] ?? self::PRIVACY_DOMAINS['en']);
+		$url = new Uri(self::PUBLIC_DOMAINS[$region ?? 'en'] ?? self::PUBLIC_DOMAINS['en']);
 
 		if (in_array($region, ['ru', 'kz']))
 		{
@@ -121,10 +126,23 @@ class UrlProvider
 		return $this->license->isCis() ? 'bitrix24.tech' : 'bitrix.info';
 	}
 
-	public function getFeedbackDomain(?string $region = null): string
+	/**
+	 * Returns the portal domain for the current region where feedback forms are hosted.
+	 *
+	 * @return string
+	 */
+	public function getFeedbackDomain(): string
 	{
 		$region ??= $this->license->getRegion();
 
 		return self::FEEDBACK_DOMAINS[$region ?? 'en'] ?? self::FEEDBACK_DOMAINS['en'];
+	}
+
+	public function getPublicDomain(?string $region = null): Uri
+	{
+		$region ??= $this->license->getRegion();
+		$domain = self::PUBLIC_DOMAINS[$region ?? 'en'] ?? self::PUBLIC_DOMAINS['en'];
+
+		return new Uri($domain);
 	}
 }

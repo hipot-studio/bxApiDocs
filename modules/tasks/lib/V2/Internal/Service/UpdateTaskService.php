@@ -13,6 +13,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressController;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunBizProc;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunCrm;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunUpdateEvent;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserFields;
@@ -61,6 +62,8 @@ class UpdateTaskService
 			$sourceTaskData,
 			static fn (mixed $event): bool => is_array($event) && ($event['TO_MODULE_ID'] ?? null) === 'crm',
 		);
+
+		(new RunBizProc($config))($fields, $taskObjectBefore);
 
 		(new RunCrm($config))($fields, $taskObjectBefore);
 

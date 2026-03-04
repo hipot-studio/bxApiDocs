@@ -20,7 +20,9 @@ class QueueConfig
 		public readonly string $handler,
 		public readonly string $moduleId,
 		public readonly ?string $brokerCode,
-		public readonly RetryStrategyInterface $retryStrategy
+		public readonly RetryStrategyInterface $retryStrategy,
+		public readonly int $limit,
+		public readonly int $totalProcessingLimit,
 	)
 	{
 	}
@@ -37,14 +39,14 @@ class QueueConfig
 		if (!class_exists($this->handler))
 		{
 			throw new ConfigurationException(
-				sprintf('The class "%s" does not exist', $this->handler)
+				sprintf('The class "%s" does not exist', $this->handler),
 			);
 		}
 
 		if (!is_subclass_of($this->handler, ReceiverInterface::class))
 		{
 			throw new ConfigurationException(
-				sprintf('The class "%s" does not implement "%s"', $this->handler, ReceiverInterface::class)
+				sprintf('The class "%s" does not implement "%s"', $this->handler, ReceiverInterface::class),
 			);
 		}
 
@@ -56,6 +58,7 @@ class QueueConfig
 		$receiver
 			->setQueueId($this->queueId)
 			->setBroker($brokerManager->getBroker($this->queueId))
+			->setLimit($this->limit)
 		;
 
 		return $receiver;

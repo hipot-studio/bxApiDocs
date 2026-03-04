@@ -4,14 +4,15 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main;
 
 class EventManager
 {
-	protected const CACHE_ID = 'b_module_to_module';
+	protected const CACHE_ID = 'b_module_to_module_v1';
+	protected const CACHE_DIR = 'b_module_to_module';
 
 	/**
 	 * @var EventManager
@@ -231,20 +232,20 @@ class EventManager
 	{
 		$cache = Application::getInstance()->getManagedCache();
 
-		if ($cache->read(3600, self::CACHE_ID, self::CACHE_ID))
+		if ($cache->read(3600, self::CACHE_ID, self::CACHE_DIR))
 		{
-			$rawEvents = $cache->get(self::CACHE_ID);
+			$dbHandlers = $cache->get(self::CACHE_ID);
 
-			if (!is_array($rawEvents))
+			if (!is_array($dbHandlers))
 			{
-				$rawEvents = [];
+				$dbHandlers = [];
 			}
 		}
 		else
 		{
-			$con = Application::getConnection();
+			$connection = Application::getConnection();
 
-			$rs = $con->query("
+			$result = $connection->query("
 				SELECT FROM_MODULE_ID, MESSAGE_ID, SORT, TO_MODULE_ID, TO_PATH,
 					TO_CLASS, TO_METHOD, TO_METHOD_ARG, VERSION
 				FROM b_module_to_module m2m
@@ -252,46 +253,39 @@ class EventManager
 				ORDER BY SORT
 			");
 
-			$rawEvents = $rs->fetchAll();
+			$dbHandlers = [];
+			while ($handler = $result->fetch())
+			{
+				$toName = $this->formatEventName([
+					'TO_MODULE_ID' => $handler['TO_MODULE_ID'],
+					'TO_CLASS' => $handler['TO_CLASS'],
+					'TO_METHOD' => $handler['TO_METHOD'],
+				]);
+				$fromModuleId = strtoupper($handler['FROM_MODULE_ID']);
+				$messageId = strtoupper($handler['MESSAGE_ID']);
+				$toMethodArg = $handler['TO_METHOD_ARG'] != '' ? unserialize($handler['TO_METHOD_ARG'], ['allowed_classes' => false]) : [];
 
-			$cache->set(self::CACHE_ID, $rawEvents);
+				$dbHandlers[$fromModuleId][$messageId][] = [
+					'SORT' => (int)$handler['SORT'],
+					'TO_MODULE_ID' => $handler['TO_MODULE_ID'],
+					'TO_PATH' => $handler['TO_PATH'],
+					'TO_CLASS' => $handler['TO_CLASS'],
+					'TO_METHOD' => $handler['TO_METHOD'],
+					'TO_METHOD_ARG' => $toMethodArg,
+					'VERSION' => $handler['VERSION'],
+					'TO_NAME' => $toName,
+					'FROM_DB' => true,
+				];
+			}
+
+			$cache->set(self::CACHE_ID, $dbHandlers);
 		}
 
 		$handlers = $this->handlers;
-		$hasHandlers = !empty($this->handlers);
 
-		foreach ($rawEvents as $ar)
-		{
-			$ar['TO_NAME'] = $this->formatEventName([
-				'TO_MODULE_ID' => $ar['TO_MODULE_ID'],
-				'TO_CLASS' => $ar['TO_CLASS'],
-				'TO_METHOD' => $ar['TO_METHOD'],
-			]);
-			$ar['FROM_MODULE_ID'] = strtoupper($ar['FROM_MODULE_ID']);
-			$ar['MESSAGE_ID'] = strtoupper($ar['MESSAGE_ID']);
-			if ($ar['TO_METHOD_ARG'] != '')
-			{
-				$ar['TO_METHOD_ARG'] = unserialize($ar['TO_METHOD_ARG'], ['allowed_classes' => false]);
-			}
-			else
-			{
-				$ar['TO_METHOD_ARG'] = [];
-			}
+		$this->handlers = array_merge_recursive($this->handlers, $dbHandlers);
 
-			$this->handlers[$ar['FROM_MODULE_ID']][$ar['MESSAGE_ID']][] = [
-				'SORT' => (int)$ar['SORT'],
-				'TO_MODULE_ID' => $ar['TO_MODULE_ID'],
-				'TO_PATH' => $ar['TO_PATH'],
-				'TO_CLASS' => $ar['TO_CLASS'],
-				'TO_METHOD' => $ar['TO_METHOD'],
-				'TO_METHOD_ARG' => $ar['TO_METHOD_ARG'],
-				'VERSION' => $ar['VERSION'],
-				'TO_NAME' => $ar['TO_NAME'],
-				'FROM_DB' => true,
-			];
-		}
-
-		if ($hasHandlers)
+		if (!empty($handlers))
 		{
 			// need to re-sort because of AddEventHandler() calls (before loadEventHandlers)
 			foreach (array_keys($handlers) as $moduleId)
@@ -318,7 +312,7 @@ class EventManager
 	public function clearLoadedHandlers()
 	{
 		$managedCache = Application::getInstance()->getManagedCache();
-		$managedCache->clean(self::CACHE_ID, self::CACHE_ID);
+		$managedCache->clean(self::CACHE_ID, self::CACHE_DIR);
 
 		foreach ($this->handlers as $module => $types)
 		{

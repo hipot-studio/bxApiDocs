@@ -3,7 +3,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2016 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 namespace Bitrix\Main\UserConsent\Internals;
 
@@ -27,6 +27,8 @@ use Bitrix\Main\ORM\Data\DataManager;
  */
 class FieldTable extends DataManager
 {
+	private static array $consentFields = [];
+
 	/**
 	 * Get table name.
 	 *
@@ -73,18 +75,25 @@ class FieldTable extends DataManager
 	 */
 	public static function getConsentFields($agreementId)
 	{
-		$fields = array();
+		$agreementId = (int)$agreementId;
+
+		if (isset(self::$consentFields[$agreementId]))
+		{
+			return self::$consentFields[$agreementId];
+		}
+
 		$fieldsDb = static::getList(array(
 			'filter' => array(
 				'=AGREEMENT_ID' => $agreementId
 			)
 		));
+		self::$consentFields[$agreementId] = [];
 		while ($field = $fieldsDb->fetch())
 		{
-			$fields[$field['CODE']] = $field['VALUE'];
+			self::$consentFields[$agreementId][$field['CODE']] = $field['VALUE'];
 		}
 
-		return $fields;
+		return self::$consentFields[$agreementId];
 	}
 
 	/**
@@ -96,6 +105,8 @@ class FieldTable extends DataManager
 	 */
 	public static function setConsentFields($agreementId, array $fields)
 	{
+		$agreementId = (int)$agreementId;
+
 		// remove old fields
 		$deleteFieldsDb = static::getList(array(
 			'select' => array('ID'),
@@ -118,5 +129,7 @@ class FieldTable extends DataManager
 			));
 			$result->isSuccess();
 		}
+
+		unset(self::$consentFields[$agreementId]);
 	}
 }

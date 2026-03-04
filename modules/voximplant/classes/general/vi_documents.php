@@ -118,6 +118,7 @@ class CVoxImplantDocuments
 	{
 		$ViHttp = new CVoxImplantHttp();
 		$result = $ViHttp->GetDocumentStatus();
+
 		if (!$result)
 		{
 			$this->error = new CVoxImplantError(__METHOD__, $ViHttp->GetError()->code, $ViHttp->GetError()->msg);
@@ -134,6 +135,16 @@ class CVoxImplantDocuments
 			$verifications[$key]['REGION_NAME'] = $regionName;
 			$verifications[$key]['STATUS'] = $verification->STATUS;
 			$verifications[$key]['STATUS_NAME'] = static::GetStatusName($verification->STATUS);
+
+			if ($verification->VERIFICATION_DEADLINE)
+			{
+				$verifications[$key]['VERIFICATION_DEADLINE'] = $verification->VERIFICATION_DEADLINE;
+			}
+
+			if ($verification->VERIFICATION_SOURCE)
+			{
+				$verifications[$key]['VERIFICATION_SOURCE'] = $verification->VERIFICATION_SOURCE;
+			}
 
 			if ($verification->STATUS != 'VERIFIED' && $verification->UNVERIFIED_HOLD_UNTIL)
 			{
@@ -160,6 +171,23 @@ class CVoxImplantDocuments
 						'IS_INDIVIDUAL_NAME' => GetMessage('VI_DOCS_IS_INDIVIDUAL_'.$document->IS_INDIVIDUAL),
 						'REVIEWER_COMMENT' => $document->REVIEWER_COMMENT,
 					);
+				}
+			}
+
+			// Parse AGREEMENTS if present (new API)
+			if (isset($verification->AGREEMENTS) && is_array($verification->AGREEMENTS))
+			{
+				$verifications[$key]['AGREEMENTS'] = [];
+				foreach ($verification->AGREEMENTS as $agreement)
+				{
+					$verifications[$key]['AGREEMENTS'][] = [
+						'TYPE' => $agreement->TYPE ?? $agreement->type ?? $agreement->agreement_type ?? '',
+						'STATUS' => $agreement->STATUS ?? $agreement->status ?? '',
+						'NUMBER' => $agreement->NUMBER ?? $agreement->number ?? '',
+						'DATE' => $agreement->DATE ?? $agreement->date ?? '',
+						'SIGNING_TYPE' => $agreement->SIGNING_TYPE ?? $agreement->signing_type ?? '',
+						'COMMENTS' => $agreement->COMMENTS ?? $agreement->comments ?? '',
+					];
 				}
 			}
 		}

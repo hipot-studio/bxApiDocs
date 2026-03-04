@@ -15,9 +15,11 @@ use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Main\Validation\ValidationResult;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class ElementsType implements PropertyValidationAttributeInterface
+class ElementsType implements PropertyValidationAttributeInterface, ValidateByGroupInterface
 {
 	use ValidationErrorTrait;
+
+	protected array $groups;
 
 	/**
 	 * @throws ArgumentException
@@ -25,7 +27,8 @@ class ElementsType implements PropertyValidationAttributeInterface
 	public function __construct(
 		private readonly ?Type   $typeEnum = null,
 		private readonly ?string $className = null,
-		string|LocalizableMessageInterface|null $errorMessage = null
+		string|LocalizableMessageInterface|null $errorMessage = null,
+		array $groups = [],
 	)
 	{
 		if (null === $this->typeEnum && null === $this->className)
@@ -34,6 +37,12 @@ class ElementsType implements PropertyValidationAttributeInterface
 		}
 
 		$this->errorMessage = $errorMessage;
+		$this->groups = $groups;
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 
 	public function validateProperty(mixed $propertyValue): ValidationResult

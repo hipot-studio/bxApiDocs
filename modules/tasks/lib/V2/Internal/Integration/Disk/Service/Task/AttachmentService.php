@@ -33,10 +33,23 @@ class AttachmentService
 
 		$ufManager = $this->getUfManager();
 
-		$current = $ufManager->GetUserFields(UserField::TASK, $taskId)[UserField::TASK_ATTACHMENTS]['VALUE'] ?? [];
-		$current = is_array($current) ? $current : [];
+		$currentAttachmentIds = $ufManager->GetUserFields(UserField::TASK, $taskId)[UserField::TASK_ATTACHMENTS]['VALUE'] ?? [];
+		$currentAttachmentIds = is_array($currentAttachmentIds) ? $currentAttachmentIds : [];
 
-		$new = array_unique(array_merge($current, $fileIds));
+		$currentAttachmentIdsMap = Container::getInstance()->getDiskFileRepository()->getObjectIdsByAttachmentIds($currentAttachmentIds);
+
+		foreach ($currentAttachmentIds as $currentAttachmentId)
+		{
+			if (!in_array($currentAttachmentId, $currentAttachmentIdsMap, true))
+			{
+				$currentAttachmentIds = array_filter(
+					$currentAttachmentIds,
+					static fn($fileId) => $fileId !== $currentAttachmentId
+				);
+			}
+		}
+
+		$new = array_unique(array_merge($currentAttachmentIds, $fileIds));
 		$new = array_values($new);
 
 		$changedBy = new User(id: $userId);
@@ -74,16 +87,16 @@ class AttachmentService
 
 		$ufManager = $this->getUfManager();
 
-		$current = $ufManager->GetUserFields(UserField::TASK, $taskId)[UserField::TASK_ATTACHMENTS]['VALUE'] ?? [];
-		$current = is_array($current) ? $current : [];
+		$currentAttachmentIds = $ufManager->GetUserFields(UserField::TASK, $taskId)[UserField::TASK_ATTACHMENTS]['VALUE'] ?? [];
+		$currentAttachmentIds = is_array($currentAttachmentIds) ? $currentAttachmentIds : [];
 
-		if (empty($current))
+		if (empty($currentAttachmentIds))
 		{
 			return;
 		}
 
 		$fileIdsToRemove = [];
-		$currentAttachments = Container::getInstance()->getDiskFileRepository()->getByIds($current);
+		$currentAttachments = Container::getInstance()->getDiskFileRepository()->getByIds($currentAttachmentIds);
 
 		foreach ($fileIds as $fileId)
 		{
@@ -107,7 +120,7 @@ class AttachmentService
 			}
 		}
 
-		$new = array_diff($current, $fileIdsToRemove);
+		$new = array_diff($currentAttachmentIds, $fileIdsToRemove);
 		$new = array_values($new);
 
 		$changedBy = new User(id: $userId);

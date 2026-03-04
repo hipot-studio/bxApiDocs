@@ -35,6 +35,8 @@ class Settings
 			'jwtInPlainCallsEnabled' => static::isPlainCallsUseNewScheme(),
 			'plainCallFollowUpEnabled' => static::isPlainCallFollowUpEnabled(),
 			'plainCallCloudRecordingEnabled' => static::isPlainCallCloudRecordingEnabled(),
+			'optionsForTestingEnabled' => static::isOptionsForTestingEnabled(),
+			'mobileCallUIVisibilityTimer' => static::getMobileCallInterfaceVisibilityTimer(),
 
 			'ai' => [
 				'serviceEnabled' => static::isAIServiceEnabled(),
@@ -223,6 +225,21 @@ class Settings
 		return (bool)\CUserOptions::GetOption('call', 'noise_suppression_enabled', false);
 	}
 
+	public static function isOptionsForTestingEnabled(): bool
+	{
+		if ((bool)Option::get('call', 'options_for_testing_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'options_for_testing_enabled', false);
+	}
+
+	public static function getMobileCallInterfaceVisibilityTimer(): int
+	{
+		return (int)Option::get('call', 'mobile_call_ui_visibility_timer', 0);
+	}
+
 	/**
 	 * @deprecated
 	 */
@@ -353,5 +370,33 @@ class Settings
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_cloud_record_log', false);
+	}
+
+	/**
+	 * Send interval of accident logs in seconds.
+	 * @return int
+	 */
+	public static function getAccidentLogSendIntervalSecs(): int
+	{
+		$commonAccidentLogSendIntervalSecs = (int)Option::get('call', 'accident_log_send_interval_secs', 0);
+
+		if ($commonAccidentLogSendIntervalSecs > 0)
+		{
+			return $commonAccidentLogSendIntervalSecs;
+		}
+
+		return (int)\CUserOptions::GetOption('call', 'accident_log_send_interval_secs', 0);
+	}
+
+	public static function getAccidentLogGroupMaxAgeSecs(): int
+	{
+		$commonAccidentLogGroupMaxAgeSecs = (int)Option::get('call', 'accident_log_group_max_age_secs', 0);
+
+		if ($commonAccidentLogGroupMaxAgeSecs > 0)
+		{
+			return $commonAccidentLogGroupMaxAgeSecs;
+		}
+
+		return (int)\CUserOptions::GetOption('call', 'accident_log_group_max_age_secs', 0);
 	}
 }

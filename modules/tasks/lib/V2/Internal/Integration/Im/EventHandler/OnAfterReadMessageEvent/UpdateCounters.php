@@ -6,14 +6,14 @@ namespace Bitrix\Tasks\V2\Internal\Integration\Im\EventHandler\OnAfterReadMessag
 
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadMessagesEvent;
 use Bitrix\Tasks\V2\Internal\Logger;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Counter;
 
 class UpdateCounters
 {
 	public function __construct
 	(
-		private readonly TaskReadRepositoryInterface $repository,
+		private readonly TaskRepositoryInterface $repository,
 		private readonly Counter\Service $counters,
 		private readonly Logger $logger,
 	) {
@@ -39,7 +39,7 @@ class UpdateCounters
 		try
 		{
 			$this->counters->send(new Counter\Command\AfterCommentsRead(
-				userId: (int) $event->getReaderId(),
+				userId: $event->getReaderId(),
 				taskId: $task->getId(),
 			));
 		}

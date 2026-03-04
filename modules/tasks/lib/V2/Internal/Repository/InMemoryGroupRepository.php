@@ -8,13 +8,16 @@ use Bitrix\Tasks\V2\Internal\Entity;
 
 class InMemoryGroupRepository implements GroupRepositoryInterface
 {
-	private GroupRepositoryInterface $groupRepository;
+	protected GroupRepositoryInterface $groupRepository;
 
-	private Entity\GroupCollection $cache;
-	private array $membersCache = [];
-	private array $typeCache = [];
+	protected Entity\GroupCollection $cache;
+	/** @var Entity\UserCollection[] */
+	protected array $membersCache = [];
+	/** @var Entity\UserCollection[] */
+	protected array $filteredMembersCache = [];
+	protected array $typeCache = [];
 	/** @var array<string, int[]> */
-	private array $groupIdsByTaskIdsCache = [];
+	protected array $groupIdsByTaskIdsCache = [];
 
 	public function __construct(GroupRepository $groupRepository)
 	{
@@ -44,6 +47,40 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 		}
 
 		return $this->membersCache[$id];
+	}
+
+	public function getMemberRoles(array $userIds, int $groupId): Entity\UserCollection
+	{
+		$data = array_map(
+			static fn(int $id): array => [
+				'id' => $id,
+				'role' => false,
+			],
+			$userIds
+		);
+
+		$members = Entity\UserCollection::mapFromArray($data);
+
+		if (isset($this->membersCache[$groupId]))
+		{
+			return $this->replaceRoles($members, $this->membersCache[$groupId]);
+		}
+
+		if (isset($this->filteredMembersCache[$groupId]))
+		{
+			$notCachedUserIds = array_diff($userIds, $this->filteredMembersCache[$groupId]->getIdList());
+			if (!empty($notCachedUserIds))
+			{
+				$fetchedMembers = $this->groupRepository->getMemberRoles($notCachedUserIds, $groupId);
+				$this->filteredMembersCache[$groupId]->merge($fetchedMembers);
+			}
+
+			return $this->replaceRoles($members, $this->filteredMembersCache[$groupId]);
+		}
+
+		$this->filteredMembersCache[$groupId] = $this->groupRepository->getMemberRoles($userIds, $groupId);
+
+		return $this->replaceRoles($members, $this->filteredMembersCache[$groupId]);
 	}
 
 	public function getType(int $id): ?string
@@ -101,5 +138,17 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 		}
 
 		return $this->groupIdsByTaskIdsCache[$key] ?? [];
+	}
+
+	protected function replaceRoles(
+		Entity\UserCollection $members,
+		Entity\UserCollection $cache,
+	): Entity\UserCollection
+	{
+		$ids = $members->getIds();
+
+		return $members->replaceMulti($cache->filter(
+			static fn (Entity\User $user) => in_array($user->getId(), $ids, true)
+		));
 	}
 }

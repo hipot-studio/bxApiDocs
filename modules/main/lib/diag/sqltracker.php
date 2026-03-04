@@ -3,6 +3,8 @@
 namespace Bitrix\Main\Diag;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\IO\File;
 
 class SqlTracker implements \Iterator
 {
@@ -11,7 +13,7 @@ class SqlTracker implements \Iterator
 	/** @var float */
 	protected $time = 0.0;
 	/** @var int */
-	protected static $depthBackTrace = 0;
+	protected $depthBackTrace = 10;
 	/** @var integer */
 	protected $counter = 0;
 	/** @var string */
@@ -19,17 +21,10 @@ class SqlTracker implements \Iterator
 
 	public function __construct()
 	{
-		if (self::$depthBackTrace == 0)
+		$eh = Configuration::getValue('exception_handling');
+		if (isset($eh['depth_back_trace']))
 		{
-			$eh = \Bitrix\Main\Config\Configuration::getValue('exception_handling');
-			if (!empty($eh['depth_back_trace']))
-			{
-				self::$depthBackTrace = (int) $eh['depth_back_trace'];
-			}
-			else
-			{
-				self::$depthBackTrace = 8;
-			}
+			$this->depthBackTrace = (int)$eh['depth_back_trace'];
 		}
 	}
 
@@ -107,7 +102,7 @@ class SqlTracker implements \Iterator
 	 */
 	public function getDepthBackTrace()
 	{
-		return self::$depthBackTrace;
+		return $this->depthBackTrace;
 	}
 
 	/**
@@ -119,7 +114,7 @@ class SqlTracker implements \Iterator
 	 */
 	public function setDepthBackTrace($depthBackTrace)
 	{
-		self::$depthBackTrace = (int) $depthBackTrace;
+		$this->depthBackTrace = (int)$depthBackTrace;
 	}
 
 	/**
@@ -128,8 +123,8 @@ class SqlTracker implements \Iterator
 	 * @param string $filePath Absolute file path.
 	 *
 	 * @return void
-	 * @see \Bitrix\Main\Diag\SqlTracker->stopFileLog
-	 * @see \Bitrix\Main\Diag\SqlTracker->writeFileLog
+	 * @see SqlTracker->stopFileLog
+	 * @see SqlTracker->writeFileLog
 	 */
 	public function startFileLog($filePath)
 	{
@@ -145,8 +140,8 @@ class SqlTracker implements \Iterator
 	 * @param integer $traceSkip How many backtrace frames to skip in output.
 	 *
 	 * @return void
-	 * @see \Bitrix\Main\Diag\SqlTracker->startFileLog
-	 * @see \Bitrix\Main\Diag\SqlTracker->stopFileLog
+	 * @see SqlTracker->startFileLog
+	 * @see SqlTracker->stopFileLog
 	 */
 	public function writeFileLog($sql, $executionTime = 0.0, $additional = "", $traceSkip = 2)
 	{
@@ -165,7 +160,7 @@ class SqlTracker implements \Iterator
 			$header = "TIME: ".round($executionTime, 6)." SESSION: ".$sessionId." ".$additional."\n";
 			$headerLength = mb_strlen($header);
 			$body = $this->formatSql($sql);
-			$trace = $this->formatTrace(Helper::getBackTrace(self::$depthBackTrace, null, $traceSkip));
+			$trace = $this->formatTrace(Helper::getBackTrace($this->depthBackTrace, null, $traceSkip));
 			$footer = str_repeat("-", $headerLength);
 			$message =
 				"\n".$header.
@@ -173,7 +168,7 @@ class SqlTracker implements \Iterator
 				"\n\n".$trace.
 				"\n".$footer.
 				"\n";
-			\Bitrix\Main\IO\File::putFileContents($this->logFilePath, $message, \Bitrix\Main\IO\File::APPEND);
+			File::putFileContents($this->logFilePath, $message, File::APPEND);
 		}
 	}
 
@@ -181,8 +176,8 @@ class SqlTracker implements \Iterator
 	 * Stops writing queries into log file.
 	 *
 	 * @return void
-	 * @see \Bitrix\Main\Diag\SqlTracker->startFileLog
-	 * @see \Bitrix\Main\Diag\SqlTracker->writeFileLog
+	 * @see SqlTracker->startFileLog
+	 * @see SqlTracker->writeFileLog
 	 */
 	public function stopFileLog()
 	{
@@ -275,7 +270,7 @@ class SqlTracker implements \Iterator
 	 *
 	 * @return void
 	 */
-	public function rewind()
+	public function rewind(): void
 	{
 		reset($this->queries);
 	}
@@ -285,7 +280,7 @@ class SqlTracker implements \Iterator
 	 *
 	 * @return mixed
 	 */
-	public function current()
+	public function current(): mixed
 	{
 		return current($this->queries);
 	}
@@ -295,7 +290,7 @@ class SqlTracker implements \Iterator
 	 *
 	 * @return mixed
 	 */
-	public function key()
+	public function key(): mixed
 	{
 		return key($this->queries);
 	}
@@ -305,7 +300,7 @@ class SqlTracker implements \Iterator
 	 *
 	 * @return void
 	 */
-	public function next()
+	public function next(): void
 	{
 		next($this->queries);
 	}
@@ -315,7 +310,7 @@ class SqlTracker implements \Iterator
 	 *
 	 * @return boolean
 	 */
-	public function valid()
+	public function valid(): bool
 	{
 		return key($this->queries) !== null;
 	}

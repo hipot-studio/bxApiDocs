@@ -11,10 +11,10 @@ class ExcludeMutedUsers implements ReducerInterface
 {
 	public function __invoke(RecipientsResolver $context): void
 	{
-		$inMuteMembers = $context->taskWithMembers?->inMute ?? [];
+		$inMuteMemberMap = array_flip($context->inMuteMembers ?? []);
 
 		$context->recipients = $context->recipients->filter(
-			static fn (Entity\User $user): bool => !in_array($user->getId(), $inMuteMembers, true)
+			static fn (Entity\User $user): bool => !array_key_exists($user->getId(), $inMuteMemberMap)
 		);
 	}
 }

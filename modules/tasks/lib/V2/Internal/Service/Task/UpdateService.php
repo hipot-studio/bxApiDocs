@@ -94,6 +94,7 @@ class UpdateService
 		[$task, $fields] = (new EntityFieldService())->prepare($task, $config, $fullTaskData);
 
 		$taskObjectBeforeUpdate = $compatibilityRepository->getTaskObject($task->getId());
+		$taskObjectBeforeUpdate->cacheCrmFields();
 
 		$this->counterService->collect($task->getId());
 

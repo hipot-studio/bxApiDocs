@@ -14,7 +14,7 @@ use ReflectionClass;
 use ReflectionProperty;
 
 #[Attribute(Attribute::TARGET_CLASS)]
-final class AtLeastOnePropertyNotEmpty extends AbstractClassValidationAttribute
+final class AtLeastOnePropertyNotEmpty extends AbstractClassValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly array $propertyNames,
@@ -22,8 +22,14 @@ final class AtLeastOnePropertyNotEmpty extends AbstractClassValidationAttribute
 		private readonly bool $allowEmptyString = false,
 		protected string|LocalizableMessageInterface|null $errorMessage = null,
 		private readonly bool $showPropertyNames = false,
+		protected array $groups = [],
 	)
 	{
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 
 	public function validateObject(object $object): ValidationResult

@@ -10,11 +10,18 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\TypeFile;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ModuleManager;
 
 final class ContentManager
 {
+	private const PROHIBITED_CONTENT_INDEXING_MIME_TYPES_BY_EXTENSION = [
+		'xls' => [
+			'application/cdfv2',
+		],
+	];
+
 	/** @var  ErrorCollection */
 	protected $errorCollection;
 
@@ -23,7 +30,7 @@ final class ContentManager
 	 */
 	public function __construct()
 	{
-		$this->errorCollection = new ErrorCollection;
+		$this->errorCollection = new ErrorCollection();
 	}
 
 	/**
@@ -35,10 +42,10 @@ final class ContentManager
 	 * @param array|null $options Custom options.
 	 *
 	 * @return string
-	 * @throws \Bitrix\Main\ArgumentNullException
-	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
+	 * @throws ArgumentNullException
+	 * @throws ArgumentOutOfRangeException
 	 */
-	public function getObjectContent(BaseObject $object, array $options = null)
+	public function getObjectContent(BaseObject $object, ?array $options = null)
 	{
 		if($object instanceof File)
 		{
@@ -70,10 +77,10 @@ final class ContentManager
 	 * @param array|null $options
 	 *
 	 * @return string
-	 * @throws \Bitrix\Main\ArgumentNullException
-	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
+	 * @throws ArgumentNullException
+	 * @throws ArgumentOutOfRangeException
 	 */
-	public function getFileContent(File $file, array $options = null)
+	public function getFileContent(File $file, ?array $options = null)
 	{
 		static $maxFileSize = null;
 		if(!isset($maxFileSize))
@@ -85,14 +92,14 @@ final class ContentManager
 		$searchData .= strip_tags($file->getName()) . "\r\n";
 
 		if(
-			($maxFileSize > 0 && $file->getSize() > $maxFileSize) ||
-			!empty($options['withoutBody'])
+			($maxFileSize > 0 && $file->getSize() > $maxFileSize)
+			|| !empty($options['withoutBody'])
 		)
 		{
 			return $searchData;
 		}
 
-		$searchDataFile = array();
+		$searchDataFile = [];
 		$fileArray = null;
 
 		//improve work with s3
@@ -103,19 +110,41 @@ final class ContentManager
 
 		if($fileArray && $fileArray['tmp_name'])
 		{
+			$isContentIndexingProhibited = !empty($fileArray['type'])
+				&& $this->isIndexingProhibitedForMimeType($file, $fileArray['type']);
+
+			if ($isContentIndexingProhibited)
+			{
+				return $searchData;
+			}
+
 			$fileAbsPath = \CBXVirtualIo::getInstance()->getLogicalName($fileArray['tmp_name']);
 			foreach(GetModuleEvents('search', 'OnSearchGetFileContent', true) as $event)
 			{
-				if($searchDataFile = executeModuleEventEx($event, array($fileAbsPath, $file->getExtension())))
+				if($searchDataFile = executeModuleEventEx($event, [$fileAbsPath, $file->getExtension()]))
 				{
 					break;
 				}
 			}
 
-			return is_array($searchDataFile)? $searchData  . "\r\n" . $searchDataFile['CONTENT'] : $searchData;
+			return is_array($searchDataFile) ? $searchData . "\r\n" . $searchDataFile['CONTENT'] : $searchData;
 		}
 
 		return $searchData;
+	}
+
+	/**
+	 * Checks if file has prohibited mime type for indexing.
+	 * @param File $file
+	 * @param string $mimeType
+	 * @return bool
+	 */
+	private function isIndexingProhibitedForMimeType(File $file, string $mimeType): bool
+	{
+		$extension = mb_strtolower($file->getExtension());
+
+		return isset(self::PROHIBITED_CONTENT_INDEXING_MIME_TYPES_BY_EXTENSION[$extension])
+			&& in_array($mimeType, self::PROHIBITED_CONTENT_INDEXING_MIME_TYPES_BY_EXTENSION[$extension], true);
 	}
 
 	/**

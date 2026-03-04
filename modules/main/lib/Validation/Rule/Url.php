@@ -9,10 +9,11 @@ use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\Validator\UrlValidator;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Url extends AbstractPropertyValidationAttribute
+class Url extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
-		protected string|LocalizableMessageInterface|null $errorMessage = null
+		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
 	}
@@ -22,5 +23,10 @@ class Url extends AbstractPropertyValidationAttribute
 		return [
 			(new UrlValidator()),
 		];
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 }

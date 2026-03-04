@@ -188,6 +188,7 @@ class AuthLogTable extends DataManager
 	public static function logSiteToControllerAuth($controllerMemberId, $userId, $isSuccess = true, $type = '', $userName = '')
 	{
 		$fields = [
+			'TIMESTAMP_X' => new \Bitrix\Main\Type\DateTime(),
 			'FROM_CONTROLLER_MEMBER_ID' => $controllerMemberId,
 			'USER_ID' => $userId,
 			'STATUS' => $isSuccess ? 'Y' : 'N',
@@ -213,6 +214,7 @@ class AuthLogTable extends DataManager
 	public static function logControllerToSiteAuth($controllerMemberId, $userId, $isSuccess = true, $type = '', $userName = '')
 	{
 		$fields = [
+			'TIMESTAMP_X' => new \Bitrix\Main\Type\DateTime(),
 			'TO_CONTROLLER_MEMBER_ID' => $controllerMemberId,
 			'USER_ID' => $userId,
 			'STATUS' => $isSuccess ? 'Y' : 'N',
@@ -238,6 +240,7 @@ class AuthLogTable extends DataManager
 	public static function logSiteToSiteAuth($fromControllerMemberId, $toControllerMemberId, $isSuccess = true, $type = '', $userName = '')
 	{
 		$fields = [
+			'TIMESTAMP_X' => new \Bitrix\Main\Type\DateTime(),
 			'FROM_CONTROLLER_MEMBER_ID' => $fromControllerMemberId,
 			'TO_CONTROLLER_MEMBER_ID' => $toControllerMemberId,
 			'STATUS' => $isSuccess ? 'Y' : 'N',

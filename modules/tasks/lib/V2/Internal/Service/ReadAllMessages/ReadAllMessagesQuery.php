@@ -19,9 +19,13 @@ class ReadAllMessagesQuery
 	) {
 	}
 
-	public function execute(int $userId, ?int $groupId = null): void
+	public function execute(int $userId, ?int $groupId = null, ?string $role = null): void
 	{
-		$taskIdsWithChatIds = $this->taskRepository->findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId($userId, $groupId);
+		$taskIdsWithChatIds = $this->taskRepository->findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(
+			$userId,
+			$groupId,
+			$role,
+		);
 		$chatIds = array_map('intval', array_column($taskIdsWithChatIds, 'TASK_CHAT_ID'));
 
 		foreach (array_chunk($chatIds, $this->getChunkSize()) as $chatIdsChunk)

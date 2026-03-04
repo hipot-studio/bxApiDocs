@@ -7,6 +7,8 @@
  */
 
 use Bitrix\Main\Application;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\IntranetUserCheckService;
 
 /**
  * For internal use only, not public API
@@ -330,27 +332,9 @@ class CTasksTools
 
 	public static function IsIntranetUser($userId)
 	{
+		$intranetUserChecker = Container::getInstance()->get(IntranetUserCheckService::class);
 
-		if (in_array(1, CUser::GetUserGroup($userId)))
-			return true;
-
-		$rsUsers = CUser::GetList(
-			"id",
-			"asc",
-			array("ID" => $userId),
-			array("SELECT" => array("UF_DEPARTMENT"))
-		);
-
-		if (
-			($arUser = $rsUsers->Fetch())
-			&& isset($arUser["UF_DEPARTMENT"][0])
-			&& (int)$arUser["UF_DEPARTMENT"][0] > 0
-		)
-		{
-			return true;
-		}
-
-		return false;
+		return $intranetUserChecker->isIntranet((int)$userId);
 	}
 
 

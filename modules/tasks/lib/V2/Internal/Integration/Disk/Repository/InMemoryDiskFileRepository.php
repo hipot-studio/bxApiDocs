@@ -13,6 +13,7 @@ class InMemoryDiskFileRepository implements DiskFileRepositoryInterface
 
 	private DiskFileCollection $cache;
 	private array $objectToAttachmentCache = [];
+	private array $ownerToAttachmentCache = [];
 
 	public function __construct(DiskFileRepository $diskFileRepository)
 	{
@@ -55,5 +56,18 @@ class InMemoryDiskFileRepository implements DiskFileRepositoryInterface
 			$this->objectToAttachmentCache,
 			static fn (int $attachmentId): bool => in_array($attachmentId, $attachmentIds, true)
 		);
+	}
+
+	public function getOwnerIdsByFileIds(array $fileIds, int $taskId): array
+	{
+		$notStored = array_diff($fileIds, $this->ownerToAttachmentCache);
+
+		if (!empty($notStored))
+		{
+			$attachmentMap = $this->diskFileRepository->getOwnerIdsByFileIds($notStored, $taskId);
+			$this->ownerToAttachmentCache += $attachmentMap;
+		}
+
+		return $this->ownerToAttachmentCache;
 	}
 }

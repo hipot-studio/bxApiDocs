@@ -284,6 +284,8 @@ class Call extends JwtController
 
 			$this->setUserStateReady($call, $userId, $callRequest->legacyMobile);
 
+			$call->getSignaling()->sendLogToken($userId);
+
 			$users = array_diff($call->getUsers(), [$userId]);
 			$this->inviteUsers(
 				call: $call,
@@ -773,6 +775,8 @@ class Call extends JwtController
 		\Bitrix\Call\Call::updateUserActiveCallsCache($currentUserId);
 
 		$users = array_diff($childCall->getAssociatedEntity()->getUsers(), [$currentUserId]);
+
+		$childCall->getSignaling()->sendLogToken($currentUserId);
 
 		$this->inviteUsers(
 			call: $childCall,

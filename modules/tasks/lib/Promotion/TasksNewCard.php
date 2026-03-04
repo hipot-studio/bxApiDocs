@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Promotion;
 
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Integration\Bitrix24\Portal;
@@ -22,7 +23,7 @@ class TasksNewCard extends AbstractPromotion
 			return false;
 		}
 
-		if (!FormV2Feature::isOn() || $this->isViewed($userId) || !CurrentUser::get()->getId())
+		if (!FormV2Feature::isOn() || $this->isViewed($userId) || !$this->isSuitableRegion() || !CurrentUser::get()->getId())
 		{
 			return false;
 		}
@@ -42,5 +43,12 @@ class TasksNewCard extends AbstractPromotion
 			? new DateTime('2025-11-26', 'Y-m-d')
 			: new DateTime('2026-01-21', 'Y-m-d')
 		;
+	}
+
+	private function isSuitableRegion(): bool
+	{
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		return $region !== 'cn';
 	}
 }

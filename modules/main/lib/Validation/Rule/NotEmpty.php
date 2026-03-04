@@ -9,12 +9,13 @@ use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\Validator\NotEmptyValidator;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class NotEmpty extends AbstractPropertyValidationAttribute
+class NotEmpty extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly bool $allowZero = false,
 		private readonly bool $allowSpaces = false,
-		protected string|LocalizableMessageInterface|null $errorMessage = null
+		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
 	}
@@ -24,5 +25,10 @@ class NotEmpty extends AbstractPropertyValidationAttribute
 		return [
 			(new NotEmptyValidator($this->allowZero, $this->allowSpaces)),
 		];
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 }

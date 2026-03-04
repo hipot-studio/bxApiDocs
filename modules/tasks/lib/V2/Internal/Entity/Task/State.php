@@ -18,6 +18,7 @@ class State extends AbstractEntity
 		public readonly ?bool $needsControl = null,
 		public readonly ?bool $matchesWorkTime = null,
 		public readonly ?bool $defaultRequireResult = null,
+		public readonly ?bool $allowsTimeTracking = null,
 	)
 	{
 		if ($defaultDeadline)
@@ -37,6 +38,7 @@ class State extends AbstractEntity
 			'needsControl' => $this->needsControl,
 			'matchesWorkTime' => $this->matchesWorkTime,
 			'defaultRequireResult' => $this->defaultRequireResult,
+			'allowsTimeTracking' => $this->allowsTimeTracking,
 		];
 	}
 
@@ -48,6 +50,7 @@ class State extends AbstractEntity
 			needsControl: static::mapBool($props, 'needsControl'),
 			matchesWorkTime: static::mapBool($props, 'matchesWorkTime'),
 			defaultRequireResult: static::mapBool($props, 'defaultRequireResult'),
+			allowsTimeTracking: static::mapBool($props, 'allowsTimeTracking'),
 		);
 	}
 
@@ -59,6 +62,7 @@ class State extends AbstractEntity
 			'needsControl' => $this->needsControl,
 			'matchesWorkTime' => $this->matchesWorkTime,
 			'defaultRequireResult' => $this->defaultRequireResult,
+			'allowsTimeTracking' => $this->allowsTimeTracking,
 		];
 	}
 }

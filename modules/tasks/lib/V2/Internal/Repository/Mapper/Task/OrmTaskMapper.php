@@ -453,7 +453,7 @@ class OrmTaskMapper
 		if (isset($fields['IM_MESSAGE_ID'], $fields['IM_CHAT_ID']))
 		{
 			$entityFields['source'] = [
-				'type' => Entity\Task\Source::TYPE_CHAT,
+				'type' => Entity\Task\SourceType::CHAT,
 				'entityId' => (int)$fields['IM_CHAT_ID'],
 				'subEntityId' => (int)$fields['IM_MESSAGE_ID'],
 			];

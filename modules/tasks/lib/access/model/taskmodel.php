@@ -11,6 +11,7 @@ namespace Bitrix\Tasks\Access\Model;
 use Bitrix\Tasks\Access\AccessibleTask;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
+use Bitrix\Tasks\Deadline\Policy\DeadlinePolicyChangeContext;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -28,6 +29,7 @@ class TaskModel implements AccessibleTask
 	private $group;
 	private ?int $flowId = null;
 	private ?int $parentId = null;
+	private ?DeadlinePolicyChangeContext $deadlineChangeContext = null;
 
 	public static function invalidateCache(int $taskId): void
 	{
@@ -455,13 +457,19 @@ class TaskModel implements AccessibleTask
 				deadlineChangeReason: $params['DEADLINE_REASON'] ?? null,
 			);
 
+			$this->deadlineChangeContext = null;
 			$result = $deadlineProvider->canChangeDeadline($userId, $taskEntity);
+			$canChangeContext = $result->getData()['canChangeContext'] ?? null;
+			if ($canChangeContext instanceof DeadlinePolicyChangeContext)
+			{
+				$this->deadlineChangeContext = $canChangeContext;
+			}
+
 			if (!$result->isSuccess())
 			{
 				return false;
 			}
 		}
-
 
 		return $task['ALLOW_CHANGE_DEADLINE'] === 'Y';
 	}
@@ -588,5 +596,10 @@ class TaskModel implements AccessibleTask
 		}
 
 		return array_unique($res);
+	}
+
+	public function getDeadlineChangeContext(): ?DeadlinePolicyChangeContext
+	{
+		return $this->deadlineChangeContext;
 	}
 }

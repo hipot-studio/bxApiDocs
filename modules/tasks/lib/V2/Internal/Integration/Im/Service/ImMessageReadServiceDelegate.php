@@ -11,7 +11,10 @@ use Bitrix\Im\V2\MessageCollection;
 /**
  * @method void readAllInChat(int $chatId)
  *
+ * use for only read chat messages without generation eventRead events
  * @see \Bitrix\Im\V2\Message\ReadService::readAllInChat()
+ *
+ * for read with eventRead events use ChatReadAllMessageService::readAllByChatId
  */
 class ImMessageReadServiceDelegate extends AbstractServiceDelegate
 {

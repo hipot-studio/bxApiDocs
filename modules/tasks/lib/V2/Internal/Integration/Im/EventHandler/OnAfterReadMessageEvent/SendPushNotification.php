@@ -10,19 +10,19 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Pull\Push;
 use Bitrix\Tasks\V2\Internal\Logger;
-use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
 use Bitrix\Tasks\V2\Internal\Repository\TaskMemberRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 
 class SendPushNotification
 {
 	public function __construct
 	(
-		private readonly TaskReadRepositoryInterface $tasksRepository,
+		private readonly TaskRepositoryInterface $tasksRepository,
 		private readonly TaskMemberRepositoryInterface $memberRepository,
 		private readonly Push\Service $push,
 		private readonly Logger $logger,
-	) {
+	)
+	{
 	}
 
 	public function __invoke(AfterReadMessagesEvent $event): void
@@ -34,7 +34,7 @@ class SendPushNotification
 
 		try
 		{
-			$task = $this->tasksRepository->getById((int)$event->getChat()->getEntityId(), select: new Select(members: true));
+			$task = $this->tasksRepository->getById((int)$event->getChat()->getEntityId());
 		}
 		catch (\Throwable $e)
 		{

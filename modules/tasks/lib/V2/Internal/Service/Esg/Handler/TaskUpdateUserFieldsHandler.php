@@ -78,8 +78,7 @@ class TaskUpdateUserFieldsHandler
 				],
 			);
 		}
-
-		if (!empty($removedFiles))
+		else if (!empty($removedFiles))
 		{
 			$this->chatNotification->notify(
 				type: NotificationType::TaskAttachmentRemoved,

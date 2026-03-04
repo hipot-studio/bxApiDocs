@@ -7,6 +7,7 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\Contract\CloudImportInterface;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\UseCase\Document\FixUnknownDocumentHandlerUseCase;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\UI\Viewer\Renderer\Board;
@@ -15,7 +16,6 @@ use Bitrix\Disk\UserConfiguration;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
 
 class DocumentHandlersManager
@@ -27,6 +27,7 @@ class DocumentHandlersManager
 	/** @var  ErrorCollection */
 	protected $errorCollection;
 	protected $userId;
+	private ?FixUnknownDocumentHandlerUseCase $fixUnknownDocumentHandlerUseCase = null;
 
 	public function __construct($user)
 	{
@@ -74,6 +75,7 @@ class DocumentHandlersManager
 		if(!isset($this->documentHandlerList[$code]))
 		{
 			$this->errorCollection->add(array(new Error("Unknown document handler name {$code}", self::ERROR_UNKNOWN_HANDLER)));
+
 			return null;
 		}
 
@@ -205,6 +207,12 @@ class DocumentHandlersManager
 	public function getDefaultHandlerForView()
 	{
 		$documentHandler = $this->getHandlerByCode(Configuration::getDefaultViewerServiceCode());
+		if (is_null($documentHandler) && $this->getErrorByCode(self::ERROR_UNKNOWN_HANDLER))
+		{
+			$this->fixUnknownDocumentHandlerForView();
+			$documentHandler = $this->getHandlerByCode(Configuration::getDefaultViewerServiceCode(false));
+		}
+
 		if(!$documentHandler instanceof IViewer)
 		{
 			throw new SystemException("Invalid class '{$documentHandler::getCode()}' for documentHandler. Must be implement IViewer");
@@ -321,5 +329,15 @@ class DocumentHandlersManager
 		];
 
 		$event->addResult(new EventResult(EventResult::SUCCESS, $renderersList));
+	}
+
+	private function fixUnknownDocumentHandlerForView(): void
+	{
+		if (is_null($this->fixUnknownDocumentHandlerUseCase))
+		{
+			$this->fixUnknownDocumentHandlerUseCase = new FixUnknownDocumentHandlerUseCase();
+		}
+
+		$this->fixUnknownDocumentHandlerUseCase->fix();
 	}
 }

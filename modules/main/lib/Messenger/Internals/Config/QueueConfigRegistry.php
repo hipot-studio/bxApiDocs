@@ -74,12 +74,32 @@ class QueueConfigRegistry
 			throw new ConfigurationException(sprintf('Param "handler" should be set for the queue "%s"', $queueId));
 		}
 
+		$limit = $params['limit'] ?? 50;
+
+		if ($limit < 1)
+		{
+			throw new ConfigurationException(
+				sprintf('Param "limit" should be positive number (queue "%s")', $queueId),
+			);
+		}
+
+		$totalProcessingLimit = $params['total_processing_limit'] ?? 100;
+
+		if ($totalProcessingLimit < 1)
+		{
+			throw new ConfigurationException(
+				sprintf('Param "total_processing_limit" should be positive number (queue "%s")', $queueId),
+			);
+		}
+
 		$this->queues[$queueId] = new QueueConfig(
 			$queueId,
 			$params['handler'],
 			$moduleId,
 			$params['broker'] ?? null,
-			$this->buildRetryStrategy($params)
+			$this->buildRetryStrategy($params),
+			$limit,
+			$totalProcessingLimit,
 		);
 	}
 
@@ -110,7 +130,7 @@ class QueueConfigRegistry
 			($config['delay'] ?? 1) * 1000,
 			$config['multiplier'] ?? 2,
 			($config['max_delay'] ?? 0) * 1000,
-			0
+			0,
 		);
 	}
 }

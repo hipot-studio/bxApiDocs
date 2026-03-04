@@ -397,7 +397,6 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			$storyPoints = (is_string($post['storyPoints'] ?? null) ? $post['storyPoints'] : '');
 			$sort = (is_numeric($post['sort']) ? (int) $post['sort'] : 0);
 			$responsible = (is_array($post['responsible'] ?? null) ? $post['responsible'] : []);
-			$sortInfo = (is_array($post['sortInfo'] ?? null) ? $post['sortInfo'] : []);
 			$info = (is_array($post['info'] ?? null) ? $post['info'] : []);
 
 			if ($name === '')
@@ -429,7 +428,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			{
 				$item->setEpicId($epicId);
 			}
-			$item->setSort($sort);
+			$item->setSortFloat($sort);
 			$item->setCreatedBy($this->userId);
 			$item->setStoryPoints($storyPoints);
 
@@ -505,17 +504,6 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 				if ($kanbanService->getErrors())
 				{
 					$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_ADD_ERROR'), $kanbanService->getErrors());
-
-					return null;
-				}
-			}
-
-			if ($sortInfo)
-			{
-				$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
-				if ($itemService->getErrors())
-				{
-					$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_ADD_ERROR'), $itemService->getErrors());
 
 					return null;
 				}
@@ -1129,11 +1117,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		$backlog = $backlogService->getBacklogByGroupId($sprint->getGroupId());
 
-		$itemService->moveItemsToEntity(
-			$backlog->getGroupId(),
-			$itemService->getItemIdsByEntityId($sprint->getId()),
-			$backlog->getId()
-		);
+		$itemService->moveItemsToEntity($itemService->getItemIdsByEntityId($sprint->getId()), $backlog->getId());
 		if ($itemService->getErrors())
 		{
 			$this->setError(Loc::getMessage('TASKS_SCRUM_SPRINT_REMOVE_ERROR'), $itemService->getErrors());
@@ -1256,7 +1240,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		if ($sortInfo)
 		{
-			$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
+			$itemService->sortItems($this->prepareSortInfo($groupId, $sortInfo), $pushService);
 		}
 
 		return '';
@@ -1277,7 +1261,6 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$itemId = (is_numeric($post['itemId'] ?? null) ? (int) $post['itemId'] : 0);
 		$name = (is_string($post['name'] ?? null) ? $post['name'] : '');
 		$storyPoints = (is_string($post['storyPoints'] ?? null) ? $post['storyPoints'] : null);
-		$sortInfo = (is_array($post['sortInfo'] ?? null) ? $post['sortInfo'] : []);
 
 		$itemService = new ItemService();
 		$pushService = (Loader::includeModule('pull') ? new PushService() : null);
@@ -1328,11 +1311,6 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			$itemService->changeItem($item, $pushService);
 		}
 
-		if ($sortInfo)
-		{
-			$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
-		}
-
 		if ($itemService->getErrors())
 		{
 			$this->setError(Loc::getMessage('TASKS_SCRUM_ITEM_UPDATE_ERROR'), $itemService->getErrors());
@@ -1357,7 +1335,6 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$userId = (int) Util\User::getId();
 
 		$itemIds = (is_array($post['itemIds'] ?? null) ? $post['itemIds'] : []);
-		$sortInfo = (is_array($post['sortInfo'] ?? null) ? $post['sortInfo'] : []);
 
 		$itemService = new ItemService();
 
@@ -1387,11 +1364,6 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			{
 				(new CacheService($subTaskId, CacheService::ITEM_TASKS))->clean();
 			}
-		}
-
-		if ($sortInfo)
-		{
-			$itemService->sortItems($groupId, $this->prepareSortInfo($groupId, $sortInfo), $pushService);
 		}
 
 		return '';

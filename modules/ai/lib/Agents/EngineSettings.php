@@ -29,6 +29,14 @@ final class EngineSettings
 			return '';
 		}
 
+		ServiceLocator::getInstance()->get(BitrixEngineRepository::class)?->deactivateEnginesByClass(
+			[
+				Engine\Cloud\ItSolution::class,
+				Engine\Cloud\ItSolutionAudio::class,
+				Engine\Cloud\ChatGPT::class,
+			]
+		);
+
 		$cloudRegistrationData = (new Configuration())->getCloudRegistrationData();
 		if (!$cloudRegistrationData)
 		{
@@ -41,14 +49,6 @@ final class EngineSettings
 		{
 			return self::class;
 		}
-
-		ServiceLocator::getInstance()->get(BitrixEngineRepository::class)?->deactivateEnginesByClass(
-			[
-				Engine\Cloud\ItSolution::class,
-				Engine\Cloud\ItSolutionAudio::class,
-				Engine\Cloud\ChatGPT::class,
-			]
-		);
 
 		return '';
 	}

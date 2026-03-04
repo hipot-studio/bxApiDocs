@@ -82,7 +82,10 @@ class Mailer extends PHPMailer
 
 		if (
 			!$this->configuration['host']
-			|| !$this->configuration['login']
+			|| (
+				$this->SMTPAuth
+				&& !$this->configuration['login']
+			)
 		)
 		{
 			return false;

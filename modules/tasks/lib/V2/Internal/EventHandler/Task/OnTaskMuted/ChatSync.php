@@ -8,7 +8,6 @@ use Bitrix\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskMutedEvent;
 use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Traits\MutexTrait;
 
 class ChatSync
@@ -17,7 +16,6 @@ class ChatSync
 
 	public function __construct(
 		private readonly ChatRepositoryInterface $chatRepository,
-		private readonly TaskReadRepositoryInterface $taskRepository,
 		private readonly Logger $logger,
 	)
 	{

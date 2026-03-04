@@ -8,6 +8,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Tasks\V2\Internal\Access\Service\TemplateRightService;
 use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\DiskArchiveLinkService;
@@ -73,6 +74,7 @@ class TemplateProvider
 		}
 
 		$modifiers = [
+			fn (): array => $this->prepareDescription($template),
 			fn (): array => $this->prepareGroup($templateParams, $template),
 			fn (): array => $this->prepareCrmItems($templateParams, $template),
 			fn (): array => $this->prepareRights($templateParams, $template),
@@ -149,5 +151,18 @@ class TemplateProvider
 		$archiveLink = $this->diskArchiveLinkService->getByTemplateId($template->getId());
 
 		return ['archiveLink' => $archiveLink];
+	}
+
+	protected function prepareDescription(Template $template): array
+	{
+		$description = $template->description;
+
+		if (!empty($description) && preg_match('/<\s*\/?\s*[a-zA-Z][a-zA-Z0-9-]*\b[^>]*>/u', $description))
+		{
+			$parse = new \CTextParser();
+			$description = $parse->convertHTMLToBB($description);
+		}
+
+		return ['description' => $description];
 	}
 }

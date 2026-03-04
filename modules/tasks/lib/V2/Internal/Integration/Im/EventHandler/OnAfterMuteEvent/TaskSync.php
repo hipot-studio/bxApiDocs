@@ -15,6 +15,8 @@ class TaskSync
 {
 	use MutexTrait;
 
+	private array $taskInMuteCache = [];
+
 	public function __construct(
 		private readonly TaskReadRepositoryInterface $repository,
 		private readonly Logger $logger,
@@ -29,26 +31,15 @@ class TaskSync
 			return;
 		}
 
-		try
-		{
-			$task = $this->repository->getById(
-				id: (int)$event->getChat()->getEntityId(),
-				select: new Select(options: true),
-			);
-		}
-		catch (\Throwable $e)
-		{
-			$this->logger->logError($e);
-			return;
-		}
+		$taskId = (int)$event->getChat()->getEntityId();
 
-		if (null === $task)
+		$taskInMute = $this->getTaskInMuteCache($taskId);
+		if ($taskInMute === null)
 		{
 			return;
 		}
 
-		$shouldSkip = $event->isMuted() === in_array($event->getUserId(), $task->inMute, true);
-
+		$shouldSkip = $event->isMuted() === in_array($event->getUserId(), $taskInMute, true);
 		if ($shouldSkip)
 		{
 			return;
@@ -56,11 +47,11 @@ class TaskSync
 
 		$command = $event->isMuted()
 			? new Command\Task\Attention\MuteTaskCommand(
-				taskId: (int)$event->getChat()->getEntityId(),
+				taskId: $taskId,
 				userId: $event->getUserId(),
 			)
 			: new Command\Task\Attention\UnmuteTaskCommand(
-				taskId: (int)$event->getChat()->getEntityId(),
+				taskId: $taskId,
 				userId: $event->getUserId(),
 			)
 		;
@@ -77,5 +68,38 @@ class TaskSync
 		}
 
 		self::unlock();
+	}
+
+
+	protected function getTaskInMuteCache(int $taskId): ?array
+	{
+		if (array_key_exists($taskId, $this->taskInMuteCache))
+		{
+			return $this->taskInMuteCache[$taskId];
+		}
+
+		try
+		{
+			$task = $this->repository->getById(
+				id: $taskId,
+				select: new Select(options: true),
+			);
+		}
+		catch (\Throwable $e)
+		{
+			$this->logger->logError($e);
+			return null;
+		}
+
+		if ($task === null)
+		{
+			$this->taskInMuteCache[$taskId] = null;
+		}
+		else
+		{
+			$this->taskInMuteCache[$taskId] = $task->inMute ?? [];
+		}
+
+		return $this->taskInMuteCache[$taskId];
 	}
 }

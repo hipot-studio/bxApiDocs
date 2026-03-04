@@ -5,6 +5,7 @@ namespace Bitrix\Tasks\Scrum\Service;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Form\EpicForm;
 use Bitrix\Tasks\Scrum\Form\ItemForm;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class PushService
 {
@@ -43,21 +44,33 @@ class PushService
 			return;
 		}
 
+		$params = [
+			'module_id' => 'tasks',
+			'command' => 'itemUpdated',
+			'params' => [
+				'id' => $updatedItem->getId(),
+				'groupId' => $entity->getGroupId(),
+				'sourceId' => $updatedItem->getSourceId(),
+				'tmpId' => $updatedItem->getTmpId(),
+				'storyPoints' => $updatedItem->getStoryPoints(),
+				...($updatedItem->getEpic() ? [
+					'epic' => $updatedItem->getEpic()->getId() > 0 ? [
+						'id' => $updatedItem->getEpic()->getId(),
+						'title' => $updatedItem->getEpic()->getName(),
+						'color' => $updatedItem->getEpic()->getColor(),
+					] : null,
+				] : []),
+			],
+		];
+
 		$tag = 'itemActions_' . $entity->getGroupId();
 
-		\CPullWatch::addToStack(
-			$tag,
-			[
-				'module_id' => 'tasks',
-				'command' => 'itemUpdated',
-				'params' => [
-					'id' => $updatedItem->getId(),
-					'groupId' => $entity->getGroupId(),
-					'sourceId' => $updatedItem->getSourceId(),
-					'tmpId' => $updatedItem->getTmpId(),
-				],
-			]
-		);
+		\CPullWatch::addToStack($tag, $params);
+
+		$memberRepository = Container::getInstance()->getTaskMemberRepository();
+		$recipients = $memberRepository->get($updatedItem->getSourceId())->getIds();
+
+		\Bitrix\Pull\Event::add($recipients, $params);
 	}
 
 	public function sendRemoveItemEvent(ItemForm $removedItem): void

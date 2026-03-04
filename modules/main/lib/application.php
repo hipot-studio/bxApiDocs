@@ -131,9 +131,6 @@ abstract class Application
 
 		if (!$this->initialized)
 		{
-			$this->initializeSessions();
-			$this->initializeSessionLocalStorage();
-
 			$this->initialized = true;
 		}
 	}
@@ -683,26 +680,46 @@ abstract class Application
 
 	final public function getSessionLocalStorageManager(): Data\LocalStorage\SessionLocalStorageManager
 	{
+		if (empty($this->sessionLocalStorageManager))
+		{
+			$this->initializeSessionLocalStorage();
+		}
+
 		return $this->sessionLocalStorageManager;
 	}
 
 	final public function getLocalSession($name): Data\LocalStorage\SessionLocalStorage
 	{
-		return $this->sessionLocalStorageManager->get($name);
+		return $this->getSessionLocalStorageManager()->get($name);
 	}
 
 	final public function getKernelSession(): SessionInterface
 	{
+		if (empty($this->kernelSession))
+		{
+			$this->initializeSessions();
+		}
+
 		return $this->kernelSession;
 	}
 
 	final public function getSession(): SessionInterface
 	{
+		if (empty($this->session))
+		{
+			$this->initializeSessions();
+		}
+
 		return $this->session;
 	}
 
 	final public function getCompositeSessionManager(): CompositeSessionManager
 	{
+		if (empty($this->compositeSessionManager))
+		{
+			$this->initializeSessions();
+		}
+
 		return $this->compositeSessionManager;
 	}
 

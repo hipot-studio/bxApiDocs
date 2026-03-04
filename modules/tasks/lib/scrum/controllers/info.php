@@ -4,11 +4,10 @@ namespace Bitrix\Tasks\Scrum\Controllers;
 
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Loader;
-use Bitrix\Tasks\Integration\Market\Router;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
-use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ScrumLimit;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class Info extends Controller
 {
@@ -45,9 +44,9 @@ class Info extends Controller
 		];
 	}
 
-	public function getMarketPathAction()
+	public function getMarketPathAction(): string
 	{
-		return Router::getBasePath() . 'collection/scrum_migration/';
+		return Container::getInstance()->getLinkService()->getMarket('collection/scrum_migration/');
 	}
 
 	public function saveAnalyticsLabelAction()

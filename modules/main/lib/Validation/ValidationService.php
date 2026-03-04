@@ -6,9 +6,11 @@ namespace Bitrix\Main\Validation;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\LocalizableMessage;
+use Bitrix\Main\Validation\Group\ValidationGroup;
 use Bitrix\Main\Validation\Rule\ClassValidationAttributeInterface;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Main\Validation\Rule\PropertyValidationAttributeInterface;
+use Bitrix\Main\Validation\Rule\ValidateByGroupInterface;
 use Generator;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -17,14 +19,16 @@ use ReflectionProperty;
 
 final class ValidationService
 {
-	public function validate(object $object): ValidationResult
+	public function validate(object $object, mixed $group = null): ValidationResult
 	{
 		$result = new ValidationResult();
 
-		$propertyResult = $this->validateByPropertyAttributes($object);
+		$group = ValidationGroup::create($group);
+		
+		$propertyResult = $this->validateByPropertyAttributes($object, $group);
 		$result->addErrors($propertyResult->getErrors());
 
-		$classResult = $this->validateByClassAttributes($object);
+		$classResult = $this->validateByClassAttributes($object, $group);
 		$result->addErrors($classResult->getErrors());
 
 		return $result;
@@ -38,18 +42,21 @@ final class ValidationService
 
 		$name = $parameter->getName();
 
-		$generator = $this->validateValue($value, $name, $attributes);
+		$generator = $this->validateValue($value, $name, $attributes, ValidationGroup::create());
 		$errors = iterator_to_array($generator);
 
 		return $result->addErrors($errors);
 	}
 
-	private function validateByClassAttributes(object $object): ValidationResult
+	private function validateByClassAttributes(object $object, ValidationGroup $group): ValidationResult
 	{
 		$result = new ValidationResult();
 
 		$class = new ReflectionClass($object);
-		$attributes = $class->getAttributes(ClassValidationAttributeInterface::class, ReflectionAttribute::IS_INSTANCEOF);
+		$attributes = $class->getAttributes(
+			ClassValidationAttributeInterface::class,
+			ReflectionAttribute::IS_INSTANCEOF
+		);
 
 		if (empty($attributes))
 		{
@@ -58,6 +65,11 @@ final class ValidationService
 
 		foreach ($attributes as $attribute)
 		{
+			if (!$this->isAttributeInGroup($attribute, $group))
+			{
+				continue;
+			}
+
 			$attributeInstance = $attribute->newInstance();
 			$attributeErrors = $attributeInstance->validateObject($object)->getErrors();
 			$result->addErrors($attributeErrors);
@@ -66,7 +78,7 @@ final class ValidationService
 		return $result;
 	}
 
-	private function validateByPropertyAttributes(object $object): ValidationResult
+	private function validateByPropertyAttributes(object $object, ValidationGroup $group): ValidationResult
 	{
 		$result = new ValidationResult();
 
@@ -75,7 +87,7 @@ final class ValidationService
 		{
 			if ($property->isInitialized($object))
 			{
-				$generator = $this->validateProperty($property, $object);
+				$generator = $this->validateProperty($property, $object, $group);
 				$errors = iterator_to_array($generator);
 				$result->addErrors($errors);
 
@@ -93,39 +105,44 @@ final class ValidationService
 				continue;
 			}
 
-			if (!$type->allowsNull())
-			{
-				$result->addError(new ValidationError(
+			$result->addError(
+				new ValidationError(
 					new LocalizableMessage('MAIN_VALIDATION_EMPTY_PROPERTY'),
 					$property->getName()
-				));
-			}
+				)
+			);
 		}
 
 		return $result;
 	}
 
-	private function validateProperty(ReflectionProperty $property, object $object): Generator
+	private function validateProperty(ReflectionProperty $property, object $object, ValidationGroup $group): Generator
 	{
 		$attributes = $this->getValidationAttributes($property);
 
 		$name = $property->getName();
 		$value = $property->getValue($object);
 
-		yield from $this->validateValue($value, $name, $attributes);
+		yield from $this->validateValue($value, $name, $attributes, $group);
 	}
 
-	private function validateValue(mixed $value, string $name, array $attributes): Generator
+	private function validateValue(mixed $value, string $name, array $attributes, ValidationGroup $group): Generator
 	{
 		foreach ($attributes as $attribute)
 		{
+			/** @var ReflectionAttribute $attribute */
 			$attributeInstance = $attribute->newInstance();
+
+			if (!$this->isAttributeInGroup($attribute, $group))
+			{
+				continue;
+			}
 
 			if ($attributeInstance instanceof Validatable)
 			{
 				yield from $this->setErrorCodes(
 					$name,
-					$this->validateValidatableProperty($value, $attributeInstance)
+					$this->validateValidatableProperty($value, $attributeInstance, $group)
 				);
 			}
 			elseif ($attributeInstance instanceof PropertyValidationAttributeInterface)
@@ -138,7 +155,7 @@ final class ValidationService
 		}
 	}
 
-	private function validateValidatableProperty(mixed $value, Validatable $attributeInstance): Generator
+	private function validateValidatableProperty(mixed $value, Validatable $attributeInstance, ValidationGroup $group): Generator
 	{
 		if ($value === null)
 		{
@@ -152,7 +169,7 @@ final class ValidationService
 				throw new ArgumentException('Only objects can be marked as Validatable');
 			}
 
-			yield from $this->validate($value)->getErrors();
+			yield from $this->validate($value, $group)->getErrors();
 
 			return;
 		}
@@ -169,7 +186,7 @@ final class ValidationService
 				throw new ArgumentException('Only objects can be Validatable inside an iterable');
 			}
 
-			$attributeErrors = $this->validate($item)->getErrors();
+			$attributeErrors = $this->validate($item, $group)->getErrors();
 
 			yield from $this->setErrorCodes((string)$i, $attributeErrors);
 		}
@@ -194,5 +211,35 @@ final class ValidationService
 			$parameter->getAttributes(Validatable::class, ReflectionAttribute::IS_INSTANCEOF),
 			$parameter->getAttributes(PropertyValidationAttributeInterface::class, ReflectionAttribute::IS_INSTANCEOF)
 		);
+	}
+
+	private function isAttributeInGroup(ReflectionAttribute $attribute, ValidationGroup $group): bool
+	{
+		if ($group->isNull())
+		{
+			return true;
+		}
+
+		$attributeInstance = $attribute->newInstance();
+		if (!$attributeInstance instanceof ValidateByGroupInterface)
+		{
+			return true;
+		}
+
+		$attributeGroups = $attributeInstance->getGroups();
+		if (empty($attributeGroups))
+		{
+			return true;
+		}
+
+		foreach ($attributeGroups as $attributeGroup)
+		{
+			if ($group->isEquals(ValidationGroup::create($attributeGroup)))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

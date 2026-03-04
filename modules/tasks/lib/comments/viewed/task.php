@@ -58,8 +58,12 @@ class Task
 		{
 			$userJoin .= " AND TM.TYPE = '". $memberRole ."'";
 		}
+		else
+		{
+			$role = null;
+		}
 
-		$this->markAsRead($currentUserId, $userJoin, $groupCondition, $groupId);
+		$this->markAsRead($currentUserId, $userJoin, $groupCondition, $groupId, $role);
 
 		Container::getInstance()->get(Counter\Service::class)->send(
 			new Counter\Command\AfterCommentsReadAll(
@@ -175,7 +179,7 @@ class Task
 				groupId: $groupId,
 			),
 		);
-	
+
 		return true;
 	}
 
@@ -183,17 +187,26 @@ class Task
 	 * @param int $userId
 	 * @param string $userJoin
 	 * @param string $groupCondition
+	 * @param int|null $groupId
+	 * @param string|null $role
 	 * @throws ArgumentTypeException
 	 * @throws SqlQueryException
 	 */
-	private function markAsRead(int $userId, string $userJoin, string $groupCondition = '', ?int $groupId = null): void
+	private function markAsRead(
+		int $userId,
+		string $userJoin,
+		string $groupCondition = '',
+		?int $groupId = null,
+		?string $role = null
+	): void
 	{
 		UserTopic::onReadAll($userId, $userJoin, $groupCondition);
 		ViewedTable::readAll($userId, $userJoin, $groupCondition);
 
 		Container::getInstance()->get(ReadAllMessagesQuery::class)->execute(
 			userId: $userId,
-			groupId: $groupId,
+			groupId: $groupId > 0 ? $groupId : null,
+			role: $role,
 		);
 	}
 }

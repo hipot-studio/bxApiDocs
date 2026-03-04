@@ -283,7 +283,6 @@ class File extends BaseObject
 	/**
 	 * Returns file (@see CFile::getById());
 	 * @return array|null
-	 * @throws \Bitrix\Main\NotImplementedException
 	 */
 	public function getFile()
 	{
@@ -301,7 +300,7 @@ class File extends BaseObject
 
 		if(!$this->file)
 		{
-			return array();
+			return [];
 		}
 
 		return $this->file;

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Integration\IM\Notification\UseCase;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Integration\IM\Notification;
 use Bitrix\Tasks\Internals\Notification\Message;
 
@@ -15,6 +16,8 @@ class TaskDeletedV2
 		{
 			return null;
 		}
+
+		Loc::loadMessages(__FILE__);
 
 		$titleTemplate = new Notification\Template(
 			'#TASK_TITLE#',

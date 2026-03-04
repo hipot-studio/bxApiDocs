@@ -8,17 +8,17 @@ use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterSendMessageEvent;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Integration\Pull\Push;
 use Bitrix\Tasks\V2\Internal\Logger;
-use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 
 class SendPushNotification
 {
 	public function __construct
 	(
-		private readonly TaskReadRepositoryInterface $repository,
+		private readonly TaskRepositoryInterface $repository,
 		private readonly Push\Service $push,
 		private readonly Logger $logger,
-	) {
+	)
+	{
 	}
 
 	public function __invoke(AfterSendMessageEvent $event): void
@@ -30,7 +30,7 @@ class SendPushNotification
 
 		try
 		{
-			$task = $this->repository->getById((int)$event->getChat()->getEntityId(), select: new Select(members: true));
+			$task = $this->repository->getById((int)$event->getChat()->getEntityId());
 		}
 		catch (\Throwable $e)
 		{

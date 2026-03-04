@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Integration\IM\Notification\UseCase;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Integration\IM\Notification;
 use Bitrix\Tasks\Internals\Notification\Message;
 use Bitrix\Tasks\Internals\Notification\UseCase\TaskUpdatedV2Action;
@@ -13,18 +14,20 @@ class TaskUpdatedV2
 	{
 		$metadata = $message->getMetaData();
 		$task = $metadata->getTask();
-		$userRepository = $metadata->getUserRepository();
 		$action = $metadata->getParams()['update_action'] ?? null;
 
-		if ($task === null || $userRepository === null || $action === null)
+		if ($task === null || $action === null)
 		{
 			return null;
 		}
+
+		Loc::loadMessages(__FILE__);
 
 		return match ($action) {
 			TaskUpdatedV2Action::RemoveUser => $this->makeRemoveUserNotification($message, $task),
 			TaskUpdatedV2Action::AddAsAuditor => $this->makeAddAsAuditorNotification($message, $task),
 			TaskUpdatedV2Action::AddAsAccomplice => $this->makeAddAsAccompliceNotification($message, $task),
+			TaskUpdatedV2Action::AddAsResponsible => $this->makeAddAsResponsibleNotification($message, $task),
 			default => null,
 		};
 	}
@@ -35,7 +38,7 @@ class TaskUpdatedV2
 			$message,
 			$task,
 			'TASKS_IM_NOTIFY_REMOVE_FROM_TASK_MESSAGE',
-			'TASKS_IM_NOTIFY_REMOVE_FROM_TASK_SUBJECT'
+			'TASKS_IM_NOTIFY_REMOVE_FROM_TASK_SUBJECT',
 		);
 	}
 
@@ -45,7 +48,7 @@ class TaskUpdatedV2
 			$message,
 			$task,
 			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_AUDITOR_MESSAGE',
-			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_AUDITOR_SUBJECT'
+			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_AUDITOR_SUBJECT',
 		);
 	}
 
@@ -55,11 +58,26 @@ class TaskUpdatedV2
 			$message,
 			$task,
 			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_ACCOMPLICE_MESSAGE',
-			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_ACCOMPLICE_SUBJECT'
+			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_ACCOMPLICE_SUBJECT',
 		);
 	}
 
-	private function makeNotify(Message $message, TaskObject $task, string $messageLocKey, string $subjectLocKey): Notification
+	private function makeAddAsResponsibleNotification(Message $message, TaskObject $task): Notification
+	{
+		return $this->makeNotify(
+			$message,
+			$task,
+			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_RESPONSIBLE_MESSAGE',
+			'TASKS_IM_NOTIFY_ADD_IN_TASK_AS_RESPONSIBLE_SUBJECT',
+		);
+	}
+
+	private function makeNotify(
+		Message $message,
+		TaskObject $task,
+		string $messageLocKey,
+		string $subjectLocKey
+	): Notification
 	{
 		$titleTemplate = $this->makeTitleTemplate($message, $task);
 

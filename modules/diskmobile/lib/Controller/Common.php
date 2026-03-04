@@ -82,8 +82,12 @@ class Common extends Base
 			['id' => $id, 'showRights' => $showRights],
 		);
 
-		$diskObject = $this->trackedToItem($trackedDiskObject);
+		if (!isset($trackedDiskObject) || !$this->errorCollection->isEmpty())
+		{
+			return [];
+		}
 
+		$diskObject = $this->trackedToItem($trackedDiskObject);
 
 		return [
 			'diskObject'=> $diskObject,

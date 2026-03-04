@@ -65,17 +65,6 @@ class ResultService
 	{
 		$task = $this->getTask($taskId)->cloneWith(['requireResult' => $require]);
 
-		if ($require)
-		{
-			$this->chatNotification->notify(
-				NotificationType::ResultRequested,
-				$task,
-				[
-					'triggeredBy' => $this->userRepository->getByIds([$userId])->findOneById($userId)
-				]
-			);
-		}
-
 		$config = new UpdateConfig(
 			userId: $userId,
 			useConsistency: $useConsistency,
@@ -198,13 +187,19 @@ class ResultService
 			throw new ResultNotFoundException('Result not found');
 		}
 
-		$updatedResult = Result::mapFromArray([
-			...$resultInDb->toArray(),
-			...array_filter(
-				$result->toArray(),
-				static fn($value) => $value !== null
-			),
-		]);
+		$updatedResult = new Result(
+			id: $resultInDb->id,
+			taskId: $resultInDb->taskId,
+			text: $result->text ?? $resultInDb->text,
+			author: $resultInDb->author,
+			createdAtTs: $resultInDb->createdAtTs,
+			updatedAtTs: time(),
+			status: $result->status ?? $resultInDb->status,
+			type: $result->type ?? $resultInDb->type,
+			fileIds: $result->fileIds ?? $resultInDb->fileIds,
+			previewId: $result->previewId ?? $resultInDb->previewId,
+			messageId: $resultInDb->messageId,
+		);
 
 		$this->taskResultRepository->save($updatedResult, $userId);
 

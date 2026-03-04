@@ -663,6 +663,11 @@ abstract class CheckListTree
 	{
 		$id = (int)$id;
 
+		if (static::isNodeExist($id))
+		{
+			return true;
+		}
+
 		/** @var DataManager $dataController */
 		$dataController = static::getDataController();
 		$parentColumnName = static::getParentNodeColumnName();
@@ -679,6 +684,11 @@ abstract class CheckListTree
 		}
 		catch (Exception $exception)
 		{
+			if (static::isNodeExist($id))
+			{
+				return true;
+			}
+
 			return false;
 		}
 

@@ -5,7 +5,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Esg\Handler;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Elapsed\Source;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\AddElapsedTimeCommand;
@@ -15,7 +15,7 @@ class ElapsedTimeHandler implements EgressHandlerInterface
 {
 	public function __construct(
 		private readonly ChatNotificationInterface $chatNotification,
-		private readonly TaskReadRepositoryInterface $taskReadRepository,
+		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly UserRepositoryInterface $userRepository,
 	)
 	{
@@ -37,7 +37,7 @@ class ElapsedTimeHandler implements EgressHandlerInterface
 			return;
 		}
 
-		$task = $this->taskReadRepository->getById($elapsedTime->taskId);
+		$task = $this->taskRepository->getById($elapsedTime->taskId);
 
 		if (!$task)
 		{

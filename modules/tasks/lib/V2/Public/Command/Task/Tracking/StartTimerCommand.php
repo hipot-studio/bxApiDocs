@@ -36,6 +36,10 @@ class StartTimerCommand extends AbstractCommand
 		try
 		{
 			$timer = $handler($this);
+			if (!$timer)
+			{
+				return $result;
+			}
 
 			return $result->setObject($timer);
 		}

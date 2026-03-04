@@ -142,6 +142,12 @@ class VoximplantLinesComponent extends \CBitrixComponent
 		);
 		$result["GRID_ID"] = $this->gridId;
 		$result["TELEPHONY_AVAILABLE"] = \Bitrix\Voximplant\Limits::canManageTelephony();
+
+		// Check for INTERNOD agreement warning
+		$accountVerification = new \Bitrix\Voximplant\AccountVerification();
+		$result['SHOW_INTERNOD_WARNING'] = $accountVerification->hasInternodWarning();
+		$result['INTERNOD_DEADLINE'] = $accountVerification->getInternodDeadline();
+
 		return $result;
 	}
 
@@ -247,6 +253,13 @@ class VoximplantLinesComponent extends \CBitrixComponent
 		else
 		{
 			$state = "<span class='voximplant-grid-state-active'>" . CVoxImplantPhone::getNumberStatus($numberFields) . "</span>";
+		}
+
+		if (!empty($numberFields['ACTIVATION_STATUS'])) {
+			$state .= "<br /><span class='voximplant-grid-activation-state-" . mb_strtolower($numberFields['ACTIVATION_STATUS'])
+				. "' title='" . $numberFields['ACTIVATION_STATUS_DESC'] . "'>"
+				. $numberFields['ACTIVATION_STATUS_NAME']
+				. "</span>";
 		}
 
 		return [

@@ -13,6 +13,7 @@ abstract class RecipientsResolver
 	public AbstractNotify $notification;
 	public Entity\Task $task;
 	public ?Entity\Task $taskWithMembers = null;
+	public ?array $inMuteMembers = null;
 	public Entity\UserCollection $recipients;
 
 	public function __construct(

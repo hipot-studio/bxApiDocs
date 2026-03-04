@@ -30,14 +30,14 @@ class UserMapper
 		foreach ($users as $user)
 		{
 			$userId = (int)$user['ID'];
-			$personalPhoto = $files?->findOneById((int)$user['PERSONAL_PHOTO']);
+			$personalPhoto = !empty($user['PERSONAL_PHOTO']) ? $files?->findOneById((int)$user['PERSONAL_PHOTO']) : null;
 			$gender = $user['PERSONAL_GENDER'] ?? '';
 			$email = is_string($user['EMAIL'] ?? null) ? $user['EMAIL'] : null;
 
 			$result[] = new Entity\User(
 				id: $userId,
 				name: $this->nameService->format($user),
-				type: $this->getUserType($userId),
+				type: $this->getUserType($user),
 				image: $personalPhoto ? $this->photoService->resize($personalPhoto) : null,
 				gender: Entity\User\Gender::tryFrom($gender) ?? Entity\User\Gender::Male,
 				email: $email,
@@ -47,10 +47,21 @@ class UserMapper
 		return new UserCollection(...$result);
 	}
 
-	private function getUserType(int $userId): Entity\User\Type
+	private function getUserType(array $user): Entity\User\Type
 	{
-		$isExtranet = Extranet\User::isExtranet($userId);
-		$isCollaber = Extranet\User::isExtranet($userId) && Extranet\User::isCollaber($userId);
+		$userId = (int)$user['ID'];
+		$hasDepartmentField = isset($user['UF_DEPARTMENT']) && is_array($user['UF_DEPARTMENT']);
+
+		if ($hasDepartmentField)
+		{
+			$isExtranet = empty($user['UF_DEPARTMENT']);
+		}
+		else
+		{
+			$isExtranet = Extranet\User::isExtranet($userId);
+		}
+
+		$isCollaber = $isExtranet && Extranet\User::isCollaber($userId);
 
 		if ($isCollaber)
 		{

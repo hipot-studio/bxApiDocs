@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Internals\Task\Template;
 
+use Bitrix\Main\ORM\Data\AddStrategy;
 use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -64,7 +65,8 @@ class TemplateMemberTable extends TaskDataManager
 	{
 		return [
 			(new IntegerField('ID'))
-				->configurePrimary(),
+				->configurePrimary()
+				->configureAutocomplete(),
 
 			(new IntegerField('TEMPLATE_ID')),
 
@@ -77,5 +79,13 @@ class TemplateMemberTable extends TaskDataManager
 
 			(new Reference('TEMPLATE', TemplateTable::getEntity(), Join::on('this.TEMPLATE_ID', 'ref.ID'))),
 		];
+	}
+
+	protected static function getInsertIgnoreStrategy(): AddStrategy\Contract\AddStrategy
+	{
+		return new AddStrategy\InsertIgnore(
+			static::getEntity(),
+			['TEMPLATE_ID', 'USER_ID', 'TYPE'],
+		);
 	}
 }

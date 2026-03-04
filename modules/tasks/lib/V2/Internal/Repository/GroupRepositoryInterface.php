@@ -12,6 +12,8 @@ interface GroupRepositoryInterface
 
 	public function getMembers(int $id): Entity\UserCollection;
 
+	public function getMemberRoles(array $userIds, int $groupId): Entity\UserCollection;
+
 	public function getType(int $id): ?string;
 
 	public function getByIds(array $ids): Entity\GroupCollection;

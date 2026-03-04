@@ -322,7 +322,7 @@ class CAutoCheck
 
 			$message = "";
 			$unknownMessage = "";
-			if (empty($result["error"]))
+			if (!empty($result) && empty($result["error"]))
 			{
 				$except = [
 					'SUBDIR' => [
@@ -391,7 +391,7 @@ class CAutoCheck
 			}
 			else
 			{
-				if ($result["error"] != "unknow module id")
+				if (empty($result) || $result["error"] != "unknow module id")
 				{
 					$state["MESSAGE"] = GetMessage("CL_CANT_CHECK", ["#module_id#" => $moduleId]) . "\n";
 					$arError = true;

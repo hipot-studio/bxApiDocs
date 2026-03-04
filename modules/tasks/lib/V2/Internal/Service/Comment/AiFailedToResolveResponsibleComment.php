@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Comment;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Comments\Internals\Comment;
+use Bitrix\Tasks\Integration\AI;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Comment\Trait\LoadMessagesTrait;
 use Bitrix\Tasks\V2\Internal\Service\User\Trait\FormatUserTrait;
@@ -16,12 +17,13 @@ class AiFailedToResolveResponsibleComment extends Comment
 	use FormatUserTrait;
 	use LoadMessagesTrait;
 
-	private const MESSAGE_KEY = 'COMMENT_POSTER_COMMENT_TASK_ADD_AI_FAILED_TO_RESOLVE_RESPONSIBLE';
+	private const MESSAGE_KEY = 'COMMENT_POSTER_COMMENT_TASK_ADD_AI_FAILED_TO_RESOLVE_RESPONSIBLE_MSGVER_1';
 
 	public function __construct(Entity\Task $task)
 	{
 		$replace = [
 			'#RESPONSIBLE#' => $this->formatUser($task->responsible),
+			'#COPILOT_NAME#' => AI\Settings::getCopilotName(),
 		];
 
 		$this->loadPosterMessages();

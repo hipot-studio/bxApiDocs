@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
+use Bitrix\Disk\File;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Integration\Disk\Provider\DiskFileProvider;
 
 #[Recipients(creator: false, responsible: false, accomplices: false, auditors: false)]
 class NotifyFilesChanged extends AbstractNotify implements ShouldSend
@@ -16,26 +15,17 @@ class NotifyFilesChanged extends AbstractNotify implements ShouldSend
 	public function __construct(
 		private readonly Entity\Task $task,
 		protected readonly ?Entity\User $triggeredBy = null,
-		protected readonly ?array $fileIds = null,
+		protected readonly ?int $fileId = null,
 	) {
 	}
 
 	public function getMessageCode(): string
 	{
-		$filesCount = $this->fileIds ? count($this->fileIds) : 1;
 		$gender = $this->triggeredBy?->getGender();
 
-		if ($filesCount === 1)
-		{
-			return match ($gender) {
-				Entity\User\Gender::Female => 'TASKS_IM_TASK_FILE_MODIFIED_F',
-				default => 'TASKS_IM_TASK_FILE_MODIFIED_M',
-			};
-		}
-
 		return match ($gender) {
-			Entity\User\Gender::Female => 'TASKS_IM_TASK_FILES_MODIFIED_F',
-			default => 'TASKS_IM_TASK_FILES_MODIFIED_M',
+			Entity\User\Gender::Female => 'TASKS_IM_TASK_FILE_MODIFIED_F',
+			default => 'TASKS_IM_TASK_FILE_MODIFIED_M',
 		};
 	}
 
@@ -50,17 +40,14 @@ class NotifyFilesChanged extends AbstractNotify implements ShouldSend
 	{
 		$attach = new \CIMMessageParamAttach();
 
-		if (!empty($this->fileIds) && Loader::includeModule('disk'))
+		if (!empty($this->fileId) && Loader::includeModule('disk'))
 		{
-			$diskFileProvider = Container::getInstance()->get(DiskFileProvider::class);
-			$files = $diskFileProvider->getObjectsByIds($this->fileIds);
+			$file = File::getById($this->fileId);
 
-			$fileNames = array_map(static fn($file) => $file['name'], $files->toArray());
-
-			if (!empty($fileNames))
+			if ($file !== null)
 			{
 				$attach->AddMessage('[b]' . Loc::getMessage('TASKS_IM_NOTIFY_ATTACH_FILE') . '[/b][br]');
-				$attach->AddMessage(implode('[br]', $fileNames));
+				$attach->AddMessage($file->getName());
 
 				return $attach;
 			}

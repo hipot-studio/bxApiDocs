@@ -291,10 +291,10 @@ final class Configuration
 		) == 'Y';
 	}
 
-	public static function getDefaultViewerServiceCode()
+	public static function getDefaultViewerServiceCode($useCache = true)
 	{
 		static $service = null;
-		if ($service !== null)
+		if ($service !== null && $useCache)
 		{
 			return $service;
 		}

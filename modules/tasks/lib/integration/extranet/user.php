@@ -11,11 +11,11 @@
 namespace Bitrix\Tasks\Integration\Extranet;
 
 use Bitrix\Extranet\Service\ServiceContainer;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\IntranetUserCheckService;
 
 final class User extends \Bitrix\Tasks\Integration\Extranet
 {
-	protected static $cache = array();
-
 	public static function getAccessible($userId)
 	{
 		if(!static::includeModule())
@@ -24,11 +24,6 @@ final class User extends \Bitrix\Tasks\Integration\Extranet
 		}
 
 		return \CExtranet::getMyGroupsUsersSimple(\CExtranet::getExtranetSiteID(), array('userId' => $userId));
-	}
-
-	public static function clear()
-	{
-		static::$cache = array();
 	}
 
 	public static function isExtranet($user = 0)
@@ -49,20 +44,13 @@ final class User extends \Bitrix\Tasks\Integration\Extranet
 				$user = \Bitrix\Tasks\Util\User::getId(); // check current
 			}
 
-			if(array_key_exists($user, static::$cache))
-			{
-				return static::$cache[$user];
-			}
-
 			$result = false;
-
-			$user = intval($user);
+			$user = (int)$user;
 			if($user)
 			{
-				$result = !\CExtranet::IsIntranetUser(SITE_ID, $user);
+				$intranetUserChecker = Container::getInstance()->get(IntranetUserCheckService::class);
+				$result = $intranetUserChecker->isExtranet($user);
 			}
-
-			static::$cache[$user] = $result;
 		}
 
 		return $result;

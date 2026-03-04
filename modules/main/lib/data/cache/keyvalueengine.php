@@ -328,14 +328,12 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 	protected function getInitDirVersion($baseDir, $initDir = false, bool $create = true): string
 	{
 		$baseDirVersion = $this->getBaseDirVersion($baseDir);
-		$initDirHash = sha1($baseDir . '|' . $initDir);
-
 		$key = $this->getInitDirKey($baseDirVersion, $baseDir, $initDir);
 		$initDirVersion = $this->get($key);
 
 		if ($initDirVersion == '' && $create)
 		{
-			$initDirVersion = sha1($initDirHash . '|' . mt_rand() . '|' . microtime());
+			$initDirVersion = sha1($baseDir . '|' . $initDir . '|' . mt_rand() . '|' . microtime());
 			$this->set($key, 0, $initDirVersion);
 		}
 
@@ -359,7 +357,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 
 		if (static::$baseDirVersion[$key] == '')
 		{
-			static::$baseDirVersion[$key] = sha1(sha1($baseDir) . '|' . mt_rand() . '|' . microtime());
+			static::$baseDirVersion[$key] = sha1($baseDir . '|' . mt_rand() . '|' . microtime());
 			$this->set($key, 0, static::$baseDirVersion[$key]);
 		}
 

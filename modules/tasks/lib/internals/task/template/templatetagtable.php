@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Internals\Task\Template;
 
+use Bitrix\Main\ORM\Data\AddStrategy;
 use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -49,7 +50,8 @@ class TemplateTagTable extends TaskDataManager
 	{
 		return [
 			(new IntegerField('ID'))
-				->configurePrimary(),
+				->configurePrimary()
+				->configureAutocomplete(),
 			(new IntegerField('TEMPLATE_ID')),
 
 			(new IntegerField('USER_ID')),
@@ -66,5 +68,13 @@ class TemplateTagTable extends TaskDataManager
 				'MAX(%s)', ['ID']
 			)),
 		];
+	}
+
+	protected static function getInsertIgnoreStrategy(): AddStrategy\Contract\AddStrategy
+	{
+		return new AddStrategy\InsertIgnore(
+			static::getEntity(),
+			['TEMPLATE_ID', 'USER_ID', 'NAME'],
+		);
 	}
 }

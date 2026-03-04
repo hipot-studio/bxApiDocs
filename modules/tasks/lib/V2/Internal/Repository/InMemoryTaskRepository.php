@@ -141,8 +141,16 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 		return $this->taskRepository->countRecentTaskIdsWithChatIds($userId);
 	}
 
-	public function findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(int $userId, ?int $groupId = null): array
+	public function findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(
+		int $userId,
+		?int $groupId = null,
+		?string $role = null,
+	): array
 	{
-		return $this->taskRepository->findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId($userId, $groupId);
+		return $this->taskRepository->findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(
+			$userId,
+			$groupId,
+			$role,
+		);
 	}
 }

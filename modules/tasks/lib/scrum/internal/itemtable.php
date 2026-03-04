@@ -66,8 +66,12 @@ class ItemTable extends Entity\DataManager
 
 		$description = new Fields\TextField('DESCRIPTION');
 
-		$sort = new Fields\IntegerField('SORT');
-		$sort->configureDefaultValue(0);
+		$sort = new Fields\FloatField('SORT_FLOAT');
+		$sort->configureDefaultValue(0.00);
+
+		// todo remove later
+		$oldSort = new Fields\IntegerField('SORT');
+		$oldSort->configureDefaultValue(0);
 
 		$createdBy = new Fields\IntegerField('CREATED_BY');
 
@@ -112,6 +116,7 @@ class ItemTable extends Entity\DataManager
 			$name,
 			$description,
 			$sort,
+			$oldSort,
 			$createdBy,
 			$modifiedBy,
 			$storyPoints,

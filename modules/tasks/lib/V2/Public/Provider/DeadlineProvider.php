@@ -9,6 +9,7 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Deadline\Policy\DeadlinePolicy;
+use Bitrix\Tasks\Deadline\Policy\DeadlinePolicyChangeContext;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
 
@@ -50,11 +51,17 @@ class DeadlineProvider
 			reason: $task->deadlineChangeReason,
 		);
 
+		$result->setData([
+			'canChangeContext' => new DeadlinePolicyChangeContext(
+				isAllowed: $allowed,
+				isDateExceedsLimit: in_array('date_exceeds_limit', $violations, true),
+				dateLimit: $task->maxDeadlineChangeDate,
+			)
+		]);
+
 		if (!$allowed)
 		{
 			$result->addError(new Error('Cannot change deadline: ' . implode(', ', $violations)));
-
-			return $result;
 		}
 
 		return $result;

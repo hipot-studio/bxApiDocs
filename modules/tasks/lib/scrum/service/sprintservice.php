@@ -188,7 +188,7 @@ class SprintService implements Errorable
 			$itemIds = $itemService->getItemIdsBySourceIds($completedTaskIds, [$sprint->getId()]);
 			if (!$itemService->getErrors())
 			{
-				$itemService->moveItemsToEntity($backlog->getGroupId(), $itemIds, $backlog->getId(), $pushService);
+				$itemService->moveItemsToEntity($itemIds, $backlog->getId(), $pushService);
 			}
 
 			$subTaskIds = [];
@@ -401,7 +401,7 @@ class SprintService implements Errorable
 				return $sprint;
 			}
 
-			$itemService->moveItemsToEntity($entity->getGroupId(), $itemIds, $entity->getId(), $pushService);
+			$itemService->moveItemsToEntity($itemIds, $entity->getId(), $pushService);
 
 			$result = EntityTable::update($sprint->getId(), $sprint->getFieldsToUpdateEntity());
 

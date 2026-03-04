@@ -30,6 +30,11 @@ class CVoxImplantComponentConfigRent extends \CBitrixComponent
 		$account = new CVoxImplantAccount();
 		$this->arResult['CURRENT_BALANCE'] = $account->GetAccountBalance();
 
+		// Check for INTERNOD agreement warning
+		$accountVerification = new \Bitrix\Voximplant\AccountVerification();
+		$this->arResult['SHOW_INTERNOD_WARNING'] = $accountVerification->hasInternodWarning();
+		$this->arResult['INTERNOD_DEADLINE'] = $accountVerification->getInternodDeadline();
+
 		$this->arResult['IFRAME'] = $this->request['IFRAME'] === 'Y';
 	}
 

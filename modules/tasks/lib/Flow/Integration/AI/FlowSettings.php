@@ -67,18 +67,40 @@ final class FlowSettings extends Settings
 			return $result;
 		}
 
+		$copilotName = Settings::getCopilotName();
+
 		if (Engine::getByCategory(self::TEXT_CATEGORY, Context::getFake()))
 		{
 			$groups[self::TUNING_CODE_FLOWS_GROUP] = [
-				'title' => Loc::getMessage('TASKS_AI_SETTINGS_FLOWS_COPILOT_TITLE'),
-				'description' => Loc::getMessage('TASKS_AI_SETTINGS_FLOWS_COPILOT_DESC'),
+				'title' => Loc::getMessage(
+					'TASKS_AI_SETTINGS_FLOWS_COPILOT_TITLE_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
+				'description' => Loc::getMessage(
+					'TASKS_AI_SETTINGS_FLOWS_COPILOT_DESC_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
 				'helpdesk' => self::HELPDESK_ID,
 			];
 
 			$items[self::TUNING_CODE_FLOWS_TEXT] = [
 				'group' => self::TUNING_CODE_FLOWS_GROUP,
-				'title' => Loc::getMessage('TASKS_AI_SETTINGS_FLOWS_COPILOT_TITLE'),
-				'header' => Loc::getMessage('TASKS_AI_SETTINGS_ALLOW_FLOWS_COPILOT_DESC'),
+				'title' => Loc::getMessage(
+					'TASKS_AI_SETTINGS_FLOWS_COPILOT_TITLE_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
+				'header' => Loc::getMessage(
+					'TASKS_AI_SETTINGS_ALLOW_FLOWS_COPILOT_DESC_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
 				'sort' => 10,

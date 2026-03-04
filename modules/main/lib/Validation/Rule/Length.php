@@ -9,12 +9,13 @@ use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\Validator\LengthValidator;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Length extends AbstractPropertyValidationAttribute
+class Length extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly ?int $min = null,
 		private readonly ?int $max = null,
 		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
 	}
@@ -23,5 +24,10 @@ class Length extends AbstractPropertyValidationAttribute
 		return [
 			(new LengthValidator($this->min, $this->max)),
 		];
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 }

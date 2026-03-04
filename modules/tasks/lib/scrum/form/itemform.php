@@ -6,10 +6,14 @@ use Bitrix\Main\ArgumentNullException;
 
 class ItemForm
 {
+	private const MAX_SORT_VALUE = 255;
+	public const DEFAULT_SORT_VALUE = 1024.0;
+
 	private $id = 0;
 	private $entityId = 0;
 	private $typeId = 0;
 	private $epicId = null;
+	private ?EpicForm $epic = null;
 	private $active = 'Y';
 	private $name = '';
 	private $description = '';
@@ -37,7 +41,7 @@ class ItemForm
 			'active' => $this->getActive(),
 			'name' => $this->getName(),
 			'description' => $this->getDescription(),
-			'sort' => $this->getSort(),
+			'sort' => $this->getSortFloat(),
 			'createdBy' => $this->getCreatedBy(),
 			'modifiedBy' => $this->getModifiedBy(),
 			'storyPoints' => $this->getStoryPoints(),
@@ -94,7 +98,7 @@ class ItemForm
 
 		if ($this->sort !== null)
 		{
-			$fields['SORT'] = $this->sort;
+			$fields['SORT_FLOAT'] = $this->sort;
 		}
 
 		if ($this->createdBy)
@@ -133,7 +137,7 @@ class ItemForm
 		return [
 			'ENTITY_ID' => $this->entityId,
 			'ACTIVE' => 'Y',
-			'SORT' => $this->getSort(),
+			'SORT_FLOAT' => $this->getSortFloat(),
 			'CREATED_BY' => $this->createdBy,
 			'MODIFIED_BY' => $this->createdBy,
 			'STORY_POINTS' => $this->storyPoints,
@@ -184,9 +188,9 @@ class ItemForm
 			$this->setDescription($fields['DESCRIPTION']);
 		}
 
-		if ($fields['SORT'] ?? null)
+		if ($fields['SORT_FLOAT'] ?? null)
 		{
-			$this->setSort($fields['SORT']);
+			$this->setSortFloat($fields['SORT_FLOAT']);
 		}
 
 		if ($fields['CREATED_BY'] ?? null)
@@ -255,6 +259,16 @@ class ItemForm
 		$this->epicId = (is_numeric($epicId) ? (int) $epicId : 0);
 	}
 
+	public function getEpic(): ?EpicForm
+	{
+		return $this->epic;
+	}
+
+	public function setEpic(?EpicForm $epic): void
+	{
+		$this->epic = $epic;
+	}
+
 	public function getActive(): string
 	{
 		return $this->active;
@@ -290,14 +304,48 @@ class ItemForm
 		$this->description = (is_string($description) ? $description : '');
 	}
 
+	/**
+	 * @deprecated Use getSortFloat() instead
+	 */
 	public function getSort(): int
 	{
-		return $this->sort === null ? 0 : $this->sort;
+		if ($this->sort === null)
+		{
+			return 0;
+		}
+
+		$floatValue = $this->sort;
+		$rounded = (int)round($floatValue);
+
+		if ($rounded > self::MAX_SORT_VALUE)
+		{
+			return self::MAX_SORT_VALUE;
+		}
+
+		if ($rounded < 0)
+		{
+			return 0;
+		}
+
+		return $rounded;
 	}
 
+	public function getSortFloat(): float
+	{
+		return $this->sort === null ? self::DEFAULT_SORT_VALUE : (float)$this->sort;
+	}
+
+	/**
+	 * @deprecated Use setSortFloat() instead
+	 */
 	public function setSort($sort): void
 	{
-		$this->sort = (is_numeric($sort) ? (int) $sort : 0);
+		$this->sort = (float)$sort;
+	}
+
+	public function setSortFloat(int|float $sort): void
+	{
+		$this->sort = $sort ? (float)$sort : self::DEFAULT_SORT_VALUE;
 	}
 
 	public function getCreatedBy(): int

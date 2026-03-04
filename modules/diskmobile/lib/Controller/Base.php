@@ -38,7 +38,7 @@ class Base extends Controller
 			[
 				'trackedId' => (int)$trackedObject['id'],
 			],
-			$trackedObject['file'],
+			$trackedObject['file'] ?? [],
 			[
 				'links' => [
 					'download' => is_string($downloadLink) ? $downloadLink : null,

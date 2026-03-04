@@ -17,7 +17,7 @@ class StartTimerHandler
 	{
 
 	}
-	public function __invoke(StartTimerCommand $command): Timer
+	public function __invoke(StartTimerCommand $command): ?Timer
 	{
 		if ($command->useConsistency)
 		{

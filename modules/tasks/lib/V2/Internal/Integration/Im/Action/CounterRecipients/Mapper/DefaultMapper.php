@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action\CounterRecipients\Mapper;
 
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
+use Bitrix\Tasks\Internals\UserOption\Option;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Action\RecipientsResolver;
@@ -15,7 +16,8 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Role;
 class DefaultMapper implements NotificationMapperInterface, CounterMapperInterface
 {
 	public function __construct(
-		private readonly Repository\TaskReadRepositoryInterface $repository,
+		private readonly Repository\TaskRepositoryInterface $repository,
+		private readonly Repository\TaskUserOptionRepositoryInterface $optionRepository,
 	)
 	{
 	}
@@ -23,10 +25,7 @@ class DefaultMapper implements NotificationMapperInterface, CounterMapperInterfa
 	public function __invoke(RecipientsResolver $context): void
 	{
 		$taskId = (int)$context->task->id;
-		$taskWithMembers = $this->repository->getById(
-			$taskId,
-			new Repository\Task\Select(members: true, options: true),
-		);
+		$taskWithMembers = $this->repository->getById($taskId);
 
 		if ($taskWithMembers === null)
 		{
@@ -45,12 +44,19 @@ class DefaultMapper implements NotificationMapperInterface, CounterMapperInterfa
 		}
 
 		$context->taskWithMembers = $taskWithMembers;
+		$context->inMuteMembers =
+			$this->optionRepository
+				->get($taskId)
+				?->filter(fn (Entity\Task\UserOption $option): bool => $option->code === Option::MUTED)
+				->getUserIdList()
+		;
 
 		$recipients = new Entity\UserCollection();
 
 		foreach ($context->notification->getRecipients() as $role)
 		{
-			$record = match ($role) {
+			$record = match ($role)
+			{
 				Role::Creator => $context->taskWithMembers->creator,
 				Role::Responsible => $context->taskWithMembers->responsible,
 				Role::Accomplice => $context->taskWithMembers->accomplices,

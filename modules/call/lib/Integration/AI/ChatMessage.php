@@ -193,17 +193,19 @@ class ChatMessage extends CallChatMessage
 		}
 		if ($efficiencyValue >= 0)
 		{
-			$efficiency = sprintf(
-				"%d%% (%s)",
-				$efficiencyValue,
+			$efficiency = sprintf("%d%%", $efficiencyValue);
+			$efficiencyDesc =
 				match ($efficiencyValue)
 				{
 					100 => static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_100'),
 					75 => static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_75'),
 					50 => static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_50'),
-					default => static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_25')
-				}
-			);
+					default => '' // static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_25')
+				};
+			if ($efficiencyDesc)
+			{
+				$efficiency .= " ($efficiencyDesc)";
+			}
 			$attach->AddMessage('[br][b]' . static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY', ['#EFFICIENCY#' => $efficiency]) . '[/b]');
 		}
 

@@ -213,6 +213,11 @@ final class CTaskTimerManager
 				return false;
 			}
 
+			if (!$timer)
+			{
+				return false;
+			}
+
 			return [
 				'TASK_ID' => $timer->taskId,
 				'USER_ID' => $timer->userId,

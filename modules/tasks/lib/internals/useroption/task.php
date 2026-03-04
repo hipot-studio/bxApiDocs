@@ -78,7 +78,7 @@ class Task
 			}
 		}
 
-		$taskRepository = Container::getInstance()->getTaskReadRepository();
+		$taskRepository = Container::getInstance()->getTaskRepository();
 		$task = $taskRepository->getById($taskId);
 		if ($task !== null)
 		{
@@ -186,7 +186,7 @@ class Task
 		// sync muted users with chat if any users were added with muted state
 		if (!empty($addedParticipants))
 		{
-			$taskRepository = Container::getInstance()->getTaskReadRepository();
+			$taskRepository = Container::getInstance()->getTaskRepository();
 			$task = $taskRepository->getById($taskId);
 			if ($task !== null)
 			{

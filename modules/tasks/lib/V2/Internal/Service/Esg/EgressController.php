@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Esg;
 
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\CreateChatForExistingTaskHandler;
+use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\CreateChatForRestoringTaskHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\DeleteTaskHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\ElapsedTimeHandler;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Handler\SaveCheckListHandler;
@@ -27,6 +28,7 @@ class EgressController implements EgressInterface
 {
 	public function __construct(
 		private readonly CreateChatForExistingTaskHandler $createChatForExistingTaskHandler,
+		private readonly CreateChatForRestoringTaskHandler $createChatForRestoringTaskHandler,
 		private readonly TaskAddHandler $taskAddHandler,
 		private readonly TaskUpdateHandler $taskUpdateHandler,
 		private readonly SaveCheckListHandler $checkListHandler,
@@ -66,5 +68,10 @@ class EgressController implements EgressInterface
 	public function createChatForExistingTask(Task $task): Task
 	{
 		return $this->createChatForExistingTaskHandler->handle($task);
+	}
+
+	public function createChatForRestoringTask(Task $task): Task
+	{
+		return $this->createChatForRestoringTaskHandler->handle($task);
 	}
 }

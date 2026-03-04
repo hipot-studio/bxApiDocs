@@ -9,11 +9,12 @@ use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\Validator\MinValidator;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Min extends AbstractPropertyValidationAttribute
+class Min extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly int $min,
-		protected string|LocalizableMessageInterface|null $errorMessage = null
+		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
 	}
@@ -23,5 +24,10 @@ class Min extends AbstractPropertyValidationAttribute
 		return [
 			(new MinValidator($this->min)),
 		];
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 }

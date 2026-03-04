@@ -114,15 +114,15 @@ abstract class AbstractReceiver implements ReceiverInterface
 							$messageBox->getClassName(),
 							$messageBox->getId(),
 							$messageBox->getQueueId(),
-							$messageBox->getItemId()
-						)
+							$messageBox->getItemId(),
+						),
 					];
 				}
 
 				return [
 					'ITEM_ID' => null,
 				];
-			}
+			},
 		);
 
 		$messageBoxes = $this->getMessages();

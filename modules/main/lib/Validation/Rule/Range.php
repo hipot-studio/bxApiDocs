@@ -10,12 +10,13 @@ use Bitrix\Main\Validation\Validator\MaxValidator;
 use Bitrix\Main\Validation\Validator\MinValidator;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-final class Range extends AbstractPropertyValidationAttribute
+final class Range extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
 	public function __construct(
 		private readonly int $min,
 		private readonly int $max,
-		protected string|LocalizableMessageInterface|null $errorMessage = null
+		protected string|LocalizableMessageInterface|null $errorMessage = null,
+		protected array $groups = [],
 	)
 	{
 	}
@@ -26,5 +27,10 @@ final class Range extends AbstractPropertyValidationAttribute
 			(new MinValidator($this->min)),
 			(new MaxValidator($this->max)),
 		];
+	}
+
+	public function getGroups(): array
+	{
+		return $this->groups;
 	}
 }

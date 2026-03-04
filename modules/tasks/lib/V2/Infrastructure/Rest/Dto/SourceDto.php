@@ -23,7 +23,7 @@ class SourceDto extends Dto
 		$dto = new self();
 		if (empty($select) || in_array('type', $select, true))
 		{
-			$dto->type = $source->type;
+			$dto->type = $source->type->value;
 		}
 		if (empty($select) || in_array('data', $select, true))
 		{

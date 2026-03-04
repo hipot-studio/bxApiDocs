@@ -161,7 +161,7 @@ class OrmTemplateMapper
 			$fields['SITE_ID'] = $template->siteId;
 		}
 
-		if ($template->task?->id)
+		if ($template->task?->id !== null)
 		{
 			$fields['TASK_ID'] = $template->task->id;
 		}

@@ -7,10 +7,10 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Integration\CRM\Fields\Mapper;
 use Bitrix\Tasks\Internals\TaskObject;
-use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\Query\TaskQuery;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class TaskRepository implements BackGroundJob
 {
@@ -70,6 +70,12 @@ class TaskRepository implements BackGroundJob
 		{
 			return;
 		}
+
+		if (!empty($payload['TASK_ID']) && (int)$payload['TASK_ID'] !== $this->taskId)
+		{
+			return;
+		}
+
 		if (
 			$this->isImmediately
 			&& ($payload['RUN_IN_BACKGROUND'] ?? false) !== true
@@ -94,45 +100,15 @@ class TaskRepository implements BackGroundJob
 			return $this->task;
 		}
 
-		$select = [
-			'ID',
-			'TITLE',
-			'DESCRIPTION',
-			'UF_CRM_TASK',
-			'REAL_STATUS',
-			'SCENARIO',
-			'DEADLINE',
-			'RESPONSIBLE_ID',
-			'CREATED_BY',
-			'UF_TASK_WEBDAV_FILES',
-			'GROUP_ID',
-			'START_DATE_PLAN',
-			'END_DATE_PLAN',
-			'PRIORITY',
-		];
+		$compatibilityRepository = Container::getInstance()->getTaskCompatabilityRepository();
 
-		$query = (new TaskQuery($this->userId))
-			->setBehalfUser($this->userId)
-			->setSelect($select)
-			->setWhere([
-				'=ID' => $this->taskId,
-			])
-			->skipAccessCheck()
-			->setLimit(1);
-
-		$list = new TaskList();
-		$tasks = $list->getList($query);
-		$task = $tasks[0] ?? null;
-		if (!is_null($task))
+		try
 		{
-			// STATUS gets \Bitrix\Tasks\Internals\Task\MetaStatus too. We need real status http://jabber.bx/view.php?id=193670
-			$task['STATUS'] = $task['REAL_STATUS'];
-			unset($task['REAL_STATUS']);
+			$this->task = $compatibilityRepository->getTaskObject($this->taskId);
 
-			$this->task = new TaskObject($task);
 			$this->task->fillMemberList();
 		}
-		else
+		catch (TaskNotExistsException)
 		{
 			$this->task = null;
 		}

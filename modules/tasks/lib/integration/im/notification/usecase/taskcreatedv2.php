@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Integration\IM\Notification\UseCase;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\DI\Container;
 use Bitrix\Tasks\Flow\Provider\OptionProvider;
 use Bitrix\Tasks\Integration\IM\Notification;
 use Bitrix\Tasks\Internals\Notification\Message;
@@ -24,19 +25,17 @@ class TaskCreatedV2
 		}
 
 		$recipient = $message->getRecepient();
-		if ($task->getCreatedBy() === $recipient->getId())
-		{
-			return null;
-		}
-
 		if ($task->onFlow())
 		{
-			$flowManualDistributorId = (new OptionProvider())->getManualDistributorId($task->getFlowId());
+			$optionProvider = Container::getInstance()->get(OptionProvider::class);
+			$flowManualDistributorId = $optionProvider->getManualDistributorId($task->getFlowId());
 			if ($flowManualDistributorId === $recipient->getId())
 			{
 				return null;
 			}
 		}
+
+		Loc::loadMessages(__FILE__);
 
 		$title = new Notification\Task\Title($task);
 		$titleTemplate = new Notification\Template('#TASK_TITLE#', $title->getFormatted($recipient->getLang()));
@@ -86,7 +85,7 @@ class TaskCreatedV2
 		if ($accomplices)
 		{
 			$descriptionRows[] = Loc::getMessage(
-				'TASKS_MESSAGE_ACCOMPLICES',
+				'TASKS_IM_NOTIFY_TASK_CREATED_ACCOMPLICES',
 				[
 					'#USER_NAME_LIST#' => $accomplices,
 				],
@@ -145,10 +144,14 @@ class TaskCreatedV2
 			$user = $userRepository->getUserById($userId);
 			if ($user instanceof User)
 			{
-				$users[] = $user->toString();
+				$userString = trim($user->toString());
+				if ($userString)
+				{
+					$users[] = $userString;
+				}
 			}
 		}
 
-		return implode(', ', $users);
+		return $users ? implode(', ', $users) : '';
 	}
 }

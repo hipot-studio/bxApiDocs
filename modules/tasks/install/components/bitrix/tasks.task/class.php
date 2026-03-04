@@ -3444,6 +3444,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			// copy from template
 			if ($templateId = (int)$this->request['TEMPLATE'])
 			{
+				$this->setHitState();
 				$sourceData = $this->getTemplateSourceData($templateId);
 				$this->arResult['DATA']['CHECKLIST_CONVERTED'] =
 					TemplateCheckListConverterHelper::checkEntityConverted($templateId);

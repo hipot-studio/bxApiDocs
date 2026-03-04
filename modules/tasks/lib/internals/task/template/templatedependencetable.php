@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Internals\Task\Template;
 
+use Bitrix\Main\ORM\Data\AddStrategy;
 use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -45,7 +46,8 @@ class TemplateDependenceTable extends TaskDataManager
 	{
 		return [
 			(new IntegerField('ID'))
-				->configurePrimary(),
+				->configurePrimary()
+				->configureAutocomplete(),
 
 			(new IntegerField('TEMPLATE_ID')),
 
@@ -55,5 +57,13 @@ class TemplateDependenceTable extends TaskDataManager
 
 			(new Reference('DEPENDS_ON', TemplateTable::getEntity(), Join::on('this.DEPENDS_ON_ID', 'ref.ID'))),
 		];
+	}
+
+	protected static function getInsertIgnoreStrategy(): AddStrategy\Contract\AddStrategy
+	{
+		return new AddStrategy\InsertIgnore(
+			static::getEntity(),
+			['TEMPLATE_ID', 'DEPENDS_ON_ID'],
+		);
 	}
 }

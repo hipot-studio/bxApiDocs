@@ -8,14 +8,12 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
-use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
-use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 
 class ChatMessagePing implements PingActionInterface
 {
 	public function execute(int $taskId, int $userId, array $taskData): void
 	{
-		$task = Container::getInstance()->get(TaskReadRepositoryInterface::class)->getById($taskId, select: new Select(members: true));
+		$task = Container::getInstance()->getTaskRepository()->getById($taskId);
 
 		if ($task->creator->id === $userId)
 		{

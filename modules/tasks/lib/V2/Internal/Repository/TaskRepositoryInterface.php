@@ -21,7 +21,7 @@ interface TaskRepositoryInterface
 	/**
 	 * @param int $taskId The ID of the task to update the last activity date for.
 	 * @param int $activityTs The timestamp of the last activity date.
-	 * @return void 
+	 * @return void
 	 */
 	public function updateLastActivityDate(int $taskId, int $activityTs): void;
 
@@ -46,7 +46,13 @@ interface TaskRepositoryInterface
 
 	/**
 	 * @param int $userId The ID of the user to find the task IDs with active counters for.
+	 * @param int|null $groupId Additional filter by group ID to find the task IDs with active counters.
+	 * @param string|null $role Additional filter by the role for which to find task IDs with active counters.
 	 * @return array{ID: int, TASKS_INTERNALS_TASK_CHAT_TASK_CHAT_ID: int|null}[] The task IDs with active counters for the user.
 	 */
-	public function findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(int $userId, ?int $groupId = null): array;
+	public function findTasksIdsWithChatIdsAndActiveCountersByUserIdAndGroupId(
+		int $userId,
+		?int $groupId = null,
+		?string $role = null
+	): array;
 }

@@ -584,7 +584,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 				break;
 
 			case 'SCRUM_ITEMS_SORT':
-				$this->query->addOrder(self::ALIAS_SCRUM_ITEM_B . '.SORT', $order);
+				$this->query->addOrder(self::ALIAS_SCRUM_ITEM_B . '.SORT_FLOAT', $order);
 				$this->registerRuntimeField(self::ALIAS_SCRUM_ITEM_B);
 				break;
 
@@ -1221,7 +1221,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 				return $this->getFavoriteField();
 			},
 			"SORTING" => self::ALIAS_TASK_SORT . ".SORT",
-			'SCRUM_ITEMS_SORT' => self::ALIAS_SCRUM_ITEM_B . '.SORT',
+			'SCRUM_ITEMS_SORT' => self::ALIAS_SCRUM_ITEM_B . '.SORT_FLOAT',
 			"IM_CHAT_ID" => self::ALIAS_CHAT_TASK . ".ID",
 			"IM_CHAT_MESSAGE_ID" => self::ALIAS_CHAT_TASK . ".MESSAGE_ID",
 			"IM_CHAT_CHAT_ID" => self::ALIAS_CHAT_TASK . ".CHAT_ID",

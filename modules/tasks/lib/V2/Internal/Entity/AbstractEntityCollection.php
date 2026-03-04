@@ -134,13 +134,15 @@ abstract class AbstractEntityCollection implements EntityCollectionInterface
 		return $this;
 	}
 
-	public function replaceMulti(EntityCollectionInterface $collection): void
+	public function replaceMulti(EntityCollectionInterface $collection): static
 	{
 		foreach ($collection as $item)
 		{
 			$this->remove($item->getId());
 			$this->add($item);
 		}
+
+		return $this;
 	}
 
 	public function replace(EntityInterface $item): void

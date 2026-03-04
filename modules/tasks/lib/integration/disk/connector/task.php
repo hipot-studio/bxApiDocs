@@ -194,12 +194,9 @@ class Task extends StubConnector
 			return;
 		}
 
-		$fileIds = [];
-		if (!empty($data['fileId']))
-		{
-			$fileIds[] = $data['fileId'];
-		}
-		elseif (!empty($data['versionId']))
+		$fileId = null;
+
+		if (!empty($data['versionId']))
 		{
 			$versionId = str_starts_with($data['versionId'], 'n')
 				? (int)substr($data['versionId'], 1)
@@ -212,7 +209,7 @@ class Task extends StubConnector
 
 				if ($version?->getObjectId())
 				{
-					$fileIds[] = FileUserType::NEW_FILE_PREFIX . $version->getFileId();
+					$fileId = (int)$version->getObjectId(); // annotation getObjectId lies
 				}
 			}
 		}
@@ -227,7 +224,7 @@ class Task extends StubConnector
 			task: $task,
 			args: [
 				'triggeredBy' => $triggeredBy,
-				'fileIds' => $fileIds,
+				'fileId' => $fileId,
 			],
 		);
 	}

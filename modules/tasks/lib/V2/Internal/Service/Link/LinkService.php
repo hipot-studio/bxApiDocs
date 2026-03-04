@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Link;
 
+use Bitrix\Intranet\Binding\Marketplace;
+use Bitrix\Main\Loader;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -21,6 +23,30 @@ class LinkService
 	)
 	{
 
+	}
+
+	public function getMarket(string $urlParams = ''): string
+	{
+		$basePath = (SITE_DIR ?: '/') . 'marketplace/';
+
+		if (Loader::includeModule('intranet'))
+		{
+			if (Loader::includeModule('bitrix24'))
+			{
+				$basePath = Marketplace::getMainDirectory();
+			}
+			else
+			{
+				$basePath = (SITE_DIR ?: '/') . Marketplace::getBoxMainDirectory();
+			}
+		}
+
+		if (Loader::includeModule('market'))
+		{
+			$basePath = (SITE_DIR ?: '/') . 'market/';
+		}
+
+		return $basePath . $urlParams;
 	}
 
 	public function getForumComments(int $taskId): string

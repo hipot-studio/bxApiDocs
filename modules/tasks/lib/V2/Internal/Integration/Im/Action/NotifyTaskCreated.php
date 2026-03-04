@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Tasks\Integration\AI;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
@@ -34,23 +35,20 @@ class NotifyTaskCreated extends AbstractNotify implements ExcludeNotifyRecipient
 		if ($this->task->scenarios?->contains(Entity\Task\Scenario::Voice))
 		{
 			return match ($this->triggeredBy?->getGender()) {
-				Entity\User\Gender::Male   => 'TASKS_IM_AUDIO_TASK_CREATED_M',
-				Entity\User\Gender::Female => 'TASKS_IM_AUDIO_TASK_CREATED_F',
-				default                    => 'TASKS_IM_AUDIO_TASK_CREATED_M',
+				Entity\User\Gender::Female => 'TASKS_IM_AUDIO_TASK_CREATED_F_MSGVER_1',
+				default                    => 'TASKS_IM_AUDIO_TASK_CREATED_M_MSGVER_1',
 			};
 		}
 
 		if ($this->task->scenarios?->contains(Entity\Task\Scenario::Video))
 		{
 			return match ($this->triggeredBy?->getGender()) {
-				Entity\User\Gender::Male   => 'TASKS_IM_VIDEO_TASK_CREATED_M',
-				Entity\User\Gender::Female => 'TASKS_IM_VIDEO_TASK_CREATED_F',
-				default                    => 'TASKS_IM_VIDEO_TASK_CREATED_M',
+				Entity\User\Gender::Female => 'TASKS_IM_VIDEO_TASK_CREATED_F_MSGVER_1',
+				default                    => 'TASKS_IM_VIDEO_TASK_CREATED_M_MSGVER_1',
 			};
 		}
 
 		return match ($this->triggeredBy?->getGender()) {
-			Entity\User\Gender::Male   => 'TASKS_IM_TASK_CREATED_M_MSGVER_1',
 			Entity\User\Gender::Female => 'TASKS_IM_TASK_CREATED_F_MSGVER_1',
 			default                    => 'TASKS_IM_TASK_CREATED_M_MSGVER_1',
 		};
@@ -61,6 +59,7 @@ class NotifyTaskCreated extends AbstractNotify implements ExcludeNotifyRecipient
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
 			'#TASK_URL#' => $this->linkService->get($this->task, (int)$this->triggeredBy?->id),
+			'#COPILOT_NAME#' => AI\Settings::getCopilotName(),
 		];
 	}
 

@@ -86,6 +86,7 @@ class TaskUpdatedV2 extends AbstractCase
 			{
 				Role::Auditor => TaskUpdatedV2Action::AddAsAuditor,
 				Role::Accomplice => TaskUpdatedV2Action::AddAsAccomplice,
+				Role::Responsible => TaskUpdatedV2Action::AddAsResponsible,
 				default => null,
 			};
 

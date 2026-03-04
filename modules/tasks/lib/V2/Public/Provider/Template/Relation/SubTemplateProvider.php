@@ -237,6 +237,7 @@ class SubTemplateProvider
 			'title',
 			'responsible',
 			'deadline',
+			'type',
 		];
 	}
 
@@ -247,6 +248,7 @@ class SubTemplateProvider
 			'title' => 'TITLE',
 			'responsible' => 'RESPONSIBLE_ID',
 			'deadline' => 'DEADLINE_AFTER',
+			'type' => 'TPARAM_TYPE',
 		];
 
 		$result = [];

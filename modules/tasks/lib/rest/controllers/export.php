@@ -1,16 +1,16 @@
 <?php
+
 namespace Bitrix\Tasks\Rest\Controllers;
 
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Controller;
+use CTempFile;
 
 class Export extends Controller\Export
 {
-	/** @var string - Module Id. */
 	protected $module = 'tasks';
 
-	/** @var string - Entity type name to export. */
-	protected $entityType;
+	protected ?string $entityType = null;
 
 	/**
 	 * Initializes controller.
@@ -19,7 +19,8 @@ class Export extends Controller\Export
 	{
 		$this->keepFieldInProcess('entityType');
 
-		$this->entityType = $this->request->get('ENTITY_TYPE');
+		$entityType = $this->request->get('ENTITY_TYPE');
+		$this->entityType = is_string($entityType) ? $entityType : null;
 
 		parent::init();
 	}
@@ -29,19 +30,9 @@ class Export extends Controller\Export
 	 */
 	protected function generateExportFileName(): string
 	{
-		if ($this->isExcel())
-		{
-			$fileExt = 'xls';
-		}
+		$date = (new DateTime())->format('Y-m-d_H-i-s');
 
-		$date = (new DateTime())->format('Y-m-d_H:i:s');
-
-		return 'tasks_' . $date . '.' . $fileExt;
-	}
-
-	private function isExcel(): bool
-	{
-		return $this->exportType === self::EXPORT_TYPE_EXCEL;
+		return 'tasks_' . $date . '.xls';
 	}
 
 	/**
@@ -49,15 +40,15 @@ class Export extends Controller\Export
 	 */
 	protected function generateTempDirPath(): string
 	{
-		$tempDir = \CTempFile::GetDirectoryName(
+		$tempDir = CTempFile::GetDirectoryName(
 			self::KEEP_FILE_HOURS,
 			[
 				$this->module,
-				uniqid($this->entityType. '_export_', true)
+				uniqid((string)$this->entityType. '_export_', true)
 			]
 		);
 
-		\CheckDirPath($tempDir);
+		CheckDirPath($tempDir);
 
 		return $tempDir;
 	}

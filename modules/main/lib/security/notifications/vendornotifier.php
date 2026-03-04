@@ -4,12 +4,9 @@ namespace Bitrix\Main\Security\Notifications;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
-use ReflectionExtension;
-use CSecuritySystemInformation;
+use Bitrix\Main\UpdateSystem\PortalInfo;
 
 class VendorNotifier
 {
@@ -26,53 +23,19 @@ class VendorNotifier
 				return;
 			}
 
+			$connection = Application::getConnection();
+
+			// we don't want to do the same job twice
+			if (!$connection->lock('SEC_ACTUALIZE_VENDOR_NOTIFICATIONS'))
+			{
+				return;
+			}
+
 			Option::set('main_sec', 'SEC_ACTUALIZE_VENDOR_NOTIFICATIONS', time());
 
 			$newData = null;
 
-			// get modules versions
-			$modules = array_map(function ($module) {
-				return ['v' => $module['version'], 'i' => (int) $module['isInstalled']];
-			}, ModuleManager::getModulesFromDisk());
-
-			// get php extensions
-			$phpExtensions = [];
-			foreach (get_loaded_extensions() as $extension)
-			{
-				$extReflection = new ReflectionExtension($extension);
-
-				$phpExtensions[$extension] = [
-					'v' => $extReflection->getVersion(),
-					'ini' => $extReflection->getINIEntries()
-				];
-			}
-
-			$dataToSend = [
-					'modules' => json_encode($modules),
-					'license' => Application::getInstance()->getLicense()->getHashLicenseKey(),
-					'php' => json_encode([
-						'v' => phpversion(),
-						'ext' => $phpExtensions
-					])
-			];
-
-			if (Loader::includeModule('security'))
-			{
-				$moreInfo = CSecuritySystemInformation::getSystemInformation();
-
-				if (isset($moreInfo['db']['type']) && isset($moreInfo['db']['version']))
-				{
-					$dataToSend['db'] = [
-						'type' => $moreInfo['db']['type'],
-						'version' => $moreInfo['db']['version']
-					];
-				}
-
-				if (isset($moreInfo['environment']['vm_version']))
-				{
-					$dataToSend['vm'] = ['v' => $moreInfo['environment']['vm_version']];
-				}
-			}
+			$dataToSend = (new PortalInfo())->getSystemInfo();
 
 			// get actual rules
 			$http = new HttpClient([
@@ -95,7 +58,6 @@ class VendorNotifier
 			//update db
 			if ($newData !== null)
 			{
-				$connection = Application::getConnection();
 				$tableName = VendorNotificationTable::getTableName();
 
 				// remove current data
@@ -130,6 +92,8 @@ class VendorNotifier
 					}
 				}
 			}
+
+			$connection->unlock('SEC_ACTUALIZE_VENDOR_NOTIFICATIONS');
 		}
 		catch (\Throwable $e)
 		{

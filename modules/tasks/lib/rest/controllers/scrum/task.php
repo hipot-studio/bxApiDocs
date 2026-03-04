@@ -9,11 +9,13 @@
 namespace Bitrix\Tasks\Rest\Controllers\Scrum;
 
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Tasks\Rest\Controllers\Base;
 use Bitrix\Tasks\Scrum\Form\ItemForm;
 use Bitrix\Tasks\Scrum\Service\EntityService;
 use Bitrix\Tasks\Scrum\Service\EpicService;
 use Bitrix\Tasks\Scrum\Service\ItemService;
+use Bitrix\Tasks\Scrum\Service\PushService;
 use Bitrix\Tasks\Scrum\Service\TaskService;
 
 class Task extends Base
@@ -42,6 +44,9 @@ class Task extends Base
 				],
 				'sort' => [
 					'type' => 'integer',
+				],
+				'sortFloat' => [
+					'type' => 'float',
 				],
 				'createdBy' => [
 					'type' => 'integer',
@@ -91,6 +96,7 @@ class Task extends Base
 			'storyPoints' => $scrumTask->getStoryPoints(),
 			'epicId' => $scrumTask->getEpicId(),
 			'sort' => $scrumTask->getSort(),
+			'sortFloat' => $scrumTask->getSortFloat(),
 			'createdBy' => $scrumTask->getCreatedBy(),
 			'modifiedBy' => $scrumTask->getModifiedBy(),
 		];
@@ -183,11 +189,16 @@ class Task extends Base
 			}
 
 			$scrumTask->setEpicId($epic->getId());
+			$scrumTask->setEpic($epic);
 		}
 
-		if (array_key_exists('sort', $fields) && is_numeric($fields['sort']))
+		if (array_key_exists('sortFloat', $fields) && is_numeric($fields['sortFloat']))
 		{
-			$scrumTask->setSort((int) $fields['sort']);
+			$scrumTask->setSortFloat((float)$fields['sortFloat']);
+		}
+		elseif (array_key_exists('sort', $fields) && is_numeric($fields['sort']))
+		{
+			$scrumTask->setSortFloat((float)$fields['sort']);
 		}
 
 		if (array_key_exists('createdBy', $fields) && is_numeric($fields['createdBy']))
@@ -216,7 +227,8 @@ class Task extends Base
 			$scrumTask->setModifiedBy($modifiedBy);
 		}
 
-		$result = $this->getItemService()->changeItem($scrumTask);
+		$pushService = (Loader::includeModule('pull') ? new PushService() : null);
+		$result = $this->getItemService()->changeItem($scrumTask, $pushService);
 		if (!$result)
 		{
 			$this->errorCollection->add([new Error('Unable to update task')]);
@@ -307,12 +319,16 @@ class Task extends Base
 		$scrumItem->setEntityId($entityId);
 		$scrumItem->setSourceId((int) $task['ID']);
 
-		$sort = 1;
-		if (array_key_exists('sort', $fields) && is_numeric($fields['sort']))
+		$sort = $this->getItemService()->getFirstItemSort() / 2;
+		if (array_key_exists('sortFloat', $fields) && is_numeric($fields['sortFloat']))
 		{
-			$sort = (int) $fields['sort'];
+			$sort = (float)$fields['sortFloat'];
 		}
-		$scrumItem->setSort($sort);
+		elseif (array_key_exists('sort', $fields) && is_numeric($fields['sort']))
+		{
+			$sort = (float)$fields['sort'];
+		}
+		$scrumItem->setSortFloat($sort);
 
 		return $this->getItemService()->createTaskItem($scrumItem);
 	}

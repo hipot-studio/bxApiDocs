@@ -17,7 +17,7 @@ class User extends AbstractEntity
 		#[PositiveNumber]
 		public readonly ?int $id = null,
 		public readonly ?string $name = null,
-		public readonly ?string $role = null, // role depends on context
+		public readonly null|string|bool $role = null, // role depends on context
 		public readonly ?Type $type = null,
 		public readonly ?File $image = null,
 		public readonly ?Gender $gender = null,
@@ -44,7 +44,7 @@ class User extends AbstractEntity
 		return new static(
 			id: static::mapInteger($props, 'id'),
 			name: static::mapString($props, 'name'),
-			role: static::mapString($props, 'role'),
+			role: static::mapString($props, 'role') ?? self::mapBool($props, 'role'),
 			type: static::mapBackedEnum($props, 'type', Type::class),
 			image: static::mapEntity($props, 'image', File::class),
 			gender: static::mapBackedEnum($props, 'gender', Gender::class),

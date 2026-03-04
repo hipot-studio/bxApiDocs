@@ -37,7 +37,7 @@ class CallLogPushService
 	/**
 	 * Send push event for missed calls counter update
 	 */
-	public static function sendCounterUpdate(int $userId, int $counterValue): void
+	public static function sendCounterUpdate(int $userId, int $counterValue, array $calls = []): void
 	{
 		if (!Loader::includeModule('pull'))
 		{
@@ -53,7 +53,8 @@ class CallLogPushService
 			'module_id' => 'call',
 			'command' => 'Call::callLogCounterUpdate',
 			'params' => [
-				'counterValue' => $counterValue
+				'counterValue' => $counterValue,
+				'callIds' => $calls
 			],
 			'extra' => \Bitrix\Im\Common::getPullExtra()
 		];

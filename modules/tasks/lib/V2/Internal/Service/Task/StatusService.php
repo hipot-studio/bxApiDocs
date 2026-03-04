@@ -38,8 +38,7 @@ class StatusService
 
 		if ($updatedTask->allowsTimeTracking)
 		{
-			$timeManagementService = Container::getInstance()->getTimeManagementService();
-			$timeManagementService->startTimer(
+			Container::getInstance()->getTimeManagementService()->startTimer(
 				userId: $config->getUserId(),
 				taskId: $taskId,
 				canStart: true,

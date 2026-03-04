@@ -123,6 +123,14 @@ class TaskUpdateHandler
 					triggeredBy: $triggeredBy,
 					stage: $command->task->stage,
 				),
+				'mark' => $this->chatNotification->notify(
+					type: NotificationType::TaskMarkChanged,
+					task: $command->task,
+					args: [
+						'triggeredBy' => $triggeredBy,
+						'markBefore' => $taskBeforeUpdate->mark,
+					],
+				),
 				default => '',
 			};
 		}
@@ -135,7 +143,12 @@ class TaskUpdateHandler
 			'responsible' => $this->chatNotification->notify(
 				type: NotificationType::ResponsibleChanged,
 				task: $task,
-				args: ['triggeredBy' => $triggeredBy, 'oldResponsible' => $taskBeforeUpdate->responsible, 'newResponsible' => $task->responsible],
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'oldResponsible' => $taskBeforeUpdate->responsible,
+					'newResponsible' => $task->responsible,
+					'isNewMember' => !$taskBeforeUpdate->getMembers()->findOneById($task->responsible->id),
+				],
 			),
 			'creator' => $this->chatNotification->notify(
 				type: NotificationType::OwnerChanged,

@@ -127,6 +127,11 @@ class CVoxImplantComponentDocuments extends CBitrixComponent
 				$this->arResult['DOCUMENTS'][] = $verification;
 			}
 		}
+
+		// Check for INTERNOD agreement warning
+		$accountVerification = new \Bitrix\Voximplant\AccountVerification();
+		$this->arResult['SHOW_INTERNOD_WARNING'] = $accountVerification->hasInternodWarning();
+		$this->arResult['INTERNOD_DEADLINE'] = $accountVerification->getInternodDeadline();
 	}
 
 	protected function createVerification($countryCode, $status)

@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main\Application;
@@ -113,10 +113,13 @@ class CAllUserTypeEntity extends CDBResult
 	{
 		global $DB, $CACHE_MANAGER;
 
+		$aFilter = array_change_key_case($aFilter, CASE_UPPER);
+
 		if (CACHED_b_user_field !== false)
 		{
 			$cacheId = "b_user_type" . md5(serialize($aSort) . "." . serialize($aFilter));
-			if ($CACHE_MANAGER->Read(CACHED_b_user_field, $cacheId, "b_user_field"))
+			$cachDir = isset($aFilter['ENTITY_ID']) ? "b_user_field_" . strtolower($aFilter['ENTITY_ID']) : "b_user_field";
+			if ($CACHE_MANAGER->Read(CACHED_b_user_field, $cacheId, $cachDir))
 			{
 				$arResult = $CACHE_MANAGER->Get($cacheId);
 				$res = new CDBResult;
@@ -134,7 +137,6 @@ class CAllUserTypeEntity extends CDBResult
 				continue;
 			}
 
-			$key = strtoupper($key);
 			$val = $DB->ForSql($val);
 
 			switch ($key)
@@ -483,6 +485,14 @@ class CAllUserTypeEntity extends CDBResult
 			$USER_FIELD_MANAGER->CleanCache();
 		}
 
+		$entityId = strtolower($arFields['ENTITY_ID']);
+
+		$connection = Application::getConnection();
+
+		// prevents concurrent execution
+		$connection->lock('uf_add_' . $entityId, -1);
+
+		$result = true;
 		if ($commonEventResult['PROVIDE_STORAGE'])
 		{
 			$strType = $USER_FIELD_MANAGER->getUtsDBColumnType($arFields);
@@ -502,13 +512,6 @@ class CAllUserTypeEntity extends CDBResult
 				return false;
 			}
 
-			$entityId = strtolower($arFields['ENTITY_ID']);
-
-			$connection = Application::getConnection();
-
-			// prevents concurrent execution
-			$connection->lock('uf_add_' . $entityId, -1);
-
 			$this->CreatePropertyTables($arFields["ENTITY_ID"]);
 
 			$tableName = 'b_uts_' . $entityId;
@@ -520,9 +523,7 @@ class CAllUserTypeEntity extends CDBResult
 				static::syncColumnsAgent($arFields['ENTITY_ID']);
 			}
 
-			$result = $DB->DDL('ALTER TABLE ' . $tableName . ' ADD ' . $arFields['FIELD_NAME'] . ' ' . $strType, true);
-
-			$connection->unlock('uf_add_' . $entityId);
+			$result = (bool)$DB->DDL('ALTER TABLE ' . $tableName . ' ADD ' . $arFields['FIELD_NAME'] . ' ' . $strType, true);
 
 			if (!$result)
 			{
@@ -535,37 +536,45 @@ class CAllUserTypeEntity extends CDBResult
 				]];
 				$e = new CAdminException($aMsg);
 				$APPLICATION->ThrowException($e);
-
-				return false;
 			}
 		}
 
-		if ($ID = $DB->Add("b_user_field", $arFields, ["SETTINGS"], '', true))
+		if ($result)
 		{
-			$arLabels = ["EDIT_FORM_LABEL", "LIST_COLUMN_LABEL", "LIST_FILTER_LABEL", "ERROR_MESSAGE", "HELP_MESSAGE"];
-			$arLangs = [];
-			foreach ($arLabels as $label)
+			if ($ID = $DB->Add("b_user_field", $arFields, ["SETTINGS"], '', true))
 			{
-				if (isset($arFields[$label]) && is_array($arFields[$label]))
+				$arLabels = ["EDIT_FORM_LABEL", "LIST_COLUMN_LABEL", "LIST_FILTER_LABEL", "ERROR_MESSAGE", "HELP_MESSAGE"];
+				$arLangs = [];
+				foreach ($arLabels as $label)
 				{
-					foreach ($arFields[$label] as $lang => $value)
+					if (isset($arFields[$label]) && is_array($arFields[$label]))
 					{
-						$arLangs[$lang][$label] = $value;
+						foreach ($arFields[$label] as $lang => $value)
+						{
+							$arLangs[$lang][$label] = $value;
+						}
 					}
 				}
-			}
 
-			foreach ($arLangs as $lang => $arLangFields)
+				foreach ($arLangs as $lang => $arLangFields)
+				{
+					$arLangFields["USER_FIELD_ID"] = $ID;
+					$arLangFields["LANGUAGE_ID"] = $lang;
+					$arInsert = $DB->PrepareInsert("b_user_field_lang", $arLangFields);
+					$DB->Query("INSERT INTO b_user_field_lang (" . $arInsert[0] . ") VALUES (" . $arInsert[1] . ")");
+				}
+
+				static::cleanCache($entityId);
+			}
+			else
 			{
-				$arLangFields["USER_FIELD_ID"] = $ID;
-				$arLangFields["LANGUAGE_ID"] = $lang;
-				$arInsert = $DB->PrepareInsert("b_user_field_lang", $arLangFields);
-				$DB->Query("INSERT INTO b_user_field_lang (" . $arInsert[0] . ") VALUES (" . $arInsert[1] . ")");
+				$result = false;
 			}
-
-			static::cleanCache();
 		}
-		else
+
+		$connection->unlock('uf_add_' . $entityId);
+
+		if (!$result)
 		{
 			return false;
 		}
@@ -611,7 +620,10 @@ class CAllUserTypeEntity extends CDBResult
 	public function Update($ID, $arFields)
 	{
 		global $DB, $USER_FIELD_MANAGER, $APPLICATION;
+
 		$ID = intval($ID);
+
+		$entityId = $arFields["ENTITY_ID"] ?? null;
 
 		unset($arFields["ENTITY_ID"]);
 		unset($arFields["FIELD_NAME"]);
@@ -700,6 +712,15 @@ class CAllUserTypeEntity extends CDBResult
 
 		if ($strUpdate <> "" || !empty($arLangs))
 		{
+			if ($entityId === null)
+			{
+				$rsUserField = CUserTypeEntity::GetList([], ["ID" => $ID]);
+				if ($usersField = $rsUserField->Fetch())
+				{
+					$entityId = $usersField["ENTITY_ID"];
+				}
+			}
+
 			if ($strUpdate <> "")
 			{
 				$strSql = "UPDATE b_user_field SET " . $strUpdate . " WHERE ID = " . $ID;
@@ -731,7 +752,7 @@ class CAllUserTypeEntity extends CDBResult
 				$DB->Commit();
 			}
 
-			static::cleanCache();
+			static::cleanCache(strtolower($entityId ?? ''));
 
 			foreach (GetModuleEvents("main", "OnAfterUserTypeUpdate", true) as $arEvent)
 			{
@@ -754,6 +775,7 @@ class CAllUserTypeEntity extends CDBResult
 	public function Delete($ID)
 	{
 		global $DB, $USER_FIELD_MANAGER, $APPLICATION;
+
 		$ID = intval($ID);
 
 		$rs = $this->GetList([], ["ID" => $ID]);
@@ -832,7 +854,7 @@ class CAllUserTypeEntity extends CDBResult
 				$rs = $DB->Query("DELETE FROM b_user_field WHERE ID = " . $ID);
 			}
 
-			static::cleanCache();
+			static::cleanCache($entityId);
 
 			foreach (GetModuleEvents("main", "OnAfterUserTypeDelete", true) as $arEvent)
 			{
@@ -850,6 +872,7 @@ class CAllUserTypeEntity extends CDBResult
 				CTimeZone::Enable();
 			}
 		}
+
 		return $rs;
 	}
 
@@ -892,21 +915,23 @@ class CAllUserTypeEntity extends CDBResult
 			}
 		}
 
-		static::cleanCache();
-
 		$entityId = strtolower($entity_id);
+
+		static::cleanCache($entityId);
+
 		$DB->Query("DROP TABLE IF EXISTS b_uts_" . $entityId);
 		$DB->Query("DROP TABLE IF EXISTS b_utm_" . $entityId);
 
 		return $rs;
 	}
 
-	protected static function cleanCache(): void
+	protected static function cleanCache(string $entityId): void
 	{
 		global $CACHE_MANAGER, $USER_FIELD_MANAGER;
 
 		if (CACHED_b_user_field !== false)
 		{
+			$CACHE_MANAGER->CleanDir("b_user_field_{$entityId}");
 			$CACHE_MANAGER->CleanDir("b_user_field");
 		}
 		UserFieldTable::cleanCache();

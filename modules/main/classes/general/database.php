@@ -914,10 +914,11 @@ abstract class CAllDatabase
 	{
 		$this->cntQuery++;
 		$this->timeQuery += $exec_time;
-		$this->arQueryDebug[] = $this->startSqlTracker()->getNewTrackerQuery()
+		$tracker = $this->startSqlTracker();
+		$this->arQueryDebug[] = $tracker->getNewTrackerQuery()
 			->setSql($strSql)
 			->setTime($exec_time)
-			->setTrace(defined("BX_NO_SQL_BACKTRACE") ? null : Main\Diag\Helper::getBackTrace(8, null, 2))
+			->setTrace(defined("BX_NO_SQL_BACKTRACE") ? null : Main\Diag\Helper::getBackTrace($tracker->getDepthBackTrace(), null, 2))
 			->setState($GLOBALS["BX_STATE"])
 			->setNode($node_id)
 		;

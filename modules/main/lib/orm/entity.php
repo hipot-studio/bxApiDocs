@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\ORM;
@@ -303,7 +303,7 @@ class Entity
 		$this->references = array();
 
 		// attributes
-		foreach ($this->fieldsMap as $fieldName => &$fieldInfo)
+		foreach ($this->fieldsMap as $fieldName => $fieldInfo)
 		{
 			$this->addField($fieldInfo, $fieldName);
 		}
@@ -814,7 +814,7 @@ class Entity
 			$class_path = array_slice($class_path, 0, -1);
 
 			// cut Bitrix namespace
-			if (count($class_path) && $class_path[0] === 'BITRIX')
+			if (!empty($class_path) && $class_path[0] === 'BITRIX')
 			{
 				$class_path = array_slice($class_path, 1);
 			}
