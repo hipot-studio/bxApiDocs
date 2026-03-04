@@ -1,4 +1,5 @@
 <?
+/*
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/order_props.php");
 
 class CSaleOrderProps extends CAllSaleOrderProps
@@ -259,4 +260,5 @@ class CSaleOrderProps extends CAllSaleOrderProps
 		return $ID;
 	}
 }
+*/
 ?>
