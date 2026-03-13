@@ -5,7 +5,10 @@ namespace Bitrix\Mail\Internals\Entity;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Internals\MailboxDirectoryTable;
 use Bitrix\Mail\MailboxDirectory as MailboxDirectoryManager;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Text\Emoji;
 use JsonSerializable;
@@ -13,6 +16,8 @@ use JsonSerializable;
 class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implements JsonSerializable
 {
 	private $children = [];
+
+	private ?bool $nestedInVirtualFolder = null;
 
 	public function isSync()
 	{
@@ -34,19 +39,80 @@ class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implem
 		return false;
 	}
 
-	public function isHiddenSystemFolder()
+	/**
+	 * @deprecated Use \Bitrix\Mail\Internals\Entity\MailboxDirectory::isVirtualFolder
+	 * @return bool
+	 */
+	public function isHiddenSystemFolder(): bool
 	{
-		if($this->isDisabled())
+		return $this->isVirtualFolder();
+	}
+
+	public function isVirtualFolder(): bool
+	{
+		if (!$this->isDisabled())
 		{
-			if(in_array($this->getPath(),[
-				'[Gmail]',
-			]))
-			{
-				return true;
-			}
+			return false;
 		}
 
-		return false;
+		$containerFolders = [
+			'[Gmail]',
+		];
+
+		return in_array($this->getPath(), $containerFolders, true);
+	}
+
+	/**
+	 * @return string[]
+	 */
+	protected function getAliasExceptionPaths(): array
+	{
+		$delimiter = $this->getDelimiter();
+
+		$exceptionPaths = [
+			'Drafts%stemplate',
+			'INBOX%sSocial',
+			'INBOX%sNewsletters',
+			'INBOX%sToMyself',
+			'INBOX%sNews',
+			'INBOX%sReceipts',
+			'INBOX%sPublic services',
+			'INBOX%sSchool',
+			'INBOX%sGames',
+		];
+
+		return array_map((static fn ($item) => sprintf($item, $delimiter)), $exceptionPaths);
+	}
+
+	public function isAliasException(): bool
+	{
+		return in_array($this->getPath(), $this->getAliasExceptionPaths(), true);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function isNestedInVirtualFolder(): bool
+	{
+		if ($this->nestedInVirtualFolder !== null)
+		{
+			return $this->nestedInVirtualFolder;
+		}
+
+		$rootId = $this->getRootId();
+		if ($rootId <= 0)
+		{
+			$this->nestedInVirtualFolder = false;
+
+			return false;
+		}
+
+		$root = MailboxDirectoryTable::getById($rootId)->fetchObject();
+		$this->nestedInVirtualFolder = $root && $root->isVirtualFolder();
+
+		return $this->nestedInVirtualFolder;
 	}
 
 	public function isSpam()
@@ -160,6 +226,12 @@ class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implem
 		return $count;
 	}
 
+	/**
+	 * @return string
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
 	public function getFormattedName()
 	{
 		if ($this->getLevel() === 1)
@@ -168,6 +240,10 @@ class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implem
 		}
 
 		$path = explode($this->getDelimiter(), $this->getPath());
+		if ($this->isAliasException() || $this->isNestedInVirtualFolder())
+		{
+			$path[count($path) - 1] = $this->getName();
+		}
 
 		return join(' / ', $path);
 	}
@@ -181,17 +257,64 @@ class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implem
 		return Emoji::encode(parent::getPath());
 	}
 
-	public function getName()
+	/**
+	 * @return string
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getName(): string
 	{
 		$name = $this->sysGetValue('NAME');
-		$level = $this->getLevel();
 
-		if (mb_strtolower($name) == 'inbox' && $level === 1)
+		if ($this->isAliasException())
 		{
-			return Loc::getMessage('MAIL_CLIENT_INBOX_ALIAS');
+			return $this->getAliasNameByType() ?? $this->getAliasNameByName($name) ?? $name;
 		}
 
-		return $name;
+		if ($this->getLevel() !== 1 && !$this->isNestedInVirtualFolder())
+		{
+			return $name;
+		}
+
+		return $this->getAliasNameByType() ?? $this->getAliasNameByName($name) ?? $name;
+	}
+
+	public function getAliasNameByType(): ?string
+	{
+		return match (true) {
+			$this->isIncome() => Loc::getMessage('MAIL_CLIENT_INBOX_ALIAS'),
+			$this->isOutcome() => Loc::getMessage('MAIL_CLIENT_OUTCOME_ALIAS'),
+			$this->isDraft() => Loc::getMessage('MAIL_CLIENT_DRAFT_ALIAS'),
+			$this->isTrash() => Loc::getMessage('MAIL_CLIENT_TRASH_ALIAS'),
+			$this->isSpam() => Loc::getMessage('MAIL_CLIENT_SPAM_ALIAS'),
+			default => null,
+		};
+	}
+
+	public function getAliasNameByName(string $name): ?string
+	{
+		$normalizedName = mb_strtolower($name);
+		return match ($normalizedName) {
+			'inbox' => Loc::getMessage('MAIL_CLIENT_INBOX_ALIAS'),
+			'outbox' => Loc::getMessage('MAIL_CLIENT_OUTBOX_ALIAS'),
+			'outcome' => Loc::getMessage('MAIL_CLIENT_OUTCOME_ALIAS'),
+			'draft' => Loc::getMessage('MAIL_CLIENT_DRAFT_ALIAS'),
+			'trash' => Loc::getMessage('MAIL_CLIENT_TRASH_ALIAS'),
+			'spam' => Loc::getMessage('MAIL_CLIENT_SPAM_ALIAS'),
+			'template' => Loc::getMessage('MAIL_CLIENT_TEMPLATE_ALIAS'),
+			'social' => Loc::getMessage('MAIL_CLIENT_SOCIAL_ALIAS'),
+			'newsletters' => Loc::getMessage('MAIL_CLIENT_NEWSLETTERS_ALIAS'),
+			'tomyself' => Loc::getMessage('MAIL_CLIENT_TOMYSELF_ALIAS'),
+			'news' => Loc::getMessage('MAIL_CLIENT_NEWS_ALIAS'),
+			'receipts' => Loc::getMessage('MAIL_CLIENT_RECEIPTS_ALIAS'),
+			'public services' => Loc::getMessage('MAIL_CLIENT_PUBLIC_SERVICES_ALIAS'),
+			'games' => Loc::getMessage('MAIL_CLIENT_SCHOOL_ALIAS'),
+			'school' => Loc::getMessage('MAIL_CLIENT_GAMES_ALIAS'),
+			'archive' => Loc::getMessage('MAIL_CLIENT_ARCHIVE_ALIAS'),
+			'notes' => Loc::getMessage('MAIL_CLIENT_NOTES_ALIAS'),
+			default => null,
+		};
 	}
 
 	public function isSyncLock()
@@ -240,6 +363,7 @@ class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implem
 			'DIR_MD5'        => $this->getDirMd5(),
 			'LEVEL'          => $this->getLevel(),
 			'IS_DISABLED'    => $this->isDisabled(),
+			'IS_CONTAINER'   => $this->isVirtualFolder(),
 			'CHILDREN'       => Json::decode(Json::encode($this->getChildren()))
 		];
 	}

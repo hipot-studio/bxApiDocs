@@ -20,6 +20,7 @@ final class CommonUserDto extends Dto
 		public ?string $avatarSizeOriginal = null,
 		public ?string $avatarSize100 = null,
 		public ?bool $isAdmin = null,
+		public ?bool $isRootAdmin = null,
 		public ?bool $isCollaber = null,
 		public ?bool $isExtranet = null,
 		public ?string $personalMobile = null,

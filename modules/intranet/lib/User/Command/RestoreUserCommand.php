@@ -46,9 +46,9 @@ class RestoreUserCommand extends AbstractCommand
 
 			return $result;
 		}
-		catch (UpdateFailedException)
+		catch (UpdateFailedException $e)
 		{
-			return $result->addError(new Error('Activity update failed'));
+			return $result->addErrors($e->getErrors());
 		}
 	}
 

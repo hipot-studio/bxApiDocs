@@ -13,4 +13,6 @@ interface PackageRepositoryInterface {
 		Baas\Model\EO_Package_Collection $packages,
 		Baas\Model\EO_ServiceInPackage_Collection $packageServices,
 	): void;
+
+	public function hasBaasDistributedPackages(): bool;
 }

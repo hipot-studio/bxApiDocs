@@ -14,7 +14,7 @@ use Bitrix\Rest\V3\Documentation\DocumentationManager;
 use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
 use Bitrix\Rest\V3\CacheManager;
 
-class Documentation extends RestController
+final class Documentation extends RestController
 {
 	private const DOCUMENTATION_CACHE_KEY = 'rest.v3.documentation.cache.key';
 

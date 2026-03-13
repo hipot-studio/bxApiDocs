@@ -22,6 +22,7 @@ use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -875,7 +876,7 @@ class CounterService
 			return;
 		}
 
-		$config = RecentConfigManager::getInstance()->getByExtendedType($entityType);
+		$config = ServiceLocator::getInstance()->get(RecentConfigManager::class)->getByExtendedType($entityType);
 		$hasAnyRecentSection = $config->hasOwnRecentSection || $config->useDefaultRecentSection;
 		$recentSectionName = $config->getOwnSectionName() ?? $entityType;
 		if (!$isMuted && !isset($this->counters[$recentSectionName][$id]))
@@ -951,7 +952,7 @@ class CounterService
 			return;
 		}
 
-		$config = RecentConfigManager::getInstance()->getByExtendedType($entityType);
+		$config = ServiceLocator::getInstance()->get(RecentConfigManager::class)->getByExtendedType($entityType);
 		$hasAnyRecentSection = $config->hasOwnRecentSection || $config->useDefaultRecentSection;
 		if ($config->hasOwnRecentSection)
 		{

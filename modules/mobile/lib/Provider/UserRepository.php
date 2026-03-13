@@ -7,6 +7,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\UserTable;
 use DateTimeZone;
+use Bitrix\Bitrix24\Internal\Service\UserService;
 
 class UserRepository
 {
@@ -116,6 +117,7 @@ class UserRepository
 			avatarSizeOriginal: $originalAvatar,
 			avatarSize100: $resizedAvatar100,
 			isAdmin: self::isAdmin($userId),
+			isRootAdmin: self::isRootAdmin($userId),
 			isCollaber: self::isCollaber($userId),
 			isExtranet: self::isExtranet($userId),
 			personalMobile: $user['PERSONAL_MOBILE'] ?? null,
@@ -186,6 +188,16 @@ class UserRepository
 		}
 
 		return isset(static::$adminIdMap[$userId]);
+	}
+
+	private static function isRootAdmin(int $userId): bool
+	{
+		if (!Loader::includeModule('bitrix24') || $userId <= 0)
+		{
+			return false;
+		}
+
+		return (new UserService())?->isFirstAdmin($userId);
 	}
 
 	private static function getUserFullName(array $user): string

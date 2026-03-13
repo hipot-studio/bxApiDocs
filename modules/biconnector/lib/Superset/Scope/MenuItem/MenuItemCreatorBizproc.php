@@ -21,13 +21,14 @@ final class MenuItemCreatorBizproc extends BaseMenuItemCreator
 				'ID' => "BIC_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
+				'IS_LOCKED' => !$this->isAvailableByTariff(),
 			];
 		}
 
 		if (!empty($menuItems))
 		{
 			$menuItems[] = [
-				"IS_DELIMITER" => true,
+				'IS_DELIMITER' => true,
 			];
 
 			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
@@ -42,5 +43,10 @@ final class MenuItemCreatorBizproc extends BaseMenuItemCreator
 				'sub_menu' => $menuItems,
 			],
 		];
+	}
+
+	protected function getOpenFormCode(): string
+	{
+		return 'bizproc';
 	}
 }

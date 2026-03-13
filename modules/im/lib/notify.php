@@ -375,7 +375,7 @@ class Notify
 			$params = \CIMMessageParam::Get(array_keys($collection));
 			foreach ($params as $notificationId => $param)
 			{
-				$collection[$notificationId]['PARAMS'] = empty($param) ? null : $param;
+				$collection[$notificationId]['PARAMS'] = empty($param) ? null : \CIMNotify::prepareNotifyParams($param);
 			}
 
 			$collection = $this->fillReadStatuses($collection);

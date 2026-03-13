@@ -208,7 +208,7 @@ class AiAgentsGridHelper
 
 	private function getGridData(int $limit, int $offset, array $filterData): array
 	{
-		$templates = $this->getAiAgentsTemplates($limit, $offset);
+		$templates = $this->getAiAgentsTemplates($limit, $offset, $filterData);
 
 		if (!$templates)
 		{
@@ -262,9 +262,10 @@ class AiAgentsGridHelper
 		return $query;
 	}
 
-	private function getAiAgentsTemplates(int $limit, int $offset): array
+	private function getAiAgentsTemplates(int $limit, int $offset, array $filterData): array
 	{
 		$query = $this->getAiAgentsTemplatesQuery($limit, $offset);
+		$this->applyFilterToQuery($query, $filterData);
 		$templates = $query->fetchAll();
 
 		if (empty($templates))
@@ -1050,5 +1051,67 @@ class AiAgentsGridHelper
 		}
 
 		return $chatsMap;
+	}
+
+	private function applyFilterToQuery(Query $query, array $filterData): void
+	{
+		if (empty($filterData))
+		{
+			return;
+		}
+
+		$fieldsWhiteList = $this->grid->getVisibleColumnsIds();
+
+		foreach ($filterData as $filterId => $filterValue)
+		{
+			if (!in_array($filterId, $fieldsWhiteList, true))
+			{
+				continue;
+			}
+
+			$this->addWhereToQuery($query, $filterId, $filterValue);
+		}
+	}
+
+	private function addWhereToQuery(Query $query, int|string $filterId, mixed $filterValue): void
+	{
+		match ($filterId)
+		{
+			'LAUNCHED_BY' => $this->addLaunchedByQueryFilter($query, $filterValue),
+			default => null,
+		};
+	}
+
+	private function addLaunchedByQueryFilter(Query $query, mixed $filterValue): void
+	{
+		if (!is_array($filterValue))
+		{
+			return;
+		}
+
+		$userIds = [];
+
+		foreach ($filterValue as $rawUserId)
+		{
+			$userId = $this->getUserIdFromString($rawUserId);
+
+			if ($userId)
+			{
+				$userIds[] = $userId;
+			}
+		}
+
+
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		$query->where(
+			Query::filter()
+				->logic('or')
+				->whereIn('ACTIVATED_BY', $userIds)
+				->where('ACTIVATED_AT', null),
+		);
 	}
 }

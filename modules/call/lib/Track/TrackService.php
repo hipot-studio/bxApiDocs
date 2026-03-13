@@ -9,13 +9,14 @@ use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Im\Call\Registry;
 use Bitrix\Call;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Integration\AI\Task\AITask;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 use Bitrix\Call\Track\Downloader\AbstractDownloader;
 use Bitrix\Call\Track\Downloader\DownloadHelper;
@@ -206,7 +207,6 @@ final class TrackService
 
 		if (str_starts_with($track->getFileMimeType(), 'audio/'))
 		{
-			// Audio recording - no preview required
 			return $this->processCloudAudioTrack($track);
 		}
 
@@ -314,6 +314,8 @@ final class TrackService
 
 			// Remove expectation agent if it was scheduled
 			CloudRecordExpectationAgent::removeAgent($callId);
+
+			TrackDeletionService::getInstance()->deleteCloudTracksFromMixer($callId);
 		}
 		else
 		{
@@ -391,6 +393,8 @@ final class TrackService
 		// Remove expectation agent if it was scheduled
 		CloudRecordExpectationAgent::removeAgent($callId);
 
+		TrackDeletionService::getInstance()->deleteCloudTracksFromMixer($callId);
+
 		return $result;
 	}
 
@@ -402,6 +406,8 @@ final class TrackService
 		{
 			$logger = Logger::getInstance();
 		}
+
+		TrackDeletionService::getInstance()->tryDeleteAiTracksFromMixer($track->getCallId());
 
 		$minDuration = CallAISettings::getRecordMinDuration();
 		if ($track->getDuration() > 0 && $track->getDuration() < $minDuration)

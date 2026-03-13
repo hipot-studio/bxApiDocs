@@ -38,6 +38,21 @@ class StyledPicture extends Payload implements IPayload
 		return $data;
 	}
 
+	/**
+	 * Returns usage cost for this payload, honoring a custom override if provided.
+	 *
+	 * @return int
+	 */
+	public function getCost(): int
+	{
+		if (!is_null($this->customCost))
+		{
+			return $this->customCost;
+		}
+
+		return self::DEFAULT_USAGE_COST;
+	}
+
 	public function pack(): string
 	{
 		return json_encode([

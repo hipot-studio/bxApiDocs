@@ -17,11 +17,13 @@ class Member
 	private int $userId;
 	private int $taskId;
 	private ?TaskObject $task = null;
+	private array $lastInsertMembers;
 
 	public function __construct(int $userId, int $taskId)
 	{
 		$this->userId = $userId;
 		$this->taskId = $taskId;
+		$this->lastInsertMembers = [];
 	}
 
 	private const FIELD_CREATED_BY = 'CREATED_BY';
@@ -72,6 +74,11 @@ class Member
 		MemberTable::deleteList([
 			'TASK_ID' => $this->taskId,
 		]);
+	}
+
+	public function getLastInsertMembers(): array
+	{
+		return $this->lastInsertMembers;
 	}
 
 	private function unsubscribeExcludedUsers(array $changes, array $members): void
@@ -272,6 +279,8 @@ class Member
 		}
 
 		$result = MemberTable::addInsertIgnoreMulti($insertRows);
+		$this->lastInsertMembers = $members;
+
 		if (!$result->isSuccess())
 		{
 			throw new SqlQueryException($result->getError()?->getMessage());

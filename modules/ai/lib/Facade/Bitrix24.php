@@ -107,9 +107,12 @@ class Bitrix24
 	 */
 	public static function isWestZone(): bool
 	{
-		$zone = self::getPortalZone();
+		return !in_array(self::getPortalZone(), self::CIS_ZONES, true);
+	}
 
-		return !in_array($zone, self::CIS_ZONES, true);
+	public static function isCisZone(): bool
+	{
+		return in_array(self::getPortalZone(), self::CIS_ZONES, true);
 	}
 
 	/**

@@ -11,6 +11,9 @@ use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Web\JWT;
 
 
+/**
+ * @internal
+ */
 abstract class JwtController extends Controller
 {
 	public function getDefaultPreFilters(): array

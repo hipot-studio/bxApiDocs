@@ -31,8 +31,6 @@ class StructureBackwardAdapter
 			return [];
 		}
 
-		self::checkAccessCodesUpdate();
-
 		if (\COption::GetOptionInt("humanresources", "check_user_existence") !== 1)
 		{
 			\CAgent::AddAgent(
@@ -302,22 +300,5 @@ class StructureBackwardAdapter
 		self::$headRole = null;
 
 		self::getCacheManager()->cleanDir(self::CACHE_SUB_DIR);
-	}
-
-	private static function checkAccessCodesUpdate()
-	{
-		if (\COption::GetOptionInt("humanresources", "access_code_update") !== 1)
-		{
-			\CAgent::AddAgent(
-				name: '\Bitrix\HumanResources\Install\Agent\AccessCodeUpdate::run();',
-				module: 'humanresources',
-				interval: 60,
-				next_exec: \ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
-				existError: false,
-			);
-
-			\COption::SetOptionInt("humanresources", "access_code_update", 1);
-		}
-
 	}
 }

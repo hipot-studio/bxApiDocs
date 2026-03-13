@@ -1,7 +1,7 @@
 <?php
 
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\Conference;
+use Bitrix\Call\Call;
+use Bitrix\Call\Conference;
 use Bitrix\Im\User;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
@@ -19,7 +19,7 @@ class ImComponentConferenceList extends CBitrixComponent
 {
 	protected function checkModules(): bool
 	{
-		if (!Loader::includeModule('im'))
+		if (!Loader::includeModule('im') || !Loader::includeModule('call'))
 		{
 			ShowError(Loc::getMessage('IM_COMPONENT_MODULE_IM_NOT_INSTALLED'));
 			return false;

@@ -56,6 +56,11 @@ class Status
 
 	public static function getSlider(): string
 	{
+		if (!self::isExist())
+		{
+			return '';
+		}
+
 		$slider = 'limit_benefit_market';
 
 		if (Client::isSubscriptionDemo())

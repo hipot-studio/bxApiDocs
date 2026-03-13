@@ -7,6 +7,7 @@ use Bitrix\ImConnector;
  * Class UpdateVersion
  *
  * @package Bitrix\Imconnector\Update
+ * @internal
  */
 class UpdateVersion
 {

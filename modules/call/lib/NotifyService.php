@@ -4,7 +4,6 @@ namespace Bitrix\Call;
 
 use Bitrix\Call\Integration\AI\ChatMessage;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
-use Bitrix\Im\Call\Call;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Message;
@@ -17,7 +16,7 @@ use Bitrix\Main\Application;
 
 class NotifyService
 {
-	/** @see \Bitrix\Im\Call\Integration\Chat::onStateChange */
+	/** @see \Bitrix\Call\Integration\Chat::onStateChange */
 	public const
 		MESSAGE_COMPONENT_ID = 'CallMessage'
 	;
@@ -34,7 +33,9 @@ class NotifyService
 		MESSAGE_TYPE_AI_INFO = 'AI_INFO',
 		MESSAGE_TYPE_AI_WAIT = 'AI_WAIT',
 		MESSAGE_TYPE_AI_DESTROY = 'AI_DESTROY',
-		MESSAGE_TYPE_AUDIO_RECORD = 'AUDIO_RECORD'
+		MESSAGE_TYPE_AUDIO_RECORD = 'AUDIO_RECORD',
+		MESSAGE_TYPE_CLOUD_RECORD_PREPARE = 'CLOUD_RECORD_PREPARE',
+		MESSAGE_TYPE_CLOUD_RECORD_READY = 'CLOUD_RECORD_READY'
 	;
 
 	public const ADMIN_NOTIFICATION_TAG = 'call_registration';
@@ -219,7 +220,7 @@ class NotifyService
 		{
 			$params = $message->getParams();
 
-			/** @see \Bitrix\Im\Call\Integration\Chat::onStateChange */
+			/** @see \Bitrix\Call\Integration\Chat::onStateChange */
 			if (
 				$params->isSet(Params::COMPONENT_PARAMS)
 				&& isset($params->get(Params::COMPONENT_PARAMS)->getValue()['MESSAGE_TYPE'])
@@ -262,7 +263,7 @@ class NotifyService
 		{
 			$params = $message->getParams();
 
-			/** @see \Bitrix\Im\Call\Integration\Chat::onStateChange */
+			/** @see \Bitrix\Call\Integration\Chat::onStateChange */
 			if (
 				$params->isSet(Params::COMPONENT_PARAMS)
 				&& $params->get(Params::COMPONENT_PARAMS)->getValue()['CALL_ID'] == $callId
@@ -294,6 +295,11 @@ class NotifyService
 
 		$chat = Chat::getInstance($call->getChatId());
 		if (!$chat || $chat instanceof \Bitrix\Im\V2\Chat\NullChat)
+		{
+			return;
+		}
+
+		if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_CLOUD_RECORD_READY) !== null)
 		{
 			return;
 		}

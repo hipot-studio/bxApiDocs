@@ -2,13 +2,13 @@
 
 namespace Bitrix\Im\V2\Controller\Call;
 
-use Bitrix\Im\V2\Call\CallError;
+use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Main\Engine\CurrentUser;
-use CIMChat;
+
 
 class Zoom extends BaseController
 {
@@ -17,23 +17,23 @@ class Zoom extends BaseController
 	 */
 	public function createAction(Chat $chat, CurrentUser $user): ?array
 	{
-		if (!\Bitrix\Im\Call\Integration\Zoom::isActive())
+		if (!\Bitrix\Im\Integration\Socialservices\Zoom::isActive())
 		{
-			$this->addError(new CallError(CallError::ZOOM_ACTIVE_ERROR));
+			$this->addError(new Error('ZOOM_ACTIVE_ERROR'));
 
 			return null;
 		}
 
-		if (!\Bitrix\Im\Call\Integration\Zoom::isAvailable())
+		if (!\Bitrix\Im\Integration\Socialservices\Zoom::isAvailable())
 		{
-			$this->addError(new CallError(CallError::ZOOM_AVAILABLE_ERROR));
+			$this->addError(new Error('ZOOM_AVAILABLE_ERROR'));
 
 			return null;
 		}
 
-		if (!\Bitrix\Im\Call\Integration\Zoom::isConnected($user->getId()))
+		if (!\Bitrix\Im\Integration\Socialservices\Zoom::isConnected($user->getId()))
 		{
-			$this->addError(new CallError(CallError::ZOOM_CONNECTED_ERROR));
+			$this->addError(new Error('ZOOM_CONNECTED_ERROR'));
 
 			return null;
 		}
@@ -45,12 +45,12 @@ class Zoom extends BaseController
 			return null;
 		}
 
-		$zoom = new \Bitrix\Im\Call\Integration\Zoom($user->getId(), $chat->getDialogId());
+		$zoom = new \Bitrix\Im\Integration\Socialservices\Zoom($user->getId(), $chat->getDialogId());
 		$link = $zoom->getImChatConferenceUrl();
 
 		if (empty($link))
 		{
-			$this->addError(new CallError(CallError::ZOOM_CREATE_ERROR));
+			$this->addError(new Error('ZOOM_CREATE_ERROR'));
 
 			return null;
 		}

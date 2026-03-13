@@ -45,7 +45,7 @@ final class SetDraftAction extends BaseAction
 		$accessItem = DashboardAccessItem::createFromArray([
 			'ID' => (int)$rawFields['ID'],
 			'TYPE' => $rawFields['TYPE'],
-			'OWNER_ID' => (int)$rawFields['OWNER_ID'],
+			'STATUS' => $rawFields['STATUS'],
 		]);
 
 		if (

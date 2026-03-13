@@ -1,6 +1,6 @@
 <?php
 
-use Bitrix\Im\Call\Conference;
+use Bitrix\Call\Conference;
 use Bitrix\Im\Chat;
 use Bitrix\Im\User;
 use Bitrix\Main\Engine\CurrentUser;
@@ -119,6 +119,10 @@ class ImComponentConferenceEdit extends CBitrixComponent
 		if (!Loader::includeModule('im'))
 		{
 			$this->errorCollection[] = new \Bitrix\Main\Error("IM module is not installed");
+		}
+		if (!Loader::includeModule('call'))
+		{
+			$this->errorCollection[] = new \Bitrix\Main\Error("Call module is not installed");
 		}
 
 		$this->initParams();

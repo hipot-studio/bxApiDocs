@@ -16,7 +16,11 @@ class Feature
 	private const CROSS_FUNCTIONAL_TEAMS_IS_AVAILABLE_OPTION_NAME = 'teams_available';
 	private const COLLABS_IS_AVAILABLE_OPTION_NAME = 'collabs_available';
 	private const DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME = 'deputy_approves_bp_available';
-	private const DEPARTMENT_SETTINGS_IS_AVAILABLE_OPTION_NAME = 'department_settings_available';
+	private const DEPARTMENT_BP_SETTINGS_IS_AVAILABLE_OPTION_NAME = 'department_settings_available';
+	private const TEAM_REPORT_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'team_reports_settings_available';
+	private const DEPUTY_GET_REPORTS_IS_AVAILABLE_OPTION_NAME = 'deputy_get_reports_available';
+	private const DEPARTMENT_REPORTS_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'department_reports_settings_available';
+	private const MULTIPLE_USERS_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'multiple_users_settings_available';
 
 	public function isHcmLinkAvailable(): bool
 	{
@@ -40,9 +44,29 @@ class Feature
 		return $this->getOptionValue(self::DEPUTY_APPROVES_BP_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
 	}
 
-	public function isDepartmentSettingsAvailable(): bool
+	public function isDepartmentBPSettingsAvailable(): bool
 	{
-		return $this->getOptionValue(self::DEPARTMENT_SETTINGS_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+		return $this->getOptionValue(self::DEPARTMENT_BP_SETTINGS_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function areTeamReportSettingsAvailable(): bool
+	{
+		return $this->getOptionValue(self::TEAM_REPORT_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function isDeputyGetReportsAvailable(): bool
+	{
+		return $this->getOptionValue(self::DEPUTY_GET_REPORTS_IS_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function areDepartmentReportsSettingsAvailable(): bool
+	{
+		return $this->getOptionValue(self::DEPARTMENT_REPORTS_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function areMultipleUsersSettingsAvailable(): bool
+	{
+		return $this->getOptionValue(self::MULTIPLE_USERS_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
 	}
 
 	public function setDeputyApprovesBPAvailable(bool $value): void

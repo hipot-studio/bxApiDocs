@@ -763,4 +763,12 @@ class GroupChat extends Chat
 	{
 		return true;
 	}
+
+	public function toCacheRepresentation(): array
+	{
+		$result = parent::toCacheRepresentation();
+		unset($result['ENGINE_CODE']);
+
+		return $result;
+	}
 }

@@ -8,9 +8,9 @@ class MethodDescription implements \Serializable
 {
 	public function __construct(
 		public readonly string $module,
-		public readonly ?string $controller,
+		public readonly ?string $controllerFqcn,
 		public readonly string $method,
-		public readonly ?string $dtoClass,
+		public readonly ?string $dtoFqcn,
 		public readonly array $scopes,
 		public readonly string $actionUri,
 		public readonly LocalizableMessage|string|null $title = null,
@@ -34,9 +34,9 @@ class MethodDescription implements \Serializable
 	{
 		return [
 			'module' => $this->module,
-			'controller' => $this->controller,
+			'controllerFqcn' => $this->controllerFqcn,
 			'method' => $this->method,
-			'dtoClass' => $this->dtoClass,
+			'dtoFqcn' => $this->dtoFqcn,
 			'scopes' => $this->scopes,
 			'actionUri' => $this->actionUri,
 			'title' => $this->title,
@@ -49,9 +49,9 @@ class MethodDescription implements \Serializable
 	public function __unserialize(array $data): void
 	{
 		$this->module = $data['module'];
-		$this->controller = $data['controller'];
+		$this->controllerFqcn = $data['controllerFqcn'];
 		$this->method = $data['method'];
-		$this->dtoClass = $data['dtoClass'];
+		$this->dtoFqcn = $data['dtoFqcn'];
 		$this->scopes = $data['scopes'];
 		$this->actionUri = $data['actionUri'];
 		$this->title = $data['title'];

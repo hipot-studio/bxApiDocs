@@ -354,7 +354,7 @@ abstract class LimitManager
 		}
 	}
 
-	protected function clearOverLimitTimestamps(): void
+	public function clearOverLimitTimestamps(): void
 	{
 		Option::delete('biconnector', ['name' => $this->getFirstOverLimitOptionName()]);
 		Option::delete('biconnector', ['name' => $this->getLastOverLimitOptionName()]);

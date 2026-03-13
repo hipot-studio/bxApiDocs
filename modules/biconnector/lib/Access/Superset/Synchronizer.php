@@ -44,34 +44,25 @@ final class Synchronizer
 			return $syncResult;
 		}
 
-		if (is_array($editValues) && count($editValues) === 1 && current($editValues) === PermissionDictionary::VALUE_VARIATION_ALL)
+		$externalFilter = [];
+		if (
+			!is_array($editValues)
+			|| count($editValues) > 1
+			|| current($editValues) !== PermissionDictionary::VALUE_VARIATION_ALL
+		)
 		{
-			$dashboardsExternalIdList = self::getDashboardExternalIdList();
+			$externalFilter = ['=ID' => $editValues];
 		}
-		else
-		{
-			$dashboardsExternalIdList = self::getDashboardExternalIdList(['=OWNER_ID' => $this->userId]);
-
-			if (is_array($editValues))
-			{
-				$dashboardsExternalIdList = array_merge(
-					$dashboardsExternalIdList,
-					self::getDashboardExternalIdList(['=ID' => $editValues])
-				);
-
-				$dashboardsExternalIdList = array_unique($dashboardsExternalIdList);
-			}
-		}
+		$dashboardsExternalIdList = self::getDashboardExternalIdList($externalFilter);
 
 		$role = self::ROLE_EMPTY_NAME;
-		if ($viewValues)
-		{
-			$role = self::ROLE_READER_NAME;
-		}
-
-		if ($editValues || !empty($dashboardsExternalIdList))
+		if ($editValues)
 		{
 			$role = self::ROLE_WRITER_NAME;
+		}
+		elseif ($viewValues)
+		{
+			$role = self::ROLE_READER_NAME;
 		}
 
 		$integrator = Integrator::getInstance();
@@ -130,7 +121,6 @@ final class Synchronizer
 			$currentViewHash
 			. $currentEditHash
 			. implode('', self::getDashboardExternalIdList())
-			. implode('', self::getDashboardExternalIdList(['=OWNER_ID' => $this->userId]))
 		);
 	}
 }

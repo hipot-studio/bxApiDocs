@@ -1932,7 +1932,7 @@ class CBPHelper
 			return $cache[$code];
 		}
 
-		if (!str_starts_with($code, 'group_'))
+		if (!$code || !str_starts_with($code, 'group_'))
 		{
 			return false;
 		}
@@ -2142,7 +2142,7 @@ class CBPHelper
 			return implode(', ', static::flatten($mixed));
 		}
 
-		return (string)$mixed;
+		return static::hasStringRepresentation($mixed) ? (string)$mixed : '';
 	}
 
 	public static function getBool($value)

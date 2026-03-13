@@ -63,7 +63,7 @@ class Operator
 	/**
 	 * @return array{RESULT: bool}
 	 */
-	private function checkAccess(): array
+	private function checkAccess(?int $chatId = null): array
 	{
 		if (!$this->moduleLoad)
 		{
@@ -72,7 +72,12 @@ class Operator
 			];
 		}
 
-		if ($this->chatId <= 0)
+		if (!$chatId)
+		{
+			$chatId = $this->chatId;
+		}
+
+		if ($chatId <= 0)
 		{
 			$this->error = new BasicError(__METHOD__, 'CHAT_ID', Loc::getMessage('IMOL_OPERATOR_ERROR_CHAT_ID'));
 
@@ -92,7 +97,7 @@ class Operator
 		$orm = \Bitrix\Im\Model\RelationTable::getList([
 			"select" => ["ID", "ENTITY_TYPE" => "CHAT.ENTITY_TYPE"],
 			"filter" => [
-				"=CHAT_ID" => $this->chatId,
+				"=CHAT_ID" => $chatId,
 				"=USER_ID" => $this->userId,
 			],
 		]);
@@ -111,13 +116,13 @@ class Operator
 		else
 		{
 			$recentCount = \Bitrix\ImOpenLines\Model\RecentTable::getCount([
-				'=CHAT_ID' => $this->chatId,
+				'=CHAT_ID' => $chatId,
 				'=USER_ID' => $this->userId,
 			]);
 
 			if (!$recentCount)
 			{
-				$ormChat = \Bitrix\Im\Model\ChatTable::getById($this->chatId);
+				$ormChat = \Bitrix\Im\Model\ChatTable::getById($chatId);
 				if ($chat = $ormChat->fetch())
 				{
 					if ($chat['TYPE'] == IM_MESSAGE_OPEN_LINE)
@@ -740,29 +745,32 @@ class Operator
 	public function saveToQuickAnswers($messageId)
 	{
 		$message = \CIMMessenger::GetById($messageId);
-		if (!$this->checkAccess()['RESULT'])
+		if ($message)
 		{
-			return false;
-		}
+			if (
+				!$this->checkAccess()['RESULT']
+				|| !$this->checkAccess((int)$message['CHAT_ID'])['RESULT']
+			)
+			{
+				return false;
+			}
 
-		if($message)
-		{
 			$lineId = Session\Common::getConfigIdByChatId($this->chatId);
-			if($lineId > 0)
+			if ($lineId > 0)
 			{
 				$listsDataManager = new ListsDataManager($lineId);
-				if($listsDataManager->isHasRights())
+				if ($listsDataManager->isHasRights())
 				{
 					QuickAnswer::setDataManager($listsDataManager);
 					$answer = reset(QuickAnswer::getList(array('MESSAGEID' => $messageId)));
-					if($answer)
+					if ($answer)
 					{
 						$answer->update(array('TEXT' => $message['MESSAGE']));
 					}
 					else
 					{
 						$answer = reset(QuickAnswer::getList(array('TEXT' => $message['MESSAGE'])));
-						if(!$answer)
+						if (!$answer)
 						{
 							$answer = QuickAnswer::add(array(
 								'TEXT' => $message['MESSAGE'],
@@ -770,7 +778,7 @@ class Operator
 							));
 						}
 					}
-					if($answer && $answer->getId() > 0)
+					if ($answer && $answer->getId() > 0)
 					{
 						return true;
 					}

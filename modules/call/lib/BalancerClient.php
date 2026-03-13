@@ -13,6 +13,9 @@ use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Web\Uri;
 use Psr\Http\Message\ResponseInterface;
 
+/**
+ * @internal
+ */
 class BalancerClient
 {
 	private const BALANCER_MAP = [
@@ -83,7 +86,7 @@ class BalancerClient
 		return $this->performRequest('/v2/update-token-version', $data);
 	}
 
-	public function changeUserRole(\Bitrix\Im\Call\Call $call, array $userIds, string $role): Result
+	public function changeUserRole(\Bitrix\Call\Call $call, array $userIds, string $role): Result
 	{
 		$data = [
 			'portalId' => Settings::getPortalId(),

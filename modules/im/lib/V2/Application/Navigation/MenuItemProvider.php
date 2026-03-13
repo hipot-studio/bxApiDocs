@@ -116,7 +116,6 @@ class MenuItemProvider
 			new MenuItem(
 				id: 'notification',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_NOTIFICATIONS'),
-				isVisible: !$this->applicationFeatures->isNotificationsStandalone,
 				sort: self::SORT_NOTIFICATIONS,
 			),
 			new MenuItem(

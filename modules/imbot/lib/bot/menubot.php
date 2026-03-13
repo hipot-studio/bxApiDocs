@@ -8,6 +8,7 @@ use Bitrix\ImBot\ItrMenu;
  * Common interface for chat menu.
  *
  * @package Bitrix\Imbot\Bot
+ * @internal
  */
 interface MenuBot
 {

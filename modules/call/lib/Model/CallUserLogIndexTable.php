@@ -3,9 +3,9 @@ namespace Bitrix\Call\Model;
 
 use Bitrix\Main;
 use Bitrix\Main\Application;
-use Bitrix\Main\Entity;
 use Bitrix\Main\Error;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\ORM\Data\DataManager;
 
 /**
  * Class CallUserLogIndexTable
@@ -32,7 +32,7 @@ use Bitrix\Main\DB\SqlExpression;
  * @method static \Bitrix\Call\Model\EO_CallUserLogIndex wakeUpObject($row)
  * @method static \Bitrix\Call\Model\EO_CallUserLogIndex_Collection wakeUpCollection($rows)
  */
-class CallUserLogIndexTable extends Main\Entity\DataManager
+class CallUserLogIndexTable extends DataManager
 {
 	use Main\ORM\Data\Internal\DeleteByFilterTrait;
 
@@ -61,7 +61,7 @@ class CallUserLogIndexTable extends Main\Entity\DataManager
 	public static function validateTitle()
 	{
 		return [
-			new Entity\Validator\Length(null, 511),
+			new \Bitrix\Main\ORM\Fields\Validators\LengthValidator(null, 511),
 		];
 	}
 
@@ -72,7 +72,7 @@ class CallUserLogIndexTable extends Main\Entity\DataManager
 
 	public static function merge(array $data)
 	{
-		$result = new Entity\AddResult();
+		$result = new \Bitrix\Main\ORM\Data\AddResult();
 
 		$helper = Application::getConnection()->getSqlHelper();
 		$insertData = $data;

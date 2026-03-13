@@ -38,7 +38,7 @@ class StatusFieldAssembler extends FieldAssembler
 
 		if (SupersetInitializer::isSupersetLoading())
 		{
-			return $this->getStatusLabelByStatusType(SupersetDashboardTable::DASHBOARD_STATUS_LOAD);
+			return $this->getStatusLabelByStatusType($value['STATUS'], $value['ID']);
 		}
 
 		if (!$this->getSettings()->isSupersetAvailable())

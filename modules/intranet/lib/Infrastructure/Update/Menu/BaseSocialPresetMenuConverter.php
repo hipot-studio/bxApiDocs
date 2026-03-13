@@ -51,7 +51,7 @@ abstract class BaseSocialPresetMenuConverter extends Stepper
 	{
 		$result = UserTable::query()
 			->setSelect(['ID'])
-			->addFilter('=IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->addFilter('>ID', $lastId)
 			->setLimit($this->limit)
 			->exec()

@@ -6,6 +6,9 @@ use Bitrix\Main;
 use Bitrix\Im;
 use Bitrix\Main\Localization\Loc;
 
+/**
+ * @internal
+ */
 class HrBot extends Base
 {
 	public const BOT_CODE = 'hrbot';

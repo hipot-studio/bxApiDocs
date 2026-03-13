@@ -197,7 +197,7 @@ class Package implements \JsonSerializable, Baas\Contract\Package
 
 				$balancePercentage = $item['current'] / $item['max'] * 100;
 
-				return min($carry, $balancePercentage < 1 ? $balancePercentage : round($balancePercentage));
+				return min($carry, $balancePercentage < 1 ? round($balancePercentage, 2) : round($balancePercentage));
 			},
 			100,
 		);

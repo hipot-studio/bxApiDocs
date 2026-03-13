@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\DTO;
 
+/**
+ * @internal
+ */
 class FileInfo extends Hydrator
 {
 	public int $id = 0;

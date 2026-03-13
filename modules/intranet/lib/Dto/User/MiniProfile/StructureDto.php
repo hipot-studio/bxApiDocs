@@ -20,6 +20,8 @@ class StructureDto implements \JsonSerializable
 		public array $userDepartmentIds,
 		/** @type list<TeamDto> */
 		public array $teams = [],
+		/** @type list<int> */
+		public array $userHeadIds = [],
 	) {}
 
 	public function jsonSerialize(): array
@@ -30,6 +32,7 @@ class StructureDto implements \JsonSerializable
 			'departmentDictionary' => $this->departmentDictionary,
 			'userDepartmentIds' => $this->userDepartmentIds,
 			'teams' => $this->teams,
+			'userHeadIds' => $this->userHeadIds,
 		];
 	}
 }

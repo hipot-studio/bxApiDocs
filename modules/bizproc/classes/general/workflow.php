@@ -217,6 +217,20 @@ class CBPWorkflow
 
 	/************************  EXECUTE WORKFLOW  ************************************************/
 
+	public function startLater(int $delay = 0)
+	{
+		if ($this->getWorkflowStatus() !== CBPWorkflowStatus::Created)
+		{
+			throw new Exception("CanNotStartInstanceTwice");
+		}
+
+		$this->isNew = true;
+		$this->initializeRoot();
+		$this->setWorkflowStatus(CBPWorkflowStatus::Suspended);
+		$this->save();
+		$this->getSchedulerService()->subscribeStartWorkflow($this->getInstanceId(), $delay);
+	}
+
 	/**
 	* Starts new workflow instance.
 	*
@@ -229,7 +243,16 @@ class CBPWorkflow
 		}
 
 		$this->isNew = true;
+		$this->initializeRoot();
 		$this->run();
+	}
+
+	private function initializeRoot(): void
+	{
+		$this->initializeActivity($this->rootActivity);
+		$this->rootActivity->setReadOnlyData(
+			$this->rootActivity->pullProperties()
+		);
 	}
 
 	/**
@@ -258,12 +281,8 @@ class CBPWorkflow
 		try
 		{
 			$this->setWorkflowStatus(CBPWorkflowStatus::Running);
-			if ($this->isNew)
+			if ($this->rootActivity->executionStatus === CBPActivityExecutionStatus::Initialized)
 			{
-				$this->initializeActivity($this->rootActivity);
-				$this->rootActivity->setReadOnlyData(
-					$this->rootActivity->pullProperties()
-				);
 				$this->executeActivity($this->rootActivity);
 			}
 

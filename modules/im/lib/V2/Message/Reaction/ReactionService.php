@@ -40,11 +40,6 @@ class ReactionService
 			->setReaction($reaction)
 		;
 
-		if (!Features::isMultipleReactionsAvailable())
-		{
-			$this->deleteAllReactions();
-		}
-
 		try
 		{
 			$saveResult = $reactionItem->save();

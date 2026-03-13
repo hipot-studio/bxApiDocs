@@ -110,7 +110,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 			if ($this->arResult["IS_CLOUD"])
 			{
 				$this->arResult["SUB_MENU_ITEMS"]["integrator"] = [
-					"NAME" => Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_INTEGRATOR"),
+					"NAME" => Loc::getMessage(($this->arResult['IS_RENAMED_INTEGRATOR'] ?? false) ? 'INTRANET_INVITE_DIALOG_MENU_INTEGRATOR_RENAMED' : 'INTRANET_INVITE_DIALOG_MENU_INTEGRATOR'),
 					"ATTRIBUTES" => [
 						"data-role" => "menu-integrator",
 						"data-action" => "integrator"
@@ -199,6 +199,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 	public function executeComponent()
 	{
 		$this->arResult["IS_CLOUD"] = Loader::includeModule("bitrix24");
+		$this->arResult['IS_RENAMED_INTEGRATOR'] = Intranet\Public\Service\IntegratorService::createByDefault()->isRenamedIntegrator();
 		if ($this->arResult["IS_CLOUD"])
 		{
 			$this->arResult["LICENSE_ZONE"] = CBitrix24::getLicensePrefix();

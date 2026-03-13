@@ -229,6 +229,11 @@ class Service implements \JsonSerializable, Baas\Contract\Service
 		return $this->data?->getMaximalValue();
 	}
 
+	public function getFeaturePromotionCode(): ?string
+	{
+		return $this->data?->getFeaturePromotionCode();
+	}
+
 	public function jsonSerialize(): array
 	{
 		return [
@@ -256,5 +261,17 @@ class Service implements \JsonSerializable, Baas\Contract\Service
 	public function __serialize(): array
 	{
 		return $this->jsonSerialize();
+	}
+
+	/**
+	 * This service is distributed through Marketplace - the service is available in Market + BitrixGPT subscription
+	 */
+	public function isDistributedByMarket(): bool
+	{
+		return $this->isAvailable()
+			&& (
+				$this->data?->getAdvertisingStrategy() === Baas\Internal\Entity\Service\ServiceAdvertisingStrategy::BY_MARKET->value
+				|| Baas\Repository\PackageRepository::getInstance()->hasMarketDistributedPackagesForService($this->getCode())
+			);
 	}
 }

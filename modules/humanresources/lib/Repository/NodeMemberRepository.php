@@ -3,13 +3,13 @@
 namespace Bitrix\HumanResources\Repository;
 
 use Bitrix\HumanResources\Access\AuthProvider\StructureAuthProvider;
+use Bitrix\HumanResources\Compatibility\Event\NewToOldEventHandler;
 use Bitrix\HumanResources\Contract\Service\SemaphoreService;
 use Bitrix\HumanResources\Service\EventSenderService;
 use Bitrix\HumanResources\Contract\Repository\RoleRepository;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
-use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Internals\Trait\Repository\TransactionHelperTrait;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
@@ -17,6 +17,7 @@ use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Item\Structure;
 use Bitrix\HumanResources\Model;
 use Bitrix\HumanResources\Model\NodeMemberTable;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Result\PropertyResult;
 use Bitrix\HumanResources\Result\Repository\UpdateNodeMemberResult;
 use Bitrix\HumanResources\Service\Container;
@@ -212,12 +213,12 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	): Item\Collection\NodeMemberCollection
 	{
 		$connection = Application::getConnection();
+		$this->locker->lock(NewToOldEventHandler::CACHE_CLEARING_LOCK_ID);
 		try
 		{
 			$connection->startTransaction();
 			foreach ($nodeMemberCollection as $nodeMember)
 			{
-				$this->locker->lock('hr-OnAfterUserAdd' . $nodeMember->entityId);
 				$this->create($nodeMember);
 			}
 			$connection->commitTransaction();
@@ -226,6 +227,11 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		{
 			$connection->rollbackTransaction();
 			throw $exception;
+		}
+		finally
+		{
+			$this->locker->unlock(NewToOldEventHandler::CACHE_CLEARING_LOCK_ID);
+			NewToOldEventHandler::clearHRNodeMemberCache();
 		}
 
 		return $nodeMemberCollection;
@@ -271,16 +277,26 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	{
 		$connection = Application::getConnection();
 		$connection->startTransaction();
-		foreach ($nodeMemberCollection as $nodeMember)
-		{
-			if (!$this->remove($nodeMember))
-			{
-				$connection->rollbackTransaction();
+		$this->locker->lock(NewToOldEventHandler::CACHE_CLEARING_LOCK_ID);
 
-				return false;
+		try
+		{
+			foreach ($nodeMemberCollection as $nodeMember)
+			{
+				if (!$this->remove($nodeMember))
+				{
+					$connection->rollbackTransaction();
+
+					return false;
+				}
 			}
+			$connection->commitTransaction();
 		}
-		$connection->commitTransaction();
+		finally
+		{
+			$this->locker->unlock(NewToOldEventHandler::CACHE_CLEARING_LOCK_ID);
+			NewToOldEventHandler::clearHRNodeMemberCache();
+		}
 
 		return true;
 	}
@@ -486,10 +502,8 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @deprecated use {@link \Bitrix\HumanResources\Public\Service\NodeMemberService::findAllByRoleIdAndNodeId} instead
+	 * @see \Bitrix\HumanResources\Public\Service\NodeMemberService::findAllByRoleIdAndNodeId
 	 */
 	public function findAllByRoleIdAndNodeId(
 		?int $roleId,
@@ -499,64 +513,19 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		bool $ascendingSort = true,
 	): Item\Collection\NodeMemberCollection
 	{
-		$cacheDir = self::NODE_MEMBER_CACHE_DIR;
-		$key =
-			"role_{$roleId}_node_{$nodeId}_limit_"
-			. (int)$limit
-			. "_offset_"
-			. (int)$offset
-			. "_sort_"
-			. (int)$ascendingSort;
-
-		$nodeMemberEntities = $this->cacheManager->getData($key, $cacheDir);
-		if (!empty($nodeMemberEntities))
+		if ($roleId === null || $nodeId === null)
 		{
-			$nodeMemberCollection = new Item\Collection\NodeMemberCollection();
-			foreach ($nodeMemberEntities as $nodeMemberEntity)
-			{
-				$nodeMemberEntity['CREATED_AT'] = $nodeMemberEntity['CREATED_AT']
-					? new Main\Type\DateTime($nodeMemberEntity['CREATED_AT']) : null;
-				$nodeMemberEntity['UPDATED_AT'] = $nodeMemberEntity['UPDATED_AT']
-					? new Main\Type\DateTime($nodeMemberEntity['UPDATED_AT']) : null;
-
-				$nodeMemberCollection->add($this->convertModelArrayToItem($nodeMemberEntity));
-			}
-
-			return $nodeMemberCollection;
+			return new Item\Collection\NodeMemberCollection();
 		}
 
-		$nodeMemberQuery = NodeMemberTable::query()
-			->setSelect($this->getBaseFieldList())
-			->where('ROLE.ID', $roleId)
-			->where('NODE_ID', $nodeId)
-			->where('ACTIVE', 'Y')
-		;
-
-		if ($limit)
-		{
-			$nodeMemberQuery->setLimit($limit);
-		}
-
-		if ($offset)
-		{
-			$nodeMemberQuery->setOffset($offset);
-		}
-
-		if (!$ascendingSort)
-		{
-			$nodeMemberQuery->addOrder('ID', 'DESC');
-		}
-
-		$nodeMemberEntities = $nodeMemberQuery->fetchAll();
-
-		$nodeMemberCollection = new Item\Collection\NodeMemberCollection();
-		foreach ($nodeMemberEntities as $nodeMemberEntity)
-		{
-			$nodeMemberCollection->add($this->convertModelArrayToItem($nodeMemberEntity));
-		}
-
-		$this->cacheManager->setData($key, $nodeMemberEntities, $cacheDir);
-		return $nodeMemberCollection;
+		return PublicContainer::getNodeMemberService()->findAllByRoleIdAndNodeId(
+			$roleId,
+			$nodeId,
+			MemberEntityType::USER,
+			$limit,
+			$offset,
+			$ascendingSort,
+		);
 	}
 
 	/**
@@ -789,6 +758,8 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	): Item\Collection\NodeMemberCollection
 	{
 		$connection = Application::getConnection();
+		$this->locker->lock(NewToOldEventHandler::CACHE_CLEARING_LOCK_ID);
+
 		try
 		{
 			$connection->startTransaction();
@@ -804,6 +775,11 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			$connection->rollbackTransaction();
 			$this->clearEventQueue();
 			throw $exception;
+		}
+		finally
+		{
+			$this->locker->unlock(NewToOldEventHandler::CACHE_CLEARING_LOCK_ID);
+			NewToOldEventHandler::clearHRNodeMemberCache();
 		}
 
 		return $nodeMemberCollection;

@@ -10,6 +10,8 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 
 /**
  * Base class for track file downloaders
+ *
+ * @internal
  */
 abstract class AbstractDownloader
 {

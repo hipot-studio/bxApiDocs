@@ -199,7 +199,7 @@ class TaskService
 		$link = new Uri($taskPath);
 		$link->addParams([
 			'ta_sec' => 'chat',
-			'ta_el' => 'comment_context_menu',
+			'ta_el' => 'chat_context_menu',
 		]);
 
 		$data['LINK'] = $link->getUri();
@@ -258,13 +258,16 @@ class TaskService
 
 		if ($data['PARAMS']['is_tasks_v2'])
 		{
-			$data['PARAMS']['entityId'] = $chat->getChatId();
-			$data['PARAMS']['subEntityId'] = $data['PARAMS']['IM_MESSAGE_ID'] ?? null;
-			$data['PARAMS']['ta_sec'] = 'chat';
-			$data['PARAMS']['ta_el'] = 'comment_context_menu';
-			$data['PARAMS']['description'] = $data['PARAMS']['DESCRIPTION'] ?? null;
-			$data['PARAMS']['auditors'] = $data['PARAMS']['AUDITORS'] ?? null;
-			$data['PARAMS']['groupId'] = $data['PARAMS']['GROUP_ID'] ?? null;
+			$data['PARAMS'] = [
+				...$data['PARAMS'],
+				'entityId' => $chat->getChatId(),
+				'subEntityId' => $data['PARAMS']['IM_MESSAGE_ID'] ?? null,
+				'ta_sec' => 'chat',
+				'ta_el' => 'chat_context_menu',
+				'description' => $data['PARAMS']['DESCRIPTION'] ?? null,
+				'auditors' => $data['PARAMS']['AUDITORS'] ?? null,
+				'groupId' => $data['PARAMS']['GROUP_ID'] ?? null,
+			];
 		}
 
 		return $result->setResult($data);

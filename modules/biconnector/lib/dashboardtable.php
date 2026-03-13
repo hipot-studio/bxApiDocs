@@ -1,15 +1,12 @@
 <?php
 namespace Bitrix\BIConnector;
 
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
-
-Loc::loadMessages(__FILE__);
 
 /**
  * Class DashboardTable
@@ -67,49 +64,40 @@ class DashboardTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_ID_FIELD')
 				]
 			),
 			new DatetimeField(
 				'DATE_CREATE',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_DATE_CREATE_FIELD')
 				]
 			),
 			new DatetimeField(
 				'DATE_LAST_VIEW',
 				[
 					'required' => false,
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_DATE_LAST_VIEW_FIELD')
 				]
 			),
 			new DatetimeField(
 				'TIMESTAMP_X',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_TIMESTAMP_X_FIELD')
 				]
 			),
 			new IntegerField(
 				'CREATED_BY',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_CREATED_BY_FIELD')
 				]
 			),
 			new IntegerField(
 				'LAST_VIEW_BY',
-				[
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_LAST_VIEW_BY_FIELD')
-				]
 			),
 			new StringField(
 				'NAME',
 				[
 					'required' => true,
 					'validation' => [__CLASS__, 'validateName'],
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_NAME_FIELD')
 				]
 			),
 			new StringField(
@@ -117,7 +105,6 @@ class DashboardTable extends DataManager
 				[
 					'required' => true,
 					'validation' => [__CLASS__, 'validateUrl'],
-					'title' => Loc::getMessage('DASHBOARD_ENTITY_URL_FIELD')
 				]
 			),
 			new Reference(

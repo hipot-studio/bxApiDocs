@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Uri;
 
 class TasksType extends EntityLink
 {
@@ -24,7 +25,13 @@ class TasksType extends EntityLink
 
 		$url = \CTasksTools::GetOptionPathTaskUserEntry(SITE_ID, "/company/personal/user/#user_id#/tasks/task/view/#task_id#/");
 		$url = str_replace(['#user_id#', '#task_id#'], [$this->getContext()->getUserId(), $this->entityId], mb_strtolower($url));
+		$url = (new Uri($url))
+			->addParams([
+				'ta_sec' => 'chat_tasks',
+				'ta_el' => 'view_button',
+			])
+		;
 
-		return $url;
+		return $url->getUri();
 	}
 }

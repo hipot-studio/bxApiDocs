@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Flow\Integration\BIConnector;
 
-use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Parameter;
 use Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorTasksFlowsFlow;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -36,11 +35,6 @@ final class FlowBIAnalytics
 			return [];
 		}
 
-		if (!Feature::isBuilderEnabled())
-		{
-			return [];
-		}
-
 		if (!class_exists(MenuItemCreatorTasksFlowsFlow::class))
 		{
 			return [];
@@ -65,6 +59,7 @@ final class FlowBIAnalytics
 				'id' => $dashboard['ID'],
 				'title' => $dashboard['TEXT'],
 				'url' => $dashboard['URL'],
+				'isLocked' => $dashboard['IS_LOCKED'],
 			];
 		}
 

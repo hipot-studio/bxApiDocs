@@ -145,13 +145,13 @@ class CIntranetUserListComponent extends UserList
 			unset($params['limit'], $params['offset']);
 
 			$grid->setRawRows(
-				UserTable::getList($params)->fetchAll()
+				$grid->getList($params)
 			);
 		}
 		else
 		{
-			$grid->setRawRowsWithLazyLoadPagination(function(array $ormParams) {
-				return UserTable::getList($ormParams)->fetchAll();
+			$grid->setRawRowsWithLazyLoadPagination(function(array $ormParams) use ($grid) {
+				return $grid->getList($ormParams);
 			});
 		}
 

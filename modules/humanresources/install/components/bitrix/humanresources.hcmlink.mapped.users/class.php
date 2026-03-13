@@ -45,10 +45,13 @@ class HumanResourcesHcmLinkMappedUsersComponent extends \CBitrixComponent
 		}
 
 		$this->init();
+
 		if ($this->company === null)
 		{
-			$this->includeComponentTemplate('error');
+			ShowError('No company found');
+			return;
 		}
+
 		$this->prepareResult();
 		$this->includeComponentTemplate();
 	}
@@ -67,7 +70,7 @@ class HumanResourcesHcmLinkMappedUsersComponent extends \CBitrixComponent
 	{
 		$this->arResult['COMPANY'] = $this->company;
 
-		$totalCount = Container::getHcmLinkPersonRepository()->countAllMappedByCompanyId($this->company->id);
+		$totalCount = $this->getPersonsCount();
 		$this->arResult['NAVIGATION_OBJECT'] = $this->getNavigationObject($totalCount);
 
 		$mappedPersons = $this->preparePersonsData();
@@ -159,6 +162,16 @@ class HumanResourcesHcmLinkMappedUsersComponent extends \CBitrixComponent
 		;
 	}
 
+	public function getPersonsCount(): int
+	{
+		$filterOptions = $this->getFilterOptions();
+		$requestFilter = $this->getRequestFilters($filterOptions);
+
+		return Container::getHcmLinkPersonRepository()
+			->countAllMappedByCompanyId($this->company->id, $this->getFilterForQuery($requestFilter))
+		;
+	}
+
 	private function getFilter(): array
 	{
 		return [
@@ -167,6 +180,13 @@ class HumanResourcesHcmLinkMappedUsersComponent extends \CBitrixComponent
 				'default' => true,
 				'name' => Loc::getMessage('HCMLINK_GRID_MAP_FILTER_FIELD_PERSON'),
 				'type' => 'string',
+			],
+			'fired' => [
+				'id' => 'FIRED',
+				'default' => true,
+				'name' => Loc::getMessage('HCMLINK_GRID_MAP_FILTER_FIELD_FIRED'),
+				'type' => 'checkbox',
+				'value' => 'N'
 			],
 		];
 	}
@@ -187,6 +207,15 @@ class HumanResourcesHcmLinkMappedUsersComponent extends \CBitrixComponent
 			}
 
 			$filter->whereLike('TITLE', "%{$title}%");
+		}
+
+		if (isset($requestFilter['FIRED']) && $requestFilter['FIRED'] === 'Y')
+		{
+			$filter->where('USER.ACTIVE', 'N');
+		}
+		else
+		{
+			$filter->where('USER.ACTIVE', 'Y');
 		}
 
 		return $filter;

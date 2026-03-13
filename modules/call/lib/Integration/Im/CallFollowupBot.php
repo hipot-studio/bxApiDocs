@@ -13,12 +13,16 @@ use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\ImBot;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\ChatMessage;
 use Bitrix\Call\Integration\AI\CallAIService;
 
 \Bitrix\Main\Loader::includeModule('imbot');
 
+/**
+ * @internal
+ */
 class CallFollowupBot extends ImBot\Bot\Base
 {
 	public const MODULE_ID = 'call';
@@ -64,7 +68,7 @@ class CallFollowupBot extends ImBot\Bot\Base
 			if (preg_match("/CALL_ID:([0-9]+)/i", $messageFields['COMMAND_PARAMS'], $matches))
 			{
 				$callId = (int)$matches[1];
-				$call = Im\Call\Registry::getCallWithId($callId);
+				$call = Registry::getCallWithId($callId);
 				if ($call)
 				{
 					$result = CallAIService::getInstance()->restartCallAiTask($callId);

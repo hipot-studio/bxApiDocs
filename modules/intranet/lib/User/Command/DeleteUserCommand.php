@@ -48,9 +48,9 @@ class DeleteUserCommand extends AbstractCommand
 
 			return $result;
 		}
-		catch (DeleteFailedException)
+		catch (DeleteFailedException $e)
 		{
-			return $result->addError(new Error('Delete failed'));
+			return $result->addError($e->getErrors());
 		}
 		catch (WrongIdException)
 		{

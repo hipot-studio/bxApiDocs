@@ -26,7 +26,7 @@ class UnArchiveTaskService
 			{
 				$decodedData[$row[0]] = $row;
 
-				if (!is_null($sort) && count($decodedData) >= $limit)
+				if (!is_null($sort) && (!is_null($limit) && count($decodedData) >= $limit))
 				{
 					break 2;
 				}

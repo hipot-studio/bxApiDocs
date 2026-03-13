@@ -132,45 +132,51 @@ class Network extends Base
 
 			$extraFields = [];
 			$description =
-				'[B]'
-				. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_NAME')
-				. '[/B]: '
-				. $message['USER']['FULL_NAME']
+				Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_NAME_MSGVER_1', [
+					'#PARAM_VALUE#' => $message['USER']['FULL_NAME']
+				])
 				. '[BR]';
+
 			if (
 				isset($message['USER']['WORK_POSITION'])
 				&& !empty($message['USER']['WORK_POSITION'])
 			)
 			{
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_POST')
-					. '[/B]: '
-					. $message['USER']['WORK_POSITION']
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_POST_MSGVER_1', [
+						'#PARAM_VALUE#' => $message['USER']['WORK_POSITION']
+					])
 					. '[BR]';
 			}
+
 			if (
 				isset($message['USER']['EMAIL'])
 				&& !empty($message['USER']['EMAIL'])
 			)
 			{
-				$description .= '[B]' . Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_EMAIL') . '[/B]: '.$message['USER']['EMAIL'] . '[BR]';
+				$description .=
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_EMAIL_MSGVER_1', [
+						'#PARAM_VALUE#' => $message['USER']['EMAIL']
+					])
+					. '[BR]';
 			}
+
 			if (
 				isset($message['USER']['TARIFF_LEVEL'])
 				&& !empty($message['USER']['TARIFF_LEVEL'])
 			)
 			{
 				$description .=
-					'[BR][B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_TARIFF_LEVEL')
-					. '[/B]: '
-					. Loc::getMessage(
-						'IMCONNECTOR_CONNECTOR_NETWORK_TARIFF_LEVEL_'
-						. mb_strtoupper($message['USER']['TARIFF_LEVEL'])
-					)
+					'[BR]'
+					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_TARIFF_LEVEL_MSGVER_1', [
+						'#PARAM_VALUE#' => Loc::getMessage(
+							'IMCONNECTOR_CONNECTOR_NETWORK_TARIFF_LEVEL_'
+							. mb_strtoupper($message['USER']['TARIFF_LEVEL'])
+						)
+					])
 					. '[BR]';
 			}
+
 			if (
 				isset($message['USER']['TARIFF'])
 				&& !empty($message['USER']['TARIFF'])
@@ -179,110 +185,123 @@ class Network extends Base
 				if (!empty($message['USER']['TARIFF_NAME']))
 				{
 					$description .=
-						'[B]'
-						. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_TARIFF')
-						. '[/B]: '
-						. $message['USER']['TARIFF_NAME']
-						. ' ('
-						. $message['USER']['TARIFF']
-						. ')[BR]';
+						Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_TARIFF_MSGVER_1', [
+							'#PARAM_VALUE#' => $message['USER']['TARIFF_NAME'] . ' (' . $message['USER']['TARIFF'] . ')'
+						])
+						. '[BR]';
 				}
 				else
 				{
 					$description .=
-						'[B]'
-						. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_TARIFF')
-						. '[/B]: '
-						. $message['USER']['TARIFF']
+						Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_TARIFF_MSGVER_1', [
+							'#PARAM_VALUE#' => $message['USER']['TARIFF']
+						])
 						. '[BR]';
 				}
 
 				$extraFields['EXTRA_TARIFF'] = $message['USER']['TARIFF'];
 			}
+
 			if (
 				isset($message['USER']['USER_LEVEL'])
 				&& in_array($message['USER']['USER_LEVEL'], ['ADMIN', 'INTEGRATOR'])
 			)
 			{
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_USER_LEVEL')
-					. '[/B]: '
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_USER_LEVEL_' . $message['USER']['USER_LEVEL'])
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_USER_LEVEL_MSGVER_1', [
+						'#PARAM_VALUE#' => Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_USER_LEVEL_' . $message['USER']['USER_LEVEL'])
+					])
 					. '[BR]';
 				$extraFields['EXTRA_USER_LEVEL'] = $message['USER']['USER_LEVEL'];
 			}
+
 			if (
 				isset($message['USER']['BOT_VERSION'])
 				&& !empty($message['USER']['BOT_VERSION'])
 			)
 			{
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_BOT_VERSION')
-					. '[/B]: '
-					. $message['USER']['BOT_VERSION']
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_BOT_VERSION_MSGVER_1', [
+						'#PARAM_VALUE#' => $message['USER']['BOT_VERSION']
+					])
 					. '[BR]';
 			}
+
 			if (
 				isset($message['USER']['PORTAL_TYPE'])
 				&& in_array($message['USER']['PORTAL_TYPE'], ['PRODUCTION', 'STAGE', 'ETALON'])
 			)
 			{
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_PORTAL_TYPE')
-					. '[/B]: '
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_PORTAL_TYPE_' . $message['USER']['PORTAL_TYPE'])
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_PORTAL_TYPE_MSGVER_1', [
+						'#PARAM_VALUE#' => Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_PORTAL_TYPE_' . $message['USER']['PORTAL_TYPE'])
+					])
 					. '[BR]';
 				$extraFields['EXTRA_PORTAL_TYPE'] = $message['USER']['PORTAL_TYPE'];
 			}
+
 			if (
 				isset($message['USER']['REGISTER'])
 				&& !empty($message['USER']['REGISTER'])
 			)
 			{
 				$daysAgo = (int)((time() - $message['USER']['REGISTER']) / 60 / 60 / 24);
-				$daysAgo = ($daysAgo > 0? $daysAgo: 1);
+				$daysAgo = ($daysAgo > 0 ? $daysAgo : 1);
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_REGISTER')
-					. '[/B]: '
-					. $daysAgo
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_REGISTER_MSGVER_1', [
+						'#PARAM_VALUE#' => $daysAgo
+					])
 					. '[BR]';
 				$extraFields['EXTRA_REGISTER'] = $daysAgo;
 			}
+
 			if (
 				isset($message['USER']['DEMO'])
 				&& !empty($message['USER']['DEMO'])
 			)
 			{
 				$daysAgo = (int)((time() - $message['USER']['DEMO']) / 60 / 60 / 24);
-				$daysAgo = ($daysAgo > 0? $daysAgo: 1);
+				$daysAgo = ($daysAgo > 0 ? $daysAgo : 1);
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_DEMO')
-					. '[/B]: '
-					. $daysAgo
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_DEMO_MSGVER_1', [
+						'#PARAM_VALUE#' => $daysAgo
+					])
 					. '[BR]';
 			}
+
 			if (
 				isset($message['USER']['GEO_DATA'])
 				&& !empty($message['USER']['GEO_DATA'])
 			)
 			{
 				$description .=
-					'[B]'
-					. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_GEO_DATA')
-					. '[/B]: '
-					. $message['USER']['GEO_DATA']
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_GEO_DATA_MSGVER_1', [
+						'#PARAM_VALUE#' => $message['USER']['GEO_DATA']
+					])
 					. '[BR]';
 			}
+
+			if (
+				isset($message['USER']['DEVICE_TYPE'])
+				&& !empty($message['USER']['DEVICE_TYPE'])
+				&& defined('IMOL_FDC')
+			)
+			{
+				$deviceTypeKey = 'IMCONNECTOR_CONNECTOR_NETWORK_DEVICE_TYPE_' . mb_strtoupper($message['USER']['DEVICE_TYPE']);
+				$deviceTypeName = Loc::getMessage($deviceTypeKey);
+
+				$description .=
+					Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_DEVICE_TYPE_MSGVER_1', [
+						'#PARAM_VALUE#' => $deviceTypeName
+					])
+					. '[BR]';
+				$extraFields['EXTRA_DEVICE_TYPE'] = $message['USER']['DEVICE_TYPE'];
+			}
+
 			$description .=
-				'[B]'
-				. Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_WWW')
-				. '[/B]: '
-				. $message['USER']['PERSONAL_WWW'];
+				Loc::getMessage('IMCONNECTOR_CONNECTOR_NETWORK_WWW_MSGVER_1', [
+					'#PARAM_VALUE#' => $message['USER']['PERSONAL_WWW']
+				]);
 			$extraFields['EXTRA_URL'] = $message['USER']['PERSONAL_WWW'];
 
 			$result->setResult([

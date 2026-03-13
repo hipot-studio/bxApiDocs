@@ -4,6 +4,9 @@ namespace Bitrix\Call\DTO;
 
 use Bitrix\Main\Type\ParameterDictionary;
 
+/**
+ * @internal
+ */
 class Hydrator
 {
 	public function __construct(null|array|\stdClass|ParameterDictionary $fields = null)

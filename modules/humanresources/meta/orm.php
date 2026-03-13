@@ -91,7 +91,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodePath wakeUp($data)
 	 */
-	class EO_NodePath {
+	class EO_NodePath extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodePathTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodePathTable';
 		/**
@@ -148,8 +148,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodePathCollection merge(?\Bitrix\HumanResources\Model\NodePathCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodePath|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodePathCollection filter(callable $callback)
 	 */
-	class EO_NodePath_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodePath_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodePathTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodePathTable';
 	}
@@ -268,7 +270,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodeSettings wakeUp($data)
 	 */
-	class EO_NodeSettings {
+	class EO_NodeSettings extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeSettingsTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeSettingsTable';
 		/**
@@ -323,8 +325,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeSettingsCollection merge(?\Bitrix\HumanResources\Model\NodeSettingsCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodeSettings|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeSettingsCollection filter(callable $callback)
 	 */
-	class EO_NodeSettings_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodeSettings_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeSettingsTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeSettingsTable';
 	}
@@ -443,7 +447,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Log wakeUp($data)
 	 */
-	class EO_Log {
+	class EO_Log extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\LogTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\LogTable';
 		/**
@@ -498,8 +502,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\EO_Log_Collection merge(?\Bitrix\HumanResources\Model\EO_Log_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Log|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\EO_Log_Collection filter(callable $callback)
 	 */
-	class EO_Log_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Log_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\LogTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\LogTable';
 	}
@@ -618,7 +624,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodeRole wakeUp($data)
 	 */
-	class EO_NodeRole {
+	class EO_NodeRole extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeRoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeRoleTable';
 		/**
@@ -673,8 +679,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeRoleCollection merge(?\Bitrix\HumanResources\Model\NodeRoleCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodeRole|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeRoleCollection filter(callable $callback)
 	 */
-	class EO_NodeRole_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodeRole_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeRoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeRoleTable';
 	}
@@ -773,7 +781,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodeBackwardAccessCode wakeUp($data)
 	 */
-	class EO_NodeBackwardAccessCode {
+	class EO_NodeBackwardAccessCode extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeBackwardAccessCodeTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeBackwardAccessCodeTable';
 		/**
@@ -825,8 +833,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeBackwardAccessCodeCollection merge(?\Bitrix\HumanResources\Model\NodeBackwardAccessCodeCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodeBackwardAccessCode|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeBackwardAccessCodeCollection filter(callable $callback)
 	 */
-	class EO_NodeBackwardAccessCode_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodeBackwardAccessCode_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeBackwardAccessCodeTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeBackwardAccessCodeTable';
 	}
@@ -975,7 +985,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodeRelation wakeUp($data)
 	 */
-	class EO_NodeRelation {
+	class EO_NodeRelation extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeRelationTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeRelationTable';
 		/**
@@ -1036,8 +1046,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeRelationCollection merge(?\Bitrix\HumanResources\Model\NodeRelationCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodeRelation|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeRelationCollection filter(callable $callback)
 	 */
-	class EO_NodeRelation_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodeRelation_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeRelationTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeRelationTable';
 	}
@@ -1197,7 +1209,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodeMember wakeUp($data)
 	 */
-	class EO_NodeMember {
+	class EO_NodeMember extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeMemberTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeMemberTable';
 		/**
@@ -1262,8 +1274,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeMemberCollection merge(?\Bitrix\HumanResources\Model\NodeMemberCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodeMember|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeMemberCollection filter(callable $callback)
 	 */
-	class EO_NodeMember_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodeMember_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeMemberTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeMemberTable';
 	}
@@ -1382,7 +1396,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\NodeMemberRole wakeUp($data)
 	 */
-	class EO_NodeMemberRole {
+	class EO_NodeMemberRole extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeMemberRoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeMemberRoleTable';
 		/**
@@ -1437,8 +1451,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeMemberRoleCollection merge(?\Bitrix\HumanResources\Model\NodeMemberRoleCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\NodeMemberRole|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeMemberRoleCollection filter(callable $callback)
 	 */
-	class EO_NodeMemberRole_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_NodeMemberRole_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeMemberRoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeMemberRoleTable';
 	}
@@ -1465,6 +1481,183 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeMemberRoleCollection wakeUpCollection($rows)
 	 */
 	class EO_NodeMemberRole_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\HumanResources\Model\UserSettingsTable:humanresources/lib/Model/UserSettingsTable.php */
+namespace Bitrix\HumanResources\Model {
+	/**
+	 * UserSettings
+	 * @see \Bitrix\HumanResources\Model\UserSettingsTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\HumanResources\Model\UserSettings setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\HumanResources\Model\UserSettings setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\HumanResources\Model\UserSettings resetUserId()
+	 * @method \Bitrix\HumanResources\Model\UserSettings unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \string getSettingsType()
+	 * @method \Bitrix\HumanResources\Model\UserSettings setSettingsType(\string|\Bitrix\Main\DB\SqlExpression $settingsType)
+	 * @method bool hasSettingsType()
+	 * @method bool isSettingsTypeFilled()
+	 * @method bool isSettingsTypeChanged()
+	 * @method \string remindActualSettingsType()
+	 * @method \string requireSettingsType()
+	 * @method \Bitrix\HumanResources\Model\UserSettings resetSettingsType()
+	 * @method \Bitrix\HumanResources\Model\UserSettings unsetSettingsType()
+	 * @method \string fillSettingsType()
+	 * @method \string getSettingsValue()
+	 * @method \Bitrix\HumanResources\Model\UserSettings setSettingsValue(\string|\Bitrix\Main\DB\SqlExpression $settingsValue)
+	 * @method bool hasSettingsValue()
+	 * @method bool isSettingsValueFilled()
+	 * @method bool isSettingsValueChanged()
+	 * @method \string remindActualSettingsValue()
+	 * @method \string requireSettingsValue()
+	 * @method \Bitrix\HumanResources\Model\UserSettings resetSettingsValue()
+	 * @method \Bitrix\HumanResources\Model\UserSettings unsetSettingsValue()
+	 * @method \string fillSettingsValue()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
+	 * @method \Bitrix\HumanResources\Model\UserSettings setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
+	 * @method bool hasCreatedAt()
+	 * @method bool isCreatedAtFilled()
+	 * @method bool isCreatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedAt()
+	 * @method \Bitrix\HumanResources\Model\UserSettings resetCreatedAt()
+	 * @method \Bitrix\HumanResources\Model\UserSettings unsetCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedAt()
+	 * @method \Bitrix\HumanResources\Model\UserSettings setUpdatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedAt)
+	 * @method bool hasUpdatedAt()
+	 * @method bool isUpdatedAtFilled()
+	 * @method bool isUpdatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedAt()
+	 * @method \Bitrix\HumanResources\Model\UserSettings resetUpdatedAt()
+	 * @method \Bitrix\HumanResources\Model\UserSettings unsetUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\HumanResources\Model\UserSettings set($fieldName, $value)
+	 * @method \Bitrix\HumanResources\Model\UserSettings reset($fieldName)
+	 * @method \Bitrix\HumanResources\Model\UserSettings unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\HumanResources\Model\UserSettings wakeUp($data)
+	 */
+	class EO_UserSettings extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\HumanResources\Model\UserSettingsTable */
+		static public $dataClass = '\Bitrix\HumanResources\Model\UserSettingsTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\HumanResources\Model {
+	/**
+	 * UserSettingsCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \string[] getSettingsTypeList()
+	 * @method \string[] fillSettingsType()
+	 * @method \string[] getSettingsValueList()
+	 * @method \string[] fillSettingsValue()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\HumanResources\Model\UserSettings $object)
+	 * @method bool has(\Bitrix\HumanResources\Model\UserSettings $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\HumanResources\Model\UserSettings getByPrimary($primary)
+	 * @method \Bitrix\HumanResources\Model\UserSettings[] getAll()
+	 * @method bool remove(\Bitrix\HumanResources\Model\UserSettings $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\HumanResources\Model\UserSettingsCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\HumanResources\Model\UserSettings current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\HumanResources\Model\UserSettingsCollection merge(?\Bitrix\HumanResources\Model\UserSettingsCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\UserSettings|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\UserSettingsCollection filter(callable $callback)
+	 */
+	class EO_UserSettings_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\HumanResources\Model\UserSettingsTable */
+		static public $dataClass = '\Bitrix\HumanResources\Model\UserSettingsTable';
+	}
+}
+namespace Bitrix\HumanResources\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_UserSettings_Result exec()
+	 * @method \Bitrix\HumanResources\Model\UserSettings fetchObject()
+	 * @method \Bitrix\HumanResources\Model\UserSettingsCollection fetchCollection()
+	 */
+	class EO_UserSettings_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\HumanResources\Model\UserSettings fetchObject()
+	 * @method \Bitrix\HumanResources\Model\UserSettingsCollection fetchCollection()
+	 */
+	class EO_UserSettings_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\HumanResources\Model\UserSettings createObject($setDefaultValues = true)
+	 * @method \Bitrix\HumanResources\Model\UserSettingsCollection createCollection()
+	 * @method \Bitrix\HumanResources\Model\UserSettings wakeUpObject($row)
+	 * @method \Bitrix\HumanResources\Model\UserSettingsCollection wakeUpCollection($rows)
+	 */
+	class EO_UserSettings_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\HumanResources\Model\NodeTable:humanresources/lib/Model/NodeTable.php */
 namespace Bitrix\HumanResources\Model {
@@ -1670,7 +1863,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Node wakeUp($data)
 	 */
-	class EO_Node {
+	class EO_Node extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\NodeTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeTable';
 		/**
@@ -1750,8 +1943,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\NodeCollection merge(?\Bitrix\HumanResources\Model\NodeCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Node|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\NodeCollection filter(callable $callback)
 	 */
-	class EO_Node_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Node_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\NodeTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\NodeTable';
 	}
@@ -1880,7 +2075,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Structure wakeUp($data)
 	 */
-	class EO_Structure {
+	class EO_Structure extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\StructureTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\StructureTable';
 		/**
@@ -1937,8 +2132,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\EO_Structure_Collection merge(?\Bitrix\HumanResources\Model\EO_Structure_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Structure|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\EO_Structure_Collection filter(callable $callback)
 	 */
-	class EO_Structure_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Structure_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\StructureTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\StructureTable';
 	}
@@ -2067,7 +2264,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\FieldValue wakeUp($data)
 	 */
-	class EO_FieldValue {
+	class EO_FieldValue extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\FieldValueTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\FieldValueTable';
 		/**
@@ -2125,8 +2322,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\FieldValueCollection merge(?\Bitrix\HumanResources\Model\HcmLink\FieldValueCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\FieldValue|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\FieldValueCollection filter(callable $callback)
 	 */
-	class EO_FieldValue_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_FieldValue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\FieldValueTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\FieldValueTable';
 	}
@@ -2286,7 +2485,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\Person wakeUp($data)
 	 */
-	class EO_Person {
+	class EO_Person extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\PersonTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\PersonTable';
 		/**
@@ -2351,8 +2550,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\PersonCollection merge(?\Bitrix\HumanResources\Model\HcmLink\PersonCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Person|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\PersonCollection filter(callable $callback)
 	 */
-	class EO_Person_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Person_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\PersonTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\PersonTable';
 	}
@@ -2491,7 +2692,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\Field wakeUp($data)
 	 */
-	class EO_Field {
+	class EO_Field extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\FieldTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\FieldTable';
 		/**
@@ -2551,8 +2752,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\FieldCollection merge(?\Bitrix\HumanResources\Model\HcmLink\FieldCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Field|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\FieldCollection filter(callable $callback)
 	 */
-	class EO_Field_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Field_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\FieldTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\FieldTable';
 	}
@@ -2751,7 +2954,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\Job wakeUp($data)
 	 */
-	class EO_Job {
+	class EO_Job extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\JobTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\JobTable';
 		/**
@@ -2823,8 +3026,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\JobCollection merge(?\Bitrix\HumanResources\Model\HcmLink\JobCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Job|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\JobCollection filter(callable $callback)
 	 */
-	class EO_Job_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Job_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\JobTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\JobTable';
 	}
@@ -2973,7 +3178,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\MemberMap wakeUp($data)
 	 */
-	class EO_MemberMap {
+	class EO_MemberMap extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\MemberMapTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\MemberMapTable';
 		/**
@@ -3034,8 +3239,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\MemberMapCollection merge(?\Bitrix\HumanResources\Model\HcmLink\MemberMapCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\MemberMap|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\MemberMapCollection filter(callable $callback)
 	 */
-	class EO_MemberMap_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MemberMap_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\MemberMapTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\MemberMapTable';
 	}
@@ -3154,7 +3361,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\Employee wakeUp($data)
 	 */
-	class EO_Employee {
+	class EO_Employee extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\EmployeeTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\EmployeeTable';
 		/**
@@ -3210,8 +3417,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\EmployeeCollection merge(?\Bitrix\HumanResources\Model\HcmLink\EmployeeCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Employee|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\EmployeeCollection filter(callable $callback)
 	 */
-	class EO_Employee_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Employee_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\EmployeeTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\EmployeeTable';
 	}
@@ -3363,7 +3572,7 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\Company wakeUp($data)
 	 */
-	class EO_Company {
+	class EO_Company extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\CompanyTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\CompanyTable';
 		/**
@@ -3427,8 +3636,10 @@ namespace Bitrix\HumanResources\Model\HcmLink {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\CompanyCollection merge(?\Bitrix\HumanResources\Model\HcmLink\CompanyCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Company|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\CompanyCollection filter(callable $callback)
 	 */
-	class EO_Company_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Company_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\CompanyTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\CompanyTable';
 	}
@@ -3507,7 +3718,7 @@ namespace Bitrix\HumanResources\Model\HcmLink\Index {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\HcmLink\Index\EO_Person wakeUp($data)
 	 */
-	class EO_Person {
+	class EO_Person extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\Index\PersonTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\Index\PersonTable';
 		/**
@@ -3554,8 +3765,10 @@ namespace Bitrix\HumanResources\Model\HcmLink\Index {
 	 * @method \Bitrix\HumanResources\Model\HcmLink\Index\EO_Person_Collection merge(?\Bitrix\HumanResources\Model\HcmLink\Index\EO_Person_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Index\EO_Person|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\HcmLink\Index\EO_Person_Collection filter(callable $callback)
 	 */
-	class EO_Person_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Person_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\HcmLink\Index\PersonTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\HcmLink\Index\PersonTable';
 	}
@@ -3674,7 +3887,7 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Role wakeUp($data)
 	 */
-	class EO_Role {
+	class EO_Role extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\RoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\RoleTable';
 		/**
@@ -3729,8 +3942,10 @@ namespace Bitrix\HumanResources\Model {
 	 * @method \Bitrix\HumanResources\Model\RoleCollection merge(?\Bitrix\HumanResources\Model\RoleCollection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Role|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\RoleCollection filter(callable $callback)
 	 */
-	class EO_Role_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Role_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\RoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\RoleTable';
 	}
@@ -3819,7 +4034,7 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Access\EO_AccessRoleRelation wakeUp($data)
 	 */
-	class EO_AccessRoleRelation {
+	class EO_AccessRoleRelation extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\Access\AccessRoleRelationTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\Access\AccessRoleRelationTable';
 		/**
@@ -3868,8 +4083,10 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRoleRelation_Collection merge(?\Bitrix\HumanResources\Model\Access\EO_AccessRoleRelation_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRoleRelation|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRoleRelation_Collection filter(callable $callback)
 	 */
-	class EO_AccessRoleRelation_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AccessRoleRelation_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\Access\AccessRoleRelationTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\Access\AccessRoleRelationTable';
 	}
@@ -3921,6 +4138,16 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole resetName()
 	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole unsetName()
 	 * @method \string fillName()
+	 * @method \string getCategory()
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole setCategory(\string|\Bitrix\Main\DB\SqlExpression $category)
+	 * @method bool hasCategory()
+	 * @method bool isCategoryFilled()
+	 * @method bool isCategoryChanged()
+	 * @method \string remindActualCategory()
+	 * @method \string requireCategory()
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole resetCategory()
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole unsetCategory()
+	 * @method \string fillCategory()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -3948,7 +4175,7 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Access\EO_AccessRole wakeUp($data)
 	 */
-	class EO_AccessRole {
+	class EO_AccessRole extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\Access\AccessRoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\Access\AccessRoleTable';
 		/**
@@ -3967,6 +4194,8 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \int[] getIdList()
 	 * @method \string[] getNameList()
 	 * @method \string[] fillName()
+	 * @method \string[] getCategoryList()
+	 * @method \string[] fillCategory()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -3995,8 +4224,10 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole_Collection merge(?\Bitrix\HumanResources\Model\Access\EO_AccessRole_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessRole_Collection filter(callable $callback)
 	 */
-	class EO_AccessRole_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AccessRole_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\Access\AccessRoleTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\Access\AccessRoleTable';
 	}
@@ -4095,7 +4326,7 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\HumanResources\Model\Access\EO_AccessPermission wakeUp($data)
 	 */
-	class EO_AccessPermission {
+	class EO_AccessPermission extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\HumanResources\Model\Access\AccessPermissionTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\Access\AccessPermissionTable';
 		/**
@@ -4146,8 +4377,10 @@ namespace Bitrix\HumanResources\Model\Access {
 	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessPermission_Collection merge(?\Bitrix\HumanResources\Model\Access\EO_AccessPermission_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessPermission|null find(callable $callback)
+	 * @method \Bitrix\HumanResources\Model\Access\EO_AccessPermission_Collection filter(callable $callback)
 	 */
-	class EO_AccessPermission_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AccessPermission_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\HumanResources\Model\Access\AccessPermissionTable */
 		static public $dataClass = '\Bitrix\HumanResources\Model\Access\AccessPermissionTable';
 	}

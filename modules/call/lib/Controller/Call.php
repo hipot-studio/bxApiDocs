@@ -10,17 +10,20 @@ use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Im\Call\CallUser;
-use Bitrix\Im\Call\Integration\EntityType;
-use Bitrix\Im\Call\Registry;
-use Bitrix\Im\Call\Util;
-use Bitrix\Im\V2\Call\CallFactory;
+use Bitrix\Call\CallUser;
+use Bitrix\Call\Integration\EntityType;
+use Bitrix\Call\Call\Registry;
+use Bitrix\Call\Util;
+use Bitrix\Call\CallFactory;
 use Bitrix\Call\Error;
 use Bitrix\Call\DTO;
 use Bitrix\Call\JwtCall;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
 
+/**
+ * @internal
+ */
 class Call extends JwtController
 {
 	protected const LOCK_TTL = 10; // in seconds
@@ -188,7 +191,7 @@ class Call extends JwtController
 				return null;
 			}
 
-			if ($callRequest->provider == \Bitrix\Im\Call\Call::PROVIDER_PLAIN)
+			if ($callRequest->provider == \Bitrix\Call\Call::PROVIDER_PLAIN)
 			{
 				if (CallFactory::hasUserActiveCalls((int)$entityId))
 				{
@@ -209,8 +212,8 @@ class Call extends JwtController
 						'ENTITY_ID' => $chat->getId(),
 						'INITIATOR_ID' => $userId,
 						'UUID' => $roomId,
-						'SCHEME' => \Bitrix\Im\Call\Call::SCHEME_JWT,
-						'STATE' => \Bitrix\Im\Call\Call::STATE_FINISHED,
+						'SCHEME' => \Bitrix\Call\Call::SCHEME_JWT,
+						'STATE' => \Bitrix\Call\Call::STATE_FINISHED,
 					];
 					$callObject = CallFactory::getCallInstance($callRequest->provider, $callFields);
 
@@ -242,7 +245,7 @@ class Call extends JwtController
 			}
 
 			// Terminate ALL active calls in this chat before starting new one
-			\Bitrix\Call\Call::terminateAllCallsInChat($callRequest->chatId, null);
+			\Bitrix\Call\Recent::terminateAllCallsInChat($callRequest->chatId, null);
 
 			$prevCall = CallFactory::searchActiveCall(
 				type: $callRequest->callType,
@@ -250,7 +253,7 @@ class Call extends JwtController
 				entityType: EntityType::CHAT,
 				entityId: $entityId,
 			);
-			if ($prevCall instanceof \Bitrix\Im\Call\Call)
+			if ($prevCall instanceof \Bitrix\Call\Call)
 			{
 				if ($prevCall->isAiAnalyzeEnabled())
 				{
@@ -270,7 +273,7 @@ class Call extends JwtController
 				entityId: $entityId,
 				initiatorId: $userId,
 				callUuid: $roomId,
-				scheme: \Bitrix\Im\Call\Call::SCHEME_JWT,
+				scheme: \Bitrix\Call\Call::SCHEME_JWT,
 			);
 
 			if ($call->hasErrors())
@@ -279,8 +282,7 @@ class Call extends JwtController
 				return null;
 			}
 
-
-			\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
+			\Bitrix\Call\Recent::updateUserActiveCallsCache($userId);
 
 			$this->setUserStateReady($call, $userId, $callRequest->legacyMobile);
 
@@ -343,7 +345,7 @@ class Call extends JwtController
 				return null;
 			}
 
-			if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+			if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
 			{
 				$this->addError(new Error('Call already finished', 'call_finished'));
 				return null;
@@ -440,9 +442,9 @@ class Call extends JwtController
 		$call->finish();
 
 		// Terminate all other active calls in the same chat after this call finishes
-		\Bitrix\Call\Call::terminateAllCallsInChat($call->getChatId(), $call->getId());
+		\Bitrix\Call\Recent::terminateAllCallsInChat($call->getChatId(), $call->getId());
 
-		\Bitrix\Call\Call::updateCallCache($call->getId());
+		\Bitrix\Call\Recent::updateCallCache($call->getId());
 
 		Application::getConnection()->unlock($lockName);
 
@@ -459,7 +461,7 @@ class Call extends JwtController
 	}
 
 	protected function inviteUsers(
-		\Bitrix\Im\Call\Call $call,
+		\Bitrix\Call\Call $call,
 		array $userIds,
 		bool $isVideo = false,
 		bool $isLegacyMobile = false,
@@ -496,7 +498,7 @@ class Call extends JwtController
 				$callUser->updateState(CallUser::STATE_CALLING);
 			}
 
-			\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
+			\Bitrix\Call\Recent::updateUserActiveCallsCache($userId);
 		}
 
 		if (!empty($existingUsers))
@@ -532,14 +534,14 @@ class Call extends JwtController
 			);
 		}
 
-		if ($call->getState() === \Bitrix\Im\Call\Call::STATE_NEW)
+		if ($call->getState() === \Bitrix\Call\Call::STATE_NEW)
 		{
-			$call->updateState(\Bitrix\Im\Call\Call::STATE_INVITING);
+			$call->updateState(\Bitrix\Call\Call::STATE_INVITING);
 		}
 	}
 
 	protected function sendPushNotifications(
-		\Bitrix\Im\Call\Call $call,
+		\Bitrix\Call\Call $call,
 		array $usersToInvite,
 		bool $isLegacyMobile,
 		bool $isVideo,
@@ -595,7 +597,7 @@ class Call extends JwtController
 
 		$call->getSignaling()->sendAnswer($currentUserId, $userRequest->callInstanceId, $isLegacyMobile);
 
-		\Bitrix\Call\Call::updateCallCache($call->getId());
+		\Bitrix\Call\Recent::updateCallCache($call->getId());
 	}
 
 	/**
@@ -663,8 +665,8 @@ class Call extends JwtController
 			$call->setActionUserId($currentUserId)->finish();
 		}
 
-		\Bitrix\Call\Call::updateCallCache($call->getId());
-		\Bitrix\Call\Call::updateUserActiveCallsCache($currentUserId);
+		\Bitrix\Call\Recent::updateCallCache($call->getId());
+		\Bitrix\Call\Recent::updateUserActiveCallsCache($currentUserId);
 	}
 
 	/**
@@ -692,7 +694,7 @@ class Call extends JwtController
 			return null;
 		}
 
-		if ($call->getState() === \Bitrix\Im\Call\Call::STATE_FINISHED)
+		if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
 		{
 			$this->addError(new Error('Call already finished', 'call_finished'));
 			return null;
@@ -731,7 +733,7 @@ class Call extends JwtController
 			$call->getSignaling()->sendDisconnectedUsers($callUserRequest->disconnectedUsers);
 		}
 
-		\Bitrix\Call\Call::updateCallCache($call->getId());
+		\Bitrix\Call\Recent::updateCallCache($call->getId());
 	}
 
 	/**
@@ -761,7 +763,7 @@ class Call extends JwtController
 			$callRequest->roomId ?: $callRequest->callUuid,
 			\Bitrix\Im\Dialog::getDialogId($callRequest->chatId, $currentUserId),
 			$callRequest->provider,
-			\Bitrix\Im\Call\Call::SCHEME_JWT,
+			\Bitrix\Call\Call::SCHEME_JWT,
 			$currentUserId
 		);
 		if ($childCall->hasErrors())
@@ -772,7 +774,7 @@ class Call extends JwtController
 
 		$this->setUserStateReady($childCall, $currentUserId, $callRequest->legacyMobile);
 
-		\Bitrix\Call\Call::updateUserActiveCallsCache($currentUserId);
+		\Bitrix\Call\Recent::updateUserActiveCallsCache($currentUserId);
 
 		$users = array_diff($childCall->getAssociatedEntity()->getUsers(), [$currentUserId]);
 
@@ -917,11 +919,11 @@ class Call extends JwtController
 	}
 
 	/**
-	 * @param \Bitrix\Im\Call\Call $call
+	 * @param \Bitrix\Call\Call $call
 	 * @param int $userId
 	 * @param bool $isLegacyMobile
 	 */
-	protected function setUserStateReady(\Bitrix\Im\Call\Call $call, int $userId, bool $isLegacyMobile): void
+	protected function setUserStateReady(\Bitrix\Call\Call $call, int $userId, bool $isLegacyMobile): void
 	{
 		$callUser = $call->getUser($userId);
 		if ($callUser)
@@ -1045,7 +1047,7 @@ class Call extends JwtController
 			$call->getSignaling()->sendUsersJoined($currentUserId, [$currentUserId]);
 		}
 
-		\Bitrix\Call\Call::updateCallCache($call->getId());
+		\Bitrix\Call\Recent::updateCallCache($call->getId());
 
 		return array_merge(
 			['success' => true],
@@ -1064,11 +1066,11 @@ class Call extends JwtController
 	}
 
 	/**
-	 * @param \Bitrix\Im\Call\Call $call
+	 * @param \Bitrix\Call\Call $call
 	 * @param bool $isNew
 	 * @return array{call: array, connectionData: array, users: array, userData: array, publicChannels: array, logToken: string, isNew: bool}
 	 */
-	protected function formatCallResponse(\Bitrix\Im\Call\Call $call, int $initiatorId = 0, bool $isNew = false): array
+	protected function formatCallResponse(\Bitrix\Call\Call $call, int $initiatorId = 0, bool $isNew = false): array
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
 

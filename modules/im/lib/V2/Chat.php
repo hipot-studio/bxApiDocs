@@ -13,6 +13,7 @@ use Bitrix\Im\V2\Entity\User\UserError;
 use Bitrix\Im\V2\Async\Promise\BackgroundJobPromise;
 use Bitrix\Im\V2\Entity\User\UserType;
 use Bitrix\Im\V2\Integration\AI\AIHelper;
+use Bitrix\Im\V2\Integration\Call\CallToken;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
@@ -68,13 +69,14 @@ use CIMNotify;
 use CPushManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Chat\Add\AddResult;
+use Bitrix\Im\V2\Cache\CacheableEntity;
 use Bitrix\Im\V2\SharingLink\Entity\ShareableEntity;
 use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 
 /**
  * Chat version #2
  */
-abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, ShareableEntity, AccessCheckable, ChatActionAccessCheckable
+abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, CacheableEntity, ShareableEntity, AccessCheckable, ChatActionAccessCheckable
 {
 	use ContextCustomer
 	{
@@ -175,6 +177,8 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		'memberEntities',
 	];
 
+	public const NON_CACHED_FIELDS = ['MESSAGE_COUNT', 'USER_COUNT', 'LAST_MESSAGE_ID'];
+
 	public const
 		MANAGE_RIGHTS_NONE = 'NONE',
 		MANAGE_RIGHTS_MEMBER = 'MEMBER',
@@ -191,11 +195,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	private const CHUNK_SIZE = 1000;
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
 	protected const MAX_USERS_TO_DISABLE_DELETE_MESSAGE = 50;
-
-	/**
-	 * @var static[]
-	 */
-	protected static array $chatStaticCache = [];
 
 	protected array $accessCache = [];
 
@@ -308,7 +307,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	protected bool $isFilledNonCachedData = false;
 	protected bool $isDiskFolderFilled = false;
-	protected ?Im\V2\Call\CallToken $callToken = null;
+	protected ?CallToken $callToken = null;
 
 	/**
 	 * @param int|array|EO_Chat|null $source
@@ -323,7 +322,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 
 		$this->messageRegistry = new Registry;
-		$this->recentConfigManager = RecentConfigManager::getInstance();
+		$this->recentConfigManager = Main\DI\ServiceLocator::getInstance()->get(RecentConfigManager::class);
 	}
 
 	//region Users
@@ -343,39 +342,23 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return new Im\V2\Chat\NullChat();
 		}
 
-		if (isset(self::$chatStaticCache[$chatId]))
-		{
-			return self::$chatStaticCache[$chatId];
-		}
-
-		$chat = ChatFactory::getInstance()->getChatById($chatId);
-
-		if ($chat instanceof Im\V2\Chat\NullChat)
-		{
-			return $chat;
-		}
-
-		self::$chatStaticCache[$chatId] = $chat;
-
-		return self::$chatStaticCache[$chatId];
+		return ChatFactory::getInstance()->getChatById($chatId);
 	}
 
 	public static function cleanCache(int $id, bool $cleanStaticCache = true): void
 	{
-		if ($cleanStaticCache)
-		{
-			unset(self::$chatStaticCache[$id]);
-		}
+		$cacheLevel = $cleanStaticCache ? Im\V2\Cache\CacheLevel::All : Im\V2\Cache\CacheLevel::Persistent;
 
-		ChatFactory::getInstance()->cleanCache($id);
+		ChatFactory::getInstance()->cleanCache($id, $cacheLevel);
 		Im\V2\Chat\EntityLink::cleanCache($id);
 	}
 
 	public static function cleanAccessCache(int $chatId): void
 	{
-		if (isset(self::$chatStaticCache[$chatId]))
+		$instance = self::getFromStaticCache($chatId);
+		if (isset($instance))
 		{
-			self::$chatStaticCache[$chatId]->accessCache = [];
+			$instance->accessCache = [];
 		}
 	}
 
@@ -908,12 +891,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected function updateStaticCacheInstance(array $fields): void
 	{
 		$id = $this->getChatId();
-		if (!isset($id, self::$chatStaticCache[$id]))
-		{
-			return;
-		}
-
-		self::$chatStaticCache[$id]->onAfterOrmUpdate($fields);
+		self::getFromStaticCache($id)?->onAfterOrmUpdate($fields);
 	}
 
 	protected function updateRecentAfterMessageSend(Message $message, SendingConfig $config): Result
@@ -2049,8 +2027,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function getCounterType(): string
 	{
-		$config = RecentConfigManager::getInstance()->getByExtendedType($this->getExtendedType(false));
-		return $config->getCounterType();
+		return
+			Main\DI\ServiceLocator::getInstance()
+				->get(RecentConfigManager::class)
+				->getByExtendedType($this->getExtendedType(false))
+				->getCounterType()
+		;
 	}
 
 	protected function beforeSaveType(): Result
@@ -2891,11 +2873,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		];
 	}
 
-	public function getCallToken(): Im\V2\Call\CallToken
+	public function getCallToken(): CallToken
 	{
 		if (!isset($this->callToken))
 		{
-			$this->callToken = new Im\V2\Call\CallToken($this->getId());
+			$this->callToken = new CallToken($this->getId());
 		}
 
 		return $this->callToken;
@@ -3688,7 +3670,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return $this;
 		}
 
-		$this->fillActual(ChatFactory::NON_CACHED_FIELDS);
+		$this->fillActual(self::NON_CACHED_FIELDS);
 		$this->isFilledNonCachedData = true;
 
 		return $this;
@@ -4015,31 +3997,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $result;
 	}
 
-	private function hideChat(): Result
-	{
-		$result = new Result();
-
-		if (!$this->getChatId())
-		{
-			return $result->addError(new ChatError(ChatError::NOT_FOUND));
-		}
-
-		$pushList = [];
-		foreach($this->getRelations() as $relation)
-		{
-			\CIMContactList::DeleteRecent($this->getChatId(), true, $relation->getUserId());
-
-			if (!Im\User::getInstance($relation->getUserId())->isConnector())
-			{
-				$pushList[] = $relation->getUserId();
-			}
-		}
-
-		(new Im\V2\Pull\Event\ChatHide($this, $pushList))->send();
-
-		return $result;
-	}
-
 	public function sendMessageUpdateAvatar(bool $skipRecent = false): void
 	{
 		$currentUser = $this->getContext()->getUser();
@@ -4113,21 +4070,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return false;
 	}
 
-	public function checkAllowedAction(string $action): bool
-	{
-		$options = \CIMChat::GetChatOptions();
-		$entityType = $this->getEntityType();
-
-		$defaultAllowed = (bool)($chatOptions['DEFAULT'][$action] ?? true);
-
-		if (isset($entityType, $options[$entityType]))
-		{
-			return (bool)($chatOptions[$entityType][$action] ?? $defaultAllowed);
-		}
-
-		return $defaultAllowed;
-	}
-
 	public function canDo(Action $action, mixed $target = null): bool
 	{
 		$userRights = $this->getRole();
@@ -4153,10 +4095,31 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			&& Im\V2\Permission::canDoActionByUserType($userId, $action, $target)
 		;
 	}
+
+	protected static function getFromStaticCache(int $id): ?Chat
+	{
+		return ChatFactory::getInstance()->getChatFromCache($id, Im\V2\Cache\CacheLevel::Static);
+	}
+
 	public static function updateStateAfterOrmEvent(int $id, array $fields): void
 	{
-		$chat = self::$chatStaticCache[$id];
-		$chat?->onAfterOrmUpdate($fields);
+		self::getFromStaticCache($id)?->onAfterOrmUpdate($fields);
+	}
+
+	public function toCacheRepresentation(): array
+	{
+		$result = $this->toArray();
+		foreach (self::NON_CACHED_FIELDS as $key)
+		{
+			unset($result[$key]);
+		}
+
+		return $result;
+	}
+
+	public function getCacheEntityId(): ?int
+	{
+		return $this->getChatId();
 	}
 
 	public static function getSharingLinkEntityType(): LinkEntityType

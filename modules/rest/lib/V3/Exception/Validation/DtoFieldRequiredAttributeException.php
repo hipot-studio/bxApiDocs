@@ -10,7 +10,7 @@ class DtoFieldRequiredAttributeException extends RequestValidationException
 	public function __construct(string $dto, string $field, string $attribute)
 	{
 		$message = new LocalizableMessage(
-			'REST_V3_EXCEPTIONS_VALIDATION_DTOFIELDREQUIREDATTRIBUTEEXCEPTION', [
+			'REST_V3_EXCEPTION_VALIDATION_DTOFIELDREQUIREDATTRIBUTEEXCEPTION', [
 				'#FIELD#' => $field,
 				'#DTO#' => $dto,
 				'#ATTRIBUTE#' => (new \ReflectionClass($attribute))->getShortName(),

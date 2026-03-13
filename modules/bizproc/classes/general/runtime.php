@@ -496,7 +496,7 @@ class CBPRuntime
 			return;
 		}
 
-		$workflow->start();
+		$workflow->resume();
 	}
 
 	private static function isRunnableWorkflow(?CBPWorkflow $workflow): bool

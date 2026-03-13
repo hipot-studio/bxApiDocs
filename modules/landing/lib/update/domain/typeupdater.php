@@ -11,11 +11,12 @@ class TypeUpdater
 {
 	private const OPTION_CODE = 'last_site_id_whose_domain_updated';
 	private const ROW_LIMIT = 10;
+	private const TYPE_CODE = 'form';
 
 	public static function updateType(): ?string
 	{
 		$start = microtime(true);
-
+		$timeLimit = self::resolveTimeLimit();
 		$siteController = Manager::getExternalSiteController();
 		if (
 			empty($siteController)
@@ -25,8 +26,7 @@ class TypeUpdater
 			return '';
 		}
 
-		$lastId = Option::get('landing', self::OPTION_CODE, 0);
-
+		$lastId = (int)Option::get('landing', self::OPTION_CODE, 0);
 		$siteCode = '/' . Type::PSEUDO_SCOPE_CODE_FORMS . '/';
 		$resSite = SiteTable::getList([
 			'select' => [
@@ -45,25 +45,27 @@ class TypeUpdater
 			'limit' => self::ROW_LIMIT,
 		]);
 
-		$limitCount = 0;
+		$processedCount = 0;
 		while ($row = $resSite->fetch())
 		{
-			$limitCount++;
+			$processedCount++;
 			if (!empty($row['LANDING_INTERNALS_SITE_DOMAIN_DOMAIN']))
 			{
-				$timeLimit = (int)((int)ini_get('max_execution_time') * 0.9) ?: 50;
 				if (microtime(true) - $start > $timeLimit)
 				{
 					return __CLASS__ . '::' . __FUNCTION__ . '();';
 				}
 
-				$siteController::updateTypeDomain($row['LANDING_INTERNALS_SITE_DOMAIN_DOMAIN'], 'form');
+				$siteController::updateTypeDomain(
+					$row['LANDING_INTERNALS_SITE_DOMAIN_DOMAIN'],
+					self::TYPE_CODE,
+				);
 
 				Option::set('landing', self::OPTION_CODE, $row['ID']);
 			}
 		}
 
-		if ($limitCount > self::ROW_LIMIT -1)
+		if ($processedCount >= self::ROW_LIMIT)
 		{
 			return __CLASS__ . '::' . __FUNCTION__ . '();';
 		}
@@ -71,5 +73,16 @@ class TypeUpdater
 		Option::delete('landing', ['name' => self::OPTION_CODE]);
 
 		return '';
+	}
+
+	private static function resolveTimeLimit(): int
+	{
+		$maxExecutionTime = (int)ini_get('max_execution_time');
+		if ($maxExecutionTime <= 0)
+		{
+			return 50;
+		}
+
+		return (int)($maxExecutionTime * 0.9);
 	}
 }

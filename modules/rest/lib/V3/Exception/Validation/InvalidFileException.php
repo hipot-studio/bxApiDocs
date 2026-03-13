@@ -8,6 +8,6 @@ class InvalidFileException extends ValidationException
 {
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_VALIDATION_INVALIDFILEEXCEPTION';
+		return 'REST_V3_EXCEPTION_VALIDATION_INVALIDFILEEXCEPTION';
 	}
 }

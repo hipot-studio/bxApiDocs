@@ -2,6 +2,8 @@
 
 namespace Bitrix\BIConnector\Superset\UI\SettingsPanel\Field;
 
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -44,6 +46,7 @@ final class DashboardGroupsField extends EntityEditorField
 			'SCOPE' => $scope,
 			'PARAMS' => $arrayParams,
 			'PARAM_LIST' => $paramList,
+			'IS_ALLOWED_CLEAR_GROUPS' => AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS),
 		];
 	}
 

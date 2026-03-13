@@ -5,10 +5,8 @@ namespace Bitrix\BiConnector\Configuration;
 
 use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
-use Bitrix\BIConnector\Superset\SystemDashboardManager;
-use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -116,11 +114,20 @@ class Action
 	{
 		$result = null;
 
-		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
+		if (!Feature::isBuilderEnabled())
 		{
 			return [
 				'ERROR_EXCEPTION' => [
 					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_TARIFF_ERROR'),
+				],
+			];
+		}
+
+		if (Loader::includeModule('intranet') && !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi'))
+		{
+			return [
+				'ERROR_EXCEPTION' => [
+					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_TOOL_DISABLED'),
 				],
 			];
 		}

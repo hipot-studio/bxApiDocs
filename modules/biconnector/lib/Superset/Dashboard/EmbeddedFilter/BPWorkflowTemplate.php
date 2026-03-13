@@ -21,9 +21,14 @@ class BPWorkflowTemplate extends PresetFilter
 	/**
 	 * @inheritDoc
 	 */
-	protected function getColumnName(): string
+	public static function getColumnName(): string
 	{
 		return 'workflow_template_id';
+	}
+
+	public static function getDatasetName(): string
+	{
+		return 'system_filter_bizproc_workflow_template';
 	}
 
 	/**

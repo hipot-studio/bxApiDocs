@@ -2,6 +2,9 @@
 
 namespace Bitrix\Imconnector\Connectors;
 
+/**
+ * @internal
+ */
 interface MessengerUrl
 {
 	/**

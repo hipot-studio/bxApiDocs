@@ -24,6 +24,7 @@ class SupersetGroupProvider extends BaseProvider
 
 		$this->options['onlySystemGroups'] = (bool)($options['onlySystemGroups'] ?? false);
 		$this->options['checkAccessRights'] = (bool)($options['checkAccessRights'] ?? true);
+		$this->options['checkAccessEditRights'] = (bool)($options['checkAccessEditRights'] ?? false);
 	}
 
 	public function isAvailable(): bool
@@ -52,7 +53,18 @@ class SupersetGroupProvider extends BaseProvider
 			$filter['TYPE'] = SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM;
 		}
 
-		if ($this->options['checkAccessRights'])
+		if ($this->options['checkAccessEditRights'])
+		{
+			$groupFilter = AccessController::getCurrent()->getEntityFilter(
+				ActionDictionary::ACTION_BIC_DASHBOARD_EDIT,
+				SupersetDashboardGroupTable::class,
+			);
+			if ($groupFilter)
+			{
+				$filter['ID'] = $groupFilter['=ID'];
+			}
+		}
+		elseif ($this->options['checkAccessRights'])
 		{
 			$groupFilter = AccessController::getCurrent()->getEntityFilter(
 				ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,

@@ -10,6 +10,7 @@ use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\Engine\IQueueOptional;
 use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Facade\Portal;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Limiter\Enums\ErrorLimit;
 use Bitrix\AI\Limiter\LimitControlService;
@@ -189,6 +190,8 @@ class Engine
 			$available[] = $engine;
 		}
 
+		usort($available, static fn(IEngine $a, IEngine $b): int => strcasecmp($a->getName(), $b->getName()));
+
 		return $available;
 	}
 
@@ -236,7 +239,9 @@ class Engine
 				$hasSelectedEngine = true;
 			}
 			$agreement = $engine->getAgreement();
+
 			$engines[] = [
+				'preffered' => $engine->isPreferredForQuality(),
 				'code' => $engine->getCode(),
 				'title' => $engine->getName(),
 				'partner' => $engine->isThirdParty(),
@@ -257,6 +262,8 @@ class Engine
 		{
 			$engines[0]['selected'] = true;
 		}
+
+		usort($engines, static fn(array $a, array $b): int => strcasecmp($a['title'], $b['title']));
 
 		return $engines;
 	}
@@ -952,13 +959,13 @@ class Engine
 	{
 		$customData = null;
 		$rewriteErrorMessage = null;
-		if ($suffixErrorCode === '_BAAS_RATE_LIMIT' && Bitrix24::isMarketAvailable())
+		if ($suffixErrorCode === '_BAAS_RATE_LIMIT' && Portal::isMarketAvailable())
 		{
 			$rewriteErrorMessage = $customData['msgForIm'] = Loc::getMessage('AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET');
 			$customData['showSliderWithMsg'] = false;
 		}
 
-		if ($suffixErrorCode === '_BAAS' && Bitrix24::isMarketAvailable())
+		if ($suffixErrorCode === '_BAAS' && Portal::isMarketAvailable())
 		{
 			$customData['msgForIm'] = Loc::getMessage(
 				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_1',

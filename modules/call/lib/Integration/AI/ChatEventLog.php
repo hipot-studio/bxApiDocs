@@ -8,6 +8,10 @@ use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Call\NotifyService;
 
+/**
+ * @internal
+ */
+
 class ChatEventLog
 {
 	protected const DEBUG_OPTION = 'call_debug_chats';

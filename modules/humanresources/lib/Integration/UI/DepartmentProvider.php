@@ -212,7 +212,7 @@ class DepartmentProvider extends BaseStructureProvider
 
 		$nodes = $this->fetchNodes($this->providerOptions->includedNodeEntityTypes);
 
-		$hasMoreNodes = $this->existAnyChildrenForNodes($nodes);
+		$hasMoreNodes = $this->areOtherNodesExists($nodes);
 		if ($this->providerOptions->selectMode === DepartmentProviderSelectMode::UsersOnly || !$hasMoreNodes)
 		{
 			$entity = $dialog->getEntity('structure-node');

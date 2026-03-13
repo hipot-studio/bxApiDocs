@@ -130,7 +130,19 @@ final class DashboardGroupRepository extends DashboardRepository
 			$urlSourceService = new UrlParameter\Service($dashboard->getOrmObject()->getSource());
 			$row['SOURCE_DETAIL_URL'] = $urlSourceService->getEmbeddedUrl();
 		}
+		else
+		{
+			$row['SOURCE_DETAIL_URL'] = '';
+		}
 		$row['ENTITY_TYPE'] = self::TYPE_DASHBOARD;
+
+		$dashboardsInTopMenu = \CUserOptions::getOption('biconnector', 'top_menu_dashboards', []);
+		$dashboardsInTopMenu = array_flip($dashboardsInTopMenu);
+		$pinnedDashboards = \CUserOptions::getOption('biconnector', 'grid_pinned_dashboards', []);
+		$pinnedDashboards = array_flip($pinnedDashboards);
+
+		$row['IS_IN_TOP_MENU'] = isset($dashboardsInTopMenu[$dashboard->getId()]);
+		$row['IS_PINNED'] = isset($pinnedDashboards[$dashboard->getId()]);
 
 		return array_merge($row, $additionalOptions);
 	}
@@ -140,11 +152,6 @@ final class DashboardGroupRepository extends DashboardRepository
 		$dashboardOrmParams = [
 			'filter' => ['ID' => $ids],
 		];
-
-		$dashboardsInTopMenu = \CUserOptions::getOption('biconnector', 'top_menu_dashboards', []);
-		$dashboardsInTopMenu = array_flip(array_intersect($ids, $dashboardsInTopMenu));
-		$pinnedDashboards = \CUserOptions::getOption('biconnector', 'grid_pinned_dashboards', []);
-		$pinnedDashboards = array_flip(array_intersect($ids, $pinnedDashboards));
 
 		$allowedIds = AccessController::getCurrent()->getAllowedDashboardValue(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
@@ -158,14 +165,12 @@ final class DashboardGroupRepository extends DashboardRepository
 			$dashboardRows[] = $this->getDashboardRow(
 				$dashboard,
 				[
-					'IS_IN_TOP_MENU' => isset($dashboardsInTopMenu[$dashboard->getId()]),
-					'IS_PINNED' => isset($pinnedDashboards[$dashboard->getId()]),
 					'IS_ACCESS_ALLOWED' => in_array($dashboard->getId(), $allowedIds, true),
 				],
 			);
 		}
 
-		return  $dashboardRows;
+		return $dashboardRows;
 	}
 
 	private function getGroupRows(array $ids): array
@@ -197,6 +202,7 @@ final class DashboardGroupRepository extends DashboardRepository
 			"INCLUDE_LAST_FILTER_DATE",
 			"IS_TARIFF_RESTRICTED",
 			"IS_AVAILABLE_DASHBOARD",
+			"SOURCE_DETAIL_URL",
 		];
 
 		$groups = SupersetDashboardGroupTable::getList($groupOrmParams)->fetchCollection();
@@ -213,7 +219,6 @@ final class DashboardGroupRepository extends DashboardRepository
 				"IS_ACCESS_ALLOWED" => in_array($group->getId(), $allowedIds, true),
 				"URL_PARAMS" => [],
 				"GROUPS" => [],
-				'OWNER_ID' => $group->getOwnerId(),
 				'ENTITY_TYPE' => self::TYPE_GROUP,
 				'COUNT_DASHBOARDS' => $group->getDashboards()->count(),
 			];
@@ -296,6 +301,14 @@ final class DashboardGroupRepository extends DashboardRepository
 					$queryGroup->addSelect($fieldCode);
 					$queryDashboard->addSelect($fieldCode);
 				}
+			}
+
+			$innerOrder = $ormParams['order'];
+			unset($innerOrder['ENTITY_TYPE']);
+			if (!empty($innerOrder))
+			{
+				$queryGroup->setOrder($innerOrder);
+				$queryDashboard->setOrder($innerOrder);
 			}
 		}
 

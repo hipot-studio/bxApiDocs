@@ -3,6 +3,7 @@
 namespace Bitrix\ImConnector;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Event;
@@ -14,6 +15,8 @@ use Bitrix\ImConnector\Model\StatusConnectorsTable;
 
 class InfoConnectors
 {
+	public const ABANDONED_LINES_OPTION_NAME = 'abandoned_lines';
+
 	/**
 	 * Method for agent which add data about all lines connections info, which haven't them
 	 *
@@ -532,4 +535,48 @@ class InfoConnectors
 		$cache = Cache::createInstance();
 		$cache->clean($lineId, Library::CACHE_DIR_INFO_CONNECTORS_LINE);
 	}
+
+	//region Abandoned Lines
+	public static function refreshAbandonedLinesAgent(): string
+	{
+		$lines = self::getAbandonedLines();
+		if (count($lines))
+		{
+			foreach ($lines as $lineId)
+			{
+				self::addSingleLineUpdateAgent($lineId, Library::LOCAL_AGENT_EXEC_INTERVAL);
+			}
+
+			self::clearAbandonedLines();
+		}
+
+		return __METHOD__ . '();';
+	}
+
+	private static function getAbandonedLines(): array
+	{
+		$lines = Option::get('imconnector', self::ABANDONED_LINES_OPTION_NAME);
+		if (empty($lines))
+		{
+			return [];
+		}
+
+		return array_filter(array_map('intval', explode(',', $lines)));
+	}
+
+	public static function addAbandonedLineInQueue(int $lineId): void
+	{
+		$lines = self::getAbandonedLines();
+		if (!in_array($lineId, $lines))
+		{
+			$lines[] = $lineId;
+			Option::set('imconnector', self::ABANDONED_LINES_OPTION_NAME, implode(',', $lines));
+		}
+	}
+
+	private static function clearAbandonedLines(): void
+	{
+		Option::set('imconnector', self::ABANDONED_LINES_OPTION_NAME, '');
+	}
+	//endregion
 }

@@ -2,6 +2,8 @@
 
 namespace Bitrix\Intranet\Integration;
 
+use Bitrix\Main\UserTable;
+
 final class Main
 {
 	public static function onAfterIblockSectionUpdate($fields)
@@ -34,18 +36,17 @@ final class Main
 			return '';
 
 		$lastUserId = intval($lastUserId);
-		
-		$cursor = \Bitrix\Main\UserTable::getList(array(
-			'order' => array('ID' => 'ASC'),
-			'filter' => array(
-				'>ID' => $lastUserId,
-				'=UF_DEPARTMENT' => $iblockSectionId,
-				'=IS_REAL_USER' => 'Y',
-			),
-			'select' => array('ID'),
-			'offset' => 0,
-			'limit' => 100
-		));
+
+		$cursor = UserTable::query()
+			->setSelect(['ID'])
+			->where('REAL_USER', 'expr', true)
+			->addFilter('UF_DEPARTMENT', $iblockSectionId)
+			->addFilter('>ID', $lastUserId)
+			->setLimit(100)
+			->setOrder(['ID' => 'ASC'])
+			->setOffset(0)
+			->exec()
+		;
 
 		$found = false;
 		while ($row = $cursor->fetch())

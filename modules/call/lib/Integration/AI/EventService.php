@@ -3,18 +3,22 @@
 namespace Bitrix\Call\Integration\AI;
 
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\Call\Registry;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Call\NotifyService;
+use Bitrix\Call\Track\TrackDeletionService;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 
+/**
+ * @internal
+ */
 
 class EventService
 {
 	/**
-	 * @see \Bitrix\Im\Call\Call::fireCallFinishedEvent
+	 * @see \Bitrix\Call\Call::fireCallFinishedEvent
 	 */
 	public static function onCallFinished(\Bitrix\Main\Event $event): void
 	{
@@ -26,7 +30,7 @@ class EventService
 		$call = $event->getParameters()['call'] ?? null;
 
 		if (
-			$call instanceof \Bitrix\Im\Call\Call
+			$call instanceof \Bitrix\Call\Call
 			&& $call->isAiAnalyzeEnabled()
 		)
 		{
@@ -138,6 +142,8 @@ class EventService
 								event: 'follow_up_result'
 							)
 						;
+
+						TrackDeletionService::getInstance()->tryDeleteAiTracksFromMixer($call->getId());
 					}
 				}
 			}

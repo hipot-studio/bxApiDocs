@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Integration\Superset;
 
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Access\Role\RoleTable;
+use Bitrix\BIConnector\Access\Service\SystemGroupLocalizationService;
 use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset;
@@ -21,26 +22,17 @@ class Agent
 {
 	private const IS_ACCESS_ROLES_REINSTALLED_OPTION = 'is_access_roles_reinstalled';
 
+	/**
+	 * @deprecated
+	 */
 	public static function setDashboardOwners(): string
 	{
-		$dashboards = SupersetDashboardTable::getList([
-			'filter' => ['=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM],
-		])
-			->fetchCollection()
-		;
-		foreach ($dashboards as $dashboard)
-		{
-			if (!$dashboard->getOwnerId())
-			{
-				$dashboard->setOwnerId($dashboard->getCreatedById());
-				$dashboard->save();
-			}
-		}
-
 		return '';
 	}
 
 	/**
+	 * @deprecated
+	 *
 	 * Sets admin as dashboard's owner if the previous owner was fired.
 	 *
 	 * @param int $previousOwnerId User id of previous owner.
@@ -49,30 +41,6 @@ class Agent
 	 */
 	public static function setDefaultOwnerForDashboards(int $previousOwnerId): string
 	{
-		$user = (new SupersetUserRepository())->getAdmin();
-
-		$integrator = Integrator::getInstance();
-		if ($user && !$user->clientId)
-		{
-			$superset = new SupersetController($integrator);
-			$createResult = $superset->createUser($user->id);
-			$user = $createResult->getData()['user'];
-			if (!$user)
-			{
-				return __CLASS__ . '::' . __FUNCTION__ . '(' . $previousOwnerId . ');';
-			}
-		}
-
-		$dashboards = SupersetDashboardTable::getList(['filter' => ['=OWNER_ID' => $previousOwnerId]])->fetchCollection();
-		foreach ($dashboards as $dashboard)
-		{
-			$dashboard
-				->setOwnerId($user->id)
-				->save()
-			;
-			$integrator->setDashboardOwner($dashboard->getExternalId(), $user);
-		}
-
 		return '';
 	}
 
@@ -183,18 +151,7 @@ class Agent
 			;
 		}
 
-		$groupCollection = SupersetDashboardGroupTable::getList([
-			'filter' => ['=TYPE' =>  SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM],
-		])
-			->fetchCollection()
-		;
-
-		foreach ($groupCollection as $group)
-		{
-			$group->setName(AccessInstaller::getDefaultGroupName($group->getCode(), $defaultLanguage));
-		}
-
-		$groupCollection->save();
+		SystemGroupLocalizationService::update($defaultLanguage);
 
 		return '';
 	}

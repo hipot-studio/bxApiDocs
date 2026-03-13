@@ -7,10 +7,13 @@ namespace Bitrix\Landing\Copilot\Connector\AI\Type;
 enum SliderCode: string
 {
 	case BoostCopilot = 'limit_boost_copilot';
+	case Copilot = 'limit_copilot';
+	case CopilotOff = 'limit_copilot_off';
 	case Daily = 'limit_copilot_max_number_daily_requests';
 	case Monthly = 'limit_copilot_requests';
 	case BoostCopilotBox = 'limit_boost_copilot_box';
 	case RequestBox = 'limit_copilot_requests_box';
 	case Box = 'limit_copilot_box';
 	case Market = 'limit_subscription_market_access_buy_marketplus';
+	case MarketTrial= 'limit_market_trial_demo';
 }

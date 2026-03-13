@@ -216,7 +216,6 @@ class KpiManager
 	 */
 	public function addMessage($fields)
 	{
-		$result = false;
 		$lastMessage = $this->getLastMessage();
 
 		if (
@@ -234,62 +233,109 @@ class KpiManager
 			{
 				$orm = ConfigTable::getById($fields['LINE_ID']);
 				$config = $orm->fetch();
-
-				if (!empty($config))
-				{
-					$isActiveOperator = $this->checkOperatorActivity($fields['OPERATOR_ID'], $fields['LINE_ID']);
-					if ($isActiveOperator)
-					{
-						$addFields['TIME_STOP'] = null;
-					}
-					else
-					{
-						$addFields['TIME_STOP'] = DateTime::createFromTimestamp(time());
-						$addFields['TIME_STOP_HISTORY'][] = [
-							'TIME_PAUSE' => $addFields['TIME_STOP'],
-							'TIME_CONTINUE' => null
-						];
-					}
-
-					$sessionFields = SessionTable::getById($this->sessionId)->fetch();
-
-					$chat = new Chat($sessionFields['CHAT_ID']);
-
-					$sessionObject = new Session();
-					$sessionObject->loadByArray($sessionFields, $config, $chat);
-
-					$interval = 0;
-					if (
-						$addFields['IS_FIRST_MESSAGE'] == 'Y'
-						&& intval($config['KPI_FIRST_ANSWER_TIME']) > 0
-					)
-					{
-						$interval = $config['KPI_FIRST_ANSWER_TIME'];
-					}
-					elseif (intval($config['KPI_FURTHER_ANSWER_TIME']) > 0)
-					{
-						$interval = $config['KPI_FURTHER_ANSWER_TIME'];
-					}
-
-					if ($interval > 0)
-					{
-						$nextWorkdayStart = time();
-
-						$workTime = new AutomaticAction\WorkTime($sessionObject);
-						if (!$workTime->isWorkTimeLine())
-						{
-							$nextWorkdayStart = $workTime->getNextWorkDayStart()->getTimestamp();
-						}
-
-						$addFields['TIME_EXPIRED'] = DateTime::createFromTimestamp($nextWorkdayStart + $interval);
-					}
-				}
+				
+				$kpiSettings = $this->getKpiSettings(
+					$addFields,
+					$config ?? null,
+					(int)$fields['OPERATOR_ID']
+				);
+				
+				$addFields = array_merge($addFields, $kpiSettings);
 			}
 
-			$result = SessionKpiMessagesTable::add($addFields);
+			return SessionKpiMessagesTable::add($addFields);
 		}
 
-		return $result;
+		return false;
+	}
+
+	private function getKpiSettings(array $messageFields, ?array $config, int $operatorId): array
+	{
+		if (empty($config))
+		{
+			return [];
+		}
+
+		$addFields = [];
+
+		$isActiveOperator = $this->checkOperatorActivity($operatorId, $config['ID']);
+		if ($isActiveOperator)
+		{
+			$addFields['TIME_STOP'] = null;
+		}
+		else
+		{
+			$addFields['TIME_STOP'] = DateTime::createFromTimestamp(time());
+			$addFields['TIME_STOP_HISTORY'][] = [
+				'TIME_PAUSE' => $addFields['TIME_STOP'],
+				'TIME_CONTINUE' => null
+			];
+		}
+
+		$sessionFields = SessionTable::getById($this->sessionId)->fetch();
+
+		$chat = new Chat($sessionFields['CHAT_ID']);
+
+		$sessionObject = new Session();
+		$sessionObject->loadByArray($sessionFields, $config, $chat);
+
+		$interval = 0;
+		if (
+			$messageFields['IS_FIRST_MESSAGE'] == 'Y'
+			&& intval($config['KPI_FIRST_ANSWER_TIME']) > 0
+		)
+		{
+			$interval = $config['KPI_FIRST_ANSWER_TIME'];
+		}
+		elseif (intval($config['KPI_FURTHER_ANSWER_TIME']) > 0)
+		{
+			$interval = $config['KPI_FURTHER_ANSWER_TIME'];
+		}
+
+		if ($interval > 0)
+		{
+			$nextWorkdayStart = time();
+
+			$workTime = new AutomaticAction\WorkTime($sessionObject);
+			if (!$workTime->isWorkTimeLine())
+			{
+				$nextWorkdayStart = $workTime->getNextWorkDayStart()->getTimestamp();
+			}
+
+			$addFields['TIME_EXPIRED'] = DateTime::createFromTimestamp($nextWorkdayStart + $interval);
+		}
+
+		return $addFields;
+	}
+
+
+	/**
+	 * Set new first message after line transfer and apply the kpi settings of new line
+	 * to the new first message
+	 *
+	 * @param array $config Line configuration data
+	 * @param int $operatorId
+	 */
+	public function refreshFirstMessageKpiSettings(array $config, int $operatorId): void
+	{
+		self::setSessionLastKpiMessageAnswered($this->sessionId);
+
+		$message = $this->getLastMessage();
+		$default = [
+			'IS_FIRST_MESSAGE' => 'Y',
+			'TIME_ANSWER' => null,
+			'TIME_EXPIRED' => null,
+			'TIME_STOP' => null,
+		];
+
+		if ($message === false)
+		{
+			return;
+		}
+
+		$kpiSettings = $this->getKpiSettings($message, $config ?? null, $operatorId);
+
+		$this->updateMessage($message['ID'], array_merge($default, $kpiSettings));
 	}
 
 	/**

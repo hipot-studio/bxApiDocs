@@ -508,4 +508,31 @@ final class FilterStructure extends Structure
 
 		return array_unique($fields);
 	}
+
+	public function getSimpleFilterConditions(): array
+	{
+		$fields = [];
+
+		foreach ($this->conditions as $condition)
+		{
+			if (
+				$condition instanceof FilterStructure &&
+				count($condition->getConditions()) === 1 &&
+				$condition->getConditions()[0] instanceof Condition &&
+				$condition->getConditions()[0]->getOperator() === Operator::Equal
+			)
+			{
+				$condition = $condition->getConditions()[0];
+			}
+
+			if (!($condition instanceof Condition) || ($condition->getOperator() !== Operator::Equal))
+			{
+				continue;
+			}
+
+			$fields[$condition->getLeftOperand()] = $condition->getRightOperand();
+		}
+
+		return $fields;
+	}
 }

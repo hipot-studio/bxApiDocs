@@ -1724,36 +1724,72 @@ class CIMNotify
 		return \Bitrix\Im\Notify::getCounters($chatIds);
 	}
 
-	public static function prepareNotifyParams(array $params): array
+	public static function prepareNotifyParams(array $params, bool $isAdd = false): array
 	{
-		if (is_string($params['COMPONENT_PARAMS']['PLAIN_TEXT'] ?? null))
-		{
-			$params['COMPONENT_PARAMS']['PLAIN_TEXT'] = self::prepareNotifyParam($params['COMPONENT_PARAMS']['PLAIN_TEXT']);
-		}
-
 		if (
-			($params['COMPONENT_PARAMS']['ENTITY']['CONTENT_TYPE'] ?? '') === 'text'
-			&& is_string($params['COMPONENT_PARAMS']['ENTITY']['CONTENT']['VALUE'] ?? null)
+			str_ends_with($params['COMPONENT_ID'] ?? '', 'Entity')
+			&& isset($params['COMPONENT_PARAMS'])
+			&& is_array($params['COMPONENT_PARAMS'])
 		)
 		{
-			$params['COMPONENT_PARAMS']['ENTITY']['CONTENT']['VALUE'] = self::prepareNotifyParam(
-				$params['COMPONENT_PARAMS']['ENTITY']['CONTENT']['VALUE']
+			$params['COMPONENT_PARAMS'] = self::prepareEntityNotifyParams(
+				$params['COMPONENT_PARAMS'],
+				$isAdd,
 			);
 		}
 
 		return $params;
 	}
 
-	private static function prepareNotifyParam(string $param): string
+	public static function prepareEntityNotifyParams(array $params, bool $isAdd = false): array
 	{
-		$param = trim(str_replace(Array('[BR]', '[br]', '#BR#'), "\n", $param));
-		if (mb_strlen($param) > \CIMMessenger::MESSAGE_LIMIT + 6)
+		$checkedFields = [
+			'SUBJECT',
+			'PLAIN_TEXT',
+			'VALUE',
+			'TEXT',
+			'ADDITIONAL_TEXT',
+			'PREV',
+			'NEXT',
+		];
+
+		foreach ($params as $key => $value)
 		{
-			$param = mb_substr($param, 0, \CIMMessenger::MESSAGE_LIMIT).' (...)';
+			if (in_array($key, $checkedFields, true) && is_string($value))
+			{
+				$params[$key] = self::prepareEntityNotifyParam($value, $isAdd);
+			}
+
+			if (is_array($value))
+			{
+				$params[$key] = self::prepareEntityNotifyParams($value);
+			}
 		}
 
-		$param = Text::convertHtmlToBbCode($param);
+		return $params;
+	}
 
-		return $param;
+	private static function prepareEntityNotifyParam(string $param, bool $isAdd = false): string
+	{
+		if ($isAdd)
+		{
+			$param = trim(str_replace(Array('[BR]', '[br]', '#BR#'), "\n", $param));
+
+			if (mb_strlen($param) > \CIMMessenger::MESSAGE_LIMIT + 6)
+			{
+				$param = mb_substr($param, 0, \CIMMessenger::MESSAGE_LIMIT).' (...)';
+			}
+		}
+
+		$param = (string)Text::convertHtmlToBbCode($param);
+		if ($isAdd)
+		{
+			return $param;
+		}
+
+		return (string)Text::parse(
+			$param,
+			['LINK_TARGET_SELF' => 'Y'],
+		);
 	}
 }

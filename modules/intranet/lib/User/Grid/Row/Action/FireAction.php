@@ -29,9 +29,29 @@ class FireAction extends JsGridAction
 
 	protected function getActionParams(array $rawFields): array
 	{
+		$user = $this->getSettings()->getUserCollection()?->getByUserId($rawFields['ID']);
+		$userFullName = '';
+
+		if ($user)
+		{
+			$userFullName = \CUser::FormatName(
+				\CSite::GetNameFormat(false),
+				[
+					'NAME' => $user->getName(),
+					'LAST_NAME' => $user->getLastName(),
+					'SECOND_NAME' => $user->getSecondName(),
+					'LOGIN' => $user->getLogin(),
+				],
+				true,
+				false
+			);
+		}
+
 		return [
 			'action' => 'fire',
 			'userId' => $rawFields['ID'],
+			'userFullName' => $userFullName,
+			'currentUserId' => $this->getSettings()->getCurrentUserId(),
 		];
 	}
 }

@@ -7,10 +7,10 @@ use Bitrix\Main\Engine;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\Registry;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Call\Call;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Call\Error;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\ChatMessage;
@@ -19,6 +19,9 @@ use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Model\CallAITaskTable;
 use Bitrix\Call\Model\CallOutcomePropertyTable;
 
+/**
+ * @internal
+ */
 class TaskAI extends Engine\Controller
 {
 	protected function init(): void
@@ -226,7 +229,7 @@ class TaskAI extends Engine\Controller
 		return $result;
 	}
 
-	protected function getCall(int $callId): ?\Bitrix\Im\Call\Call
+	protected function getCall(int $callId): ?\Bitrix\Call\Call
 	{
 		$call = Registry::getCallWithId($callId);
 		if (!$call)

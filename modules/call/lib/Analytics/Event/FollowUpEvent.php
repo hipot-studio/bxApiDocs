@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\Analytics\Event;
 
+/**
+ * @internal
+ */
 class FollowUpEvent extends Event
 {
 	protected function setDefaultParams(): self

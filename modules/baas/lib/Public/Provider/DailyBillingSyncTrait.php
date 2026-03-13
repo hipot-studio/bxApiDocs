@@ -13,7 +13,7 @@ trait DailyBillingSyncTrait
 	{
 		if (BaasService::getInstance()->isAvailable())
 		{
-			BillingSynchronizationService::getInstance()->syncIfNeeded();
+			BillingSynchronizationService::getInstance()->autoSync();
 		}
 	}
 }

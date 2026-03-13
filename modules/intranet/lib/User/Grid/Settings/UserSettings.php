@@ -100,6 +100,32 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 		return ModuleManager::isModuleInstalled('bitrix24');
 	}
 
+	public function isFirstAdminConfirmationEnabled(): bool
+	{
+		if ($this->isCloud() && Loader::includeModule('bitrix24'))
+		{
+			return Option::get('bitrix24', 'first_admin_confirmation', 'N') === 'Y';
+		}
+
+		return false;
+	}
+
+	public function getCurrentUserName(): string
+	{
+		$currentUser = CurrentUser::get();
+		return \CUser::FormatName(
+			\CSite::GetNameFormat(false),
+			[
+				'NAME' => $currentUser->getFirstName(),
+				'LAST_NAME' => $currentUser->getLastName(),
+				'SECOND_NAME' => $currentUser->getSecondName(),
+				'LOGIN' => $currentUser->getLogin(),
+			],
+			true,
+			false
+		);
+	}
+
 	public function setFilterFields(array $filterFields): void
 	{
 		$this->filterFields = $filterFields;

@@ -552,17 +552,6 @@ final class IntranetConfigsComponent extends CBitrixComponent
 				COption::SetOptionString("bitrix24", "buy_tariff_by_all", "N", false);
 		}
 
-		if (
-			!$this->arResult["IS_BITRIX24"]
-			|| \Bitrix\Bitrix24\Release::isAvailable('stresslevel')
-		)
-		{
-			if ($_POST["stresslevel_available"] <> '')
-				COption::SetOptionString("intranet", "stresslevel_available", "Y", false);
-			else
-				COption::SetOptionString("intranet", "stresslevel_available", "N", false);
-		}
-
 		// tasks
 		if (isset($_POST["create_overdue_chats"]) && $_POST["create_overdue_chats"] <> '')
 			COption::SetOptionString("tasks", "create_overdue_chats", "Y", false);
@@ -1192,8 +1181,6 @@ final class IntranetConfigsComponent extends CBitrixComponent
 				$this->arResult["PROJECT_PRICE"] = CBitrix24::ConvertCurrency($arProductPrices["TF1"]["PRICE"], $billingCurrency);
 			}
 		}
-
-		$this->arResult['STRESSLEVEL_AVAILABLE'] = COption::GetOptionString("intranet", "stresslevel_available", "Y");
 
 		if($this->arResult['SHOW_YANDEX_MAP_KEY_FIELD'])
 		{

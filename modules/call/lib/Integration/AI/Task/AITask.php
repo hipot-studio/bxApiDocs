@@ -42,11 +42,13 @@ use Bitrix\Main\ORM\Entity;
  * @method AITask setDateCreate(DateTime $dateCreate)
  * @method DateTime|null getDateFinished()
  * @method AITask setDateFinished(DateTime $dateFinished)
- * @method \Bitrix\Im\Model\EO_Call fillCall()
+ * @method \Bitrix\Call\Model\EO_Call fillCall()
  * @method \Bitrix\Call\Track fillTrack()
  * @method \Bitrix\Call\Integration\AI\Outcome fillOutcome()
  * @method \Bitrix\Main\ORM\Data\Result save()
  * @method \Bitrix\Main\ORM\Data\Result delete()
+ *
+ * @internal
  */
 abstract class AITask
 {
@@ -393,7 +395,7 @@ abstract class AITask
 	 */
 	protected function getMeetingEvent(int $callId): ?\stdClass
 	{
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);
+		$call = \Bitrix\Call\Call\Registry::getCallWithId($callId);
 
 		static $meetings = [];
 		if (

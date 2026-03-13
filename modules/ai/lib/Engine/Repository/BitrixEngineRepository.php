@@ -12,6 +12,7 @@ class BitrixEngineRepository
 			->setSelect([
 				'CLASS', 'CATEGORY',
 			])
+			->setCacheTtl(86400)
 			->where('IS_ACTIVE', '=', 1)
 			->fetchAll()
 		;

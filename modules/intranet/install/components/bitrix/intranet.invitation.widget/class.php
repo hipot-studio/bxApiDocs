@@ -15,11 +15,6 @@ class IntranetInvitationWidgetComponent extends \CBitrixComponent implements Eng
 {
 	public function onPrepareComponentParams($arParams)
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return parent::onPrepareComponentParams($arParams);
-		}
-
 		if (
 			Loader::includeModule('extranet')
 			&& (\CExtranet::isExtranetSite() || !\CExtranet::IsIntranetUser())
@@ -30,7 +25,7 @@ class IntranetInvitationWidgetComponent extends \CBitrixComponent implements Eng
 
 		$intranetUser = new Intranet\User();
 		$this->arResult['isCurrentUserAdmin'] = $intranetUser->isAdmin();
-		$this->arResult['isInvitationAvailable'] = \CBitrix24::isInvitingUsersAllowed();
+		$this->arResult['isInvitationAvailable'] =  Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()->canInvite();
 		$this->arResult['structureLink'] = '/company/vis_structure.php';
 		$this->arResult['invitationLink'] = $this->arResult['isCurrentUserAdmin'] || $this->arResult['isInvitationAvailable']
 			? Engine\UrlManager::getInstance()->create('getSliderContent', [
@@ -56,11 +51,6 @@ class IntranetInvitationWidgetComponent extends \CBitrixComponent implements Eng
 
 	public function executeComponent(): void
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return;
-		}
-
 		if (
 			Loader::includeModule('extranet')
 			&& (\CExtranet::isExtranetSite() || !\CExtranet::IsIntranetUser())

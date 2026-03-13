@@ -12,6 +12,9 @@ use Bitrix\Call\Integration\AI\Outcome\Overview;
 use Bitrix\Call\Integration\AI\Outcome\Transcription;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 
+/**
+ * @internal
+ */
 class MeetingEvaluationTask extends AITask
 {
 	public const PROMPT_ID = 'meeting_eval_by_type';
@@ -62,7 +65,7 @@ class MeetingEvaluationTask extends AITask
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($outcome->getCallId());
+		$call = \Bitrix\Call\Call\Registry::getCallWithId($outcome->getCallId());
 		if (!$call)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content

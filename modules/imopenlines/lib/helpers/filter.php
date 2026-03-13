@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\ImOpenLines\Helpers;
 
+use Bitrix\ImBot\Bot\Network;
 use Bitrix\ImOpenLines\Session;
 use Bitrix\Main\ArgumentException;
 use \Bitrix\Main\Loader,
@@ -179,6 +180,11 @@ class Filter
 		if (!empty($filter['EXTRA_PORTAL_TYPE']))
 		{
 			$result['=EXTRA_PORTAL_TYPE'] = $filter['EXTRA_PORTAL_TYPE'];
+		}
+
+		if (!empty($filter['EXTRA_DEVICE_TYPE']))
+		{
+			$result['=EXTRA_DEVICE_TYPE'] = $filter['EXTRA_DEVICE_TYPE'];
 		}
 
 		if (isset($filter['STATUS']))
@@ -552,6 +558,17 @@ class Filter
 				'name' => Loc::getMessage('OL_STATS_HEADER_EXTRA_REGISTER'),
 				'default' => false,
 				'type' => 'number'
+			);
+			$filterFields['EXTRA_DEVICE_TYPE'] = array(
+				'id' => 'EXTRA_DEVICE_TYPE',
+				'name' => Loc::getMessage('OL_STATS_HEADER_EXTRA_DEVICE_TYPE'),
+				'default' => false,
+				'type' => 'list',
+				'items' => array(
+					'' => Loc::getMessage('OL_STATS_FILTER_UNSET'),
+					Network::DEVICE_TYPE_WEB => Loc::getMessage('OL_COMPONENT_TABLE_DEVICE_TYPE_WEB'),
+					Network::DEVICE_TYPE_MOBILE => Loc::getMessage('OL_COMPONENT_TABLE_DEVICE_TYPE_MOBILE'),
+				),
 			);
 		}
 		if (Loader::includeModule('crm'))

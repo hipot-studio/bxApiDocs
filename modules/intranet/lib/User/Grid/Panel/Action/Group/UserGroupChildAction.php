@@ -28,6 +28,10 @@ abstract class UserGroupChildAction extends GroupChildAction
 			'actionId' => static::getId(),
 			'gridId' => $this->getSettings()->getID(),
 			'filter' => $this->getSettings()->getFilterFields(),
+			'isCloud' => $this->getSettings()->isCloud(),
+			'isFirstAdminConfirmationEnabled' => $this->getSettings()->isFirstAdminConfirmationEnabled(),
+			'currentUserId' => $this->getSettings()->getCurrentUserId(),
+			'currentUserName' => $this->getSettings()->getCurrentUserName(),
 		]);
 
 		return "BX.Intranet.UserList.Panel.executeAction($actionParams)";

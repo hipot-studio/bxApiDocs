@@ -56,6 +56,7 @@ final class Integrator
 	private const PROXY_ACTION_CHANGE_DASHBOARD_OWNER = '/dashboard/changeOwner';
 	private const PROXY_ACTION_LIST_DATASET = '/dataset/list';
 	private const PROXY_ACTION_GET_DATASET = '/dataset/get';
+	private const PROXY_ACTION_GET_DATASET_BY_NAME = '/dataset/getByName';
 	private const PROXY_ACTION_CREATE_DATASET = '/dataset/create';
 	private const PROXY_ACTION_UPDATE_DATASET = '/dataset/update';
 	private const PROXY_ACTION_DELETE_DATASET = '/dataset/delete';
@@ -65,6 +66,7 @@ final class Integrator
 	private const PROXY_ACTION_GET_DASHBOARD_DATASETS = '/dashboard/datasets';
 	private const PROXY_ACTION_DATASET_INIT_REQUIRED_DATASET = '/dataset/initRequiredDataset';
 
+	private const PROXY_EXTENDED_STREAM_TIMEOUT = 90;
 	static private self $instance;
 
 	private Sender $sender;
@@ -91,6 +93,7 @@ final class Integrator
 			->addBefore($registrarMiddleware)
 			->addBefore(new Middleware\ReadyGate($statusContainer, $this->logger))
 			->addBefore(new Middleware\UserAccess())
+			->addBefore(new Middleware\RequiredDatasetSync())
 			->addAfter($registrarMiddleware)
 			->addAfter(new Middleware\Logger($this->logger))
 			->addAfter(new Middleware\StatusArbiter($this->logger))
@@ -134,6 +137,7 @@ final class Integrator
 			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 			->removeBefore(Middleware\Registrar::getMiddlewareId())
 			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
 			->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 			->perform()
 		;
@@ -165,6 +169,7 @@ final class Integrator
 			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 			->removeBefore(Middleware\Registrar::getMiddlewareId())
 			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
 			->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 			->perform()
 		;
@@ -336,8 +341,6 @@ final class Integrator
 	public function updateUser(Dto\User $user): IntegratorResponse
 	{
 		$parameters = [
-			'email' => $user->email,
-			'username' => $user->userName,
 			'first_name' => $user->firstName,
 			'last_name' => $user->lastName,
 		];
@@ -443,6 +446,9 @@ final class Integrator
 						'dashboardSettings' => $dashboardSettings,
 					]
 				)
+				->setSenderHttpClientParams([
+					'streamTimeout' => self::PROXY_EXTENDED_STREAM_TIMEOUT,
+				])
 				->perform()
 		;
 
@@ -559,6 +565,7 @@ final class Integrator
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_START_SUPERSET)
 				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
 				->setParams($requestParams)
 				->perform()
 		;
@@ -694,6 +701,7 @@ final class Integrator
 				->createDefaultRequest($action)
 				->setParams(['fields' => $parameters])
 				->removeBefore(Middleware\UserAccess::getMiddlewareId())
+				->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
 				->perform()
 		;
 	}
@@ -751,6 +759,8 @@ final class Integrator
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_PING_SUPERSET)
 				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->removeBefore(Middleware\UserAccess::getMiddlewareId())
+				->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
 				->perform()
 			;
 			$isChecked = true;
@@ -808,7 +818,6 @@ final class Integrator
 	 */
 	public function setDashboardOwner(int $dashboardId, Dto\User $user): IntegratorResponse
 	{
-
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_SET_DASHBOARD_OWNER)
@@ -905,6 +914,9 @@ final class Integrator
 	}
 
 	/**
+	 *
+	 * @deprecated
+	 *
 	 * Changes dashboard owners
 	 *
 	 * @param int $dashboardId
@@ -1016,21 +1028,32 @@ final class Integrator
 			'id' => $id,
 		];
 
-		$response =
+		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_GET_DATASET)
 				->setParams($requestParams)
 				->perform()
 		;
+	}
 
-		if ($response->hasErrors())
-		{
-			return $response;
-		}
+	/**
+	 * Returns response with dataset info on successful request by name.
+	 *
+	 * @param string $name
+	 * @return IntegratorResponse
+	 */
+	public function getDatasetByName(string $name): IntegratorResponse
+	{
+		$requestParams = [
+			'name' => $name,
+		];
 
-		$resultData = $response->getData();
-
-		return $response->setData($resultData);
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_GET_DATASET_BY_NAME)
+				->setParams($requestParams)
+				->perform()
+			;
 	}
 
 	/**
@@ -1200,13 +1223,18 @@ final class Integrator
 	/**
 	 * Inits a server-side scenario to create or update required system datasets (e.g., for filters).
 	 *
+	 * @param array $tables
 	 * @return IntegratorResponse
 	 */
-	public function initRequiredDataset(): IntegratorResponse
+	public function initRequiredDataset(array $tables = []): IntegratorResponse
 	{
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_DATASET_INIT_REQUIRED_DATASET)
+				->setParams(['tables' => $tables])
+				->removeBefore(Middleware\UserAccess::getMiddlewareId())
+				->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 				->perform()
 		;
 	}

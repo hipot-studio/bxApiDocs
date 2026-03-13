@@ -93,7 +93,7 @@ class SenderContactListComponent extends Bitrix\Sender\Internals\CommonSenderCom
 			$GLOBALS['APPLICATION']->SetTitle(Loc::getMessage('SENDER_CONTACT_LIST_TITLE1'));
 		}
 
-		if (!Security\Access::getInstance()->canViewSegments())
+		if (!Security\Access::getInstance()->canViewClientList())
 		{
 			Security\AccessChecker::addError($this->errors);
 			return false;
@@ -485,7 +485,7 @@ class SenderContactListComponent extends Bitrix\Sender\Internals\CommonSenderCom
 
 	public function getEditAction()
 	{
-		return ActionDictionary::ACTION_SEGMENT_CLIENT_VIEW;
+		return ActionDictionary::ACTION_SEGMENT_CLIENT_EDIT;
 	}
 
 	public function getViewAction()

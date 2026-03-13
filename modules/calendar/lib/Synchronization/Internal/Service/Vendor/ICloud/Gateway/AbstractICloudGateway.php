@@ -60,7 +60,7 @@ class AbstractICloudGateway
 				'request' => $data,
 				'statusCode' => $this->client->getStatus(),
 				'response' => $this->client->getResult(),
-			]
+			],
 		);
 	}
 
@@ -111,7 +111,7 @@ class AbstractICloudGateway
 
 			throw new UnexpectedException(
 				sprintf('Unknown iCloud API error: "%s"', $error['message'] ?? ''),
-				(int)($error['code'] ?? 400)
+				(int)($error['code'] ?? 400),
 			);
 		}
 

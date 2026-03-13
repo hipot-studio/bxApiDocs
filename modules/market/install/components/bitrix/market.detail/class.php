@@ -2,7 +2,6 @@
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Market\AppFavoritesTable;
 use Bitrix\Market\Application\Action;
@@ -18,7 +17,7 @@ use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
 use Bitrix\Rest\Marketplace\Url;
-use Bitrix\Rest\OAuthService;
+use Bitrix\Market\Internal;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) {
 	die();
@@ -30,8 +29,15 @@ class RestMarketDetail extends CBitrixComponent
 {
 	private array $appItem;
 	private int $version = 0;
+	private Internal\Integration\Rest\Client $restClient;
 
 	private bool $appInstalled = false;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+		$this->restClient = new Internal\Integration\Rest\Client();
+	}
 
 	private function isAppInstalled(): bool
 	{
@@ -40,7 +46,9 @@ class RestMarketDetail extends CBitrixComponent
 
 	public function executeComponent()
 	{
-		if ($this->prepareInfo()) {
+		try
+		{
+			$this->prepareInfo();
 			$marketDetail = new MarketDetail($this->arParams['APP_CODE'], DetailType::App);
 			$marketDetail->setVersion($this->version);
 			$marketDetail->setCheckHash($this->arResult['CHECK_HASH']);
@@ -51,25 +59,20 @@ class RestMarketDetail extends CBitrixComponent
 			$this->arResult['ADDITIONAL_MARKET_ACTION'] = $marketDetail->getAdditionalMarketAction();
 
 			$this->prepareResult();
-		}
 
-		$this->includeComponentTemplate();
+			$this->includeComponentTemplate();
+		}
+		catch (Internal\Exception\MarketException $exception)
+		{
+			$this->arResult['EXCEPTION'] = $exception;
+
+			$this->includeComponentTemplate('error_template');
+		}
 	}
 
-	private function prepareInfo(): bool
+	private function prepareInfo(): void
 	{
-		if (Loader::includeModule('rest') && !OAuthService::getEngine()->isRegistered()) {
-			try {
-				OAuthService::register();
-				OAuthService::getEngine()->getClient()->getApplicationList();
-			} catch (SystemException $e) {
-				ShowError($e->getMessage());
-				return false;
-			}
-
-			AppTable::updateAppStatusInfo();
-			Client::getNumUpdates();
-		}
+		$this->restClient->connectToMarket();
 
 		$this->arParams['COMPONENT_NAME'] = 'bitrix:market.detail';
 
@@ -113,8 +116,6 @@ class RestMarketDetail extends CBitrixComponent
 		) {
 			$this->arResult['START_INSTALL'] = false;
 		}
-
-		return true;
 	}
 
 	private function prepareResult()

@@ -10,6 +10,9 @@ use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\Outcome\Transcription;
 
+/**
+ * @internal
+ */
 class TranscriptionSummary extends AITask
 {
 	public const PROMPT_ID = 'meeting_summarization';
@@ -60,7 +63,7 @@ class TranscriptionSummary extends AITask
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($outcome->getCallId());
+		$call = \Bitrix\Call\Call\Registry::getCallWithId($outcome->getCallId());
 		if (!$call)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content

@@ -22,16 +22,22 @@ class MenuItemCreatorTasksFlowsFlow extends BaseMenuItemCreator
 			$menuItems[] = [
 				'ID' => "BIC_TASKS_FLOWS_FLOW_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
+				'IS_LOCKED' => !$this->isAvailableByTariff(),
 				'URL' => $this->getDetailUrl(
 					$dashboard,
 					$params,
 					[
-						'openFrom' => 'flow',
+						'openFrom' => $this->getOpenFrom(),
 					]
 				),
 			];
 		}
 
 		return $menuItems;
+	}
+
+	protected function getOpenFormCode(): string
+	{
+		return 'flow';
 	}
 }

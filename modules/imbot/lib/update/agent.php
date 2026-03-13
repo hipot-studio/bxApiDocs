@@ -12,6 +12,9 @@ use Bitrix\Imbot\Bot\Partner24;
  * \CAgent::addAgent('\\Bitrix\\Imbot\\Update\\Agent::installSupport24Command();', 'imbot', "N", 300, "", "Y", \ConvertTimeStamp(time()+\CTimeZone::getOffset()+300, "FULL"));
  */
 
+/**
+ * @internal
+ */
 final class Agent
 {
 

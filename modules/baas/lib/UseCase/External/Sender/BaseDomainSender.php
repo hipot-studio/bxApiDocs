@@ -23,6 +23,7 @@ class BaseDomainSender extends Main\Service\MicroService\BaseSender
 	public function performRequest($action, array $parameters = []): Response\SenderResult
 	{
 		/** @var Response\SenderResult $result */
+		$parameters['baasVersion'] = '26.100.0';
 		$result = parent::performRequest($this->formatActionName($action), $parameters);
 
 		if (!$result->isSuccess())

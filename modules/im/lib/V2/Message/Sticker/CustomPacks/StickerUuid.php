@@ -6,7 +6,6 @@ namespace Bitrix\Im\V2\Message\Sticker\CustomPacks;
 
 use Bitrix\Im\V2\Message\Sticker\StickerCollection;
 use Bitrix\Im\V2\Rest\RestConvertible;
-use Bitrix\UI\FileUploader\PendingFileCollection;
 
 class StickerUuid implements RestConvertible
 {
@@ -33,20 +32,6 @@ class StickerUuid implements RestConvertible
 			$data = $sticker->toShortRestFormat();
 			$data['uuid'] = $this->fileMap[$sticker->fileId] ?? null;
 			$result[] = $data;
-		}
-
-		return $result;
-	}
-
-	public static function getFileMap(PendingFileCollection $pendingFiles): array
-	{
-		$result = [];
-		foreach ($pendingFiles as $file)
-		{
-			if ($file->getFileId() !== null)
-			{
-				$result[$file->getFileId()] = $file->getGuid();
-			}
 		}
 
 		return $result;

@@ -8,6 +8,9 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 
+/**
+ * @internal
+ */
 class UniqueRequestFilter extends Base
 {
 	public function onBeforeAction(Event $event)

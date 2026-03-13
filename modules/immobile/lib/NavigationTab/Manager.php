@@ -59,16 +59,6 @@ class Manager
 
 	public function getComponent(): array
 	{
-		if (Settings::isMessengerV2Enabled())
-		{
-			return $this->getMessengerV2Component();
-		}
-
-		return $this->getMessengerComponent();
-	}
-
-	public function getMessengerV2Component(): array
-	{
 		$sortedTabs = $this->getSortedItems();
 		/**
 		 * @type Tab\BaseRecent[] $items
@@ -115,7 +105,7 @@ class Manager
 				'name' => 'JSStackComponent',
 				'title' => Loc::getMessage('MD_COMPONENT_IM_RECENT'),
 				'componentCode' => 'im.messenger',
-				'scriptPath' => MobileApp\Janative\Manager::getComponentPath('im:messenger-v2'),
+				'scriptPath' => MobileApp\Janative\Manager::getComponentPath('im:messenger'),
 				'params' => $params,
 				'rootWidget' => [
 					'name' => 'tabs',
@@ -165,59 +155,6 @@ class Manager
 
 		sort($enabledIds);
 		return 'chat_tabs_' . hash('sha256', implode('_', $enabledIds) . $additionalString);
-	}
-
-	public function getMessengerComponent(): array
-	{
-		/**
-		 * @type Tab\TabInterface[] $items
-		 */
-		$items = array_values(
-			array_filter($this->getSortedItems(), static fn ($item) => $item->isAvailable())
-		);
-
-		$itemsData = [];
-		$params = $this->getMessengerParams($items);
-		foreach ($items as $item)
-		{
-			if ($item->getId() === 'openlines')
-			{
-				$item->mergeParams($params['SHARED_PARAMS']);
-			}
-
-			$itemsData[] = $item->getComponentData();
-		}
-
-		return [
-			'sort' => 100,
-			'imageName' => 'chat',
-			'cacheId' => $this->getCacheId(),
-			'badgeCode' => 'messages',
-			'component' => [
-				'name' => 'JSStackComponent',
-				'title' => Loc::getMessage('MD_COMPONENT_IM_RECENT'),
-				'componentCode' => 'im.navigation',
-				'scriptPath' => MobileApp\Janative\Manager::getComponentPath('im:im.navigation'),
-				'params' => array_merge([
-					'COMPONENT_CODE' => 'im.navigation',
-					'firstTabId' => $items[0]->getId(),
-				], $params),
-				'rootWidget' => [
-					'name' => 'tabs',
-					'settings' => [
-						'code' => 'im.tabs',
-						'objectName' => 'tabs',
-						'titleParams'=> [
-							'text' => $this->getTitle(),
-							'useLargeTitleMode' => true
-						],
-						'tabs' => [
-							'items' => $itemsData,
-						],
-					],
-				],
-			],
-		];
 	}
 
 	/**
@@ -304,20 +241,6 @@ class Manager
 		return [
 			'SHARED_PARAMS' => [
 				...$this->getSharedParams($tabs),
-				'AVAILABLE_MESSENGER_COMPONENTS' => [
-					$this->messenger->getComponentCode() => $this->messenger->isAvailable(),
-					$this->copilot->getComponentCode() => $this->copilot->isAvailable(),
-					$this->channel->getComponentCode() => $this->channel->isAvailable(),
-					$this->collab->getComponentCode() => $this->collab->isAvailable(),
-					$this->openLines->getComponentCode() => $this->openLines->isAvailable(),
-				],
-				'PRELOADED_MESSENGER_COMPONENTS' => [
-					$this->messenger->getComponentCode() => $this->messenger->isPreload(),
-					$this->copilot->getComponentCode() => $this->copilot->isPreload(),
-					$this->channel->getComponentCode() => $this->channel->isPreload(),
-					$this->collab->getComponentCode() => $this->collab->isPreload(),
-					$this->openLines->getComponentCode() => $this->openLines->isPreload(),
-				],
 				'WIDGET_CHAT_CREATE_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.create'),
 				'WIDGET_CHAT_USERS_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.user.list'),
 				'WIDGET_CHAT_RECIPIENTS_VERSION' => MobileApp\Janative\Manager::getComponentVersion('im:im.chat.user.selector'),
@@ -408,8 +331,6 @@ class Manager
 			'IS_CLOUD' => $isCloud,
 			'HAS_ACTIVE_CLOUD_STORAGE_BUCKET' => $hasActiveBucket,
 			'IS_BETA_AVAILABLE' => Settings::isBetaAvailable(),
-			'IS_MESSENGER_V2_ENABLED' => Settings::isMessengerV2Enabled(),
-			'IS_MULTIPLE_REACTIONS_ENABLED' => Settings::isMultipleReactionsEnabled(),
 			'IS_COPILOT_SELECT_MODEL_ENABLED' => Settings::isCopilotSelectModelEnabled(),
 			'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
 			'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
@@ -511,11 +432,11 @@ class Manager
 
 	private function getCallServerMaxUsers(): int
 	{
-		if (Loader::includeModule('bitrix24'))
+		if (Loader::includeModule('call'))
 		{
-			return (int)\Bitrix\Bitrix24\Feature::getVariable('im_max_call_participants');
+			return \Bitrix\Call\Call::getMaxCallServerParticipants();
 		}
-		return (int)Option::get('im', 'call_server_max_users');
+		return 0;
 	}
 
 	private function getServiceHealthUrl(): string

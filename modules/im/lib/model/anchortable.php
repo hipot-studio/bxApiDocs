@@ -11,6 +11,22 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Query\Join;
 
+/**
+ * Class AnchorTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Anchor_Query query()
+ * @method static EO_Anchor_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Anchor_Result getById($id)
+ * @method static EO_Anchor_Result getList(array $parameters = [])
+ * @method static EO_Anchor_Entity getEntity()
+ * @method static \Bitrix\Im\Model\EO_Anchor createObject($setDefaultValues = true)
+ * @method static \Bitrix\Im\Model\EO_Anchor_Collection createCollection()
+ * @method static \Bitrix\Im\Model\EO_Anchor wakeUpObject($row)
+ * @method static \Bitrix\Im\Model\EO_Anchor_Collection wakeUpCollection($rows)
+ */
 class AnchorTable extends DataManager
 {
 	use DeleteByFilterTrait;

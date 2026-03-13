@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Baas\Repository;
 
 use Bitrix\Baas;
+use Bitrix\Baas\Internal\Entity\Package;
 use Bitrix\Baas\Model;
-use Bitrix\Baas\Model\EO_Purchase;
 use Bitrix\Main;
-use Bitrix\Baas\Internal\Entity\Enum;
 
 class PurchaseRepository implements PurchaseRepositoryInterface
 {
@@ -105,6 +104,7 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 					'PURCHASE_CODE' => $purchasedPackage->getPurchaseCode(),
 					'START_DATE' => $purchasedPackage->getStartDate(),
 					'EXPIRATION_DATE' => $purchasedPackage->getExpirationDate(),
+					'NOTIFIED' => $purchasedPackage->getNotified(),
 				]);
 				$cleanCache = true;
 			}
@@ -255,7 +255,7 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 			)
 			->where(Main\ORM\Query\Query::filter()
 				->logic('OR')
-				->where('PACKAGE.DISTRIBUTION_STRATEGY', Enum\PackageDistributionStrategy::BY_BAAS->value)
+				->where('PACKAGE.DISTRIBUTION_STRATEGY', Package\PackageDistributionStrategy::BY_BAAS->value)
 				->whereNull('PACKAGE.DISTRIBUTION_STRATEGY')
 			)
 			->exec()
@@ -306,7 +306,7 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 		return $this->getNotExpiredServicesQuery()
 			->where(Main\ORM\Query\Query::filter()
 				->logic('OR')
-				->where('PACKAGE.DISTRIBUTION_STRATEGY', Enum\PackageDistributionStrategy::BY_BAAS->value)
+				->where('PACKAGE.DISTRIBUTION_STRATEGY', Package\PackageDistributionStrategy::BY_BAAS->value)
 				->whereNull('PACKAGE.DISTRIBUTION_STRATEGY')
 			)
 			->exec()
@@ -357,41 +357,17 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 
 	public function getPurchasesToNotifyAbout(): Baas\Model\EO_Purchase_Collection
 	{
-		$purchases = Baas\Model\PurchaseTable::query()
+		return Baas\Model\PurchaseTable::query()
 			->where('PURCHASED_PACKAGE.SERVICE_IN_PURCHASED_PACKAGE.CURRENT_VALUE', '>', '0')
 			->where('PURCHASED_PACKAGE.EXPIRED', 'N')
 			->where(
 				Main\ORM\Query\Query::filter()
 					->logic('or')
 					->where('NOTIFIED', 'N')
-					->where(
-						Main\ORM\Query\Query::filter()
-							->where(
-								'PURCHASED_PACKAGE.START_DATE',
-								'>',
-								new Main\Type\Date(
-									Main\Config\Option::get('baas', 'ticket_236784_notified_date', '10.12.2025'),
-									'd.m.Y',
-								))
-							->whereLike('PURCHASED_PACKAGE.PACKAGE_CODE', 'COPILOT_MARKET%')
-					)
+					->where('PURCHASED_PACKAGE.NOTIFIED', 'N'),
 			)
 			->fetchCollection()
 		;
-
-		$result = Baas\Model\PurchaseTable::createCollection();
-		foreach ($purchases as $purchase)
-		{
-			if (
-				$purchase->getNotified() === false ||
-				Main\Config\Option::get('baas', 'ticket_236784_notified_package_' . $purchase->getPurchasedPackage()->getCode(), 'N') === 'N'
-			)
-			{
-				$result->add($purchase);
-			}
-		}
-
-		return $result;
 	}
 
 	public function setPurchaseNotified(string $purchaseCode): void
@@ -399,15 +375,21 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 		if ($purchase = $this->findPurchaseByCode($purchaseCode))
 		{
 			$purchase->setNotified(true)->save();
-			$purchasedPackages = Baas\Model\PurchasedPackageTable::query()
-				->setSelect(['CODE'])
-				->where('PURCHASE_CODE', $purchaseCode)
-				->fetchCollection()
+
+			$purchasedPackageIds = Baas\Model\PurchasedPackageTable::query()
+				->setSelect(['ID'])
+				->where('PURCHASE_CODE', $purchase->getCode())
+				->where('NOTIFIED', 'N')
+				->fetchAll()
 			;
-			foreach ($purchasedPackages as $purchasedPackage)
+			$purchasedPackageIds = array_column($purchasedPackageIds, 'ID');
+
+			if (!empty($purchasedPackageIds))
 			{
-				$purchasedPackageCode = $purchasedPackage->getCode();
-				Main\Config\Option::set('baas', 'ticket_236784_notified_package_' . $purchasedPackageCode, 'Y');
+				Model\PurchasedPackageTable::updateBatch(
+					['NOTIFIED' => 'Y'],
+					['@ID' => $purchasedPackageIds],
+				);
 			}
 		}
 	}

@@ -45,7 +45,6 @@ class IntranetUserProfileButton extends \CBitrixComponent implements Controllera
 	protected function listKeysSignedParameters(): array
 	{
 		return [
-			'PATH_TO_USER_STRESSLEVEL',
 			'USER_ID',
 		];
 	}
@@ -70,8 +69,6 @@ class IntranetUserProfileButton extends \CBitrixComponent implements Controllera
 		$arParams['USER_ID'] = $this->userId;
 		$arParams['PATH_TO_USER_PROFILE'] = $arParams['PATH_TO_USER_PROFILE']
 			?? SITE_DIR . 'company/personal/user/#user_id#/';
-		$arParams["PATH_TO_USER_STRESSLEVEL"] = $arParams["PATH_TO_USER_STRESSLEVEL"]
-			?? SITE_DIR . "company/personal/user/#user_id#/stresslevel/";
 		$arParams['PATH_TO_USER_COMMON_SECURITY'] = $arParams['PATH_TO_USER_COMMON_SECURITY']
 			?? SITE_DIR . 'company/personal/user/#user_id#/common_security/';
 
@@ -92,7 +89,6 @@ class IntranetUserProfileButton extends \CBitrixComponent implements Controllera
 		$this->arResult['USER_STATUS'] = Util::getUserStatus($this->userId);
 		$this->arResult += Util::getAppsInstallationConfig($this->userId);
 		$this->arResult['LOGIN_HISTORY'] = $this->getLoginHistoryData();
-		$this->arResult['IS_STRESSLEVEL_AVAILABLE'] = $this->isStressLevelAvailable($this->arResult['USER_STATUS']);
 		$this->arResult['IS_SOCIALNETWORK_ADMIN'] = $this->isUserSocialnetworkAdmin();
 		$this->arResult['B24NET_PANEL_AVAILABLE'] = $this->isB24NetPanelAvailable();
 		$this->arResult['IS_SIGN_DOCUMENT_AVAILABLE'] = $this->isSignDocumentAvailable();
@@ -200,13 +196,6 @@ class IntranetUserProfileButton extends \CBitrixComponent implements Controllera
 	protected function isB24NetPanelAvailable(): bool
 	{
 		return $this->isCloud && Option::get('bitrix24', 'network', 'N') === 'Y';
-	}
-
-	protected function isStressLevelAvailable(string $userStatus): bool
-	{
-		return Option::get('intranet', 'stresslevel_available', 'Y') === 'Y'
-			&& !in_array($userStatus, ['email', 'extranet'])
-			&& !$this->isExtranet;
 	}
 
 	public function configureActions(): array

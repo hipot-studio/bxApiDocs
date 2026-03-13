@@ -222,6 +222,7 @@ class UserRepository implements UserRepositoryContract
 				'EXTERNAL_AUTH_ID',
 				'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
 				'UF_DEPARTMENT',
+				'PERSONAL_PHOTO',
 			])
 			->fetchAll()
 		;
@@ -482,7 +483,7 @@ class UserRepository implements UserRepositoryContract
 
 		if (!$userApi->Update($user->getId(), $userData))
 		{
-			throw new UpdateFailedException(new ErrorCollection([new Error($userApi->LAST_ERROR)]));
+			throw $this->getUpdateExceptionFromLastError($userApi->LAST_ERROR);
 		}
 
 		return $user;
@@ -511,7 +512,21 @@ class UserRepository implements UserRepositoryContract
 
 		if (!$userApi->delete($user->getId()))
 		{
-			throw new DeleteFailedException($this->getErrorCollectionFromUpdateLastError($userApi->LAST_ERROR));
+			throw new DeleteFailedException($this->getUpdateErrorCollectionFromLastError($userApi->LAST_ERROR));
 		}
+	}
+
+	public function getUserActivityById(int $id): bool
+	{
+		$user = UserTable::query()
+			->where('ID', $id)
+			->setSelect([
+				'ACTIVE',
+			])
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $user && $user['ACTIVE'] === 'Y';
 	}
 }

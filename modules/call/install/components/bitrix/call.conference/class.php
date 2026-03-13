@@ -4,8 +4,8 @@ if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
 	die();
 }
 
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\Conference;
+use Bitrix\Call\Call;
+use Bitrix\Call\Conference;
 use Bitrix\Im\Chat;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Config\Option;
@@ -24,7 +24,7 @@ class ImComponentConference extends CBitrixComponent
 	private $startupErrorCode = '';
 	private $isIntranetOrExtranet = false;
 	private $isPasswordRequired = false;
-	/** @var $conference Bitrix\Im\Call\Conference **/
+	/** @var $conference \Bitrix\Call\Conference **/
 	private $conference = null;
 
 	const OPTION_ENABLED = 'enabled';
@@ -208,7 +208,7 @@ class ImComponentConference extends CBitrixComponent
 
 		/* feature screen sharing */
 
-		$screenSharingLimit = \Bitrix\Im\Limit::getTypeCallScreenSharing();
+		$screenSharingLimit = \Bitrix\Call\Limit::getTypeCallScreenSharing();
 		$screenSharingState = self::OPTION_ENABLED;
 
 		if ($screenSharingLimit['ACTIVE'])
@@ -231,7 +231,7 @@ class ImComponentConference extends CBitrixComponent
 
 		/* feature record */
 
-		$recordLimit = \Bitrix\Im\Limit::getTypeCallRecord();
+		$recordLimit = \Bitrix\Call\Limit::getTypeCallRecord();
 		$recordState = self::OPTION_ENABLED;
 
 		if ($recordLimit['ACTIVE'])

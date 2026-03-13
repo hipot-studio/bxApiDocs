@@ -23,18 +23,12 @@ class Copilot extends BaseRecent
 
 	public function getComponentCode(): string
 	{
-		return 'im.copilot.messenger';
+		return '';
 	}
 
 	protected function getParams(): array
 	{
-		return [
-			'TAB_CODE' => 'chats.copilot',
-			'COMPONENT_CODE' => $this->getComponentCode(),
-			'MESSAGES' => [
-				'COMPONENT_TITLE' => $this->getTitle(),
-			],
-		];
+		return [];
 	}
 
 	protected function getWidgetSettings(): array

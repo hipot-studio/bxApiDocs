@@ -6,6 +6,9 @@ use Bitrix\Call\Model\CallUserLogCountersTable;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
 
+/**
+ * @internal
+ */
 class Counter
 {
 	const CACHE_TTL = 86400; // 1 day

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\User\Grid;
 
+use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
@@ -9,6 +10,7 @@ use Bitrix\Intranet\User\Filter\Provider\PhoneUserDataProvider;
 use Bitrix\Intranet\User\Filter\UserFilter;
 use Bitrix\Intranet\User\Grid\Row\Assembler\UserRowAssembler;
 use Bitrix\Intranet\User\Grid\Settings\UserSettings;
+use Bitrix\Intranet\UserTable;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Filter\UserDataProvider;
 use Bitrix\Main\Grid\Column\Columns;
@@ -177,6 +179,41 @@ final class UserGrid extends Grid
 				'FILTER_SETTINGS' => $filterSettings,
 			],
 		);
+	}
+
+	public function getList(array $params = []): array
+	{
+		$query = UserTable::query();
+		$query->setSelect($params['select'])
+			->where('REAL_USER', 'expr', true)
+			->setDistinct(true);
+
+		if (isset($params['filter']))
+		{
+			$query->setFilter($params['filter']);
+		}
+
+		if (isset($params['order']))
+		{
+			$query->setOrder($params['order']);
+		}
+
+		if (isset($params['limit']))
+		{
+			$query->setLimit($params['limit']);
+		}
+
+		if (isset($params['offset']))
+		{
+			$query->setOffset($params['offset']);
+		}
+
+		if (isset($params['group']))
+		{
+			$query->setGroup($params['group']);
+		}
+
+		return $query->fetchAll();
 	}
 
 	public function setRawRows(iterable $rawValue): void

@@ -2,6 +2,7 @@
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
 use Bitrix\Rest\Public;
 use Bitrix\Rest;
@@ -228,25 +229,39 @@ class CRestUtil
 				"LOGIN" => $USER->GetLogin()
 			));
 
+			$appLink = \Bitrix\Rest\Marketplace\Url::getApplicationDetailUrl(urlencode($appInfo['CODE']));
+
 			$adminList = \CRestUtil::getAdministratorIdList();
 			foreach($adminList as $id)
 			{
 				$messageFields = array(
 					"TO_USER_ID" => $id,
 					"FROM_USER_ID" => $USER->GetID(),
-					"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
+					"NOTIFY_TYPE" => IM_NOTIFY_FROM,
 					"NOTIFY_MODULE" => "rest",
 					"NOTIFY_TAG" => "REST|APP_INSTALL_NOTIFY|".$USER->GetID()."|TO|".$id,
 					"NOTIFY_SUB_TAG" => "REST|APP_INSTALL_NOTIFY",
 					"NOTIFY_EVENT" => "app_install",
-					"NOTIFY_MESSAGE" => GetMessage(
-						"REST_APP_INSTALL_NOTIFY_TEXT",
+					"NOTIFY_MESSAGE" => Loc::getMessage(
+						'REST_APP_INSTALL_NOTIFY_MESSAGE',
 						array(
-							"#USER_NAME#" => $userName,
-							"#APP_NAME#" => $appInfo['APP_NAME'],
-							"#APP_CODE#" => $appInfo['CODE'],
-							"#APP_LINK#" => \Bitrix\Rest\Marketplace\Url::getApplicationDetailUrl(urlencode($appInfo['CODE'])),
-						)),
+							'#APP_NAME#' => $appInfo['APP_NAME'],
+							'#APP_CODE#' => $appInfo['CODE'],
+							'#APP_LINK#' => $appLink,
+						)
+					),
+					"PARAMS" => [
+						'COMPONENT_ID' => 'DefaultEntity',
+						'COMPONENT_PARAMS' => [
+							'SUBJECT' => Loc::getMessage('REST_APP_INSTALL_NOTIFY_SUBJECT', [
+								'#APP_NAME#' => $appInfo['APP_NAME'],
+								'#APP_CODE#' => $appInfo['CODE'],
+							]),
+							'PLAIN_TEXT' => Loc::getMessage('REST_APP_INSTALL_NOTIFY_PLAIN_TEXT', [
+									'#APP_LINK#' => $appLink,
+							]),
+						],
+					],
 				);
 				\CIMNotify::Add($messageFields);
 			}

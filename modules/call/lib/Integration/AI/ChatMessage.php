@@ -8,7 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Call\Library;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\CallChatMessage;
@@ -18,6 +18,9 @@ use Bitrix\Call\Integration\AI\Outcome\Evaluation;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 use Bitrix\Call\Integration\Im\CallFollowupBot;
 
+/**
+ * @internal
+ */
 
 class ChatMessage extends CallChatMessage
 {
@@ -139,7 +142,7 @@ class ChatMessage extends CallChatMessage
 
 		$hostUrl = UrlManager::getInstance()->getHostUrl();
 
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);
+		$call = \Bitrix\Call\Call\Registry::getCallWithId($callId);
 
 		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_COMPLETE', $callId, $chat);
 

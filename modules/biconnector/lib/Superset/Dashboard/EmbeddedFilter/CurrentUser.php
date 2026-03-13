@@ -105,12 +105,12 @@ class CurrentUser extends UrlFilter
 	{
 		if (!$defaultValues)
 		{
-			return [];
+			return [[], []];
 		}
 
 		if (!Loader::includeModule('humanresources'))
 		{
-			return [];
+			return [[], []];
 		}
 
 		$currentUserDepartments = $this->getCurrentUserDepartments();

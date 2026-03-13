@@ -4,6 +4,7 @@ namespace Bitrix\AI\Engine\Cloud\EngineCloudError\Service;
 
 use Bitrix\AI\Container;
 use Bitrix\AI\Engine\Cloud\EngineCloudError\Dto\ExceededLimitDto;
+use Bitrix\AI\Facade\Portal;
 use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -18,6 +19,7 @@ class ExceededLimitService
 
 	protected const ERROR_CODE_LIMIT_STANDARD = 'LIMIT_IS_EXCEEDED_MONTHLY';
 	protected const ERROR_CODE_LIMIT_BAAS = 'LIMIT_IS_EXCEEDED_BAAS';
+	protected const ERROR_CODE_LIMIT_BAAS_RATE_LIMIT = 'LIMIT_IS_EXCEEDED_BAAS_RATE_LIMIT';
 	protected const ERROR_CODE_RATE_LIMIT = 'RATE_LIMIT';
 
 	protected const RATE_LIMIT_HELP_CODE = '24736310';
@@ -40,6 +42,10 @@ class ExceededLimitService
 
 	protected function getMessageByErrorCode(string $errorCode): string
 	{
+		if ($errorCode === static::ERROR_CODE_LIMIT_BAAS_RATE_LIMIT)
+		{
+			return Loc::getMessage('AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET');
+		}
 		if ($errorCode === static::ERROR_CODE_RATE_LIMIT)
 		{
 			return Loc::getMessage(
@@ -80,9 +86,22 @@ class ExceededLimitService
 		}
 
 		$sliderCode = $isAvailableBaas ? static::SLIDER_CODE_BOOST : static::SLIDER_CODE_BOX;
+		$showSliderWithMsg = !$isAvailableBaas;
 
-
-		if ($errorCode === static::ERROR_CODE_RATE_LIMIT)
+		if ($errorCode === static::ERROR_CODE_LIMIT_BAAS_RATE_LIMIT && Portal::isMarketAvailable())
+		{
+			$msgForIm = Loc::getMessage('AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET');
+		}
+		elseif ($errorCode === static::ERROR_CODE_LIMIT_BAAS && Portal::isMarketAvailable())
+		{
+			$showSliderWithMsg = true;
+			$sliderCode = 'limit_subscription_market_access_buy_marketplus';
+			$msgForIm = Loc::getMessage(
+				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET',
+				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_subscription_market_access_buy_marketplus']
+			);
+		}
+		elseif ($errorCode === static::ERROR_CODE_RATE_LIMIT)
 		{
 			$msgForIm = Loc::getMessage(
 				'AI_ENGINE_ERROR_IM_RATE_LIMIT_IS_EXCEEDED',
@@ -104,7 +123,7 @@ class ExceededLimitService
 		}
 
 		return new ExceededLimitDto(
-			showSliderWithMsg: !$isAvailableBaas,
+			showSliderWithMsg: $showSliderWithMsg,
 			sliderCode: $sliderCode,
 			errorCode: $errorCode,
 			msgForIm: $msgForIm,
@@ -125,6 +144,11 @@ class ExceededLimitService
 		if (empty($errorData['errorLimitType']))
 		{
 			return static::ERROR_CODE_LIMIT_STANDARD;
+		}
+
+		if ($errorData['errorLimitType'] === static::ERROR_CODE_LIMIT_BAAS_RATE_LIMIT)
+		{
+			return static::ERROR_CODE_LIMIT_BAAS_RATE_LIMIT;
 		}
 
 		if ($errorData['errorLimitType'] === static::ERROR_CODE_RATE_LIMIT)

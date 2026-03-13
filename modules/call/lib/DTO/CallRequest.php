@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\DTO;
 
+/**
+ * @internal
+ */
 class CallRequest extends Hydrator
 {
 	public int $initiatorUserId = 0;

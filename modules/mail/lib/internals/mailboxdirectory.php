@@ -29,6 +29,7 @@ class MailboxDirectoryTable extends DataManager
 
 	const TYPE_INCOME = 'IS_INCOME';
 	const TYPE_OUTCOME = 'IS_OUTCOME';
+	const TYPE_DRAFT = 'IS_DRAFT';
 	const TYPE_TRASH = 'IS_TRASH';
 	const TYPE_SPAM = 'IS_SPAM';
 

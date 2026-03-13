@@ -13,6 +13,9 @@ use Bitrix\Call\Integration\AI\Outcome\Overview;
 use Bitrix\Call\Integration\AI\Outcome\Transcription;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 
+/**
+ * @internal
+ */
 class TranscriptionInsights extends AITask
 {
 	public const
@@ -112,7 +115,7 @@ class TranscriptionInsights extends AITask
 		}
 
 		$callId = $outcome->getCallId();
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);
+		$call = \Bitrix\Call\Call\Registry::getCallWithId($callId);
 		if (!$call)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content

@@ -6,6 +6,9 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Config\Configuration;
 
+/**
+ * @internal
+ */
 class Library
 {
 	public const

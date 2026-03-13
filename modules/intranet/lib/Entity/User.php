@@ -179,6 +179,11 @@ class User
 		return in_array($this->id, ServiceContainer::getInstance()->getUserService()->getAdminUserIds());
 	}
 
+	public function isFirstAdmin(): bool
+	{
+		return ServiceContainer::getInstance()->getUserService()->isFirstAdmin($this->id);
+	}
+
 	public function isCollaber(): bool
 	{
 		return Loader::includeModule('socialnetwork')

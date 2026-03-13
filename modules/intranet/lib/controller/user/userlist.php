@@ -216,11 +216,14 @@ class UserList extends Controller
 			}
 			elseif (empty($user['CONFIRM_CODE']) && !$isConfirm)
 			{
-				Util::deactivateUser([
-					'userId' => $user['ID'],
-					'currentUserId' => CurrentUser::get()->getId(),
-					'isCurrentUserAdmin' => CurrentUser::get()->isAdmin(),
-				]);
+				$skippedActiveUsers[$user['ID']] = $this->getUserFullName($user);
+			}
+			elseif (!empty($user['CONFIRM_CODE']) && !$isConfirm)
+			{
+				if(!\CUser::Delete($user['ID']))
+				{
+					$this->addError(new Error('Could not decline invitation for user ID '.$user['ID']));
+				}
 			}
 			else
 			{
@@ -316,7 +319,9 @@ class UserList extends Controller
 				'filter' => ['=ACTIVE' => 'Y', '@ID' => $fields['userIds']],
 			]);
 
-			if ($res && $idList = $res->fetchCollection()->getIdList())
+			$idList = $res?->fetchCollection()?->getIdList();
+
+			if (!empty($idList))
 			{
 				$messenger = \Bitrix\Im\V2\Service\Locator::getMessenger();
 				$result = $messenger->createChat([

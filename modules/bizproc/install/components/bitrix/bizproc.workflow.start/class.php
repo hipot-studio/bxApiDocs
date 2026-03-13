@@ -16,6 +16,7 @@ use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\EventDto;
 use Bitrix\Bizproc\Starter\Enum\Face;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -473,87 +474,61 @@ class BizprocWorkflowStart extends \CBitrixComponent
 
 	private function startWorkflow(int $templateId, array $workflowParameters = []): array
 	{
-		$currentUserId = $this->getCurrentUserId();
-
-		$triggerType = $this->arParams['TRIGGER_TYPE'] ?? null;
-		if (is_string($triggerType))
-		{
-			// todo: metadata: startDuration
-			$starter =
-				(new StarterService())
-					->getStarterForManualEventScenario(
-						templateIds: [$templateId],
-						context: new ContextDto(
-							'bizproc',
-							Face::WEB,
-						),
-						events: [
-							new EventDto(
-								code: $triggerType,
-								documents: [
-									new DocumentDto(
-										$this->getComplexDocumentId(),
-										$this->getComplexDocumentType(),
-									),
-								],
-								eventType: CBPDocumentEventType::Manual,
-								userId: $currentUserId,
-							),
-						],
-						userId: $currentUserId,
-						parameters: $workflowParameters,
-					)
-			;
-
-			$result = $starter?->start();
-			$errors = [];
-			if ($result && !$result->isSuccess())
-			{
-				foreach ($result->getErrors() as $error)
-				{
-					$errors[] = $this->createStartWorkflowError($error->jsonSerialize());
-				}
-			}
-
-			$workflowIds = $result?->getWorkflowIds();
-
-			return ['errors' => $errors, 'workflowId' => $workflowIds[0] ?? null];
-		}
-
-		$preparedParameters = array_merge(
-			$workflowParameters,
-			[
-				CBPDocument::PARAM_TAGRET_USER => 'user_' . $currentUserId,
-				CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => CBPDocumentEventType::Manual,
-			],
-		);
-
-		// backward compatibility
-		$response =
-			(new WorkflowService())
-				->startWorkflow(
-					new StartWorkflowRequest(
-						userId: $currentUserId,
-						targetUserId: $currentUserId,
-						templateId: $templateId,
-						complexDocumentId: $this->getComplexDocumentId(),
-						parameters: $preparedParameters,
-						startDuration: 0, // todo start duration
-						checkAccess: false, // checked earlier
-					)
-				)
-		;
-
+		$starter = $this->getStarter($templateId, $workflowParameters);
+		$starter->setValidateParameters(false);
+		$result = $starter->start();
 		$errors = [];
-		if (!$response->isSuccess())
+
+		if (!$result->isSuccess())
 		{
-			foreach ($response->getErrors() as $error)
+			foreach ($result->getErrors() as $error)
 			{
 				$errors[] = $this->createStartWorkflowError($error->jsonSerialize());
 			}
 		}
 
-		return ['errors' => $errors, 'workflowId' => $response->getWorkflowId()];
+		$workflowIds = $result->getWorkflowIds();
+
+		return ['errors' => $errors, 'workflowId' => $workflowIds[0] ?? null];
+	}
+
+	private function getStarter(int $templateId, array $workflowParameters): Starter
+	{
+		$currentUserId = $this->getCurrentUserId();
+		$triggerType = $this->arParams['TRIGGER_TYPE'] ?? null;
+
+		$context = new ContextDto('bizproc', Face::WEB);
+		$documentId = $this->getComplexDocumentId();
+		$documentType = $this->getComplexDocumentType();
+
+		if ($triggerType)
+		{
+			return (new StarterService())->getStarterForManualEventScenario(
+				templateIds: [$templateId],
+				context: $context,
+				events: [
+					new EventDto(
+						code: $triggerType,
+						documents: [new DocumentDto($documentId, $documentType)],
+						eventType: CBPDocumentEventType::Manual,
+						userId: $currentUserId,
+					),
+				],
+				userId: $currentUserId,
+				parameters: $workflowParameters,
+			);
+		}
+
+		return (new StarterService())->getStarterForManualDocumentScenario(
+			templateIds: [$templateId],
+			context: $context,
+			document: new DocumentDto(
+				complexDocumentId: $documentId,
+				complexDocumentType: $documentType,
+			),
+			userId: $currentUserId,
+			parameters: $workflowParameters,
+		);
 	}
 
 	private function restoreWorkflowStartParameters(array $templateParameters): array

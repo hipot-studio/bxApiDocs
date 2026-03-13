@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Main\UserTable;
 
 class CExtranet
 {
@@ -1574,18 +1575,13 @@ class CExtranet
 
 		if (!empty($arUserId))
 		{
-			$rsUser = CUser::GetList(
-				'',
-				'',
-				[
-					'UF_DEPARTMENT' => false,
-					'ID' => implode('|', $arUserId),
-					'=IS_REAL_USER' => 'Y',
-				],
-				[
-					'FIELDS' => [ 'ID' ]
-				]
-			);
+			$rsUser = UserTable::query()
+				->setSelect(['ID'])
+				->where('REAL_USER', 'expr', true)
+				->addFilter('UF_DEPARTMENT', false)
+				->whereIn('ID', $arUserId)
+				->exec()
+			;
 
 			$i = 0;
 			$arExtranetUserId = array();

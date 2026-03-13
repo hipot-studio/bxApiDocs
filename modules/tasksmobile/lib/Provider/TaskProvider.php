@@ -58,11 +58,15 @@ use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
+use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder\AddAuditorsCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder\DeleteAuditorsCommand;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
 use Bitrix\Tasks\V2\Public\Command\Task\Attachment\AttachFilesCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Attachment\DetachFilesCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Kanban\MoveTaskCommand;
+use Bitrix\Tasks\V2\Public\Command\Task\ReadTaskMessagesCommand;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
 use Bitrix\Tasks\V2\Public\Provider\DeadlineProvider;
 use Bitrix\TasksMobile\Dto\DiskFileDto;
@@ -1213,6 +1217,7 @@ final class TaskProvider
 				ActionDictionary::ACTION_TASK_DEFER => 'CAN_DEFER',
 				ActionDictionary::ACTION_TASK_TAKE => 'CAN_TAKE',
 				ActionDictionary::ACTION_TASK_CREATE => 'CAN_CREATE',
+				ActionDictionary::ACTION_TASK_ADD_AUDITORS => 'CAN_UPDATE_AUDITORS',
 			];
 			$taskModel = TaskModel::createFromId($id);
 			$accessController = new TaskAccessController($this->userId);
@@ -2420,6 +2425,48 @@ final class TaskProvider
 		return ($timer->start($taskId) !== false);
 	}
 
+	public function addAuditors(int $taskId, array $auditorIds): bool
+	{
+		if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_ADD_AUDITORS, $taskId, $auditorIds))
+		{
+			return false;
+		}
+
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
+		$result = (new AddAuditorsCommand(
+			taskId: $taskId,
+			auditorIds: $auditorIds,
+			config: $config,
+		))->run();
+
+		return $result->isSuccess();
+	}
+
+	public function deleteAuditors(int $taskId, array $auditorIds): bool
+	{
+		if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_EDIT, $taskId))
+		{
+			return false;
+		}
+
+		$config = new UpdateConfig(
+			userId: $this->userId,
+			useConsistency: true,
+		);
+
+		$result = (new DeleteAuditorsCommand(
+			taskId: $taskId,
+			auditorIds: $auditorIds,
+			config: $config,
+		))->run();
+
+		return $result->isSuccess();
+	}
+
 	/**
 	 * @param int $taskId
 	 * @return bool
@@ -2669,7 +2716,7 @@ final class TaskProvider
 			// TODO: Replace after release with normal dependency.
 			if (class_exists('\Bitrix\Tasks\V2\Public\Command\Task\ReadTaskMessagesCommand'))
 			{
-				$command = new \Bitrix\Tasks\V2\Public\Command\Task\ReadTaskMessagesCommand($taskId, $this->userId);
+				$command = new ReadTaskMessagesCommand($taskId, $this->userId);
 				$command->run();
 			}
 

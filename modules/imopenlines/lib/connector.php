@@ -1701,10 +1701,17 @@ class Connector
 				&& Loader::includeModule('disk')
 			)
 			{
+				$fileModels = Disk\File::loadBatchById(array_column($messageFields['FILES'], 'id'));
+				$fileModelsIndexed = [];
+				foreach ($fileModels as $fileModel)
+				{
+					$fileModelsIndexed[$fileModel->getId()] = $fileModel;
+				}
+
 				foreach ($messageFields['FILES'] as $file)
 				{
-					$fileModel = Disk\File::loadById($file['id']);
-					if (!$fileModel)
+					$fileModel = $fileModelsIndexed[$file['id']] ?? null;
+					if ($fileModel === null)
 					{
 						continue;
 					}
@@ -1715,11 +1722,7 @@ class Connector
 						continue;
 					}
 
-					if (
-						$fileModel->getId()
-						&& (Disk\File::getById($fileModel->getId()))
-						&& ($fileUri = \CBXShortUri::GetUri($file['link']))
-					)
+					if ($fileUri = \CBXShortUri::GetUri($file['link']))
 					{
 						$file['downloadLink'] = $fileUri['URI'];
 					}

@@ -16,10 +16,8 @@ class Analyst extends Base
 		return [
 			PermissionDictionary::BIC_ACCESS,
 			PermissionDictionary::BIC_SETTINGS_ACCESS,
-			PermissionDictionary::BIC_DASHBOARD_CREATE,
 			PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
 			PermissionDictionary::BIC_EXTERNAL_DASHBOARD_CONFIG,
-			PermissionDictionary::BIC_GROUP_MODIFY,
 		];
 	}
 
@@ -60,15 +58,15 @@ class Analyst extends Base
 
 		$groups = [];
 		$dashboards = SupersetDashboardTable::getList([
-			'select' => ['OWNER_ID'],
-			'group' => ['OWNER_ID'],
+			'select' => ['CREATED_BY_ID'],
+			'group' => ['CREATED_BY_ID'],
 		]);
 
 		while ($dashboard = $dashboards->fetch())
 		{
-			if (!empty($dashboard['OWNER_ID']))
+			if (!empty($dashboard['CREATED_BY_ID']))
 			{
-				$groups[] = "U{$dashboard['OWNER_ID']}";
+				$groups[] = "U{$dashboard['CREATED_BY_ID']}";
 			}
 		}
 

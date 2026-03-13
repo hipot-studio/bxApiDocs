@@ -15,7 +15,7 @@ class MethodNotFoundException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_METHODNOTFOUNDEXCEPTION';
+		return 'REST_V3_EXCEPTION_METHODNOTFOUNDEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

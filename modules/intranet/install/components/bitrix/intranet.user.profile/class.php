@@ -11,10 +11,14 @@ use Bitrix\Intranet\Internal\Access;
 use Bitrix\Intranet\User\Access\Model\TargetUserModel;
 use Bitrix\Intranet\User\Access\UserAccessController;
 use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\License\UrlProvider;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Intranet\Component\UserProfile;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -59,6 +63,7 @@ class CIntranetUserProfileComponent extends UserProfile
 		$ownerUserId = (int) ($this->arParams["ID"] ?? 0);
 
 		$this->arResult["isCloud"] = Loader::includeModule("bitrix24");
+		$this->arResult['isFirstAdminConfirmationEnabled'] = Option::get('bitrix24', 'first_admin_confirmation', 'N') === 'Y';
 
 		if ($this->arResult["isCloud"])
 		{
@@ -76,7 +81,11 @@ class CIntranetUserProfileComponent extends UserProfile
 
 		$this->arResult["Urls"] = $this->getUrls();
 		$this->arResult["User"] = $this->getUserData();
+
+		$currentUser = \Bitrix\Main\Engine\CurrentUser::get();
 		$this->arResult["CurrentUser"] = [
+			'ID' => $currentUser->getId(),
+			'FORMATTED_NAME' => $currentUser->getFormattedName(),
 			'STATUS' => $this->getCurrentUserStatus()
 		];
 
@@ -136,7 +145,6 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->arResult["Tags"] = $this->getTagsInstance()->getStub();
 		$this->arResult["FormId"] = "intranet-user-profile";
 		$this->arResult["IsOwnProfile"] = $currentUserId === $ownerUserId;
-		$this->arResult["StressLevel"] = $this->getStressLevelInstance()->getStub();
 		$userEntity = \Bitrix\Intranet\Entity\User::initByArray($this->arResult['User']);
 
 		$this->filterHiddenFields();
@@ -193,6 +201,8 @@ class CIntranetUserProfileComponent extends UserProfile
 				'accessCode' => $rootDepartment->getAccessCode(),
 			];
 		}
+
+		$this->arResult['PARTNER_URL'] = $this->getPartnerUrl();
 
 		$this->includeComponentTemplate();
 	}
@@ -311,5 +321,27 @@ class CIntranetUserProfileComponent extends UserProfile
 			}
 		}
 		$this->arResult["User"] = $user;
+	}
+
+	private function getPartnerUrl(): string
+	{
+		$publicDomain = method_exists(UrlProvider::class, 'getPublicDomain')
+				? (new UrlProvider())->getPublicDomain()
+				: new Uri($this->getPublicDomain());
+		$publicDomain->setPath('/partners/');
+
+		return (string)$publicDomain;
+	}
+
+	private static function getPublicDomain(): string
+	{
+		return match (Application::getInstance()->getLicense()->getRegion())
+		{
+			'ru' => 'https://www.bitrix24.ru',
+			'by' => 'https://www.bitrix24.by',
+			'uz' => 'https://www.bitrix24.uz',
+			'kz' => 'https://www.bitrix24.kz',
+			default => 'https://www.bitrix24.com',
+		};
 	}
 }

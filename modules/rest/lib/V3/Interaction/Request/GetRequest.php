@@ -6,7 +6,7 @@ use Bitrix\Rest\V3\Structure\SelectStructure;
 
 class GetRequest extends Request
 {
-	public int $id;
+	public string $id;
 
 	public ?SelectStructure $select = null;
 }

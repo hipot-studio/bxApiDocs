@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\Analytics\Event;
 
+/**
+ * @internal
+ */
 class CallEvent extends Event
 {
 	protected function setDefaultParams(): self
@@ -39,7 +42,7 @@ class CallEvent extends Event
 
 	protected function setCallP2(): self
 	{
-		$this->p2 = 'timeout_' . \Bitrix\Call\Call::ACTIVE_CALLS_DEPTH_HOURS * 3600;
+		$this->p2 = 'timeout_' . \Bitrix\Call\Recent::ACTIVE_CALLS_DEPTH_HOURS * 3600;
 
 		return $this;
 	}

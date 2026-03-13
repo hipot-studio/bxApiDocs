@@ -3,12 +3,19 @@
 namespace Bitrix\Rest\V3\Dto;
 
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Contract\Arrayable;
 use Traversable;
 
-class DtoFieldsCollection implements \IteratorAggregate, \Countable, \ArrayAccess
+class DtoFieldsCollection implements \IteratorAggregate, \Countable, \ArrayAccess, Arrayable
 {
+	/**
+	 * @var DtoField[]
+	 */
 	private array $fieldsOrdered = [];
 
+	/**
+	 * @var DtoField[]
+	 */
 	private array $fieldsIndex = [];
 
 	/**
@@ -77,5 +84,16 @@ class DtoFieldsCollection implements \IteratorAggregate, \Countable, \ArrayAcces
 				fn(DtoField $field) => $field->getPropertyName() !== $offset,
 			);
 		}
+	}
+
+	public function toArray()
+	{
+		$result = [];
+		foreach ($this->fieldsOrdered as $field)
+		{
+			$result[] = $field->toArray();
+		}
+
+		return $result;
 	}
 }

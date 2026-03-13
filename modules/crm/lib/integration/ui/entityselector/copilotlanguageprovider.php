@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Integration\UI\EntitySelector;
 
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Main\Loader;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -21,7 +20,7 @@ final class CopilotLanguageProvider extends BaseProvider
 	{
 		parent::__construct();
 
-		$this->isAiEnabled = Loader::includeModule('ai');
+		$this->isAiEnabled = AIManager::isAvailable();
 
 		$this->entityTypeId = (int)($options['entityTypeId'] ?? 0);
 		$this->categoryId = isset($options['categoryId']) ? (int)$options['categoryId'] : null;

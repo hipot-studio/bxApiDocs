@@ -83,4 +83,9 @@ class PackageProvider
 			Baas\Repository\PackageRepository::getInstance(),
 		);
 	}
+
+	public function hasBaasDistributedPackages(): bool
+	{
+		return $this->packageRepository->hasBaasDistributedPackages();
+	}
 }

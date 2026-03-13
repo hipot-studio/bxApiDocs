@@ -2,7 +2,7 @@
 
 namespace Bitrix\ImMobile\Controller;
 
-use Bitrix\Call\Call;
+use Bitrix\Call\Recent;
 use Bitrix\Im\Department;
 use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
@@ -100,7 +100,7 @@ abstract class Tab extends BaseController
 					$data[$method] = [];
 					if (Loader::includeModule('call'))
 					{
-						$data[$method] = Call::getActiveCalls();
+						$data[$method] = Recent::getActiveCalls();
 					}
 
 					break;

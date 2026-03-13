@@ -4,6 +4,9 @@ namespace Bitrix\Call\Call;
 
 use Bitrix\Main\Config\Option;
 
+/**
+ * @internal
+ */
 class LargeCall extends BitrixCall
 {
 	public function getMaxUsers(): int

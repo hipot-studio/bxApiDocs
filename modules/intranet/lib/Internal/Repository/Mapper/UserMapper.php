@@ -88,6 +88,7 @@ class UserMapper
 			$userData['LAST_LOGIN'] = $user->getLastLogin();
 		}
 
+
 		return $userData;
 	}
 

@@ -490,6 +490,33 @@ final class RolePreset {
 		};
 	}
 
+	public static function installDefaultRoles(): void
+	{
+		$CCrmRole = new \CCrmRole();
+		$roles = self::GetDefaultRolesPreset();
+
+		$rolesRelations = [];
+		foreach ($roles as $role)
+		{
+			$roleId = $CCrmRole->Add($role);
+			if ($roleId && $role['RELATIONS'] ?? false)
+			{
+				foreach ($role['RELATIONS'] as $relation)
+				{
+					if (!isset($rolesRelations[$relation]))
+					{
+						$rolesRelations[$relation] = [];
+					}
+					$rolesRelations[$relation][] = $roleId;
+				}
+			}
+		}
+		if (!empty($rolesRelations))
+		{
+			$CCrmRole->SetRelation($rolesRelations);
+		}
+	}
+
 	/**
 	 * Sets the permissions MyCardView and HideSum to ALL for smart process and deal
 	 */

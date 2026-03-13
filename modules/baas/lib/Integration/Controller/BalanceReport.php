@@ -4,15 +4,26 @@ declare(strict_types=1);
 
 namespace Bitrix\Baas\Integration\Controller;
 
-use Bitrix\Baas;
+use Bitrix\Baas\Baas;
+use Bitrix\Baas\Contract\DateTimeFormat;
+use Bitrix\Baas\Model\Dto\PurchasedPackage;
+use Bitrix\Baas\Public\Provider\PackageProvider;
+use Bitrix\Main\Application;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Routing\Router;
+use Bitrix\Main\Security\Sign\TimeSigner;
 
 final class BalanceReport
 {
-	private Baas\Baas $baas;
+	private Baas $baas;
+	private Router $router;
+	private TimeSigner $signer;
 
-	public function __construct()
+	public function __construct(?Baas $baas = null, ?Router $router = null, ?TimeSigner $signer = null)
 	{
-		$this->baas = Baas\Baas::getInstance();
+		$this->baas = $baas ?? Baas::getInstance();
+		$this->router = $router ?? Application::getInstance()->getRouter();
+		$this->signer = $signer ?? new TimeSigner();
 	}
 
 	public function get(): string
@@ -52,16 +63,15 @@ final class BalanceReport
 		$noticeCollection['packages'] = [[
 			'Service', 'Current val', 'Maximal val',
 			'Package', 'Purchase', 'Purchased Pack',
-			'Start date', 'Expiration date'
-        ]];
-		$services = [];
+			'Start date', 'Expiration date', 'Download logs'
+		]];
 
-		foreach (Baas\Public\Provider\PackageProvider::create()->getDistributedByBaas() as $package)
+		foreach (PackageProvider::create()->getAll() as $package)
 		{
 			$formattedPurchases = [];
-			foreach ($package->getPurchases() as $purchase)
+			foreach ($package->getPurchases(true) as $purchase)
 			{
-				/** @var Baas\Model\Dto\PurchasedPackage $purchasedPack */
+				/** @var PurchasedPackage $purchasedPack */
 				foreach ($purchase->getPurchasedPackages() as $purchasedPack)
 				{
 					$packBalance = [];
@@ -81,17 +91,35 @@ final class BalanceReport
 
 					foreach ($packBalance as $serviceCode => $balance)
 					{
-						$formattedPurchases[] = [$serviceCode, ...$balance,  ...[
-							$package->getCode(),
-							$purchase->getCode(),
-							$purchasedPack->getCode(),
-							$purchasedPack->getStartDate()->format(
-								Baas\Contract\DateTimeFormat::LOCAL_DATETIME->value
+						$hasLogsLink = false;
+						if ($balance['current'] !== 'not actual' && $balance['current'] !== $balance['max'])
+						{
+							$hasLogsLink = true;
+						}
+						$formattedPurchase = [
+							'service_code' => $serviceCode,
+							'balance_current' => $balance['current'],
+							'balance_max' => $balance['max'],
+							'package_code' => $package->getCode(),
+							'purchase_code' => $purchase->getCode(),
+							'purchase_package_code' => $purchasedPack->getCode(),
+							'start_date' => $purchasedPack->getStartDate()->format(
+								DateTimeFormat::LOCAL_DATETIME->value,
 							),
-							$purchasedPack->getExpirationDate()->format(
-								Baas\Contract\DateTimeFormat::LOCAL_DATETIME->value
+							'expiration_date' => $purchasedPack->getExpirationDate()->format(
+								DateTimeFormat::LOCAL_DATETIME->value,
 							),
-						]];
+						];
+
+						if ($hasLogsLink)
+						{
+							$formattedPurchase['logs_link'] = $this->getLink(
+								$purchasedPack->getCode(),
+								$serviceCode,
+							);
+						}
+
+						$formattedPurchases[] = $formattedPurchase;
 					}
 				}
 			}
@@ -112,15 +140,40 @@ final class BalanceReport
 				);
 			}
 		}
-		$cb = fn($value) => str_pad(substr((string)$value, 0, 20), 20, '_', STR_PAD_RIGHT);
+		$cb = fn ($key, $value) => $key === 'logs_link' ? $value : str_pad(substr((string)$value, 0, 20), 20, '_', STR_PAD_RIGHT);
 		array_walk(
 			$noticeCollection['packages'],
 			function (&$row) use ($cb) {
-				$row = implode(' | ', array_map($cb, $row));
-			}
+				$row = implode(' | ', array_map($cb, array_keys($row), $row));
+			},
 		);
 		$noticeCollection['packages'] = implode(PHP_EOL, $noticeCollection['packages']);
 
 		return implode(PHP_EOL, $noticeCollection);
+	}
+
+	private function getLink(
+		string $purchasedPackageCode,
+		string $serviceCode,
+	): string
+	{
+		$signTime = '+1 hour';
+		$signedPurchasedPackageCode = $this->signer->sign($purchasedPackageCode, $signTime);
+		$signedServiceCode = $this->signer->sign($serviceCode, $signTime);
+
+		$route = $this->router->url(
+			'/bitrix/services/main/ajax.php',
+			[
+				'action' => 'baas.Host.getSignedPurchaseReport',
+				'purchasedPackageCode' => $signedPurchasedPackageCode,
+				'serviceCode' => $signedServiceCode,
+			],
+		);
+
+		return sprintf(
+			'<a href="%s" target="_blank" >%s</a>',
+			$route,
+			Loc::getMessage('BAAS_PACKAGE_LOGS_ROW_DOWNLOAD') ?? 'Logs',
+		);
 	}
 }

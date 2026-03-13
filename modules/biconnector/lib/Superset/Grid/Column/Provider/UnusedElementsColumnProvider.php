@@ -43,15 +43,6 @@ class UnusedElementsColumnProvider extends DataProvider
 		;
 
 		$result[] =
-			$this->createColumn('OWNERS')
-				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BI_UNUSED_ELEMENTS_GRID_COLUMN_NAME_OWNERS'))
-				->setAlign('left')
-				->setDefault(true)
-				->setSort(null)
-		;
-
-		$result[] =
 			$this->createColumn('EXTERNAL_ID')
 				->setEditable(true)
 				->setType(Type::INT)

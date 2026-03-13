@@ -21,7 +21,7 @@ final class Security
 					$server = Main\Context::getCurrent()->getServer();
 
 					$pushMessage = Loc::getMessage("intranet_otp_push_code", ["#CODE#" => $params["code"]]);
-					$message = Loc::getMessage("intranet_push_otp_notification1", [
+					$message = Loc::getMessage("intranet_push_otp_notification_message", [
 						"#CODE#" => $params["code"],
 						"#IP#" => $server->getRemoteAddr(),
 						"#USER_AGENT#" => $server->get("HTTP_USER_AGENT"),
@@ -33,6 +33,7 @@ final class Security
 						"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
 						"NOTIFY_MODULE" => "intranet",
 						"NOTIFY_EVENT" => "security_otp",
+						"NOTIFY_TITLE" => Loc::getMessage('intranet_push_otp_notification_title'),
 						"NOTIFY_MESSAGE" => $message,
 						"PUSH_MESSAGE" => $pushMessage,
 					 	"PUSH_IMPORTANT" => "N",

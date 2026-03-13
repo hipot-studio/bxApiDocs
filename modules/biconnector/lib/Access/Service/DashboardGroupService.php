@@ -37,7 +37,6 @@ class DashboardGroupService
 			$group = SupersetDashboardGroupTable::createObject()
 				->setCode(self::generateGroupCode())
 				->setType(SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM)
-				->setOwnerId((int)CurrentUser::get()->getId())
 			;
 		}
 		else

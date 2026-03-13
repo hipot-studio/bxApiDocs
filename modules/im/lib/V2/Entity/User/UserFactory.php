@@ -5,9 +5,9 @@ namespace Bitrix\Im\V2\Entity\User;
 use Bitrix\Im\Color;
 use Bitrix\Im\Model\StatusTable;
 use Bitrix\Im\Model\UserTable;
+use Bitrix\Im\V2\Entity\User\Cache\UserCacheRegistry;
 use Bitrix\Im\V2\Integration\Extranet\CollaberService;
-use Bitrix\Main\Application;
-use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
@@ -38,7 +38,7 @@ class UserFactory
 		'STATUS' => 'ST.STATUS',
 	];
 
-	protected static self $instance;
+	protected static ?self $instance = null;
 
 	private function __construct()
 	{
@@ -58,30 +58,23 @@ class UserFactory
 
 	public function getUserById(int $id): User
 	{
-		$cache = $this->getCache($id);
-		$cachedUser = $cache->getVars();
-		if ($cachedUser !== false)
-		{
-			return $this->initUser($cachedUser);
-		}
+		$result = ServiceLocator::getInstance()
+			->get(UserCacheRegistry::class)
+			?->getUserDataManager()
+			->getOrSet(
+				entityId: $id,
+				dataProvider: fn() => $this->prepareUserData($this->getUserFromDb($id)),
+				tags: ["USER_NAME_{$id}"],
+			)
+		;
 
-		$userData = $this->getUserFromDb($id);
+		$user = $result->getResult();
 
-		if ($userData === null)
-		{
-			return new NullUser();
-		}
-
-		$userData = $this->prepareUserData($userData);
-		$this->saveInCache($cache, $userData);
-
-		return $this->initUser($userData);
+		return $user ?? new NullUser();
 	}
 
 	public function initUser(array $userData): User
 	{
-		$userData = $this->prepareNonCachedUserData($userData);
-
 		if ($userData['IS_BOT'])
 		{
 			return UserBot::initByArray($userData);
@@ -102,8 +95,13 @@ class UserFactory
 		return User::initByArray($userData);
 	}
 
-	protected function prepareUserData(array $userData): array
+	public function prepareUserData(?array $userData): ?array
 	{
+		if ($userData === null)
+		{
+			return null;
+		}
+
 		$avatar = \CIMChat::GetAvatarImage($userData['PERSONAL_PHOTO']) ?: '';
 
 		$preparedUserData = $userData;
@@ -140,14 +138,6 @@ class UserFactory
 				$preparedUserData['INNER_PHONE'] = $innerPhone;
 			}
 		}
-
-		return $preparedUserData;
-	}
-
-	protected function prepareNonCachedUserData(array $userData): array
-	{
-		$preparedUserData = $userData;
-		$preparedUserData['ABSENT'] = \CIMContactList::formatAbsentResult((int)$userData['ID']) ?: null;
 
 		return $preparedUserData;
 	}
@@ -242,45 +232,12 @@ class UserFactory
 		return in_array($params['EXTERNAL_AUTH_ID'], UserTable::filterExternalUserTypes(['bot']), true);
 	}
 
-	//region Cache
-
-	protected function getCache(int $id): Cache
-	{
-		$cache = Application::getInstance()->getCache();
-
-		$cacheTTL = defined("BX_COMP_MANAGED_CACHE") ? 18144000 : 1800;
-		$cacheId = "user_data_{$id}";
-		$cacheDir = $this->getCacheDir($id);
-
-		$cache->initCache($cacheTTL, $cacheId, $cacheDir);
-
-		return $cache;
-	}
-
-	protected function saveInCache(Cache $cache, array $userData): void
-	{
-		$taggedCache = Application::getInstance()->getTaggedCache();
-		$id = (int)$userData['ID'];
-		$cache->startDataCache();
-		$taggedCache->startTagCache($this->getCacheDir($id));
-		$taggedCache->registerTag("USER_NAME_{$id}");
-		$taggedCache->endTagCache();
-		$cache->endDataCache($userData);
-	}
-
-	private function getCacheDir(int $id): string
-	{
-		$cacheSubDir = $id % 100;
-		$cacheSubSubDir = ($id % 10000) / 100;
-
-		return "/bx/imc/userdata_v9/{$cacheSubDir}/{$cacheSubSubDir}/{$id}";
-	}
-
 	public function clearCache(int $id): void
 	{
-		User::clearStaticCache($id);
-		Application::getInstance()->getCache()->cleanDir($this->getCacheDir($id));
+		ServiceLocator::getInstance()
+			->get(UserCacheRegistry::class)
+			?->getUserDataManager()
+			->clear(entityId: $id)
+		;
 	}
-
-	//endregion
 }

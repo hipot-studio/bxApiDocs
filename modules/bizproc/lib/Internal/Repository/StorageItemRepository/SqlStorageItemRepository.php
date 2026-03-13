@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal\Repository\StorageItemRepository;
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Entity;
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Exception\StorageItem\CreateStorageItemException;
@@ -140,18 +141,32 @@ class SqlStorageItemRepository implements StorageItemRepositoryInterface
 	}
 
 	public function saveItem(
-		int $storageTypeId, Entity\StorageItem\StorageItem $item,
+		int $storageTypeId,
+		Entity\StorageItem\StorageItem $item,
 		string $exceptionClass = null
 	): AddResult|UpdateResult
 	{
 		$exceptionClass ??= CreateStorageItemException::class;
+
+		if ($storageTypeId <= 0)
+		{
+			throw new $exceptionClass(ErrorMessage::INVALID_PARAM_ARG->get([
+				'#PARAM#' => 'STORAGE_ID',
+				'#VALUE#' => $storageTypeId
+			]));
+		}
+
+		if (empty($item->getValueFields()))
+		{
+			throw new $exceptionClass(ErrorMessage::GET_DATA_ERROR->get());
+		}
 
 		try
 		{
 			$ormStorageItem = $this->mapper->convertToOrm($storageTypeId, $item);
 			if (!$ormStorageItem)
 			{
-				throw new $exceptionClass('Storage type not found');
+				throw new $exceptionClass(ErrorMessage::ENTITY_NOT_EXISTS->get());
 			}
 
 			$validator = new \Bitrix\Bizproc\Internal\Service\StorageField\StorageFieldValidatorService(

@@ -20,11 +20,24 @@ class StorageItemDeleteStepper extends Main\Update\Stepper
 		$outerParams = $this->getOuterParams();
 		$storageTypeId = (int)($outerParams[0] ?? 0);
 		$filterJson = (string)($outerParams[1] ?? '');
+		$workflowId = (string)($outerParams[2] ?? '');
+		$activityName = (string)($outerParams[3] ?? '');
 
-		$filter = Json::decode($filterJson) ?? [];
+		try
+		{
+			$filter = Json::decode($filterJson) ?? [];
+		}
+		catch (\Throwable $e)
+		{
+			$this->notifyWorkflow($workflowId, $activityName);
+
+			return self::FINISH_EXECUTION;
+		}
 
 		if ($storageTypeId <= 0)
 		{
+			$this->notifyWorkflow($workflowId, $activityName);
+
 			return self::FINISH_EXECUTION;
 		}
 
@@ -39,6 +52,8 @@ class StorageItemDeleteStepper extends Main\Update\Stepper
 
 		if (empty($ids))
 		{
+			$this->notifyWorkflow($workflowId, $activityName);
+
 			return self::FINISH_EXECUTION;
 		}
 
@@ -48,16 +63,33 @@ class StorageItemDeleteStepper extends Main\Update\Stepper
 			$command->run();
 		}
 		catch (\Throwable $e)
-		{}
+		{
+			$this->notifyWorkflow($workflowId, $activityName);
 
-		$this->setOuterParams([$storageTypeId, $filterJson]);
+			return self::FINISH_EXECUTION;
+		}
+
+		$this->setOuterParams([$storageTypeId, $filterJson, $workflowId, $activityName]);
 
 		return self::CONTINUE_EXECUTION;
 	}
 
-	public static function bindStorage(int $storageTypeId, array $filter = []): void
+	private function notifyWorkflow(string $workflowId, string $activityName): void
+	{
+		if ($workflowId && $activityName)
+		{
+			\CBPSchedulerService::retrySendEventToWorkflow($workflowId, $activityName);
+		}
+	}
+
+	public static function bindStorage(
+		int $storageTypeId,
+		array $filter = [],
+		string $workflowId = '',
+		string $activityName = ''
+	): void
 	{
 		$filterJson = Json::encode($filter);
-		static::bind(0, [$storageTypeId, $filterJson]);
+		static::bind(0, [$storageTypeId, $filterJson, $workflowId, $activityName]);
 	}
 }

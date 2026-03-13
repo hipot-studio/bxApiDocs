@@ -18,6 +18,7 @@ class Formatter
 		Formatter\AuthorMessage::class,
 		Formatter\ContextMessages::class,
 		Formatter\Language::class,
+		Formatter\CopilotName::class,
 		Formatter\Fields::class,
 		Formatter\Role::class,
 		Formatter\Clean::class,

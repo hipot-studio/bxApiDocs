@@ -10,6 +10,7 @@ use Bitrix\Rest\V3\Attribute\Description;
 use Bitrix\Rest\V3\Attribute\ElementType;
 use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Documentation\Attributes\Deprecated;
+use Bitrix\Rest\V3\Documentation\Attributes\Hidden;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
@@ -22,6 +23,8 @@ use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 use Bitrix\Rest\V3\Interaction\Response\UpdateResponse;
+use Bitrix\Rest\V3\Schema\MethodDescription;
+use Bitrix\Rest\V3\Schema\TypeAliasRegistry;
 use Bitrix\Rest\V3\Schema\ControllerData;
 use Bitrix\Rest\V3\Schema\ModuleManager;
 use Bitrix\Rest\V3\Schema\SchemaManager;
@@ -40,6 +43,16 @@ class DocumentationManager
 
 	/** @var DtoExample[] */
 	private static array $dtoExamples = [];
+
+	/**
+	 * @var array<string, Dto>
+	 */
+	private static array $dtos = [];
+
+	/**
+	 * @var array<string, ReflectionClass>
+	 */
+	private static array $contollersReflections = [];
 
 	private const AVAILABLE_DEFAULT_RESPONSES = [
 		ArrayResponse::class,
@@ -96,9 +109,14 @@ class DocumentationManager
 				{
 					continue;
 				}
-				if ($controllerData->dto !== null)
+				if ($controllerData->dtoFqcn !== null)
 				{
-					$this->collectDtoSchemas($controllerData->dto, $customModuleSchemas[$moduleId] ?? [], $dtoSchemas);
+					$dto = $this->getDtoByClass($controllerData->dtoFqcn);
+					if ($dto === null)
+					{
+						continue;
+					}
+					$this->collectDtoSchemas($dto, $customModuleSchemas[$moduleId] ?? [], $dtoSchemas);
 				}
 
 				foreach ($controllerData->getMethods() as $controllerMethodDescription)
@@ -113,9 +131,24 @@ class DocumentationManager
 					}
 					else
 					{
-						$method = $controllerData->controller->getMethod($controllerMethodDescription->method . 'Action');
-						$returnType = $method->getReturnType()->getName();
-						$methodData = $this->getMethodData($method, $returnType, $controllerData);
+						if ($controllerMethodDescription->controllerFqcn !== $controllerData->controllerFqcn)
+						{
+							$controllerFqcn = $controllerMethodDescription->controllerFqcn;
+						}
+						else
+						{
+							$controllerFqcn = $controllerData->controllerFqcn;
+						}
+
+						$controller = $this->getControllerReflectionByClass($controllerFqcn);
+						if ($controller === null)
+						{
+							continue;
+						}
+
+						$reflectionMethod = $controller->getMethod($controllerMethodDescription->method . 'Action');
+						$returnType = $reflectionMethod->getReturnType()->getName();
+						$methodData = $this->getMethodData($reflectionMethod, $returnType, $controllerMethodDescription);
 						if ($methodData === null)
 						{
 							continue; // skip unknown return types
@@ -125,7 +158,6 @@ class DocumentationManager
 					$file['paths'][$this->getPathUri($controllerMethodDescription->actionUri)]['post'] = $methodData;
 					if (isset($methodData['requestBody']['content']['application/json']['schema']['properties']) && empty($methodData['requestBody']['content']['application/json']['schema']['properties']))
 					{
-
 						$file['paths'][$this->getPathUri($controllerMethodDescription->actionUri)]['get'] = $methodData;
 						unset($file['paths'][$this->getPathUri($controllerMethodDescription->actionUri)]['get']['requestBody']);
 					}
@@ -158,9 +190,9 @@ class DocumentationManager
 		return $file;
 	}
 
-	private function collectDtoSchemas(ReflectionClass $dtoReflection, array $customSchemas, array &$dtoSchemas): void
+	private function collectDtoSchemas(Dto $dto, array $customSchemas, array &$dtoSchemas): void
 	{
-		$dtoSchemaName = $this->getDtoSchemaName($dtoReflection);
+		$dtoSchemaName = TypeAliasRegistry::toPublicType($dto);
 		if (isset($dtoSchemas[$dtoSchemaName]))
 		{
 			return;
@@ -173,21 +205,20 @@ class DocumentationManager
 			return;
 		}
 
-		$dtoSchema = $this->getDtoProperties($dtoReflection);
+		$dtoSchema = $this->getDtoProperties($dto);
 		$dtoSchemas[$dtoSchemaName] = $dtoSchema;
-
-		/** @var DtoExample $instance */
-		$instance = $dtoReflection->getName()::create();
-		foreach ($instance->getFields() as $field)
+		foreach ($dto->getFields() as $field)
 		{
 			$type = $field->getPropertyType();
 			if (is_subclass_of($type, Dto::class))
 			{
-				$this->collectDtoSchemas(new ReflectionClass($type), $customSchemas, $dtoSchemas);
+				$dto = $this->getDtoByClass($type);
+				$this->collectDtoSchemas($dto, $customSchemas, $dtoSchemas);
 			}
 			elseif ($type === DtoCollection::class && $field->getElementType() && is_subclass_of($field->getElementType(), Dto::class))
 			{
-				$this->collectDtoSchemas(new ReflectionClass($field->getElementType()), $customSchemas, $dtoSchemas);
+				$dto = $this->getDtoByClass($field->getElementType());
+				$this->collectDtoSchemas($dto, $customSchemas, $dtoSchemas);
 			}
 		}
 	}
@@ -236,9 +267,9 @@ class DocumentationManager
 		return $documentationMethods;
 	}
 
-	private function getMethodResponseSchema(string $returnTypeClass, ?ReflectionClass $dtoReflection): array
+	private function getMethodResponseSchema(string $returnTypeClass, ?Dto $dto): array
 	{
-		$getResponseByClass = function (string $responseClass) use ($dtoReflection) {
+		$getResponseByClass = function (string $responseClass) use ($dto) {
 			return match ($responseClass)
 			{
 				ArrayResponse::class => [
@@ -246,19 +277,19 @@ class DocumentationManager
 				],
 				GetResponse::class => [
 					'type' => 'object',
-					'properties' => $dtoReflection ? [
+					'properties' => $dto ? [
 						'item' => [
-							'$ref' => '#/components/schemas/' . $this->getDtoSchemaName($dtoReflection),
+							'$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto),
 						],
 					] : [],
 				],
-				ListResponse::class => call_user_func(function () use ($dtoReflection) {
+				ListResponse::class => call_user_func(function () use ($dto) {
 					$result = [
 						'type' => 'array',
 					];
-					if ($dtoReflection !== null)
+					if ($dto !== null)
 					{
-						$result['items'] = ['$ref' => '#/components/schemas/' . $this->getDtoSchemaName($dtoReflection)];
+						$result['items'] = ['$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto)];
 					}
 
 					return $result;
@@ -382,9 +413,9 @@ class DocumentationManager
 
 		if (is_subclass_of($field->getPropertyType(), Dto::class))
 		{
-			$reflectionClass = new ReflectionClass($field->getPropertyType());
+			$dto = $this->getDtoByClass($field->getPropertyType());
 
-			return ['$ref' => '#/components/schemas/' . $this->getDtoSchemaName($reflectionClass)];
+			return ['$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto)];
 		}
 
 		return [];
@@ -394,27 +425,25 @@ class DocumentationManager
 	{
 		if ($field->getElementType())
 		{
-			$reflectionClass = new ReflectionClass($field->getElementType());
+			$dto = $this->getDtoByClass($field->getElementType());
 
 			return [
-				'$ref' => '#/components/schemas/' . $this->getDtoSchemaName($reflectionClass),
+				'$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto),
 			];
 		}
 
 		return [];
 	}
 
-	private function getDtoProperties(ReflectionClass $dtoReflection): array
+	private function getDtoProperties(Dto $dto): array
 	{
 		$result = [
 			'type' => 'object',
 			'properties' => [],
 		];
 
-		/** @var DtoExample $instance */
-		$instance = $dtoReflection->getName()::create();
 		/** @var DtoField $field */
-		foreach ($instance->getFields() as $field)
+		foreach ($dto->getFields() as $field)
 		{
 			$result['properties'][$field->getPropertyName()] = $this->getFieldTypeFormat($field);
 		}
@@ -518,9 +547,9 @@ class DocumentationManager
 				{
 					$methodName = str_replace('Action', '', $method->getName());
 					$result['properties'] = $method->getName() === 'updateAction' ? $dtoExample->editable : $dtoExample->addable;
-					if (!empty($dtoExample->methodRequiredFields[$methodName]))
+					if (!empty($dtoExample->fieldsRequiredByMethods[$methodName]) || isset($dtoExample->fieldsRequiredByMethods['*']))
 					{
-						$result['required'] = $dtoExample->methodRequiredFields[$methodName];
+						$result['required'] = array_merge($dtoExample->fieldsRequiredByMethods[$methodName] ?? [], $dtoExample->allMethodsRequiredFields);
 					}
 				}
 
@@ -606,7 +635,7 @@ class DocumentationManager
 	/**
 	 * @throws ReflectionException
 	 */
-	private function getMethodData(ReflectionMethod $method, string $returnTypeClass, ControllerData $controllerData): ?array
+	private function getMethodData(ReflectionMethod $method, string $returnTypeClass, MethodDescription $methodDescription): ?array
 	{
 		$methodData = [];
 		foreach ($method->getAttributes() as $attribute)
@@ -623,33 +652,30 @@ class DocumentationManager
 			};
 		}
 
-		$methodData['tags'] = [$controllerData->module];
+		$methodData['tags'] = [$methodDescription->module];
 
 		$methodData['requestBody'] = [
 			'content' => [
 				'application/json' => [
-					'schema' => $this->getMethodRequestSchema($method, $controllerData),
+					'schema' => $this->getMethodRequestSchema($method, $methodDescription),
 				],
 			],
 		];
+
+		$dto = $this->getDtoByClass($methodDescription->dtoFqcn);
 
 		$methodData['responses'] = [
 			200 => [
 				'description' => 'Success response',
 				'content' => [
 					'application/json' => [
-						'schema' => $this->getMethodResponseSchema($returnTypeClass, $controllerData->dto),
+						'schema' => $this->getMethodResponseSchema($returnTypeClass, $dto),
 					],
 				],
 			],
 		];
 
 		return $methodData;
-	}
-
-	private function getDtoSchemaName(ReflectionClass $dto): string
-	{
-		return str_replace('\\', '', $dto->getName());
 	}
 
 	private function getPathUri(string $actionUri): string
@@ -662,7 +688,7 @@ class DocumentationManager
 		return $actionUri;
 	}
 
-	private function getMethodRequestSchema(ReflectionMethod $method, ControllerData $controllerData): array
+	private function getMethodRequestSchema(ReflectionMethod $method, MethodDescription $methodDescription): array
 	{
 		$properties = $requestRequiredProperties = [];
 		$parameters = $method->getParameters();
@@ -676,11 +702,15 @@ class DocumentationManager
 					$requestTypeReflection = new ReflectionClass($parameter->getType()->getName());
 					if ($requestTypeReflection->isSubclassOf(Request::class))
 					{
-						$dto = $controllerData->dto?->getName()::create();
+						$dto = $methodDescription->dtoFqcn ? $methodDescription->dtoFqcn::create() : null;
 						foreach ($requestTypeReflection->getProperties(\ReflectionProperty::IS_PUBLIC) as $property)
 						{
+							$hiddenAttributes = $property->getAttributes(Hidden::class);
+							if (!empty($hiddenAttributes))
+							{
+								continue;
+							}
 							$dtoExample = $this->getDtoExample($dto);
-
 							$properties[$property->getName()] = $this->getExamplesByDtoClass($property, $dtoExample, $method);
 
 							if (!$property->getType()->allowsNull())
@@ -725,7 +755,7 @@ class DocumentationManager
 		}
 		if (!isset(self::$dtoExamples[get_class($dto)]))
 		{
-			$select = $sortable = $addable = $editable = $methodRequiredFields = [];
+			$select = $sortable = $addable = $editable = $methodRequiredFields = $allMethodsRequiredFields = [];
 
 			/** @var DtoField $dtoField */
 			foreach ($dto->getFields() as $dtoField)
@@ -746,9 +776,16 @@ class DocumentationManager
 
 				if ($dtoField->getRequiredGroups() !== null)
 				{
-					foreach ($dtoField->getRequiredGroups() as $methodName)
+					if ($dtoField->getRequiredGroups() === [])
 					{
-						$methodRequiredFields[$methodName][] = $dtoField->getPropertyName();
+						$allMethodsRequiredFields[] = $dtoField->getPropertyName();
+					}
+					else
+					{
+						foreach ($dtoField->getRequiredGroups() as $methodName)
+						{
+							$methodRequiredFields[$methodName][] = $dtoField->getPropertyName();
+						}
 					}
 				}
 
@@ -767,9 +804,53 @@ class DocumentationManager
 				$editable,
 				$sortable,
 				$methodRequiredFields,
+				$allMethodsRequiredFields
 			);
 		}
 
 		return self::$dtoExamples[get_class($dto)];
+	}
+
+	private function getDtoByClass(?string $dtoFqcn): ?Dto
+	{
+		if ($dtoFqcn === null)
+		{
+			return null;
+		}
+
+		if (!isset(self::$dtos[$dtoFqcn]))
+		{
+			try
+			{
+				$dto = $dtoFqcn::create();
+			}
+			catch (\Exception $e)
+			{
+				return null;
+			}
+
+			self::$dtos[$dtoFqcn] = $dto;
+		}
+
+		return self::$dtos[$dtoFqcn];
+	}
+
+	private function getControllerReflectionByClass(string $controllerFqcn): ?ReflectionClass
+	{
+		if (!isset(self::$contollersReflections[$controllerFqcn]))
+		{
+			try
+			{
+				$controllerReflection = new ReflectionClass($controllerFqcn);
+			}
+			catch (ReflectionException $e)
+			{
+				return null;
+			}
+
+			self::$contollersReflections[$controllerFqcn] = $controllerReflection;
+		}
+
+		return self::$contollersReflections[$controllerFqcn];
 	}
 }

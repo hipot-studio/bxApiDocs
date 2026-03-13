@@ -4,8 +4,11 @@ namespace Bitrix\Call\Analytics\Event;
 
 use Bitrix\Call\Call\ConferenceCall;
 use Bitrix\Call\Call\PlainCall;
-use Bitrix\Im\Call\CallUser;
+use Bitrix\Call\CallUser;
 
+/**
+ * @internal
+ */
 class FollowUpTaskEvent extends Event
 {
 	protected function setDefaultParams(): self

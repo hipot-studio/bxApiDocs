@@ -64,7 +64,7 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 				return BillingSynchronizationService::getInstance()->sync();
 			}
 
-			return BillingSynchronizationService::getInstance()->syncIfNeeded();
+			return BillingSynchronizationService::getInstance()->autoSync();
 		}
 
 		return (new Main\Result())->addError(new Main\Error('Baas is not available'));
@@ -144,6 +144,11 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 	public function getService(string $serviceCode): Contract\Service
 	{
 		return $this->getServiceManager()->getByCode($serviceCode);
+	}
+
+	public function hasBaasDistributedPackages(): bool
+	{
+		return $this->getPackageProvider()->hasBaasDistributedPackages();
 	}
 
 	protected function getPackageProvider(): Provider\PackageProvider

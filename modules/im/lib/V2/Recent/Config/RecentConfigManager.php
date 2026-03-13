@@ -15,24 +15,15 @@ class RecentConfigManager
 	public const EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION = false;
 	public const DEFAULT_SECTION_NAME = 'default';
 
-	private static self $instance;
-
 	private array $configByTypes = [];
 	private bool $isLoaded = false;
-	private ExternalTypeRegistry $externalTypeRegistry;
 	private Converter $converterToCamelCase;
 
-	private function __construct()
+	public function __construct(
+		private readonly ExternalTypeRegistry $externalTypeRegistry
+	)
 	{
-		$this->externalTypeRegistry = ServiceLocator::getInstance()->get(ExternalTypeRegistry::class);
 		$this->converterToCamelCase = new Converter(Converter::TO_CAMEL | Converter::LC_FIRST);
-	}
-
-	public static function getInstance(): self
-	{
-		self::$instance ??= new self();
-
-		return self::$instance;
 	}
 
 	public function getByExtendedType(string $type): RecentConfig

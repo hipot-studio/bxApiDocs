@@ -380,6 +380,11 @@ class Access
 				return 'limit_subscription_market_bundle';
 			}
 
+			if ($isB24)
+			{
+				return 'limit_benefit_market';
+			}
+
 			return 'limit_subscription_market_trial_access';
 		}
 

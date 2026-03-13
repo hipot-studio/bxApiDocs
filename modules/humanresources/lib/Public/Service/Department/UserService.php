@@ -2,10 +2,11 @@
 
 namespace Bitrix\HumanResources\Public\Service\Department;
 
+use Bitrix\HumanResources\Internals\Repository\Structure\NodeMemberRepository;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
+use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Public\Service\Node\UserService as NodeUserService;
-use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeMemberRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\StructureRole;
 use Bitrix\HumanResources\Util\StructureHelper;
@@ -70,5 +71,41 @@ class UserService
 		}
 
 		return $this->internalNodeMemberRepository->countUniqueUsersByNodeIdWithSubNodes($rootDepartment->id);
+	}
+
+	/**
+	 * Returns the nearest department heads from the branch where the given user belongs
+	 */
+	public function getUserHeads(int $userId): NodeMemberCollection
+	{
+		try
+		{
+			return InternalContainer::getNodeMemberService()->getNodeMemberHeads(
+				entityId: $userId,
+			);
+		}
+		catch (\Throwable)
+		{
+			return new NodeMemberCollection();
+		}
+	}
+
+	/**
+	 * Filters user IDs, returning only those who are employees.
+	 *
+	 * @param int[] $userIds
+	 * @return int[]
+	 */
+	public function filterEmployeeIds(array $userIds): array
+	{
+		$filteredIds = array_filter($userIds, static fn($id) => is_numeric($id) && (int)$id > 0);
+		$intIds = array_map('intval', $filteredIds);
+
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		return $this->internalNodeMemberRepository->getExistingEntityIds($intIds);
 	}
 }

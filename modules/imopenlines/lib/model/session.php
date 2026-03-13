@@ -362,6 +362,9 @@ class SessionTable extends DataManager
 			new StringField('EXTRA_URL', [
 				'validation' => [__CLASS__, 'validateExtraUrl'],
 			]),
+			new StringField('EXTRA_DEVICE_TYPE', [
+				'validation' => [__CLASS__, 'validateExtraDeviceType'],
+			]),
 			new StringField('SEND_FORM', [
 				'validation' => [__CLASS__, 'validateSendForm'],
 				'default_value' => 'none',
@@ -735,6 +738,18 @@ class SessionTable extends DataManager
 	{
 		return [
 			new LengthValidator(null, 255),
+		];
+	}
+
+	/**
+	 * Returns validators for EXTRA_DEVICE_TYPE field.
+	 *
+	 * @return Validator[]
+	 */
+	public static function validateExtraDeviceType()
+	{
+		return [
+			new LengthValidator(null, 50),
 		];
 	}
 

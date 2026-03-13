@@ -11,7 +11,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Context;
 use Bitrix\AI\Payload\IPayload;
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Call\Track;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\NotifyService;
@@ -211,17 +211,21 @@ final class CallAIService
 		if ($payload instanceof \Bitrix\AI\Payload\IPayload)
 		{
 			$payload->setCost($task->getCost());
-
-			// b24 only
 			if (
-				Loader::includeModule('bitrix24')
-				&& CallAISettings::isCopilotAutostartFeatureEnable()
+				CallAISettings::isPaidTariff()
+				&& CallAISettings::checkMarketSubscription()
+				&& CallAISettings::isMarketSubscriptionEnabled()
 			)
 			{
-				if ($call->autoStartRecording())
-				{
-					$payload->setCost(0);
-				}
+				$payload->setCost(0);
+			}
+			elseif (
+				Loader::includeModule('bitrix24')
+				&& CallAISettings::isCopilotAutostartFeatureEnable()
+				&& $call->autoStartRecording()
+			)
+			{
+				$payload->setCost(0);
 			}
 		}
 

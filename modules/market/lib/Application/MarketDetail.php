@@ -5,6 +5,7 @@ namespace Bitrix\Market\Application;
 use Bitrix\Market\Detail\DetailType;
 use Bitrix\Market\Rest\Actions;
 use Bitrix\Market\Rest\Transport;
+use Bitrix\Market\Internal;
 
 class MarketDetail
 {
@@ -73,8 +74,6 @@ class MarketDetail
 	{
 		global $USER;
 
-		$result = [];
-
 		$detailMethod = $this->type->getRestMethod();
 
 		$detailMethodFields = [
@@ -97,15 +96,22 @@ class MarketDetail
 		$batch = array_merge($detailMethodFields, $ratingMethodFields);
 
 		$response = Transport::instance()->batch($batch);
-		if (isset($response[$detailMethod->getMethodName()]['ITEMS']) && is_array($response[$detailMethod->getMethodName()]['ITEMS'])) {
-			$result = $response[$detailMethod->getMethodName()]['ITEMS'];
 
-			$this->additionalContent = $response[$detailMethod->getMethodName()]['ADDITIONAL_CONTENT'] ?? '';
-			$this->additionalMarketAction = $response[$detailMethod->getMethodName()]['ADDITIONAL_MARKET_ACTION'] ?? '';
+		if (
+			empty($response[$detailMethod->getMethodName()]['ITEMS'])
+			|| !is_array($response[$detailMethod->getMethodName()]['ITEMS'])
+		)
+		{
+			throw new Internal\Exception\ApplicationNotFoundException();
+		}
 
-			if (is_array($response[Actions::METHOD_GET_REVIEWS])) {
-				$result['REVIEWS'] = $response[Actions::METHOD_GET_REVIEWS];
-			}
+		$result = $response[$detailMethod->getMethodName()]['ITEMS'];
+
+		$this->additionalContent = $response[$detailMethod->getMethodName()]['ADDITIONAL_CONTENT'] ?? '';
+		$this->additionalMarketAction = $response[$detailMethod->getMethodName()]['ADDITIONAL_MARKET_ACTION'] ?? '';
+
+		if (is_array($response[Actions::METHOD_GET_REVIEWS])) {
+			$result['REVIEWS'] = $response[Actions::METHOD_GET_REVIEWS];
 		}
 
 		return $result;

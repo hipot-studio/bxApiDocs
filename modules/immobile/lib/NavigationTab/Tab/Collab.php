@@ -22,13 +22,7 @@ class Collab extends BaseRecent
 
 	protected function getParams(): array
 	{
-		return [
-			'TAB_CODE' => 'chats.collab',
-			'COMPONENT_CODE' => 'im.collab.messenger',
-			'MESSAGES' => [
-				'COMPONENT_TITLE' => $this->getTitle(),
-			],
-		];
+		return [];
 	}
 
 	protected function getWidgetSettings(): array
@@ -55,7 +49,7 @@ class Collab extends BaseRecent
 
 	public function getComponentCode(): string
 	{
-		return 'im.collab.messenger';
+		return '';
 	}
 
 	protected function getComponentName(): string

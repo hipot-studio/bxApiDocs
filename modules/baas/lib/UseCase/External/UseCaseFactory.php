@@ -243,8 +243,7 @@ class UseCaseFactory
 	}
 
 	public function createGetPurchasedPackageReport(
-		string $packageCode,
-		string $purchaseCode,
+		string $purchasedPackageCode,
 		?string $serviceCode = null,
 	): Baas\UseCase\External\GetPurchaseReport
 	{
@@ -252,8 +251,7 @@ class UseCaseFactory
 			new Baas\UseCase\External\Request\GetPurchaseReportRequest(
 				server: $this->server,
 				client: $this->client,
-				packageCode: $packageCode,
-				purchaseCode: $purchaseCode,
+				purchasedPackageCode: $purchasedPackageCode,
 				serviceCode: $serviceCode,
 			),
 		);

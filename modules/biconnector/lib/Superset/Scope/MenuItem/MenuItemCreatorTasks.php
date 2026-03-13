@@ -21,13 +21,14 @@ final class MenuItemCreatorTasks extends BaseMenuItemCreator
 				'ID' => "BIC_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
+				'IS_LOCKED' => !$this->isAvailableByTariff(),
 			];
 		}
 
 		if (!empty($menuItems))
 		{
 			$menuItems[] = [
-				"IS_DELIMITER" => true,
+				'IS_DELIMITER' => true,
 			];
 
 			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
@@ -40,5 +41,10 @@ final class MenuItemCreatorTasks extends BaseMenuItemCreator
 			'URL' => '',
 			'ITEMS' => $menuItems,
 		];
+	}
+
+	protected function getOpenFormCode(): string
+	{
+		return 'tasks';
 	}
 }

@@ -3,6 +3,9 @@
 namespace Bitrix\Im\V2\Controller\Sticker;
 
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Permission;
+use Bitrix\Im\V2\Permission\GlobalAction;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO\Path;
@@ -20,17 +23,21 @@ class StickerUploader extends UploaderController
 	private const MAX_IMAGE_WIDTH = 512;
 	private const MAX_IMAGE_HEIGHT = 512;
 
+	private int $userId;
+
 	public function __construct()
 	{
+		$this->userId = (int)CurrentUser::get()?->getId();
+
 		parent::__construct([
 			'type' => 'stickerUploadedFiles',
-			'userId' => (int)CurrentUser::get()?->getId(),
+			'userId' => $this->userId,
 		]);
 	}
 
 	public function isAvailable(): bool
 	{
-		return Features::isStickersAvailable();
+		return true;
 	}
 
 	public function getConfiguration(): Configuration
@@ -67,7 +74,15 @@ class StickerUploader extends UploaderController
 
 	public function canUpload()
 	{
-		return true;
+		if (
+			Permission::canDoGlobalAction($this->userId, GlobalAction::CreateStickerPack, null)
+			&& User::getInstance($this->userId)->isInternalType()
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	public function canView(): bool
@@ -76,9 +91,7 @@ class StickerUploader extends UploaderController
 	}
 
 	public function verifyFileOwner(FileOwnershipCollection $files): void
-	{
-
-	}
+	{}
 
 	public function canRemove(): bool
 	{

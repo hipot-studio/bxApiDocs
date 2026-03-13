@@ -4,6 +4,9 @@ namespace Bitrix\Call\Analytics;
 
 use Bitrix\Call\Analytics\Event\CallEvent;
 
+/**
+ * @internal
+ */
 class CallAnalytics extends AbstractAnalytics
 {
 	protected const FINISH_CALL = 'finish_call';

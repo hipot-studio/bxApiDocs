@@ -290,7 +290,7 @@ final class ProviderDecorator implements ReturnsEditorFields
 				$field['data'] = [];
 			}
 
-            $field['required'] = $field['data']['isRequiredByAttribute'];
+            $field['required'] = $field['data']['isRequiredByAttribute'] ?? false;
 
 			if ($fieldItem = $fieldsCollection->getField($fieldName))
 			{

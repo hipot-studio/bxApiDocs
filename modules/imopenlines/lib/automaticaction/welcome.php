@@ -6,8 +6,9 @@ use Bitrix\ImOpenLines\Connector;
 use Bitrix\ImOpenLines\Im;
 use	Bitrix\ImOpenLines\Session;
 use Bitrix\ImOpenLines\Widget\FormHandler;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
-
+use Bitrix\Main\Web\Json;
 
 /**
  * Class Welcome
@@ -85,7 +86,7 @@ class Welcome
 		if (
 			$this->config['WELCOME_MESSAGE'] == 'Y'
 			&& isset($this->config['WELCOME_MESSAGE_TEXT'])
-			&& $this->session['SOURCE'] != Connector::TYPE_NETWORK
+			&& $this->isWelcomeAllowedIfNetwork()
 			&& $this->sessionManager->isEnableSendSystemMessage()
 		)
 		{
@@ -106,6 +107,36 @@ class Welcome
 		}
 
 		return $result;
+	}
+
+	/**
+	 * By default Network lines is not allowed to send a welcome message,
+	 * but it can be "whitelisted" in imopenlines.network_welcome_allowed_list option
+	 */
+	private function isWelcomeAllowedIfNetwork(): bool
+	{
+		if ($this->session['SOURCE'] !== Connector::TYPE_NETWORK)
+		{
+			return true;
+		}
+
+		$rawList = Option::get('imopenlines', 'network_welcome_allowed_list', '[]');
+		$idList = Json::decode($rawList);
+		if (!is_array($idList) || empty($idList))
+		{
+			return false;
+		}
+
+		$configIds = [];
+		foreach ($idList as $id)
+		{
+			if (is_numeric($id))
+			{
+				$configIds[] = (int)$id;
+			}
+		}
+
+		return in_array((int)$this->config['ID'], $configIds, true);
 	}
 
 	public function sendWelcomeForm(): bool

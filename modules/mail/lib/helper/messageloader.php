@@ -166,7 +166,7 @@ class MessageLoader
 		return trim(preg_replace('/\s+/', ' ', mb_substr($text, 0, $length)));
 	}
 
-	private static function addBinding(MailMessage $message, array $row): void
+	public static function addBinding(MailMessage $message, array $row): void
 	{
 		$crmBindId = (int)($row['CRM_ACTIVITY_OWNER_ID'] ?? 0);
 		$crmBindTypeId = (int)($row['CRM_ACTIVITY_OWNER_TYPE_ID'] ?? 0);
@@ -191,6 +191,9 @@ class MessageLoader
 					break;
 				case MessageAccessTable::ENTITY_TYPE_TASKS_TASK:
 					$message->taskBindId = $entityBindId;
+					break;
+				case MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT:
+					$message->eventBindId = $entityBindId;
 					break;
 			}
 		}

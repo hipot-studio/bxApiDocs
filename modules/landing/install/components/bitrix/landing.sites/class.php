@@ -201,13 +201,19 @@ class LandingSitesComponent extends LandingBaseComponent
 			&& Copilot\Manager::isFeatureEnabled()
 		)
 		{
+			$featurePromoterParam = 'feature_promoter';
+			$featureMarketTrial = $featurePromoterParam . '=' . Copilot\Connector\AI\Type\SliderCode::MarketTrial->value;
+			$featureLimit = $featurePromoterParam . '=' . Copilot\Connector\AI\Type\SliderCode::Copilot->value;
+			$featureLimitOff = $featurePromoterParam . '=' . Copilot\Connector\AI\Type\SliderCode::CopilotOff->value;
+
 			$url = new Uri($_SERVER['REQUEST_URI']);
+
 			if (
-				str_contains($url, 'feature_promoter=limit_copilot')
-				&& !str_contains($url, 'feature_promoter=limit_copilot_off')
+				str_contains($url, $featureMarketTrial)
+				|| (str_contains($url, $featureLimit) && !str_contains($url, $featureLimitOff))
 			)
 			{
-				$url->deleteParams(['feature_promoter']);
+				$url->deleteParams([$featurePromoterParam]);
 				\localRedirect($url->getUri());
 			}
 		}

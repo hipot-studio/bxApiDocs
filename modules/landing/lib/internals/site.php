@@ -470,7 +470,7 @@ class SiteTable extends Entity\DataManager
 			// user try to restore site, check the limits
 			if ($primary && $fields['DELETED'] == 'N')
 			{
-				$fields['TYPE'] = self::getValueByCode(
+				$typeForCheck = self::getValueByCode(
 					$primary['ID'],
 					$fields,
 					'TYPE'
@@ -478,7 +478,7 @@ class SiteTable extends Entity\DataManager
 				$check = Manager::checkFeature(
 					Manager::FEATURE_CREATE_SITE,
 					[
-						'type' => $fields['TYPE'],
+						'type' => $typeForCheck,
 						'filter' => ['!ID' => $primary['ID']]
 					]
 				);

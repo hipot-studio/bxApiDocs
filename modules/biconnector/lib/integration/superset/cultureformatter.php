@@ -63,7 +63,21 @@ final class CultureFormatter
 
 	private static function getPortalLanguageCode(): string
 	{
-		return \Bitrix\Main\SiteTable::getDefaultLanguageId();
+		$lang = \Bitrix\Main\SiteTable::getDefaultLanguageId();
+
+		if (!empty($lang))
+		{
+			return $lang;
+		}
+
+		$contextLang = Application::getInstance()->getContext()?->getLanguage();
+
+		if (!empty($contextLang))
+		{
+			return $contextLang;
+		}
+
+		return 'en';
 	}
 
 	private static function getLanguageList(): array

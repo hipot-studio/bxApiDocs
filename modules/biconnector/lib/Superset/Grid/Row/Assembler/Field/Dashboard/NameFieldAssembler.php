@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
@@ -21,7 +22,6 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 	{
 		$id = (int)$value['ID'];
 		$title = htmlspecialcharsbx($value['TITLE']);
-		$isPinned = (bool)$value['IS_PINNED'];
 
 		$editButton = '';
 		if ($this->canEditTitle($value) && !empty($value['EDIT_URL']))
@@ -33,6 +33,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		$pinButton = '';
 		if ($value['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_DASHBOARD)
 		{
+			$isPinned = (bool)$value['IS_PINNED'];
 			$pinButton = $this->getPinButton($id, $isPinned);
 		}
 
@@ -84,7 +85,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 					</div>
 					<div>
 						<a
-							class ='biconnector-grid-group-name-link'
+							class ='biconnector-grid-name-link'
 							onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.handleGroupTitleClick($eventGroup)'
 						>
 							{$title}
@@ -98,8 +99,25 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		{
 			$link = $title;
 		}
+		elseif (!Feature::isBuilderEnabled())
+		{
+			$link = <<<HTML
+				<a
+					class="biconnector-grid-name-link"
+					onclick="BX.UI.InfoHelper.show('limit_crm_BI_constructor')"
+				>
+					<span class="ui-icon-set --lock-m"></span>
+					{$title}
+				</a>
+				HTML;
+		}
 		else
 		{
+			$value['DETAIL_URL'] .=
+				(str_contains($value['DETAIL_URL'], '?') ? '&' : '?')
+				. 'openFrom=grid'
+			;
+
 			$link = "<a href='{$value['DETAIL_URL']}' target='_blank'>{$title}</a>";
 		}
 
@@ -141,6 +159,11 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 
 	protected function getPinButton(int $dashboardId, bool $isPinned): string
 	{
+		if (!Feature::isBuilderEnabled())
+		{
+			return '';
+		}
+
 		$iconClass = $isPinned ? '--pin-2 dashboard-unpin-icon' : '--pin-1 dashboard-pin-icon';
 		$method =
 			$isPinned
@@ -166,6 +189,11 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 	 */
 	protected function canEditTitle(array $dashboardData): bool
 	{
+		if (!Feature::isBuilderEnabled())
+		{
+			return false;
+		}
+
 		$supersetController = new SupersetController(Integrator::getInstance());
 		if (
 			!$supersetController->isSupersetEnabled()
@@ -179,7 +207,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		$accessItem = DashboardAccessItem::createFromArray([
 			'ID' => (int)$dashboardData['ID'],
 			'TYPE' => $dashboardData['TYPE'],
-			'OWNER_ID' => $dashboardData['OWNER_ID'],
+			'STATUS' => $dashboardData['STATUS'],
 		]);
 
 		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);

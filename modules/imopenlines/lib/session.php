@@ -471,6 +471,16 @@ class Session
 						$messageId = Messages\Session::sendMessageStartSession($fields['CHAT_ID'], $fields['SESSION_ID']);
 					}
 				}
+
+				// Send previous session history if client has sessions with different config
+				if (Helpers\Filter::isFdcMode())
+				{
+					Messages\Session::sendMessagePreviousSessionHistory(
+						$fields['CHAT_ID'],
+						$fields['USER_ID'],
+						$fields['CONFIG_ID']
+					);
+				}
 				//END Send message
 
 				if ($this->chat->isNowCreated())

@@ -17,13 +17,6 @@ class Recent extends BaseController
 	 */
 	public function deleteAction(int $id, int $packId, PackType $packType): ?array
 	{
-		if (!Features::isStickersAvailable())
-		{
-			$this->addError(new StickerError(StickerError::STICKERS_NOT_AVAILABLE));
-
-			return null;
-		}
-
 		(new RecentSticker())->delete($id, $packId, $packType);
 
 		return ['result' => true];
@@ -34,13 +27,6 @@ class Recent extends BaseController
 	 */
 	public function deleteAllAction(): ?array
 	{
-		if (!Features::isStickersAvailable())
-		{
-			$this->addError(new StickerError(StickerError::STICKERS_NOT_AVAILABLE));
-
-			return null;
-		}
-
 		(new RecentSticker())->deleteAll();
 
 		return ['result' => true];

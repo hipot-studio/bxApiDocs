@@ -236,6 +236,13 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 			->setSelect(['*'])
 			->where('USER_ID', 0)
 			->where('COMPANY_ID', $companyId)
+			// filter out deleted from external system
+			->whereNot(\Bitrix\Main\ORM\Query\Query::filter()
+				->logic('or')
+				->where('TITLE', ' ')
+				->where('TITLE', '')
+				->whereNull('TITLE')
+			)
 		;
 
 		if ($limit !== null)
@@ -272,6 +279,14 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 	{
 		$query = PersonTable::query()
 			->setSelect(['*'])
+			->registerRuntimeField(	// used to get ACTIVE field for $filter condition
+				new \Bitrix\Main\ORM\Fields\Relations\Reference(
+					'USER',
+					\Bitrix\Main\UserTable::class,
+					Join::on('this.USER_ID', 'ref.ID'),
+					['join_type' => 'INNER'],
+				),
+			)
 			->where('COMPANY_ID', $companyId)
 			->where('USER_ID', '!=', 0)
 			->setLimit($limit)
@@ -282,13 +297,27 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 		return $this->toItemCollection($query->fetchCollection());
 	}
 
-	public function countAllMappedByCompanyId(int $companyId): int
+	public function countAllMappedByCompanyId(int $companyId, ?ConditionTree $filter = null): int
 	{
-		return (int)PersonTable::query()
+		$query = PersonTable::query()
+			->registerRuntimeField(
+				new \Bitrix\Main\ORM\Fields\Relations\Reference(
+					'USER',
+					\Bitrix\Main\UserTable::class,
+					Join::on('this.USER_ID', 'ref.ID'),
+					['join_type' => 'INNER'],
+				),
+			)
 			->where('USER_ID', '!=', 0)
 			->where('COMPANY_ID', $companyId)
-			->queryCountTotal()
 		;
+
+		if ($filter)
+		{
+			$query->where($filter);
+		}
+
+		return (int)$query->queryCountTotal();
 	}
 
 	public function deleteLink(Item\Collection\HcmLink\PersonCollection $personCollection): Item\Collection\HcmLink\PersonCollection
@@ -446,6 +475,13 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 					'COUNT(*)',
 				),
 			)
+			// filter out deleted from external system
+			->whereNot(\Bitrix\Main\ORM\Query\Query::filter()
+				->logic('or')
+				->where('TITLE', ' ')
+				->where('TITLE', '')
+				->whereNull('TITLE')
+			)
 			->where('USER_ID', '=', 0)
 			->setGroup('COMPANY_ID')
 		;
@@ -500,6 +536,13 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 		$countQuery = Model\HcmLink\PersonTable::query()
 			->where('USER_ID', 0)
 			->where('COMPANY_ID', $companyId)
+			// filter out deleted from external system
+			->whereNot(\Bitrix\Main\ORM\Query\Query::filter()
+				->logic('or')
+				->where('TITLE', ' ')
+				->where('TITLE', '')
+				->whereNull('TITLE')
+			)
 			->queryCountTotal()
 		;
 
@@ -512,6 +555,13 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 			->setSelect(['*'])
 			->where('USER_ID', 0)
 			->where('COMPANY_ID', $companyId)
+			// filter out deleted from external system
+			->whereNot(\Bitrix\Main\ORM\Query\Query::filter()
+				->logic('or')
+				->where('TITLE', ' ')
+				->where('TITLE', '')
+				->whereNull('TITLE')
+			)
 		;
 
 		if (!empty($searchName))

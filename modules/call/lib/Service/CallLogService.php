@@ -7,7 +7,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Call\Model\CallUserLogTable;
 use Bitrix\Call\Model\CallUserLogCountersTable;
 use Bitrix\Call\Counter;
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\DB\DuplicateEntryException;
@@ -399,7 +399,7 @@ class CallLogService
 
 		// Load call object using standard method
 		$callObject = Call::loadWithId($sourceCallId);
-		if (!$callObject)
+		if (!$callObject instanceof Call)
 		{
 			return [];
 		}
@@ -430,6 +430,11 @@ class CallLogService
 			$result['dialogId'] = (string)$chatEntity->getEntityId($currentUserId);
 			$result['chatType'] = 'private';
 		}
+		elseif ($callObject->getType() === \Bitrix\Call\Call::TYPE_PERMANENT)
+		{
+			$result['dialogId'] = 'chat' . $callObject->getChatId();
+			$result['chatType'] = 'videoconf';
+		}
 		else
 		{
 			$result['dialogId'] = 'chat' . $callObject->getChatId();
@@ -451,7 +456,7 @@ class CallLogService
 		$startDate = $call->getStartDate();
 		$endDate = $call->getEndDate();
 
-		if (!$startDate || !$endDate)
+		if (!$startDate instanceof \DateTime || !$endDate instanceof \DateTime)
 		{
 			return 0;
 		}

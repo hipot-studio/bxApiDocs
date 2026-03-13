@@ -6,6 +6,7 @@ namespace Bitrix\Imbot\Bot;
  * Multidialog interface for support bots.
  *
  * @package Bitrix\Imbot\Bot\Mixin
+ * @internal
  */
 interface SupportQuestion
 {

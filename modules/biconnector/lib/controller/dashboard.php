@@ -147,7 +147,6 @@ class Dashboard extends Controller
 			'APP_ID' => $dashboard->getAppId(),
 			'TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM,
 			'CREATED_BY_ID' => $this->getCurrentUser()?->getId(),
-			'OWNER_ID' => $this->getCurrentUser()?->getId(),
 		];
 
 		if ($dashboard->getField('FILTER_PERIOD'))
@@ -501,7 +500,7 @@ class Dashboard extends Controller
 		$accessItem = DashboardAccessItem::createFromArray([
 			'ID' => $dashboard->getId(),
 			'TYPE' => $dashboard->getType(),
-			'OWNER_ID' => $dashboard->getField('OWNER_ID'),
+			'STATUS' => $dashboard->getStatus(),
 		]);
 
 		$accessController = AccessController::getCurrent();

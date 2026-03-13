@@ -404,6 +404,18 @@ class Track extends EO_CallTrack
 	}
 
 	/**
+	 * @deprecated
+	 * @see self::scheduleTempCleanup
+	 * @param string $tempPath
+	 * @return string
+	 */
+	public static function cleanupTempFileAgent(string $tempPath): string
+	{
+		self::cleanupTempFile($tempPath);
+		return '';
+	}
+
+	/**
 	 * @return string
 	 */
 	public function generateTemporaryPath(): self

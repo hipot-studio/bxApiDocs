@@ -91,11 +91,9 @@ final class PermissionConfig
 
 		$mainRights = [
 			PermissionDictionary::BIC_ACCESS,
-			PermissionDictionary::BIC_DASHBOARD_CREATE,
 			PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
 			PermissionDictionary::BIC_SETTINGS_ACCESS,
 			PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
-			PermissionDictionary::BIC_GROUP_MODIFY,
 		];
 
 		if (Feature::isExternalEntitiesEnabled())

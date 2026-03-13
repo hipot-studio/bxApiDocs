@@ -8,6 +8,9 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 
+/**
+ * @internal
+ */
 class Logger extends FileLogger
 {
 	public const LOG_ID = 'call.logger';

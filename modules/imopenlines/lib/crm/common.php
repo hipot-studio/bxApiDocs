@@ -1,6 +1,9 @@
 <?php
 namespace Bitrix\ImOpenLines\Crm;
 
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -258,21 +261,41 @@ class Common
 				$previousFields = $entity::GetByID($id, false) ?: [];
 				if ($entity->Update($id, $updateFields, true, true, $options))
 				{
-					$errors = [];
-					\CCrmBizProcHelper::AutoStartWorkflows(
-						\CCrmOwnerType::ResolveID($type),
-						$id,
-						\CCrmBizProcEventType::Edit,
-						$errors
-					);
+					$entityTypeId = \CCrmOwnerType::ResolveID($type);
 
-					//Region automation
-					if (\Bitrix\Crm\Automation\Factory::isAutomationRunnable(\CCrmOwnerType::ResolveID($type)))
+					if (
+						class_exists(CrmStarter::class)
+						&& defined('\Bitrix\Crm\Integration\BizProc\Starter\CrmStarter::MOVE_TO_BACKGROUND_DELAY')
+					)
 					{
-						$starter = new \Bitrix\Crm\Automation\Starter(\CCrmOwnerType::ResolveID($type), $id);
-						$starter->runOnUpdate($updateFields, $previousFields);
+						$starter = new CrmStarter(new DocumentDto($entityTypeId, (int)$id));
+						$starter
+							->setContextModuleId('imopenlines')
+							->runOnDocumentUpdate(
+								new RunDataDto(
+									actualFields: $updateFields,
+									previousFields: $previousFields,
+									delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY,
+								)
+							)
+						;
 					}
-					//End region
+					else
+					{
+						$errors = [];
+						\CCrmBizProcHelper::AutoStartWorkflows(
+							$entityTypeId,
+							$id,
+							\CCrmBizProcEventType::Edit,
+							$errors
+						);
+
+						if (\Bitrix\Crm\Automation\Factory::isAutomationRunnable($entityTypeId))
+						{
+							$starter = new \Bitrix\Crm\Automation\Starter($entityTypeId, $id);
+							$starter->runOnUpdate($updateFields, $previousFields);
+						}
+					}
 				}
 
 				$result = true;

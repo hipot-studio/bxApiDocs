@@ -3,10 +3,8 @@
 namespace Bitrix\HumanResources\Service\Access;
 
 use Bitrix\HumanResources\Access\Role\RoleUtil;
-use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\Access\Exception\RoleRelationSaveException;
-use Bitrix\Main\DB\SqlQueryException;
 
 class RoleRelationService
 {
@@ -25,8 +23,6 @@ class RoleRelationService
 
 			(new RoleUtil($roleId))->updateRoleRelations($setting['accessCodes'] ?? []);
 		}
-
-		Container::getCacheManager()->clean(NodeRepository::NODE_ENTITY_RESTRICTION_CACHE);
 	}
 
 	public function deleteRelationsByRoleId(int $roleId): void

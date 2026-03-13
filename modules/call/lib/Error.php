@@ -4,7 +4,9 @@ namespace Bitrix\Call;
 
 use Bitrix\Main\Localization\Loc;
 
-
+/**
+ * @internal
+ */
 class Error extends \Bitrix\Main\Error
 {
 	public const

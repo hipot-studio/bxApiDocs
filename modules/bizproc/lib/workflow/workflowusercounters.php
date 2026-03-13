@@ -30,6 +30,18 @@ class WorkflowUserCounters
 		}
 	}
 
+	public function sync():void
+	{
+		// time to verify
+		Entity\WorkflowUserCommentTable::verifyUserUnread($this->userId);
+
+		$task = (int)(\CBPTaskService::getCounters($this->userId)['*'] ?? 0);
+		$comment = Entity\WorkflowUserCommentTable::getCountUserUnread($this->userId);
+
+		$this->setTask($task);
+		$this->setComment($comment);
+	}
+
 	public function incrementTask(int $increment = 1): void
 	{
 		if ($increment <= 0)
@@ -110,6 +122,16 @@ class WorkflowUserCounters
 		$this->syncWorkflow();
 	}
 
+	public function getTask(): int
+	{
+		return (int)$this->get(self::TASK_COUNTER_CODE);
+	}
+
+	public function getComment(): int
+	{
+		return (int)$this->get(self::COMMENT_COUNTER_CODE);
+	}
+
 	private function syncWorkflowIfNeed(): void
 	{
 		if (self::$isNeedSyncWorkflow[$this->userId])
@@ -143,7 +165,7 @@ class WorkflowUserCounters
 		return [
 			'task' => $task,
 			'comment' => $comment,
-			'workflow' => $workflow
+			'workflow' => $workflow,
 		];
 	}
 

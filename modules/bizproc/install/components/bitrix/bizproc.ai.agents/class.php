@@ -28,12 +28,12 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 	public function __construct(
 		$component = null,
-		AiAgentsGridHelper $gridHelper = null,
-		AiAgentsFeature $aiAgentFeature = null,
+		?AiAgentsGridHelper $gridHelper = null,
+		?AiAgentsFeature $aiAgentFeature = null,
 	)
 	{
 		parent::__construct($component);
-		$this->gridHelper = $gridHelper ?? ServiceLocator::getInstance()->get(AiAgentsGridHelper::class);;
+		$this->gridHelper = $gridHelper ?? ServiceLocator::getInstance()->get(AiAgentsGridHelper::class);
 		$this->aiAgentFeature = $aiAgentFeature ?? ServiceLocator::getInstance()->get(AiAgentsFeature::class);
 	}
 
@@ -80,17 +80,15 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 		$result['GRID_PARAMS'] = \Bitrix\Main\Grid\Component\ComponentParams::get(
 			$grid,
-			$this->gridHelper->buildGridParams($grid, $currentPage)
+			$this->gridHelper->buildGridParams($grid, $currentPage),
 		);
 
 		$result['GRID_FILTER'] = $grid->getFilter();
-		$result['FILTER_PRESETS'] = $grid->getFilter()?->getFilterPresets();
 
 		// TODO: REPLACE WITH LOGIC
 		$result['AVAILABLE_AI_AGENTS_COUNT'] = 0;
 		$result['MENU_ITEMS'] = $this->getMenuItems();
 
-		$result['SHOW_FACADE_FILTER'] = false;
 		$result['SHOW_AVAILABLE_AGENTS_COUNT'] = false;
 
 		$result['BASE_BIZPROC_DESIGNER_URI'] = $this->getBaseBizprocDesignerUri();
@@ -157,9 +155,9 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 			[
 				'options' => [
 					'min_range' => 1,
-					'default' => 1
-				]
-			]
+					'default' => 1,
+				],
+			],
 		);
 
 		return (int)$page;
@@ -180,8 +178,9 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 	private function getBaseBizprocDesignerUri(): Uri
 	{
-		return (new AiAgentsGridHelper)
+		return (new AiAgentsGridHelper())
 			->getBaseBizprocDesignerUri()
-			->withQuery('START_TRIGGER=');
+			->withQuery('START_TRIGGER=')
+		;
 	}
 }

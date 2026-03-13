@@ -3,7 +3,6 @@
 namespace Bitrix\BIConnector\Access\Filter;
 
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main\Access\Filter\AbstractAccessFilter;
@@ -33,53 +32,34 @@ class DashboardViewFilter extends AbstractAccessFilter
 
 		if ($entity === SupersetDashboardTable::class)
 		{
+			$ids = $this->controller->getAllowedDashboardValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW);
+
 			$dashboards = SupersetDashboardTable::getList([
-				'select' => ['ID', 'TYPE', 'OWNER_ID'],
-				'filter' => [
-					'LOGIC' => 'OR',
-					'!=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
-					[
-						'=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
-						'=OWNER_ID' => $this->user->getUserId(),
-					],
-				],
+				'select' => ['ID'],
+				'filter' => ['=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_DRAFT],
 				'cache' => ['ttl' => 3600],
 			])
 				->fetchAll()
 			;
 
-			$allowedDashboardIds = array_filter(
-				$dashboards,
-				fn(array $dashboard) => $this->controller->check($action, DashboardAccessItem::createFromArray([
-					'ID' => $dashboard['ID'],
-					'TYPE' => $dashboard['TYPE'],
-					'OWNER_ID' => $dashboard['OWNER_ID'],
-				])),
-			);
-			$allowedDashboardIds = array_column($allowedDashboardIds, 'ID');
-
-			if (empty($allowedDashboardIds))
+			$draftedIds = array_column($dashboards, 'ID');
+			if (!empty($draftedIds))
 			{
-				return ['=ID' => null];
+				$editIds = $this->controller->getAllowedDashboardValue(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
+				$hiddenDraftedIds = array_diff($draftedIds, $editIds);
+				if (!empty($hiddenDraftedIds))
+				{
+					$ids = array_diff($ids, $hiddenDraftedIds);
+				}
 			}
 
 			return [
-				'=ID' => $allowedDashboardIds,
+				'=ID' => $ids,
 			];
 		}
 		if ($entity === SupersetDashboardGroupTable::class)
 		{
 			$allowedGroupIds = $this->controller->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW);
-
-			$groupIdsWithOwnDashboards = SupersetDashboardGroupTable::getList([
-				'select' => ['ID'],
-				'filter' => ['=DASHBOARDS.OWNER_ID' => $this->user->getUserId()],
-			])
-				->fetchCollection()
-				->getIdList()
-			;
-
-			$allowedGroupIds = array_unique(array_merge($allowedGroupIds, $groupIdsWithOwnDashboards));
 
 			if (!empty($allowedGroupIds))
 			{

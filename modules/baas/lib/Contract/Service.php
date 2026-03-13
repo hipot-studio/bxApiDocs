@@ -17,4 +17,6 @@ interface Service
 	public function forceConsume(int $units = 1, ?array $attributes = null): Main\Result;
 
 	public function refund(string $consumptionId, ?array $attributes = null): Main\Result;
+
+	public function isDistributedByMarket(): bool;
 }

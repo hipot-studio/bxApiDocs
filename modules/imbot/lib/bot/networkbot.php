@@ -6,6 +6,7 @@ namespace Bitrix\Imbot\Bot;
  * Common interface for chat bots.
  *
  * @package Bitrix\Imbot\Bot
+ * @internal
  */
 interface NetworkBot extends ChatBot
 {

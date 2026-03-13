@@ -4,6 +4,9 @@ namespace Bitrix\Call;
 
 use Bitrix\Main\Data\Cache;
 
+/**
+ * @internal
+ */
 class Idempotence
 {
 	private static $cacheTtl = 86400;

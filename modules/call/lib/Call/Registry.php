@@ -1,0 +1,75 @@
+<?php
+
+namespace Bitrix\Call\Call;
+
+use Bitrix\Call\Call;
+use Bitrix\Call\Model\CallTable;
+use Bitrix\Call\CallFactory;
+
+class Registry
+{
+	/** @var Call[] */
+	protected static array $calls = [];
+
+	/**
+	 * @param int $id Id of the call
+	 * @return Call|null
+	 */
+	public static function getCallWithId(int $id): ?Call
+	{
+		if (static::$calls[$id] instanceof \Bitrix\Call\Call)
+		{
+			return static::$calls[$id];
+		}
+
+		$row = CallTable::getRowById($id);
+		if (!$row)
+		{
+			return null;
+		}
+
+		static::$calls[$id] = CallFactory::createWithArray($row['PROVIDER'], $row);
+
+		return static::$calls[$id];
+	}
+
+	/**
+	 * Clear cached Call object by ID
+	 * Forces next getCallWithId() to reload from database
+	 *
+	 * @param int $id Id of the call to clear from cache
+	 * @return void
+	 */
+	public static function clearCache(int $id): void
+	{
+		unset(static::$calls[$id]);
+	}
+
+	/**
+	 * @param string $uuid internal call Id
+	 * @return Call|null
+	 */
+	public static function getCallWithUuid(string $uuid): ?Call
+	{
+		foreach (static::$calls as $call)
+		{
+			if ($call instanceof \Bitrix\Call\Call && $call->getUuid() === $uuid)
+			{
+				return $call;
+			}
+		}
+		$row = CallTable::getList([
+			'select' => ['*'],
+			'filter' => ['=UUID' => $uuid],
+			'limit' => 1,
+		])->fetch();
+		if (!$row)
+		{
+			return null;
+		}
+
+		static::$calls[$row['ID']] = CallFactory::getCallInstance($row['PROVIDER'], $row);
+
+		return static::$calls[$row['ID']];
+	}
+}

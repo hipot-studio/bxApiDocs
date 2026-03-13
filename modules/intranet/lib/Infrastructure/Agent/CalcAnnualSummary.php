@@ -105,7 +105,7 @@ class CalcAnnualSummary extends Stepper
 	{
 		return UserTable::query()
 			->setSelect(['ID'])
-			->addFilter('=IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->addFilter('ACTIVE', 'Y')
 			->addFilter('>ID', $lastId)
 			->addFilter('<DATE_REGISTER', new DateTime('2025-10-01', 'Y-m-d'))

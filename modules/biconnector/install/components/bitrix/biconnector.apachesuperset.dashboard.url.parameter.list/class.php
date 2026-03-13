@@ -9,7 +9,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
-use Bitrix\Bitrix24\Feature;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -115,7 +115,7 @@ class ApacheSupersetDashboardUrlParameterComponent extends CBitrixComponent
 	{
 		$result = new Main\Result();
 
-		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
+		if (!Feature::isBuilderEnabled())
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_URL_PARAM_LIST_BIC_UNAVAILABLE_ERROR')));
 

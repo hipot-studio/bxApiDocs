@@ -15,6 +15,9 @@ const COMMAND_ADD_QUESTION = 'question';
 const OPTION_BOT_QUESTION_LIMIT = 'support24_session_limit';
 const COMMAND_RESUME_SESSION = 'resume';
 
+/**
+ * @internal
+ */
 trait SupportQuestion
 {
 	/**

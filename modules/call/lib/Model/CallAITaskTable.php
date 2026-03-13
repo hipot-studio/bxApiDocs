@@ -10,7 +10,7 @@ use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Im\Model\CallTable;
+use Bitrix\Call\Model\CallTable;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\Task\AITask;
 

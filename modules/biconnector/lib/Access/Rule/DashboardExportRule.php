@@ -8,6 +8,28 @@ use Bitrix\BIConnector\Superset\MarketDashboardManager;
 
 final class DashboardExportRule extends DashboardRule
 {
+	public function getPermissionMultiValues(array $params): ?array
+	{
+		if (!$this->isExportEnabled())
+		{
+			return [];
+		}
+
+		return parent::getPermissionMultiValues($params);
+	}
+
+	protected function loadGroupDashboards(array $groupIds, array $additionalFilter = []): array
+	{
+		if (!$this->isExportEnabled())
+		{
+			return [];
+		}
+
+		$additionalFilter = array_merge($additionalFilter, ['TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM]);
+
+		return parent::loadGroupDashboards($groupIds, $additionalFilter);
+	}
+
 	/**
 	 * Check access permission.
 	 *
@@ -20,25 +42,26 @@ final class DashboardExportRule extends DashboardRule
 		$item = $params['item'] ?? null;
 		if ($item instanceof DashboardAccessItem)
 		{
-			$type = $item->getType();
-			if ($type === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM || $type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET)
+			if (
+				!$this->isExportEnabled()
+				|| $item->getType() === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM
+				|| $item->getType() === SupersetDashboardTable::DASHBOARD_TYPE_MARKET
+			)
 			{
 				return false;
 			}
-
-			if (!MarketDashboardManager::getInstance()->isExportEnabled())
-			{
-				return false;
-			}
-
-			return parent::check($params);
 		}
 
-		return false;
+		return parent::check($params);
 	}
 
 	protected function isAlwaysAvailableForAdmin(): bool
 	{
 		return false;
+	}
+
+	private function isExportEnabled(): bool
+	{
+		return MarketDashboardManager::getInstance()->isExportEnabled();
 	}
 }

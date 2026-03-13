@@ -2,7 +2,7 @@
 
 namespace Bitrix\Call\Controller;
 
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Call\Error;
@@ -12,6 +12,9 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\CallAIService;
 use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
 
+/**
+ * @internal
+ */
 class Mixer extends JwtController
 {
 	public function getAutoWiredParameters(): array

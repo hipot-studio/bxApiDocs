@@ -566,6 +566,40 @@ class Task extends Base
 		}
 	}
 
+	public function addAuditorsAction(int $taskId, array $auditorIds): ?array
+	{
+		try
+		{
+			$provider = new TaskProvider($this->getCurrentUser()?->getId());
+			$addResult = $provider->addAuditors($taskId, $auditorIds);
+
+			return $this->prepareActionResult($addResult, $taskId);
+		}
+		catch (\Exception $exception)
+		{
+			$this->addError(Error::createFromThrowable($exception));
+
+			return null;
+		}
+	}
+
+	public function deleteAuditorsAction(int $taskId, array $auditorIds): ?array
+	{
+		try
+		{
+			$provider = new TaskProvider($this->getCurrentUser()?->getId());
+			$deleteResult = $provider->deleteAuditors($taskId, $auditorIds);
+
+			return $this->prepareActionResult($deleteResult, $taskId);
+		}
+		catch (\Exception $exception)
+		{
+			$this->addError(Error::createFromThrowable($exception));
+
+			return null;
+		}
+	}
+
 	public function takeAction(int $taskId): ?array
 	{
 		try

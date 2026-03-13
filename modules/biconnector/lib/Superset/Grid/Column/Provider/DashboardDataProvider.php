@@ -36,16 +36,9 @@ class DashboardDataProvider extends DataProvider
 				->setType(Type::TEXT)
 				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_AUTHOR'))
 				->setAlign('left')
-				->setDefault(false)
-		;
-
-		$result[] =
-			$this->createColumn('OWNER_ID')
-				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_OWNER'))
-				->setAlign('left')
 				->setDefault(true)
 		;
+
 		$result[] =
 			$this->createColumn('GROUPS')
 				->setType(Type::TEXT)

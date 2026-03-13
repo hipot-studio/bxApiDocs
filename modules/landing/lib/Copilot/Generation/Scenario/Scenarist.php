@@ -13,6 +13,7 @@ use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Generation\Type\ScenarioStepDto;
 use Bitrix\Landing\Copilot\Generation\Type\StepStatuses;
 use Bitrix\Landing\Copilot\Model\StepsTable;
+use Bitrix\Landing\Copilot\Services\FirstSiteGenerationService;
 use Bitrix\Landing\Metrika;
 use Bitrix\Main\Loader;
 
@@ -536,6 +537,13 @@ class Scenarist
 			return false;
 		}
 
+		if (FirstSiteGenerationService::isFirstSiteGeneration())
+		{
+			$this->sendQuotaOkMessage();
+
+			return true;
+		}
+
 		$requestLimiter = $this->getRequestLimiter();
 
 		$isRequestQuotaExceeded = true;
@@ -543,15 +551,20 @@ class Scenarist
 		{
 			$isRequestQuotaExceeded = false;
 			// todo: can change to this->scenario?
-			$this->generation->getScenario()?->getChatbot()?->onRequestQuotaOk(
-				new ChatBotMessageDto(
-					$this->generation->getChatId(),
-					$this->generation->getId(),
-				)
-			);
+			$this->sendQuotaOkMessage();
 		}
 
 		return $isRequestQuotaExceeded;
+	}
+
+	private function sendQuotaOkMessage(): void
+	{
+		$this->generation->getScenario()?->getChatbot()?->onRequestQuotaOk(
+			new ChatBotMessageDto(
+				$this->generation->getChatId(),
+				$this->generation->getId(),
+			)
+		);
 	}
 
 	/**

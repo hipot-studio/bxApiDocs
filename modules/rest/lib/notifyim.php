@@ -88,13 +88,24 @@ class NotifyIm implements INotify
 					{
 						$messageFields = array(
 							"TO_USER_ID" => $notifyFields["RELATION_USER_ID"],
-							"FROM_USER_ID" => $notifyFields["AUTHOR_ID"],
-							"NOTIFY_TYPE" => IM_NOTIFY_FROM,
+							"FROM_USER_ID" => 0,
+							"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
 							"NOTIFY_MODULE" => "rest",
 							"NOTIFY_EVENT" => "app_install_request",
 							"NOTIFY_TAG" => "REST|APP_INSTALL_LINK|".$notifyFields["AUTHOR_ID"]."|TO|".$notifyFields["RELATION_USER_ID"],
 							"NOTIFY_SUB_TAG" => "REST|APP_INSTALL_LINK|".$notifyFields["RELATION_USER_ID"],
-							"NOTIFY_MESSAGE" => GetMessage("REST_APP_INSTALL_REQUEST", array("#APP_URL#" => $notifyFields["NOTIFY_BUTTONS"][0]["APP_URL"], "#APP_NAME#" => $notifyFields["NOTIFY_BUTTONS"][0]["APP_NAME"]))
+							"NOTIFY_TITLE" => Loc::getMessage('REST_APP_INSTALL_REQUEST_NOTIFY_TITLE'),
+							"NOTIFY_MESSAGE" => Loc::getMessage('REST_APP_INSTALL_REQUEST_NOTIFY_MESSAGE',
+								[
+									'#APP_URL#' => $notifyFields['NOTIFY_BUTTONS'][0]['APP_URL'],
+									'#APP_NAME#' => $notifyFields['NOTIFY_BUTTONS'][0]['APP_NAME']
+								]
+							),
+							"PARAMS" => [
+								'COMPONENT_PARAMS' => [
+									'SYSTEM_ICON' => 'app',
+								],
+							],
 						);
 						\CIMNotify::Add($messageFields);
 					}

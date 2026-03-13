@@ -5,9 +5,9 @@ namespace Bitrix\Call\Controller;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Service\MicroService\BaseReceiver;
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\CallUser;
-use Bitrix\Im\V2\Call\CallFactory;
+use Bitrix\Call\Call;
+use Bitrix\Call\CallUser;
+use Bitrix\Call\CallFactory;
 use Bitrix\Call\Error;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Track\TrackError;
@@ -21,7 +21,9 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\CallAIService;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 
-
+/**
+ * @internal
+ */
 class CallController extends BaseReceiver
 {
 	public function getAutoWiredParameters(): array

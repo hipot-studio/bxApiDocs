@@ -7,6 +7,6 @@ class DtoValidationException extends ValidationException
 {
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_VALIDATION_DTOVALIDATIONEXCEPTION';
+		return 'REST_V3_EXCEPTION_VALIDATION_DTOVALIDATIONEXCEPTION';
 	}
 }

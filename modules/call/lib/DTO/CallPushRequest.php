@@ -1,6 +1,9 @@
 <?php
 namespace Bitrix\Call\DTO;
 
+/**
+ * @internal
+ */
 class CallPushRequest extends Hydrator
 {
 	public int $initiatorUserId = 0;

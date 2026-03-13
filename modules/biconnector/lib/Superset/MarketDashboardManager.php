@@ -399,6 +399,11 @@ final class MarketDashboardManager
 			return $result;
 		}
 
+		if ($appRow['INSTALLED'] === 'N')
+		{
+			return $result;
+		}
+
 		if (
 			!SystemDashboardManager::canDeleteSystemDashboard()
 			&& self::isSystemAppByAppCode($appRow['CODE'])

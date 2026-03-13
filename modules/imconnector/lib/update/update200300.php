@@ -10,6 +10,9 @@ use \Bitrix\Main\Loader,
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * @internal
+ */
 final class Update200300 extends Stepper
 {
 	private const PORTION = 5;

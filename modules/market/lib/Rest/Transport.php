@@ -10,6 +10,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Bitrix\Market\Internal\Exception;
 use Bitrix\Rest\Marketplace\Client;
 use CBitrix24;
 
@@ -83,7 +84,16 @@ class Transport
 			$query[$key] = $this->prepareQuery($batch[0], $batch[1]);
 		}
 
-		$response = $this->getHttpClient()->post($this->getServiceUrl(), ['batch' => $query]);
+		$httpClient = $this->getHttpClient();
+		$response = $httpClient->post(
+			$this->getServiceUrl(),
+			['batch' => $query]
+		);
+
+		if ($response === false)
+		{
+			throw new Exception\MarketRequestException($httpClient->getError());
+		}
 
 		return $this->prepareAnswer($response);
 	}

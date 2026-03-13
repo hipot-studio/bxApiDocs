@@ -10,6 +10,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Bitrix24\License\Market;
 use Bitrix\Call\Settings;
@@ -18,7 +19,11 @@ use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Type;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\AI\Tuning\Defaults;
+use Bitrix\AI\Integration\Baas\BaasTokenService;
 
+/**
+ * @internal
+ */
 
 class CallAISettings
 {
@@ -48,7 +53,10 @@ class CallAISettings
 	;
 
 	private const
-		CALL_RECORD_MIN_USERS = ['B24' => ['ru' => 3, 'def' => 4], 'BOX' => 0],
+		CALL_RECORD_MIN_USERS = [
+			'B24' => ['ru' => 3, 'def' => 4],
+			'BOX' => ['ru' => 3, 'def' => 0],
+		],
 		CALL_RECORD_MIN_LENGTH = 59
 	;
 
@@ -160,10 +168,7 @@ class CallAISettings
 		static $enabled;
 		if ($enabled === null)
 		{
-			$enabled =
-				Application::getInstance()->getLicense()->getRegion() === 'ru'
-				&& (bool)Option::get('call', 'market_subscription', false)
-			;
+			$enabled = (Application::getInstance()->getLicense()->getRegion() === 'ru');
 		}
 
 		return $enabled;
@@ -178,9 +183,15 @@ class CallAISettings
 		static $enabled;
 		if ($enabled === null)
 		{
-			$enabled =
-				Loader::includeModule('bitrix24')
-				&& (Market::isPaidVersion() || Market::isTrialVersion()); // market
+			$enabled = false;
+			if (Loader::includeModule('bitrix24'))
+			{
+				$enabled = (Market::isPaidVersion() || Market::isTrialVersion());
+			}
+			if (!$enabled && Loader::includeModule('baas'))
+			{
+				$enabled = ServiceLocator::getInstance()->get(BaasTokenService::class)?->isMarketAvailable() ?? false;
+			}
 		}
 
 		return $enabled;
@@ -190,12 +201,12 @@ class CallAISettings
 	 * Checks paid tariff.
 	 * @return bool
 	 */
-	private static function isPaidTariff(): bool
+	public static function isPaidTariff(): bool
 	{
 		static $value;
 		if ($value === null)
 		{
-			$value = false;
+			$value = true;
 			if (Loader::includeModule('bitrix24'))
 			{
 				$value =
@@ -212,7 +223,7 @@ class CallAISettings
 	 * Checks paid tariff.
 	 * @return bool
 	 */
-	private static function isFreeTariff(): bool
+	public static function isFreeTariff(): bool
 	{
 		static $value;
 		if ($value === null)
@@ -238,7 +249,14 @@ class CallAISettings
 			if (!ModuleManager::isModuleInstalled('bitrix24'))
 			{
 				// box
-				$enabled = (self::getRecordMinUsers() > 0);
+				if (self::checkMarketSubscription())
+				{
+					$enabled = self::isMarketSubscriptionEnabled(); // market
+				}
+				if (!$enabled)
+				{
+					$enabled = (self::getRecordMinUsers() > 0);
+				}
 			}
 			else
 			{
@@ -269,15 +287,16 @@ class CallAISettings
 		if ($enabled === null)
 		{
 			$enabled = false;
-
-			// b24
-			if (Loader::includeModule('bitrix24'))
+			if (self::checkMarketSubscription())
+			{
+				$enabled =
+					self::isPaidTariff()
+					&& self::isMarketSubscriptionEnabled()
+				;
+			}
+			elseif (Loader::includeModule('bitrix24'))
 			{
 				$enabled = Feature::isFeatureEnabled(self::CALL_COPILOT_AUTOSTART_FEATURE_NAME);
-				if ($enabled && self::checkMarketSubscription())
-				{
-					$enabled = self::isMarketSubscriptionEnabled(); // market
-				}
 			}
 		}
 
@@ -290,25 +309,19 @@ class CallAISettings
 	 */
 	public static function getRecordMinUsers(): int
 	{
-		if (ModuleManager::isModuleInstalled('bitrix24'))
+		$portalType = ModuleManager::isModuleInstalled('bitrix24') ? 'B24' : 'BOX';
+		if (self::checkMarketSubscription() && self::isMarketSubscriptionEnabled())
 		{
-			if (self::checkMarketSubscription())
+			$region = Application::getInstance()->getLicense()->getRegion() ?? '';
+			$defaultValue = match ($region)
 			{
-				$region = Application::getInstance()->getLicense()->getRegion() ?? '';
-				$defaultValue = match ($region)
-				{
-					'ru' => self::CALL_RECORD_MIN_USERS['B24']['ru'],
-					default => self::CALL_RECORD_MIN_USERS['B24']['def'],
-				};
-			}
-			else
-			{
-				$defaultValue = self::CALL_RECORD_MIN_USERS['B24']['def'];
-			}
+				'ru' => self::CALL_RECORD_MIN_USERS[$portalType]['ru'],
+				default => self::CALL_RECORD_MIN_USERS[$portalType]['def'],
+			};
 		}
 		else
 		{
-			$defaultValue = self::CALL_RECORD_MIN_USERS['BOX'];
+			$defaultValue = self::CALL_RECORD_MIN_USERS[$portalType]['def'];
 		}
 
 		return (int)Option::get('call', 'call_record_min_users', $defaultValue);
@@ -491,12 +504,10 @@ class CallAISettings
 		{
 			if (self::isFreeTariff())
 			{
-				//$error = new CallAIError(CallAIError::AI_MARKET_SUBSCRIPTION, 'AI service is unavailable on current subscription plan');
 				$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'AI service is unavailable on current subscription plan');
 			}
-			elseif (self::isPaidTariff() && !self::isMarketSubscriptionEnabled() && !CallAIBaasService::checkQueryLimit())
+			elseif (self::isPaidTariff() && !self::baasAvailable())
 			{
-				//$error = new CallAIError(CallAIError::AI_MARKET_SUBSCRIPTION, 'AI service is unavailable on current subscription plan');
 				$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'AI service is unavailable on current subscription plan');
 			}
 		}
@@ -523,21 +534,15 @@ class CallAISettings
 		{
 			return true;
 		}
+		if (!Loader::includeModule('baas'))
+		{
+			return true;
+		}
 		static $enabled;
 		if ($enabled === null)
 		{
 			$enabled = CallAIBaasService::checkQueryLimit();
 		}
 		return $enabled;
-	}
-
-	/**
-	 * todo Remove  method check in future
-	 * @deprecated
-	 * @return bool
-	 */
-	public static function isBaasServiceHasPackage(): bool
-	{
-		return self::baasAvailable();
 	}
 }

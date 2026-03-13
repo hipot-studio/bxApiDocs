@@ -9,8 +9,10 @@ use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\UserAgent\Platform;
 use Bitrix\Im;
 use Bitrix\Im\Bot\Keyboard;
 use Bitrix\Im\V2\Message\CounterService;
@@ -75,7 +77,9 @@ class Network extends Base implements NetworkBot
 		USER_LEVEL_INTEGRATOR = 'INTEGRATOR',
 		USER_LEVEL_BUSINESS = 'BUSINESS',
 		USER_LEVEL_REGULAR = 'USER';
-
+	 public const
+		 DEVICE_TYPE_WEB = 'web', // browser + desktop
+		 DEVICE_TYPE_MOBILE = 'mobile';
 	protected const CACHE_TIME_IMBOT_MULTIDIALOG = 86400;
 	protected const CACHE_DIR_IMBOT_MULTIDIALOG = '/imbot/multidialog/';
 	protected const CACHE_KEY_IMBOT_MULTIDIALOG_CHATS = 'multidialog_chats_';
@@ -1312,6 +1316,7 @@ class Network extends Base implements NetworkBot
 			'USER_LEVEL' => $userLevel,
 			'PORTAL_TYPE' => $portalType,
 			'BOT_VERSION' => $botVersion,
+			'DEVICE_TYPE' => self::getDeviceType(),
 		]);
 
 		$messageId = is_array($fields['MESSAGE']) && isset($fields['MESSAGE']['ID'])
@@ -4936,6 +4941,34 @@ class Network extends Base implements NetworkBot
 	public static function isFdcCode($text)
 	{
 		return self::checkCodeBlacklist($text);
+	}
+
+	/**
+	 * Get device type from user agent
+	 *
+	 * @return string
+	 */
+	protected static function getDeviceType(): string
+	{
+		$context = Context::getCurrent();
+		if (!$context)
+		{
+			return '';
+		}
+
+		$userAgent = $context->getServer()->get('HTTP_USER_AGENT');
+		if (empty($userAgent))
+		{
+			return '';
+		}
+
+		$platform = Platform::fromUserAgent($userAgent);
+		if ($platform->isMobile())
+		{
+			return self::DEVICE_TYPE_MOBILE;
+		}
+
+		return self::DEVICE_TYPE_WEB;
 	}
 
 	//endregion

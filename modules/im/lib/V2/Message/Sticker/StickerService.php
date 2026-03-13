@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Message\Sticker;
 
+use Bitrix\Im\V2\Integration\UI\Sticker\PendingFileCollection;
 use Bitrix\Im\V2\Message\Sticker\Recent\RecentCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Engine\Response\Converter;
@@ -46,9 +47,9 @@ class StickerService
 		return PackFactory::getInstance()->getByType($packType)->getStickerById($stickerId, $packId);
 	}
 
-	public function addPack(array $fileUuidMap, PackType $packType, ?string $packName): Result
+	public function addPack(PendingFileCollection $pendingFileCollection, PackType $packType, ?string $packName): Result
 	{
-		return PackFactory::getInstance()->getByType($packType)->addPack($fileUuidMap, $packName);
+		return PackFactory::getInstance()->getByType($packType)->addPack($pendingFileCollection, $packName);
 	}
 
 	public function linkPack(int $packId, PackType $packType): Result
@@ -56,9 +57,9 @@ class StickerService
 		return PackFactory::getInstance()->getByType($packType)->linkPack($packId);
 	}
 
-	public function addStickers(array $fileUuidMap, int $packId, PackType $packType): Result
+	public function addStickers(PendingFileCollection $pendingFileCollection, int $packId, PackType $packType): Result
 	{
-		return PackFactory::getInstance()->getByType($packType)->addStickers($fileUuidMap, $packId);
+		return PackFactory::getInstance()->getByType($packType)->addStickers($pendingFileCollection, $packId);
 	}
 
 	public function deletePack(int $packId, PackType $packType): Result

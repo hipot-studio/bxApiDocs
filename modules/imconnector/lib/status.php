@@ -127,6 +127,11 @@ class Status implements \JsonSerializable
 	{
 		$connector = Connector::getConnectorRealId($connector);
 
+		if (isset(self::$instance[$connector]))
+		{
+			return self::$instance[$connector];
+		}
+
 		$raw = StatusConnectorsTable::getList([
 			'filter' => [
 				'=CONNECTOR' => $connector
@@ -135,22 +140,18 @@ class Status implements \JsonSerializable
 				'ID' => 'ASC'
 			]
 		]);
+
+		self::$instance[$connector] = [];
 		while ($row = $raw->fetch())
 		{
-			if (empty(self::$instance[$connector][$row['LINE']]) )
+			$line = (int)$row['LINE'];
+			if (!isset(self::$instance[$connector][$line]))
 			{
-				self::$instance[$connector][$row['LINE']] = new self($connector, (int)$row['LINE'], $row);
+				self::$instance[$connector][$line] = new self($connector, $line, $row);
 			}
 		}
 
-		if (empty(self::$instance[$connector]))
-		{
-			return [];
-		}
-		else
-		{
-			return self::$instance[$connector];
-		}
+		return self::$instance[$connector];
 	}
 
 	/**
@@ -210,6 +211,66 @@ class Status implements \JsonSerializable
 		{
 			return self::$instance;
 		}
+	}
+
+	/**
+	 * Returns a complete array of instances for all active connectors
+	 * and all configured lines, creating missing instances as needed.
+	 *
+	 * @return array [connectorId => [lineId => self]]
+	 */
+	public static function getInstanceAllFull(): array
+	{
+		self::getInstanceAll();
+
+		$activeConnectors = array_keys(Connector::getListConnectorReal(40));
+
+		$linesInCache = [];
+		foreach (self::$instance as $lines)
+		{
+			if (is_array($lines))
+			{
+				$linesInCache = array_merge($linesInCache, array_keys($lines));
+			}
+		}
+		$linesInCache = array_unique(array_map('intval', $linesInCache));
+		$linesInCacheSet = array_flip($linesInCache);
+
+		$lineList = Config::getAllLinesSettings([]);
+		foreach ($lineList as $row)
+		{
+			$lineId = (int)$row['ID'];
+
+			if (!isset($linesInCacheSet[$lineId]))
+			{
+				foreach ($activeConnectors as $connectorId)
+				{
+					if (
+						!isset(self::$instance[$connectorId][$lineId])
+						|| !(self::$instance[$connectorId][$lineId] instanceof self)
+					)
+					{
+						self::$instance[$connectorId][$lineId] = new self($connectorId, $lineId, null);
+					}
+				}
+			}
+		}
+
+		foreach ($linesInCache as $lineId)
+		{
+			foreach ($activeConnectors as $connectorId)
+			{
+				if (
+					!isset(self::$instance[$connectorId][$lineId])
+					|| !(self::$instance[$connectorId][$lineId] instanceof self)
+				)
+				{
+					self::$instance[$connectorId][$lineId] = new self($connectorId, $lineId, null);
+				}
+			}
+		}
+
+		return self::$instance;
 	}
 
 	/**

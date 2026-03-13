@@ -66,6 +66,8 @@ class Limit
 
 	protected function getLimitDays(): ?int
 	{
+		return null;
+
 		if (!Loader::includeModule('bitrix24'))
 		{
 			return null;

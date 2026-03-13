@@ -10,7 +10,7 @@ final class DashboardAccessItem implements AccessibleItem
 {
 	private int $id;
 	private ?string $type = null;
-	private ?int $ownerId = null;
+	private string $status;
 
 	/**
 	 * @param int $id
@@ -30,9 +30,9 @@ final class DashboardAccessItem implements AccessibleItem
 		return $this->type;
 	}
 
-	public function getOwnerId(): ?int
+	public function getStatus(): string
 	{
-		return $this->ownerId;
+		return $this->status;
 	}
 
 
@@ -59,17 +59,17 @@ final class DashboardAccessItem implements AccessibleItem
 	/**
 	 * Creates Access item from dashboard fields to use in Access check.
 	 *
-	 * @param array{ID: int, TYPE: string, OWNER_ID: string} $fields Fields: ID, TYPE, OWNER_ID.
+	 * @param array{ID: int, TYPE: string, STATUS: string} $fields Fields: ID, TYPE, STATUS.
 	 *
 	 * @return self
 	 */
 	public static function createFromArray(array $fields): self
 	{
 		$accessItem = new self(
-			(int)($fields['ID'] ?? 0)
+			(int)($fields['ID'] ?? 0),
 		);
 		$accessItem->type = $fields['TYPE'] ?? null;
-		$accessItem->ownerId = $fields['OWNER_ID'] ?? null;
+		$accessItem->status = $fields['STATUS'] ?? SupersetDashboardTable::DASHBOARD_STATUS_READY;
 
 		return $accessItem;
 	}
@@ -87,7 +87,7 @@ final class DashboardAccessItem implements AccessibleItem
 			$dashboard->getId()
 		);
 		$accessItem->type = $dashboard->getType();
-		$accessItem->ownerId = $dashboard->getField('OWNER_ID');
+		$accessItem->status = $dashboard->getStatus();
 
 		return $accessItem;
 	}

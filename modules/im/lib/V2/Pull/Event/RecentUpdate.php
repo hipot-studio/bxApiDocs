@@ -3,6 +3,8 @@
 namespace Bitrix\Im\V2\Pull\Event;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\PrivateChat;
+use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Message\MessagePopupItem;
 use Bitrix\Im\V2\Pull\Dto\Diff;
@@ -36,7 +38,8 @@ class RecentUpdate extends BaseChatEvent
 	protected function getBasePullParamsInternal(): array
 	{
 		$messages = new MessagePopupItem([$this->chat->getLastMessageId()], true);
-		$restAdapter = new RestAdapter($messages);
+		$users = $this->getUsersForRest();
+		$restAdapter = new RestAdapter($messages, $users);
 		$pull = $restAdapter->toRestFormat([
 			'WITHOUT_OWN_REACTIONS' => true,
 			'MESSAGE_ONLY_COMMON_FIELDS' => true,
@@ -48,6 +51,16 @@ class RecentUpdate extends BaseChatEvent
 		$pull['recentConfig'] = $this->chat->getRecentConfig()->toPullFormat();
 
 		return $pull;
+	}
+
+	protected function getUsersForRest(): UserCollection
+	{
+		if ($this->chat instanceof PrivateChat)
+		{
+			return new UserCollection([$this->chat->getCompanionId()]);
+		}
+
+		return new UserCollection();
 	}
 
 	protected function getDiffByUser(int $userId): Diff

@@ -14,7 +14,6 @@ class BillingService
 	private const LOCK_LIMIT = 15;
 
 	protected static ?self $instance = null;
-	private mixed $backgroundJob = null;
 
 	protected function __construct(
 		protected Baas\Config\Client $clientConfigs,
@@ -130,16 +129,14 @@ class BillingService
 	}
 
 	public function getPurchasedPackageReport(
-		string $packageCode,
-		string $purchaseCode,
+		string $purchasedPackageCode,
 		string $serviceCode,
 	): Baas\UseCase\External\Response\GetPurchaseReportResult
 	{
-		return $this->fulfill(function() use ($packageCode, $purchaseCode, $serviceCode) {
+		return $this->fulfill(function() use ($purchasedPackageCode, $serviceCode) {
 			return $this->useCaseFactory->createGetPurchasedPackageReport(
-				(string) $packageCode,
-				(string) $purchaseCode,
-				(string) $serviceCode,
+				$purchasedPackageCode,
+				$serviceCode,
 			)();
 		});
 	}

@@ -34,6 +34,12 @@ class Image extends BaseConnector
 		$payload = new Payload\StyledPicture($prompt->getCode());
 		$payload->setMarkers($prompt->getMarkers());
 
+		$cost = $prompt->getCost();
+		if ($cost !== null)
+		{
+			$payload->setCost($cost);
+		}
+
 		$this->engine->setPayload($payload);
 		$this->engine->setHistoryState(true);
 

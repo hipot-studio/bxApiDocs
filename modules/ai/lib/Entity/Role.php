@@ -6,12 +6,15 @@ namespace Bitrix\AI\Entity;
 
 use Bitrix\AI\Container;
 use Bitrix\AI\Enum\RoleAvatarSize;
+use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Model\EO_Role;
 use Bitrix\AI\ShareRole\Service\RoleService;
 
 class Role extends EO_Role
 {
 	use TranslateTrait;
+	private const UNIVERSAL_ROLE_CODE = 'copilot_assistant';
+	private const UNIVERSAL_ROLE_CIS_NAME = "BitrixGPT";
 
 	/**
 	 * Return role name
@@ -20,6 +23,11 @@ class Role extends EO_Role
 	 */
 	public function getName(): string
 	{
+		if (($this->getCode() === self::UNIVERSAL_ROLE_CODE) && Bitrix24::isCisZone())
+		{
+			return self::UNIVERSAL_ROLE_CIS_NAME;
+		}
+
 		return $this->get('ROLE_TRANSLATE_NAME')?->getText() ?? $this->getDefaultName();
 	}
 

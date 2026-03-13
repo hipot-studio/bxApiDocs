@@ -6,6 +6,9 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Call\JwtCall;
 use Bitrix\Call\Signaling;
 
+/**
+ * @internal
+ */
 class Settings extends Controller
 {
 	/**

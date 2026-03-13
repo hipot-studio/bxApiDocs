@@ -9,10 +9,12 @@ use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 
 /**
  * Downloads track file completely in one request (no chunking)
+ *
+ * @internal
  */
 class FullDownloader extends AbstractDownloader
 {
@@ -38,20 +40,35 @@ class FullDownloader extends AbstractDownloader
 
 		if (!$isDownloadSuccess || $httpClient->getStatus() !== 200)
 		{
-			$errors = [];
-			foreach ($httpClient->getError() as $code => $message)
+			$httpErrors = $httpClient->getError();
+			$isNetworkError = isset($httpErrors['NETWORK']);
+
+			$errors = array_values($httpErrors);
+			$status = $httpClient->getStatus();
+			if ($status != 200)
 			{
-				$errors[] = $code . ': ' . $message;
+				$errors[] = "Expected HTTP 200, got: {$status}";
 			}
-			$errorMessage = !empty($errors) ? implode('; ', $errors) : 'HTTP ' . $httpClient->getStatus();
+			$errors[] = 'url: ' . (parse_url($track->getDownloadUrl(), PHP_URL_HOST) ?: $track->getDownloadUrl());
+
+			$errorMessage = implode('; ', $errors);
 
 			$log && $logger->error("FullDownloader::download: Failed. Error: {$errorMessage}. TrackId: {$track->getId()}");
+
+			if ($isNetworkError)
+			{
+				$systemException = new \Bitrix\Main\SystemException('Network connection error: ' . $errorMessage);
+				\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
+			}
 
 			// Send telemetry about download error
 			$errorCode = $httpClient->getStatus() ?: 'download_error';
 			$this->sendTelemetry($track, 'error', (string)$errorCode, $this->getEventName($track, 'download_failed'));
 
-			return $result->addError(new TrackError(TrackError::DOWNLOAD_ERROR, "Download failed: {$errorMessage}"));
+			return $result->addError(new TrackError(
+				$isNetworkError ? TrackError::NETWORK_ERROR : TrackError::DOWNLOAD_ERROR,
+				"Download failed: {$errorMessage}"
+			));
 		}
 
 		$log && $logger->info("FullDownloader::download: Completed. TempPath: {$tempPath}. TrackId: {$track->getId()}");

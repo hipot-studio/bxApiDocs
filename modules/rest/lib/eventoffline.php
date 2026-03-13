@@ -275,11 +275,11 @@ class EventOfflineTable extends Main\Entity\DataManager
 				$listIds[$key] = $helper->forSql($id);
 			}
 
-			$queryWhere = array(
+			$queryWhere = [
+				"MESSAGE_ID IN ('".implode("', '", $listIds)."')",
 				"APP_ID='".intval($appId)."'",
 				"CONNECTOR_ID='".$helper->forSql($connectorId)."'",
-				"MESSAGE_ID IN ('".implode("', '", $listIds)."')",
-			);
+			];
 
 			$sqlTable = static::getTableName();
 			$sqlWhere = implode(" AND ", $queryWhere);
@@ -287,7 +287,16 @@ class EventOfflineTable extends Main\Entity\DataManager
 
 			$sql = array();
 			$sql[] = "DELETE FROM {$sqlTable} WHERE {$sqlWhere} AND ERROR=0 AND PROCESS_ID <> '{$sqlProcessId}'";
-			$sql[] = "UPDATE {$sqlTable} SET ERROR=1, PROCESS_ID=IF(PROCESS_ID='{$sqlProcessId}', '', 'fake_process_id') WHERE {$sqlWhere} AND ERROR=0 ORDER BY PROCESS_ID ASC";
+			$orderBy = $connection->getType() === 'mysql' ? ' ORDER BY PROCESS_ID ASC' : '';
+			$sql[] = "UPDATE {$sqlTable} 
+						SET 
+							ERROR = 1, 
+							PROCESS_ID = CASE 
+								WHEN PROCESS_ID = '{$sqlProcessId}' THEN '' 
+								ELSE 'fake_process_id' 
+							END
+						WHERE {$sqlWhere} AND ERROR = 0 
+			" . $orderBy;
 			$sql[] = "DELETE FROM {$sqlTable} WHERE {$sqlWhere} AND PROCESS_ID='fake_process_id'";
 
 			foreach($sql as $query)

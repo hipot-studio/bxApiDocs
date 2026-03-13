@@ -170,9 +170,9 @@ abstract class BaseTypeStarter
 		return false;
 	}
 
-	protected function validateParameters(int $templateId, array $templateParameters): ?array
+	protected function validateParameters(int $templateId, array $templateParameters, ?array $complexDocumentType = null): ?array
 	{
-		if (!$this->parameters || !$this->document?->complexType)
+		if (!$this->parameters)
 		{
 			// todo: default values or empty?
 			return [];
@@ -183,7 +183,13 @@ abstract class BaseTypeStarter
 			return $this->parameters->getValues($templateId, $templateParameters);
 		}
 
-		$result = $this->parameters->getValidatedValues($templateId, $templateParameters, $this->document->complexType);
+		$complexDocumentType ??= $this->document?->complexType;
+		if (!$complexDocumentType)
+		{
+			return [];
+		}
+
+		$result = $this->parameters->getValidatedValues($templateId, $templateParameters, $complexDocumentType);
 		if ($result->isSuccess())
 		{
 			return $result->getData()['values'];

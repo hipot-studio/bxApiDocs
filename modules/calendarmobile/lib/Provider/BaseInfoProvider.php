@@ -80,8 +80,10 @@ final class BaseInfoProvider
 			$sections = [...$sections, ...$collabSections];
 		}
 
+		$sectionsToAccess = $this->isCollabContext() ? $collabSections : $sections;
+
 		return $result->setData([
-			'readOnly' => $this->isReadOnly($permission, $this->isCollabContext() ? $collabSections : $sections),
+			'readOnly' => $this->isReadOnly($permission, $sectionsToAccess, $this->isCollabContext()),
 			'sectionInfo' => $sections,
 			'additionalSectionInfo' => $this->getAdditionalSectionsInfo($sections),
 			'locationInfo' => $this->getLocationInfo(),
@@ -554,10 +556,11 @@ final class BaseInfoProvider
 	/**
 	 * @param array $permission
 	 * @param array $sections
+	 * @param bool $collabContext
 	 *
 	 * @return bool
 	 */
-	private function isReadOnly(array $permission, array $sections): bool
+	private function isReadOnly(array $permission, array $sections, bool $collabContext = false): bool
 	{
 		$readOnly = !$permission['edit'] && !$permission['section_edit'];
 
@@ -573,11 +576,12 @@ final class BaseInfoProvider
 
 		foreach ($sections as $section)
 		{
-			if (
-				$groupOrUser
+			$suitableForCheck = $groupOrUser
 				&& $section['CAL_TYPE'] === $this->calType
 				&& (int)$section['OWNER_ID'] === $this->ownerId
-			)
+			;
+
+			if ($suitableForCheck || $collabContext)
 			{
 				if ($noEditAccessedCalendars && $section['PERM']['edit'])
 				{

@@ -16,14 +16,9 @@ class StarterService
 	public function __construct()
 	{}
 
-	public function getStarterByScenario(Scenario $scenario): ?Starter
+	public function getStarterByScenario(Scenario $scenario): Starter
 	{
-		if (Starter::isEnabled())
-		{
-			return Starter::getByScenario($scenario);
-		}
-
-		return null;
+		return Starter::getByScenario($scenario);
 	}
 
 	/**
@@ -36,7 +31,7 @@ class StarterService
 	 * @param array|string $parameters
 	 * @param MetaDataDto|null $metaData
 	 *
-	 * @return Starter|null
+	 * @return Starter
 	 */
 	public function getStarterForManualDocumentScenario(
 		array $templateIds,
@@ -45,20 +40,16 @@ class StarterService
 		int $userId = 0,
 		array | string $parameters = [],
 		?MetaDataDto $metaData = null,
-	): ?Starter
+	): Starter
 	{
-		$starter = $this->getStarterByScenario(Scenario::onManual);
-		if (!$starter)
-		{
-			return null;
-		}
-
-		$starter
-			->setDocument($document)
-			->setTemplateIds($templateIds)
-			->setContext($context)
-			->setUser($userId)
-			->setParameters($parameters);
+		$starter =
+			$this->getStarterByScenario(Scenario::onManual)
+				->setDocument($document)
+				->setTemplateIds($templateIds)
+				->setContext($context)
+				->setUser($userId)
+				->setParameters($parameters)
+		;
 
 		if ($metaData)
 		{
@@ -78,7 +69,7 @@ class StarterService
 	 * @param array|string $parameters
 	 * @param MetaDataDto|null $metaData
 	 *
-	 * @return Starter|null
+	 * @return Starter
 	 */
 	public function getStarterForManualEventScenario(
 		array $templateIds,
@@ -87,15 +78,15 @@ class StarterService
 		int $userId = 0,
 		array | string $parameters = [],
 		?MetaDataDto $metaData = null,
-	): ?Starter
+	): Starter
 	{
-		$starter = $this->getStarterByScenario(Scenario::onEvent);
-		if (!$starter)
-		{
-			return null;
-		}
-
-		$starter->setContext($context);
+		$starter =
+			$this->getStarterByScenario(Scenario::onEvent)
+				->setContext($context)
+				->setTemplateIds($templateIds)
+				->setUser($userId)
+				->setParameters($parameters)
+		;
 		foreach ($events as $event)
 		{
 			if (!($event instanceof EventDto))
@@ -112,11 +103,6 @@ class StarterService
 			);
 		}
 
-		$starter
-			->setTemplateIds($templateIds)
-			->setUser($userId)
-			->setParameters($parameters);
-
 		if ($metaData)
 		{
 			$starter->setMetaData($metaData);
@@ -129,20 +115,18 @@ class StarterService
 	 * @param ContextDto $context
 	 * @param EventDto[] $events
 	 *
-	 * @return Starter|null
+	 * @return Starter
 	 */
 	public function getStarterByEventScenario(
 		ContextDto $context,
 		array $events,
-	): ?Starter
+	): Starter
 	{
-		$starter = $this->getStarterByScenario(Scenario::onEvent);
-		if (!$starter)
-		{
-			return null;
-		}
+		$starter =
+			$this->getStarterByScenario(Scenario::onEvent)
+				->setContext($context)
+		;
 
-		$starter->setContext($context);
 		foreach ($events as $event)
 		{
 			$starter

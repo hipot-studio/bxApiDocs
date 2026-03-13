@@ -5,13 +5,12 @@ namespace Bitrix\Call;
 use Bitrix\Main\Result;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Service\MicroService\BaseSender;
-use Bitrix\Im\Call\Call;
 use Bitrix\Call\Call\PlainCall;
 use Bitrix\Call\Call\ConferenceCall;
 
-\Bitrix\Main\Loader::includeModule('im');
-
-
+/**
+ * @internal
+ */
 class ControllerClient extends BaseSender
 {
 	private const SERVICE_MAP = [
@@ -30,7 +29,7 @@ class ControllerClient extends BaseSender
 	 */
 	public function getEndpoint(string $region): string
 	{
-		$endpoint = Option::get('im', 'call_server_url');
+		$endpoint = Option::get('call', 'call_server_url');
 
 		if (empty($endpoint))
 		{
@@ -119,7 +118,7 @@ class ControllerClient extends BaseSender
 		{
 			$data = array_merge($data, [
 				'secretKey' => $call->getSecretKey(),
-				'maxParticipants' => \Bitrix\Im\Call\Call::getMaxCallServerParticipants(),
+				'maxParticipants' => Call::getMaxCallServerParticipants(),
 			]);
 			$this->httpClientParameters = [
 				'waitResponse' => true,
@@ -257,9 +256,11 @@ class ControllerClient extends BaseSender
 	 */
 	public function dropTrack(Track $track): Result
 	{
+		$call = $track->fillCall();
 		$data = [
-			'uuid' => $track->fillCall()->getUuid(),
+			'uuid' => $call->getUuid(),
 			'trackId' => $track->getExternalTrackId(),
+			'chatId' => $call->getChatId(),
 		];
 
 		$this->httpClientParameters = [

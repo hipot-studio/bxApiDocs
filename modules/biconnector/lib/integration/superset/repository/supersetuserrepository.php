@@ -2,7 +2,6 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Repository;
 
-use Bitrix\Main\Entity\Query;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -14,8 +13,7 @@ final class SupersetUserRepository
 {
 	public function getById(int $id): ?User
 	{
-		$query = new Query(UserTable::getEntity());
-		$query
+		$query = UserTable::query()
 			->setSelect([
 				'ID',
 				'LOGIN',
@@ -27,10 +25,8 @@ final class SupersetUserRepository
 				'SUPERSET_PERMISSION_HASH' => 'SUPERSET_USER.PERMISSION_HASH',
 				'SUPERSET_UPDATED' => 'SUPERSET_USER.UPDATED',
 			])
-			->setFilter([
-				'=ID' => $id,
-				'=IS_REAL_USER' => 'Y',
-			])
+			->where('ID', '=', $id)
+			->where('REAL_USER', 'expr', true)
 			->setLimit(1)
 			->registerRuntimeField(
 				new Reference(
@@ -47,11 +43,13 @@ final class SupersetUserRepository
 		$user = $result->fetch();
 		if ($user)
 		{
-			$email = $user['EMAIL'] ?: ($user['LOGIN'] . '@bitrix.bi');
+			$id = (int)$user['ID'];
+			$username = self::getUsername($id);
+			$email = self::getEmail($username);
 
 			return new User(
-				id: (int)$user['ID'],
-				userName: $email,
+				id: $id,
+				userName: $username,
 				email: $email,
 				firstName: $user['NAME'] ?: $user['LOGIN'],
 				lastName: $user['LAST_NAME'] ?: $user['LOGIN'],
@@ -95,5 +93,15 @@ final class SupersetUserRepository
 		}
 
 		return null;
+	}
+
+	private static function getUsername(int $id): string
+	{
+		return substr(hash('sha1', (string)$id), 0, 16);
+	}
+
+	private static function getEmail(string $username): string
+	{
+		return $username . '@bitrix.info';
 	}
 }

@@ -24,13 +24,14 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 				'text' => $dashboard->getTitle(),
 				'title' => $dashboard->getTitle(),
 				'on_click' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
+				'is_locked' => !$this->isAvailableByTariff(),
 			];
 		}
 
 		if (!empty($menuItems))
 		{
 			$menuItems[] = [
-				"is_delimiter" => true,
+				'is_delimiter' => true,
 				'items_id' => 'BIC_DASBOARDS_DELIMITER',
 			];
 
@@ -115,5 +116,10 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 		{
 			$aModuleMenu[] = $menuItem;
 		}
+	}
+
+	protected function getOpenFormCode(): string
+	{
+		return 'shop';
 	}
 }

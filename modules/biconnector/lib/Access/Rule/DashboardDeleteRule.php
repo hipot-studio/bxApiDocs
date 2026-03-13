@@ -8,6 +8,24 @@ use Bitrix\BIConnector\Superset\SystemDashboardManager;
 
 final class DashboardDeleteRule extends DashboardRule
 {
+	protected function loadGroupDashboards(array $groupIds, array $additionalFilter = []): array
+	{
+		$types = [SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM];
+		if ($this->user->canDeleteRestApp())
+		{
+			$types[] = SupersetDashboardTable::DASHBOARD_TYPE_MARKET;
+
+			if (SystemDashboardManager::canDeleteSystemDashboard())
+			{
+				$types[] = SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM;
+			}
+		}
+
+		$additionalFilter = array_merge($additionalFilter, ['TYPE' => $types]);
+
+		return parent::loadGroupDashboards($groupIds, $additionalFilter);
+	}
+
 	/**
 	 * Check access permission.
 	 *
@@ -32,11 +50,9 @@ final class DashboardDeleteRule extends DashboardRule
 			{
 				return false;
 			}
-
-			return parent::check($params);
 		}
 
-		return false;
+		return parent::check($params);
 	}
 
 	protected function isAlwaysAvailableForAdmin(): bool

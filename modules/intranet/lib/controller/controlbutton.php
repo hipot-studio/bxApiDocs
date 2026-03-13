@@ -15,6 +15,7 @@ use Bitrix\Main\Application;
 use Bitrix\Intranet;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Integration\Im\Chat\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
 
@@ -358,7 +359,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return null;
 		}
 
-		if (!Loader::includeModule('im'))
+		if (!Loader::includeModule('im') || !Loader::includeModule('call'))
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_IM_ERROR'), 'create_chat_error'));
 			return null;
@@ -390,7 +391,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return null;
 		}
 
-		if (!Loader::includeModule('im'))
+		if (!Loader::includeModule('im') || !Loader::includeModule('call'))
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_IM_ERROR'), 'create_chat_error'));
 			return null;
@@ -421,7 +422,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			$userCount = Workgroup::getNumberOfMembers($entityId);
 		}
 
-		if ($userCount > \Bitrix\Im\Call\Call::getMaxParticipants())
+		if ($userCount > \Bitrix\Call\Call::getMaxParticipants())
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_VIDEOCALL_LIMIT')));
 			return null;
@@ -488,11 +489,27 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 
 		if (!empty($data))
 		{
-			$result['link'] = str_replace(
+			$link = str_replace(
 				[ '#USER_ID#', '#ID#' ],
 				$USER->getId(),
 				Option::get('intranet', 'search_user_url', SITE_DIR . 'company/personal/user/#USER_ID#/')
 			) . 'tasks/task/edit/0/';
+
+			$section = match ($entityType)
+			{
+				'calendar_event' => 'calendar',
+				'workgroup' => 'project',
+				default => 'feed',
+			};
+
+			$result['link'] = (new Uri($link))
+				->addParams([
+					'ta_sec' => $section,
+					'ta_el' => 'context_menu',
+				])
+				->getUri()
+			;
+
 			$result['TITLE'] = $data['TITLE'];
 			$result['DESCRIPTION'] = $data['DESCRIPTION'];
 			$result['URL'] = $data['URL'];

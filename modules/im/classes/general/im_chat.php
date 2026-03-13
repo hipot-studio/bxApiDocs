@@ -1544,10 +1544,14 @@ class CIMChat
 			return false;
 		}
 
+		if (!$chat->checkAccess($this->user_id)->isSuccess())
+		{
+			return false;
+		}
+
 		$readService = new IM\V2\Message\ReadService($this->user_id);
 
 		$startId = $readService->getLastIdByChatId($chatId);
-		$counter = 0;
 		$viewedMessages = [];
 
 		if (isset($lastId))
@@ -1563,14 +1567,13 @@ class CIMChat
 			$counter = $readService->readAllInChat($chatId)->getResult()['COUNTER'];
 		}
 
-		$relation = CIMMessage::SetLastId($chatId, $this->user_id, 0);
-
-		if (!$relation)
+		$relation = $chat->getRelationByUserId($this->user_id);
+		if ($relation === null)
 		{
 			return false;
 		}
 
-		$endId = (int)($relation['LAST_ID'] ?? 0);
+		$endId = $readService->getLastIdByChatId($chatId);
 
 		/*\Bitrix\Main\Application::getConnection()->query(
 			"UPDATE b_im_recent SET DATE_UPDATE = NOW() WHERE USER_ID = ".$this->user_id." AND ITEM_CID = ".intval($chatId)
@@ -1596,9 +1599,9 @@ class CIMChat
 						'type' => $chat->getExtendedType(),
 						'lastId' => $endId,
 						'counter' => $counter,
-						'muted' => $relation['NOTIFY_BLOCK'] === 'Y',
-						'unread' => Im\Recent::isUnread($this->user_id, $relation['MESSAGE_TYPE'], 'chat'.$chatId),
-						'lines' => $relation['MESSAGE_TYPE'] === IM_MESSAGE_OPEN_LINE,
+						'muted' => $relation->getNotifyBlock() ?? false,
+						'unread' => Im\Recent::isUnread($this->user_id, $relation->getMessageType(), 'chat'.$chatId),
+						'lines' => $relation->getMessageType() === IM_MESSAGE_OPEN_LINE,
 						'viewedMessages' => $viewedMessages,
 						'counterType' => $chat->getCounterType(),
 						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
@@ -1622,7 +1625,7 @@ class CIMChat
 					'lastId' => $endId,
 					'date' => date('c', time()),
 					'viewedMessages' => $viewedMessages,
-					'chatMessageStatus' => $relation['CHAT_MESSAGE_STATUS'],
+					'chatMessageStatus' => $readService->getChatMessageStatus($chatId),
 				),
 				'extra' => \Bitrix\Im\Common::getPullExtra()
 			);
@@ -1654,7 +1657,7 @@ class CIMChat
 				'CHAT_ENTITY_ID' => $chat->getEntityId(),
 				'START_ID' => $startId,
 				'END_ID' => $endId,
-				'COUNT' => $relation['COUNTER'],
+				'COUNT' => ((int)$counter > 99) ? 100 : $counter,
 				'USER_ID' => $this->user_id,
 				'BY_EVENT' => $byEvent
 			)));
@@ -1664,7 +1667,7 @@ class CIMChat
 			'DIALOG_ID' => 'chat'.$chatId,
 			'CHAT_ID' => (int)$chatId,
 			'LAST_ID' => $endId,
-			'COUNTER' => (int)$relation['COUNTER']
+			'COUNTER' => ((int)$counter > 99) ? 100 : $counter,
 		);
 	}
 

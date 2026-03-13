@@ -2,10 +2,12 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
+use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\Grid\Row\Action\DataProvider;
 
 /**
@@ -23,6 +25,9 @@ class DashboardActionDataProvider extends DataProvider
 		return [];
 	}
 
+	/**
+	 * @return BaseAction[]
+	 */
 	public function prepareDashboardActions(): array
 	{
 		return [
@@ -39,6 +44,9 @@ class DashboardActionDataProvider extends DataProvider
 		];
 	}
 
+	/**
+	 * @return BaseAction[]
+	 */
 	public function prepareGroupActions(): array
 	{
 		return [
@@ -47,45 +55,72 @@ class DashboardActionDataProvider extends DataProvider
 		];
 	}
 
+	/**
+	 * @param array $rawFields
+	 *
+	 * @return BaseAction[]
+	 */
+	public function prepareDashboardGroupActions(array $rawFields): array
+	{
+		$actions = $this->prepareDashboardActions();
+
+		$settings = $this->getSettings();
+
+		if ($rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
+		{
+			return [
+				new OpenAction(),
+				new OpenSettingsAction(),
+				new AddToTopMenuAction(),
+				new DeleteFromTopMenuAction(),
+				new DeleteAction(),
+			];
+		}
+
+		if (SupersetInitializer::isSupersetLoading())
+		{
+			return [
+				new OpenAction(),
+				new OpenSettingsAction(),
+				new AddToTopMenuAction(),
+				new DeleteFromTopMenuAction(),
+			];
+		}
+
+		if (
+			($settings !== null && !$settings->isSupersetAvailable())
+			|| $rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_LOAD
+			|| !$rawFields['IS_ACCESS_ALLOWED']
+		)
+		{
+			return [];
+		}
+
+		if ($rawFields['EXTERNAL_ID'] && $rawFields['EDIT_URL'] === '')
+		{
+			return [
+				new DeleteAction(),
+			];
+		}
+
+		return $actions;
+	}
+
 	public function prepareControls(array $rawFields): array
 	{
 		$actions = [];
+		if (!Feature::isBuilderEnabled())
+		{
+			return $actions;
+		}
+
 		if ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
 		{
 			$actions = $this->prepareGroupActions();
 		}
 		elseif ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_DASHBOARD)
 		{
-			$actions = $this->prepareDashboardActions();
-			$settings = $this->getSettings();
-
-			if ($rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
-			{
-				$actions = [
-					new OpenAction(),
-					new OpenSettingsAction(),
-					new AddToTopMenuAction(),
-					new DeleteFromTopMenuAction(),
-					new DeleteAction(),
-				];
-			}
-
-			if (
-				($settings !== null && !$settings->isSupersetAvailable())
-				|| $rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_LOAD
-				|| !$rawFields['IS_ACCESS_ALLOWED']
-				|| SupersetInitializer::isSupersetLoading()
-			)
-			{
-				return [];
-			}
-
-			if ($rawFields['EXTERNAL_ID'] && $rawFields['EDIT_URL'] === '')
-			{
-				$config = (new DeleteAction())->getControl($rawFields);
-
-				return isset($config) ? [$config] : [];
-			}
+			$actions = $this->prepareDashboardGroupActions($rawFields);
 		}
 
 		$result = [];

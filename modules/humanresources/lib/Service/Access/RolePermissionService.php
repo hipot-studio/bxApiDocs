@@ -8,7 +8,6 @@ use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\HumanResources\Access\Role;
 use Bitrix\HumanResources\Access\Role\RoleDictionary;
 use Bitrix\HumanResources\Access\SectionDictionary;
-use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\Collection\Access\PermissionCollection;
@@ -139,8 +138,6 @@ class RolePermissionService
 				throw new SqlQueryException(self::DB_ERROR_KEY);
 			}
 		}
-
-		Container::getCacheManager()->clean(Contract\Repository\NodeRepository::NODE_ENTITY_RESTRICTION_CACHE);
 	}
 
 	/**

@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Link\File\SubtypeGroup;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 
@@ -148,8 +149,6 @@ class CIMRestService extends IRestService
 
 				'im.videoconf.share.change' => array('callback' => array(__CLASS__, 'videoconfShareChange'), 'options' => array('private' => true)),
 				'im.videoconf.password.check' => array('callback' => array(__CLASS__, 'videoconfPasswordCheck'), 'options' => array('private' => true)),
-				'im.videoconf.add' => array('callback' => array(__CLASS__, 'videoconfAdd'), 'options' => array('private' => true)),
-				'im.videoconf.update' => array('callback' => array(__CLASS__, 'videoconfUpdate'), 'options' => array('private' => true)),
 
 				'im.desktop.status.get' => array('callback' => array(__CLASS__, 'desktopStatusGet'), 'options' => array('private' => true)),
 				'im.desktop.page.open' => array('callback' => array(__CLASS__, 'desktopPageOpen'), 'options' => array('private' => true)),
@@ -1076,6 +1075,18 @@ class CIMRestService extends IRestService
 		if (isset($arParams['ACTION']))
 		{
 			$arParams['PIN'] = $arParams['ACTION'];
+		}
+
+		$chatId = \Bitrix\Im\Dialog::getChatId($arParams['DIALOG_ID']);
+		if (!$chatId)
+		{
+			throw new Bitrix\Rest\RestException("You don't have access to this chat", "ACCESS_ERROR", CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+		if (!$chat->canDo(Action::PinChat))
+		{
+			throw new Bitrix\Rest\RestException("You don’t have permission to pin this chat", "ACCESS_ERROR", CRestServer::STATUS_WRONG_REQUEST);
 		}
 
 		return \Bitrix\Im\Recent::pin($arParams['DIALOG_ID'], $arParams['PIN'] != 'N');
@@ -4591,7 +4602,7 @@ class CIMRestService extends IRestService
 		if (CModule::IncludeModule('bitrix24'))
 		{
 			$counter = \Bitrix\Im\Model\BotTable::getCount(array('=APP_ID' => $clientId));
-			$restRegisterLimit = \Bitrix\Bitrix24\Feature::getVariable('imbot_rest_register_limit')?: 5;
+			$restRegisterLimit = \Bitrix\Bitrix24\Feature::getVariable('imbot_rest_register_limit') ?: 100;
 
 			if ($counter >= $restRegisterLimit)
 			{
@@ -7135,495 +7146,66 @@ class CIMRestService extends IRestService
 		return \CIMMessenger::GetMobileDialogTemplateJS([], $config);
 	}
 
+	/** @deprecated  */
 	public static function callUserRegister($params, $n, \CRestServer $server)
 	{
-		global $APPLICATION;
-
-		if ($server->getAuthType() !== 'call')
+		if (Loader::includeModule('call'))
 		{
-			throw new \Bitrix\Rest\RestException("Access for this method allowed only by call authorization.", "WRONG_AUTH_TYPE", \CRestServer::STATUS_FORBIDDEN);
+			return \Bitrix\Call\Rest\Handler::registerCallUser($params, $n, $server);
 		}
-
-		$params = array_change_key_case($params, CASE_UPPER);
-
-		//1. check session info $_SESSION['LIVECHAT']['REGISTER'] - already registered?
-		if (
-			isset($_SESSION['CALL']['REGISTER'])
-			&& $_SESSION['CALL']['REGISTER']
-			&&
-			!(
-				isset($params['USER_HASH'])
-				&& trim($params['USER_HASH'])
-				&& preg_match("/^[a-fA-F0-9]{32}$/i", $params['USER_HASH'])
-			)
-		)
-		{
-			$params['USER_HASH'] = $_SESSION['CALL']['REGISTER']['hash'];
-		}
-
-		//2. register user
-		$userData = \Bitrix\Im\Call\User::register([
-			'NAME' => $params['NAME'] ?? '',
-			'LAST_NAME' => $params['LAST_NAME'] ?? '',
-			'AVATAR' => $params['AVATAR'] ?? '',
-			'EMAIL' => $params['EMAIL'] ?? '',
-			'PERSONAL_WWW' => $params['WWW'] ?? '',
-			'PERSONAL_GENDER' => $params['GENDER'] ?? '',
-			'WORK_POSITION' => $params['POSITION'] ?? '',
-			'USER_HASH' => $params['USER_HASH'] ?? '',
-		]);
-		if (!$userData)
-		{
-			throw new \Bitrix\Rest\RestException(
-				\Bitrix\Im\Call\User::getError()->msg,
-				\Bitrix\Im\Call\User::getError()->code,
-				\CRestServer::STATUS_WRONG_REQUEST
-			);
-		}
-
-		$aliasData = \Bitrix\Im\Alias::get($params['ALIAS']);
-		if (!$aliasData)
-		{
-			throw new \Bitrix\Rest\RestException("Wrong alias.", "WRONG_ALIAS", \CRestServer::STATUS_FORBIDDEN);
-		}
-
-		//3. authorize
-		\Bitrix\Im\Call\Auth::authorizeById($userData['ID'], true, true);
-
-		//4. add to dialog
-		$chat = new CIMChat(0);
-		$chat->AddUser(
-			chatId: $aliasData['ENTITY_ID'],
-			userId: $userData['ID'],
-			hideHistory: null,
-			skipMessage: true,
-			skipRecent: true
-		);
-		if ($exception = $APPLICATION->GetException())
-		{
-			if ($exception->GetID() !== 'NOTHING_TO_ADD')
-			{
-				throw new Bitrix\Rest\RestException(
-					"You don't have access",
-					"WRONG_REQUEST",
-					CRestServer::STATUS_WRONG_REQUEST
-				);
-			}
-		}
-
-		\Bitrix\Main\Loader::includeModule('call');
-		//5. return id and hash
-		$result = [
-			'id' => (int)$userData['ID'],
-			'hash' => $userData['HASH'],
-			'created' => $userData['CREATED'],
-			'userToken' => \Bitrix\Call\JwtCall::getUserJwt((int)$userData['ID']),
-		];
-
-		$_SESSION['CALL']['REGISTER'] = $result;
-
-		//6. send notification to chat owner
-		$chatData = CIMChat::GetChatData(['ID' => $aliasData['ENTITY_ID']]);
-		$chatTitle = $chatData['chat'][$aliasData['ENTITY_ID']]['name'];
-		$chatOwnerId = $chatData['chat'][$aliasData['ENTITY_ID']]['owner'];
-
-		$publicLink = $aliasData['LINK'];
-		CIMNotify::Add(
-			[
-				'TO_USER_ID' => $chatOwnerId,
-				'NOTIFY_MODULE' => 'im',
-				'NOTIFY_EVENT' => 'videconf_new_guest',
-				'MESSAGE' => fn (?string $languageId = null) => Loc::getMessage(
-						"IM_VIDEOCONF_NEW_GUEST",
-						['#CHAT_TITLE#' => $chatTitle],
-						$languageId
-					) . "[br]" . "<a href='{$publicLink}'>" . Loc::getMessage("IM_VIDEOCONF_JOIN_LINK", null, $languageId) . "</a>",
-			]
-		);
-
-		return $result;
+		throw new \Bitrix\Rest\RestException("Module call is unavailable", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 	}
 
+	/** @deprecated  */
 	public static function callUserUpdate($params, $n, \CRestServer $server)
 	{
-		if ($server->getAuthType() !== \Bitrix\Im\Call\Auth::AUTH_TYPE)
+		if (Loader::includeModule('call'))
 		{
-			throw new \Bitrix\Rest\RestException(
-				"Access for this method allowed only by call authorization.",
-				"WRONG_AUTH_TYPE",
-				\CRestServer::STATUS_FORBIDDEN
-			);
+			\Bitrix\Call\Rest\Handler::updateCallUser($params, $n, $server);
+			return;
 		}
-
-		$params = array_change_key_case($params, CASE_UPPER);
-		if (empty($params['NAME']))
-		{
-			throw new Bitrix\Rest\RestException("User NAME can't be empty", "USER_NAME_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		/** @var \CUser $USER */
-		global $USER;
-		if ($USER->GetParam("NAME") != $params['NAME'])
-		{
-			$userManager = new \CUser;
-			$userManager->Update($USER->GetID(), [
-				'NAME' => $params['NAME']
-			]);
-
-			$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
-
-			if (\CModule::IncludeModule("pull"))
-			{
-				\Bitrix\Pull\Event::add(array_keys($relations), [
-					'module_id' => 'im',
-					'command' => 'callUserNameUpdate',
-					'params' => [
-						'userId' => $USER->GetID(),
-						'name' => $params['NAME']
-					],
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				]);
-			}
-		}
-
-		\Bitrix\Main\Loader::includeModule('call');
-		return [
-			'id' => $USER->GetID(),
-			'hash' => mb_substr($USER->GetParam('XML_ID'), mb_strlen(\Bitrix\Im\Call\Auth::AUTH_TYPE) + 1),
-			'userToken' => \Bitrix\Call\JwtCall::getUserJwt($USER->GetID()),
-		];
+		throw new \Bitrix\Rest\RestException("Module call is unavailable", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 	}
 
+	/** @deprecated  */
 	public static function callUserForceRename($params, $n, \CRestServer $server)
 	{
-		global $USER;
-
-		$params = array_change_key_case($params, CASE_UPPER);
-		$params['CHAT_ID'] = (int)$params['CHAT_ID'];
-		$params['USER_ID'] = (int)$params['USER_ID'];
-
-		if ($params['CHAT_ID'] <= 0)
+		if (Loader::includeModule('call'))
 		{
-			throw new Bitrix\Rest\RestException("Chat ID can't be empty", "CHAT_ID_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
+			\Bitrix\Call\Rest\Handler::forceRenameCallUser($params, $n, $server);
+			return;
 		}
-		if ($params['USER_ID'] <= 0)
-		{
-			throw new Bitrix\Rest\RestException("User ID can't be empty", "USER_ID_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		//check if current user if owner of chat
-		$chat = \Bitrix\Im\Model\ChatTable::getRowById($params['CHAT_ID']);
-		if (!$chat)
-		{
-			throw new Bitrix\Rest\RestException("Chat was not found", "CHAT_NOT_FOUND", CRestServer::STATUS_WRONG_REQUEST);
-		}
-		$owner = (int)$chat['AUTHOR_ID'];
-		if ((int)$USER->GetID() !== $owner)
-		{
-			throw new Bitrix\Rest\RestException("You cannot perform this operation", "NO_ACCESS", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		//check if renamed user is call auth
-		$userToRename = \Bitrix\Im\User::getInstance($params['USER_ID']);
-		if (!$userToRename)
-		{
-			throw new Bitrix\Rest\RestException("User was not found", "USER_NOT_FOUND", CRestServer::STATUS_WRONG_REQUEST);
-		}
-		$externalAuth = $userToRename->getExternalAuthId();
-		if ($externalAuth !== 'call')
-		{
-			throw new Bitrix\Rest\RestException("You cannot rename this user", "WRONG_USER_AUTH_TYPE", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		$userManager = new \CUser;
-		$userManager->Update($params['USER_ID'], [
-			'NAME' => $params['NAME']
-		]);
-
-		$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
-
-		if (\CModule::IncludeModule("pull"))
-		{
-			\Bitrix\Pull\Event::add(array_keys($relations), [
-				'module_id' => 'im',
-				'command' => 'callUserNameUpdate',
-				'params' => [
-					'userId' => $params['USER_ID'],
-					'name' => $params['NAME']
-				],
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			]);
-		}
+		throw new \Bitrix\Rest\RestException("Module call is unavailable", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 	}
 
+	/** @deprecated  */
 	public static function callChannelPublicList($params, $n, \CRestServer $server)
 	{
-		$params = array_change_key_case($params, CASE_UPPER);
-
-		$type = \CPullChannel::TYPE_PRIVATE;
-		if ($params['APPLICATION'] == 'Y')
+		if (Loader::includeModule('call'))
 		{
-			$clientId = $server->getClientId();
-			if (!$clientId)
-			{
-				throw new \Bitrix\Rest\RestException("Get application public channel available only for application authorization.", "WRONG_AUTH_TYPE", \CRestServer::STATUS_WRONG_REQUEST);
-			}
-			$type = $clientId;
+			return \Bitrix\Call\Rest\Handler::getCallChannelPublicList($params, $n, $server);
 		}
-
-		$users = Array();
-		if (is_string($params['USERS']))
-		{
-			$params['USERS'] = \CUtil::JsObjectToPhp($params['USERS']);
-		}
-		if (is_array($params['USERS']))
-		{
-			foreach ($params['USERS'] as $userId)
-			{
-				$userId = intval($userId);
-				if ($userId > 0)
-				{
-					$users[$userId] = $userId;
-				}
-			}
-		}
-
-		if (empty($users))
-		{
-			throw new \Bitrix\Rest\RestException("A wrong format for the USERS field is passed", "INVALID_FORMAT", \CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		$chatId = (int)$params['CALL_CHAT_ID'];
-
-		if (!$chatId)
-		{
-			throw new \Bitrix\Rest\RestException("No chat id", "INVALID_FORMAT", \CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		$configParams = Array();
-		$configParams['TYPE'] = $type;
-		$configParams['USERS'] = $users;
-		$configParams['JSON'] = true;
-
-		$config = \Bitrix\Pull\Channel::getPublicIds($configParams);
-		if ($config === false)
-		{
-			throw new \Bitrix\Rest\RestException("Push & Pull server is not configured", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
-		}
-
-		return $config;
+		throw new \Bitrix\Rest\RestException("Module call is unavailable", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 	}
 
+	/** @deprecated  */
 	public static function videoconfShareChange($params, $n, \CRestServer $server)
 	{
-		global $USER;
-		$userName = $USER->GetFullName();
-		$params = array_change_key_case($params, CASE_UPPER);
-
-		if (!\Bitrix\Im\Common::isDialogId($params['DIALOG_ID']))
+		if (Loader::includeModule('call'))
 		{
-			throw new Bitrix\Rest\RestException("Dialog ID can't be empty", "DIALOG_ID_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
+			return \Bitrix\Call\Rest\Handler::changeVideoconfShare($params, $n, $server);
 		}
-
-		//check owner
-		$chatId = \Bitrix\Im\Dialog::getChatId($params['DIALOG_ID']);
-		$chatData = \Bitrix\Im\Chat::getById($chatId);
-
-		if ($USER->GetID() != $chatData['OWNER'])
-		{
-			throw new Bitrix\Rest\RestException("You don't have access to this chat", "ACCESS_ERROR", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		//get chat users and delete guests
-		$chatUsers = \Bitrix\Im\Chat::getUsers($chatId);
-		$externalTypes = \Bitrix\Main\UserTable::getExternalUserTypes();
-
-		$chat = new CIMChat($USER->GetId());
-		foreach($chatUsers as $user)
-		{
-			if (in_array($user['external_auth_id'], $externalTypes, true))
-			{
-				$chat->DeleteUser($chatId, $user['id']);
-			}
-		}
-
-		//get alias
-		$aliasData = \Bitrix\Im\Alias::getByEntity('VIDEOCONF', $chatId);
-
-		//generate new alias and update
-		$newCode = \Bitrix\Im\Alias::generateUnique();
-		$updateResult = \Bitrix\Im\Alias::update($aliasData['ID'], [
-			'ALIAS' => $newCode,
-			'ENTITY_TYPE' => 'VIDEOCONF',
-			'ENTITY_ID' => $chatId
-		]);
-
-		if (!$updateResult)
-		{
-			throw new Bitrix\Rest\RestException("Can't update alias", "ACCESS_ERROR", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		$newLink = \Bitrix\Im\Alias::get($newCode)['LINK'];
-
-		//add message to chat
-		$attach = new CIMMessageParamAttach(null);
-		$attach->AddLink(
-			[
-				"NAME" => $newLink,
-				"DESC" => GetMessage("IM_VIDEOCONF_SHARE_UPDATED_LINK", ['#USER_NAME#' => htmlspecialcharsback($userName)]),
-				"LINK" => $newLink
-			]
-		);
-
-		CIMChat::AddMessage(
-			[
-				"TO_CHAT_ID" => $chatId,
-				"SYSTEM" => 'Y',
-				"FROM_USER_ID" => $USER->GetID(),
-				"MESSAGE" => GetMessage("IM_VIDEOCONF_LINK_TITLE"),
-				"ATTACH" => $attach
-			]
-		);
-
-		//send pull with changed alias
-
-		$relations = \Bitrix\Im\Chat::getRelation($chatId, ['WITHOUT_COUNTERS' => 'Y']);
-		if (\CModule::IncludeModule("pull"))
-		{
-			\Bitrix\Pull\Event::add(array_keys($relations), [
-				'module_id' => 'im',
-				'command' => 'videoconfShareUpdate',
-				'params' => [
-					'newCode' => $newCode,
-					'newLink' => $newLink,
-					'dialogId' => $params['DIALOG_ID']
-				],
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			]);
-		}
-
-		return true;
+		throw new \Bitrix\Rest\RestException("Module call is unavailable", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 	}
 
+	/** @deprecated  */
 	public static function videoconfPasswordCheck($params, $n, \CRestServer $server)
 	{
-		$params = array_change_key_case($params, CASE_UPPER);
-
-		if (!$params['PASSWORD'])
+		if (Loader::includeModule('call'))
 		{
-			throw new Bitrix\Rest\RestException("Password can't be empty", "PASSWORD_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
+			return \Bitrix\Call\Rest\Handler::checkVideoconfPassword($params, $n, $server);
 		}
-
-		if (!$params['ALIAS'])
-		{
-			throw new Bitrix\Rest\RestException("Alias can't be empty", "ALIAS_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		$conference = \Bitrix\Im\Call\Conference::getByAlias($params['ALIAS']);
-		if ($conference && $conference->getPassword() === $params['PASSWORD'])
-		{
-			//create cache for current confId and sessId
-			$storage = \Bitrix\Main\Application::getInstance()->getLocalSession('conference_check_' . $conference->getId());
-			$storage->set('checked', true);
-
-			//add user to chat
-			$currentUserId = \Bitrix\Main\Engine\CurrentUser::get()->getId();
-			$isUserInChat = Chat::isUserInChat($conference->getChatId());
-			if ($currentUserId && !$isUserInChat)
-			{
-				$chat = new \CIMChat(0);
-				$addingResult = $chat->AddUser(
-					chatId: $conference->getChatId(),
-					userId: $currentUserId,
-					hideHistory: null,
-					skipMessage: true,
-					skipRecent: true
-				);
-				if (!$addingResult)
-				{
-					throw new Bitrix\Rest\RestException("Error during adding user to chat", "ADDING_TO_CHAT_ERROR", CRestServer::STATUS_WRONG_REQUEST);
-				}
-			}
-
-			return true;
-		}
-
-		return false;
-	}
-
-	public static function videoconfAdd($arParams, $n, CRestServer $server)
-	{
-		throw new \Bitrix\Rest\RestException('This method is not available', 'METHOD_NOT_AVAILABLE', CRestServer::STATUS_WRONG_REQUEST);
-
-		$arParams = array_change_key_case($arParams, CASE_UPPER);
-
-		if (
-			\Bitrix\Im\User::getInstance()->isExtranet()
-			|| \Bitrix\Im\User::getInstance()->isBot()
-		)
-		{
-			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
-		}
-
-		$arParams['BROADCAST_MODE'] = ($arParams['BROADCAST_MODE'] ?? 'N') === 'Y';
-
-		$createResult = \Bitrix\Im\Call\Conference::add($arParams);
-
-		if (!$createResult->isSuccess())
-		{
-			$error = $createResult->getErrors()[0];
-			throw new Bitrix\Rest\RestException($error->getMessage(), $error->getCode(), CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		return [
-			'chatId' => $createResult->getData()['CHAT_ID'],
-			'alias' => $createResult->getData()['ALIAS_DATA']['ALIAS'],
-			'link' => $createResult->getData()['ALIAS_DATA']['LINK']
-		];
-	}
-
-	public static function videoconfUpdate($arParams, $n, CRestServer $server)
-	{
-		throw new \Bitrix\Rest\RestException('This method is not available', 'METHOD_NOT_AVAILABLE', CRestServer::STATUS_WRONG_REQUEST);
-
-		$arParams = array_change_key_case($arParams, CASE_UPPER);
-
-		if (
-			\Bitrix\Im\User::getInstance()->isExtranet()
-			|| \Bitrix\Im\User::getInstance()->isBot()
-		)
-		{
-			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
-		}
-
-		$arParams['BROADCAST_MODE'] = ($arParams['BROADCAST_MODE'] ?? 'N') === 'Y';
-
-		if (!isset($arParams['ID']) || (int)$arParams['ID'] <= 0)
-		{
-			throw new Bitrix\Rest\RestException("Conference ID can't be empty", "CONFERENCE_ID_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		$conference = \Bitrix\Im\Call\Conference::getById((int)$arParams['ID']);
-
-		if (!$conference)
-		{
-			throw new Bitrix\Rest\RestException("Conference with such id not found.", "CONFERENCE_NOT_FOUND", CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		if (!$conference->canUserEdit(\Bitrix\Main\Engine\CurrentUser::get()->getId()))
-		{
-			throw new Bitrix\Rest\RestException("You can't edit the conference.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
-		}
-
-		$updateResult = $conference->update($arParams);
-
-		if (!$updateResult->isSuccess())
-		{
-			$error = $updateResult->getErrors()[0];
-			throw new Bitrix\Rest\RestException($error->getMessage(), $error->getCode(), CRestServer::STATUS_WRONG_REQUEST);
-		}
-
-		return $updateResult->isSuccess();
+		throw new \Bitrix\Rest\RestException("Module call is unavailable", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 	}
 
 	public static function desktopStatusGet($params, $n, \CRestServer $server)

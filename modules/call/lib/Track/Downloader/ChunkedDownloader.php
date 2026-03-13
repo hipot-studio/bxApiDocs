@@ -11,10 +11,12 @@ use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 
 /**
  * Downloads track file in chunks with time limit awareness and resume capability
+ *
+ * @internal
  */
 class ChunkedDownloader extends AbstractDownloader
 {
@@ -139,13 +141,9 @@ class ChunkedDownloader extends AbstractDownloader
 				{
 					$log && $logger->error("ChunkedDownloader::download: Chunk #{$chunkCount} failed. TrackId: {$track->getId()}");
 
-					// Send telemetry about chunk error (only for records, not preview)
-					if ($track->getType() !== Track::TYPE_VIDEO_PREVIEW)
-					{
-						$errors = $chunkResult->getErrors();
-						$errorCode = !empty($errors) ? $errors[0]->getCode() : 'unknown';
-						$this->sendTelemetry($track, 'error', $errorCode, $this->getEventName($track, 'download_chunk_failed'));
-					}
+					$errors = $chunkResult->getErrors();
+					$errorCode = !empty($errors) ? $errors[0]->getCode() : 'unknown';
+					$this->sendTelemetry($track, 'error', $errorCode, $this->getEventName($track, 'download_chunk_failed'));
 
 					$result->addErrors($chunkResult->getErrors());
 					return $this->fail($result);
@@ -224,17 +222,31 @@ class ChunkedDownloader extends AbstractDownloader
 
 		if (!$queryResult || $status !== 206)
 		{
-			$errors = [];
-			foreach ($httpClient->getError() as $code => $message)
+			$httpErrors = $httpClient->getError();
+			$isNetworkError = isset($httpErrors['NETWORK']);
+
+			$errors = array_values($httpErrors);
+			if ($status != 206)
 			{
-				$errors[] = $code . ': ' . $message;
+				$errors[] = "Expected HTTP 206, got: {$status}";
 			}
-			$errorMessage = !empty($errors) ? implode('; ', $errors) : "Expected HTTP 206, got: {$status}";
+			$errors[] = 'url: ' . (parse_url($url, PHP_URL_HOST) ?: $url);
+
+			$errorMessage = implode('; ', $errors);
 
 			$log && $logger->error("ChunkedDownloader::downloadChunk: Failed: {$errorMessage}. Bytes: {$startByte}-{$endByte}");
 
+			$errorCode = TrackError::DOWNLOAD_ERROR;
+			if ($isNetworkError)
+			{
+				$errorCode = TrackError::NETWORK_ERROR;
+
+				$systemException = new \Bitrix\Main\SystemException('Network connection error: ' . $errorMessage);
+				\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
+			}
+
 			return $result->addError(new TrackError(
-				TrackError::DOWNLOAD_ERROR,
+				$errorCode,
 				"Chunk download failed: {$errorMessage}"
 			));
 		}

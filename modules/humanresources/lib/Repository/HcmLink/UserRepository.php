@@ -6,8 +6,10 @@ use Bitrix\HumanResources\Item\Collection\HcmLink\MappingEntityCollection;
 use Bitrix\HumanResources\Item\Collection\UserCollection;
 use Bitrix\HumanResources\Item\HcmLink\MappingEntity;
 use Bitrix\Main\EO_User;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\Content;
 use Bitrix\Main\UserTable;
 use Bitrix\HumanResources\Contract;
@@ -63,16 +65,21 @@ class UserRepository implements Contract\Repository\HcmLink\UserRepository
 		return $collection;
 	}
 
-	public function getUsersIdBySearch(string $searchName, array $excludeIds, int $limit = 10): UserCollection
+	public function getUsersIdBySearch(Query $query, string $searchName, array $excludeIds, int $limit = 10): UserCollection
 	{
-		$usersQuery = UserTable::query()
-			->setSelect(['ID']);
-
-		$users = $this->injectSearchQuery($usersQuery, $searchName)
+		$users = $this->injectSearchQuery($query, $searchName)
 			->whereNotIn('ID', $excludeIds)
+			// filter out users who didn't accept an invitation
+			->where(\Bitrix\Main\ORM\Query\Query::filter()
+				->logic('or')
+				->where('CONFIRM_CODE', '')
+				->whereNull('CONFIRM_CODE')
+			)
 			->setLimit($limit)
+			->setDistinct()
 			->fetchCollection()
-			->getAll();
+			->getAll()
+		;
 
 		$result = array_map([$this, 'extractItemFromModel'], $users);
 

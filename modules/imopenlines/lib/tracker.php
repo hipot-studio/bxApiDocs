@@ -13,7 +13,9 @@ use Bitrix\Crm\Binding\LeadContactTable,
 use Bitrix\ImOpenLines\Model\TrackerTable;
 use Bitrix\ImConnector\Connector;
 
-
+/**
+ * @internal
+ */
 class Tracker
 {
 	public const

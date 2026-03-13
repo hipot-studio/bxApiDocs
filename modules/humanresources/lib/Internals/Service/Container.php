@@ -2,8 +2,9 @@
 
 namespace Bitrix\HumanResources\Internals\Service;
 
-use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeMemberRepository;
-use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeRepository;
+use Bitrix\HumanResources\Internals\Repository\Structure\UserSettingsRepository;
+use Bitrix\HumanResources\Internals\Repository\Structure\NodeMemberRepository;
+use Bitrix\HumanResources\Internals\Repository\Structure\NodeRepository;
 use Bitrix\HumanResources\Internals\Service\Structure\AccessService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeAccessCodeService;
 use Bitrix\HumanResources\Internals\Repository\Structure\NodeAccessCodeRepository;
@@ -11,6 +12,8 @@ use Bitrix\HumanResources\Internals\Service\Structure\NodeChatService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeCollabService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeMemberService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeSettingsService;
+use Bitrix\HumanResources\Internals\Service\Structure\UserSettingsService;
+use Bitrix\HumanResources\Internals\Service\Structure\RoleService;
 use Bitrix\Main\DI\ServiceLocator;
 
 /**
@@ -63,6 +66,11 @@ class Container
 		return self::getService('humanresources.service.internal.nodeSettingsService');
 	}
 
+	public static function getUserSettingsService(): UserSettingsService
+	{
+		return self::getService('humanresources.service.internal.userSettingsService');
+	}
+
 	public static function getNodeRepository(): NodeRepository
 	{
 		return self::getService('humanresources.repository.internal.nodeRepository');
@@ -81,5 +89,15 @@ class Container
 	public static function getNodeMemberRepository(): NodeMemberRepository
 	{
 		return self::getService('humanresources.internal.repository.structure.node.nodeMemberRepository');
+	}
+
+	public static function getUserSettingsRepository(): UserSettingsRepository
+	{
+		return self::getService('humanresources.repository.internal.userSettingsRepository');
+	}
+
+	public static function getRoleService(): RoleService
+	{
+		return self::getService('humanresources.private.internal.service.structure.roleService');
 	}
 }

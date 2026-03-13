@@ -144,6 +144,12 @@ abstract class Dataset
 			$result['DICTIONARY'] = $this->getDictionaries();
 		}
 
+		$groupBy = $this->getGroupBy();
+		if (!empty($groupBy))
+		{
+			$result['GROUP'] = $groupBy;
+		}
+
 		return $result;
 	}
 
@@ -237,5 +243,13 @@ abstract class Dataset
 		$result = &$params[1];
 		$tableName = $dataset->getResultTableName();
 		$result[$tableName] = $dataset->getResult();
+	}
+
+	/**
+	 * @return array
+	 */
+	protected function getGroupBy(): array
+	{
+		return [];
 	}
 }

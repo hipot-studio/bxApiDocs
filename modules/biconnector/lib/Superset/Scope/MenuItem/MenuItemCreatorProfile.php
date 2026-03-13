@@ -21,10 +21,13 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 			$dashboardId = $dashboard->getId();
 
 			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params);
-			if ($dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
+			if (
+				$this->isAvailableByTariff()
+				&& $dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED
+			)
 			{
 				$this->loadDashboardManagerExtension();
-				$fallBackUrl = \CUtil::JSEscape($this->getDetailUrl($dashboard, $params, ['openFrom' => 'menu']));
+				$fallBackUrl = \CUtil::JSEscape($this->getDetailUrl($dashboard, $params, ['openFrom' => $this->getOpenFrom()]));
 				$onClick = "
 					const instance = new BX.BIConnector.DashboardManager();
 					instance.createEventOpenNotInstalledDashboard({$dashboardId}, '{$fallBackUrl}');
@@ -36,13 +39,14 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $onClick,
 				'IS_ACTIVE' => false,
+				'IS_LOCKED' => !$this->isAvailableByTariff(),
 			];
 		}
 
 		if (!empty($menuItems))
 		{
 			$menuItems[] = [
-				"IS_DELIMITER" => true,
+				'IS_DELIMITER' => true,
 			];
 
 			$menuItems = [...$menuItems, ...$this->getAdditionalItems()];
@@ -64,5 +68,10 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 			\Bitrix\Main\UI\Extension::load('biconnector.apache-superset-dashboard-manager');
 			$loaded = true;
 		}
+	}
+
+	protected function getOpenFormCode(): string
+	{
+		return 'profile';
 	}
 }

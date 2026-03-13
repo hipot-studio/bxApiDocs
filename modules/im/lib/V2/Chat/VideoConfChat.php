@@ -3,11 +3,11 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\Alias;
-use Bitrix\Im\Call\Conference;
+use Bitrix\Call\Conference;
 use Bitrix\Im\Color;
 use Bitrix\Im\Model\BlockUserTable;
-use Bitrix\IM\Model\ConferenceTable;
-use Bitrix\IM\Model\ConferenceUserRoleTable;
+use Bitrix\Call\Model\ConferenceTable;
+use Bitrix\Call\Model\ConferenceUserRoleTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;

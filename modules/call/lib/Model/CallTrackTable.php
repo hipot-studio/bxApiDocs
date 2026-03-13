@@ -12,7 +12,7 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Call\Track;
-use Bitrix\Im\Model\CallTable;
+use Bitrix\Call\Model\CallTable;
 
 \Bitrix\Main\Loader::includeModule('im');
 

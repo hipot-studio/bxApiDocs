@@ -198,6 +198,27 @@ class Access
 	}
 
 	/**
+	 * Return true if can modify segment clients list.
+	 *
+	 * @return bool
+	 * @throws ArgumentException
+	 */
+	public function canModifyClientList()
+	{
+		return AccessController::can($this->user->getId(), ActionDictionary::ACTION_SEGMENT_CLIENT_EDIT);
+	}
+
+	/**
+	 * Return true if can upload personal client list.
+	 *
+	 * @return bool
+	 */
+	public function canModifyClientPersonalList()
+	{
+		return AccessController::can($this->user->getId(), ActionDictionary::ACTION_SEGMENT_CLIENT_PERSONAL_EDIT);
+	}
+
+	/**
 	 * Return true if user can modify letters.
 	 *
 	 * @return bool

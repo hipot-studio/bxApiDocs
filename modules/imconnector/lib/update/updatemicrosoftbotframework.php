@@ -16,6 +16,9 @@ use Bitrix\ImConnector\Model\StatusConnectorsTable;
 
 use Bitrix\ImOpenLines\Model\QueueTable;
 
+/**
+ * @internal
+ */
 final class UpdateMicrosoftBotFramework extends Stepper
 {
 	protected const ARTICLE_CODE = '11382470';

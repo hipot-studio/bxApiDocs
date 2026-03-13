@@ -5,6 +5,9 @@ use Bitrix\Main\DI\ServiceLocator;
 
 use Bitrix\ImConnector\Model\StatusConnectorsTable;
 
+/**
+ * @internal
+ */
 class Update2110000
 {
 	protected const CONNECTOR_ID = 'fbinstagram';

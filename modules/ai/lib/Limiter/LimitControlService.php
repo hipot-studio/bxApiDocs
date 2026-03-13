@@ -2,7 +2,7 @@
 
 namespace Bitrix\AI\Limiter;
 
-use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Facade\Portal;
 use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\AI\Integration\Baas\NotServiceException;
 use Bitrix\AI\Limiter\Enums\ErrorLimit;
@@ -157,7 +157,7 @@ class LimitControlService
 		Date $dateExpired
 	): ReserveRequest
 	{
-		$limitType = (Bitrix24::isMarketAvailable()) ? ErrorLimit::BAAS_RATE_LIMIT : ErrorLimit::BAAS_LIMIT;
+		$limitType = (Portal::isMarketAvailable()) ? ErrorLimit::BAAS_RATE_LIMIT : ErrorLimit::BAAS_LIMIT;
 		if ($this->getTimestampFirstDayOnNextMonths($dateExpired) < time())
 		{
 			return $this->getReserveRequestInPromoLimit($reserveRequest, $limitType);

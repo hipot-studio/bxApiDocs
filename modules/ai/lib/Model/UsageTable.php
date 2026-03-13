@@ -3,6 +3,7 @@
 namespace Bitrix\AI\Model;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
 /**
  * Class UsageTable
@@ -22,6 +23,8 @@ use Bitrix\Main\Entity;
  */
 class UsageTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 * @return string

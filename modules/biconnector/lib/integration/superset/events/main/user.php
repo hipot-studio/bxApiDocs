@@ -17,11 +17,10 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
  */
 class User
 {
-	private static ?array $currentUserFields = null;
+	private static array $currentUserFields;
 
 	private static array $changableFields = [
 		'ACTIVE',
-		'EMAIL',
 		'NAME',
 		'LAST_NAME',
 	];
@@ -34,34 +33,45 @@ class User
 	 */
 	public static function onBeforeUserUpdate(array $fields): void
 	{
+		/**
+		 * UF_CONNECTOR_MD5 uses in imconnector for OL user
+		 * Skip this user
+		 */
+		if ($fields['UF_CONNECTOR_MD5'] ?? false)
+		{
+			return;
+		}
+
+		$userId = (int)($fields['ID'] ?? 0);
+
 		if (
-			isset($fields['ID'])
-			&& (int)$fields['ID'] > 0
-			&& array_intersect(self::$changableFields, array_keys($fields))
+			!$userId
+			|| empty(array_intersect(self::$changableFields, array_keys($fields)))
+			|| !self::isSupersetUser($userId)
 		)
 		{
-			$id = (int)$fields['ID'];
-			$currentUser = CurrentUser::get();
+			return;
+		}
 
-			if ($id === (int)$currentUser->getId())
-			{
-				self::$currentUserFields = [
-					'ACTIVE' => 'Y',
-					'EMAIL' => $currentUser->getEmail(),
-					'NAME' => $currentUser->getFirstName(),
-					'LAST_NAME' => $currentUser->getLastName(),
-					'LOGIN' => $currentUser->getLogin(),
-				];
-			}
-			else
-			{
-				self::$currentUserFields = UserTable::getRow([
-					'select' => array_merge(self::$changableFields, ['LOGIN']),
-					'filter' => [
-						'=ID' => $id,
-					],
-				]);
-			}
+		$currentUser = CurrentUser::get();
+
+		if ($userId === (int)$currentUser->getId())
+		{
+			self::$currentUserFields[$userId] = [
+				'ACTIVE' => 'Y',
+				'NAME' => $currentUser->getFirstName(),
+				'LAST_NAME' => $currentUser->getLastName(),
+				'LOGIN' => $currentUser->getLogin(),
+			];
+		}
+		else
+		{
+			self::$currentUserFields[$userId] = UserTable::getRow([
+				'select' => array_merge(self::$changableFields, ['LOGIN']),
+				'filter' => [
+					'=ID' => $userId,
+				],
+			]);
 		}
 	}
 
@@ -74,56 +84,48 @@ class User
 	 */
 	public static function onAfterUserUpdate(array $fields): void
 	{
-		$userId = (isset($fields['ID']) && ((int)$fields['ID']) > 0) ? (int)$fields['ID'] : 0;
-
-		if (!self::$currentUserFields || !$userId)
+		/**
+		 * UF_CONNECTOR_MD5 uses in imconnector for OL user
+		 * Skip this user
+		 */
+		if ($fields['UF_CONNECTOR_MD5'] ?? false)
 		{
 			return;
 		}
 
-		$user = self::getUser($userId);
-		if (!$user || empty($user->clientId))
+		$userId = (int)($fields['ID'] ?? 0);
+
+		if (!$userId || !isset(self::$currentUserFields[$userId]))
 		{
 			return;
 		}
 
-		$isChangedActivity = isset($fields['ACTIVE']) && ($fields['ACTIVE'] !== self::$currentUserFields['ACTIVE']);
+		/** @var array $currentUserFields */
+		$currentUserFields = self::$currentUserFields[$userId];
 
-		$email = '';
+		$isChangedActivity = isset($fields['ACTIVE']) && ($fields['ACTIVE'] !== $currentUserFields['ACTIVE']);
+
 		$name = '';
 		$lastName = '';
 
-		$isChangedEmail = isset($fields['EMAIL']) && $fields['EMAIL'] !== self::$currentUserFields['EMAIL'];
-		$isChangedName = isset($fields['NAME']) && $fields['NAME'] !== self::$currentUserFields['NAME'];
-		$isChangedLastName = isset($fields['LAST_NAME']) && $fields['LAST_NAME'] !== self::$currentUserFields['LAST_NAME'];
+		$isChangedName = isset($fields['NAME']) && $fields['NAME'] !== $currentUserFields['NAME'];
+		$isChangedLastName = isset($fields['LAST_NAME']) && $fields['LAST_NAME'] !== $currentUserFields['LAST_NAME'];
 
-		$isChangedFields = $isChangedName || $isChangedLastName || $isChangedEmail;
+		$isChangedFields = $isChangedName || $isChangedLastName;
 		if ($isChangedFields)
 		{
 			// login
-			$login = self::$currentUserFields['LOGIN'];
+			$login = $currentUserFields['LOGIN'];
 			if (!empty($fields['LOGIN']))
 			{
 				$login = $fields['LOGIN'];
 			}
 
-			// email
-			$email = ($login . '@bitrix.bi');
-			if (!empty(self::$currentUserFields['EMAIL']))
-			{
-				$email = self::$currentUserFields['EMAIL'];
-			}
-
-			if (!empty($fields['EMAIL']))
-			{
-				$email = $fields['EMAIL'];
-			}
-
 			// name
 			$name = $login;
-			if (!empty(self::$currentUserFields['NAME']))
+			if (!empty($currentUserFields['NAME']))
 			{
-				$name = self::$currentUserFields['NAME'];
+				$name = $currentUserFields['NAME'];
 			}
 
 			if (!empty($fields['NAME']))
@@ -133,9 +135,9 @@ class User
 
 			// last name
 			$lastName = $login;
-			if (!empty(self::$currentUserFields['LAST_NAME']))
+			if (!empty($currentUserFields['LAST_NAME']))
 			{
-				$lastName = self::$currentUserFields['LAST_NAME'];
+				$lastName = $currentUserFields['LAST_NAME'];
 			}
 
 			if (!empty($fields['LAST_NAME']))
@@ -146,6 +148,12 @@ class User
 
 		if ($isChangedActivity || $isChangedFields)
 		{
+			$user = self::getUser($userId);
+			if (!$user || empty($user->clientId))
+			{
+				return;
+			}
+
 			if (SupersetInitializer::isSupersetReady())
 			{
 				if ($isChangedActivity)
@@ -155,7 +163,7 @@ class User
 
 				if ($isChangedFields)
 				{
-					self::updateUser($user, $email, $name, $lastName);
+					self::updateUser($user, $name, $lastName);
 				}
 
 				self::setUpdated($user);
@@ -166,7 +174,7 @@ class User
 			}
 		}
 
-		self::$currentUserFields = null;
+		unset(self::$currentUserFields[$userId], $currentUserFields);
 	}
 
 	private static function changeActivity(Dto\User $user, bool $isActive): void
@@ -200,10 +208,8 @@ class User
 		self::clearPermissionHash($user);
 	}
 
-	private static function updateUser(Dto\User $user, string $email, string $firstName, string $lastName): void
+	private static function updateUser(Dto\User $user, string $firstName, string $lastName): void
 	{
-		$user->userName = $email;
-		$user->email = $email;
 		$user->firstName = $firstName;
 		$user->lastName = $lastName;
 
@@ -236,5 +242,16 @@ class User
 	private static function setNotUpdated(Dto\User $user): void
 	{
 		SupersetUserTable::updateUpdated($user->id, false);
+	}
+
+	private static function isSupersetUser(int $userId): bool
+	{
+		return (bool)SupersetUserTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=USER_ID' => $userId,
+			],
+			'cache' => ['ttl' => 86400],
+		]);
 	}
 }

@@ -37,12 +37,6 @@ class DashboardRowAssembler extends RowAssembler
 				],
 				$this->settings,
 			),
-			new Field\Dashboard\OwnerFieldAssembler(
-				[
-					'OWNER_ID',
-				],
-				$this->settings,
-			),
 			new Field\Dashboard\TagFieldAssembler(
 				[
 					'TAGS',

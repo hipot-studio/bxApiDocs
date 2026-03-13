@@ -2,15 +2,15 @@
 
 namespace Bitrix\BIConnector\Superset\UI;
 
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\Bitrix24;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UI\Extension;
 
 class UIHelper
 {
-	public static function needShowDeleteInstanceButton(): bool
+	public static function needShowDeleteInstanceWarning(): bool
 	{
 		if (!Loader::includeModule('bitrix24'))
 		{
@@ -22,7 +22,12 @@ class UIHelper
 			return false;
 		}
 
-		if (!Bitrix24\Feature::isFeatureEnabled('bi_constructor'))
+		if (!SupersetInitializer::isSupersetExist())
+		{
+			return false;
+		}
+
+		if (!Feature::isBuilderEnabled())
 		{
 			return true;
 		}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Message\Sticker;
 
+use Bitrix\Im\V2\Integration\UI\Sticker\PendingFileCollection;
 use Bitrix\Im\V2\Message\Sticker\Recent\RecentCollection;
 use Bitrix\Im\V2\Result;
 
@@ -19,11 +20,11 @@ interface StickerPacks
 
 	public function getStickersByRecent(RecentCollection $recentCollection): StickerCollection;
 
-	public function addPack(array $fileUuidMap, ?string $packName): Result;
+	public function addPack(PendingFileCollection $pendingFileCollection, ?string $packName): Result;
 
 	public function linkPack(int $packId): Result;
 
-	public function addStickers(array $fileUuidMap, int $packId, bool $sendPush = true): Result;
+	public function addStickers(PendingFileCollection $pendingFileCollection, int $packId, bool $sendPush = true): Result;
 
 	public function deletePack(int $packId): Result;
 

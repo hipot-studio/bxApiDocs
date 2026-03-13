@@ -4,6 +4,9 @@ namespace Bitrix\Imconnector\Update;
 use Bitrix\Main\Loader,
 	Bitrix\Main\Config\Option;
 
+/**
+ * @internal
+ */
 class Update221000
 {
 	private const MODULE_ID = 'imconnector';

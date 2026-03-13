@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\DTO;
 
+/**
+ * @internal
+ */
 class CloudRecordingRequest extends Hydrator
 {
 	public int $chatId = 0;

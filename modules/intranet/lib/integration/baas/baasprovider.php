@@ -50,4 +50,14 @@ final class BaasProvider
 
 		return $this->purchaseCount;
 	}
+
+	public function hasBaasDistributedPackages(): bool
+	{
+		if (method_exists($this->baas, 'hasBaasDistributedPackages'))
+		{
+			return $this->baas->hasBaasDistributedPackages();
+		}
+
+		return true;
+	}
 }

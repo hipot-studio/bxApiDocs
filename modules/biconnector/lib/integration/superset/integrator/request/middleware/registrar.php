@@ -57,6 +57,18 @@ final class Registrar extends Base
 	{
 		if ($response->getStatus() === IntegratorResponse::STATUS_REGISTER_REQUIRED)
 		{
+			if ($this->registrar->isComplete())
+			{
+				$errors = [new Error("Unexpected proxy response: 'registration required' received for already registered portal"), ...$response->getErrors()];
+				$this->logger->logErrors($errors);
+
+				return new IntegratorResponse(
+					IntegratorResponse::STATUS_UNKNOWN,
+					null,
+					[new Error("Unexpected proxy response: 'registration required' received for already registered portal", IntegratorResponse::STATUS_UNKNOWN)]
+				);
+			}
+
 			$this->logger->logInfo("Portal got 'register required' response. Clear registrar info");
 			$response->setStatus(IntegratorResponse::STATUS_FROZEN);
 			$this->registrar->clear(__CLASS__ . '::' . __FUNCTION__);

@@ -27,7 +27,7 @@ class Max extends Base
 		$parser = new \CTextParser();
 		$parser->allow['SMILES'] = 'N';
 		$text = $parser->convertText($text);
-		$text = str_replace(["[br]", "#br#", "[BR]", "#BR#"], "\n", $text);
+		$text = str_replace(["<br>", "<br />", "[br]", "#br#", "[BR]", "#BR#"], "\n", $text);
 		$text = Text::parseQuoting($text);
 
 		return $text;

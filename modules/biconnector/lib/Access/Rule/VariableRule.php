@@ -10,29 +10,21 @@ class VariableRule extends BaseRule
 {
 	public function getPermissionMultiValues(array $params): ?array
 	{
-		$actionPermissionCode = (int)static::getPermissionCode($params);
 		$groups = SupersetDashboardGroupTable::getList([
-			'select' => ['ID', 'OWNER_ID'],
+			'select' => ['ID'],
 			'cache' => ['ttl' => 3600],
-		]);
-
-		$allowedGroupIds = [];
+		])->fetchAll();
 
 		if ($this->isAbleToSkipChecking())
 		{
-			return array_column($groups->fetchAll(), 'ID');
+			return array_column($groups, 'ID');
 		}
-		$userId = $this->user->getUserId();
 
-		while ($group = $groups->fetch())
+		$actionPermissionCode = (int)static::getPermissionCode($params);
+		$allowedGroupIds = [];
+
+		foreach ($groups as $group)
 		{
-			if ((int)$group['OWNER_ID'] === $userId)
-			{
-				$allowedGroupIds[] = $group['ID'];
-
-				continue;
-			}
-
 			$groupId = $group['ID'];
 			$groupPermissionId = PermissionDictionary::getDashboardGroupPermissionId($groupId);
 			$groupActions = $this->user->getPermissionMulti($groupPermissionId);
@@ -77,20 +69,20 @@ class VariableRule extends BaseRule
 		return $this->getPermissionMultiValues($params) ?? [];
 	}
 
-	protected function loadGroupDashboards(array $groupIds): array
+	protected function loadGroupDashboards(
+		array $groupIds,
+		array $additionalFilter = [],
+	): array
 	{
 		if (empty($groupIds))
 		{
-			$filter = ['OWNER_ID' => $this->user->getUserId()];
+			return [];
 		}
-		else
-		{
-			$filter = [
-				'LOGIC' => 'OR',
-				'GROUPS.ID' => $groupIds,
-				'OWNER_ID' => $this->user->getUserId(),
-			];
-		}
+
+		$filter = array_merge(
+			['GROUPS.ID' => $groupIds],
+			$additionalFilter,
+		);
 
 		$dashboardList = SupersetDashboardTable::getList([
 			'select' => ['ID'],
@@ -107,16 +99,17 @@ class VariableRule extends BaseRule
 
 	public function check(array $params): bool
 	{
-		$values = $this->getPermissionAllowedDashboardIds($params);
-		if (!$values)
-		{
-			return false;
-		}
-
-		if (!isset($params['value']) && !empty($values))
+		if ($this->isAbleToSkipChecking())
 		{
 			return true;
 		}
+
+		if (!isset($params['value']))
+		{
+			return !empty($this->getPermissionAllowedGroupIds($params));
+		}
+
+		$values = $this->getPermissionAllowedDashboardIds($params);
 
 		$checkDashboardIds = (array)($params['value'] ?? []);
 

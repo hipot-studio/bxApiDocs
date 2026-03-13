@@ -64,6 +64,12 @@ class Link extends \Bitrix\Landing\Node
 		$valueBefore = static::getNode($block, $selector);
 		$isIframe = self::isFrame();
 
+		$textProvided = [];
+		foreach ($data as $pos => $value)
+		{
+			$textProvided[$pos] = is_array($value) && array_key_exists('text', $value);
+		}
+
 		$data = self::sanitizeData($data);
 		foreach ($data as $pos => $value)
 		{
@@ -72,7 +78,7 @@ class Link extends \Bitrix\Landing\Node
 			$query = $value['query'];
 			$target = $value['target'];
 			$attrs = $value['attrs'];
-			$skipContent = $globalSkipContent || $value['skipContent'];
+			$skipContent = $globalSkipContent || $value['skipContent'] || !($textProvided[$pos] ?? true);
 
 			$result[$pos]['attrs'] = [];
 

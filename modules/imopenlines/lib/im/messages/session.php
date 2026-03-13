@@ -151,4 +151,53 @@ class Session
 
 		return null;
 	}
+
+	/**
+	 * Send message with links to previous client dialogs from different configurations
+	 *
+	 * @param int $chatId Chat ID
+	 * @param int $userId User ID
+	 * @param int $currentConfigId Current configuration ID
+	 * @return void
+	 */
+	public static function sendMessagePreviousSessionHistory(
+		int $chatId,
+		int $userId,
+		int $currentConfigId
+	): void
+	{
+		$previousSessions = ImOpenLines\SessionHistory::getPreviousSessionsWithDifferentConfig(
+			$userId,
+			$currentConfigId
+		);
+
+		if (empty($previousSessions))
+		{
+			return;
+		}
+
+		$message = Loc::getMessage('IMOL_MESSAGE_SESSION_PREVIOUS_HISTORY') . "\n";
+
+		foreach (array_reverse($previousSessions) as $session)
+		{
+			$sessionId = (int)$session['ID'];
+			$dateCreate = $session['DATE_CREATE'] instanceof \Bitrix\Main\Type\DateTime
+				? $session['DATE_CREATE']->format('d.m.Y H:i')
+				: '';
+
+			$historyLink = ImOpenLines\Session\Common::getUrlImHistoryBbCode($sessionId, $dateCreate);
+			$message .= "- {$historyLink}\n";
+		}
+
+		$messageFields = [
+			'SYSTEM' => 'Y',
+			'TO_CHAT_ID' => $chatId,
+			'MESSAGE' => $message,
+			'PARAMS' => [
+				'CLASS' => 'bx-messenger-content-item-ol-output',
+			],
+		];
+
+		Im::addMessage($messageFields);
+	}
 }

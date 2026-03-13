@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Baas\Internal\Service;
 
 use Bitrix\Baas;
-use Bitrix\Baas\Internal\Entity\Enum\ServiceAdvertisingStrategy;
-use Bitrix\Baas\Internal\Entity\Enum\PackageDistributionStrategy;
+use Bitrix\Baas\Internal\Entity\Service\ServiceAdvertisingStrategy;
+use Bitrix\Baas\Internal\Entity\Package\PackageDistributionStrategy;
 
 class MarketplaceService
 {
@@ -36,17 +36,6 @@ class MarketplaceService
 		}
 
 		return ServiceAdvertisingStrategy::BY_BAAS;
-	}
-
-	public function adaptFeaturePromotionAndHelperCodes(Baas\Model\EO_Service $service): void
-	{
-		//TODO: remove to the baascontroller
-		if ($service->getAdvertisingStrategy() === ServiceAdvertisingStrategy::BY_MARKET->value
-			&& $service->getCode() === 'ai_copilot_token')
-		{
-			$service->setFeaturePromotionCode('limit_subscription_market_access_buy_marketplus');
-			$service->setHelperCode('limit_subscription_market_access_buy_marketplus');
-		}
 	}
 
 	public function detectDistributionStrategy(

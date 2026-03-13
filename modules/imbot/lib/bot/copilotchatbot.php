@@ -24,6 +24,9 @@ use Bitrix\Im;
 use Bitrix\ImBot;
 use Bitrix\Pull;
 
+/**
+ * @internal
+ */
 class CopilotChatBot extends Base
 {
 	public const BOT_CODE = 'copilot';
@@ -353,7 +356,7 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
-		$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_SUMMARY);
+		$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_ID);
 		$engine = self::getEngineByChat($chat, $context);
 		$serviceRestriction = self::checkAiServeRestriction($engine, (int)$messageFields['FROM_USER_ID']);
 		if (!$serviceRestriction->isSuccess())
@@ -398,6 +401,7 @@ class CopilotChatBot extends Base
 		$reasoningIsEnabled = (
 			Im\V2\Application\Features::get()->isCopilotReasoningAvailable
 			&& $targetMessage->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
+			&& $engine?->supportsReasoning()
 		);
 
 		self::sendTyping(
@@ -917,7 +921,9 @@ class CopilotChatBot extends Base
 		$message = match (true)
 		{
 			$error === null || is_numeric($error->getCode()) || $error->getCode() === 'HASH_EXPIRED' => $defaultMessage,
-			is_array($customData) && isset($customData['msgForIm']) => $customData['msgForIm'],
+			is_array($customData) && !empty($customData['msgForIm']) => $customData['msgForIm'],
+			is_array($customData) && !empty($customData['msgBBCode']) => $customData['msgBBCode'],
+			is_array($customData) && !empty($customData['msgPlainText']) => $customData['msgPlainText'],
 			$error->getCode() === self::LIMIT_IS_EXCEEDED_BAAS => Loc::getMessage(
 				'IMBOT_COPILOT_ERROR_LIMIT_BAAS',
 				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_boost_copilot']

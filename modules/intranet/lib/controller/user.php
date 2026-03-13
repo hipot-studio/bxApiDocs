@@ -61,7 +61,7 @@ class User extends \Bitrix\Main\Engine\Controller
 		else
 		{
 			$this->addErrors(
-				$this->getErrorsFromUpdateLastError($cUser->LAST_ERROR),
+				$this->getUpdateErrorsFromLastError($cUser->LAST_ERROR),
 			);
 
 			return false;
@@ -95,7 +95,7 @@ class User extends \Bitrix\Main\Engine\Controller
 		else
 		{
 			$this->addErrors(
-				$this->getErrorsFromUpdateLastError($cUser->LAST_ERROR),
+				$this->getUpdateErrorsFromLastError($cUser->LAST_ERROR),
 			);
 
 			return false;

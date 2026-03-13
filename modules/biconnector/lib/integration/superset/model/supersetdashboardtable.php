@@ -152,6 +152,7 @@ final class SupersetDashboardTable extends DataManager
 			(new Fields\IntegerField('CREATED_BY_ID'))
 				->configureNullable(),
 
+			/** @deprecated  */
 			(new Fields\IntegerField('OWNER_ID'))
 				->configureNullable(),
 

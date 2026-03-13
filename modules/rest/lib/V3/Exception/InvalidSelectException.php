@@ -12,7 +12,7 @@ class InvalidSelectException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_INVALIDSELECTEXCEPTION';
+		return 'REST_V3_EXCEPTION_INVALIDSELECTEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

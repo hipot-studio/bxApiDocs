@@ -23,6 +23,7 @@ class PublicApplication extends \Bitrix\Main\Authentication\Application
 		"/bitrix/tools/sale_ps_fail.php",
 		"/bitrix/tools/sale_ps_ajax.php",
 		"/bitrix/tools/sale/paysystem/robokassa/redirect.php",
+		"/conference/videoconf.php",
 	);
 
 	public static function OnApplicationsBuildList()

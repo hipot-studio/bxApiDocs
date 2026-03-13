@@ -374,6 +374,8 @@ class Task implements Recyclebinable
 
 			if (FormV2Feature::isOn())
 			{
+				self::restoreTaskChatMembers($taskId);
+
 				// this event will up task's chat
 				Container::getInstance()->getEventDispatcher()::dispatch(
 					new OnTaskRestoredEvent(
@@ -838,6 +840,34 @@ class Task implements Recyclebinable
 		try
 		{
 			$taskObject->save();
+		}
+		catch (Exception $e)
+		{
+			Container::getInstance()
+				->getLogger()
+				->logError($e);
+		}
+	}
+
+	private static function restoreTaskChatMembers(int $taskId): void
+	{
+		try
+		{
+			$taskEntity = Container::getInstance()->getTaskRepository()->getById($taskId);
+			if ($taskEntity === null || $taskEntity->chatId <= 0)
+			{
+				return;
+			}
+
+			$members = $taskEntity->getMembers();
+
+			if (!$members->isEmpty())
+			{
+				Container::getInstance()->getChatIntegration()->addChatMembers(
+					task: $taskEntity,
+					membersToAdd: $members->getIdList(),
+				);
+			}
 		}
 		catch (Exception $e)
 		{

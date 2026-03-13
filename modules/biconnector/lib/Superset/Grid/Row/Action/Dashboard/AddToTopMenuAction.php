@@ -39,8 +39,10 @@ final class AddToTopMenuAction extends BaseAction
 			return null;
 		}
 
-		$url .= (str_contains($url, '?') ? '&' : '?')
-			. 'openFrom=menu';
+		$url .=
+			(str_contains($url, '?') ? '&' : '?')
+			. 'openFrom=top_menu'
+		;
 
 		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.addToTopMenu({$dashboardId}, `{$url}`)";
 

@@ -455,6 +455,7 @@ class CCalendar
 			'showGoogleApplicationRefused' => CUserOptions::getOption('calendar', 'showGoogleApplicationRefused', 'Y'),
 			'useAirDesign' => defined('AIR_SITE_TEMPLATE'),
 			'isBitrix24Template' => SITE_TEMPLATE_ID === 'bitrix24',
+			'isBitrix24Enabled' => Bitrix24Manager::isEnabled(),
 		];
 
 		if (Loader::includeModule('socialnetwork'))

@@ -134,7 +134,7 @@ class SharingConference
 			return null;
 		}
 
-		$conference = \Bitrix\Im\Call\Conference::add([
+		$conference = \Bitrix\Call\Conference::add([
 			'USERS' => $attendeesId,
 			'TITLE' => $event['NAME'],
 			'AUTHOR_ID' => $attendeesId[0],
@@ -178,7 +178,7 @@ class SharingConference
 	 */
 	private function checkPossibilityOfCreatingLink(): bool
 	{
-		return !(!Loader::includeModule('im') || !Loader::includeModule('voximplant'));
+		return Loader::includeModule('im') && Loader::includeModule('voximplant') && Loader::includeModule('call');
 	}
 
 	/**

@@ -77,10 +77,20 @@ class RestMarketplaceSolutionComponent extends CBitrixComponent
 		$this->arResult['IS_RENAMED_MARKET'] = \Bitrix\Rest\Integration\Market\Label::isRenamedMarket();
 	}
 
+	protected function getComponentPage(): string
+	{
+		if (($this->arParams['MANIFEST_CODE'] ?? '') === 'crm_smart_robots')
+		{
+			return 'crm_smart_robots';
+		}
+
+		return '';
+	}
+
 	public function executeComponent(): void
 	{
 		$this->prepareResult();
 
-		$this->includeComponentTemplate();
+		$this->includeComponentTemplate($this->getComponentPage());
 	}
 }

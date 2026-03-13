@@ -18,6 +18,7 @@ use Bitrix\Rest\V3\Attribute\Required;
 use Bitrix\Rest\V3\Attribute\Sortable;
 use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\CacheManager;
+use Bitrix\Rest\V3\Dto\Attribute\TypeAlias;
 
 abstract class Dto implements Arrayable
 {
@@ -148,7 +149,7 @@ abstract class Dto implements Arrayable
 						{
 							if (is_subclass_of($value, Dto::class))
 							{
-								$fieldValue[] = $value->getValue()?->toArray($rawData);
+								$fieldValue[] = $value->toArray($rawData);
 							}
 							else
 							{
@@ -228,7 +229,15 @@ abstract class Dto implements Arrayable
 		$fields = [];
 		foreach (PropertyHelper::getProperties($this) as $property)
 		{
-			$propertyType = $property->getType() ? $property->getType()->getName() : 'mixed';
+			$fieldPropertyType = $property->getType();
+			if ($fieldPropertyType instanceof \ReflectionUnionType)
+			{
+				$propertyType = 'mixed';
+			}
+			else
+			{
+				$propertyType = $fieldPropertyType !== null ? $fieldPropertyType->getName() : 'mixed';
+			}
 
 			$field = new DtoField(
 				propertyName: $property->getName(),
@@ -272,35 +281,44 @@ abstract class Dto implements Arrayable
 		return $fields;
 	}
 
+	public function issetUserFields(): bool
+	{
+		/** @var OrmEntity $ormEntityAttribute */
+		$ormEntityAttribute = $this->getAttributeByName(OrmEntity::class);
+		return $ormEntityAttribute !== null && $ormEntityAttribute->getUserFieldId() !== null;
+	}
+
 	/**
 	 * @return DtoField[]
 	 */
 	private function getUserFields(): array
 	{
 		$fields = [];
+		if (!$this->issetUserFields())
+		{
+			return $fields;
+		}
 		/** @var OrmEntity $ormEntityAttribute */
 		$ormEntityAttribute = $this->getAttributeByName(OrmEntity::class);
-		if ($ormEntityAttribute !== null && method_exists($ormEntityAttribute->entity, 'getUfId'))
-		{
-			$ufFields = \Bitrix\Main\UserFieldTable::getList([
-				'filter' => [
-					'ENTITY_ID' => $ormEntityAttribute->entity::getUfId(),
-				],
-				'select' => ['*'],
-				'order' => ['SORT' => 'ASC'],
-			])->fetchAll();
 
-			foreach ($ufFields as $ufField)
-			{
-				$fields[] = new DtoField(
-					propertyName: $ufField['FIELD_NAME'],
-					propertyType: UserFieldTypeFactory::getFromBitrixType($ufField['USER_TYPE_ID']),
-					type: DtoField::DTO_FIELD_TYPE_USER_FIELD,
-					filterable: $ufField['IS_SEARCHABLE'] === 'Y',
-					sortable: $ufField['IS_SEARCHABLE'] === 'Y',
-					multiple: $ufField['MULTIPLE'] === 'Y',
-				);
-			}
+		$ufFields = \Bitrix\Main\UserFieldTable::getList([
+			'filter' => [
+				'ENTITY_ID' => $ormEntityAttribute->entity::getUfId(),
+			],
+			'select' => ['FIELD_NAME', 'USER_TYPE_ID', 'IS_SEARCHABLE', 'MULTIPLE'],
+			'order' => ['SORT' => 'ASC'],
+		]);
+
+		while ($ufField = $ufFields->fetch())
+		{
+			$fields[] = new DtoField(
+				propertyName: $ufField['FIELD_NAME'],
+				propertyType: UserFieldTypeFactory::getFromBitrixType($ufField['USER_TYPE_ID']),
+				type: DtoField::DTO_FIELD_TYPE_USER_FIELD,
+				filterable: $ufField['IS_SEARCHABLE'] === 'Y',
+				sortable: $ufField['IS_SEARCHABLE'] === 'Y',
+				multiple: $ufField['MULTIPLE'] === 'Y',
+			);
 		}
 
 		return $fields;
@@ -312,5 +330,33 @@ abstract class Dto implements Arrayable
 	protected function getExtraFields(): array
 	{
 		return [];
+	}
+
+	public function getTypeName(): string
+	{
+		$reflection = new \ReflectionClass($this);
+		$namespace = $reflection->getNamespaceName();
+		$namespaceParts = array_filter(explode('\\', $namespace), static fn(string $part): bool => $part !== '');
+
+		if (empty($namespaceParts))
+		{
+			return strtolower($this->getShortName());
+		}
+
+		$selectedParts = array_slice($namespaceParts, 0, 2);
+
+		if (isset($this->attributes[TypeAlias::class]))
+		{
+			$selectedParts[] = $this->attributes[TypeAlias::class]->alias;
+		}
+		else
+		{
+			$selectedParts[] = $this->getShortName();
+		}
+
+
+		$selectedParts = array_map('strtolower', $selectedParts);
+
+		return implode('.', $selectedParts);
 	}
 }

@@ -190,6 +190,22 @@ class TaskCreateBlocks extends TaskStep
 				'SORT' => 0,
 				'PUBLIC' => 'N',
 			]);
+
+			if ($blockId === false)
+			{
+				$error = $this->landingInstance->getError()->getFirstError();
+
+				throw new GenerationException(
+					GenerationErrors::dataValidation,
+					sprintf(
+						'Add block failed for code "%s": %s (%s)',
+						$blockCode,
+						$error?->getMessage() ?? 'unknown error message',
+						$error?->getCode() ?? 'unknown error code',
+					),
+				);
+			}
+
 			$blockInstance = $this->landingInstance->getBlockById($blockId);
 			$blockData->setId($blockId);
 

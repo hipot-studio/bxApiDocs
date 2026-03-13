@@ -92,14 +92,7 @@ class Manager
 	 */
 	public static function deleteByAppCode(string $appCode): void
 	{
-		$engines = EngineTable::query()
-			->setSelect(['ID'])
-			->where('app_code', $appCode)
-		;
-		foreach ($engines->fetchAll() as $engine)
-		{
-			EngineTable::delete($engine['ID'])->isSuccess();
-		}
+		EngineTable::deleteByFilter(['=APP_CODE' => $appCode]);
 	}
 
 	/**
@@ -125,13 +118,14 @@ class Manager
 			$filter['app_code'] = Rest::getApplicationCode($server->getClientId());
 		}
 
-		$engines = EngineTable::query()
+		$res = EngineTable::query()
 			->setSelect(['*'])
 			->setFilter($filter)
 			->setOrder(['ID' => 'asc'])
 			->setLimit($data['limit'] ?? null)
+			->exec()
 		;
-		foreach ($engines->fetchAll() as $engine)
+		while ($engine = $res->fetch())
 		{
 			$engine = array_change_key_case($engine);
 

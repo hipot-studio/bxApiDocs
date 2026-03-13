@@ -2,7 +2,6 @@
 
 namespace Bitrix\Im\Configuration;
 
-use Bitrix\Im\Call\VideoStrategyType;
 use Bitrix\Im\Model\OptionStateTable;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Im\V2\Application\Features;
@@ -133,7 +132,7 @@ class General extends Base
 			'privacyCall' => Option::get("im", "privacy_call"),
 			'privacySearch' => Option::get("im", "privacy_search"),
 			'privacyProfile' => Option::get("im", "privacy_profile"),
-			'callAcceptIncomingVideo' => VideoStrategyType::ALLOW_ALL,
+			'callAcceptIncomingVideo' => 'AllowAll',/** @see \Bitrix\Call\VideoStrategyType::ALLOW_ALL */
 			'backgroundImageId' => 1,
 			'chatAlignment' => 'left',
 			'next' => false,
@@ -738,8 +737,9 @@ class General extends Base
 
 					break;
 				case 'callAcceptIncomingVideo':
+					\Bitrix\Main\Loader::includeModule('call');
 					$verifiedSettings[$name] =
-						in_array($value, VideoStrategyType::getList())
+						in_array($value, \Bitrix\Call\VideoStrategyType::getList())
 							? $value
 							: $defaultSettings[$name]
 					;

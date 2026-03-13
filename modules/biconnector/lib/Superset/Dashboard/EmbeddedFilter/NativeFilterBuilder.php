@@ -59,7 +59,7 @@ class NativeFilterBuilder
 
 			foreach ($urlParams as $code => $value)
 			{
-				if (isset($this->filters[$urlParameterFilterMap[$code]]))
+				if (isset($urlParameterFilterMap[$code], $this->filters[$urlParameterFilterMap[$code]]))
 				{
 					foreach ($this->filters[$urlParameterFilterMap[$code]] as $filter)
 					{
@@ -89,7 +89,7 @@ class NativeFilterBuilder
 			}
 		}
 
-		return sprintf('(%s)', implode(',', $formatted));
+		return sprintf('(%s)', implode(',', array_filter($formatted)));
 	}
 
 	/**

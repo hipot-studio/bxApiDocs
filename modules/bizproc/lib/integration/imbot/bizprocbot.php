@@ -304,6 +304,11 @@ class BizprocBot extends Base
 	 */
 	public static function getBotNamesByIds(int $limit = 100): array
 	{
+		if (!Loader::includeModule('im'))
+		{
+			return [];
+		}
+
 		$result = BotTable::query()
 			->where(self::FIELD_CLASS, self::class)
 			->registerRuntimeField(
@@ -340,6 +345,11 @@ class BizprocBot extends Base
 
 	public static function isExistsById(int $botId): bool
 	{
+		if (!Loader::includeModule('im'))
+		{
+			return false;
+		}
+
 		$row = BotTable::query()
 			->where(self::FIELD_CLASS, self::class)
 			->where(self::FIELD_BOT_ID, $botId)
@@ -408,6 +418,11 @@ class BizprocBot extends Base
 
 	public static function getBotIdByCode(string $code, bool $withCache = true): ?int
 	{
+		if (!Loader::includeModule('im'))
+		{
+			return null;
+		}
+
 		if ($withCache && array_key_exists($code, self::$botIdsByCodes))
 		{
 			return self::$botIdsByCodes[$code];

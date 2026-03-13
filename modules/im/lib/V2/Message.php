@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessage;
+use Bitrix\Im\V2\Message\Send\ImportantUsers;
 use Bitrix\Im\V2\Message\Sticker\PackType;
 use Bitrix\Im\V2\Message\Sticker\StickerItem;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
@@ -174,7 +175,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	protected ?bool $isImportant = false;
 
-	protected ?array $importantFor = null;
+	protected ?ImportantUsers $importantFor = null;
 	protected ?string $dialogId = null;
 	protected ?int $prevId = null;
 
@@ -292,26 +293,17 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getImportantFor(): array
 	{
-		if ($this->importantFor !== null)
+		if ($this->importantFor === null)
 		{
-			return $this->importantFor;
+			$this->importantFor = ImportantUsers::createByMessage($this);
 		}
 
-		if ($this->isImportant())
-		{
-			$this->setImportantFor([]);
-		}
-		else
-		{
-			$this->setImportantFor(array_values($this->getMentionedUserIds()));
-		}
-
-		return $this->importantFor;
+		return $this->importantFor->userIds;
 	}
 
 	public function setImportantFor(array $importantFor): self
 	{
-		$this->importantFor = $importantFor;
+		$this->importantFor = new ImportantUsers($importantFor);
 
 		return $this;
 	}
@@ -810,25 +802,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $files;
 	}
 
-	/**
-	 * @return array
-	 */
-	public function getFilesDiskData(): array
-	{
-		if ($this->hasFiles())
-		{
-			return $this->getFiles()->getFileDiskAttributes($this->getChatId());
-		}
-
-		return  [];
-	}
-
 	//endregion
-
-	public function getReminder(): ?Link\Reminder\ReminderItem
-	{
-		return Link\Reminder\ReminderItem::getByMessageAndUserId($this, $this->getContext()->getUserId());
-	}
 
 	public function getAdditionalMessageIds(): array
 	{
@@ -976,7 +950,11 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		$this->url = null;
 		$this->mentionedUserIds = null;
 		$this->hasMentionAll = null;
-		$this->importantFor = null;
+
+		if (!$this->importantFor?->immutable)
+		{
+			$this->importantFor = null;
+		}
 
 		return $this;
 	}
@@ -1553,6 +1531,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			'TO_CHAT_ID' => [
 				'alias' => 'CHAT_ID',
 			],
+			'IMPORTANT_FOR' => [
+				'set' => 'setImportantFor', /** @see Message::setImportantFor() */
+				'get' => 'getImportantFor', /** @see Message::getImportantFor() */
+			],
 		];
 	}
 
@@ -1701,32 +1683,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $previewMessage;
 	}
 
-	public function getForPush(?int $messageSize = 200): string
-	{
-		if ($this->getRegistry() instanceof MessageCollection)
-		{
-			$this->getRegistry()->fillFiles();
-		}
-
-		$files = [];
-
-		foreach ($this->getFiles() as $file)
-		{
-			$files[] = ['name' => $file->getDiskFile()->getName()];
-		}
-
-		$message = ['MESSAGE' => $this->getMessage(), 'FILES' => $files];
-		$text = \CIMMessenger::PrepareParamsForPush($message);
-
-		if ($messageSize !== null)
-		{
-			$dots = mb_strlen($text) >= $messageSize ? '...' : '';
-			$text = mb_substr($text, 0, $messageSize - 1) . $dots;
-		}
-
-		return $text;
-	}
-
 	public function checkAccess(?int $userId = null): Result
 	{
 		$userId ??= $this->getContext()->getUserId();
@@ -1820,7 +1776,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			$mentionedUserIds[(int)$userId] = (int)$userId;
 		}
 
-		if ($isMentionAllFound && Features::isMentionAllAvailable())
+		if ($isMentionAllFound)
 		{
 			$mentionedUserIds += $this->getChat()->getAllUserIdsForMention();
 			$this->setHasMentionAll(true);
@@ -1983,42 +1939,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 	}
 
-	/**
-	 * Parse dates from message.
-	 * @return self
-	 */
-	public function parseDates(): self
-	{
-		if ($this->getMessage())
-		{
-			$dateConvertResult = Text::getDateConverterParams($this->getMessage());
-			foreach ($dateConvertResult as $row)
-			{
-				$this->getParams()->get(Params::DATE_TEXT)->addValue($row->getText());
-				$this->getParams()->get(Params::DATE_TS)->addValue($row->getDate()->getTimestamp());
-			}
-		}
-
-		return $this;
-	}
-
-	/**
-	 * Parse dates from message.
-	 * @return self
-	 */
-	public function checkEmoji(): self
-	{
-		if ($this->getMessage())
-		{
-			if (Text::isOnlyEmoji($this->getMessage()))
-			{
-				$this->getParams()->get(Params::LARGE_FONT)->setValue(true);
-			}
-		}
-
-		return $this;
-	}
-
 	public function autocompleteParams(Im\V2\Message\Send\SendingConfig $config): self
 	{
 		$this->getParams()->get(Params::LARGE_FONT)->setValue(Text::isOnlyEmoji($this->getMessage() ?? ''));
@@ -2149,18 +2069,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		$messageWithoutUrl = str_replace($url->getUrl(), '', $this->getMessage() ?? '');
 
 		return trim($messageWithoutUrl) === '';
-	}
-
-	/**
-	 * Update search index record.
-	 * @return void
-	 */
-	public function updateSearchIndex(): void
-	{
-		if ($this->getMessageId())
-		{
-			MessageTable::indexRecord($this->getMessageId());
-		}
 	}
 
 	/**

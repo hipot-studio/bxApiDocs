@@ -2,7 +2,7 @@
 
 namespace Bitrix\Im\V2\Application;
 
-use Bitrix\Im\Call\Integration\Zoom;
+use Bitrix\Im\Integration\Socialservices\Zoom;
 use Bitrix\Im\Integration\Disk\Documents;
 use Bitrix\Im\Settings;
 use Bitrix\Im\V2\Chat\CopilotChat;
@@ -44,7 +44,6 @@ class Features
 		public readonly bool $changeInviteLanguageAvailable,
 		public readonly bool $voteCreationAvailable,
 		public readonly bool $messagesAutoDeleteEnabled,
-		public readonly bool $isNotificationsStandalone,
 		public readonly bool $isCopilotSelectModelAvailable,
 		public readonly bool $teamsInStructureAvailable,
 		public readonly bool $isDesktopRedirectAvailable,
@@ -53,15 +52,11 @@ class Features
 		public readonly bool $aiFileTranscriptionAvailable,
 		public readonly bool $chatSharingLinkAvailable,
 		public readonly bool $isTasksRecentListAvailable,
-		public readonly bool $videoNoteAvailable,
-		public readonly bool $mentionAllAvailable,
 		public readonly bool $unreadRecentModeAvailable,
-		public readonly bool $isMultipleReactionsAvailable,
 		public readonly bool $aiAssistantMcpSelectorAvailable,
 		public readonly bool $videoNoteTranscriptionAvailable,
-		public readonly bool $stickersAvailable,
 		public readonly bool $isCopilotReasoningAvailable,
-		public readonly bool $isTextFormatToolbarAvailable,
+		public readonly bool $isCopilotFileUploadAvailable,
 	){}
 
 	public static function get(): self
@@ -98,7 +93,6 @@ class Features
 			Invitation::isChangeLanguageAvailable(),
 			self::isVoteCreationAvailable(),
 			self::isMessagesAutoDeleteEnabled(),
-			self::isNotificationsStandalone(),
 			self::isCopilotSelectModelAvailable(),
 			Structure::isTeamsAvailable(),
 			self::isDesktopRedirectAvailable(),
@@ -107,15 +101,11 @@ class Features
 			self::isAiFileTranscriptionAvailable(),
 			self::isChatSharingLinkAvailable(),
 			self::isTasksRecentListAvailable(),
-			self::isVideoNoteAvailable(),
-			self::isMentionAllAvailable(),
 			self::isUnreadRecentModeAvailable(),
-			self::isMultipleReactionsAvailable(),
 			self::isAiAssistantMcpSelectorAvailable(),
 			self::isVideoNoteTranscriptionAvailable(),
-			self::isStickersAvailable(),
 			self::isCopilotReasoningAvailable(),
-			self::isTextFormatToolbarAvailable(),
+			self::isCopilotFileUploadAvailable(),
 		);
 	}
 
@@ -155,11 +145,6 @@ class Features
 			&& class_exists('\\Bitrix\\Vote\\Config\\Feature')
 			&& \Bitrix\Vote\Config\Feature::instance()->isImIntegrationEnabled()
 		;
-	}
-
-	private static function isNotificationsStandalone(): bool
-	{
-		return Option::get('im', '~is_notifications_standalone', 'N') === 'Y';
 	}
 
 	public static function isMessagesAutoDeleteEnabled(): bool
@@ -228,35 +213,12 @@ class Features
 
 	public static function isTasksRecentListAvailable(): bool
 	{
-		return
-			Option::get('im', 'is_tasks_recent_list_available', 'Y') === 'Y'
-			&& Loader::includeModule('tasks')
-		;
-	}
-
-	public static function isVideoNoteAvailable(): bool
-	{
-		return Option::get('im', 'video_note_available', 'N') === 'Y';
-	}
-
-	public static function isMentionAllAvailable(): bool
-	{
-		return Option::get('im', 'mention_all_available', 'N') === 'Y';
-	}
-
-	public static function isMultipleReactionsAvailable(): bool
-	{
-		return Option::get('im', 'multiple_reactions_available', 'N') === 'Y';
+		return Loader::includeModule('tasks');
 	}
 
 	public static function isTranscriptionEmotionsAvailable(): bool
 	{
 		return Option::get('im', 'transcription_emotions_available', 'N') === 'Y';
-	}
-
-	public static function isStickersAvailable(): bool
-	{
-		return Option::get('im', 'stickers_available', 'N') === 'Y';
 	}
 
 	public static function isCopilotReasoningAvailable(): bool
@@ -269,8 +231,8 @@ class Features
 		return Option::get('im', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 
-	public static function isTextFormatToolbarAvailable(): bool
+	public static function isCopilotFileUploadAvailable(): bool
 	{
-		return Option::get('im', 'text_format_toolbar_available', 'N') === 'Y';
+		return Option::get('im', 'copilot_file_upload_available', 'N') === 'Y';
 	}
 }

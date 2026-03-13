@@ -7,7 +7,6 @@ use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Rest\V3\Attribute\DtoType;
-use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Exception\ClassRequireAttributeException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
 use Bitrix\Rest\V3\Exception\RestException;

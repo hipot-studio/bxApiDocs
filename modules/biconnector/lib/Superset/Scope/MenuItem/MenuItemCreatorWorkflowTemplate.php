@@ -20,14 +20,21 @@ final class MenuItemCreatorWorkflowTemplate extends BaseMenuItemCreator
 			$menuItems[] = [
 				'ID' => "BIC_WORKFLOW_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
+				'IS_LOCKED' => !$this->isAvailableByTariff(),
+				'ON_CLICK' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
 				'URL' => $this->getDetailUrl(
 					$dashboard,
 					$params,
-					['openFrom' => 'workflow_template']
+					['openFrom' => $this->getOpenFrom()]
 				),
 			];
 		}
 
 		return $menuItems;
+	}
+
+	protected function getOpenFormCode(): string
+	{
+		return 'workflow_template';
 	}
 }

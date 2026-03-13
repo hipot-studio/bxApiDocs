@@ -14,7 +14,6 @@ use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
 use Bitrix\HumanResources\Builder\Structure\Sort\NodeSort;
 use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Enum\SortDirection;
-use Bitrix\HumanResources\Service\Access\Structure\StructureAccessService;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\HumanResources\Engine\Controller;
@@ -32,13 +31,11 @@ use Bitrix\HumanResources\Type\StructureAction;
 final class Structure extends Controller
 {
 	private readonly NodeRepository $nodeRepository;
-	private readonly StructureAccessService $accessService;
 
 	public function __construct(Request $request = null)
 	{
 		parent::__construct($request);
 		$this->nodeRepository = Container::getNodeRepository(true);
-		$this->accessService = new StructureAccessService();
 	}
 
 	#[Attribute\StructureActionAccess(permission: StructureActionDictionary::ACTION_STRUCTURE_VIEW_ACCESS)]
@@ -204,7 +201,11 @@ final class Structure extends Controller
 			'teamsAvailable' => Feature::instance()->isCrossFunctionalTeamsAvailable(),
 			'collabsAvailable' => Feature::instance()->isCollabsAvailable(),
 			'deputyApprovesBP' => Feature::instance()->isDeputyApprovesBPAvailable(),
-			'departmentSettingsAvailable' => Feature::instance()->isDepartmentSettingsAvailable(),
+			'departmentBPSettingsAvailable' => Feature::instance()->isDepartmentBPSettingsAvailable(),
+			'areTeamReportSettingsAvailable' => Feature::instance()->areTeamReportSettingsAvailable(),
+			'isDeputyGetReportsAvailable' => Feature::instance()->isDeputyGetReportsAvailable(),
+			'areDepartmentReportsSettingsAvailable' => Feature::instance()->areDepartmentReportsSettingsAvailable(),
+			'multipleUsersSettingsAvailable' => Feature::instance()->areMultipleUsersSettingsAvailable(),
 		];
 	}
 

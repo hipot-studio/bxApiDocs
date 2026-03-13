@@ -6,6 +6,9 @@ use Bitrix\Main\Loader;
 
 class CBPSchedulerService extends CBPRuntimeService
 {
+	public const DEFAULT_SORT = 100;
+	public const REPEAT_SORT = 75;
+
 	/**
 	 * @param bool $withType Return as array [value, type].
 	 * @return int|array
@@ -58,7 +61,7 @@ class CBPSchedulerService extends CBPRuntimeService
 		\Bitrix\Main\Config\Option::set('bizproc', 'delay_min_limit', $limit);
 	}
 
-	public function subscribeOnTime($workflowId, $eventName, $expiresAt)
+	public function subscribeOnTime($workflowId, $eventName, $expiresAt, int $sort = self::DEFAULT_SORT)
 	{
 		$workflowId = preg_replace('#[^a-z0-9.]#i', '', $workflowId);
 		$eventName = preg_replace('#[^a-z0-9._-]#i', '', $eventName);
@@ -73,14 +76,21 @@ class CBPSchedulerService extends CBPRuntimeService
 			}
 		}
 
-		return self::addAgent($workflowId, $eventName, $expiresAt);
+		return self::addAgent($workflowId, $eventName, $expiresAt, sort: $sort);
 	}
 
-	private static function addAgent($workflowId, $eventName, $expiresAt, $counter = 0)
+	private static function addAgent(
+		$workflowId,
+		$eventName,
+		$expiresAt,
+		int $counter = 0,
+		int $sort = self::DEFAULT_SORT
+	)
 	{
-		$params = '[\'SchedulerService\' => \'OnAgent\', \'Counter\' => '.((int) $counter).']';
+		$params = "['SchedulerService' => 'OnAgent', 'Counter' => {$counter}, 'Sort' => {$sort}]";
 		$name = "CBPSchedulerService::OnAgent('{$workflowId}', '{$eventName}', {$params});";
-		return self::addAgentInternal($name, $expiresAt);
+
+		return self::addAgentInternal($name, $expiresAt, $sort);
 	}
 
 	public function unSubscribeOnTime($id)
@@ -103,7 +113,7 @@ class CBPSchedulerService extends CBPRuntimeService
 				if ($expiresAt)
 				{
 					++$counter;
-					self::addAgent($workflowId, $eventName, $expiresAt, $counter);
+					self::addAgent($workflowId, $eventName, $expiresAt, $counter, self::REPEAT_SORT);
 				}
 			}
 			elseif (
@@ -116,7 +126,14 @@ class CBPSchedulerService extends CBPRuntimeService
 		}
 	}
 
-	public function subscribeOnEvent($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId = null): ?int
+	public function subscribeOnEvent(
+		$workflowId,
+		$eventHandlerName,
+		$eventModule,
+		$eventName,
+		$entityId = null,
+		int $sort = self::DEFAULT_SORT
+	): ?int
 	{
 		$resultId = null;
 		$entityKey = null;
@@ -153,7 +170,7 @@ class CBPSchedulerService extends CBPRuntimeService
 			'bizproc',
 			'CBPSchedulerService',
 			'sendEvents',
-			100,
+			$sort,
 			'',
 			array($eventModule, $eventName, $entityKey)
 		);
@@ -365,6 +382,22 @@ class CBPSchedulerService extends CBPRuntimeService
 		}
 	}
 
+	/**
+	 * @param string $workflowId
+	 * @param string $handler
+	 * @param int $counter
+	 * @return void
+	 */
+	public static function retrySendEventToWorkflow(string $workflowId, string $handler, int $counter = 0): void
+	{
+		$event = [
+			'WORKFLOW_ID' => $workflowId,
+			'HANDLER' => $handler,
+			'EVENT_PARAMETERS' => []
+		];
+		self::sendEventToWorkflow($event, $counter);
+	}
+
 	private static function sendEventToWorkflow($event, $counter = 0)
 	{
 		try
@@ -423,11 +456,11 @@ class CBPSchedulerService extends CBPRuntimeService
 			++$counter;
 			$eventId = $event['ID'];
 			$name = "CBPSchedulerService::repeatEvent({$eventId}, {$counter});";
-			self::addAgentInternal($name, $expiresAt);
+			self::addAgentInternal($name, $expiresAt, sort: self::REPEAT_SORT);
 		}
 	}
 
-	private static function addAgentInternal($name, $expiresAt)
+	private static function addAgentInternal($name, $expiresAt, $sort = self::DEFAULT_SORT)
 	{
 		CTimeZone::Disable();
 		$result = CAgent::AddAgent(
@@ -437,7 +470,8 @@ class CBPSchedulerService extends CBPRuntimeService
 			10,
 			"",
 			"Y",
-			date($GLOBALS["DB"]->DateFormatToPHP(FORMAT_DATETIME), $expiresAt)
+			date($GLOBALS["DB"]->DateFormatToPHP(FORMAT_DATETIME), $expiresAt),
+			sort: $sort,
 		);
 		CTimeZone::Enable();
 		return $result;

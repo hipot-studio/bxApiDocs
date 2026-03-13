@@ -4,7 +4,6 @@ namespace Bitrix\HumanResources\Compatibility\Event;
 
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Config\Storage;
-use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Enum\LoggerEntityType;
 use Bitrix\HumanResources\Exception\CreationFailedException;
@@ -46,7 +45,6 @@ class UserEventHandler
 
 		self::updateNodeMemberActive($fields);
 
-		Container::getCacheManager()->clean(NodeRepository::NODE_ENTITY_RESTRICTION_CACHE);
 		NewToOldEventHandler::clearCacheInBackground();
 	}
 
@@ -92,14 +90,6 @@ class UserEventHandler
 
 		if (Container::getSemaphoreService()
 			->isLocked('main-OnAfterUserAdd'))
-		{
-			return;
-		}
-
-		if (
-			Container::getSemaphoreService()
-				->isLocked('hr-OnAfterUserAdd' . $fields['ID'])
-		)
 		{
 			return;
 		}
@@ -232,7 +222,9 @@ class UserEventHandler
 		{
 		}
 
-		NewToOldEventHandler::clearCacheInBackground();
+		NewToOldEventHandler::clearCacheInBackground(
+			shouldClearHRCacheImmediately: true,
+		);
 
 		Container::getCacheManager()->clean(sprintf(UserService::USER_DEPARTMENT_EXISTS_KEY, $userId));
 	}

@@ -104,7 +104,8 @@ class UpdateService
 
 		$changes = $this->getChanges($fields, $fullTaskData);
 
-		(new UpdateMembers($config))($fields, $fullTaskData, $changes);
+		$updateMemberService = new UpdateMembers($config);
+		$updateMemberInfo = $updateMemberService($fields, $fullTaskData, $changes);
 
 		(new UpdateParameters($config))($fields, $fullTaskData);
 
@@ -213,6 +214,26 @@ class UpdateService
 		));
 
 		(new RunInternalEvent())($entityBefore, $taskAfterUpdate);
+
+		if ($task->responsible || $entityBefore->responsible->id !== $taskAfterUpdate->responsible->id)
+		{
+			$context = \Bitrix\Main\Context::getCurrent();
+			Container::getInstance()
+				->getLogger()
+				->logWarning(
+					[
+						'targetUserId' => $task->responsible?->id,
+						'taskId' => $task->id,
+						'requestStartTime' => $context?->getServer()->get('REQUEST_TIME_FLOAT'),
+						'action' => $context?->getRequest()->get('action'),
+						'responsibleBefore' => $entityBefore->responsible->id,
+						'responsibleAfter' => $taskAfterUpdate->responsible->id,
+						'members' => $updateMemberInfo,
+						'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS),
+					],
+					'TASKS_UPDATE_RESPONSIBLE_DEBUG'
+				);
+		}
 
 		return [$taskAfterUpdate, $fields, $entityBefore, $taskObjectBeforeUpdate, $sourceTaskData];
 	}

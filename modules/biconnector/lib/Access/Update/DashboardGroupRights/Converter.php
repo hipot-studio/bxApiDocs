@@ -485,7 +485,6 @@ final class Converter
 				)
 			)
 			->setCode("user_converted_group_{$this->newGroupCounter}")
-			->setOwnerId(Manager::getAdminId())
 		;
 	}
 

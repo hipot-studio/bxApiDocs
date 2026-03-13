@@ -6,7 +6,7 @@ class RequestValidationException extends ValidationException
 {
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_VALIDATION_REQUESTVALIDATIONEXCEPTION';
+		return 'REST_V3_EXCEPTION_VALIDATION_REQUESTVALIDATIONEXCEPTION';
 	}
 
 	protected function getClassWithPhrase(): string

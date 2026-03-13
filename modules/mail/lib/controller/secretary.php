@@ -5,13 +5,17 @@ namespace Bitrix\Mail\Controller;
 use Bitrix\Forum\ForumTable;
 use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Integration\Im\Chat;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\SystemException;
 
 class Secretary extends Controller
 {
@@ -65,9 +69,10 @@ class Secretary extends Controller
 	/**
 	 * Create chat for mail message or go back to existing chat.
 	 *
-	 * @param int $messageId  mail message id
+	 * @param int $messageId mail message id
 	 * @return int|null  chat id
 	 * @throws \Bitrix\Main\LoaderException
+	 * @throws SystemException
 	 */
 	public function createChatFromMessageAction(int $messageId): ?int
 	{
@@ -95,8 +100,6 @@ class Secretary extends Controller
 			if (! \Bitrix\Intranet\Secretary::isUserInChat($chatId, $userId))
 			{
 				\Bitrix\Intranet\Secretary::addUserToChat($chatId, $userId, false);
-				// // post welcome message again because it was hidden
-				// \Bitrix\Intranet\Secretary::postMailChatWelcomeMessage($message, $chatId, $userId);
 			}
 		}
 		else
@@ -107,10 +110,20 @@ class Secretary extends Controller
 				$this->addError(new Error(
 						Loc::getMessage('MAIL_SECRETARY_CREATE_CHAT_LOCK_ERROR'), 'lock_error')
 				);
+
 				return null;
 			}
 
-			$chatId = \Bitrix\Intranet\Secretary::createMailChat($messageData, $userId);
+			$createMailChatResult = Chat::createMailChat($messageData, $userId);
+
+			if (!$createMailChatResult->isSuccess())
+			{
+				$this->addError($createMailChatResult->getError());
+
+				return null;
+			}
+
+			$chatId = $createMailChatResult->getData()['chatId'];
 
 			Application::getConnection()->unlock($lockName);
 		}
@@ -145,6 +158,40 @@ class Secretary extends Controller
 		}
 
 		return $chatId;
+	}
+
+	/**
+	 * @throws LoaderException
+	 * @throws SystemException
+	 */
+	public function discussMessageInChatAction(int $messageId, string $dialogId, CurrentUser $user): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_MODULE_NOT_INSTALLED')));
+
+			return;
+		}
+
+		$userId = (int)$user->getId();
+
+		if (!$this->canBindEntities($messageId, $userId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_ACCESS_DENIED')));
+
+			return;
+		}
+
+		$message = \Bitrix\Mail\Integration\Intranet\Secretary::getMessage($messageId);
+		$messageData = $message->toArray();
+		$messageData['USER_IDS'] = [$userId];
+
+		$result = Chat::addMailInChat($messageData, $userId, $dialogId);
+
+		if (!$result->isSuccess())
+		{
+			$this->addError($result->getError());
+		}
 	}
 
 	public function onCalendarSaveAction(int $messageId, int $calendarEventId)

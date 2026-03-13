@@ -28,7 +28,17 @@ class BaseRule extends AbstractRule
 			return true;
 		}
 
-		$permissionId = ActionDictionary::getActionPermissionMap()[$params['action']];
+		if (empty($params['action']))
+		{
+			return false;
+		}
+
+		$permissionId = $this->getPermissionId($params['action']);
+		if (empty($permissionId))
+		{
+			return false;
+		}
+
 		$params['item'] = $item;
 		$params['value'] = $item?->getId();
 		$params['permissionId'] = $permissionId;
@@ -45,6 +55,11 @@ class BaseRule extends AbstractRule
 		}
 
 		return (bool)$this->user->getPermission($permissionId);
+	}
+
+	protected function getPermissionId(string $action): ?string
+	{
+		return ActionDictionary::getActionPermissionMap()[$action] ?? null;
 	}
 
 	/**
@@ -85,7 +100,7 @@ class BaseRule extends AbstractRule
 	 */
 	protected static function getPermissionCode(array $params): ?string
 	{
-		$permissionCode = ActionDictionary::getDashboardPermissionsMap()[$params['action']];
+		$permissionCode = ActionDictionary::getDashboardPermissionsMap()[$params['action']] ?? null;
 
 		if (!$permissionCode)
 		{

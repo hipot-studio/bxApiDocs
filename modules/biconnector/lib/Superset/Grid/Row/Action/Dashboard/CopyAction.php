@@ -38,7 +38,7 @@ final class CopyAction extends BaseAction
 		$accessItem = DashboardAccessItem::createFromArray([
 			'ID' => (int)$rawFields['ID'],
 			'TYPE' => $rawFields['TYPE'],
-			'OWNER_ID' => (int)$rawFields['OWNER_ID'],
+			'STATUS' => $rawFields['STATUS'],
 		]);
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_COPY, $accessItem))
 		{

@@ -38,11 +38,22 @@ class BizprocAutomationSchemeComponent
 		$this->action = $this->arParams['action'];
 		$this->documentType = $this->arParams['documentType'];
 
+		if (!$this->documentType)
+		{
+			$this->errorCollection->setError(
+				new Error(Loc::getMessage('BIZPROC_AUTOMATION_SCHEME_UNKNOWN_DOCUMENT_MSGVER_1'))
+			);
+
+			return;
+		}
+
 		if (!$this->checkCurrentUserRights($this->documentType, $this->arParams['documentCategory']))
 		{
 			$this->errorCollection->setError(
 				new Error(Loc::getMessage('BIZPROC_AUTOMATION_SCHEME_RIGHTS_ERROR'))
 			);
+
+			return;
 		}
 		$this->arParams['robotNames'] = $this->arParams['robotNames'] ?? [];
 		if (!is_array($this->arParams['triggerNames'] ?? null))
@@ -60,6 +71,8 @@ class BizprocAutomationSchemeComponent
 			$this->errorCollection->setError(
 				new Error(Loc::getMessage('BIZPROC_AUTOMATION_SCHEME_UNKNOWN_ACTION'))
 			);
+
+			return;
 		}
 
 		$documentService = CBPRuntime::getRuntime()->getDocumentService();

@@ -219,10 +219,7 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			}
 		}
 
-		if (empty($this->mailboxHelper->getDirsHelper()->getDirs()))
-		{
-			$this->mailboxHelper->cacheDirs();
-		}
+		$this->mailboxHelper->cacheDirs();
 
 		$this->rememberCurrentMailboxId($this->mailbox['ID']);
 
@@ -1285,14 +1282,14 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 	/**
 	 * @return mixed[]
 	 */
-				private function getDirsForFilter(): array
-				{
+		private function getDirsForFilter(): array
+		{
 		$syncDirs = $this->mailboxHelper->getDirsHelper()->getSyncDirs();
 		$dirs = [];
 
 		foreach ($syncDirs as $syncDir)
 		{
-			if ($syncDir->isHiddenSystemFolder())
+			if ($syncDir->isVirtualFolder())
 			{
 				continue;
 			}
@@ -1550,7 +1547,8 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 		$flat = [];
 		$list = [];
-		$dirs = $mailboxHelper->getDirsHelper()->getSyncDirs();
+
+		$dirs = $mailboxHelper->getDirsHelper()->getSyncDirsOrdered();
 
 		foreach ($dirs as $dir)
 		{
@@ -1558,7 +1556,7 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			$hasChild = (bool)preg_match('/(HasChildren)/ix', (string)$dir->getFlags());
 			$isCounted = ($dir->isTrash() || $dir->isSpam()) ? false : true;
 
-			if ($dir->isHiddenSystemFolder())
+			if ($dir->isVirtualFolder())
 			{
 				continue;
 			}
@@ -1566,7 +1564,6 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			$flat[$dir->getId()] = [
 				'id' => $path,
 				'path' => $path,
-				'order' => $mailboxHelper->getDirsHelper()->getOrderByDefault($dir),
 				'delimiter' => $dir->getDelimiter(),
 				'name' => htmlspecialcharsbx($dir->getName()),
 				// @TODO: transfer to template
@@ -1612,7 +1609,6 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			}
 		}
 
-		Bitrix\Main\Type\Collection::sortByColumn($list, 'order');
 		$directoryTreeForContextMenu = $list;
 
 		return $list;

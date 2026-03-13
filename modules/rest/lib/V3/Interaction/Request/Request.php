@@ -2,13 +2,19 @@
 
 namespace Bitrix\Rest\V3\Interaction\Request;
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Exception\InvalidJsonException;
 use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
+use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
+use Bitrix\Rest\V3\Exception\Validation\RequiredFieldsInRequestFilterPropertyException;
 use Bitrix\Rest\V3\Interaction\Relation;
+use Bitrix\Rest\V3\Structure\Filtering\Attribute\FilterRequired;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
 use Bitrix\Rest\V3\Structure\Structure;
 use ReflectionClass;
 use ReflectionNamedType;
@@ -70,6 +76,7 @@ abstract class Request
 
 		// properties of request
 		$reflection = new ReflectionClass($request);
+
 		$properties = $reflection->getProperties(\ReflectionProperty::IS_PUBLIC);
 
 		// set input data into the request
@@ -83,13 +90,19 @@ abstract class Request
 			$propertyName = $property->getName();
 			$propertyType = $property->getType()->getName();
 			$isOptional = $property->getType()->allowsNull();
+			$hasDefaultValue = $property->hasDefaultValue();
 
 			if (!isset($input[$propertyName]))
 			{
-				if (!$isOptional)
+				if (!$isOptional && !$hasDefaultValue)
 				{
 					// field not found, but it is required
 					throw new RequiredFieldInRequestException($propertyName);
+				}
+
+				if ($hasDefaultValue)
+				{
+					$input[$propertyName] = $property->getDefaultValue();
 				}
 				if ($propertyName === 'select' && $request->getOptions()['scope'] && !empty($request->getOptions()['scope']->fields))
 				{
@@ -120,6 +133,31 @@ abstract class Request
 				throw new InvalidRequestFieldTypeException($propertyName, $propertyType);
 			}
 
+			if (isset($request->{$propertyName}) && $request->{$propertyName} instanceof FilterStructure)
+			{
+				$propertyReflection = new \ReflectionProperty($request, $propertyName);
+				$requiredFilterAttributes = $propertyReflection->getAttributes(FilterRequired::class);
+				if (!empty($requiredFilterAttributes))
+				{
+					$requiredFilterFields =	$requiredFilterAttributes[0]->newInstance()->fields;
+					$usedFields = array_keys($request->{$propertyName}->getSimpleFilterConditions());
+					$missingFields = array_diff($requiredFilterFields, $usedFields);
+					$containsAllRequiredFields = ($missingFields === []);
+
+					if (!$containsAllRequiredFields)
+					{
+						throw new RequiredFieldsInRequestFilterPropertyException($propertyName, $missingFields);
+					}
+				}
+			}
+		}
+
+		$validationService = ServiceLocator::getInstance()->get(ValidationService::class);
+		$validationResult = $validationService->validate($request);
+
+		if (!$validationResult->isSuccess())
+		{
+			throw new RequestValidationException($validationResult->getErrors());
 		}
 
 		return $request;

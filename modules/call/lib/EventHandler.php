@@ -5,14 +5,13 @@ namespace Bitrix\Call;
 use Bitrix\Main\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\EntityError;
-use Bitrix\Main\Config\Option;
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\V2\Call\CallFactory;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\Call\Integration\EntityType;
 use Bitrix\Call\Service\CallLogService;
+use Bitrix\Call\Integration\EntityType;
 
-
+/**
+ * @internal
+ */
 class EventHandler
 {
 	/**
@@ -60,7 +59,7 @@ class EventHandler
 				$ids = array_unique(array_merge($userIds, array_keys($call->getCallUsers())));
 				foreach ($ids as $userId)
 				{
-					\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
+					Recent::updateUserActiveCallsCache($userId);
 				}
 			}
 		}
@@ -128,13 +127,13 @@ class EventHandler
 	public static function onCallFinished(Event $event): void
 	{
 		$call = $event->getParameter('call');
-		if (!$call instanceof \Bitrix\Im\Call\Call)
+		if (!$call instanceof Call)
 		{
 			return;
 		}
 
-		\Bitrix\Call\Call::updateCallCache($call->getId());
-		\Bitrix\Call\Call::terminateAllCallsInChat($call->getChatId(), $call->getId());
+		Recent::updateCallCache($call->getId());
+		Recent::terminateAllCallsInChat($call->getChatId(), $call->getId());
 	}
 
 	/**
@@ -223,7 +222,7 @@ class EventHandler
 					true,
 					true
 				);
-				\Bitrix\Call\Call::updateUserActiveCallsCache($userId);
+				Recent::updateUserActiveCallsCache($userId);
 			}
 
 			if (count($usersToInvite) > 0)
@@ -231,7 +230,7 @@ class EventHandler
 				$signaling->sendUsersInvited($initiatorId, $usersToInvite, $call->getUsers(), true);
 			}
 
-			\Bitrix\Call\Call::updateCallCache($call->getId());
+			Recent::updateCallCache($call->getId());
 		}
 	}
 
@@ -239,7 +238,7 @@ class EventHandler
 	 * Handles call user state change events for logging
 	 *
 	 * @event 'im:OnCallUserStateChange'
-	 * @see \Bitrix\Im\Call\CallUser::updateState
+	 * @see \Bitrix\Call\CallUser::updateState
 	 * @param Event $event
 	 * @return EventResult
 	 */
@@ -293,7 +292,7 @@ class EventHandler
 	 */
 	public static function onPortalDomainChange(array $domains): EventResult
 	{
-		$result = new EventResult(EventResult::SUCCESS);
+		$result = new EventResult();
 
 		/*
 		$publicUrl = $domains['new_domain'];

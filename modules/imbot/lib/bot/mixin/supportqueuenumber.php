@@ -11,6 +11,9 @@ const COMMAND_OPERATOR_QUEUE_NUMBER = 'operatorQueueNumber';
 const COMMAND_QUEUE_NUMBER = 'queueNumber';
 const MESSAGE_PARAM_QUEUE_NUMBER = 'IMB_QUEUE_NUMBER';// position in OL line
 
+/**
+ * @internal
+ */
 trait SupportQueueNumber
 {
 	/**

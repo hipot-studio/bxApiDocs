@@ -6,6 +6,7 @@ namespace Bitrix\Imbot\Bot;
  * Common interface for support bots.
  *
  * @package Bitrix\Imbot\Bot
+ * @internal
  */
 interface SupportBot extends NetworkBot
 {

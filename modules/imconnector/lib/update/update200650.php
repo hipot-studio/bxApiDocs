@@ -9,7 +9,9 @@ use Bitrix\Main\Loader,
 
 use Bitrix\Disk\Internals\VersionTable;
 
-
+/**
+ * @internal
+ */
 final class Update200650 extends Stepper
 {
 	private const PORTION = 100;

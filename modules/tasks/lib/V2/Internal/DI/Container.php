@@ -18,6 +18,7 @@ use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
 use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Repository\DiskFileRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Repository\MessageRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\UserUrlService;
@@ -503,5 +504,10 @@ class Container extends AbstractContainer
 	public function getFeedbackService(): FeedbackService
 	{
 		return $this->get(FeedbackService::class);
+	}
+
+	public function getChatIntegration(): Chat
+	{
+		return $this->get(Chat::class);
 	}
 }

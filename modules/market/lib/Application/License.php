@@ -26,7 +26,7 @@ class License
 			!in_array(CBitrix24::getLicensePrefix(), ['ua', 'kz', 'by'])
 		) {
 			$licenseInfo['TERMS_OF_SERVICE_LINK'] = Loc::getMessage('MARKET_INSTALL_TERMS_OF_SERVICE_LINK');
-			$licenseInfo['TERMS_OF_SERVICE_TEXT'] = Loc::getMessage('MARKET_INSTALL_TERMS_OF_SERVICE_TEXT', ['#LINK#' => $licenseInfo['TERMS_OF_SERVICE_LINK']]);
+			$licenseInfo['TERMS_OF_SERVICE_TEXT'] = Loc::getMessage('MARKET_INSTALL_TERMS_OF_SERVICE_TEXT_MSGVER_1', ['#LINK#' => $licenseInfo['TERMS_OF_SERVICE_LINK']]);
 		}
 		elseif (
 			Loader::IncludeModule('bitrix24')
@@ -34,7 +34,7 @@ class License
 		)
 		{
 			$licenseInfo['TERMS_OF_SERVICE_LINK'] = Loc::getMessage('MARKET_INSTALL_TERMS_OF_SERVICE_LINK_BY');
-			$licenseInfo['TERMS_OF_SERVICE_TEXT'] = Loc::getMessage('MARKET_INSTALL_TERMS_OF_SERVICE_TEXT', ['#LINK#' => $licenseInfo['TERMS_OF_SERVICE_LINK']]);
+			$licenseInfo['TERMS_OF_SERVICE_TEXT'] = Loc::getMessage('MARKET_INSTALL_TERMS_OF_SERVICE_TEXT_MSGVER_1', ['#LINK#' => $licenseInfo['TERMS_OF_SERVICE_LINK']]);
 		}
 
 		return $licenseInfo;

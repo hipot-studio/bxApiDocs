@@ -6,6 +6,6 @@ class LicenseException extends RestException
 {
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_LICENCEEXCEPTION';
+		return 'REST_V3_EXCEPTION_LICENCEEXCEPTION';
 	}
 }

@@ -144,6 +144,7 @@ final class UserManager
 
 		$query = UserTable::query();
 		$query->setSelect($params['select'])
+			->where('REAL_USER', 'expr', true)
 			->setFilter($params['filter'])
 			->setDistinct(true);
 

@@ -10,7 +10,6 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -33,9 +32,9 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Type\Date;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
-use Bitrix\Bitrix24\Feature;
+use Bitrix\BIConnector\Configuration\Feature;
 
-Loader::includeModule("biconnector");
+Loader::includeModule('biconnector');
 
 class ApacheSupersetDashboardSettingComponent
 	extends CBitrixComponent
@@ -132,12 +131,7 @@ class ApacheSupersetDashboardSettingComponent
 				->setAjaxData($ajaxData)
 		;
 
-		if (AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $this->dashboard))
-		{
-			$settingsPanel->addSection($this->getOwnerSection());
-		}
-
-		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT))
 		{
 			$settingsPanel->addSection($this->getGroupsSection());
 		}
@@ -171,14 +165,14 @@ class ApacheSupersetDashboardSettingComponent
 			return $result;
 		}
 
-		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $this->dashboard))
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS, $this->dashboard))
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_DASHBOARD')));
 
 			return $result;
 		}
 
-		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
+		if (!Feature::isBuilderEnabled())
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_FEATURE_UNAVAILABLE')));
 
@@ -218,20 +212,6 @@ class ApacheSupersetDashboardSettingComponent
 		}
 
 		return $dateFilterSection;
-	}
-
-	private function getOwnerSection(): EntityEditorSection
-	{
-		return (new EntityEditorSection(
-			name: 'OWNER_ID',
-			title: Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_SECTION_OWNER_TITLE'),
-		))
-			->addField(new Field\OwnerField(
-				id: 'OWNER_ID',
-				dashboard: $this->dashboard,
-			))
-			->setIconClass('--person-check')
-		;
 	}
 
 	private function getGroupsSection(): EntityEditorSection
@@ -357,81 +337,20 @@ class ApacheSupersetDashboardSettingComponent
 			$result['FILTER_PERIOD'] = $period;
 		}
 
-		if (isset($data['OWNER_ID']) && (int)$data['OWNER_ID'] !== $dashboardObject->getOwnerId())
-		{
-			if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $this->dashboard))
-			{
-				$this->errorCollection->setError(
-					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_DASHBOARD')),
-				);
-
-				return null;
-			}
-
-			$integrator = Integrator::getInstance();
-			$newOwnerId = (int)$data['OWNER_ID'];
-			if ($newOwnerId <= 0)
-			{
-				$this->errorCollection->setError(
-					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_OWNER_ERROR_NOT_SELECTED')),
-				);
-
-				return null;
-			}
-
-			$userTo = (new SupersetUserRepository())->getById($newOwnerId);
-			if (!$userTo)
-			{
-				$this->errorCollection->setError(
-					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_OWNER_ERROR_NOT_FOUND')),
-				);
-
-				return null;
-			}
-
-			if (!$userTo->clientId)
-			{
-				$superset = new SupersetController($integrator);
-				$createResult = $superset->createUser($newOwnerId);
-				if (!$createResult->isSuccess())
-				{
-					$this->errorCollection->setError(
-						new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_OWNER_ERROR_CREATE_USER')),
-					);
-
-					return null;
-				}
-				$userTo = $createResult->getData()['user'];
-			}
-
-			$currentOwnerId = $dashboardObject->getOwnerId();
-			$userFrom = (new SupersetUserRepository())->getById($currentOwnerId);
-			if (!$userFrom)
-			{
-				$this->errorCollection->setError(
-					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_OWNER_ERROR_CREATE_USER')),
-				);
-
-				return null;
-			}
-
-			$setOwnerResult = $integrator->changeDashboardOwner($dashboardObject->getExternalId(), $userFrom, $userTo);
-			if ($setOwnerResult->hasErrors())
-			{
-				$this->errorCollection->setError(
-					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_OWNER_ERROR_CREATE_USER')),
-				);
-
-				return null;
-			}
-			$dashboardObject->setOwnerId((int)$data['OWNER_ID']);
-			$result['OWNER_ID'] = (int)$data['OWNER_ID'];
-		}
-
-		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS))
 		{
 			$dashboardObject->unsetGroups();
 			$groupIds = array_flip($data['DASHBOARD_PARAMETERS']['GROUPS'] ?? []);
+			if (empty($groupIds) && !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
+			{
+				$error = new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_EMPTY_DASHBOARD_GROUP'));
+				$this->errorCollection->setError($error);
+
+				return null;
+			}
+
+			$allowedEditGroups = AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS);
+			$flippedAllowedEditGroups = array_flip($allowedEditGroups);
 
 			$bindings = SupersetDashboardGroupBindingTable::getList([
 				'filter' => ['DASHBOARD_ID' => $dashboardObject->getId()],
@@ -441,17 +360,19 @@ class ApacheSupersetDashboardSettingComponent
 
 			foreach ($bindings as $binding)
 			{
-				if (isset($groupIds[$binding->getGroupId()]))
+				$bindingGroupId = $binding->getGroupId();
+				if (isset($groupIds[$bindingGroupId]))
 				{
-					unset($groupIds[$binding->getGroupId()]);
+					unset($groupIds[$bindingGroupId]);
 				}
-				else
+				elseif (isset($flippedAllowedEditGroups[$bindingGroupId]))
 				{
 					$binding->delete();
 				}
 			}
 
-			foreach (array_flip($groupIds) as $groupId)
+			$addGroups = array_intersect(array_flip($groupIds), $allowedEditGroups);
+			foreach ($addGroups as $groupId)
 			{
 				SupersetDashboardGroupBindingTable::add([
 					'DASHBOARD_ID' => $dashboardObject->getId(),

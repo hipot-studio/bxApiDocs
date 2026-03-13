@@ -148,6 +148,7 @@ class Recent extends \Bitrix\Im\V2\Recent\Recent
 			->where('USER_ID', $userId)
 			->where('ITEM_TYPE', Chat::IM_TYPE_OPEN_LINE)
 			->where('SESSION.STATUS', '>=', $statusGroup->getLowerBorder())
+			->whereNotNull('RELATION.ID')
 			->registerRuntimeField((new Reference(
 				'SESSION',
 				SessionTable::class,

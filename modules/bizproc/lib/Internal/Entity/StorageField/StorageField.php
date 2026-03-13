@@ -183,12 +183,14 @@ class StorageField implements EntityInterface
 
 		if (isset($props['multiple']))
 		{
-			$result->setMultiple($props['multiple'] === 'Y');
+			$value = $props['multiple'];
+			$result->setMultiple(is_bool($value) ? $value : $value === 'Y');
 		}
 
 		if (isset($props['mandatory']))
 		{
-			$result->setMandatory($props['mandatory'] === 'Y');
+			$value = $props['mandatory'];
+			$result->setMandatory(is_bool($value) ? $value : $value === 'Y');
 		}
 
 		if (isset($props['settings']))

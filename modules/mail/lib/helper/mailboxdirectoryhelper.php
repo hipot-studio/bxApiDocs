@@ -4,20 +4,22 @@ namespace Bitrix\Mail\Helper;
 
 use Bitrix\Mail\Internals\MailboxDirectoryStorage;
 use Bitrix\Mail\Internals\MailboxDirectoryTable;
+use Bitrix\Mail\Internals\Entity\MailboxDirectory as MailboxDirectoryEntity;
 use Bitrix\Mail\MailboxDirectory;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Text\Emoji;
 
 class MailboxDirectoryHelper
 {
-	private $mailboxId = null;
+	private int $mailboxId;
 	private $storage = null;
 	/** @var  ErrorCollection */
 	private $errors = [];
+	private ?DirSortingHelper $sortingHelper = null;
 
 	public function __construct($mailboxId)
 	{
-		$this->mailboxId = $mailboxId;
+		$this->mailboxId = (int)$mailboxId;
 		$this->storage = new MailboxDirectoryStorage($mailboxId);
 		$this->errors = new ErrorCollection();
 	}
@@ -199,20 +201,54 @@ class MailboxDirectoryHelper
 		return null;
 	}
 
-	public function getSyncDirs()
+	public static function hasChildren(string $flags): bool
 	{
-		return array_filter($this->getDirs(), function ($item)
+		$hasChild = (bool)preg_match('/(\x5cHasChildren)/ix', $flags);
+
+		if (!$hasChild)
 		{
-			return $item->isSync();
-		});
+			$hasNoChildren = (bool)preg_match('/(\x5cHasNoChildren)/ix', $flags);
+			$noInferiors = (bool)preg_match('/(\x5cNoinferiors)/ix', $flags);
+
+			if (!$hasNoChildren && !$noInferiors)
+			{
+				$hasChild = true;
+			}
+		}
+
+		return $hasChild;
 	}
 
-	public function getSyncDirsOrderByTime($excludeDirPath = null)
+	/**
+	 * @return MailboxDirectoryEntity[]
+	 */
+	public function getSyncDirs(): array
 	{
-		return array_filter($this->orderByTime($this->getSyncDirs()), function ($item) use ($excludeDirPath)
-		{
-			return $item->getPath() !== $excludeDirPath;
-		});
+		return array_filter($this->getDirs(), static fn ($item) => $item->isSync());
+	}
+
+	/**
+	 * @return MailboxDirectoryEntity[]
+	 * @throws \Exception
+	 */
+	public function getSyncDirsOrdered(): array
+	{
+		$syncDirs = $this->getSyncDirs();
+
+		return $this->order($syncDirs);
+	}
+
+	/**
+	 * @param ?string $excludeDirPath
+	 * @return MailboxDirectoryEntity[]
+	 * @throws \Exception
+	 */
+	public function getSyncDirsOrderByTime(?string $excludeDirPath = null): array
+	{
+		return array_filter(
+			$this->orderByTime($this->getSyncDirs()),
+			static fn ($item) => $item->getPath() !== $excludeDirPath,
+		);
 	}
 
 	public function getSyncDirsPath($emojiEncode = false)
@@ -245,27 +281,202 @@ class MailboxDirectoryHelper
 		return $list;
 	}
 
-	private function orderByDefault($dirs)
+	public function buildDirectoryTreeForContextMenu(int $mailboxId, Mailbox $mailboxHelper)
 	{
-		usort($dirs, function ($a, $b)
-		{
-			$aSort = $this->getOrderByDefault($a);
-			$bSort = $this->getOrderByDefault($b);
+		$directoriesWithNumberOfUnreadMessages = $mailboxHelper->getDirsMd5WithCounter($mailboxId);
+		static $directoryTreeForContextMenu;
 
-			if ($aSort === $bSort)
+		if (!is_null($directoryTreeForContextMenu))
+		{
+			return $directoryTreeForContextMenu;
+		}
+
+		$systemDirs = [
+			'default' => $this->getDefaultDir(),
+			'spam' => $this->getSpam(),
+			'trash' => $this->getTrash(),
+			'outcome' => $this->getOutcome(),
+			'drafts' => $this->getDrafts(),
+		];
+
+		$systemDirMap = [];
+		foreach ($systemDirs as $type => $dirObj)
+		{
+			if ($dirObj && method_exists($dirObj, 'getId'))
 			{
-				return 0;
+				$systemDirMap[$dirObj->getId()] = $type;
+			}
+		}
+
+		$flat = [];
+		$list = [];
+		$syncDirIds = [];
+		$dirs = $this->getSyncDirs();
+		foreach ($dirs as $dir)
+		{
+			$syncDirIds[$dir->getId()] = true;
+		}
+
+		foreach ($dirs as $dir)
+		{
+			$id = $dir->getId();
+
+			if ($dir->isVirtualFolder())
+			{
+				continue;
 			}
 
-			return $aSort > $bSort ? 1 : -1;
-		});
+			$folderData = $this->buildFolderData(
+				$dir,
+				$systemDirMap,
+				$directoriesWithNumberOfUnreadMessages,
+			);
 
-		return $dirs;
+			$flat[$id] = $folderData;
+			if (!empty($flat[$dir->getParentId()]))
+			{
+				foreach ($flat[$dir->getParentId()]['items'] as $k => $item)
+				{
+					if (!empty($item['id']) && $item['id'] === 'loading')
+					{
+						array_splice($flat[$dir->getParentId()]['items'], $k, 1);
+					}
+				}
+
+				$flat[$dir->getParentId()]['items'][] = &$flat[$dir->getId()];
+			}
+			else
+			{
+				$list[] = &$flat[$dir->getId()];
+			}
+		}
+
+		foreach ($systemDirs as $type => $dirObj)
+		{
+			if (!$dirObj)
+			{
+				continue;
+			}
+
+			$id = $dirObj->getId();
+			if (!isset($syncDirIds[$id]))
+			{
+				$folderData = $this->buildFolderData(
+					$dirObj,
+					$systemDirMap,
+					$directoriesWithNumberOfUnreadMessages,
+					true
+				);
+				$list[] = $folderData;
+			}
+		}
+
+		usort(
+			$list,
+			static function (array $a, array $b): int
+			{
+				$aSort = $a['order'];
+				$bSort = $b['order'];
+
+				return $aSort <=> $bSort;
+			},
+		);
+
+		$directoryTreeForContextMenu = $list;
+
+		return $list;
 	}
 
-	public function getOrderByDefault($dir)
+	private function buildFolderData(
+		$dir,
+		array $systemDirMap,
+		array $directoriesWithNumberOfUnreadMessages,
+		bool $isHidden = false
+	): array
 	{
-		return $dir->isIncome() ? 10 : ($dir->isOutcome() ? 2000 : ($dir->isTrash() ? 3000 : ($dir->isSpam() ? 4000 : ($dir->isDraft() ? 5000 : $dir->getLevel() * 100))));
+		$id = $dir->getId();
+		$path = $dir->getPath(true);
+		$isCounted = !(($dir->isTrash() || $dir->isSpam()));
+		$hasChild = (bool)preg_match('/(HasChildren)/ix', (string)$dir->getFlags());
+
+		return [
+			'id' => $id,
+			'path' => $path,
+			'order' => $this->getOrder($dir),
+			'delimiter' => $dir->getDelimiter(),
+			'name' => htmlspecialcharsbx($dir->getName()),
+			'type' => $systemDirMap[$id] ?? 'custom',
+			'isHidden' => $isHidden,
+			'dataset' => [
+				'path' => $path,
+				'dirMd5' => $dir->getDirMd5(),
+				'isDisabled' => $dir->isDisabled(),
+				'hasChild' => $hasChild,
+				'isCounted' => $isCounted,
+			],
+			'count' => isset($directoriesWithNumberOfUnreadMessages[$dir->getDirMd5()]['MESSAGE_COUNT'])
+				? (int)$directoriesWithNumberOfUnreadMessages[$dir->getDirMd5()]['MESSAGE_COUNT']
+				: 0
+			,
+			'unseen' => isset($directoriesWithNumberOfUnreadMessages[$dir->getDirMd5()]['UNSEEN'])
+				? (int)$directoriesWithNumberOfUnreadMessages[$dir->getDirMd5()]['UNSEEN']
+				: 0
+			,
+		];
+	}
+
+	/**
+	 * @deprecated Use \Bitrix\Mail\Helper\MailboxDirectoryHelper::getOrder
+	 * @throws \Exception
+	 */
+	public function getOrderByDefault(MailboxDirectoryEntity $dir): int
+	{
+		return $this->getOrder($dir);
+	}
+
+	/**
+	 * Get sorting weight for a directory.
+	 *
+	 * @throws \Exception
+	 */
+	public function getOrder(MailboxDirectoryEntity $dir): int
+	{
+		return $this->getSortingHelper()->getWeight($dir);
+	}
+
+	/**
+	 * @param MailboxDirectoryEntity[] $dirs
+	 * @param string $strategy
+	 * @return MailboxDirectoryEntity[]
+	 *
+	 * @throws \Exception
+	 */
+	public function order(array $dirs, string $strategy = DirSortingHelper::STRATEGY_PRESET): array
+	{
+		return $this->getSortingHelper()->order($dirs, $strategy);
+	}
+
+	private function getSortingHelper(): DirSortingHelper
+	{
+		if ($this->sortingHelper === null)
+		{
+			$this->sortingHelper = new DirSortingHelper(
+				$this->mailboxId,
+				$this->getProviderCode(),
+			);
+		}
+
+		return $this->sortingHelper;
+	}
+
+	/**
+	 * @throws \Exception
+	 */
+	private function getProviderCode(): string
+	{
+		$mailboxHelper = Mailbox::createInstance($this->mailboxId);
+
+		return $mailboxHelper ? $mailboxHelper->getProviderCode() : 'default';
 	}
 
 	private function orderByName($dirs)
@@ -306,31 +517,32 @@ class MailboxDirectoryHelper
 		return $dirs;
 	}
 
-	private function orderByTime($dirs)
+	/**
+	 * @param MailboxDirectoryEntity[] $dirs
+	 * @return MailboxDirectoryEntity[]
+	 * @throws \Exception
+	 */
+	private function orderByTime(array $dirs): array
 	{
 		usort($dirs, function ($a, $b)
 		{
-			$aSort = $a->getSyncTime() ?: ($a->isIncome() ? 100 : ($a->isOutcome() ? 200 : ($a->isTrash() ? 300 : ($a->isSpam() ? 400 : $a->getLevel() * 1000))));
-			$bSort = $b->getSyncTime() ?: ($b->isIncome() ? 100 : ($b->isOutcome() ? 200 : ($b->isTrash() ? 300 : ($b->isSpam() ? 400 : $b->getLevel() * 1000))));
+			$aSort = $a->getSyncTime() ?: ($this->getOrder($a));
+			$bSort = $b->getSyncTime() ?: ($this->getOrder($b));
 
-			if ($aSort === $bSort)
-			{
-				return 0;
-			}
-
-			return $aSort > $bSort ? 1 : -1;
+			return $aSort <=> $bSort;
 		});
 
 		return $dirs;
 	}
 
-	public function getLastSyncDirByDefault($excludeDirPath = null)
+	/**
+	 * @throws \Exception
+	 */
+	public function getLastSyncDirOrdered(?string $excludeDirPath = null): MailboxDirectoryEntity
 	{
-		$list = $this->orderByDefault($this->getSyncDirs());
-		$list = array_filter($list, function ($item) use ($excludeDirPath)
-		{
-			return $item->getPath() !== $excludeDirPath;
-		});
+		$syncDirs = $this->getSyncDirs();
+		$list = $this->order($syncDirs);
+		$list = array_filter($list, static fn ($item) => $item->getPath() !== $excludeDirPath);
 
 		return end($list);
 	}
@@ -342,28 +554,23 @@ class MailboxDirectoryHelper
 		return reset($list);
 	}
 
-	public function getCurrentSyncDirPositionByDefault(string $path, $excludeDirPath = null)
+	/**
+	 * @throws \Exception
+	 */
+	public function getCurrentSyncDirPositionOrdered(string $path, ?string $excludeDirPath = null): int
 	{
-		$list = $this->orderByDefault($this->getSyncDirs());
-		$list = array_filter($list, function ($item) use ($excludeDirPath)
-		{
-			return $item->getPath() !== $excludeDirPath;
-		});
+		$list = $this->getSyncDirsOrdered();
+		$list = array_filter($list, static fn ($item) => $item->getPath() !== $excludeDirPath);
 
-		$getIndex = function ($list, $path)
+		foreach ($list as $index => $item)
 		{
-			foreach ($list as $index => $item)
+			if ($item->getPath() === $path)
 			{
-				if ($item->getPath() === $path)
-				{
-					return $index;
-				}
+				return $index;
 			}
+		}
 
-			return -1;
-		};
-
-		return $getIndex($list, $path);
+		return -1;
 	}
 
 	public function removeDirsLikePath(array $dirs)
@@ -431,7 +638,11 @@ class MailboxDirectoryHelper
 		return '';
 	}
 
-	public function buildTreeDirs()
+	/**
+	 * @return MailboxDirectoryEntity[]
+	 * @throws \Exception
+	 */
+	public function buildTreeDirs(): array
 	{
 		$list = [];
 		$result = [];
@@ -454,7 +665,7 @@ class MailboxDirectoryHelper
 			}
 		}
 
-		return $this->orderByDefault($result);
+		return $this->order($result);
 	}
 
 	public function syncChildren($parent)
@@ -604,6 +815,16 @@ class MailboxDirectoryHelper
 		}
 	}
 
+	public function updateCache(): void
+	{
+		$mailboxId = (int)$this->mailboxId;
+		if ($mailboxId > 0)
+		{
+			MailboxDirectory::invalidateCache($mailboxId);
+			MailboxDirectory::fetchAll($mailboxId);
+		}
+	}
+
 	public function toggleSyncDirs($dirs)
 	{
 		$enableRows = [];
@@ -678,6 +899,8 @@ class MailboxDirectoryHelper
 		$this->addSyncDirs($dirs, $dbDirs);
 		$this->updateSyncDirs($dirs, $dbDirs);
 		$this->removeSyncDirs($dirs, $dbDirs);
+
+		$this->updateCache();
 	}
 
 	public function updateMessageCount($id, $count)

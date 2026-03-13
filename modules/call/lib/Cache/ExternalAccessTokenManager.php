@@ -5,6 +5,9 @@ namespace Bitrix\Call\Cache;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 
+/**
+ * @internal
+ */
 class ExternalAccessTokenManager
 {
 	private const TOKEN_TTL = 24 * 3600; // 24 hours

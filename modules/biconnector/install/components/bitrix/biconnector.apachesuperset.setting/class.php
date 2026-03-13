@@ -15,7 +15,6 @@ use Bitrix\BIConnector\KeyTable;
 use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\KeyInfoField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DeleteSupersetField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DashboardLanguageField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
@@ -38,7 +37,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Type\Date;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
-use Bitrix\Bitrix24\Feature;
+use Bitrix\BIConnector\Configuration\Feature;
 
 Loader::includeModule("biconnector");
 
@@ -135,13 +134,7 @@ class ApacheSupersetSettingComponent
 			{
 				$settingsPanel->addSection($this->getSupersetKeySection());
 			}
-
-			if (BIConnector\Manager::isAdmin())
-			{
-				$settingsPanel->addSection($this->getDeleteSupersetSection());
-			}
 		}
-
 
 		$this->arResult['SETTINGS_PANEL'] = $settingsPanel;
 	}
@@ -155,7 +148,7 @@ class ApacheSupersetSettingComponent
 	{
 		$result = new Result();
 
-		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
+		if (!Feature::isBuilderEnabled())
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_FEATURE_UNAVAILABLE')));
 
@@ -189,17 +182,6 @@ class ApacheSupersetSettingComponent
 		$dateFilterSection->addField(new PeriodFilterField('DASHBOARD_FILTER'));
 
 		return $dateFilterSection;
-	}
-
-	private function getDeleteSupersetSection(): EntityEditorSection
-	{
-		return (new EntityEditorSection(
-			name: 'DELETE_SUPERSET_SECTION',
-			title: Loc::getMessage('BICONNECTOR_SUPERSET_NEW_DASHBOARD_DELETE_SUPERSET_SECTION'),
-		))
-			->setIconClass('--trash-bin')
-			->addField(new DeleteSupersetField('DELETE_SUPERSET'))
-		;
 	}
 
 	private function getClearCacheSection(): EntityEditorSection

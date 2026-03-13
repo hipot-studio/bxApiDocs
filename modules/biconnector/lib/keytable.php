@@ -1,7 +1,6 @@
 <?php
 namespace Bitrix\BIConnector;
 
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -9,8 +8,6 @@ use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
-
-Loc::loadMessages(__FILE__);
 
 /**
  * Class KeyTable
@@ -67,28 +64,24 @@ class KeyTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('KEY_ENTITY_ID_FIELD')
 				]
 			),
 			new DatetimeField(
 				'DATE_CREATE',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('KEY_ENTITY_DATE_CREATE_FIELD')
 				]
 			),
 			new DatetimeField(
 				'TIMESTAMP_X',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('KEY_ENTITY_TIMESTAMP_X_FIELD')
 				]
 			),
 			new IntegerField(
 				'CREATED_BY',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('KEY_ENTITY_CREATED_BY_FIELD')
 				]
 			),
 			new StringField(
@@ -96,7 +89,6 @@ class KeyTable extends DataManager
 				[
 					'required' => true,
 					'validation' => [__CLASS__, 'validateAccessKey'],
-					'title' => Loc::getMessage('KEY_ENTITY_ACCESS_KEY_FIELD')
 				]
 			),
 			new StringField(
@@ -104,7 +96,6 @@ class KeyTable extends DataManager
 				[
 					'required' => true,
 					'validation' => [__CLASS__, 'validateConnection'],
-					'title' => Loc::getMessage('KEY_ENTITY_CONNECTION_FIELD')
 				]
 			),
 			new BooleanField(
@@ -112,20 +103,13 @@ class KeyTable extends DataManager
 				[
 					'values' => ['N', 'Y'],
 					'default' => 'Y',
-					'title' => Loc::getMessage('KEY_ENTITY_ACTIVE_FIELD')
 				]
 			),
 			new IntegerField(
 				'APP_ID',
-				[
-					'title' => Loc::getMessage('KEY_ENTITY_APP_ID_FIELD'),
-				]
 			),
 			new DatetimeField(
 				'LAST_ACTIVITY_DATE',
-				[
-					'title' => Loc::getMessage('KEY_ENTITY_LAST_ACTIVITY_DATE_FIELD')
-				]
 			),
 			new Reference(
 				'PERMISSION',
@@ -141,9 +125,6 @@ class KeyTable extends DataManager
 			),
 			new StringField(
 				'SERVICE_ID',
-				[
-					'title' => Loc::getMessage('KEY_ENTITY_SERVICE_ID_FIELD')
-				]
 			),
 			new Reference(
 				'APPLICATION',

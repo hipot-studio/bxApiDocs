@@ -5,14 +5,14 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Cache\ChatCacheRegistry;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Intranet\Settings\CommunicationSettings;
-use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -32,7 +32,6 @@ class GeneralChat extends GroupChat
 	protected static ?self $instance = null;
 	protected static bool $wasSearched = false;
 	protected static Result $resultFind;
-	protected static int $idStaticCache;
 
 	protected function getDefaultType(): string
 	{
@@ -82,21 +81,16 @@ class GeneralChat extends GroupChat
 
 	public function getManagerList(bool $fullList = true): array
 	{
-		$cache = static::getCache(self::MANAGERS_CACHE_ID);
+		$getResult = ServiceLocator::getInstance()
+			->get(ChatCacheRegistry::class)
+			?->getGeneralChatManagersManager()
+			->getOrSet(
+				entityId: null,
+				dataProvider: fn() => $this->getRelationFacade()?->getManagerOnly()->getUserIds(),
+			)
+		;
 
-		$cachedManagerList = $cache->getVars();
-
-		if ($cachedManagerList !== false)
-		{
-			return $cachedManagerList;
-		}
-
-		$managerList = $this->getRelationFacade()->getManagerOnly()->getUserIds();
-
-		$cache->startDataCache();
-		$cache->endDataCache($managerList);
-
-		return $managerList;
+		return $getResult->getResult()?->value ?? [];
 	}
 
 	protected function changeManagers(array $userIds, bool $isManager, bool $sendPush = true): self
@@ -128,34 +122,34 @@ class GeneralChat extends GroupChat
 			return 0;
 		}
 
-		if (isset(self::$idStaticCache))
-		{
-			return self::$idStaticCache;
-		}
+		$getResult = ServiceLocator::getInstance()
+			->get(ChatCacheRegistry::class)
+			?->getGeneralChatIdManager()
+			->getOrSet(
+				entityId: null,
+				dataProvider: fn() => self::getGeneralChatIdWithoutCache() ?? 0,
+			)
+		;
 
-		$cache = static::getCache(self::ID_CACHE_ID);
+		return $getResult->getResult()?->value ?? 0;
+	}
 
-		$cachedId = $cache->getVars();
-
-		if ($cachedId !== false)
-		{
-			self::$idStaticCache = $cachedId ?? 0;
-
-			return self::$idStaticCache;
-		}
-
+	protected static function getGeneralChatIdWithoutCache(): ?int
+	{
 		$result = ChatTable::query()
 			->setSelect(['ID'])
 			->where('TYPE', Chat::IM_TYPE_OPEN)
 			->where('ENTITY_TYPE', Chat::ENTITY_TYPE_GENERAL)
-			->fetch() ?: []
+			->setLimit(1)
+			->fetch()
 		;
 
-		self::$idStaticCache = $result['ID'] ?? 0;
-		$cache->startDataCache();
-		$cache->endDataCache(self::$idStaticCache);
+		if ($result)
+		{
+			return (int)$result['ID'];
+		}
 
-		return self::$idStaticCache;
+		return null;
 	}
 
 	public function setManagers(array $managerIds): Chat
@@ -318,12 +312,20 @@ class GeneralChat extends GroupChat
 	}
 
 	/**
-	 * @param self::MANAGERS_CACHE_ID|self::ID_CACHE_ID $cacheId
+	 * @param self::ID_CACHE_ID|self::MANAGERS_CACHE_ID $cacheId
 	 * @return void
 	 */
 	public static function cleanGeneralChatCache(string $cacheId): void
 	{
-		Application::getInstance()->getCache()->clean($cacheId, static::getCacheDir());
+		$chatRegistry = ServiceLocator::getInstance()->get(ChatCacheRegistry::class);
+		$manager = match ($cacheId)
+		{
+			self::ID_CACHE_ID => $chatRegistry?->getGeneralChatIdManager(),
+			self::MANAGERS_CACHE_ID => $chatRegistry?->getGeneralChatManagersManager(),
+			default => null
+		};
+
+		$manager?->clear(entityId: null);
 	}
 
 	public static function unlinkGeneralChat(): bool
@@ -601,20 +603,5 @@ class GeneralChat extends GroupChat
 	protected function disableUserDeleteMessage(bool $skipRecent = false): void
 	{
 		return;
-	}
-
-	private static function getCache(string $cacheId): Cache
-	{
-		$cache = Application::getInstance()->getCache();
-		$cacheTTL = 18144000;
-		$cacheDir = static::getCacheDir();
-		$cache->initCache($cacheTTL, $cacheId, $cacheDir);
-
-		return $cache;
-	}
-
-	private static function getCacheDir(): string
-	{
-		return '/bx/imc/general_chat';
 	}
 }

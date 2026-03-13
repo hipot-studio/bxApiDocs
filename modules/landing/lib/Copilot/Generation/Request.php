@@ -13,6 +13,7 @@ use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Model\EO_Requests;
 use Bitrix\Landing\Copilot\Model\RequestsTable;
 use Bitrix\Landing\Copilot\Model\RequestToStepTable;
+use Bitrix\Landing\Copilot\Services\FirstSiteGenerationService;
 use Bitrix\Main;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Query\Filter;
@@ -77,6 +78,11 @@ class Request
 		if ($this->status->value >= Type\RequestStatus::Sent->value)
 		{
 			return false;
+		}
+
+		if (FirstSiteGenerationService::isFirstSiteGeneration())
+		{
+			$prompt->setCost(0);
 		}
 
 		$result = $connector->request($prompt);

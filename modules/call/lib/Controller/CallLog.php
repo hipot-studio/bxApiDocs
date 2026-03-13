@@ -8,6 +8,9 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Call\Service\CallLogService;
 
+/**
+ * @internal
+ */
 class CallLog extends Controller
 {
 	private const DEFAULT_LIMIT = 50;

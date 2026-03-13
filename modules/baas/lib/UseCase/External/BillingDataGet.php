@@ -111,8 +111,6 @@ class BillingDataGet extends BaseClientAction
 					->value
 			);
 
-			$this->marketplaceService->adaptFeaturePromotionAndHelperCodes($service);
-
 			$services->add($service);
 		}
 

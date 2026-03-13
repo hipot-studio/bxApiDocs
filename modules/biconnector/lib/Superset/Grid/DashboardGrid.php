@@ -46,7 +46,6 @@ final class DashboardGrid extends Grid
 				'TITLE',
 				'STATUS',
 				'CREATED_BY_ID',
-				'OWNER_ID',
 				'DATE_CREATE',
 				'DATE_MODIFY',
 				'SOURCE_ID',

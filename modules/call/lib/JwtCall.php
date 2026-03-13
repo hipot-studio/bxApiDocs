@@ -11,9 +11,11 @@ use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Web\JWT;
-use Bitrix\Im\Call\Call;
 use Bitrix\Main\Service\MicroService\Client;
 
+/**
+ * @internal
+ */
 class JwtCall
 {
 	/** @var array<int, string> */
@@ -205,7 +207,7 @@ class JwtCall
 
 		if ($callServerUrl)
 		{
-			Option::set('im', 'call_server_url', $callServerUrl);
+			Option::set('call', 'call_server_url', $callServerUrl);
 		}
 
 		Signaling::sendChangedCallV2Enable($isJwtEnabled, $isPlainUseJwt, $callBalancerUrl);

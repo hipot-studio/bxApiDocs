@@ -103,6 +103,7 @@ class User
 				],
 				'DEPARTMENT_ID' => [
 					'FIELD_NAME' => 'SN.DEP_ID',
+					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
 						$departmentJoin,

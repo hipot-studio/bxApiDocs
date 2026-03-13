@@ -2,7 +2,6 @@
 
 namespace Bitrix\Bizproc\Controller;
 
-use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Public\Provider\Params;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Provider\Params\GridParams;
@@ -12,12 +11,9 @@ use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
 use Bitrix\Bizproc\Internal\Exception\Exception;
 use Bitrix\Bizproc\Internal\Entity\StorageType;
 use Bitrix\Bizproc\Internal\Entity\StorageItem;
-use Bitrix\Bizproc\Internal\Entity\StorageField;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
-use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
 use Bitrix\Bizproc\Public\Command;
-use Bitrix\Bizproc\Public\Service\StorageField\FieldService;
 
 class Storage extends Base
 {
@@ -337,211 +333,8 @@ class Storage extends Base
 		return $result->getData();
 	}
 
-	public function getFieldsAction(
-		PageNavigation $navigation,
-		array $filter = [],
-		array $sort = [],
-		array $select = ['*'],
-	): ?StorageField\StorageFieldCollection
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		$provider = new StorageFieldProvider();
-
-		return $provider->getList(new GridParams(
-			pager: Pager::buildFromPageNavigation($navigation),
-			filter: new Params\StorageField\StorageFieldFilter($filter),
-			sort: new Params\StorageField\StorageFieldSort($sort),
-			select: new Params\StorageField\StorageFieldSelect($select),
-		));
-	}
-
-	public function getFieldAction(int $id): ?StorageField\StorageField
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		try
-		{
-			return (new StorageFieldProvider())->getById($id);
-		}
-		catch (Exception $exception)
-		{
-			$this->addError(ErrorBuilder::buildFromException($exception));
-
-			return null;
-		}
-	}
-
-	public function getFieldsByStorageIdAction(
-		int $storageId,
-		array $select = ['*'],
-		bool $format = false
-	): StorageField\StorageFieldCollection|array|null
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		try
-		{
-			$fieldCollection = (new StorageFieldProvider())->getByStorageId($storageId, $select);
-
-			if ($format)
-			{
-				$result = [];
-				foreach ($fieldCollection as $field)
-				{
-					$result[] = $field->toProperty();
-				}
-
-				return $result;
-			}
-
-			return $fieldCollection;
-		}
-		catch (Exception $exception)
-		{
-			$this->addError(ErrorBuilder::buildFromException($exception));
-
-			return null;
-		}
-	}
-
-	public function addFieldAction(array $field, bool $format = false): StorageField\StorageField|array|null
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		try
-		{
-			$storageFieldEntity = StorageField\StorageField::mapFromArray($field);
-		}
-		catch (Exception $exception)
-		{
-			$this->addError(ErrorBuilder::buildFromException($exception));
-
-			return null;
-		}
-
-		$addStorageFieldCommand = new Command\StorageField\AddStorageFieldCommand(
-			storageField: $storageFieldEntity,
-		);
-
-		$result = $addStorageFieldCommand->run();
-		if (!$result->isSuccess())
-		{
-			$this->addErrors($result->getErrors());
-
-			return null;
-		}
-
-		if ($format)
-		{
-			return $result->getStorageField()?->toProperty();
-		}
-
-		/** @var Command\StorageField\StorageFieldResult $result */
-		return $result->getStorageField();
-	}
-
-	public function updateFieldAction(array $field, bool $format = false): StorageField\StorageField|array|null
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		try
-		{
-			$storageFieldEntity = StorageField\StorageField::mapFromArray($field);
-		}
-		catch (Exception $exception)
-		{
-			$this->addError(ErrorBuilder::buildFromException($exception));
-
-			return null;
-		}
-
-		$updateStorageFieldCommand = new Command\StorageField\UpdateStorageFieldCommand(
-			storageField: $storageFieldEntity,
-		);
-
-		$result = $updateStorageFieldCommand->run();
-		if (!$result->isSuccess())
-		{
-			$this->addErrors($result->getErrors());
-
-			return null;
-		}
-
-		if ($format)
-		{
-			return $result->getStorageField()?->toProperty();
-		}
-
-		/** @var Command\StorageField\StorageFieldResult $result */
-		return $result->getStorageField();
-	}
-
-	public function deleteFieldAction(int $id): ?array
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		$command = new Command\StorageField\DeleteStorageFieldCommand($id);
-
-		$result = $command->run();
-		if (!$result->isSuccess())
-		{
-			$this->addErrors($result->getErrors());
-
-			return null;
-		}
-
-		return $result->getData();
-	}
-
 	protected function checkAdminAccess(): bool
 	{
 		return (new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
-	}
-
-	public function getPreparedFormAction(array $field): ?StorageField\StorageField
-	{
-		if (!$this->checkAdminAccess())
-		{
-			return null;
-		}
-
-		try
-		{
-			$fieldService = new FieldService();
-			$storageFieldEntity = $fieldService->prepare($field);
-			if (!$storageFieldEntity)
-			{
-				$this->addError(ErrorMessage::GET_DATA_ERROR->getError());
-
-				return null;
-			}
-		}
-		catch (Exception $exception)
-		{
-			$this->addError(ErrorBuilder::buildFromException($exception));
-
-			return null;
-		}
-
-		return $storageFieldEntity;
 	}
 }

@@ -151,4 +151,11 @@ final class IntegratorRequest
 
 		return $this;
 	}
+
+	public function setSenderHttpClientParams(array $params): self
+	{
+		$this->sender->setSingleUseHttpClientParams($params);
+
+		return $this;
+	}
 }

@@ -8,6 +8,8 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 
 /**
  * Factory for creating appropriate downloader based on server capabilities
+ *
+ * @internal
  */
 class DownloaderFactory
 {

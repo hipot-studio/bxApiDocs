@@ -226,7 +226,9 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 				}
 
 				$code = $fieldProperties['FieldName'] ?? null;
-				$fieldColumns[strtoupper($code)] = $fieldType->formatValue($field[$code] ?? null);
+				$formattedValue = $fieldType->formatValue($field[$code] ?? null);
+
+				$fieldColumns[strtoupper($code)] = htmlspecialcharsbx($formattedValue);
 			}
 		}
 

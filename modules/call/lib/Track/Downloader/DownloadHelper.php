@@ -12,9 +12,12 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 
 /**
  * Helper utilities for track file downloading
+ *
+ * @internal
  */
 class DownloadHelper
 {
+	private const STREAM_TIMEOUT = 10; // CURLOPT_LOW_SPEED_TIME in seconds
 	/**
 	 * Check if remote server supports Range requests and get file size.
 	 *
@@ -122,7 +125,7 @@ class DownloadHelper
 		$httpClient
 			->waitResponse(true)
 			->setTimeout(20)
-			->setStreamTimeout(60)
+			->setStreamTimeout(self::STREAM_TIMEOUT)
 			->disableSslVerification()
 			->setHeader('User-Agent', 'Bitrix Call Client ' . \Bitrix\Main\Service\MicroService\Client::getPortalType())
 			->setHeader('Referer', \Bitrix\Main\Service\MicroService\Client::getServerName())

@@ -33,12 +33,7 @@ class DashboardDataProvider extends EntityDataProvider
 	public function prepareFields(): array
 	{
 		return [
-			'OWNER_ID' => $this->createField('OWNER_ID', [
-				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_OWNER'),
-				'default' => true,
-				'type' => 'entity_selector',
-				'partial' => true,
-			]),
+
 			'DATE_CREATE' => $this->createField('DATE_CREATE', [
 				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_DATE_CREATE'),
 				'default' => true,
@@ -163,14 +158,6 @@ class DashboardDataProvider extends EntityDataProvider
 			);
 		}
 
-		if ($fieldID === 'OWNER_ID')
-		{
-			return $this->getUserEntitySelectorParams(
-				$fieldID . '_filter',
-				['fieldName' => $fieldID]
-			);
-		}
-
 		if ($fieldID === 'SOURCE_ID')
 		{
 			return [
@@ -231,7 +218,6 @@ class DashboardDataProvider extends EntityDataProvider
 						],
 						'dropdownMode' => true,
 						'compactView' => true,
-						'height' => 200,
 					],
 				],
 			];
@@ -256,7 +242,6 @@ class DashboardDataProvider extends EntityDataProvider
 						'dropdownMode' => true,
 						'compactView' => true,
 						'showAvatars' => false,
-						'height' => 200,
 					],
 				],
 			];
@@ -316,7 +301,6 @@ class DashboardDataProvider extends EntityDataProvider
 						'dropdownMode' => true,
 						'compactView' => false,
 						'showAvatars' => false,
-						'height' => 200,
 					],
 				],
 			];

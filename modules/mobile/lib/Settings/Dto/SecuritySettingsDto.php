@@ -13,6 +13,7 @@ final class SecuritySettingsDto extends Dto
 	public bool $isOtpEnabled;
 	public bool $isOtpEnabledForUser;
 	public bool $isOtpMandatory;
+	public bool $isHighPushOtpPromote;
 	public RightsDto $takeScreenshotRights;
 	public RightsDto $copyTextRights;
 }

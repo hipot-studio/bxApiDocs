@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\DTO;
 
+/**
+ * @internal
+ */
 class ProcessingStatusRequest extends Hydrator
 {
 	public string $roomId = '';

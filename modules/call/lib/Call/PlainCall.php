@@ -2,15 +2,13 @@
 
 namespace Bitrix\Call\Call;
 
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\Util;
+use Bitrix\Call\Util;
 use Bitrix\Main\Config\Option;
 use Bitrix\Call\ControllerClient;
 use Bitrix\Call\Settings;
 
-\Bitrix\Main\Loader::includeModule('im');
 
-class PlainCall extends Call
+class PlainCall extends \Bitrix\Call\Call
 {
 	protected $provider = parent::PROVIDER_PLAIN;
 

@@ -2,7 +2,6 @@
 
 namespace Bitrix\Call;
 
-use Bitrix\Im\Call\Call;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -24,6 +23,12 @@ class CallChatMessage
 		$message->setMessage($phrase);
 		$message->markAsSystem(true);
 
+		$params = $message->getParams();
+		$params->get(Params::COMPONENT_PARAMS)->setValue([
+			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_CLOUD_RECORD_READY,
+			'CALL_ID' => $call->getId(),
+		]);
+
 		return $message;
 	}
 
@@ -32,6 +37,12 @@ class CallChatMessage
 		$message = new Message();
 		$message->setMessage(self::getPhraseWithCallLink('CALL_CLOUD_RECORDING_PREPARE_MESSAGE_LINK', $call->getId(), $chat));
 		$message->markAsSystem(true);
+
+		$params = $message->getParams();
+		$params->get(Params::COMPONENT_PARAMS)->setValue([
+			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_CLOUD_RECORD_PREPARE,
+			'CALL_ID' => $call->getId(),
+		]);
 
 		return $message;
 	}
@@ -50,7 +61,7 @@ class CallChatMessage
 	{
 		Loader::includeModule('im');
 
-		Loc::loadMessages($_SERVER["DOCUMENT_ROOT"]. '/bitrix/modules/im/lib/call/integration/chat.php');
+		Loc::loadMessages($_SERVER["DOCUMENT_ROOT"]. '/bitrix/modules/call/lib/Integration/Chat.php');
 
 		$opponentUser = \Bitrix\Im\User::getInstance($opponentUserId);
 

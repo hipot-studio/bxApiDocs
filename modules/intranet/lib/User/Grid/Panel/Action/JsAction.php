@@ -34,6 +34,9 @@ abstract class JsAction implements Action
 			'gridId' => $this->getSettings()->getID(),
 			'filter' => $this->getSettings()->getFilterFields(),
 			'isCloud' => $this->getSettings()->isCloud(),
+			'isFirstAdminConfirmationEnabled' => $this->getSettings()->isFirstAdminConfirmationEnabled(),
+			'currentUserId' => $this->getSettings()->getCurrentUserId(),
+			'currentUserName' => $this->getSettings()->getCurrentUserName(),
 		]);
 
 		return "BX.Intranet.UserList.Panel.executeAction($actionParams)";

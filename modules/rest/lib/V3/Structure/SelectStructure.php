@@ -104,7 +104,7 @@ final class SelectStructure extends Structure
 
 		if ($relation === null)
 		{
-			if (!isset($parentDto->getFields()[$relationName]) || $parentDto->getFields()[$relationName]->getRelation() === null)
+			if (!isset($parentDto->getFields()[$relationName]))
 			{
 				throw new UnknownDtoPropertyException($parentDto->getShortName(), $relationName);
 			}
@@ -113,9 +113,19 @@ final class SelectStructure extends Structure
 			$relationDtoField = $parentDto->getFields()[$relationName];
 
 			$type = $relationDtoField->getPropertyType();
-			if ($type === DtoCollection::class)
+			$isSingleDto = is_subclass_of($type, Dto::class);
+			$isMultipleDto = $type === DtoCollection::class &&
+				$relationDtoField->getElementType() !== null &&
+				is_subclass_of($relationDtoField->getElementType(), Dto::class);
+
+			if ($relationDtoField->getRelation() === null && !$isSingleDto && !$isMultipleDto)
 			{
-				$childDtoReflection = PropertyHelper::getReflection($parentDto->getFields()[$relationName]->getElementType());
+				throw new UnknownDtoPropertyException($parentDto->getShortName(), $field);
+			}
+
+			if ($isMultipleDto)
+			{
+				$childDtoReflection = PropertyHelper::getReflection($relationDtoField->getElementType());
 			}
 			else
 			{
@@ -131,6 +141,7 @@ final class SelectStructure extends Structure
 
 			$relationRequest = new ListRequest($childDtoReflection->getName());
 			$relationRequest->select = self::create([], $relationRequest->getDtoClass(), $relationRequest);
+
 			if ($relationDtoField->getRelation()->sort !== null)
 			{
 				$relationRequest->order = OrderStructure::create(
@@ -139,17 +150,20 @@ final class SelectStructure extends Structure
 				);
 			}
 
+			$fromField = $relationDtoField->getRelation()?->thisField ?? $remaining;
+			$toField = $relationDtoField->getRelation()?->refField ?? $relationDtoField->getPropertyName();
+
 			$relation = new Relation(
 				$relationName,
 				$childDto,
-				$relationDtoField->getRelation()->thisField,
-				$relationDtoField->getRelation()->refField,
+				$fromField,
+				$toField,
 				$relationRequest,
-				$relationDtoField->getRelation()->multiple,
+				$relationDtoField->getRelation()?->multiple ?? $isMultipleDto,
 			);
-			$relation->getRequest()->select->relationFields[] = $relationDtoField->getRelation()->refField;
+			$relation->getRequest()->select->relationFields[] = $toField;
 			$request->addRelation($relation);
-			$structure->relationFields[] = $relationDtoField->getRelation()->thisField;
+			$structure->relationFields[] = $fromField;
 		}
 
 		if ($remaining !== null)

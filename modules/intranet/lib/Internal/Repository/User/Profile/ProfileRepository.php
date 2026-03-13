@@ -178,7 +178,7 @@ class ProfileRepository
 
 		if (!$result)
 		{
-			throw new UpdateFailedException($this->getErrorCollectionFromUpdateLastError($this->cUser->LAST_ERROR));
+			throw new UpdateFailedException($this->getUpdateErrorCollectionFromLastError($this->cUser->LAST_ERROR));
 		}
 	}
 

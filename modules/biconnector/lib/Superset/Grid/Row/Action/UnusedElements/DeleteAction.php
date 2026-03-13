@@ -4,7 +4,6 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Action\UnusedElements;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -19,14 +18,10 @@ class DeleteAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
-		$owners = $rawFields['OWNERS'];
-		if (!in_array((int)CurrentUser::get()->getId(), $owners, true))
+		$deleteAllElementsPermission = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DELETE_ALL_UNUSED_ELEMENTS);
+		if (!$deleteAllElementsPermission)
 		{
-			$deleteAllElementsPermission = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DELETE_ALL_UNUSED_ELEMENTS);
-			if (!$deleteAllElementsPermission)
-			{
-				return null;
-			}
+			return null;
 		}
 
 		$id = (int)$rawFields['EXTERNAL_ID'];

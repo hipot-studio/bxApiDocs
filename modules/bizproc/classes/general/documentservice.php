@@ -972,7 +972,7 @@ EOS;
 
 		if ($this->isCallable($moduleId, $entity, 'GetFieldInputValue'))
 		{
-			return $this->call($entity, 'GetFieldInputValue', $documentType, $arFieldType, $arFieldName, $arRequest, $arErrors);
+			return $this->callArray($entity, 'GetFieldInputValue', [$documentType, $arFieldType, $arFieldName, $arRequest, &$arErrors]);
 		}
 		if ($this->isCallable($moduleId, $entity, 'SetGUIFieldEdit'))
 		{
@@ -1635,6 +1635,11 @@ EOS;
 	}
 
 	private function call(string $entity, string $method, ...$args): mixed
+	{
+		return $this->callArray($entity, $method, $args);
+	}
+
+	private function callArray(string $entity, string $method, array $args): mixed
 	{
 		return call_user_func_array([$entity, $method], $args);
 	}

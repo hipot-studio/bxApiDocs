@@ -10,7 +10,6 @@ use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Compatibility\Adapter\StructureBackwardAdapter;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Compatibility\Utils\OldStructureUtils;
-use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Item\NodeMember;
@@ -32,9 +31,10 @@ use Bitrix\Main\SystemException;
 class NewToOldEventHandler
 {
 	private const MODULE_NAME_PREFIX = 'humanresources-';
+	public const CACHE_CLEARING_LOCK_ID = 'humanresources-cache-clearing';
 
 	/**
-	 * @param \Bitrix\Main\Event $event
+	 * @param Event $event
 	 *
 	 * @return void
 	 */
@@ -104,7 +104,7 @@ class NewToOldEventHandler
 	}
 
 	/**
-	 * @param \Bitrix\Main\Event $event
+	 * @param Event $event
 	 *
 	 * @return void
 	 */
@@ -159,13 +159,13 @@ class NewToOldEventHandler
 	}
 
 	/**
-	 * @param \Bitrix\Main\Event $event
+	 * @param Event $event
 	 *
 	 * @return void
 	 * @throws \Bitrix\HumanResources\Exception\ElementNotFoundException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
 	public static function onNodeUpdated(Event $event): void
 	{
@@ -230,11 +230,11 @@ class NewToOldEventHandler
 
 	/**
 	 *
-	 * @param \Bitrix\Main\Event $event
+	 * @param Event $event
 	 *
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
 	public static function onMemberAdded(Event $event): void
 	{
@@ -243,7 +243,7 @@ class NewToOldEventHandler
 			return;
 		}
 
-		/** @var \Bitrix\HumanResources\Item\NodeMember $member */
+		/** @var NodeMember $member */
 		$member = $event->getParameter('member');
 
 		if (!isset($member))
@@ -285,6 +285,7 @@ class NewToOldEventHandler
 						entityIdFilter: EntityIdFilter::fromEntityId($member->entityId),
 						nodeFilter: $nodeFilter,
 						findRelatedMembers: false,
+						active: null,
 					)
 				;
 
@@ -337,7 +338,11 @@ class NewToOldEventHandler
 			{
 			}
 		}
-		self::clearCacheInBackground($node, $member);
+		self::clearCacheInBackground(
+			node: $node,
+			member: $member,
+			shouldClearHRCacheImmediately: true
+		);
 
 		Container::getSemaphoreService()->unlock($onAfterUserUpdateEvent);
 	}
@@ -352,7 +357,7 @@ class NewToOldEventHandler
 			return;
 		}
 
-		/** @var \Bitrix\HumanResources\Item\NodeMember $member */
+		/** @var NodeMember $member */
 		$member = $event->getParameter('member');
 
 		if (!isset($member))
@@ -460,16 +465,36 @@ class NewToOldEventHandler
 
 	/**
 	 * @param mixed $node
-	 * @param \Bitrix\HumanResources\Item\NodeMember $member
+	 * @param NodeMember|null $member
 	 *
 	 * @return void
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public static function clearCache(?Node $node = null, ?\Bitrix\HumanResources\Item\NodeMember $member = null): void
+	public static function clearCache(?Node $node = null, ?NodeMember $member = null): void
 	{
+		self::clearHRNodeMemberCache($member);
+		self::clearGlobalCache($node, $member);
+	}
+
+	public static function clearHRNodeMemberCache(?NodeMember $member = null): void
+	{
+		if ($member)
+		{
+			Container::getCacheManager()->clean(sprintf(UserService::USER_DEPARTMENT_EXISTS_KEY, $member->entityId));
+		}
+
+		if (Container::getSemaphoreService()->isLocked(self::CACHE_CLEARING_LOCK_ID))
+		{
+			return;
+		}
+
+		Container::getCacheManager()->cleanDir(NodeMemberRepository::NODE_MEMBER_CACHE_DIR);
+		NodeTable::cleanCache();
+	}
+
+	private static function clearGlobalCache(?Node $node = null, ?NodeMember $member = null): void
+	{
+		StructureBackwardAdapter::clearCache();
+
 		$taggedCacheManager = Application::getInstance()->getTaggedCache();
 
 		if ($node && $node->type === NodeEntityType::DEPARTMENT)
@@ -484,11 +509,6 @@ class NewToOldEventHandler
 				'iblock_id_' . DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode)
 			);
 		}
-
-		StructureBackwardAdapter::clearCache();
-		Container::getCacheManager()->cleanDir(NodeMemberRepository::NODE_MEMBER_CACHE_DIR);
-		Container::getCacheManager()->clean(NodeRepository::NODE_ENTITY_RESTRICTION_CACHE);
-		NodeTable::cleanCache();
 
 		$taggedCacheManager->clearByTag('intranet_users');
 		$taggedCacheManager->clearByTag('intranet_department_structure');
@@ -508,8 +528,17 @@ class NewToOldEventHandler
 		}
 	}
 
-	public static function clearCacheInBackground(?Node $node = null, ?\Bitrix\HumanResources\Item\NodeMember $member = null): void
+	public static function clearCacheInBackground(
+		?Node $node = null,
+		?NodeMember $member = null,
+		bool $shouldClearHRCacheImmediately = false,
+	): void
 	{
+		if ($shouldClearHRCacheImmediately)
+		{
+			self::clearHRNodeMemberCache($member);
+		}
+
 		static $jobPrepared = [];
 
 		if (isset($jobPrepared[(int)$node?->id][(int)$member?->id]))
@@ -520,13 +549,9 @@ class NewToOldEventHandler
 		$jobPrepared[(int)$node?->id][(int)$member?->id] = true;
 
 		\Bitrix\Main\Application::getInstance()->addBackgroundJob(function ($node, $member) {
-			self::clearCache($node, $member);
-		}, [$node, $member]);
-
-		if ($member)
-		{
-			Container::getCacheManager()->clean(sprintf(UserService::USER_DEPARTMENT_EXISTS_KEY, $member->entityId));
-		}
+			self::clearHRNodeMemberCache($member);
+			self::clearGlobalCache($node, $member);
+		}, [$node, $member, $shouldClearHRCacheImmediately]);
 
 		static $tagGroupCache = [];
 		$groupCacheKey = (int)($member?->entityId / TAGGED_user_card_size);

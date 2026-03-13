@@ -30,7 +30,7 @@ class Collection extends BaseTemplate
 
 	public function setResult(bool $isAjax = false)
 	{
-		$title = Loc::getMessage('MARKET_MAIN_PAGE_TITLE');
+		$title = Loc::getMessage('MARKET_MAIN_PAGE_TITLE_MSGVER_1');
 
 		$params = [
 			'collection_id' => $this->collectionId,

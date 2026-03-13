@@ -16,6 +16,7 @@ use Bitrix\Main\Web\Json;
 class Sender extends MicroService\BaseSender
 {
 	private const API_VERSION = 2;
+	private array $singleUseHttpClientParams = [];
 
 	protected function getServiceUrl(): string
 	{
@@ -174,14 +175,14 @@ class Sender extends MicroService\BaseSender
 			return $result;
 		}
 
-		if($parsedResponse["status"] === "error")
+		if (($parsedResponse["status"] ?? null) === "error")
 		{
 			foreach ($parsedResponse["errors"] as $error)
 			{
-				$result->addError(new Error($error["message"], $error["code"], $error["customData"]));
+				$result->addError(new Error($error["message"], $error["code"], $error["customData"] ?? null));
 			}
 		}
-		else if(is_array($parsedResponse["data"]))
+		else if (is_array($parsedResponse["data"] ?? null))
 		{
 			$result->setData($parsedResponse["data"]);
 		}
@@ -220,5 +221,23 @@ class Sender extends MicroService\BaseSender
 
 
 		return $scheme . $serverName;
+	}
+
+	public function setSingleUseHttpClientParams(array $params): void
+	{
+		$this->singleUseHttpClientParams = $params;
+	}
+
+	public function getHttpClientParameters(): array
+	{
+		$params = parent::getHttpClientParameters();
+
+		if (!empty($this->singleUseHttpClientParams))
+		{
+			$params = array_merge($params, $this->singleUseHttpClientParams);
+			$this->singleUseHttpClientParams = [];
+		}
+
+		return $params;
 	}
 }

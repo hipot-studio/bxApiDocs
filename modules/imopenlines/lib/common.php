@@ -73,6 +73,11 @@ class Common
 			return '/contact_center/';
 		}
 
+		if (empty(trim(SITE_DIR)))
+		{
+			return '/services/contact_center/';
+		}
+
 		return SITE_DIR . 'services/contact_center/';
 	}
 

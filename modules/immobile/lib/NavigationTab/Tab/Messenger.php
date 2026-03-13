@@ -41,13 +41,7 @@ class Messenger extends BaseRecent
 
 	protected function getParams(): array
 	{
-		return [
-			'TAB_CODE' => 'chats',
-			'COMPONENT_CODE' => $this->getComponentCode(),
-			'MESSAGES' => [
-				'COMPONENT_TITLE' => $this->getTitle(),
-			],
-		];
+		return [];
 	}
 
 	protected function getWidgetSettings(): array

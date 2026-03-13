@@ -9,8 +9,11 @@ use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Chat\EntityLink;
+use Bitrix\Im\V2\Chat\OpenChannelChat;
+use Bitrix\Im\V2\Chat\OpenChat;
 use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
+use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
@@ -24,8 +27,10 @@ use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Pull\Event\ChatPin;
 use Bitrix\Im\V2\Pull\Event\RecentUpdate;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
+use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Settings\UserConfiguration;
 use Bitrix\Im\V2\Sync;
@@ -1343,7 +1348,6 @@ class Recent
 		$pin = $pin === true? 'Y': 'N';
 
 		$id = $dialogId;
-		$chatId = 0;
 		if (mb_substr($dialogId, 0, 4) == 'chat')
 		{
 			$itemTypes = \Bitrix\Im\Chat::getTypes();
@@ -1355,6 +1359,8 @@ class Recent
 			$itemTypes = IM_MESSAGE_PRIVATE;
 			$chatId = \Bitrix\Im\Dialog::getChatId($dialogId);
 		}
+
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
 
 		$element = \Bitrix\Im\Model\RecentTable::getList(
 			[
@@ -1368,58 +1374,21 @@ class Recent
 		)->fetch();
 		if (!$element)
 		{
-			return false;
-//			if (mb_substr($dialogId, 0, 4) == 'chat')
-//			{
-//				if (!\Bitrix\Im\Dialog::hasAccess($dialogId))
-//				{
-//					return false;
-//				}
-//
-//				$missingChat = \Bitrix\Im\Model\ChatTable::getRowById($id);
-//				$itemTypes = $missingChat['TYPE'];
-//			}
-
-//			$messageId = 0;
-//			$relationId = 0;
-//			if ($itemTypes !== IM_MESSAGE_OPEN)
-//			{
-
-//			}
-
-			$relationData = \Bitrix\Im\Model\RelationTable::getList(
-				[
-					'select' => ['ID', 'LAST_MESSAGE_ID' => 'CHAT.LAST_MESSAGE_ID'],
-					'filter' => [
-						'=CHAT_ID' => $chatId,
-						'=USER_ID' => $userId,
-					]
-				]
-			)->fetchAll()[0];
-
-			$messageId = $relationData['LAST_MESSAGE_ID'];
-			$relationId = $relationData['ID'];
-
-			$addResult = \Bitrix\Im\Model\RecentTable::add(
-				[
-					'USER_ID' => $userId,
-					'ITEM_TYPE' => $itemTypes,
-					'ITEM_ID' => $id,
-					'ITEM_MID' => $messageId,
-					'ITEM_RID' => $relationId,
-					'ITEM_CID' => $chatId,
-					'DATE_UPDATE' => new \Bitrix\Main\Type\DateTime()
-				]
-			);
-			if (!$addResult->isSuccess())
+			if (!$chat->checkAccess($userId))
 			{
 				return false;
 			}
 
-//			self::show($id);
+			$relation = $chat->getRelationByUserId($userId);
+			if ($relation === null)
+			{
+				return false;
+			}
+
+			self::addRecent($chat, $relation);
 
 			$element['USER_ID'] = $userId;
-			$element['ITEM_TYPE'] = $itemTypes;
+			$element['ITEM_TYPE'] = $chat->getType();
 			$element['ITEM_ID'] = $id;
 		}
 
@@ -1457,7 +1426,6 @@ class Recent
 
 		$connection->unlock("PIN_SORT_CHAT_{$userId}");
 
-		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
 			$userId,
@@ -1466,23 +1434,7 @@ class Recent
 
 		self::clearCache($element['USER_ID']);
 
-		$pullInclude = \Bitrix\Main\Loader::includeModule("pull");
-		if ($pullInclude)
-		{
-			Event::add(
-				$userId,
-				[
-					'module_id' => 'im',
-					'command' => 'chatPin',
-					'expiry' => 3600,
-					'params' => [
-						'dialogId' => $dialogId,
-						'active' => $pin == 'Y'
-					],
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				]
-			);
-		}
+		(new ChatPin($chat, $pin == 'Y', $userId))->send();
 
 		return true;
 	}
@@ -1666,7 +1618,7 @@ class Recent
 				$fields[] = [
 					'USER_ID' => $userId,
 					'ITEM_TYPE' => $chat->getType(),
-					'ITEM_ID' => $chat->getId(),
+					'ITEM_ID' => $chat->getId(), // Todo: invalid ITEM_ID for PrivateChat
 					'ITEM_MID' => $chat->getLastMessageId(),
 					'ITEM_CID' => $chat->getId(),
 					'ITEM_RID' => $relation->getId(),
@@ -1685,6 +1637,53 @@ class Recent
 		);
 
 		(new RecentUpdate($chat, $userIds, $dateCreate))->send();
+	}
+
+	public static function addRecent(\Bitrix\Im\V2\Chat $chat, Relation $relation, ?DateTime $lastActivity = null): void
+	{
+		$userId = $relation->getUserId();
+		if (!$userId)
+		{
+			return;
+		}
+
+		$message = new Message($chat->getLastMessageId());
+		$dateMessage = $message->getDateCreate() ?? new DateTime();
+		$dateCreate = $lastActivity ?? $dateMessage;
+
+		$itemId = $chat->getChatId();
+		if ($chat instanceof PrivateChat)
+		{
+			$itemId = $chat->getCompanionId($userId);
+		}
+
+		static::merge(
+			[[
+				'USER_ID' => $userId,
+				'ITEM_TYPE' => $chat->getType(),
+				'ITEM_ID' => $itemId,
+				'ITEM_MID' => $chat->getLastMessageId(),
+				'ITEM_CID' => $chat->getId(),
+				'ITEM_RID' => $relation->getId(),
+				'DATE_MESSAGE' => $dateMessage,
+				'DATE_UPDATE' => $dateCreate,
+				'DATE_LAST_ACTIVITY' => $dateCreate,
+			]],
+			[
+				'ITEM_MID' => $chat->getLastMessageId(),
+				'ITEM_CID' => $chat->getId(),
+				'ITEM_RID' => $relation->getId(),
+				'DATE_MESSAGE' => $dateMessage,
+				'DATE_LAST_ACTIVITY' => $dateCreate,
+				'DATE_UPDATE' => $dateCreate
+			],
+		);
+
+		Sync\Logger::getInstance()->add(
+			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chat->getId()),
+			[$userId],
+			$chat
+		);
 	}
 
 	public static function merge(array $fields, array $update): void

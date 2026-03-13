@@ -6,6 +6,9 @@ use Bitrix\Call\Service\CallLogService;
 use Bitrix\Call\Model\CallUserLogTable;
 use CVoxImplantMain;
 
+/**
+ * @internal
+ */
 class CallProcessor
 {
 	// Voximplant call statuses

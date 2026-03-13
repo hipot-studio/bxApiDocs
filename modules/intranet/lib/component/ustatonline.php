@@ -160,26 +160,20 @@ class UstatOnline extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			$users = [];
 			$date = new DateTime;
 
-			$filter = [
-				'=ACTIVE'       => true,
-				'=IS_REAL_USER' => true,
-				'>=LAST_ACTIVITY_DATE' => $date->add('-'.$this->getLimitOnlineSeconds().' seconds'),
-				"!UF_DEPARTMENT" => false,
-			];
-
 			$select = [
-				"ID", "LAST_NAME", "NAME", "SECOND_NAME", "LOGIN", "PERSONAL_PHOTO", "LAST_ACTIVITY_DATE",
+				"ID", "LAST_NAME", "NAME", "SECOND_NAME", "LOGIN", "PERSONAL_PHOTO", "LAST_ACTIVITY_DATE"
 			];
 
-			$result = UserTable::getList([
-				'select' => $select,
-				'filter' => $filter,
-				'limit' => 7,
-				'count_total' => true,
-				'order' => ['LAST_ACTIVITY_DATE' => 'DESC']
-			]);
-
-			$count = $result->getCount();
+			$result = UserTable::query()
+				->setSelect($select)
+				->where('REAL_USER', 'expr', true)
+				->addFilter('!UF_DEPARTMENT', false)
+				->addFilter('ACTIVE', 'Y')
+				->addFilter('>=LAST_ACTIVITY_DATE', $date->add('-'.$this->getLimitOnlineSeconds().' seconds'))
+				->setLimit(7)
+				->setOrder(['LAST_ACTIVITY_DATE' => 'DESC'])
+				->exec()
+			;
 
 			while ($user = $result->fetch())
 			{
@@ -195,10 +189,12 @@ class UstatOnline extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				$users[] = $element;
 			}
 
+			$count = count($users);
+
 			$CACHE_MANAGER->EndTagCache();
 			$cache->endDataCache([
 				"USERS" => $users,
-				"COUNT" => $count
+				"COUNT" => $count,
 			]);
 		}
 
@@ -350,22 +346,18 @@ class UstatOnline extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		$pageSize = 10;
 		$date = new DateTime;
 
-		$filter = [
-			'=ACTIVE'       => true,
-			'=IS_REAL_USER' => true,
-			'>=LAST_ACTIVITY_DATE' => $date->add('-'.$this->getLimitOnlineSeconds().' seconds'),
-			"!UF_DEPARTMENT" => false,
-		];
+		$result = UserTable::query()
+			->setSelect($select)
+			->where('REAL_USER', 'expr', true)
+			->addFilter('!UF_DEPARTMENT', false)
+			->addFilter('ACTIVE', 'Y')
+			->addFilter('>=LAST_ACTIVITY_DATE', $date->add('-'.$this->getLimitOnlineSeconds().' seconds'))
+			->setLimit($pageSize)
+			->setOrder(['LAST_LOGIN' => 'DESC'])
+			->setOffset(($pageNum - 1) * $pageSize)
+			->exec()
+		;
 
-		$result = UserTable::getList([
-			'select' => $select,
-			'filter' => $filter,
-			'limit'  => $pageSize,
-			'offset' => ($pageNum - 1) * $pageSize,
-			'order' => [
-				'LAST_LOGIN' => 'DESC'
-			],
-		]);
 		while ($user = $result->fetch())
 		{
 			$userResult = self::prepareUser($user);
@@ -396,27 +388,30 @@ class UstatOnline extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 
 		$userIds = Worktime::getTMUserData($status);
 
+		if (empty($userIds))
+		{
+			return false;
+		}
+
+		$users = [];
+
 		$select = [
 			"ID", "LAST_NAME", "NAME", "SECOND_NAME", "LOGIN", "PERSONAL_PHOTO", "LAST_ACTIVITY_DATE",
 		];
 
-		$filter = [
-			'=ACTIVE'       => true,
-			'=IS_REAL_USER' => true,
-			'ID' => $userIds,
-			"!UF_DEPARTMENT" => false,
-		];
-
-		$users = [];
-
 		$pageSize = 10;
 
-		$result = UserTable::getList([
-			'select' => $select,
-			'filter' => $filter,
-			'limit'  => $pageSize,
-			'offset' => ($pageNum - 1) * $pageSize,
-		]);
+		$result = UserTable::query()
+			->setSelect($select)
+			->addFilter('!UF_DEPARTMENT', false)
+			->addFilter('ACTIVE', 'Y')
+			->where('REAL_USER', 'expr', true)
+			->whereIn('ID', $userIds)
+			->setLimit($pageSize)
+			->setOffset(($pageNum - 1) * $pageSize)
+			->exec()
+		;
+
 		while ($user = $result->fetch())
 		{
 			$userResult = self::prepareUser($user);
@@ -427,14 +422,7 @@ class UstatOnline extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			$users[] = $userResult;
 		}
 
-		if (!empty($users))
-		{
-			return $users;
-		}
-		else
-		{
-			return false;
-		}
+		return $users;
 	}
 
 	public function getOpenedTimemanUserAction($pageNum)

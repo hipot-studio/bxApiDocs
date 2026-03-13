@@ -148,12 +148,11 @@ class Usage
 	{
 		$periods = [];
 
-		$rows = UsageTable::query()
+		$res = UsageTable::query()
 			->setSelect(['ID', 'USAGE_PERIOD', 'USAGE_COUNT'])
 			->where('USER_ID', $this->context->getUserId())
-			->fetchAll()
-		;
-		foreach ($rows as $row)
+			->exec();
+		while ($row = $res->fetch())
 		{
 			$periods[$row['USAGE_PERIOD']] = $row;
 		}
@@ -169,14 +168,6 @@ class Usage
 	 */
 	public static function deleteForUser(int $userId): void
 	{
-		$rows = UsageTable::query()
-			->setSelect(['ID'])
-			->where('USER_ID', $userId)
-			->fetchAll()
-		;
-		foreach ($rows as $row)
-		{
-			UsageTable::delete($row['ID'])->isSuccess();
-		}
+		UsageTable::deleteByFilter(['=USER_ID' => $userId]);
 	}
 }

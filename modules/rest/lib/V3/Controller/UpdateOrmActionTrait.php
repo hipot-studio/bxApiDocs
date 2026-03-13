@@ -20,11 +20,6 @@ trait UpdateOrmActionTrait
 	#[Description(new LocalizableMessage(code: 'REST_V3_CONTROLLER_UPDATEORMACTIONTRAIT_ACTION_DESCRIPTION', phraseSrcFile: __FILE__))]
 	public function updateAction(UpdateRequest $request): UpdateResponse
 	{
-		if ($request->id === null && $request->filter === null)
-		{
-			throw new RequiredFieldInRequestException('id || filter');
-		}
-
 		$dto = $request->fields->getAsDto();
 		if (!$this->validateDto($dto, (RequiredGroup::Update)->value))
 		{
@@ -32,9 +27,18 @@ trait UpdateOrmActionTrait
 		}
 
 		$repository = $this->getOrmRepositoryByRequest($request);
-		$result = $request->id !== null
-			? $repository->update($request->id, $dto)
-			: $repository->updateMulti($request->filter, $dto);
+		if ($request->id)
+		{
+			$result = $repository->update($request->id, $dto);
+		}
+		else if ($request->filter)
+		{
+			$result = $repository->updateMulti($request->filter, $dto);
+		}
+		else
+		{
+			throw new RequiredFieldInRequestException('id || filter');
+		}
 
 		return new UpdateResponse($result);
 	}

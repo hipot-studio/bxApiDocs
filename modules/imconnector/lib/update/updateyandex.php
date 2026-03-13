@@ -10,6 +10,9 @@ use Bitrix\ImConnector\Status;
 use Bitrix\ImConnector\Connector;
 use Bitrix\ImConnector\Model\StatusConnectorsTable;
 
+/**
+ * @internal
+ */
 final class UpdateYandex extends Stepper
 {
 	protected const PORTION = 5;

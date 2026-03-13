@@ -11,7 +11,7 @@ use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Track\Downloader\DownloadAgent;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Service\Context;
@@ -24,6 +24,8 @@ use Bitrix\Im\V2\Service\Context;
  * - Recording download failure -> error notification
  * - Preview download failure -> create default preview
  * - Successful download -> already handled by TrackService
+ *
+ * @internal
  */
 class CloudRecordExpectationAgent
 {

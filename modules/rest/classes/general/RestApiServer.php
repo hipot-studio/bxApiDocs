@@ -18,6 +18,7 @@ use Bitrix\Rest\V3\Attribute\ResolvedBy;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\DefaultLanguage;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
+use Bitrix\Rest\V3\Exception\InsufficientScopeException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
 use Bitrix\Rest\V3\Exception\InvalidSelectException;
 use Bitrix\Rest\V3\Exception\LicenseException;
@@ -123,9 +124,9 @@ class CRestApiServer extends CRestServer
 			throw new AccessDeniedException(status: self::STATUS_FORBIDDEN);
 		}
 
-		if ($methodDescription->controller)
+		if ($methodDescription->controllerFqcn)
 		{
-			$controllerData = $this->schemaManager->getControllerDataByName($methodDescription->controller);
+			$controllerData = $this->schemaManager->getControllerDataByName($methodDescription->controllerFqcn);
 			if (!$controllerData || !$controllerData->isEnabled())
 			{
 				throw new AccessDeniedException(status: self::STATUS_FORBIDDEN);
@@ -425,10 +426,10 @@ class CRestApiServer extends CRestServer
 		$availableScope = $this->getAvailableScopeFromRequest($request->getScopes());
 		if ($availableScope === null)
 		{
-			throw new AccessDeniedException(status: self::STATUS_FORBIDDEN);
+			throw new InsufficientScopeException();
 		}
 
-		$controller = ControllerBuilder::build($methodDescription->controller, [
+		$controller = ControllerBuilder::build($methodDescription->controllerFqcn, [
 			'scope' => \Bitrix\Main\Engine\Controller::SCOPE_REST,
 			'currentUser' => $currentUser,
 			'request' => $request->getHttpRequest(),
@@ -440,15 +441,16 @@ class CRestApiServer extends CRestServer
 			throw new InternalException($exception);
 		}
 
-		$controller->setDtoClass($methodDescription->dtoClass);
+		$controller->setDtoClass($methodDescription->dtoFqcn);
 		$controller->setProcessedScope($availableScope);
 		$controller->setResponseLanguage($this->responseLanguage);
 
 		$manager = new RestManager();
 		$autoWirings = $manager->getAutoWirings();
 
+		$sourceParameters = array_merge($request->getQuery(), ($methodDescription->queryParams !== null ? $methodDescription->queryParams : []));
 		$manager->registerAutoWirings($autoWirings);
-		$response = $controller->run($methodDescription->method, [$request->getQuery(), ['__restServer' => $this]]);
+		$response = $controller->run($methodDescription->method, [$sourceParameters, ['__restServer' => $this]]);
 		$manager->unRegisterAutoWirings($autoWirings);
 
 		if ($controller->hasErrors())
@@ -627,7 +629,7 @@ class CRestApiServer extends CRestServer
 		}
 
 		$httpRequestBody = $request->getHttpRequest()->getJsonList()->toArray();
-		$httpRequestBody = array_merge($methodDescription->queryParams, $httpRequestBody);
+		$jsonData = $this->applyBodyOverridesToQueryParams($httpRequestBody, $methodDescription->queryParams);
 
 		$httpRequest = new \Bitrix\Main\HttpRequest(
 			\Bitrix\Main\Context::getCurrent()->getServer(),
@@ -635,7 +637,7 @@ class CRestApiServer extends CRestServer
 			$request->getHttpRequest()->getPostList()->toArray(),
 			$request->getHttpRequest()->getFileList()->toArray(),
 			$request->getHttpRequest()->getCookieList()->toArray(),
-			$httpRequestBody,
+			$jsonData,
 		);
 
 		return new ServerRequest($request->getMethod(), $request->getQuery(), $httpRequest);
@@ -660,5 +662,48 @@ class CRestApiServer extends CRestServer
 			$methods[$index] = $methodDescription;
 		}
 		return $methods;
+	}
+
+	private function applyBodyOverridesToQueryParams(array $httpRequestBody, array $queryParams): array
+	{
+		$result = $queryParams;
+
+		foreach ($httpRequestBody as $key => $bodyValue)
+		{
+			if ($key === 'filter')
+			{
+				$queryFilter = $result['filter'] ?? [];
+
+				if (!is_array($queryFilter))
+				{
+					$queryFilter = [];
+				}
+
+				if (is_array($bodyValue))
+				{
+					$result['filter'] = $queryFilter;
+					$result['filter'][] = $bodyValue;
+				}
+
+				continue;
+			}
+
+			if ($key === 'select' && array_key_exists('select', $queryParams))
+			{
+				$result['select'] = $queryParams['select'];
+
+				continue;
+			}
+
+			if ($key === 'fields' && array_key_exists('fields', $queryParams))
+			{
+				$result['fields'] = array_replace_recursive($bodyValue, $queryParams['fields']);
+				continue;
+			}
+
+			$result[$key] = $bodyValue;
+		}
+
+		return $result;
 	}
 }

@@ -9,7 +9,6 @@ use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Im;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\CallAIBaasService;
 
@@ -20,14 +19,14 @@ class Settings
 	public static function getMobileOptions(): array
 	{
 		return array_merge([
-			'useCustomTurnServer' => Option::get('call', 'turn_server_self') === 'Y',
-			'turnServer' => \Bitrix\Im\Call\Call::getTurnServer(),
+			'useCustomTurnServer' => self::isSelfTurnServerEnabled(),
+			'turnServer' => Call::getTurnServer(),
 			'turnServerLogin' => Option::get('call', 'turn_server_login', ''),
 			'turnServerPassword' => Option::get('call', 'turn_server_password', ''),
-			'callLogService' => \Bitrix\Im\Call\Call::getLogService(),
-			'sfuServerEnabled' => Im\Call\Call::isCallServerEnabled(),
-			'bitrixCallsEnabled' => Im\Call\Call::isBitrixCallEnabled(),
-			'callBetaIosEnabled' => Im\Call\Call::isIosBetaEnabled(),
+			'callLogService' => Call::getLogService(),
+			'sfuServerEnabled' => Call::isCallServerEnabled(),
+			'bitrixCallsEnabled' => Call::isBitrixCallEnabled(),
+			'callBetaIosEnabled' => Call::isIosBetaEnabled(),
 			'isAIServiceEnabled' => static::isAIServiceEnabled(),//todo: Deprecated, should be removed after mobile app update
 			'userJwt' => JwtCall::getUserJwt((int)CurrentUser::get()->getId()),
 			'callBalancerUrl' => static::getBalancerUrl(),
@@ -87,11 +86,16 @@ class Settings
 		Loader::includeModule('im');
 
 		$userId = (int)CurrentUser::get()->getId();
-		$usersData = Im\Call\Util::getUsers([$userId]);
+		$usersData = Util::getUsers([$userId]);
 
 		return [
 			'currentUserData' => $usersData[$userId],
 		];
+	}
+
+	public static function isSelfTurnServerEnabled(): bool
+	{
+		return Option::get('call', 'turn_server_self') === 'Y';
 	}
 
 	public static function isConferenceChatEnabled(): bool
@@ -274,6 +278,20 @@ class Settings
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_kibana_logs_enabled', false);
+	}
+
+	/**
+	 * Enable/disable logs to console.
+	 * @return bool
+	 */
+	public static function isConsoleLogsEnabled(): bool
+	{
+		if (Option::get('call', 'call_console_logs_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'call_console_logs_enabled', false);
 	}
 
 	/**

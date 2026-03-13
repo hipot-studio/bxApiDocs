@@ -18,14 +18,18 @@ class DashboardRule extends VariableRule
 		$item = $params['item'] ?? null;
 		if ($item instanceof DashboardAccessItem)
 		{
-			if ($this->isAbleToSkipChecking() || $this->user->getUserId() === $item->getOwnerId())
+			if ($this->isAbleToSkipChecking())
 			{
 				return true;
 			}
 
 			return parent::check($params);
 		}
+		if ($item !== null)
+		{
+			return false;
+		}
 
-		return false;
+		return parent::check($params);
 	}
 }

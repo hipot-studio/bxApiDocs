@@ -937,9 +937,9 @@ class CVoxImplantRestService extends IRestService
 	public static function getAuthorization($params, $n, $server)
 	{
 		$allowedAuthTypes = [\Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE => true];
-		if (Loader::includeModule('im') && class_exists('\Bitrix\Im\Call\Auth'))
+		if (Loader::includeModule('call') && class_exists('\Bitrix\Call\Rest\Auth'))
 		{
-			$allowedAuthTypes[\Bitrix\Im\Call\Auth::AUTH_TYPE] = true;
+			$allowedAuthTypes[\Bitrix\Call\Rest\Auth::AUTH_TYPE] = true;
 		}
 		if (!isset($allowedAuthTypes[$server->getAuthType()]))
 		{
@@ -971,9 +971,9 @@ class CVoxImplantRestService extends IRestService
 	public static function signOneTimeKey($params, $n, $server)
 	{
 		$allowedAuthTypes = [\Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE => true];
-		if (Loader::includeModule('im') && class_exists('\Bitrix\Im\Call\Auth'))
+		if (Loader::includeModule('call') && class_exists('\Bitrix\Call\Rest\Auth'))
 		{
-			$allowedAuthTypes[\Bitrix\Im\Call\Auth::AUTH_TYPE] = true;
+			$allowedAuthTypes[\Bitrix\Call\Rest\Auth::AUTH_TYPE] = true;
 		}
 		if (!isset($allowedAuthTypes[$server->getAuthType()]))
 		{
@@ -1001,9 +1001,9 @@ class CVoxImplantRestService extends IRestService
 	public static function onAuthorizationError($params, $n, $server)
 	{
 		$allowedAuthTypes = [\Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE => true];
-		if (Loader::includeModule('im') && class_exists('\Bitrix\Im\Call\Auth'))
+		if (Loader::includeModule('call') && class_exists('\Bitrix\Call\Rest\Auth'))
 		{
-			$allowedAuthTypes[Bitrix\Im\Call\Auth::AUTH_TYPE] = true;
+			$allowedAuthTypes[\Bitrix\Call\Rest\Auth::AUTH_TYPE] = true;
 		}
 		if (!isset($allowedAuthTypes[$server->getAuthType()]))
 		{

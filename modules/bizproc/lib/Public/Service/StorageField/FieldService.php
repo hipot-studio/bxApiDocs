@@ -8,12 +8,13 @@ use Bitrix\Bizproc\Internal\Entity\StorageField\StorageField;
 use Bitrix\Bizproc\Internal\Model\StorageFieldTable;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Exception\Exception;
+use Bitrix\Bizproc\Public\Command\StorageField\StorageFieldDto;
 
 class FieldService
 {
-	public function prepare(array $field): ?StorageField
+	public function prepare(StorageFieldDto $storageFieldDto): ?StorageField
 	{
-		$storageFieldEntity = StorageField::mapFromArray($field);
+		$storageFieldEntity = StorageField::mapFromArray($storageFieldDto->toArray());
 		$mapper = new \Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper();
 		$storageFieldOrm = $mapper->convertToOrm($storageFieldEntity);
 		$storageFieldEntity->setCode($storageFieldOrm->getCode());

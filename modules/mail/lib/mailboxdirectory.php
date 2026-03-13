@@ -10,6 +10,8 @@ use Bitrix\Main\Result;
 
 class MailboxDirectory
 {
+	private static array $mailboxDirs = [];
+
 	public static function fetchAllDirsTypes($mailboxId)
 	{
 		return MailboxDirectoryTable::getList([
@@ -232,9 +234,7 @@ class MailboxDirectory
 
 	public static function fetchAll(int $mailboxId)
 	{
-		static $mailboxDirs = [];
-
-		if (!isset($mailboxDirs[$mailboxId]))
+		if (!isset(self::$mailboxDirs[$mailboxId]))
 		{
 			$query = MailboxDirectoryTable::getList([
 				'filter' => [
@@ -256,10 +256,22 @@ class MailboxDirectory
 				$result[$row->getPath()] = $row;
 			}
 
-			$mailboxDirs[$mailboxId] = $result;
+			self::$mailboxDirs[$mailboxId] = $result;
 		}
 
-		return $mailboxDirs[$mailboxId];
+		return self::$mailboxDirs[$mailboxId];
+	}
+
+	public static function invalidateCache(?int $mailboxId = null): void
+	{
+		if ($mailboxId === null)
+		{
+			self::$mailboxDirs = [];
+		}
+		else
+		{
+			unset(self::$mailboxDirs[$mailboxId]);
+		}
 	}
 
 	public static function fetchAllSyncDirs($mailboxId)

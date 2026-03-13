@@ -4,6 +4,7 @@ namespace Bitrix\Baas\Model;
 
 use Bitrix\Main;
 use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Fields\BooleanField;
 
 /**
  * Class PurchasedPackageTable
@@ -67,6 +68,10 @@ class PurchasedPackageTable extends ORM\Data\DataManager
 				->configureTitle('Expiration date')
 				->configureRequired()
 				->configureDefaultValue(function() { return (new Main\Type\Date())->add('30 days'); })
+			,
+			(new BooleanField('NOTIFIED'))
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue('N')
 			,
 			new Main\ORM\Fields\Relations\Reference(
 				'PACKAGE',

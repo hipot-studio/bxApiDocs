@@ -633,10 +633,10 @@ class FieldType
 					break;
 				case 'NAME':
 				case 'TITLE':
-					$normalized['Name'] = (string)$val;
+					$normalized['Name'] = \CBPHelper::stringify($val);
 					break;
 				case 'DESCRIPTION':
-					$normalized['Description'] = (string)$val;
+					$normalized['Description'] = \CBPHelper::stringify($val);
 					break;
 				case 'DEFAULT':
 					$normalized['Default'] = $val;

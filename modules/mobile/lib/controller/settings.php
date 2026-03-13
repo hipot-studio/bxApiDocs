@@ -69,6 +69,7 @@ final class Settings extends JsonController
 			'isOtpEnabled' => $otpService->isEnabled(),
 			'isOtpEnabledForUser' => $otpService->isEnabledForUser($userId),
 			'isOtpMandatory' => $otpService->isMandatory(),
+			'isHighPushOtpPromote' => $otpService->isPushOtpHighPromote(),
 			'takeScreenshotRights' => $this->getTakeScreenshotRights(),
 			'copyTextRights' => $this->getCopyTextRights($mobileAppSettings),
 		]);

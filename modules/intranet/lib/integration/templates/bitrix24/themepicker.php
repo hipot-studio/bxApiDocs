@@ -486,6 +486,12 @@ class ThemePicker
 					}
 				}
 			}
+			else if (isset($fields["bgImageAnimated"]) && $fields["bgImageAnimated"] === true)
+			{
+				// 0 means that the original image does not have a blurred version
+				$theme["bgImageBlurred"] = 0;
+				$theme["bgImageBlurredSignature"] = $signer->sign("0", 'theme-picker');
+			}
 		}
 
 		if (empty($theme))

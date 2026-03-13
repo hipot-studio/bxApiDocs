@@ -8,7 +8,7 @@ use Bitrix\Main\Web\Json;
 
 class ChangeNodeNameAction extends BaseAction
 {
-	protected const JS_COMMAND = 'cnangeNodeName';
+	protected const JS_COMMAND = 'changeNodeName';
 
 	public function execute(bool $undo = true): bool
 	{

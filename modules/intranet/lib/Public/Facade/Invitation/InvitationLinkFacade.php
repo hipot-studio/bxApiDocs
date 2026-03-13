@@ -8,6 +8,7 @@ use Bitrix\Intranet\Internal\Strategy\Registration\PortalLinkRegistrationStrateg
 use Bitrix\Intranet\Public\Service\RegistrationService;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Bitrix\Socialservices\Network;
 
@@ -66,13 +67,16 @@ abstract class InvitationLinkFacade
 		catch (SystemException $e)
 		{
 			$message = $e->getMessage();
-			Network::setLastUserStatus(!empty($message)
-				? [
-					"error" => "no_email",
-					"error_message" => $message,
-				]
-				: "no_email",
-			);
+			if (Loader::includeModule('socialservices'))
+			{
+				Network::setLastUserStatus(!empty($message)
+					? [
+						"error" => "no_email",
+						"error_message" => $message,
+					]
+					: "no_email",
+				);
+			}
 
 			throw $e;
 		}

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Service\User;
 
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
+use Bitrix\Intranet\Internal\Integration\Humanresources\DepartmentRepository;
 use Bitrix\Intranet\Internal\Integration\Humanresources\TeamRepository;
 use Bitrix\Intranet\Service;
 use Bitrix\Intranet\Integration;
@@ -11,12 +13,14 @@ use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Intranet\Dto\User\MiniProfile;
 use Bitrix\Intranet\Result\Service\User\MiniProfileDataResult;
 
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main;
 use Bitrix\Main\EO_User;
 
 class MiniProfileService
 {
 	private const AVATAR_SIZE = 100;
+	private const HEAD_AVATAR_SIZE = 45;
 	private const DEPARTMENT_BRANCH_SIZE = 3;
 
 	private Service\UserService $userService;
@@ -139,6 +143,8 @@ class MiniProfileService
 			}
 		}
 
+		$userHeadIds = $this->getUserHeadIds($userId, $headDictionaryDto);
+
 		$departmentDictionaryDto = [];
 		foreach ($nodeDictionary as $id => $node)
 		{
@@ -172,6 +178,7 @@ class MiniProfileService
 			departmentDictionary: $departmentDictionaryDto,
 			userDepartmentIds: $userDepartmentIds,
 			teams: $teamDtoList,
+			userHeadIds: $userHeadIds,
 		);
 	}
 
@@ -187,7 +194,7 @@ class MiniProfileService
 			status: $this->getStatus($userModel),
 			role: (new \Bitrix\Intranet\User($userId))->getUserRole()?->value,
 			url: $this->userService->getDetailUrl($userId),
-			avatar: $this->getAvatarUrl($userModel, self::AVATAR_SIZE),
+			avatar: $this->getAvatarUrl($userModel->getPersonalPhoto(), self::AVATAR_SIZE),
 			personalGender: $userModel->getPersonalGender(),
 		);
 	}
@@ -299,10 +306,15 @@ class MiniProfileService
 		);
 	}
 
-	private function getAvatarUrl(EO_User $userModel, int $size): ?string
+	private function getAvatarUrl(int $personalPhoto, int $size): ?string
 	{
+		if (!$personalPhoto)
+		{
+			return '';
+		}
+
 		$fileTmp = \CFile::ResizeImageGet(
-			$userModel->getPersonalPhoto(),
+			$personalPhoto,
 			['width' => $size, 'height' => $size],
 			BX_RESIZE_IMAGE_EXACT,
 			false,
@@ -340,5 +352,59 @@ class MiniProfileService
 			'code' => $status['STATUS'] ?? null,
 			'lastSeenTs' => $status['LAST_SEEN'] ?? null,
 		];
+	}
+
+	private function getUserHeadIds(int $userId, array &$headDictionaryDto): array
+	{
+		$userHeadIds = [];
+		$remainingHeadIds = [];
+		$nodeMemberCollection = PublicContainer::getUserDepartmentService()
+			->getUserHeads($userId)
+		;
+
+		foreach ($nodeMemberCollection as $headMember)
+		{
+			$headId = $headMember->entityId;
+			if (in_array($headId, $userHeadIds, true))
+			{
+				continue;
+			}
+
+			$userHeadIds[] = $headId;
+			if (!isset($headDictionaryDto[$headId]))
+			{
+				if (!in_array($headId, $remainingHeadIds, true))
+				{
+					$remainingHeadIds[] = $headId;
+				}
+
+				continue;
+			}
+		}
+
+		if (empty($remainingHeadIds))
+		{
+			return $userHeadIds;
+		}
+
+		$userHeads = ServiceContainer::getInstance()->userRepository()->findUsersByIds($remainingHeadIds);
+		foreach ($userHeads as $head)
+		{
+			$headId = $head->getId();
+			if (!$headId)
+			{
+				continue;
+			}
+
+			$headDictionaryDto[$headId] = new MiniProfile\Structure\HeadDto(
+				id: $headId,
+				name: $head->getFormattedName(),
+				workPosition: '',
+				avatar: $this->getAvatarUrl((int)$head->getPersonalPhoto(), self::HEAD_AVATAR_SIZE),
+				url: $this->userService->getDetailUrl($headId),
+			);
+		}
+
+		return $userHeadIds;
 	}
 }

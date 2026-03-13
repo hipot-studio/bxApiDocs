@@ -11,7 +11,7 @@ class EInvoice
 
 	public static function isAvailable(): bool
 	{
-		return Access::isAvailable() && in_array(Main\Application::getInstance()->getLicense()->getRegion(), ['de', 'it', 'pl']);
+		return Access::isAvailable() && !Main\Application::getInstance()->getLicense()->isCis();
 	}
 
 	public static function getApplicationList(): array

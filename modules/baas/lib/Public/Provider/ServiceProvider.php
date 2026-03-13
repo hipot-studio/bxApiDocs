@@ -6,8 +6,6 @@ namespace Bitrix\Baas\Public\Provider;
 
 use Bitrix\Baas;
 use Bitrix\Main\Provider\Params\PagerInterface;
-use Bitrix\Baas\Internal\Entity\Enum\ServiceAdvertisingStrategy;
-use Bitrix\Baas\Internal\Service\MarketplaceService;
 
 class ServiceProvider
 {
@@ -63,18 +61,7 @@ class ServiceProvider
 	{
 		if (!array_key_exists($code, $this->repo))
 		{
-			$data = $data ?? $this->getServices()->getByPrimary($code);
-			// region remove it after 13.11.2025. this code is used only for temporary needs of the controller
-			if (
-				str_starts_with(\COption::GetOptionString('main', '~controller_group_name'), 'ru')
-				&& $data?->getCode() === 'ai_copilot_token'
-				&& $data?->getAdvertisingStrategy() !== ServiceAdvertisingStrategy::BY_MARKET->value
-			)
-			{
-				$data->setAdvertisingStrategy(ServiceAdvertisingStrategy::BY_MARKET->value);
-				MarketplaceService::createInstance()->adaptFeaturePromotionAndHelperCodes($data);
-			}
-			// endregion
+			$data ??= $this->getServices()->getByPrimary($code);
 			$this->repo[$code] = new Baas\Entity\Service($code, $data);
 		}
 

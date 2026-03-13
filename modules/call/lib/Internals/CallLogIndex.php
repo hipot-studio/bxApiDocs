@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\Internals;
 
+/**
+ * @internal
+ */
 class CallLogIndex
 {
 	private const CHARS_TO_REPLACE = ['(', ')', '[', ']', '{', '}', '<', '>', '-', '#', '"', '\''];

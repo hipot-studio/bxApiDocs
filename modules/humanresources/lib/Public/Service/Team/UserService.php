@@ -14,7 +14,9 @@ use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
+use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Public\Service\Node\UserService as NodeUserService;
 use Bitrix\HumanResources\Type\NodeEntityType;
@@ -130,5 +132,23 @@ class UserService
 		);
 
 		return $headMember !== null;
+	}
+
+	/**
+	 * Returns the nearest team heads from the branch where the given user belongs
+	 */
+	public function getUserHeads(int $userId): NodeMemberCollection
+	{
+		try
+		{
+			return InternalContainer::getNodeMemberService()->getNodeMemberHeads(
+				entityId: $userId,
+				nodeEntityType: NodeEntityType::TEAM,
+			);
+		}
+		catch (\Throwable)
+		{
+			return new NodeMemberCollection();
+		}
 	}
 }

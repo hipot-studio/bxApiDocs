@@ -2,12 +2,17 @@
 
 namespace Bitrix\Call\Cache;
 
-use Bitrix\Call\JwtCall;
-use Bitrix\Im\Call\Util;
-use Bitrix\Im\V2\Call\CallFactory;
-use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Application;
+use Bitrix\Call\JwtCall;
+use Bitrix\Call\Util;
+use Bitrix\Call\CallFactory;
+use Bitrix\Call\Model\CallUserTable;
 
+
+/**
+ * @internal
+ */
 class ActiveCallsCache
 {
 	private const CACHE_TTL = 86400;
@@ -101,15 +106,11 @@ class ActiveCallsCache
 	 */
 	public static function updateCallCache(int $callId): void
 	{
-		if (!\Bitrix\Main\Loader::includeModule('im'))
-		{
-			return;
-		}
-
-		$userRows = \Bitrix\Im\Model\CallUserTable::query()
+		$userRows = CallUserTable::query()
 			->addSelect('USER_ID')
 			->where('CALL_ID', $callId)
-			->fetchAll();
+			->fetchAll()
+		;
 
 		if (!$userRows)
 		{

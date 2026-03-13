@@ -117,15 +117,14 @@ class CacheProvider extends StaticCacheProvider
 	 */
 	public static function deleteAllCache()
 	{
-		$users = UserTable::getList(array(
-			"select" => array("ID"),
-			"filter" => array(
-				"=ACTIVE" => "Y",
-				"=CONFIRM_CODE" => false,
-				"!UF_DEPARTMENT" => false,
-				"=IS_REAL_USER" => "Y"
-			)
-		));
+		$users = UserTable::query()
+			->setSelect(['ID'])
+			->where('REAL_USER', 'expr', true)
+			->addFilter('!UF_DEPARTMENT', false)
+			->addFilter('CONFIRM_CODE', false)
+			->addFilter('ACTIVE', 'Y')
+			->exec()
+		;
 
 		while ($user = $users->fetch())
 		{

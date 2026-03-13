@@ -161,7 +161,7 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 			$crmAnalytics = $this->getPanelButtonCRMAnalytics();
 			if (!empty($crmAnalytics))
 			{
-				if (!empty($biAnalytics) && $this->isBiConstructorAvailable())
+				if (!empty($biAnalytics))
 				{
 					array_push($buttons['ITEMS'], ... $crmAnalytics);
 				}
@@ -367,16 +367,6 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 		}
 
 		return $menuItem['ITEMS'] ?? [];
-	}
-
-	private function isBiConstructorAvailable(): bool
-	{
-		return
-			Loader::includeModule('biconnector')
-			&& \Bitrix\BIConnector\Configuration\Feature::isBuilderEnabled()
-			&& Loader::includeModule('intranet')
-			&& ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi')
-		;
 	}
 
 	private function getPanelButtonsSettings(): array

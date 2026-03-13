@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Service\GeoIp;
@@ -27,8 +27,6 @@ use Psr\Log;
  */
 class Manager
 {
-	/** @deprecated */
-	const INFO_NOT_AVAILABLE = null;
 	protected const CACHE_DIR = 'geoip_manager';
 
 	/** @var Base[] | null */
@@ -187,12 +185,17 @@ class Manager
 	 */
 	public static function getDataResult($ip = '', $lang = '', array $required = [])
 	{
-		$result = null;
-
-		if ($ip == '')
+		if (empty($ip))
 		{
 			$ip = self::getRealIp();
+
+			if (empty($ip))
+			{
+				return null;
+			}
 		}
+
+		$result = null;
 
 		// cache on the hit
 		if (isset(self::$data[$ip][$lang]))

@@ -15,6 +15,7 @@ const MESSAGE_PARAM_MENU_ACTION = 'IMB_MENU_ACTION'; // menu action parameter
  * The implement of the Imbot\Bot\MenuBot interface.
  *
  * @package \Bitrix\Imbot\Bot\Mixin
+ * @internal
  */
 trait NetworkMenuBot
 {

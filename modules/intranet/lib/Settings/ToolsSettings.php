@@ -126,6 +126,12 @@ class ToolsSettings extends AbstractSettings
 				'settings-title' => $tool->getSettingsTitle(),
 				'infohelper-slider' => $tool->getInfoHelperSlider(),
 				'default' => $tool->isDefault(),
+				'disableConfirmation' => [
+					'isNeeded' => $tool->isNeedDisableConfirmation(),
+					'title' => $tool->getDisableConfirmationTitle(),
+					'text' => $tool->getDisableConfirmationText(),
+					'confirmCaption' => $tool->getDisableConfirmCaption(),
+				],
 			];
 		}
 

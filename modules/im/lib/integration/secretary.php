@@ -2,7 +2,7 @@
 namespace Bitrix\Im\Integration;
 
 use Bitrix\Im\Alias;
-use Bitrix\Im\Call\Conference;
+use Bitrix\Call\Conference;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;

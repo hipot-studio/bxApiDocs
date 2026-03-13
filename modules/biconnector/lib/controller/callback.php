@@ -2,14 +2,15 @@
 
 namespace Bitrix\BIConnector\Controller;
 
+use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
-use Bitrix\Bitrix24;
+use Bitrix\BIConnector\Superset\SystemDashboardManager;
+use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Error;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Engine\Controller;
 
 class Callback extends Controller
@@ -48,10 +49,12 @@ class Callback extends Controller
 		SupersetInitializerLogger::logInfo('Portal got freeze action', ['current_status' => SupersetInitializer::getSupersetStatus()]);
 	}
 
+	/**
+	 * @see \Bitrix\BIConnector\Integration\Superset\Agent::deleteInstance()
+	 * @return void
+	 */
 	public function deleteAction(): void
 	{
-		SupersetInitializerLogger::logInfo('Portal got delete instance callback');
-
 		$responseBody = Context::getCurrent()?->getRequest()->getJsonList();
 		$status = $responseBody?->get('status');
 		if ($status === 'error')
@@ -72,22 +75,19 @@ class Callback extends Controller
 			return;
 		}
 
-		SupersetInitializer::clearSupersetData();
-
-		if (
-			Loader::includeModule('bitrix24')
-			&& Bitrix24\LicenseScanner\Manager::getInstance()->shouldWarnPortal()
-		)
+		// When deleting from proxy
+		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_DELETED)
 		{
-			// Deleting instance was initiated by client - when tariff is over.
-			SupersetInitializerLogger::logInfo('Superset instance was deleted by client due to tariff ending');
-		}
-		else
-		{
-			// Deleting instance was initiated manually using settings or by admins.
-			SupersetInitializerLogger::logInfo('Superset instance was deleted manually or by admins');
+			SupersetInitializer::clearSupersetData();
 		}
 
-		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DELETED);
+		SupersetInitializerLogger::logInfo('Superset instance was deleted');
+
+		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+		AccessInstaller::install();
+		Option::set('biconnector', \Bitrix\BIConnector\Configuration\Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
+		SystemDashboardManager::actualizeSystemDashboards();
+
+		DashboardManager::notifySupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
 	}
 }

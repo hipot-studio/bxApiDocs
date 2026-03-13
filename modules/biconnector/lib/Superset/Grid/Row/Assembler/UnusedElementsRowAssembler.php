@@ -21,9 +21,6 @@ class UnusedElementsRowAssembler extends RowAssembler
 				['DESCRIPTION'],
 				maxLength: 300
 			),
-			new Field\UnusedElements\OwnersFieldAssembler([
-				'OWNERS',
-			]),
 			new Field\Base\DateFieldAssembler([
 				'DATE_UPDATE',
 				'DATE_CREATE',

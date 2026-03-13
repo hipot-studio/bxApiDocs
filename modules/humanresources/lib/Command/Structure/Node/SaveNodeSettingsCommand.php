@@ -18,24 +18,13 @@ class SaveNodeSettingsCommand extends AbstractCommand
 
 	protected function validate(): bool
 	{
-		$isDeputyCheckRequired = !Feature::instance()->isDeputyApprovesBPAvailable() && $this->node->type === NodeEntityType::TEAM;
-		$unavailableDeputyTypes = $isDeputyCheckRequired ? [
-			NodeSettingsAuthorityType::DepartmentDeputy->value,
-			NodeSettingsAuthorityType::TeamDeputy->value,
-		] : [];
-		$unavailableTeamTypes = $this->node->type !== NodeEntityType::TEAM ? [
-			NodeSettingsAuthorityType::TeamHead->value,
-			NodeSettingsAuthorityType::TeamDeputy->value,
-			NodeSettingsAuthorityType::TeamEmployee->value,
-		] : [];
-		$unavailableTypes = array_merge([NodeSettingsAuthorityType::DepartmentEmployee->value],
-			$unavailableDeputyTypes,
-			$unavailableTeamTypes,
-		);
+		$unavailableBpTypes = $this->getUnavailableTypes(NodeSettingsType::BusinessProcAuthority);
+		$unavailableReportsTypes = $this->getUnavailableTypes(NodeSettingsType::ReportsAuthority);
 
 		foreach ($this->settings as $type => $setting)
 		{
-			if (!NodeSettingsType::tryFrom($type) || !is_array($setting))
+			$nodeSettingType = NodeSettingsType::tryFrom($type);
+			if (!$nodeSettingType || !is_array($setting))
 			{
 				return false;
 			}
@@ -58,7 +47,11 @@ class SaveNodeSettingsCommand extends AbstractCommand
 				return false;
 			}
 
-			if (is_array($setting['values']) && !empty(array_intersect($setting['values'], $unavailableTypes)))
+			$typesToCheck = $nodeSettingType === NodeSettingsType::BusinessProcAuthority
+				? $unavailableBpTypes
+				: $unavailableReportsTypes
+			;
+			if (is_array($setting['values']) && !empty(array_intersect($setting['values'], $typesToCheck)))
 			{
 				return false;
 			}
@@ -82,5 +75,31 @@ class SaveNodeSettingsCommand extends AbstractCommand
 		}
 
 		return new Result();
+	}
+
+	/**
+	 * @return array<string>
+	 */
+	private function getUnavailableTypes(NodeSettingsType $type): array
+	{
+		$featureFlag = $type === NodeSettingsType::BusinessProcAuthority
+			? Feature::instance()->isDeputyApprovesBPAvailable()
+			: Feature::instance()->isDeputyGetReportsAvailable()
+		;
+
+		$isDeputyCheckRequired = !$featureFlag && $this->node->type === NodeEntityType::TEAM;
+		$unavailableDeputyTypes = $isDeputyCheckRequired ? [
+			NodeSettingsAuthorityType::DepartmentDeputy->value,
+			NodeSettingsAuthorityType::TeamDeputy->value,
+		] : [];
+		$unavailableTeamTypes = $this->node->type !== NodeEntityType::TEAM ? [
+			NodeSettingsAuthorityType::TeamHead->value,
+			NodeSettingsAuthorityType::TeamDeputy->value,
+			NodeSettingsAuthorityType::TeamEmployee->value,
+		] : [];
+		return array_merge([NodeSettingsAuthorityType::DepartmentEmployee->value],
+			$unavailableDeputyTypes,
+			$unavailableTeamTypes,
+		);
 	}
 }

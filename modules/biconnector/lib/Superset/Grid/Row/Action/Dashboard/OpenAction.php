@@ -45,6 +45,11 @@ final class OpenAction extends BaseAction
 			}
 		}
 
+		$rawFields['DETAIL_URL'] .=
+			(str_contains($rawFields['DETAIL_URL'], '?') ? '&' : '?')
+			. 'openFrom=grid'
+		;
+
 		$this->onclick = "window.open(`{$rawFields['DETAIL_URL']}`, '_blank');";
 
 		return parent::getControl($rawFields);

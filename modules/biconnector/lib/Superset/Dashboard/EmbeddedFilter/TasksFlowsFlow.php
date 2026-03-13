@@ -20,9 +20,14 @@ class TasksFlowsFlow extends PresetFilter
 	/**
 	 * @inheritDoc
 	 */
-	protected function getColumnName(): string
+	public static function getColumnName(): string
 	{
 		return 'flow_id';
+	}
+
+	public static function getDatasetName(): string
+	{
+		return 'system_filter_tasks_flow';
 	}
 
 	/**

@@ -35,7 +35,7 @@ interface PersonRepository
 
 	public function getMappedPersonsByCompanyId(int $companyId, ConditionTree $filter, int $limit, int $offset): PersonCollection;
 
-	public function countAllMappedByCompanyId(int $companyId): int;
+	public function countAllMappedByCompanyId(int $companyId, ?ConditionTree $filter = null): int;
 
 	public function deleteLink(PersonCollection $personCollection): PersonCollection;
 

@@ -83,7 +83,8 @@ class CommonTab extends BaseProfileTab
 		}
 
 		$owner = $userOwner[0];
-		$statusData = $this->getOwnerStatusData($owner);
+		$commonFields = $this->getCommonFields();
+		$statusData = $this->getOwnerStatusData($owner, $commonFields);
 		$tagsData = $this->getTagsData();
 		$users = [$owner, ...UserRepository::getByIds($tagsData['userIds'])];
 
@@ -95,7 +96,7 @@ class CommonTab extends BaseProfileTab
 			'tags' => $tagsData['tags'],
 			'departments' => $this->getDepartmentData(),
 			'efficiency' => $this->getEfficiencyData(),
-			'commonFields' => $this->getCommonFields(),
+			'commonFields' => $commonFields,
 			'currentTheme' => (new ThemeProvider($this->ownerId))->getCurrentTheme(),
 			'inviteSettings' => (new InviteProvider())->getInviteSettings(),
 			'aboutMe' => $this->getAboutMeData(),
@@ -138,15 +139,34 @@ class CommonTab extends BaseProfileTab
 
 	/**
 	 * @param \Bitrix\Mobile\Provider\CommonUserDto $owner
+	 * @param array $commonFields
 	 * @return array
 	 */
-	private function getOwnerStatusData(CommonUserDto $owner): array
+	private function getOwnerStatusData(CommonUserDto $owner, array $commonFields): array
 	{
 		$result = [
 			'onVacationDateTo' => '',
 			'lastSeenText' => '',
 			'inviteStatus' => $this->getOwnerInviteStatus(),
+			'isBirthday' => false,
 		];
+
+		foreach ($commonFields as $section)
+		{
+			if (!isset($section['fields']) || !is_array($section['fields']))
+			{
+				continue;
+			}
+
+			foreach ($section['fields'] as $field)
+			{
+				if (($field['id'] ?? null) === 'PERSONAL_BIRTHDAY')
+				{
+					$result['isBirthday'] = \CIntranetUtils::IsToday($field['value'] ?? null);
+					break 2;
+				}
+			}
+		}
 
 		$isFired = $result['inviteStatus'] === InvitationStatus::FIRED;
 		if ($isFired)

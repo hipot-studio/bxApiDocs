@@ -70,41 +70,11 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 
 		$this->arResult['ERROR_MESSAGES'] = [];
 		$this->arResult['FEATURE_AVAILABLE'] = true;
-		$this->arResult['TOOLS_AVAILABLE'] = true;
 		$this->arResult['HELPER_CODE'] = null;
-
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
-		{
-			$this->arResult['CAN_CREATE'] = BIConnector\Manager::isAdmin();
-
-			$AvailableToEnableTimestamp = SupersetInitializer::getAvailableToEnableSupersetTimestamp();
-			$this->arResult['IS_ENABLE_TIME_REACHED'] = time() > $AvailableToEnableTimestamp;
-			$this->arResult['ENABLE_DATE'] = \Bitrix\Main\Type\DateTime::createFromTimestamp($AvailableToEnableTimestamp)->toString();
-			$this->includeComponentTemplate('create_superset');
-
-			return;
-		}
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
-			$this->includeComponentTemplate($template);
-
-			return;
-		}
-
-		if (!Feature::isBuilderEnabled())
-		{
-			if (SupersetInitializer::isSupersetExist())
-			{
-				$this->initDeleteButton();
-			}
-
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_TARIFF_ERROR');
-			$this->arResult['FEATURE_AVAILABLE'] = false;
-			$this->arResult['HELPER_CODE'] = 'limit_crm_BI_constructor';
-
-
 			$this->includeComponentTemplate($template);
 
 			return;
@@ -120,13 +90,16 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			return;
 		}
 
+		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
+		{
+			$this->includeComponentTemplate('create_superset');
+
+			return;
+		}
+
 		if (SupersetInitializer::isSupersetReady())
 		{
 			(new BIConnector\Access\Superset\Synchronizer(CurrentUser::get()->getId()))->sync();
-
-			Application::getInstance()
-				->addBackgroundJob(fn() => (new BIConnector\Superset\Synchronizer())->initRequiredDataset())
-			;
 		}
 
 		if (!DashboardOwner::isFinished())
@@ -150,21 +123,6 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			$supersetStatus === SupersetInitializer::SUPERSET_STATUS_READY
 			&& !$metricAlreadySend
 		);
-	}
-
-	private function initDeleteButton(): void
-	{
-		if (Superset\UI\UIHelper::needShowDeleteInstanceButton())
-		{
-			$clearButton = new Buttons\Button([
-				'color' => Buttons\Color::DANGER,
-				'text' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_CLEAR_BUTTON'),
-				'click' => new Buttons\JsCode(
-					'BX.BIConnector.ApacheSupersetTariffCleaner.Instance.handleButtonClick(this)'
-				),
-			]);
-			Toolbar::addButton($clearButton);
-		}
 	}
 
 	private static function getTemplateUrls(): array

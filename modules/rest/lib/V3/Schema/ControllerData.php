@@ -1,55 +1,32 @@
 <?php
-
 namespace Bitrix\Rest\V3\Schema;
 
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Contract\Arrayable;
-use Bitrix\Rest\V3\Attribute\Enabled;
 
-class ControllerData implements Arrayable
+final class ControllerData implements Arrayable
 {
-	public readonly \ReflectionClass $controller;
-	public readonly ?\ReflectionClass $dto;
 	/**
-	 * @var MethodDescription[]
+	 * @var array<string, MethodDescription>
 	 */
 	private array $methodDescriptions = [];
-	private bool $enabled;
 
 	public function __construct(
 		public readonly string $module,
-		string $controller,
-		?string $dto = null,
+		public readonly string $controllerFqcn,
+		public readonly ?string $dtoFqcn = null,
 		public readonly ?string $namespace = null,
+		public readonly bool $enabled = true,
 		array $methods = [],
-		?bool $isEnabled = null,
-	) {
-		$this->controller = new \ReflectionClass($controller);
-		$this->dto = $dto !== null ? new \ReflectionClass($dto) : null;
-		if ($isEnabled === null)
-		{
-			$isEnabledAttribute = $this->controller->getAttributes(Enabled::class);
-			if (!empty($isEnabledAttribute))
-			{
-				/** @var Enabled $isEnabledAttribute */
-				$enabledAttribute = $isEnabledAttribute[0]->newInstance();
-				$this->enabled = $enabledAttribute->isEnabled();
-			}
-			else
-			{
-				$this->enabled = true;
-			}
-		}
-		else
-		{
-			$this->enabled = $isEnabled;
-		}
+	)
+	{
 		foreach ($methods as $methodDescription)
 		{
 			if (!$methodDescription instanceof MethodDescription)
 			{
-				throw new \InvalidArgumentException('All items in $methods must be instances of MethodDescription or arrays.');
+				throw new \InvalidArgumentException('All items in $methods must be instances of MethodDescription.');
 			}
+
 			$this->methodDescriptions[$methodDescription->actionUri] = $methodDescription;
 		}
 	}
@@ -61,10 +38,14 @@ class ControllerData implements Arrayable
 
 	public function getUri(): string
 	{
-		$namespace = strtolower(trim($this->namespace, '\\'));
+		$namespacePrefix = strtolower(trim((string)$this->namespace, '\\'));
+		$controllerFqcnLower = strtolower($this->controllerFqcn);
 
-		$controllerName = strtolower($this->controller->getName());
-		$controllerUri = str_replace('\\', '.', trim(str_replace($namespace,'', $controllerName), '\\'));
+		$controllerWithoutNamespace = $namespacePrefix !== ''
+			? str_replace($namespacePrefix, '', $controllerFqcnLower)
+			: $controllerFqcnLower;
+
+		$controllerUri = str_replace('\\', '.', trim($controllerWithoutNamespace, '\\'));
 
 		return $this->module . '.' . $controllerUri;
 	}
@@ -74,6 +55,9 @@ class ControllerData implements Arrayable
 		return $this->getUri() . '.' . strtolower($method);
 	}
 
+	/**
+	 * @return array<string, MethodDescription>
+	 */
 	public function getMethods(): array
 	{
 		return $this->methodDescriptions;
@@ -92,29 +76,39 @@ class ControllerData implements Arrayable
 		{
 			throw new SystemException('Parameter "module" is required and must be a string.');
 		}
-		if (empty($data['controller']) || !is_string($data['controller']))
+
+		if (empty($data['controllerFqcn']) || !is_string($data['controllerFqcn']))
 		{
 			throw new SystemException('Parameter "controller" is required and must be a string.');
 		}
-		if (isset($data['dto']) && !is_null($data['dto']) && !is_string($data['dto']))
+
+		if (isset($data['dtoFqcn']) && $data['dtoFqcn'] !== null && !is_string($data['dtoFqcn']))
 		{
-			throw new SystemException('Parameter "dto" must be a string or null.');
+			throw new SystemException('Parameter "dtoFqcn" must be a string or null.');
 		}
-		if (isset($data['namespace']) && !is_null($data['namespace']) && !is_string($data['namespace']))
+
+		if (isset($data['namespace']) && $data['namespace'] !== null && !is_string($data['namespace']))
 		{
 			throw new SystemException('Parameter "namespace" must be a string or null.');
 		}
+
 		if (isset($data['methods']) && !is_array($data['methods']))
 		{
 			throw new SystemException('Parameter "methods" must be an array.');
 		}
 
+		if (isset($data['enabled']) && !is_bool($data['enabled']))
+		{
+			throw new SystemException('Parameter "enabled" must be a bool.');
+		}
+
 		return new self(
-			$data['module'],
-			$data['controller'],
-			$data['dto'] ?? null,
-			$data['namespace'] ?? null,
-			$data['methods'] ?? [],
+			module: $data['module'],
+			controllerFqcn: $data['controllerFqcn'],
+			dtoFqcn: $data['dto'] ?? null,
+			namespace: $data['namespace'] ?? null,
+			enabled: $data['enabled'] ?? true,
+			methods: $data['methods'] ?? [],
 		);
 	}
 
@@ -122,9 +116,11 @@ class ControllerData implements Arrayable
 	{
 		$data = [
 			'module' => $this->module,
-			'controller' => $this->controller->getName(),
-			'dto' => $this->dto?->getName(),
+			'controllerFqcn' => $this->controllerFqcn,
+			'dtoFqcn' => $this->dtoFqcn,
 			'namespace' => $this->namespace,
+			'enabled' => $this->enabled,
+			'methods' => [],
 		];
 
 		foreach ($this->methodDescriptions as $methodDescription)

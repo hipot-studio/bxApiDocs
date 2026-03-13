@@ -28,15 +28,7 @@ class Manager
 	 */
 	public static function deleteForUser(int $userId): void
 	{
-		$rows = HistoryTable::query()
-			->setSelect(['ID'])
-			->where('CREATED_BY_ID', $userId)
-			->fetchAll()
-		;
-		foreach ($rows as $row)
-		{
-			HistoryTable::delete($row['ID'])->isSuccess();
-		}
+		HistoryTable::deleteByFilter(['=CREATED_BY_ID' => $userId]);
 	}
 
 	/**
@@ -139,7 +131,7 @@ class Manager
 			$limit = self::getCapacity();
 		}
 
-		 $items = HistoryTable::query()
+		$res = HistoryTable::query()
 			->setSelect(['ID', 'DATE_CREATE', 'RESULT_TEXT', 'GROUP_ID', 'PAYLOAD', 'PAYLOAD_CLASS', 'ENGINE_CODE'])
 			->where('CONTEXT_MODULE', $context->getModuleId())
 			->where('CONTEXT_ID', $context->getContextId())
@@ -147,12 +139,11 @@ class Manager
 			->whereIn('GROUP_ID', [-1, 0])
 			->setOrder(['ID' => 'DESC'])
 			->setLimit($limit)
-			->fetchAll()
-		;
+			->exec();
 
 		$collection = [];
 		$groupIds = [];
-		foreach($items as $item)
+		while ($item = $res->fetch())
 		{
 			if ($item['GROUP_ID'] !== -1)
 			{
@@ -175,17 +166,16 @@ class Manager
 
 		if (!empty($groupIds))
 		{
-			$groupItems = HistoryTable::query()
+			$groupRes = HistoryTable::query()
 				->setSelect(['ID', 'RESULT_TEXT', 'GROUP_ID'])
 				->where('CONTEXT_MODULE', $context->getModuleId())
 				->where('CONTEXT_ID', $context->getContextId())
 				->where('CREATED_BY_ID', $context->getUserId())
 				->whereIn('GROUP_ID', $groupIds)
 				->setOrder(['ID' => 'ASC'])
-				->fetchAll()
-			;
+				->exec();
 
-			foreach($groupItems as $groupItem)
+			while($groupItem = $groupRes->fetch())
 			{
 				if ($collection[$groupItem['GROUP_ID']])
 				{
@@ -262,19 +252,18 @@ class Manager
 		$keepCount = self::getCapacity();
 		$keepCount--;
 
-		$items = HistoryTable::query()
+		$res = HistoryTable::query()
 			->setSelect(['ID', 'GROUP_ID'])
 			->where('CREATED_BY_ID', $context->getUserId())
 			->whereIn('GROUP_ID', [-1, 0])
 			->setOrder(['ID' => 'DESC'])
 			->setLimit(1100)
-			->fetchAll()
-		;
+			->exec();
 
 		$itemsForDelete = [];
 		$groupsForDel = [];
 		$offset = 0;
-		foreach ($items as $item)
+		while ($item = $res->fetch())
 		{
 			if (++$offset <= $keepCount)
 			{

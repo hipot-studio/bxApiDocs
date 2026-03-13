@@ -348,26 +348,21 @@ class CBPDocument
 		$startDelay = $parameters[static::PARAM_START_WORKFLOW_DELAY] ?? null;
 		unset($parameters[static::PARAM_START_WORKFLOW_DELAY]);
 
-		if (Main\ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			$startDelay = null;
-		}
+		static $useDelays;
+		$useDelays ??= (Main\Config\Option::get('bizproc', 'disable_start_workflow_delay') !== 'Y');
 
 		try
 		{
 			$wi = CBPRuntime::GetRuntime()->createWorkflow($workflowTemplateId, $documentId, $parameters, $parentWorkflow);
-
-			if ($startDelay !== null)
-			{
-				self::setUsedDocumentFields($wi, $workflowTemplateId);
-				$wi->save();
-				$wi->getSchedulerService()->subscribeStartWorkflow($wi->getInstanceId(), $startDelay);
-
-				return $wi->getInstanceId();
-			}
-
 			self::setUsedDocumentFields($wi, $workflowTemplateId);
-			$wi->start();
+			if ($useDelays && $startDelay !== null)
+			{
+				$wi->startLater($startDelay);
+			}
+			else
+			{
+				$wi->start();
+			}
 
 			return $wi->getInstanceId();
 		}

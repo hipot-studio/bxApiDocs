@@ -6,20 +6,20 @@ use Bitrix\Extranet\Enum\User\ExtranetRole;
 use Bitrix\Extranet\Entity;
 use Bitrix\Extranet\Contract;
 use Bitrix\Main\Application;
-use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Data\ManagedCache;
 use Bitrix\Main\Result;
 
 class UserService implements Contract\Service\UserService
 {
 	private Contract\Repository\ExtranetUserRepository $extranetUserRepository;
-	private Cache $cache;
+	private ManagedCache $cache;
 	private const BASE_CACHE_DIR = 'extranet/user/';
 	private const CACHE_TTL = 86400;
 
 	public function __construct(?Contract\Repository\ExtranetUserRepository $userRepository = null)
 	{
 		$this->extranetUserRepository = $userRepository ?? ServiceContainer::getInstance()->getExtranetUserRepository();
-		$this->cache = Application::getInstance()->getCache();
+		$this->cache = Application::getInstance()->getManagedCache();
 	}
 
 	public function setRoleById(int $id, ExtranetRole $role): Result
@@ -46,18 +46,14 @@ class UserService implements Contract\Service\UserService
 
 	public function getCurrentExtranetUserIds(): array
 	{
-		if ($this->cache->initCache(self::CACHE_TTL, 'current_extranet_user_ids', self::BASE_CACHE_DIR))
+		if ($this->cache->read(self::CACHE_TTL, 'current_extranet_user_ids', self::BASE_CACHE_DIR))
 		{
-			$ids = $this->cache->getVars();
+			$ids = $this->cache->get('current_extranet_user_ids');
 		}
 		else
 		{
 			$ids = $this->extranetUserRepository->getAllUserIdsByRoles(ExtranetRole::getCurrentExtranetRole());
-
-			if ($this->cache->startDataCache())
-			{
-				$this->cache->endDataCache($ids);
-			}
+			$this->cache->set('current_extranet_user_ids', $ids);
 		}
 
 		return $ids;
@@ -65,18 +61,15 @@ class UserService implements Contract\Service\UserService
 
 	public function getUserIdsByRole(ExtranetRole $role): array
 	{
-		if ($this->cache->initCache(self::CACHE_TTL, 'extranet_user_ids_' . $role->value, self::BASE_CACHE_DIR))
+		$cacheId = 'extranet_user_ids_' . $role->value;
+		if ($this->cache->read(self::CACHE_TTL, $cacheId, self::BASE_CACHE_DIR))
 		{
-			$ids = $this->cache->getVars();
+			$ids = $this->cache->get($cacheId);
 		}
 		else
 		{
 			$ids = $this->extranetUserRepository->getAllUserIdsByRole($role);
-
-			if ($this->cache->startDataCache())
-			{
-				$this->cache->endDataCache($ids);
-			}
+			$this->cache->set($cacheId, $ids);
 		}
 
 		return $ids;
@@ -84,18 +77,14 @@ class UserService implements Contract\Service\UserService
 
 	public function getFormerExtranetUserIds(): array
 	{
-		if ($this->cache->initCache(self::CACHE_TTL, 'former_extranet_user_ids', self::BASE_CACHE_DIR))
+		if ($this->cache->read(self::CACHE_TTL, 'former_extranet_user_ids', self::BASE_CACHE_DIR))
 		{
-			$ids = $this->cache->getVars();
+			$ids = $this->cache->get('former_extranet_user_ids');
 		}
 		else
 		{
 			$ids = $this->extranetUserRepository->getAllUserIdsByRoles(ExtranetRole::getFormerExtranetRole());
-
-			if ($this->cache->startDataCache())
-			{
-				$this->cache->endDataCache($ids);
-			}
+			$this->cache->set('former_extranet_user_ids', $ids);
 		}
 
 		return $ids;

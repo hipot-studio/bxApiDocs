@@ -35,7 +35,7 @@ final class ShowGroupDetailPopupAction extends BaseAction
 			return null;
 		}
 
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
 		{
 			return null;
 		}

@@ -11,8 +11,7 @@ class GetPurchaseReportRequest extends BaseRequest
 	public function __construct(
 		public Baas\UseCase\External\Entity\Server $server,
 		public Baas\UseCase\External\Entity\Client $client,
-		public string $packageCode,
-		public string $purchaseCode,
+		public string $purchasedPackageCode,
 		public ?string $serviceCode = null,
 	)
 	{

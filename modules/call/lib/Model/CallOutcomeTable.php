@@ -11,7 +11,7 @@ use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
-use Bitrix\Im\Model\CallTable;
+use Bitrix\Call\Model\CallTable;
 use Bitrix\Call\Integration\AI\Outcome;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;

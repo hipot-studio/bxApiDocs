@@ -24,11 +24,9 @@ use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
 use Bitrix\Main\Application;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
-use Bitrix\Main\UI\Extension;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Buttons\Button;
 use Bitrix\UI\Buttons\Color;
@@ -100,9 +98,8 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->initGrid();
 		$this->initGridFilter();
 		$this->initCreateButton();
-		$this->initToolbar();
 		$this->prepareSecondDbConnectWarning();
-		$this->arResult['SHOW_DELETE_INSTANCE_BUTTON'] = UIHelper::needShowDeleteInstanceButton();
+		$this->prepareDeleteInstanceWarning();
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 	}
@@ -194,8 +191,24 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function initCreateButton(): void
 	{
-		$this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_CREATE);
-		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY);
+		$isFeatureAvailable = Feature::isBuilderEnabled();
+		if (!$isFeatureAvailable)
+		{
+			$createButton = new Buttons\CreateButton([
+				'dataset' => [
+					'toolbar-collapsed-icon' => Buttons\Icon::LOCK,
+				],
+			]);
+			$createButton->getAttributeCollection()['onclick'] = "top.BX.UI.InfoHelper.show('limit_crm_BI_constructor')";
+			$createButton->setId('biconnector-creation-entity-button');
+			$createButton->setIcon(Buttons\Icon::LOCK);
+			Toolbar::addButton($createButton, ButtonLocation::AFTER_TITLE);
+
+			return;
+		}
+
+		$this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
+		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS);
 
 		$splitButton = new Buttons\Split\CreateButton([
 			'dataset' => [
@@ -210,7 +223,9 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 		else
 		{
-			$mainButton->getAttributeCollection()['onclick'] = "BX.BIConnector.SupersetDashboardGridManager.Instance.notifyPermissionErrorOpenCreationSlider()";
+			$markerUrl = CUtil::JSEscape($this->arParams['MARKET_URL']);
+			$isMarketExists = $this->arParams['IS_MARKET_EXISTS'] ? 'true' : 'false';;
+			$mainButton->getAttributeCollection()['onclick'] = "BX.BIConnector.SupersetDashboardGridManager.Instance.showMarketSlider($isMarketExists, '$markerUrl')";
 		}
 
 		$menuButton = $splitButton->getMenuButton();
@@ -224,21 +239,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		);
 
 		Toolbar::addButton($splitButton, ButtonLocation::AFTER_TITLE);
-	}
-
-	private function initToolbar(): void
-	{
-		if (UIHelper::needShowDeleteInstanceButton())
-		{
-			$clearButton = new Button([
-				'color' => Color::DANGER,
-				'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_CLEAR_BUTTON'),
-				'click' => new JsCode(
-					'BX.BIConnector.ApacheSupersetTariffCleaner.Instance.handleButtonClick(this)',
-				),
-			]);
-			Toolbar::addButton($clearButton);
-		}
 	}
 
 	/**
@@ -292,20 +292,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		$groupIdFilter = $groupFilter['=ID'] ?? [];
-
-		if (isset($currentFilter['GROUPS.ID']) && is_array($currentFilter['GROUPS.ID']))
-		{
-			$groupIdFilter = array_intersect($groupIdFilter, $currentFilter['GROUPS.ID']);
-			if (!empty($groupIdFilter))
-			{
-				unset($result['DASHBOARD_ID']);
-				$result[] = [
-					'LOGIC' => 'OR',
-					'!=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
-					'=OWNER_ID' => (int)CurrentUser::get()->getId(),
-				];
-			}
-		}
 
 		$result['GROUP_ID'] = $groupIdFilter;
 
@@ -376,5 +362,14 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		{
 			$this->arResult['SHOW_SECOND_DB_KEY_UPDATE'] = true;
 		}
+	}
+
+	private function prepareDeleteInstanceWarning(): void
+	{
+		$this->arResult['SHOW_DELETE_INSTANCE_WARNING'] = UIHelper::needShowDeleteInstanceWarning();
+		$this->arResult['OPEN_SETTINGS_LINK'] = Loader::includeModule('intranet')
+			? \Bitrix\Intranet\Portal::getInstance()->getSettings()->getSettingsUrl()
+			: '/settings/configs/'
+		;
 	}
 }

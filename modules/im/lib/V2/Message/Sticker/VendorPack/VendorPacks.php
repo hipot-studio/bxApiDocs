@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Message\Sticker\VendorPack;
 
+use Bitrix\Im\V2\Integration\UI\Sticker\PendingFileCollection;
 use Bitrix\Im\V2\Message\Sticker\PackCollection;
 use Bitrix\Im\V2\Message\Sticker\PackItem;
 use Bitrix\Im\V2\Message\Sticker\PackType;
@@ -15,7 +16,6 @@ use Bitrix\Im\V2\Message\Sticker\StickerPacks;
 use Bitrix\Im\V2\Message\Sticker\StickerType;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
-use Bitrix\Main\IO\File;
 use Bitrix\Main\Localization\Loc;
 
 class VendorPacks implements StickerPacks
@@ -133,7 +133,7 @@ class VendorPacks implements StickerPacks
 		return $stickerCollection;
 	}
 
-	public function addPack(array $fileUuidMap, ?string $packName): Result
+	public function addPack(PendingFileCollection $pendingFileCollection, ?string $packName): Result
 	{
 		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
 	}
@@ -143,7 +143,7 @@ class VendorPacks implements StickerPacks
 		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
 	}
 
-	public function addStickers(array $fileUuidMap, int $packId, bool $sendPush = true): Result
+	public function addStickers(PendingFileCollection $pendingFileCollection, int $packId, bool $sendPush = true): Result
 	{
 		return (new Result())->addError(new StickerError(StickerError::ACCESS_DENIED));
 	}

@@ -32,10 +32,15 @@ class Secretary
 		return self::getMessageUrl($messageId, Message::ENTITY_TYPE_CALENDAR_EVENT, $eventId);
 	}
 
-	// public static function getMessageUrlForUser(int $messageId, int $userId): ?string
-	// {
-	// 	return self::getMessageUrl($messageId, null, null, $userId);
-	// }
+	public static function getMessageUrlForChatMessage(int $messageId, int $chatId): ?string
+	{
+		return self::getMessageUrl($messageId, Message::ENTITY_TYPE_CHAT_MESSAGE, $chatId);
+	}
+
+	public static function getMessageUrlForUserMessage(int $messageId, int $userId): ?string
+	{
+		return self::getMessageUrl($messageId, Message::ENTITY_TYPE_USER_MESSAGE, $userId);
+	}
 
 	public static function getMailboxIdForMessage(int $messageId)
 	{
@@ -54,6 +59,24 @@ class Secretary
 		}
 
 		return false;
+	}
+
+
+	public static function isAccessProvidedToMessage(int $mailMessageId, int $mailMailBoxId, string $entityType, int $entityId): bool
+	{
+		$filter = [
+			'=MAILBOX_ID' => $mailMailBoxId,
+			'=MESSAGE_ID' => $mailMessageId,
+			'=ENTITY_TYPE' => $entityType,
+			'=ENTITY_ID' => $entityId,
+		];
+
+		$accessResult = MessageAccessTable::getList([
+			'filter' => $filter,
+			'limit' => 1,
+		])->fetch();
+
+		return (bool)$accessResult;
 	}
 
 	public static function provideAccessToMessage(int $mailMessageId, string $entityType, int $entityId, int $userId): bool
@@ -121,7 +144,7 @@ class Secretary
 								'entityType' => MessageAccessTable::ENTITY_TYPE_TASKS_TASK,
 								'entityId' => $taskId,
 							],
-						]
+						],
 					);
 				}
 			}

@@ -64,6 +64,12 @@ trait ExceptionProcessorTrait
 					// @todo Change to no loggable exception after adding it's support to main module
 					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
 				}
+
+				if ($previous->getCode() >= 500 && $previous->getCode() < 600)
+				{
+					// @todo Change to no loggable exception after adding it's support to main module
+					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
+				}
 			}
 		}
 

@@ -14,6 +14,9 @@ use Bitrix\UI\Util;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * @internal
+ */
 class Update2112000
 {
 	protected const ID_ARTICLE_HELP_DESK = 14927782;

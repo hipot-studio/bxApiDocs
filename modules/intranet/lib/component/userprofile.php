@@ -11,6 +11,7 @@ use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
 use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
 use Bitrix\Intranet\Repository\HrDepartmentRepository;
+use Bitrix\Intranet\Service\UserService;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -40,7 +41,6 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 	protected $grats;
 	protected $tags;
 	protected $profilePost;
-	protected $stressLevel;
 	private ?array $userData;
 
 	public function __construct($component = null)
@@ -56,7 +56,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 	protected function listKeysSignedParameters()
 	{
 		$result = [
-			'ID', 'PATH_TO_USER', 'PATH_TO_POST', 'GRAT_POST_LIST_PAGE_SIZE', 'PATH_TO_USER_STRESSLEVEL'
+			'ID', 'PATH_TO_USER', 'PATH_TO_POST', 'GRAT_POST_LIST_PAGE_SIZE',
 		];
 
 		if (Option::get("intranet", "user_profile_view_fields", false, SITE_ID) === false)
@@ -154,16 +154,6 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		}
 		return $this->tags;
 	}
-
-	protected function getStressLevelInstance()
-	{
-		if ($this->stressLevel === null)
-		{
-			$this->stressLevel = new \Bitrix\Intranet\Component\UserProfile\StressLevel();
-		}
-		return $this->stressLevel;
-	}
-
 
 	protected function getUrls()
 	{
@@ -361,6 +351,8 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		{
 			$user["IS_INTEGRATOR"] = true;
 		}
+
+		$user["IS_FIRST_ADMIN"] = (new UserService())->isFirstAdmin((int)$user["ID"]);
 
 		$this->userData = $user;
 
@@ -685,12 +677,17 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 
 	private function prepareSubordination(&$user)
 	{
+		if (!$user['ID'])
+		{
+			return;
+		}
+
 		global $CACHE_MANAGER;
 
 		$obCache = new \CPHPCache;
 		$path = "/user_card_".(int)($user["ID"] / TAGGED_user_card_size);
 
-		if ( $this->arParams["CACHE_TIME"] == 0 || $obCache->StartDataCache($this->arParams["CACHE_TIME"], $user["ID"], $path))
+		if ( $this->arParams["CACHE_TIME"] == 0 || $obCache->StartDataCache($this->arParams["CACHE_TIME"], (string)$user["ID"], $path))
 		{
 			if ($this->arParams["CACHE_TIME"] > 0 && defined("BX_COMP_MANAGED_CACHE"))
 			{

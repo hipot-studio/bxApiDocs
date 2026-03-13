@@ -12,7 +12,7 @@ class InvalidFilterException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_INVALIDFILTEREXCEPTION';
+		return 'REST_V3_EXCEPTION_INVALIDFILTEREXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

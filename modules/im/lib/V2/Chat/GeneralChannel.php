@@ -5,14 +5,14 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\HumanResources\Repository\StructureRepository;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Cache\ChatCacheRegistry;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Intranet\Settings\CommunicationSettings;
-use Bitrix\Main\Application;
-use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use CSite;
@@ -26,7 +26,6 @@ class GeneralChannel extends OpenChannelChat
 
 	protected static ?self $instance = null;
 	protected static bool $wasSearched = false;
-	protected static int $idStaticCache;
 
 	protected function getDefaultEntityType(): string
 	{
@@ -55,40 +54,22 @@ class GeneralChannel extends OpenChannelChat
 
 	public static function getGeneralChannelId(): ?int
 	{
-		if (isset(self::$idStaticCache))
-		{
-			return self::$idStaticCache;
-		}
+		$getResult = ServiceLocator::getInstance()
+			->get(ChatCacheRegistry::class)
+			?->getGeneralChannelIdManager()
+			->getOrSet(
+				entityId: null,
+				dataProvider: fn() => self::getGeneralChannelIdWithoutCache() ?? 0,
+			);
 
-		$cache = static::getCache(self::ID_CACHE_ID);
-
-		$cachedId = $cache->getVars();
-
-		if ($cachedId !== false)
-		{
-			self::$idStaticCache = $cachedId ?? 0;
-
-			return self::$idStaticCache;
-		}
-
-		$result = ChatTable::query()
-			->setSelect(['ID'])
-			->where('TYPE', self::IM_TYPE_OPEN_CHANNEL)
-			->where('ENTITY_TYPE', self::ENTITY_TYPE_GENERAL_CHANNEL)
-			->fetch() ?: []
-		;
-
-		self::$idStaticCache = $result['ID'] ?? 0;
-		$cache->startDataCache();
-		$cache->endDataCache(self::$idStaticCache);
-
-		return self::$idStaticCache;
+		return $getResult->getResult()->value ?? 0;
 	}
 
-	protected function getGeneralChannelIdWithoutCache(): ?int
+	protected static function getGeneralChannelIdWithoutCache(): ?int
 	{
 		$result = ChatTable::query()
 			->setSelect(['ID'])
+			->where('TYPE', self::IM_TYPE_OPEN_CHANNEL)
 			->where('ENTITY_TYPE', self::ENTITY_TYPE_GENERAL_CHANNEL)
 			->setLimit(1)
 			->fetch()
@@ -106,7 +87,7 @@ class GeneralChannel extends OpenChannelChat
 	{
 		$result = new AddResult();
 
-		$generalChannel = Chat::getInstance($this->getGeneralChannelIdWithoutCache());
+		$generalChannel = Chat::getInstance(self::getGeneralChannelIdWithoutCache());
 		if ($generalChannel instanceof self)
 		{
 			return $result->setChat($generalChannel);
@@ -125,7 +106,7 @@ class GeneralChannel extends OpenChannelChat
 		];
 
 		$result = parent::add($params);
-		self::cleanGeneralChannelCache(self::ID_CACHE_ID);
+		self::cleanGeneralChannelCache();
 
 		return $result;
 	}
@@ -256,7 +237,7 @@ class GeneralChannel extends OpenChannelChat
 		$chat->unlinkStructureNodes($structureNodes[1] ?? []);
 
 		$result = $chat->deleteChat();
-		self::cleanGeneralChannelCache(self::ID_CACHE_ID);
+		self::cleanGeneralChannelCache();
 
 		return $result;
 	}
@@ -290,7 +271,7 @@ class GeneralChannel extends OpenChannelChat
 			return '';
 		}
 
-		GeneralChannel::cleanGeneralChannelCache(self::ID_CACHE_ID);
+		GeneralChannel::cleanGeneralChannelCache();
 
 		$chatId = GeneralChannel::getGeneralChannelId();
 		if ($chatId > 0)
@@ -333,23 +314,12 @@ class GeneralChannel extends OpenChannelChat
 		return $result;
 	}
 
-	private static function getCache(string $cacheId): Cache
+	public static function cleanGeneralChannelCache(): void
 	{
-		$cache = Application::getInstance()->getCache();
-		$cacheTTL = 18144000;
-		$cacheDir = static::getCacheDir();
-		$cache->initCache($cacheTTL, $cacheId, $cacheDir);
-
-		return $cache;
-	}
-
-	private static function getCacheDir(): string
-	{
-		return '/bx/imc/general_channel';
-	}
-
-	public static function cleanGeneralChannelCache(string $cacheId): void
-	{
-		Application::getInstance()->getCache()->clean($cacheId, static::getCacheDir());
+		ServiceLocator::getInstance()
+			->get(ChatCacheRegistry::class)
+			?->getGeneralChannelIdManager()
+			->clear(entityId: null)
+		;
 	}
 }

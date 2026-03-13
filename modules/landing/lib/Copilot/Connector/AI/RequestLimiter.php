@@ -6,7 +6,7 @@ namespace Bitrix\Landing\Copilot\Connector\AI;
 
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Context;
-use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Facade\Portal;
 
 use Bitrix\Landing\Copilot\Connector\AI\Type\ErrorCode;
 use Bitrix\Landing\Copilot\Connector\AI\Type\HelpdeskCode;
@@ -28,6 +28,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Rest\Marketplace\Client;
 use Bitrix\UI\Util;
 use Psr\Container\NotFoundExceptionInterface;
 
@@ -154,7 +155,7 @@ class RequestLimiter
 		if ($code === ErrorCode::LimitBaasCloud->value)
 		{
 			//right 3 in board
-			if (Bitrix24::isMarketAvailable())
+			if (Portal::isMarketAvailable())
 			{
 				return $this->createLimitResult(
 					LimitType::Market,
@@ -186,6 +187,15 @@ class RequestLimiter
 			//left 1 in board
 			if ($code === ErrorCode::Daily->value)
 			{
+				if (Client::isSubscriptionAccess())
+				{
+					return $this->createLimitResult(
+						LimitType::Daily,
+						true,
+						self::buildLimitMessage(MessageCode::Daily, SliderCode::MarketTrial)
+					);
+				}
+
 				return $this->createLimitResult(
 					LimitType::Daily,
 					true,
@@ -244,6 +254,15 @@ class RequestLimiter
 			);
 		}
 
+		if ($errorCode === ErrorCode::BaasRateLimit->value)
+		{
+			return $this->createLimitResult(
+				LimitType::Rate,
+				true,
+				self::buildLimitMessage(MessageCode::BaasRateLimit)
+			);
+		}
+
 		$customData = $error->getCustomData();
 
 		if (
@@ -251,6 +270,15 @@ class RequestLimiter
 			&& $errorCode === ErrorCode::LimitBaasCloud->value
 		)
 		{
+			if (Portal::isMarketAvailable())
+			{
+				return $this->createLimitResult(
+					LimitType::Market,
+					true,
+					self::buildLimitMessage(MessageCode::Market, SliderCode::Market)
+				);
+			}
+
 			//right 2 in board
 			if ($customData['showSliderWithMsg'] === true)
 			{
@@ -308,7 +336,7 @@ class RequestLimiter
 		}
 
 		$typeLimit = $reservedRequest->getTypeLimit();
-		if ($errorLimit === ErrorLimit::BAAS_LIMIT && Bitrix24::isMarketAvailable())
+		if ($errorLimit === ErrorLimit::BAAS_LIMIT && Portal::isMarketAvailable())
 		{
 			//right 3 in board
 			return $this->createLimitResult(
@@ -342,6 +370,15 @@ class RequestLimiter
 		//left 1 in board
 		if ($promoLimitCode === PromoLimitCode::Daily->value)
 		{
+			if (Client::isSubscriptionAccess())
+			{
+				return $this->createLimitResult(
+					LimitType::Daily,
+					true,
+					self::buildLimitMessage(MessageCode::Daily, SliderCode::MarketTrial)
+				);
+			}
+
 			return $this->createLimitResult(
 				LimitType::Daily,
 				true,
@@ -416,8 +453,26 @@ class RequestLimiter
 			);
 		}
 
+		if ($limitError === ErrorLimit::BAAS_RATE_LIMIT)
+		{
+			return $this->createLimitResult(
+				LimitType::Rate,
+				true,
+				self::buildLimitMessage(MessageCode::BaasRateLimit)
+			);
+		}
+
 		if ($limitError === ErrorLimit::BAAS_LIMIT)
 		{
+			if (Portal::isMarketAvailable())
+			{
+				return $this->createLimitResult(
+					LimitType::Market,
+					true,
+					self::buildLimitMessage(MessageCode::Market, SliderCode::Market)
+				);
+			}
+
 			if (Loader::includeModule('baas') && Baas::getInstance()->isAvailable())
 			{
 				//right 1 in board

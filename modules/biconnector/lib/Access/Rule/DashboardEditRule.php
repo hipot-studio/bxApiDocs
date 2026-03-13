@@ -7,6 +7,13 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 
 final class DashboardEditRule extends DashboardRule
 {
+	protected function loadGroupDashboards(array $groupIds, array $additionalFilter = []): array
+	{
+		$additionalFilter = array_merge($additionalFilter, ['TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM]);
+
+		return parent::loadGroupDashboards($groupIds, $additionalFilter);
+	}
+
 	/**
 	 * Check access permission.
 	 *
@@ -26,11 +33,9 @@ final class DashboardEditRule extends DashboardRule
 			{
 				return false;
 			}
-
-			return parent::check($params);
 		}
 
-		return false;
+		return parent::check($params);
 	}
 
 	protected function isAlwaysAvailableForAdmin(): bool

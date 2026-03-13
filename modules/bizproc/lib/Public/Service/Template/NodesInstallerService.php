@@ -118,7 +118,7 @@ class NodesInstallerService
 			$files['lang/ru/' . self::TEMPLATE_LOC_FILE_NAME] = $this->makeLangFileContents($messages);
 		}
 
-		$files[self::INSTALLER_FILE_NAME] = $this->makeInstallerFileContents();
+		$files[self::INSTALLER_FILE_NAME] = $this->makeInstallerFileContents($request);
 
 		return $files;
 	}
@@ -140,9 +140,25 @@ class NodesInstallerService
 		return Json::encode($template, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 	}
 
-	private function makeInstallerFileContents(): string
+	private function makeInstallerFileContents(MakeTemplatePackageDto $request): string
 	{
 		$time = time();
+		$oldFile = new File($this->getTargetDirPath($request) . '/' . self::INSTALLER_FILE_NAME);
+		if ($oldFile->isExists())
+		{
+			$contents = $oldFile->getContents();
+			$contents = preg_replace(
+				'|/\*mtime\*/\d+/\*mtime\*/|',
+				"/*mtime*/{$time}/*mtime*/",
+				$contents,
+				1,
+				$count
+			);
+			if ($count > 0)
+			{
+				return $contents;
+			}
+		}
 
 		return <<<PHP
 <?php
@@ -155,7 +171,7 @@ return new class extends NodesInstaller
 {
 	public function getModifiedTime(): int
 	{
-		return {$time};
+		return /*mtime*/{$time}/*mtime*/;
 	}
 };
 
@@ -192,7 +208,7 @@ PHP;
 		$createMessage = function(string $text, string $key) use (&$messages, $oldMessages, $getLocPrefix): string
 		{
 			$code = array_search($text, $oldMessages, true);
-			if ($code === false)
+			if ($code === false || isset($messages[$code]))
 			{
 				$code = array_search($text, $messages, true);
 			}

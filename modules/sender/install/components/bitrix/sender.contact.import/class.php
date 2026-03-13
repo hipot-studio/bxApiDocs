@@ -64,7 +64,7 @@ class SenderContactImportComponent extends CBitrixComponent
 			?
 			$this->arParams['CAN_EDIT']
 			:
-			Security\Access::getInstance()->canModifySegments();
+			Security\Access::getInstance()->canModifyClientPersonalList();
 	}
 
 	protected function preparePost()

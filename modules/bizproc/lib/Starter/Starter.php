@@ -27,7 +27,7 @@ final class Starter
 
 	public static function isEnabled(): bool
 	{
-		return Option::get('bizproc', 'enable_starter', 'Y') === 'Y';
+		return true;
 	}
 
 	public static function getByScenario(Scenario $scenario): Starter

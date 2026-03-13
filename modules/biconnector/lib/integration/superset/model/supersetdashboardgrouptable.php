@@ -84,6 +84,7 @@ class SupersetDashboardGroupTable extends DataManager
 				->configureDefaultValue(self::GROUP_TYPE_CUSTOM)
 			,
 
+			/** @deprecated  */
 			(new Fields\IntegerField('OWNER_ID'))
 				->configureNullable(),
 

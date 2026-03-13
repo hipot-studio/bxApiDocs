@@ -280,12 +280,15 @@ class Sql extends Base
 			}
 		}
 
+		$groupByClause = $this->buildGroupByClause($tableInfo['GROUP'] ?? null);
+
 		return
 			"select\n  " . $builder->GetSelect()
 			. "\nfrom\n  " . $tableInfo['TABLE_NAME'] . ' AS ' . $tableInfo['TABLE_ALIAS']
 			. ($limitSubQuery ? "\n  {$limitSubQuery}" : '')
 			. ($additionalJoins ? "\n  " . $additionalJoins : '')
 			. ($queryWhere ? "\nWHERE " . $queryWhere : '')
+			. ($groupByClause ? "\nGROUP BY\n  " . $groupByClause : '')
 			. (!empty($tableInfo['UNIONS']) ? "\n" . $this->getUnionQuery($builder, $tableInfo['UNIONS']) : '')
 			. (empty($limitSubQuery) && !empty($limit) ? "\n {$limit}" : '')
 			. "\n"
@@ -324,5 +327,15 @@ class Sql extends Base
 		}
 
 		return $unionQuery;
+	}
+
+	private function buildGroupByClause(?array $groupBy): string
+	{
+		if (empty($groupBy))
+		{
+			return '';
+		}
+
+		return implode("\n  ,", $groupBy);
 	}
 }

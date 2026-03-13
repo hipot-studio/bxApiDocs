@@ -23,10 +23,11 @@ class ChatOnlyProvider extends RecentProvider
 
 	public function __construct(array $options = [])
 	{
-		$options[self::INCLUDE_ONLY_OPTION] = [self::FLAG_CHATS];
+		$options[SearchOptions::INCLUDE_ONLY_OPTION] = [SearchOptions::FLAG_CHATS];
+		$options[SearchOptions::ONLY_WITH_MANAGE_USERS_ADD_RIGHT_OPTION] = true;
+		$options[SearchOptions::ONLY_WITH_NULL_ENTITY_TYPE_OPTION] = true;
+
 		parent::__construct($options);
-		$this->options[self::ONLY_WITH_MANAGE_USERS_ADD_RIGHT_OPTION] = true;
-		$this->options[self::ONLY_WITH_NULL_ENTITY_TYPE_OPTION] = true;
 	}
 
 	/**
@@ -45,10 +46,5 @@ class ChatOnlyProvider extends RecentProvider
 		;
 
 		return array_map(static fn (int $chatId): string => 'chat' . $chatId, $chatIds);
-	}
-
-	protected function getAllowedChatTypesForQuery(): array
-	{
-		return $this->options[self::SEARCH_CHAT_TYPES_OPTION];
 	}
 }

@@ -22,7 +22,7 @@ class Baas extends BaseContent
 	public function getConfiguration(): array
 	{
 		return [
-			'isAvailable' => $this->provider->isAvailable(),
+			'isAvailable' => $this->provider->isAvailable() && $this->provider->hasBaasDistributedPackages(),
 			'title' => $this->getTitle(),
 			'isActive' => $this->provider->isActive(),
 			'messages' => [

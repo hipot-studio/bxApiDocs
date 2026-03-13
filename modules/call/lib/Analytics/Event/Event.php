@@ -2,10 +2,13 @@
 
 namespace Bitrix\Call\Analytics\Event;
 
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Engine\Response\Converter;
 
+/**
+ * @internal
+ */
 abstract class Event
 {
 	protected Call $call;

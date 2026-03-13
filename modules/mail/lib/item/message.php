@@ -2,6 +2,8 @@
 
 namespace Bitrix\Mail\Item;
 
+use Bitrix\Main\Type\DateTime;
+
 class Message extends Base
 {
 
@@ -31,7 +33,7 @@ class Message extends Base
 	private $from;
 	/** @var string */
 	private $to;
-	/** @var \Bitrix\Main\Type\DateTime */
+	/** @var DateTime */
 	private $date;
 
 	protected function __construct(int $id, int $mailboxId)
@@ -55,10 +57,20 @@ class Message extends Base
 		$item->bodyHtml = $array[self::FIELD_BODY_HTML] ?? '';
 		$item->from = $array[self::FIELD_FROM] ?? '';
 		$item->to = $array[self::FIELD_TO] ?? '';
-		$date = $array[self::FIELD_DATE] ?? '';
-		$item->date = $date instanceof \Bitrix\Main\Type\DateTime
-			? $date
-			: new \Bitrix\Main\Type\DateTime();
+
+		if ($array[self::FIELD_DATE] instanceof DateTime)
+		{
+			$item->date = $array[self::FIELD_DATE];
+		}
+		elseif (is_string($array[self::FIELD_DATE]) && !empty($array[self::FIELD_DATE]))
+		{
+			$phpDateTime = new \DateTime($array[self::FIELD_DATE]);
+			$item->date = DateTime::createFromPhp($phpDateTime);
+		}
+		else
+		{
+			$item->date = new DateTime();
+		}
 
 		return $item;
 	}
@@ -116,9 +128,9 @@ class Message extends Base
 	}
 
 	/**
-	 * @return \Bitrix\Main\Type\DateTime
+	 * @return DateTime
 	 */
-	public function getDate(): \Bitrix\Main\Type\DateTime
+	public function getDate(): DateTime
 	{
 		return $this->date;
 	}

@@ -81,9 +81,9 @@ class Imap extends Mail\Helper\Mailbox
 
 			$currentSyncDirMessagesCount = (int)$currentSyncDirMessages['TOTAL'];
 			$currentSyncDirMessagesAll = (int)$currentSyncDir->getMessageCount();
-			$currentSyncDirPosition = $this->getDirsHelper()->getCurrentSyncDirPositionByDefault(
+			$currentSyncDirPosition = $this->getDirsHelper()->getCurrentSyncDirPositionOrdered(
 				$currentSyncDir->getPath(),
-				$currentDir
+				$currentDir,
 			);
 
 			if ($currentDir != null) {
@@ -770,9 +770,8 @@ class Imap extends Mail\Helper\Mailbox
 			return $syncReport;
 		}
 
-		$lastDir = $this->getDirsHelper()->getLastSyncDirByDefault($currentDir);
+		$lastDir = $this->getDirsHelper()->getLastSyncDirOrdered($currentDir);
 
-		/** @var Mail\Internals\Entity\MailboxDirectory $item */
 		foreach ($dirsSync as $item)
 		{
 			MailboxDirectoryHelper::setCurrentSyncDir($item->getPath());
@@ -1031,7 +1030,6 @@ class Imap extends Mail\Helper\Mailbox
 			return true;
 		}
 
-		/** @var \Bitrix\Mail\Internals\Entity\MailboxDirectory[] $dirs */
 		foreach ($dirs as $dir)
 		{
 			if (\Bitrix\Mail\Helper::getImapUnseen($this->mailbox, $dir->getPath()) !== false)

@@ -180,7 +180,7 @@ class WorkflowUserGridView extends WorkflowUserView
 			{
 				if (!empty($button['TEXT']))
 				{
-					$button['TEXT'] = html_entity_decode(htmlspecialcharsback($button['TEXT']));
+					$button['TEXT'] = html_entity_decode(htmlspecialcharsback(\CBPHelper::stringify($button['TEXT'])));
 				}
 			}
 

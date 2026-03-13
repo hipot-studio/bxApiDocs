@@ -108,10 +108,10 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 		}
 
 		return ChatTable::query()
-			->setSelect(array_merge(ChatFactory::NON_CACHED_FIELDS, ['ID']))
+			->setSelect(array_merge(Chat::NON_CACHED_FIELDS, ['ID']))
 			->whereIn('ID', $chatIds)
 			->fetchAll()
-			;
+		;
 	}
 
 	protected function fillCounters(array $chatIds): array

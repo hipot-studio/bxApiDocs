@@ -75,51 +75,7 @@ class Settings
 
 	public static function isTasksRecentListAvailable(): bool
 	{
-		if (!Loader::includeModule('tasks'))
-		{
-			return false;
-		}
-
-		return \Bitrix\Main\Config\Option::get('im', 'is_tasks_recent_list_available', 'Y') === 'Y';
-	}
-
-	public static function isMessengerV2Enabled(): bool
-	{
-		return true;
-	}
-
-	public static function isMultipleReactionsEnabled(): bool
-	{
-		if (\Bitrix\Main\Config\Option::get('im', 'multiple_reactions_available', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		return false;
-	}
-
-	public static function isMessengerV2EnabledForCurrentUser(): bool
-	{
-		return true;
-	}
-
-	public static function toggleMessengerV2ForCurrentUser(): array
-	{
-		return [
-			'isSuccess' => true,
-			'isMessengerV2Enabled' => self::isMessengerV2Enabled(),
-			'isMessengerV2EnabledForCurrentUser' => self::isMessengerV2EnabledForCurrentUser(),
-		];
-	}
-
-	public static function enableMessengerV2ForCurrentUser(): bool
-	{
-		return \CUserOptions::SetOption('immobile', 'messenger_v2_enabled', 'Y');
-	}
-
-	public static function disableMessengerV2ForCurrentUser(): bool
-	{
-		return \CUserOptions::SetOption('immobile', 'messenger_v2_enabled', 'N');
+		return Loader::includeModule('tasks');
 	}
 
 	public static function isCopilotSelectModelEnabled(): bool

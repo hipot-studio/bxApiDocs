@@ -32,9 +32,19 @@ class Container
 		;
 	}
 
+	public static function getNodeMemberService(): NodeMemberService
+	{
+		return self::getService('humanresources.public.service.nodeMemberService');
+	}
+
 	public static function getNodeSettingsService(): NodeSettingsService
 	{
 		return self::getService('humanresources.service.public.nodeSettings');
+	}
+
+	public static function getUserSettingsService(): UserSettingsService
+	{
+		return self::getService('humanresources.service.public.userSettings');
 	}
 
 	public static function getUserService(): UserService

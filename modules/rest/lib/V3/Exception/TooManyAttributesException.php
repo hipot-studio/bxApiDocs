@@ -14,7 +14,7 @@ class TooManyAttributesException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_TOOMANYATTRIBUTESEXCEPTION';
+		return 'REST_V3_EXCEPTION_TOOMANYATTRIBUTESEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

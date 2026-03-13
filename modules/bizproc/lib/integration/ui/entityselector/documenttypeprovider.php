@@ -18,6 +18,8 @@ class DocumentTypeProvider extends BaseProvider
 {
 	protected const TAB_ID = 'bizproc-document-type-tab';
 	protected const ENTITY_ID = 'bizproc-document-type';
+	//remove dependency check after DocumentTypeProvider::getPreselectedItems is implemented
+	public const PRESELECTED_ITEMS_SUPPORTED = true;
 
 	public function __construct(array $options = [])
 	{
@@ -233,5 +235,27 @@ class DocumentTypeProvider extends BaseProvider
 	protected function isUserWorkflowTemplateAdmin(int $userId): bool
 	{
 		return (new \CBPWorkflowTemplateUser($userId))->isAdmin();
+	}
+
+	public function getPreselectedItems(array $ids): array
+	{
+		$items = [];
+		$userId = $this->getCurrentUserId();
+
+		foreach ($ids as $id)
+		{
+			$documentType = explode('@', $id);
+
+			if (!$this->canUserOperateDocumentType($userId, $documentType))
+			{
+				continue;
+			}
+
+			$dialog = new Dialog([]);
+			$item = $this->getDocumentItem($dialog, $documentType);
+			$items[] = $item;
+		}
+
+		return $items;
 	}
 }

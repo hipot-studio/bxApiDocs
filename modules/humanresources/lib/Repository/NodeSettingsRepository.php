@@ -28,7 +28,7 @@ class NodeSettingsRepository
 	}
 
 	/**
-	 * @param int $nodeId
+	 * @param int|array $nodeIds
 	 * @param NodeSettingsType[] $settingsTypes
 	 * @return Item\Collection\NodeSettingsCollection
 	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
@@ -36,11 +36,21 @@ class NodeSettingsRepository
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function getByNodeAndTypes(int $nodeId, array $settingsTypes = []): Item\Collection\NodeSettingsCollection
+	public function getByNodesAndTypes(int|array $nodeIds, array $settingsTypes = []): Item\Collection\NodeSettingsCollection
 	{
+		if (is_int($nodeIds))
+		{
+			$nodeIds = [$nodeIds];
+		}
+
+		if (empty($nodeIds))
+		{
+			return new Item\Collection\NodeSettingsCollection();
+		}
+
 		$query = NodeSettingsTable::query()
 			->setSelect(['*'])
-			->where('NODE_ID', $nodeId)
+			->whereIn('NODE_ID', $nodeIds)
 		;
 
 		if (!empty($settingsTypes))

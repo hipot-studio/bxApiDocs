@@ -126,7 +126,7 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\UStat\EO_DepartmentHour wakeUp($data)
 	 */
-	class EO_DepartmentHour {
+	class EO_DepartmentHour extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\UStat\DepartmentHourTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\DepartmentHourTable';
 		/**
@@ -188,8 +188,10 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Intranet\UStat\EO_DepartmentHour_Collection merge(?\Bitrix\Intranet\UStat\EO_DepartmentHour_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\UStat\EO_DepartmentHour|null find(callable $callback)
+	 * @method \Bitrix\Intranet\UStat\EO_DepartmentHour_Collection filter(callable $callback)
 	 */
-	class EO_DepartmentHour_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DepartmentHour_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\UStat\DepartmentHourTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\DepartmentHourTable';
 	}
@@ -343,7 +345,7 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\UStat\EO_UserDay wakeUp($data)
 	 */
-	class EO_UserDay {
+	class EO_UserDay extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\UStat\UserDayTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\UserDayTable';
 		/**
@@ -405,8 +407,10 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Intranet\UStat\EO_UserDay_Collection merge(?\Bitrix\Intranet\UStat\EO_UserDay_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\UStat\EO_UserDay|null find(callable $callback)
+	 * @method \Bitrix\Intranet\UStat\EO_UserDay_Collection filter(callable $callback)
 	 */
-	class EO_UserDay_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UserDay_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\UStat\UserDayTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\UserDayTable';
 	}
@@ -580,7 +584,7 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\UStat\EO_DepartmentDay wakeUp($data)
 	 */
-	class EO_DepartmentDay {
+	class EO_DepartmentDay extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\UStat\DepartmentDayTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\DepartmentDayTable';
 		/**
@@ -646,8 +650,10 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Intranet\UStat\EO_DepartmentDay_Collection merge(?\Bitrix\Intranet\UStat\EO_DepartmentDay_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\UStat\EO_DepartmentDay|null find(callable $callback)
+	 * @method \Bitrix\Intranet\UStat\EO_DepartmentDay_Collection filter(callable $callback)
 	 */
-	class EO_DepartmentDay_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DepartmentDay_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\UStat\DepartmentDayTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\DepartmentDayTable';
 	}
@@ -801,7 +807,7 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\UStat\EO_UserHour wakeUp($data)
 	 */
-	class EO_UserHour {
+	class EO_UserHour extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\UStat\UserHourTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\UserHourTable';
 		/**
@@ -863,8 +869,10 @@ namespace Bitrix\Intranet\UStat {
 	 * @method \Bitrix\Intranet\UStat\EO_UserHour_Collection merge(?\Bitrix\Intranet\UStat\EO_UserHour_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\UStat\EO_UserHour|null find(callable $callback)
+	 * @method \Bitrix\Intranet\UStat\EO_UserHour_Collection filter(callable $callback)
 	 */
-	class EO_UserHour_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UserHour_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\UStat\UserHourTable */
 		static public $dataClass = '\Bitrix\Intranet\UStat\UserHourTable';
 	}
@@ -974,7 +982,7 @@ namespace Bitrix\Intranet\CustomSection\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\CustomSection\Entity\EO_CustomSection wakeUp($data)
 	 */
-	class EO_CustomSection {
+	class EO_CustomSection extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\CustomSection\Entity\CustomSectionTable */
 		static public $dataClass = '\Bitrix\Intranet\CustomSection\Entity\CustomSectionTable';
 		/**
@@ -1028,8 +1036,10 @@ namespace Bitrix\Intranet\CustomSection\Entity {
 	 * @method \Bitrix\Intranet\CustomSection\Entity\EO_CustomSection_Collection merge(?\Bitrix\Intranet\CustomSection\Entity\EO_CustomSection_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\CustomSection\Entity\EO_CustomSection|null find(callable $callback)
+	 * @method \Bitrix\Intranet\CustomSection\Entity\EO_CustomSection_Collection filter(callable $callback)
 	 */
-	class EO_CustomSection_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CustomSection_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\CustomSection\Entity\CustomSectionTable */
 		static public $dataClass = '\Bitrix\Intranet\CustomSection\Entity\CustomSectionTable';
 	}
@@ -1168,7 +1178,7 @@ namespace Bitrix\Intranet\CustomSection\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\CustomSection\Entity\EO_CustomSectionPage wakeUp($data)
 	 */
-	class EO_CustomSectionPage {
+	class EO_CustomSectionPage extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable */
 		static public $dataClass = '\Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable';
 		/**
@@ -1228,8 +1238,10 @@ namespace Bitrix\Intranet\CustomSection\Entity {
 	 * @method \Bitrix\Intranet\CustomSection\Entity\EO_CustomSectionPage_Collection merge(?\Bitrix\Intranet\CustomSection\Entity\EO_CustomSectionPage_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\CustomSection\Entity\EO_CustomSectionPage|null find(callable $callback)
+	 * @method \Bitrix\Intranet\CustomSection\Entity\EO_CustomSectionPage_Collection filter(callable $callback)
 	 */
-	class EO_CustomSectionPage_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CustomSectionPage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable */
 		static public $dataClass = '\Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable';
 	}
@@ -1328,7 +1340,7 @@ namespace Bitrix\Intranet {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\EO_RatingSubordinate wakeUp($data)
 	 */
-	class EO_RatingSubordinate {
+	class EO_RatingSubordinate extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\RatingSubordinateTable */
 		static public $dataClass = '\Bitrix\Intranet\RatingSubordinateTable';
 		/**
@@ -1379,8 +1391,10 @@ namespace Bitrix\Intranet {
 	 * @method \Bitrix\Intranet\EO_RatingSubordinate_Collection merge(?\Bitrix\Intranet\EO_RatingSubordinate_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\EO_RatingSubordinate|null find(callable $callback)
+	 * @method \Bitrix\Intranet\EO_RatingSubordinate_Collection filter(callable $callback)
 	 */
-	class EO_RatingSubordinate_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RatingSubordinate_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\RatingSubordinateTable */
 		static public $dataClass = '\Bitrix\Intranet\RatingSubordinateTable';
 	}
@@ -1509,7 +1523,7 @@ namespace Bitrix\Intranet\Table {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\Internal\Model\InvitationLink wakeUp($data)
 	 */
-	class EO_InvitationLink {
+	class EO_InvitationLink extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\Table\InvitationLinkTable */
 		static public $dataClass = '\Bitrix\Intranet\Table\InvitationLinkTable';
 		/**
@@ -1566,8 +1580,10 @@ namespace Bitrix\Intranet\Table {
 	 * @method \Bitrix\Intranet\Table\EO_InvitationLink_Collection merge(?\Bitrix\Intranet\Table\EO_InvitationLink_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\Internal\Model\InvitationLink|null find(callable $callback)
+	 * @method \Bitrix\Intranet\Table\EO_InvitationLink_Collection filter(callable $callback)
 	 */
-	class EO_InvitationLink_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_InvitationLink_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\Table\InvitationLinkTable */
 		static public $dataClass = '\Bitrix\Intranet\Table\InvitationLinkTable';
 	}
@@ -1595,90 +1611,50 @@ namespace Bitrix\Intranet\Table {
 	 */
 	class EO_InvitationLink_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Intranet\Internal\Model\VerifyNumberCodeTable:intranet/lib/internal/model/verifynumbercodetable.php */
+/* ORMENTITYANNOTATION:Bitrix\Intranet\Internal\Model\AnnualSummaryTable:intranet/lib/internal/model/annualsummarytable.php */
 namespace Bitrix\Intranet\Internal\Model {
 	/**
-	 * EO_VerifyNumberCode
-	 * @see \Bitrix\Intranet\Internal\Model\VerifyNumberCodeTable
+	 * EO_AnnualSummary
+	 * @see \Bitrix\Intranet\Internal\Model\AnnualSummaryTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getUserId()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
 	 * @method bool hasUserId()
 	 * @method bool isUserIdFilled()
 	 * @method bool isUserIdChanged()
 	 * @method \int remindActualUserId()
 	 * @method \int requireUserId()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetUserId()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetUserId()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary resetUserId()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary unsetUserId()
 	 * @method \int fillUserId()
-	 * @method \string getPhoneNumber()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
-	 * @method bool hasPhoneNumber()
-	 * @method bool isPhoneNumberFilled()
-	 * @method bool isPhoneNumberChanged()
-	 * @method \string remindActualPhoneNumber()
-	 * @method \string requirePhoneNumber()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetPhoneNumber()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetPhoneNumber()
-	 * @method \string fillPhoneNumber()
-	 * @method \string getCode()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetCode()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetCode()
-	 * @method \string fillCode()
-	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
-	 * @method bool hasCreatedAt()
-	 * @method bool isCreatedAtFilled()
-	 * @method bool isCreatedAtChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedAt()
-	 * @method \Bitrix\Main\Type\DateTime requireCreatedAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetCreatedAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetCreatedAt()
-	 * @method \Bitrix\Main\Type\DateTime fillCreatedAt()
-	 * @method \Bitrix\Main\Type\DateTime getLastSentAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setLastSentAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastSentAt)
-	 * @method bool hasLastSentAt()
-	 * @method bool isLastSentAtFilled()
-	 * @method bool isLastSentAtChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualLastSentAt()
-	 * @method \Bitrix\Main\Type\DateTime requireLastSentAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetLastSentAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetLastSentAt()
-	 * @method \Bitrix\Main\Type\DateTime fillLastSentAt()
-	 * @method null|\Bitrix\Main\Type\DateTime getConfirmedAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setConfirmedAt(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $confirmedAt)
-	 * @method bool hasConfirmedAt()
-	 * @method bool isConfirmedAtFilled()
-	 * @method bool isConfirmedAtChanged()
-	 * @method null|\Bitrix\Main\Type\DateTime remindActualConfirmedAt()
-	 * @method null|\Bitrix\Main\Type\DateTime requireConfirmedAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetConfirmedAt()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetConfirmedAt()
-	 * @method null|\Bitrix\Main\Type\DateTime fillConfirmedAt()
-	 * @method \int getAttempts()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode setAttempts(\int|\Bitrix\Main\DB\SqlExpression $attempts)
-	 * @method bool hasAttempts()
-	 * @method bool isAttemptsFilled()
-	 * @method bool isAttemptsChanged()
-	 * @method \int remindActualAttempts()
-	 * @method \int requireAttempts()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode resetAttempts()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unsetAttempts()
-	 * @method \int fillAttempts()
+	 * @method \string getName()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary resetName()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary unsetName()
+	 * @method \string fillName()
+	 * @method null|\string getValue()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary setValue(null|\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method null|\string remindActualValue()
+	 * @method null|\string requireValue()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary resetValue()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary unsetValue()
+	 * @method null|\string fillValue()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1694,9 +1670,9 @@ namespace Bitrix\Intranet\Internal\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode set($fieldName, $value)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode reset($fieldName)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode unset($fieldName)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary set($fieldName, $value)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary reset($fieldName)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -1704,11 +1680,11 @@ namespace Bitrix\Intranet\Internal\Model {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode wakeUp($data)
+	 * @method static \Bitrix\Intranet\Internal\Model\EO_AnnualSummary wakeUp($data)
 	 */
-	class EO_VerifyNumberCode {
-		/* @var \Bitrix\Intranet\Internal\Model\VerifyNumberCodeTable */
-		static public $dataClass = '\Bitrix\Intranet\Internal\Model\VerifyNumberCodeTable';
+	class EO_AnnualSummary extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Intranet\Internal\Model\AnnualSummaryTable */
+		static public $dataClass = '\Bitrix\Intranet\Internal\Model\AnnualSummaryTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -1717,7 +1693,7 @@ namespace Bitrix\Intranet\Internal\Model {
 }
 namespace Bitrix\Intranet\Internal\Model {
 	/**
-	 * EO_VerifyNumberCode_Collection
+	 * EO_AnnualSummary_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -1725,50 +1701,44 @@ namespace Bitrix\Intranet\Internal\Model {
 	 * @method \int[] getIdList()
 	 * @method \int[] getUserIdList()
 	 * @method \int[] fillUserId()
-	 * @method \string[] getPhoneNumberList()
-	 * @method \string[] fillPhoneNumber()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
-	 * @method \Bitrix\Main\Type\DateTime[] getLastSentAtList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillLastSentAt()
-	 * @method null|\Bitrix\Main\Type\DateTime[] getConfirmedAtList()
-	 * @method null|\Bitrix\Main\Type\DateTime[] fillConfirmedAt()
-	 * @method \int[] getAttemptsList()
-	 * @method \int[] fillAttempts()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method null|\string[] getValueList()
+	 * @method null|\string[] fillValue()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode $object)
-	 * @method bool has(\Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode $object)
+	 * @method void add(\Bitrix\Intranet\Internal\Model\EO_AnnualSummary $object)
+	 * @method bool has(\Bitrix\Intranet\Internal\Model\EO_AnnualSummary $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode getByPrimary($primary)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode[] getAll()
-	 * @method bool remove(\Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode $object)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary getByPrimary($primary)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary[] getAll()
+	 * @method bool remove(\Bitrix\Intranet\Internal\Model\EO_AnnualSummary $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection wakeUp($data)
+	 * @method static \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode current() Iterator
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection merge(?\Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection $collection)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection merge(?\Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary|null find(callable $callback)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection filter(callable $callback)
 	 */
-	class EO_VerifyNumberCode_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Intranet\Internal\Model\VerifyNumberCodeTable */
-		static public $dataClass = '\Bitrix\Intranet\Internal\Model\VerifyNumberCodeTable';
+	class EO_AnnualSummary_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Intranet\Internal\Model\AnnualSummaryTable */
+		static public $dataClass = '\Bitrix\Intranet\Internal\Model\AnnualSummaryTable';
 	}
 }
 namespace Bitrix\Intranet\Internal\Model {
@@ -1776,23 +1746,164 @@ namespace Bitrix\Intranet\Internal\Model {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_VerifyNumberCode_Result exec()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode fetchObject()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection fetchCollection()
+	 * @method EO_AnnualSummary_Result exec()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary fetchObject()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection fetchCollection()
 	 */
-	class EO_VerifyNumberCode_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_AnnualSummary_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode fetchObject()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection fetchCollection()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary fetchObject()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection fetchCollection()
 	 */
-	class EO_VerifyNumberCode_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_AnnualSummary_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode createObject($setDefaultValues = true)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection createCollection()
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode wakeUpObject($row)
-	 * @method \Bitrix\Intranet\Internal\Model\EO_VerifyNumberCode_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary createObject($setDefaultValues = true)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection createCollection()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary wakeUpObject($row)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary_Collection wakeUpCollection($rows)
 	 */
-	class EO_VerifyNumberCode_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_AnnualSummary_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Intranet\Internal\Model\IntranetUserTable:intranet/lib/internal/model/intranetusertable.php */
+namespace Bitrix\Intranet\Internal\Model {
+	/**
+	 * EO_IntranetUser
+	 * @see \Bitrix\Intranet\Internal\Model\IntranetUserTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser resetUserId()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \boolean getInitialized()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser setInitialized(\boolean|\Bitrix\Main\DB\SqlExpression $initialized)
+	 * @method bool hasInitialized()
+	 * @method bool isInitializedFilled()
+	 * @method bool isInitializedChanged()
+	 * @method \boolean remindActualInitialized()
+	 * @method \boolean requireInitialized()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser resetInitialized()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser unsetInitialized()
+	 * @method \boolean fillInitialized()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser set($fieldName, $value)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser reset($fieldName)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Intranet\Internal\Model\EO_IntranetUser wakeUp($data)
+	 */
+	class EO_IntranetUser extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Intranet\Internal\Model\IntranetUserTable */
+		static public $dataClass = '\Bitrix\Intranet\Internal\Model\IntranetUserTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Intranet\Internal\Model {
+	/**
+	 * EO_IntranetUser_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \boolean[] getInitializedList()
+	 * @method \boolean[] fillInitialized()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Intranet\Internal\Model\EO_IntranetUser $object)
+	 * @method bool has(\Bitrix\Intranet\Internal\Model\EO_IntranetUser $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser getByPrimary($primary)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser[] getAll()
+	 * @method bool remove(\Bitrix\Intranet\Internal\Model\EO_IntranetUser $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection merge(?\Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser|null find(callable $callback)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection filter(callable $callback)
+	 */
+	class EO_IntranetUser_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Intranet\Internal\Model\IntranetUserTable */
+		static public $dataClass = '\Bitrix\Intranet\Internal\Model\IntranetUserTable';
+	}
+}
+namespace Bitrix\Intranet\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IntranetUser_Result exec()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser fetchObject()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection fetchCollection()
+	 */
+	class EO_IntranetUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser fetchObject()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection fetchCollection()
+	 */
+	class EO_IntranetUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection createCollection()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser wakeUpObject($row)
+	 * @method \Bitrix\Intranet\Internal\Model\EO_IntranetUser_Collection wakeUpCollection($rows)
+	 */
+	class EO_IntranetUser_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Intranet\Internals\ThemeTable:intranet/lib/internals/theme.php */
 namespace Bitrix\Intranet\Internals {
@@ -1885,7 +1996,7 @@ namespace Bitrix\Intranet\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\Internals\EO_Theme wakeUp($data)
 	 */
-	class EO_Theme {
+	class EO_Theme extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\Internals\ThemeTable */
 		static public $dataClass = '\Bitrix\Intranet\Internals\ThemeTable';
 		/**
@@ -1940,8 +2051,10 @@ namespace Bitrix\Intranet\Internals {
 	 * @method \Bitrix\Intranet\Internals\EO_Theme_Collection merge(?\Bitrix\Intranet\Internals\EO_Theme_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\Internals\EO_Theme|null find(callable $callback)
+	 * @method \Bitrix\Intranet\Internals\EO_Theme_Collection filter(callable $callback)
 	 */
-	class EO_Theme_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Theme_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\Internals\ThemeTable */
 		static public $dataClass = '\Bitrix\Intranet\Internals\ThemeTable';
 	}
@@ -2025,7 +2138,7 @@ namespace Bitrix\Intranet\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\Internals\EO_Queue wakeUp($data)
 	 */
-	class EO_Queue {
+	class EO_Queue extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\Internals\QueueTable */
 		static public $dataClass = '\Bitrix\Intranet\Internals\QueueTable';
 		/**
@@ -2073,8 +2186,10 @@ namespace Bitrix\Intranet\Internals {
 	 * @method \Bitrix\Intranet\Internals\EO_Queue_Collection merge(?\Bitrix\Intranet\Internals\EO_Queue_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\Internals\EO_Queue|null find(callable $callback)
+	 * @method \Bitrix\Intranet\Internals\EO_Queue_Collection filter(callable $callback)
 	 */
-	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Queue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\Internals\QueueTable */
 		static public $dataClass = '\Bitrix\Intranet\Internals\QueueTable';
 	}
@@ -2253,7 +2368,7 @@ namespace Bitrix\Intranet\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Intranet\Internals\EO_Invitation wakeUp($data)
 	 */
-	class EO_Invitation {
+	class EO_Invitation extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Intranet\Internals\InvitationTable */
 		static public $dataClass = '\Bitrix\Intranet\Internals\InvitationTable';
 		/**
@@ -2322,8 +2437,10 @@ namespace Bitrix\Intranet\Internals {
 	 * @method \Bitrix\Intranet\Internals\EO_Invitation_Collection merge(?\Bitrix\Intranet\Internals\EO_Invitation_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Intranet\Internals\EO_Invitation|null find(callable $callback)
+	 * @method \Bitrix\Intranet\Internals\EO_Invitation_Collection filter(callable $callback)
 	 */
-	class EO_Invitation_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Invitation_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Intranet\Internals\InvitationTable */
 		static public $dataClass = '\Bitrix\Intranet\Internals\InvitationTable';
 	}

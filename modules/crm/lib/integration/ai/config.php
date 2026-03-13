@@ -12,6 +12,11 @@ final class Config
 	public const CODE_PREFIX = 'ai_config';
 	public const LANGUAGE_CODE = 'languageId';
 
+	// Map for language codes that differ between AI and Bitrix24
+	private const LANGUAGE_CODE_MAP = [
+		'kz' => 'kk',
+	];
+
 	public static function getAll(int $userId, int $entityTypeId, ?int $categoryId): array
 	{
 		$config = CUserOptions::GetOption(
@@ -34,6 +39,18 @@ final class Config
 		)
 		{
 			$languageId = self::getDefaultLanguageId();
+
+			// save default language for correct work copilot features, that depends on this config
+			if (self::isValidLanguageId($languageId))
+			{
+				CUserOptions::SetOption(
+					self::MODULE_ID,
+					self::getOptionName($entityTypeId, $categoryId),
+					[self::LANGUAGE_CODE => $languageId],
+					false,
+					$userId
+				);
+			}
 		}
 
 		return $languageId;
@@ -43,7 +60,9 @@ final class Config
 	{
 		if (AIManager::isAvailable())
 		{
-			return Facade\User::getUserLanguage();
+			$languageId = Facade\User::getUserLanguage();
+
+			return self::LANGUAGE_CODE_MAP[$languageId] ?? $languageId;
 		}
 
 		return '';

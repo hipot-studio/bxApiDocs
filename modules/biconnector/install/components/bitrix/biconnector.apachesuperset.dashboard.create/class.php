@@ -9,14 +9,15 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\Dashboard\Metadata\DashboardMetadataBuilder;
+use Bitrix\BIConnector\Superset\Dashboard\Metadata\MetadataSection\NativeFilterConfigurationSection;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
-use Bitrix\Bitrix24\Feature;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -68,7 +69,7 @@ class ApacheSupersetDashboardCreateComponent
 			],
 			'paramList' => $this->getParamList(),
 			'groupIds' => $this->getGroupIds(),
-			'canManageGroups' => $this->canManageGroups(),
+			'activeUrlParamsSelector' => SupersetInitializer::isSupersetReady(),
 		];
 	}
 
@@ -99,11 +100,6 @@ class ApacheSupersetDashboardCreateComponent
 
 	private function getGroupIds(): array
 	{
-		if (!$this->canManageGroups())
-		{
-			return [];
-		}
-
 		$groupIds = $this->arParams['GROUP_IDS'];
 		if (empty($groupIds))
 		{
@@ -114,7 +110,7 @@ class ApacheSupersetDashboardCreateComponent
 
 		return array_intersect(
 			$groupIds,
-			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT),
 		);
 	}
 
@@ -122,7 +118,7 @@ class ApacheSupersetDashboardCreateComponent
 	{
 		$result = new Main\Result();
 
-		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
+		if (!Feature::isBuilderEnabled())
 		{
 			$result->addError(new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_OPEN_BIC_UNAVAILABLE_ERROR')));
 
@@ -136,7 +132,7 @@ class ApacheSupersetDashboardCreateComponent
 			return $result;
 		}
 
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_CREATE))
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT))
 		{
 			$result->addError(new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_OPEN_ACCESS_ERROR')));
 
@@ -144,11 +140,6 @@ class ApacheSupersetDashboardCreateComponent
 		}
 
 		return $result;
-	}
-
-	private function canManageGroups(): bool
-	{
-		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY);
 	}
 
 	public function saveAction(array $data, Main\Engine\CurrentUser $user): ?array
@@ -175,14 +166,16 @@ class ApacheSupersetDashboardCreateComponent
 			->setType(SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
 			->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 			->setCreatedById((int)$user->getId())
-			->setOwnerId((int)$user->getId())
 		;
+
+		$jsonMetadata = $this->getJsonMetadata($data);
 
 		if (SupersetInitializer::isSupersetReady())
 		{
 			$integrator = Integrator::getInstance();
 			$response = $integrator->createEmptyDashboard([
 				'name' => $title,
+				'json_metadata' => $jsonMetadata,
 			]);
 
 			if ($response->getErrors())
@@ -205,6 +198,17 @@ class ApacheSupersetDashboardCreateComponent
 			;
 		}
 
+		$editableGroups = AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
+
+		$groups = $data['groups'] ?? [];
+		$groups = array_intersect($groups, $editableGroups);
+		if (empty($groups))
+		{
+			$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_EMPTY_GROUPS'));
+
+			return null;
+		}
+
 		$saveResult = $dashboard->save();
 
 		if (!$saveResult->isSuccess())
@@ -214,27 +218,23 @@ class ApacheSupersetDashboardCreateComponent
 			return null;
 		}
 
-		if ($this->canManageGroups())
+		$scopes = $data['scopes'] ?? [];
+		$params = $data['params'] ?? [];
+
+		$saveGroupResult = DashboardGroupService::saveDashboardGroupBindings($dashboard->getId(), $groups);
+		if (!$saveGroupResult->isSuccess())
 		{
-			$groups = $data['groups'] ?? [];
-			$scopes = $data['scopes'] ?? [];
-			$params = $data['params'] ?? [];
+			$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
+		}
 
-			$saveGroupResult = DashboardGroupService::saveDashboardGroupBindings($dashboard->getId(), $groups);
-			if (!$saveGroupResult->isSuccess())
-			{
-				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
-			}
-
-			$saveScopesResult = ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopes);
-			$saveParamsResult = (new UrlParameter\Service($dashboard))->saveDashboardParams($params, $scopes);
-			if (
-				!$saveScopesResult->isSuccess()
-				|| !$saveParamsResult->isSuccess()
-			)
-			{
-				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
-			}
+		$saveScopesResult = ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopes);
+		$saveParamsResult = (new UrlParameter\Service($dashboard))->saveDashboardParams($params, $scopes);
+		if (
+			!$saveScopesResult->isSuccess()
+			|| !$saveParamsResult->isSuccess()
+		)
+		{
+			$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_CREATE_FORM_SAVE_PARAMS_ERROR'));
 		}
 
 		$data = [];
@@ -247,7 +247,7 @@ class ApacheSupersetDashboardCreateComponent
 			$data['id'] = $dashboard->getId();
 			$data['title'] = $dashboard->getTitle();
 			$data['detailUrl'] = $dashboard->getOrmObject()->getDetailUrl()->getUri();
-			$data['groupIds'] = $dashboard->getOrmObject()->getGroups()->getIdList();
+			$data['groupIds'] = $editableGroups;
 
 			$data['columns'] = $gridRow['columns'];
 			$data['actions'] = $gridRow['actions'];
@@ -256,5 +256,18 @@ class ApacheSupersetDashboardCreateComponent
 		}
 
 		return null;
+	}
+
+	private function getJsonMetadata(array $data): array
+	{
+		$builder = new DashboardMetadataBuilder();
+
+		if (isset($data['params']) && is_array($data['params']))
+		{
+			$filterSection = new NativeFilterConfigurationSection($data['params']);
+			$builder->addSection($filterSection);
+		}
+
+		return $builder->build();
 	}
 }

@@ -13,14 +13,15 @@ use Bitrix\Main;
 class CollaberService implements Contract\Service\CollaberService
 {
 	private Contract\Repository\ExtranetUserRepository $extranetUserRepository;
-	private Main\Data\Cache $cache;
+	private Main\Data\ManagedCache $cache;
+	private ?array $collaberIds = null;
 	private const BASE_CACHE_DIR = 'extranet/collaber/';
 	private const CACHE_TTL = 86400;
 
 	public function __construct(?Contract\Repository\ExtranetUserRepository $userRepository = null)
 	{
 		$this->extranetUserRepository = $userRepository ?? ServiceContainer::getInstance()->getExtranetUserRepository();
-		$this->cache = Application::getInstance()->getCache();
+		$this->cache = Application::getInstance()->getManagedCache();
 	}
 
 	public function isCollaberById(int $id): bool
@@ -83,25 +84,27 @@ class CollaberService implements Contract\Service\CollaberService
 
 	public function getCollaberIds(): array
 	{
-		if ($this->cache->initCache(self::CACHE_TTL, 'collaber_ids', self::BASE_CACHE_DIR))
+		if ($this->collaberIds !== null)
 		{
-			$collaberIds = $this->cache->getVars();
+			return $this->collaberIds;
+		}
+
+		if ($this->cache->read(self::CACHE_TTL, 'collaber_ids', self::BASE_CACHE_DIR))
+		{
+			$this->collaberIds = $this->cache->get('collaber_ids');
 		}
 		else
 		{
-			$collaberIds = $this->extranetUserRepository->getAllUserIdsByRole(Enum\User\ExtranetRole::Collaber);
-
-			if ($this->cache->startDataCache())
-			{
-				$this->cache->endDataCache($collaberIds);
-			}
+			$this->collaberIds = $this->extranetUserRepository->getAllUserIdsByRole(Enum\User\ExtranetRole::Collaber);
+			$this->cache->set('collaber_ids', $this->collaberIds);
 		}
 
-		return $collaberIds;
+		return $this->collaberIds;
 	}
 
 	public function clearCache(): void
 	{
+		$this->collaberIds = null;
 		$this->cache->cleanDir(self::BASE_CACHE_DIR);
 	}
 }

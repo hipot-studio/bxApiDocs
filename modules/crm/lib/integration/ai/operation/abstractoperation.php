@@ -592,12 +592,7 @@ abstract class AbstractOperation
 
 	protected function getContextLanguageId(): string
 	{
-		$currentLang = \Bitrix\Main\Context::getCurrent()
-			?->getLanguageObject()
-			?->getCode()
-		;
-
-		return $currentLang ?? Config::getDefaultLanguageId();
+		return Config::getDefaultLanguageId();
 	}
 
 	private function getAIEngineContext(): Context

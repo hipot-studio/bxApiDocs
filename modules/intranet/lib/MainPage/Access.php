@@ -13,8 +13,7 @@ class Access
 	public function canEdit(): bool
 	{
 		return
-			$this->canView()
-			&& CurrentUser::get()->isAdmin()
+			$this->canViewAsAdmin()
 			&& $this->isAvailableFeature()
 		;
 	}
@@ -24,6 +23,14 @@ class Access
 		return
 			$this->isAvailable()
 			&& $this->checkUserPermissions()
+		;
+	}
+
+	public function canViewAsAdmin(): bool
+	{
+		return
+			$this->canView()
+			&& CurrentUser::get()->isAdmin()
 		;
 	}
 

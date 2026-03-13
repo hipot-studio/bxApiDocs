@@ -12,11 +12,6 @@ class Task extends BaseRecent
 
 	public function isAvailable(): bool
 	{
-		if (!Settings::isMessengerV2Enabled())
-		{
-			return false;
-		}
-
 		if (!Settings::isTasksRecentListAvailable())
 		{
 			return false;
@@ -32,13 +27,7 @@ class Task extends BaseRecent
 
 	protected function getParams(): array
 	{
-		return [
-			'TAB_CODE' => 'chats.task',
-			'COMPONENT_CODE' => 'im.task.messenger',
-			'MESSAGES' => [
-				'COMPONENT_TITLE' => $this->getTitle(),
-			],
-		];
+		return [];
 	}
 
 	protected function getWidgetSettings(): array

@@ -6,7 +6,7 @@ namespace Bitrix\HumanResources\Command\Structure\Node\Handler;
 
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
-use Bitrix\HumanResources\Internals\Repository\Structure\Node\NodeRepository as InternalNodeRepository;
+use Bitrix\HumanResources\Internals\Repository\Structure\NodeRepository as InternalNodeRepository;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Service\Container;

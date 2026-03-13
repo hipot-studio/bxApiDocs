@@ -413,6 +413,36 @@ abstract class Mailbox
 		return $this->mailbox;
 	}
 
+	public function getServiceId(): int
+	{
+		return (int)($this->mailbox['SERVICE_ID'] ?? 0);
+	}
+
+	public function getProviderCode(): string
+	{
+		$serviceId = $this->getServiceId();
+
+		if ($serviceId <= 0)
+		{
+			return '';
+		}
+
+		$service = MailServicesTable::getByPrimary(
+			$serviceId,
+			[
+				'select' => ['NAME'],
+				'cache' => ['ttl' => 86400],
+			],
+		)->fetch();
+
+		if ($service && !empty($service['NAME']))
+		{
+			return mb_strtolower($service['NAME']);
+		}
+
+		return '';
+	}
+
 	public function getMailboxId(): int
 	{
 		$mailbox = self::getMailbox();
@@ -2176,7 +2206,7 @@ abstract class Mailbox
 		$this->lastSyncResult = array_merge($this->lastSyncResult, $data);
 	}
 
-	public function getDirsHelper()
+	public function getDirsHelper(): Mail\Helper\MailboxDirectoryHelper
 	{
 		if (!$this->dirsHelper)
 		{

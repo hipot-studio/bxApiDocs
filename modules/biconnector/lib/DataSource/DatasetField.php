@@ -15,6 +15,7 @@ abstract class DatasetField
 	protected ?string $description = null;
 	protected ?string $descriptionFull = null;
 	protected ?JoinSelection $join = null;
+	protected ?string $expression = null;
 
 	public function __construct(
 		protected readonly string $code,
@@ -69,6 +70,11 @@ abstract class DatasetField
 			return 'NULL';
 		}
 
+		if ($this->expression !== null)
+		{
+			return $this->expression;
+		}
+
 		$name =
 			!empty($this->name)
 				? $this->name
@@ -110,6 +116,19 @@ abstract class DatasetField
 	public function setJoin(JoinSelection $join): static
 	{
 		$this->join = $join;
+
+		return $this;
+	}
+
+	/**
+	 * Set raw expression for field selection.
+	 *
+	 * @param string $expression
+	 * @return $this
+	 */
+	public function setExpression(string $expression): static
+	{
+		$this->expression = $expression;
 
 		return $this;
 	}

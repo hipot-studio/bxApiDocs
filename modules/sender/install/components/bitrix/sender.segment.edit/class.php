@@ -172,6 +172,12 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 			Security\AccessChecker::addError($this->errors);
 			return false;
 		}
+		if ($this->arParams['ID'] === 0 && !Security\Access::getInstance()->canModifySegments())
+		{
+			Security\AccessChecker::addError($this->errors, Security\AccessChecker::ERR_CODE_EDIT);
+
+			return false;
+		}
 
 		$this->arResult['ACTION_URI'] = $this->getPath() . '/ajax.php';
 		$this->arResult['SUBMIT_FORM_URL'] = Context::getCurrent()->getRequest()->getRequestUri();

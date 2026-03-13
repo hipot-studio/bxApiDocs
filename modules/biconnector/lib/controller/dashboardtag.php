@@ -6,7 +6,8 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetTagTable;
-use Bitrix\Bitrix24\Feature;
+use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\ActionFilter\Scope;
@@ -28,6 +29,7 @@ class DashboardTag extends Controller
 	protected function getDefaultPreFilters(): array
 	{
 		$additionalFilters = [
+			new BIConstructorAccess(),
 			new Scope(Scope::AJAX),
 		];
 
@@ -176,7 +178,7 @@ class DashboardTag extends Controller
 	private function checkPermission(): bool
 	{
 		if (
-			(Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
+			!Feature::isBuilderEnabled()
 			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_TAG_MODIFY)
 		)
 		{

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Integration\Humanresources;
 
-use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Intranet\Dto\EntitySelector\EntitySelectorCodeDto;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
@@ -57,29 +57,13 @@ class DepartmentRepository
 
 	public function getDepartmentHeadsByUserId(int $userId): UserCollection
 	{
-		$employeeRoleId = Container::getRoleRepository()
-			->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE'])
-			?->id
+		$nodeMemberCollection = PublicContainer::getUserDepartmentService()
+			->getUserHeads($userId)
 		;
 
-		if (!isset($employeeRoleId))
-		{
-			return new UserCollection();
-		}
+		$userIds = $nodeMemberCollection->getEntityIds();
 
-		$nodeCollection = Container::getNodeRepository()
-			->findAllByUserIdAndRoleId($userId, $employeeRoleId)
-		;
-
-		$managers = \CIntranetUtils::GetDepartmentManager(
-			$nodeCollection->map(
-				fn (Node $node) => DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode),
-			),
-			$userId,
-			true,
-		);
-
-		return $this->userRepository->makeUserCollectionFromModelArray($managers);
+		return ServiceContainer::getInstance()->userRepository()->findUsersByIds($userIds);
 	}
 
 	public function getDepartmentsByEntitySelectorAccessCode(EntitySelectorCodeDto $accessCode): DepartmentCollection

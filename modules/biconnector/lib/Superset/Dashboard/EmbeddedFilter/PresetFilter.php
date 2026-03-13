@@ -2,11 +2,13 @@
 
 namespace Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 
-use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 
 abstract class PresetFilter extends UrlFilter
 {
 	protected ?int $value = null;
+
+	abstract public static function getDatasetName(): string;
 
 	/**
 	 * Returns values for Superset filter.
@@ -20,7 +22,7 @@ abstract class PresetFilter extends UrlFilter
 	 *
 	 * @return string
 	 */
-	abstract protected function getColumnName(): string;
+	abstract public static function getColumnName(): string;
 
 	/**
 	 * Sets value for filter by default.
@@ -63,7 +65,6 @@ abstract class PresetFilter extends UrlFilter
 					filterState:(
 						validateMessage:!f,
 						validateStatus:!f,
-						label:"#VALUE#",
 						value:!(#VALUE#)
 					),
 					id:#FILTER_ID#,
@@ -76,9 +77,42 @@ abstract class PresetFilter extends UrlFilter
 			$urlTemplateFilter,
 			[
 				'#FILTER_ID#' => $this->getCode(),
-				'#COLUMN_NAME#' => $this->getColumnName(),
+				'#COLUMN_NAME#' => static::getColumnName(),
 				'#VALUE#' => $this->value,
 			],
 		);
+	}
+
+	/**
+	 * Returns dataset ID for Superset filter.
+	 *
+	 * @return int|null
+	 */
+	public static function getDatasetId(): ?int
+	{
+		$datasetName = static::getDatasetName();
+
+		$cacheKey = "biconnector_dataset_id_by_name_{$datasetName}";
+		$cacheManager = \Bitrix\Main\Application::getInstance()->getManagedCache();
+
+		if ($cacheManager->read(43200, $cacheKey)) //12 hours
+		{
+			return $cacheManager->get($cacheKey);
+		}
+
+		$integrator = Integrator::getInstance();
+		$response = $integrator->getDatasetByName($datasetName);
+		if ($response->hasErrors())
+		{
+			return null;
+		}
+
+		$datasetId = $response->getData()['id'] ?? null;
+		if ($datasetId)
+		{
+			$cacheManager->set($cacheKey, $datasetId);
+		}
+
+		return $datasetId;
 	}
 }

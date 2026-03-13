@@ -48,7 +48,7 @@ class MarketMain extends CBitrixComponent implements Controllerable, Loadable
 	private function prepareResult()
 	{
 		$this->prepareParams();
-		$this->pageTitle = Loc::getMessage('MARKET_MAIN_PAGE_TITLE');
+		$this->pageTitle = Loc::getMessage('MARKET_MAIN_PAGE_TITLE_MSGVER_1');
 		$this->arResult['TITLE'] = $this->pageTitle;
 		$this->arResult['COLLECTIONS'] = [];
 		$this->arResult['SLIDER'] = [];

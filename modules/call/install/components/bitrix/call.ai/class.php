@@ -4,7 +4,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\Outcome\Transcription;
@@ -53,7 +53,7 @@ class CallAiComponent extends \CBitrixComponent
 			return false;
 		}
 
-		$this->call = \Bitrix\Im\Call\Registry::getCallWithId($this->callId);
+		$this->call = \Bitrix\Call\Call\Registry::getCallWithId($this->callId);
 		if (!$this->call)
 		{
 			$this->showError(Loc::getMessage('CALL_COMPONENT_CALL_UNDEFINED'), Loc::getMessage('CALL_COMPONENT_ERROR_DESCRIPTION'));
@@ -258,7 +258,7 @@ class CallAiComponent extends \CBitrixComponent
 
 	protected function formatInterval(int $hours = 0, int $minutes = 0, int $seconds = 0): string
 	{
-		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/im/lib/call/integration/chat.php');
+		Loc::loadMessages($_SERVER["DOCUMENT_ROOT"].'/bitrix/modules/call/lib/Integration/Chat.php');
 
 		$result = [];
 		if ($hours > 0)

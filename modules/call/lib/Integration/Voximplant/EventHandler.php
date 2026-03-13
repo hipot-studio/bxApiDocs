@@ -7,6 +7,9 @@ use Bitrix\Main\EventResult;
 use Bitrix\Voximplant\StatisticTable;
 use Bitrix\Main\Loader;
 
+/**
+ * @internal
+ */
 class EventHandler
 {
 	/**

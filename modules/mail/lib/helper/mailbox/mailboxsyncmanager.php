@@ -158,6 +158,7 @@ class MailboxSyncManager
 			return true;
 		}
 
+		// After token renewal, re-authorization is performed
 		if ($mailboxHelper->renewOauthTokens() && $mailboxHelper->isAuthenticated())
 		{
 			$this->removeConnectErrorCache($mailboxId);

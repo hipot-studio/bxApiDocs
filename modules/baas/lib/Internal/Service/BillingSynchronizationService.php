@@ -26,7 +26,7 @@ class BillingSynchronizationService
 	{
 	}
 
-	public function syncIfNeeded(): Main\Result
+	public function autoSync(): Main\Result
 	{
 		$result = new Main\Result();
 		if (self::$synchronized === false && $this->isTimeToSynchronize())

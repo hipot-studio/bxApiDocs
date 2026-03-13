@@ -91,6 +91,13 @@ class Main extends BaseContent
 		$userId = (int)$this->currentUser->getId();
 		$status = Util::getUserStatus($userId);
 
+		if ($status === 'integrator')
+		{
+			return Intranet\Public\Service\IntegratorService::createByDefault()->isRenamedIntegrator()
+				? Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_integrator_RENAMED')
+				: Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_integrator');
+		}
+
 		return Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_MAIN_' . $status);
 	}
 

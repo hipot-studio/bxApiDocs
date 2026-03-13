@@ -22,10 +22,12 @@ use Bitrix\BIConnector\ExternalSource\DatasetManager;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\BIConnector\ExternalSource\Source\Csv;
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\Settings\Tools;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
 use Bitrix\Main\DB\SqlQueryException;
@@ -46,6 +48,7 @@ final class SupersetInitializer
 	public const ERROR_DELETE_INSTANCE_OPTION = 'error_superset_delete_instance';
 
 	private const SUPERSET_CLEAN_TIMESTAMP_OPTION = 'superset_clean_timestamp';
+	private const SUPERSET_CLEAN_TIMEOUT_OPTION = 'superset_clean_timeout';
 
 	private const SUPERSET_CREATED_BY_OPTION = 'superset_created_by_user';
 	private const SUPERSET_INITIAL_DASHBOARD_OPTION = 'superset_initial_dashboard';
@@ -176,6 +179,7 @@ final class SupersetInitializer
 
 	public static function setSupersetStatus(string $status): void
 	{
+		SupersetInitializerLogger::logInfo('Superset status changed to ' . $status);
 		if (!isset(self::$statusContainer))
 		{
 			self::$statusContainer = new SupersetStatusOptionContainer();
@@ -376,9 +380,22 @@ final class SupersetInitializer
 		return $agentName;
 	}
 
+	/**
+	 * @return Result
+	 */
 	public static function deleteInstance(): Result
 	{
+		SupersetInitializerLogger::logInfo('Start deleting superset instance');
+
 		$result = new Result();
+
+		if (Option::get('biconnector', 'delete_error_emulation', 'N') === 'Y')
+		{
+			$result->addError(new Error('Superset instance deletion error emulation'));
+
+			return $result;
+		}
+
 		if (
 			!\Bitrix\Main\Loader::includeModule('bitrix24')
 			&& !ConfigContainer::getConfigContainer()->isPortalIdVerified()
@@ -410,17 +427,24 @@ final class SupersetInitializer
 		Option::set('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, time());
 	}
 
-	private static function getDeleteTimestamp(): int
+	public static function getDeleteTimestamp(): int
 	{
 		return (int)Option::get('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, 0);
 	}
 
+	private static function getCleanTimeout(): int
+	{
+		return (int)Option::get('biconnector', self::SUPERSET_CLEAN_TIMEOUT_OPTION, 24 * 60 * 60);
+	}
+
+	/**
+	 * @deprecated Will be removed in future updates.
+	 */
 	public static function getAvailableToEnableSupersetTimestamp(): int
 	{
 		$cleanTimestamp = self::getDeleteTimestamp();
-		$day = 60 * 60 * 24;
 
-		return $cleanTimestamp + $day;
+		return $cleanTimestamp + self::getCleanTimeout();
 	}
 
 	/**
@@ -492,7 +516,7 @@ final class SupersetInitializer
 		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
 		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
 		Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
-		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_done_v_1']);
+		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_table_hash']);
 		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_last_attempt']);
 
 		\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
@@ -522,6 +546,49 @@ final class SupersetInitializer
 		if ($dashboardId)
 		{
 			Option::set('biconnector', self::SUPERSET_INITIAL_DASHBOARD_OPTION, $dashboardId);
+		}
+	}
+
+	/**
+	 * Handle enable BI Builder tool in general portal settings.
+	 *
+	 * @return void
+	 */
+	public static function onEnableBiBuilderTool(): void
+	{}
+
+	/**
+	 * Handle disable BI Builder tool in general portal settings.
+	 *
+	 * @return void
+	 */
+	public static function onDisableBiBuilderTool(): void
+	{
+		$deleteStartResult = self::deleteInstance();
+		if ($deleteStartResult->isSuccess())
+		{
+			// In case of 0238163 - callback returns instantly and here we already have DOESNT_EXISTS status
+			if (self::getSupersetStatus() !== self::SUPERSET_STATUS_DOESNT_EXISTS)
+			{
+				self::clearSupersetData();
+				self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
+			}
+		}
+		else
+		{
+			$notificationCallback = static fn(?string $languageId = null) => Loc::getMessage(
+				code: 'BI_SUPERSET_DISABLING_TOOL_ERROR_TEXT',
+				language: $languageId,
+			);
+			\CIMNotify::Add([
+				'TO_USER_ID' => CurrentUser::get()->getId(),
+				'FROM_USER_ID' => 0,
+				'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+				'NOTIFY_MODULE' => 'biconnector',
+				'NOTIFY_TITLE' => Loc::getMessage('BI_SUPERSET_DISABLING_TOOL_ERROR_TITLE'),
+				'NOTIFY_MESSAGE' => $notificationCallback,
+			]);
+			(new Tools\BIConstructor())->enable();
 		}
 	}
 }

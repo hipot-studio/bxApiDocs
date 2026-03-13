@@ -123,7 +123,6 @@ class SupersetDashboardProvider extends BaseProvider
 				'scopes' => $scopes,
 				'type' => $dashboard->getType(),
 				'createdById' => $dashboard->getOrmObject()->getCreatedById(),
-				'ownerId' => $dashboard->getOrmObject()->getOwnerId(),
 				'status' => $dashboard->getStatus(),
 			],
 		];

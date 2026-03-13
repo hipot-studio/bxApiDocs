@@ -305,7 +305,7 @@ class Connector
 			$customConnectors = self::getListCustomConnectorBase();
 		}
 
-		$connectors = array_merge($connectors, $customConnectors);
+		$connectors = $connectors + $customConnectors;
 
 		$connectors = self::filterConnectorsByPortalRegion($connectors);
 
@@ -756,10 +756,11 @@ class Connector
 	 * Returns information about all connected connectors specific open line.
 	 *
 	 * @param int $lineId
+	 * @param bool $deferUpdate deferred update of abandoned lines
 	 *
 	 * @return array<string, array>
 	 */
-	public static function infoConnectorsLine($lineId)
+	public static function infoConnectorsLine($lineId, bool $deferUpdate = false)
 	{
 		$result = [];
 
@@ -774,6 +775,10 @@ class Connector
 			{
 				InfoConnectors::addSingleLineUpdateAgent($info['LINE_ID'], Library::LOCAL_AGENT_EXEC_INTERVAL);
 			}
+		}
+		elseif ($deferUpdate)
+		{
+			InfoConnectors::addAbandonedLineInQueue($lineId);
 		}
 		else
 		{

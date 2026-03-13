@@ -13,7 +13,7 @@ class InvalidClassInstanceProvidedException extends RestException
 
 	protected function getMessagePhraseCode(): string
 	{
-		return 'REST_V3_EXCEPTIONS_INVALIDCLASSPROVIDEDEXCEPTION';
+		return 'REST_V3_EXCEPTION_INVALIDCLASSPROVIDEDEXCEPTION';
 	}
 
 	protected function getMessagePhraseReplacement(): ?array

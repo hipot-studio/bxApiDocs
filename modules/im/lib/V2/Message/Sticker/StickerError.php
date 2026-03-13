@@ -9,7 +9,6 @@ use Bitrix\Main\Localization\Loc;
 
 class StickerError extends Error
 {
-	public const STICKERS_NOT_AVAILABLE = 'STICKERS_NOT_AVAILABLE';
 	public const PACK_NOT_AVAILABLE = 'PACK_NOT_AVAILABLE';
 	public const STICKER_SENDING_ERROR = 'STICKER_SENDING_ERROR';
 	public const MAX_STICKERS_ERROR = 'MAX_STICKERS_ERROR';

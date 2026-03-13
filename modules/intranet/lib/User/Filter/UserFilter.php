@@ -155,7 +155,6 @@ class UserFilter extends Filter
 		$this->prepareFilterValue($result);
 		$this->removeServiceUiFilterFields($result);
 		$this->addSearchFilter($result, $searchString);
-		$result['=IS_REAL_USER'] = 'Y';
 
 		if (isset($result['=UF_DEPARTMENT']))
 		{

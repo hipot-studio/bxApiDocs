@@ -76,7 +76,29 @@ class DiskFile extends Controller
 		Type::setScope($scope);
 		$needed = Connector\Disk::FILE_PREFIX_HREF . $fileId;
 
-		return Block::isContains($landingId, $needed, true);
+		if (Block::isContains($landingId, $needed, true))
+		{
+			return true;
+		}
+
+		$landing = \Bitrix\Landing\Landing::createInstance($landingId, [
+			'skip_blocks' => true,
+			'check_permissions' => false,
+		]);
+		if (!$landing->exist())
+		{
+			return false;
+		}
+
+		foreach ($landing->getAreas() as $areaLandingId)
+		{
+			if (Block::isContains((int)$areaLandingId, $needed, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

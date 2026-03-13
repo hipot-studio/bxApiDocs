@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Facade;
 
+use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserTable;
@@ -64,5 +66,10 @@ class Portal
 	public static function getRegion(): string
 	{
 		return Application::getInstance()->getLicense()->getRegion() ?? self::DEFAULT_REGION;
+	}
+
+	public static function isMarketAvailable(): bool
+	{
+		return ServiceLocator::getInstance()->get(BaasTokenService::class)?->isMarketAvailable() ?? false;
 	}
 }

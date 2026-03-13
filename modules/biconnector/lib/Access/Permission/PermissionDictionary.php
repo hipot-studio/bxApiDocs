@@ -12,11 +12,12 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const VALUE_VARIATION_ALL = -1;
 
 	public const BIC_ACCESS = 1;
-	public const BIC_DASHBOARD_CREATE = 2;
+
 	public const BIC_SETTINGS_ACCESS = 3;
 	public const BIC_SETTINGS_EDIT_RIGHTS = 4;
 	public const BIC_DASHBOARD_TAG_MODIFY = 5;
-	public const BIC_GROUP_MODIFY = 6;
+
+
 	public const BIC_EXTERNAL_DASHBOARD_CONFIG = 7;
 	public const BIC_DELETE_ALL_UNUSED_ELEMENTS = 8;
 
@@ -26,7 +27,12 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const BIC_DASHBOARD_DELETE = 103;
 	public const BIC_DASHBOARD_EXPORT = 104;
 	public const BIC_DASHBOARD_COPY = 105;
+	public const BIC_DASHBOARD_MODIFY_SETTINGS = 106;
 
+	/** @var int deprecated */
+	public const BIC_GROUP_MODIFY = 6;
+	public const BIC_DASHBOARD_CREATE = 2;
+	
 	private static ?array $groupPermissions = null;
 
 	public static function getPermission($permissionId): array
@@ -46,6 +52,7 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 
 		if ($permissionId === self::BIC_DASHBOARD_EDIT)
 		{
+			$permission['title'] = Loc::getMessage('BIC_DASHBOARD_EDIT_MSGVER_1');
 			$permission['hint'] = Loc::getMessage('HINT_BIC_DASHBOARD_EDIT_MSGVER_2');
 		}
 
@@ -56,7 +63,12 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 
 		if ($permissionId === self::BIC_DELETE_ALL_UNUSED_ELEMENTS)
 		{
-			$permission['title'] = Loc::getMessage('BIC_DELETE_ALL_UNUSED_ELEMENTS_MSGVER_1');
+			$permission['title'] = Loc::getMessage('BIC_DELETE_ALL_UNUSED_ELEMENTS_MSGVER_2');
+		}
+
+		if ($permissionId === self::BIC_SETTINGS_EDIT_RIGHTS)
+		{
+			$permission['title'] = Loc::getMessage('BIC_SETTINGS_EDIT_RIGHTS_MSGVER_2');
 		}
 
 		if ($permission['type'] === Permission\PermissionDictionary::TYPE_TOGGLER)
@@ -88,12 +100,35 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public static function getDefaultPermissionValue($permissionId): int
 	{
 		$permission = self::getPermission($permissionId);
-		if ($permission['type'] === self::TYPE_MULTIVARIABLES) // TODO change to dependent variables
+		if (
+			$permission['type'] === self::TYPE_MULTIVARIABLES
+			|| $permission['type'] === self::TYPE_DEPENDENT_VARIABLES
+		)
 		{
 			return self::VALUE_VARIATION_ALL;
 		}
 
 		return self::VALUE_YES;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public static function getDefaultPermissionGroupValues(): array
+	{
+		$groupPermissions = [
+			self::BIC_DASHBOARD_VIEW,
+			self::BIC_DASHBOARD_EDIT,
+			self::BIC_DASHBOARD_DELETE,
+			self::BIC_DASHBOARD_COPY,
+		];
+
+		if (MarketDashboardManager::getInstance()->isExportEnabled())
+		{
+			$groupPermissions[] = self::BIC_DASHBOARD_EXPORT;
+		}
+
+		return $groupPermissions;
 	}
 
 	private static function getOldVariablesPermissions(): array

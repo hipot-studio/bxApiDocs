@@ -33,4 +33,5 @@ enum EventType: string
 	case StickerRecentDelete = 'stickerRecentDelete';
 	case StickerRecentDeleteAll = 'stickerRecentDeleteAll';
 	case AutoTaskStatus = 'autoTaskStatus';
+	case ChatPin = 'chatPin';
 }

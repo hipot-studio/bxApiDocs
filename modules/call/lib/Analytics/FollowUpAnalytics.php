@@ -9,7 +9,9 @@ use Bitrix\Call\ControllerClient;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\Task\AITask;
 
-
+/**
+ * @internal
+ */
 class FollowUpAnalytics extends AbstractAnalytics
 {
 	public function addFollowUpResultMessage(): self

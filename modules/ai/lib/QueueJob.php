@@ -58,16 +58,15 @@ final class QueueJob
 		$date->add('-' . self::TTL_SECONDS . ' seconds');
 		$limit = 100;
 
-		$rows = QueueTable::query()
+		$res = QueueTable::query()
 			->setSelect(['ID', 'HASH', 'DATE_CREATE'])
 			->where('DATE_CREATE', '<', $date)
 			->setOrder('ID')
 			->setLimit($limit)
-			->fetchAll()
-		;
+			->exec();
 
 		$limiterControlService = new LimitControlService();
-		foreach ($rows as $row)
+		while ($row = $res->fetch())
 		{
 			$queueJob = self::createFromHash($row['HASH']);
 			if ($queueJob)

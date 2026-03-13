@@ -16,6 +16,7 @@ class FullNameFieldAssembler extends JsExtensionFieldAssembler
 			'position' => $rawValue['WORK_POSITION'],
 			'role' => $userEntity->getRole()->value,
 			'inviteStatus' => $userEntity->getInviteStatus()->value,
+			'isFirstAdmin' => $userEntity->isFirstAdmin(),
 		];
 	}
 

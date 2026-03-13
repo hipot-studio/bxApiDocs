@@ -233,7 +233,7 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 
 		$fastClose = true;
 		$task = $workflowView->getTaskById($this->getTaskId());
-		if ($task && $task['status'] === CBPTaskStatus::Running)
+		if ($task && $task['activityName'] && $task['status'] === CBPTaskStatus::Running)
 		{
 			if (count($workflowView->getTasks()) > 1)
 			{
@@ -292,7 +292,7 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 				->fetch()
 		;
 
-		if ($row['WORKFLOW_ID'])
+		if ($row && $row['WORKFLOW_ID'])
 		{
 			return $row['WORKFLOW_ID'];
 		}

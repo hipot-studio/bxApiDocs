@@ -2,8 +2,10 @@
 
 namespace Bitrix\HumanResources\Model;
 
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
@@ -94,6 +96,15 @@ class NodeMemberTable extends ORM\Data\DataManager
 		];
 	}
 
+	public static function onAfterDelete(Event $event): void
+	{
+		$data = $event->getParameters();
+		$nodeMemberId = $data["primary"]["ID"];
+
+		InternalContainer::getUserSettingsService()
+			->deleteByNodeMemberId($nodeMemberId);
+	}
+
 	/**
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\DB\SqlQueryException
@@ -103,6 +114,9 @@ class NodeMemberTable extends ORM\Data\DataManager
 	{
 		$entity = static::getEntity();
 		$connection = $entity->getConnection();
+
+		$nodeMembers = self::getList(['filter' => $filter])->fetchAll();
+		UserSettingsTable::deleteByNodeMembers($nodeMembers);
 
 		return $connection->query(sprintf(
 			'DELETE FROM %s WHERE %s',
@@ -122,12 +136,14 @@ class NodeMemberTable extends ORM\Data\DataManager
 			->quote(NodeTable::getTableName())
 		;
 
+		UserSettingsTable::deleteListByStructureId($structureId);
+
 		if ($connection->getType() === 'mysql')
 		{
 			$sql = "
 				DELETE $tableName FROM $tableName 
-           		INNER JOIN $nodeTableName ON $tableName.NODE_ID = $nodeTableName.ID 
-            	WHERE $nodeTableName.STRUCTURE_ID = $structureId
+				INNER JOIN $nodeTableName ON $tableName.NODE_ID = $nodeTableName.ID 
+				WHERE $nodeTableName.STRUCTURE_ID = $structureId
 			";
 
 			return $connection->query($sql);

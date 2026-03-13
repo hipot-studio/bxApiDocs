@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Component;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Invitation;
+use Bitrix\Intranet\Public\Service\IntegratorService;
 use Bitrix\Intranet\User;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\DB\Connection;
@@ -170,7 +171,8 @@ class UserList extends \CBitrixComponent implements Controllerable, Errorable
 			}
 			if (!empty($additionalData['IS_INTEGRATOR']))
 			{
-				$result .= '<div class="intranet-user-list-role">'.Loc::getMessage('INTRANET_USER_LIST_STATUS_INTEGRATOR').'</div>';
+				$isIntegratorRenamed = IntegratorService::createByDefault()->isRenamedIntegrator();
+				$result .= '<div class="intranet-user-list-role">'.Loc::getMessage($isIntegratorRenamed ? 'INTRANET_USER_LIST_STATUS_INTEGRATOR_RENAMED' : 'INTRANET_USER_LIST_STATUS_INTEGRATOR').'</div>';
 			}
 		}
 

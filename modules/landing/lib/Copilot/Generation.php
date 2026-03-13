@@ -12,6 +12,7 @@ use Bitrix\Landing\Copilot\Generation\Scenario\Scenarist;
 use Bitrix\Landing\Copilot\Generation\Timer;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Model\GenerationsTable;
+use Bitrix\Landing\Copilot\Services\FirstSiteGenerationService;
 use Bitrix\Landing\Metrika;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -331,6 +332,8 @@ class Generation
 			return false;
 		}
 
+		FirstSiteGenerationService::setCurrentGenerationId($generationId);
+
 		$filter =
 			Query::filter()
 				->where('ID', '=', $generationId)
@@ -431,6 +434,8 @@ class Generation
 		{
 			return false;
 		}
+
+		FirstSiteGenerationService::setCurrentGenerationId($this->id ?? null);
 
 		$connection = Application::getConnection();
 		if (!$connection->lock($this->getLockName()))

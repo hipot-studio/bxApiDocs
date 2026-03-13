@@ -42,6 +42,12 @@ class Text extends BaseConnector
 			$payload->setJsonSchema($jsonSchema);
 		}
 
+		$cost = $prompt->getCost();
+		if ($cost !== null)
+		{
+			$payload->setCost($cost);
+		}
+
 		$this->engine->setPayload($payload);
 		$this->engine->setParameters($this->getParams());
 		$this->engine->setUserParameters($this->getUserParams());

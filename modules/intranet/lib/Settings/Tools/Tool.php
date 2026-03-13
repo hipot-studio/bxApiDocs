@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Settings\Tools;
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Localization\Loc;
 
 abstract class Tool
 {
@@ -75,6 +76,26 @@ abstract class Tool
 	public function isDefault(): bool
 	{
 		return false;
+	}
+
+	public function isNeedDisableConfirmation(): bool
+	{
+		return false;
+	}
+
+	public function getDisableConfirmationTitle(): ?string
+	{
+		return null;
+	}
+
+	public function getDisableConfirmationText(): ?string
+	{
+		return null;
+	}
+
+	public function getDisableConfirmCaption(): string
+	{
+		return Loc::getMessage('INTRANET_SETTINGS_DISABLE_CONFIRMATION_BUTTON');
 	}
 
 	public function isEnabledSubgroups(): bool

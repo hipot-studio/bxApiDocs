@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Baas\Controller;
 
-use \Bitrix\Main;
-use \Bitrix\Baas;
+use Bitrix\Baas;
+use Bitrix\Main;
+use Bitrix\Main\Context;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
+use Bitrix\Main\Engine\ActionFilter\Csrf;
+use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Request;
 
 class Host extends Main\Engine\Controller
@@ -19,6 +23,15 @@ class Host extends Main\Engine\Controller
 
 		$this->billingService = Baas\Service\BillingService::getInstance();
 		$this->serviceService = Baas\Baas::getInstance()->getServiceManager();
+	}
+
+	public function configureActions(): array
+	{
+		return [
+			'getSignedPurchaseReport' => [
+				'-prefilters' => [Authentication::class, Csrf::class],
+			],
+		];
 	}
 
 	public function registerAction(): Main\Engine\Response\Json
@@ -59,20 +72,61 @@ class Host extends Main\Engine\Controller
 	}
 
 	public function getPurchaseReportAction(
-		string $packageCode,
-		$purchaseCode,
+		$purchasedPackageCode,
 		string $serviceCode,
 	): Main\Engine\Response\Json
 	{
-		return $this->fullFill(function() use ($packageCode, $purchaseCode, $serviceCode) {
+		return $this->fullFill(function() use ($purchasedPackageCode, $serviceCode) {
 			$result = $this->billingService->getPurchasedPackageReport(
-				(string) $packageCode,
-				(string) $purchaseCode,
-				(string) $serviceCode,
+				(string) $purchasedPackageCode,
+				$serviceCode,
 			);
 
 			return (new Main\Result())->setData($result->getData());
 		});
+	}
+
+	public function getSignedPurchaseReportAction(
+		string $purchasedPackageCode,
+		string $serviceCode,
+	): HttpResponse
+	{
+		$signer = new Main\Security\Sign\TimeSigner();
+		$unsignedPurchasedPackageCode = $signer->unsign($purchasedPackageCode);
+		$unsignedServiceCode = $signer->unsign($serviceCode);
+
+		$result = $this->billingService->getPurchasedPackageReport($unsignedPurchasedPackageCode, $unsignedServiceCode);
+
+		if(!$result->isSuccess())
+		{
+			return (new HttpResponse())->setContent($result->getError()?->getMessage());
+		}
+
+		$lines = [];
+		foreach ($result->getData() as $row)
+		{
+			if (isset($row[0]))
+			{
+				$row[0] = '"' . $row[0] . '"';
+			}
+			$lines[] = implode("\t", $row);
+		}
+		$content = implode("\r\n", $lines);
+
+		$response = new HttpResponse();
+		$response->setContent($content);
+		$serverName = Context::getCurrent()->getServer()->getServerName();
+		$filename = sprintf('report_%s_%s.xls', $serverName, date('Y-m-d'));
+		$response->addHeader(
+			'Content-Disposition',
+			"attachment; filename=\"$filename\"; filename*=utf-8'",
+		);
+		$response->addHeader(
+			'Content-Type',
+			'text/tab-separated-values'
+		);
+
+		return $response;
 	}
 
 	private function fullFill(callable $callback): Main\Engine\Response\Json

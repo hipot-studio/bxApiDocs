@@ -21,7 +21,7 @@ class ConferenceCenterComponent extends CBitrixComponent
 
 	protected function checkRequiredParams()
 	{
-		if (!Loader::includeModule('im'))
+		if (!Loader::includeModule('im') || !Loader::includeModule('call'))
 		{
 			$this->errors->setError(new Error('Module `im` is not installed.'));
 			return false;

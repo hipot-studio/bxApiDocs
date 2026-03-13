@@ -8,6 +8,9 @@ use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\CallAISettings;
 
+/**
+ * @internal
+ */
 class TranscribeCallRecord extends AITask
 {
 	/**
@@ -82,7 +85,7 @@ class TranscribeCallRecord extends AITask
 
 	public function getCost(): int
 	{
-		return 7;
+		return 6;
 	}
 
 	/**

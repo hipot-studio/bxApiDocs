@@ -25,6 +25,11 @@ class BaasTokenService
 		return $this->getService()?->isAvailable() === true;
 	}
 
+	public function isMarketAvailable(): bool
+	{
+		return $this->getService()?->isDistributedByMarket() ?? false;
+	}
+
 	/**
 	 * Returns true if the package is available and active depending on the license.
 	 * @return bool

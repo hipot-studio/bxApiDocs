@@ -17,7 +17,8 @@ class BaseInfo implements EntityInterface, Arrayable
 		public readonly string $fullName,
 		public readonly UserRole $userRole,
 		public readonly InvitationStatus $invitationStatus,
-		public readonly ?int $photoId = null
+		public readonly ?int $photoId = null,
+		public readonly ?bool $isFirstAdmin = null,
 	)
 	{
 	}
@@ -30,6 +31,7 @@ class BaseInfo implements EntityInterface, Arrayable
 			userRole: $user->getRole(),
 			invitationStatus: $user->getInviteStatus(),
 			photoId: $user->getPersonalPhoto(),
+			isFirstAdmin: $user->isFirstAdmin(),
 		);
 	}
 

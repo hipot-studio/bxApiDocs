@@ -39,21 +39,6 @@ final class Parameters
 
 			$value = $this->values[$key] ?? null;
 
-			if ($property['Type'] === FieldType::FILE)
-			{
-				if (!empty($value) && isset($value['name']))
-				{
-					$parameters[$key] = $value;
-					if (is_array($value['name']))
-					{
-						$parameters[$key] = [];
-						\CFile::ConvertFilesToPost($value, $parameters[$key]);
-					}
-				}
-
-				continue;
-			}
-
 			$parameters[$originalKey] = $value;
 			unset($this->values[$key]);
 		}
@@ -65,11 +50,34 @@ final class Parameters
 	{
 		$result = new Result();
 
+		$values = [];
+		foreach ($this->getValues($templateId, $templateParameters) as $key => $value)
+		{
+			$property = $templateParameters[$key] ?? ['Type' => FieldType::STRING];
+
+			if ($property['Type'] === FieldType::FILE)
+			{
+				if (!empty($value) && isset($value['name']))
+				{
+					$values[$key] = $value;
+					if (is_array($value['name']))
+					{
+						$values[$key] = [];
+						\CFile::ConvertFilesToPost($value, $values[$key]);
+					}
+				}
+
+				continue;
+			}
+
+			$values[$key] = $value;
+		}
+
 		$errors = [];
 		$result->setData([
 			'values' => \CBPWorkflowTemplateLoader::checkWorkflowParameters(
 				$templateParameters,
-				$this->getValues($templateId, $templateParameters),
+				$values,
 				$complexDocumentType,
 				$errors
 			),

@@ -347,16 +347,35 @@ class User extends \CBPRuntimeService
 
 			if ($fields[$fieldName]['Type'] === 'select')
 			{
-				$fieldData = Main\UserFieldTable::getFieldData($field['ID']);
+				$enum = $this->getUserFieldEnum($field['ID']);
 				$fields[$fieldName]['Options'] = array_combine(
-					array_column($fieldData['ENUM'], 'XML_ID'),
-					array_column($fieldData['ENUM'], 'VALUE'),
+					array_column($enum, 'XML_ID'),
+					array_column($enum, 'VALUE'),
 				);
-				$fields[$fieldName]['Settings'] = ['ENUM' => $fieldData['ENUM']];
+				$fields[$fieldName]['Settings'] = ['ENUM' => $enum];
 			}
 		}
 
 		return $fields;
+	}
+
+	private function getUserFieldEnum(int $fieldId): array
+	{
+		$enum = [];
+		$enumList = \CUserFieldEnum::getList(
+			[
+				'SORT' => 'ASC',
+			],
+			[
+				'USER_FIELD_ID' => $fieldId,
+			]
+		);
+		while ($row = $enumList->fetch())
+		{
+			$enum[] = $row;
+		}
+
+		return $enum;
 	}
 
 	public function extractUsersFromDepartment(int $departmentId, bool $recursive = false): ?array

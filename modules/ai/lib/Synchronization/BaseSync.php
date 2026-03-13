@@ -213,8 +213,8 @@ abstract class BaseSync implements SyncInterface
 			return;
 		}
 
-		$items = $this->getDataManager()::query()->setSelect(['ID'])->whereIn('CODE', $codes)->fetchAll();
-		foreach ($items as $item)
+		$res = $this->getDataManager()::query()->setSelect(['ID'])->whereIn('CODE', $codes)->exec();
+		while ($item = $res->fetch())
 		{
 			$this->delete($item['ID']);
 		}

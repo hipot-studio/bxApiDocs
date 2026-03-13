@@ -40,7 +40,7 @@ class NodeSettings extends Controller
 	)]
 	public function getAction(Item\Node $node): array
 	{
-		return $this->nodeSettingsRepository->getByNodeAndTypes($node->id)->getValues();
+		return $this->nodeSettingsRepository->getByNodesAndTypes($node->id)->getValues();
 	}
 
 	/**

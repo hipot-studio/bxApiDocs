@@ -861,6 +861,12 @@ class Chat
 					'SYSTEM' => 'Y',
 				]);
 
+				$kpi = new KpiManager($session->getData('ID'));
+				$kpi->refreshFirstMessageKpiSettings(
+					$config,
+					(int)$session->getData('OPERATOR_ID')
+				);
+
 				$result = true;
 			}
 		}

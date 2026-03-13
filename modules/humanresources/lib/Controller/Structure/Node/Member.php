@@ -17,6 +17,7 @@ use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\UserService;
 use Bitrix\HumanResources\Type\AccessibleItemType;
@@ -230,6 +231,8 @@ final class Member extends Controller
 		$result = [];
 		try
 		{
+			$userIds = PublicContainer::getUserDepartmentService()->filterEmployeeIds($userIds);
+			$membersToCreate = new Item\Collection\NodeMemberCollection();
 			foreach ($userIds as $userId)
 			{
 				$userId = (int)$userId;
@@ -245,9 +248,14 @@ final class Member extends Controller
 					true,
 					role: $role->id,
 				);
-				$this->nodeMemberRepository->create($member);
 
+				$membersToCreate->add($member);
 				$result['members'][] = $member;
+			}
+
+			if (!$membersToCreate->empty())
+			{
+				$this->nodeMemberRepository->createByCollection($membersToCreate);
 			}
 		}
 		catch (CreationFailedException $e)

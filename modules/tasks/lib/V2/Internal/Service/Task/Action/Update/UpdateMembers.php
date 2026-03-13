@@ -11,9 +11,11 @@ class UpdateMembers
 {
 	use ConfigTrait;
 
-	public function __invoke(array $fields, array $fullTaskData, array $changes): void
+	public function __invoke(array $fields, array $fullTaskData, array $changes): array
 	{
 		$members = new Member($this->config->getUserId(), (int)$fullTaskData['ID']);
 		$members->set($fields, $changes);
+
+		return $members->getLastInsertMembers();
 	}
 }

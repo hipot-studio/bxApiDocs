@@ -82,7 +82,7 @@ class MessageProvider extends AbstractFeatureProvider
 					and DATE_CREATE >= '" . $from->format('Y-m-d') . "'
 					and DATE_CREATE < '" . $to->format('Y-m-d') . "'
 			")->fetch();
-			$partCount = (int)$result['selectedcount'];
+			$partCount = (int)($result['selectedcount'] ?? 0);
 			if (count($chatIds) >= 10)
 			{
 				$lastId = (int)array_pop($chatIds);

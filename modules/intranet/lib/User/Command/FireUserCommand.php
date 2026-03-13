@@ -10,6 +10,7 @@ use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
 class FireUserCommand extends AbstractCommand
@@ -47,9 +48,17 @@ class FireUserCommand extends AbstractCommand
 
 			return $result;
 		}
-		catch (UpdateFailedException)
+		catch (UpdateFailedException $exception)
 		{
-			return $result->addError(new Error('Activity update failed'));
+			if (trim($exception->getMessage()) === 'FIRST_ADMIN_UPDATE_FORBIDDEN')
+			{
+				return $result->addError(new Error(
+					Loc::getMessage('INTRANET_USER_COMMAND_FIRE_FIRST_ADMIN_UPDATE_FORBIDDEN_ERROR'),
+					'FIRST_ADMIN_UPDATE_FORBIDDEN')
+				);
+			}
+
+			return $result->addErrors($exception->getErrors());
 		}
 	}
 

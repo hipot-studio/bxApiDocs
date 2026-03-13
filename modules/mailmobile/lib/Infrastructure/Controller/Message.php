@@ -337,46 +337,41 @@ class Message extends Controller
 					}
 				}
 
-				foreach($newCurrentFilesIds as $fileId)
-				{
-					$fileArray = CFile::getFileArray($fileId);
-
-					if ($fileArray)
+					foreach($newCurrentFilesIds as $fileId)
 					{
-						$filePath = CFile::GetPath($fileId);
-						if ($filePath)
+						$file = CFile::MakeFileArray($fileId);
+
+						if (!$file || empty($file['tmp_name']))
 						{
-							$absolutePath = $_SERVER['DOCUMENT_ROOT'] . $filePath;
-							if (file_exists($absolutePath))
-							{
-								$fileSize = filesize($absolutePath);
-								if ($fileSize > 0)
-								{
-									$totalSize += $fileSize;
-
-									$contentId = sprintf(
-										'bxacid.%s@%s.mail',
-										hash('crc32b', $fileId . $fileSize . $fileArray['ORIGINAL_NAME']),
-										hash('crc32b', $hostname)
-									);
-
-									$attachments[] = [
-										'ID' => $contentId,
-										'NAME' => $fileArray['ORIGINAL_NAME'] ?? $fileArray['name'],
-										'PATH' => $absolutePath,
-										'CONTENT_TYPE' => $fileArray['CONTENT_TYPE'],
-									];
-
-									$outgoingBody = preg_replace(
-										sprintf('/(https?:\/\/)?bxacid:n?%u/i', $fileId),
-										sprintf('cid:%s', $contentId),
-										$outgoingBody
-									);
-								}
-							}
+							continue;
 						}
+
+						$fileSize = $file['size'] ?? 0;
+						if ($fileSize <= 0)
+						{
+							continue;
+						}
+
+						$totalSize += $fileSize;
+						$contentId = sprintf(
+							'bxacid.%s@%s.mail',
+							hash('crc32b', ($file['external_id'] ?? $fileId) . $fileSize . $file['name']),
+							hash('crc32b', $hostname)
+						);
+
+						$attachments[] = [
+							'ID' => $contentId,
+							'NAME' => $file['name'],
+							'PATH' => $file['tmp_name'],
+							'CONTENT_TYPE' => $file['type'],
+						];
+
+						$outgoingBody = preg_replace(
+							sprintf('/(https?:\/\/)?bxacid:n?%u/i', $fileId),
+							sprintf('cid:%s', $contentId),
+							$outgoingBody
+						);
 					}
-				}
 			}
 
 			$pendingFiles = $uploader->getPendingFiles($pendingFilesIds);
@@ -389,32 +384,16 @@ class Message extends Controller
 				}
 
 				$fileId = $pendingFile->getFileId();
-				$fileArray = CFile::getFileArray($fileId);
+				$file = CFile::MakeFileArray($fileId);
 
-				if (!$fileArray)
+				if (!$file || empty($file['tmp_name']))
 				{
 					$pendingFile->remove();
 
 					continue;
 				}
 
-				$filePath = CFile::GetPath($fileId);
-				if (!$filePath)
-				{
-					$pendingFile->remove();
-
-					continue;
-				}
-
-				$absolutePath = $_SERVER['DOCUMENT_ROOT'] . $filePath;
-				if (!file_exists($absolutePath))
-				{
-					$pendingFile->remove();
-
-					continue;
-				}
-
-				$fileSize = filesize($absolutePath);
+				$fileSize = $file['size'] ?? 0;
 				if ($fileSize <= 0)
 				{
 					$pendingFile->remove();
@@ -426,15 +405,15 @@ class Message extends Controller
 
 				$contentId = sprintf(
 					'bxacid.%s@%s.mail',
-					hash('crc32b', $fileId . $fileSize . $fileArray['ORIGINAL_NAME']),
+					hash('crc32b', ($file['external_id'] ?? $fileId) . $fileSize . $file['name']),
 					hash('crc32b', $hostname)
 				);
 
 				$attachments[] = [
 					'ID' => $contentId,
-					'NAME' => $fileArray['ORIGINAL_NAME'],
-					'PATH' => $absolutePath,
-					'CONTENT_TYPE' => $fileArray['CONTENT_TYPE'],
+					'NAME' => $file['name'],
+					'PATH' => $file['tmp_name'],
+					'CONTENT_TYPE' => $file['type'],
 				];
 
 				$outgoingBody = preg_replace(

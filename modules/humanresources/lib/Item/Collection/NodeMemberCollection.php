@@ -10,6 +10,24 @@ use Bitrix\HumanResources\Item;
 class NodeMemberCollection extends BaseCollection
 {
 	/**
+	 * @param array $items
+	 * @return static
+	 */
+	public static function wakeUp(array $items): static
+	{
+		$collection = new static();
+		foreach ($items as $item)
+		{
+			if (is_array($item))
+			{
+				$collection->add(Item\NodeMember::wakeUp($item));
+			}
+		}
+
+		return $collection;
+	}
+
+	/**
 	 * @return list<int>
 	 */
 	public function getNodeIds(): array
@@ -18,6 +36,17 @@ class NodeMemberCollection extends BaseCollection
 			$this->map(
 				static fn(Item\NodeMember $member) => $member->nodeId,
 			),
+		);
+	}
+
+	public function getUniqueNodeIds(): array
+	{
+		return array_values(
+			array_unique(
+				$this->map(
+					static fn(Item\NodeMember $member) => $member->nodeId,
+				),
+			)
 		);
 	}
 

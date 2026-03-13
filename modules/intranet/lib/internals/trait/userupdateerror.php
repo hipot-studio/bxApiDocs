@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Internals\Trait;
 
+use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 
@@ -13,7 +14,7 @@ trait UserUpdateError
 	 * @param string $lastError LAST_ERROR
 	 * @return Error[]
 	 */
-	protected function getErrorsFromUpdateLastError(string $lastError): array
+	protected function getUpdateErrorsFromLastError(string $lastError): array
 	{
 		return array_map(fn($errorMassage) => new Error($errorMassage), explode('<br>', $lastError));
 	}
@@ -24,10 +25,17 @@ trait UserUpdateError
 	 * @param string $lastError LAST_ERROR
 	 * @return ErrorCollection
 	 */
-	protected function getErrorCollectionFromUpdateLastError(string $lastError): ErrorCollection
+	protected function getUpdateErrorCollectionFromLastError(string $lastError): ErrorCollection
 	{
 		return new ErrorCollection(
-			$this->getErrorsFromUpdateLastError($lastError),
+			$this->getUpdateErrorsFromLastError($lastError),
+		);
+	}
+
+	protected function getUpdateExceptionFromLastError(string $lastError): UpdateFailedException
+	{
+		return new UpdateFailedException(
+			$this->getUpdateErrorCollectionFromLastError($lastError),
 		);
 	}
 }

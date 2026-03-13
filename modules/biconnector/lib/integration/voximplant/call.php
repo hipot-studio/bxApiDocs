@@ -107,6 +107,12 @@ class Call
 					'FIELD_NAME' => 'S.CALL_DURATION',
 					'FIELD_TYPE' => 'int',
 				],
+				//RECORD_DURATION int(11) NULL,
+				'RECORD_DURATION' => [
+					'IS_METRIC' => 'Y',
+					'FIELD_NAME' => 'S.RECORD_DURATION',
+					'FIELD_TYPE' => 'int',
+				],
 				//CALL_START_DATE datetime not null,
 				'CALL_START_TIME' => [
 					'IS_METRIC' => 'N',

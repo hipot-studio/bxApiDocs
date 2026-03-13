@@ -190,7 +190,7 @@ class MailsFoldersManager extends SyncInternalManager
 
 	private function deleteMessages($messagesToDelete, $mailbox)
 	{
-		if (empty($messagesToDelete))
+		if (empty($messagesToDelete) || !$this->mailboxHelper)
 		{
 			return new Main\Result();
 		}
@@ -227,7 +227,7 @@ class MailsFoldersManager extends SyncInternalManager
 
 	private function moveMailsByImap($messagesToMove, $folder)
 	{
-		if (empty($messagesToMove))
+		if (empty($messagesToMove) || !$this->mailboxHelper)
 		{
 			return new Main\Result();
 		}
@@ -238,6 +238,11 @@ class MailsFoldersManager extends SyncInternalManager
 	private function processSyncMovedMessages($folderCurrentNameEncoded)
 	{
 		$folderCurrentName = base64_decode($folderCurrentNameEncoded);
+		if (!$this->mailboxHelper || $folderCurrentName === '')
+		{
+			return;
+		}
+
 		$this->mailboxHelper->syncDir($folderCurrentName);
 
 		Mail\MailMessageUidTable::updateList(
@@ -259,9 +264,14 @@ class MailsFoldersManager extends SyncInternalManager
 		{
 			$mailManager = new static($mailboxId, []);
 			$mailManager->setMailboxUserId($mailboxUserId);
+			if (!$mailManager->mailboxHelper)
+			{
+				return '';
+			}
+
 			$mailManager->processSyncMovedMessages($folderName);
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 		}
 

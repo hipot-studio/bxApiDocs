@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\DTO;
 
+/**
+ * @internal
+ */
 class TrackFileRequest extends Hydrator
 {
 	public string $callUuid = '';

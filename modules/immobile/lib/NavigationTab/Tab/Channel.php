@@ -30,7 +30,7 @@ class Channel extends BaseRecent
 
 	public function getComponentCode(): string
 	{
-		return 'im.channel.messenger';
+		return '';
 	}
 
 	protected function getTabTitle(): ?string
@@ -45,13 +45,7 @@ class Channel extends BaseRecent
 
 	protected function getParams(): array
 	{
-		return [
-			'TAB_CODE' => 'chats.channel',
-			'COMPONENT_CODE' => $this->getComponentCode(),
-			'MESSAGES' => [
-				'COMPONENT_TITLE' => $this->getTitle(),
-			],
-		];
+		return [];
 	}
 
 	protected function getWidgetSettings(): array

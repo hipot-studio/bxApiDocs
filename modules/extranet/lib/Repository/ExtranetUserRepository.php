@@ -296,8 +296,8 @@ class ExtranetUserRepository implements Contract\Repository\ExtranetUserReposito
 	{
 		$isRealUser = (bool) UserTable::query()
 			->setSelect(['ID'])
+			->where('REAL_USER', 'expr', true)
 			->addFilter('=ID', $id)
-			->addFilter('=IS_REAL_USER', 'Y')
 			->addFilter('GROUPS.GROUP_ID', \CExtranet::GetExtranetUserGroupID())
 			->setLimit(1)
 			->exec()
@@ -319,7 +319,7 @@ class ExtranetUserRepository implements Contract\Repository\ExtranetUserReposito
 		return (bool) UserTable::query()
 			->setSelect(['ID'])
 			->addFilter('=ID', $id)
-			->addFilter('=IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->setLimit(1)
 			->exec()
 			->fetch()

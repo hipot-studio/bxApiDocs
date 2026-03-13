@@ -42,12 +42,13 @@ class Ids
 	private static function putIntoCache(string $id, $data): void
 	{
 		$cacheId = implode('_', [self::$cacheId, $id]);
+		$cacheObj = self::getCacheObject();
 		if (
-			self::getCacheObject()->InitCache(self::$cacheTtl, $cacheId, self::$cacheDir)
-			&& self::getCacheObject()->StartDataCache()
+			!$cacheObj->InitCache(self::$cacheTtl, $cacheId, self::$cacheDir)
+			&& $cacheObj->StartDataCache()
 		)
 		{
-			self::getCacheObject()->EndDataCache($data);
+			$cacheObj->EndDataCache($data);
 		}
 	}
 

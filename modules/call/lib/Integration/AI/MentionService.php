@@ -4,6 +4,10 @@ namespace Bitrix\Call\Integration\AI;
 
 use Bitrix\Im\User;
 
+/**
+ * @internal
+ */
+
 final class MentionService
 {
 	private static ?MentionService $service = null;
@@ -148,7 +152,7 @@ final class MentionService
 
 	public function loadMentionsForCall(int $callId): void
 	{
-		$call = \Bitrix\Im\Call\Registry::getCallWithId($callId);
+		$call = \Bitrix\Call\Call\Registry::getCallWithId($callId);
 		$users = array_unique(array_merge(
 			$call->getUsers(),
 			$call->getAssociatedEntity()?->getUsers() ?? []

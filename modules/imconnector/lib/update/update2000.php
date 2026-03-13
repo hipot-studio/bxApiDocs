@@ -8,6 +8,9 @@ use Bitrix\Main\ORM;
 use Bitrix\Rest;
 use Bitrix\ImConnector;
 
+/**
+ * @internal
+ */
 final class Update2000 extends Main\Update\Stepper
 {
 	private const PORTION = 30;

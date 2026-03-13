@@ -31,8 +31,6 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			$arParams = [];
 		}
 
-		$arParams['NEED_SHOW_SETTINGS'] = $this->request->get('needShowSettings') === 'Y';
-
 		return parent::onPrepareComponentParams($arParams);
 	}
 
@@ -149,17 +147,29 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 				'ID' => 'MARKET',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_MARKET_MSGVER_1'),
 				'ON_CLICK' => "BX.BIConnector.ApacheSupersetMarketManager.openMarket({$isMarketExists}, '{$marketUrl}', 'menu')",
-				'IS_DISABLED' => false,
-			],
-			[
-				'ID' => 'ORDER_DASHBOARD',
-				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_ORDER'),
-				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.requestIntegrationFormOpen()',
-				'IS_DISABLED' => false,
 			],
 		];
 
-		if (!Feature::isExternalEntitiesEnabled())
+		$isFeatureEnabled = Feature::isBuilderEnabled();
+		if ($isFeatureEnabled)
+		{
+			$menuItems[] = [
+				'ID' => 'ORDER_DASHBOARD',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_ORDER'),
+				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.requestIntegrationFormOpen()',
+			];
+		}
+
+		if (!$isFeatureEnabled)
+		{
+			$menuItems[] = [
+				'ID' => 'BI_ANALYTICS',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_ANALYTICS'),
+				'ON_CLICK' => "top.BX.UI.InfoHelper.show('limit_crm_BI_constructor')",
+				'IS_LOCKED' => true,
+			];
+		}
+		else if (!Feature::isExternalEntitiesEnabled())
 		{
 			$menuItems[] = [
 				'ID' => 'BI_ANALYTICS',
@@ -170,7 +180,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 					JS,
 			];
 		}
-		elseif (
+		else if (
 			AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG)
 			&& SupersetInitializer::isSupersetExist()
 		)
@@ -179,16 +189,18 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 				'ID' => 'BI_ANALYTICS',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_ANALYTICS'),
 				'ON_CLICK' => 'BX.BIConnector.DashboardManager.openDatasetListSlider()',
-				'IS_DISABLED' => false,
+				'IS_LOCKED' => false,
 			];
 		}
 
-		$menuItems[] = [
-			'ID' => 'FEEDBACK',
-			'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_FEEDBACK'),
-			'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.feedbackFormOpen()',
-			'IS_DISABLED' => false,
-		];
+		if ($isFeatureEnabled)
+		{
+			$menuItems[] = [
+				'ID' => 'FEEDBACK',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_FEEDBACK'),
+				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.feedbackFormOpen()',
+			];
+		}
 
 		$settingsItems = [];
 		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_ACCESS))
@@ -196,14 +208,26 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			$settingsItems[] = [
 				'ID' => 'COMMON_SETTINGS',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_COMMON_SETTINGS'),
-				'ON_CLICK' => 'BX.BIConnector.DashboardManager.openSettingsSlider()',
+				'ON_CLICK' => $isFeatureEnabled
+					? 'BX.BIConnector.DashboardManager.openSettingsSlider()'
+					: "top.BX.UI.InfoHelper.show('limit_crm_BI_constructor')",
+				'IS_LOCKED' => !$isFeatureEnabled,
 			];
 		}
 
 		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
 		{
 			$menuTitle = Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_RIGHTS_SETTINGS');
-			if (!Feature::isBiBuilderRightsEnabled())
+			if (!$isFeatureEnabled)
+			{
+				$settingsItems[] = [
+					'ID' => 'RIGHTS_SETTINGS',
+					'TEXT' => $menuTitle,
+					'IS_LOCKED' => true,
+					'ON_CLICK' => "top.BX.UI.InfoHelper.show('limit_crm_BI_constructor')",
+				];
+			}
+			else if (!Feature::isBiBuilderRightsEnabled())
 			{
 				$settingsItems[] = [
 					'ID' => 'RIGHTS_SETTINGS',
@@ -259,6 +283,12 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 
 	private function getDashboardsForTopMenu(): array
 	{
+		$isFeatureEnabled = Feature::isBuilderEnabled();
+		if (!$isFeatureEnabled)
+		{
+			return [];
+		}
+
 		$userId = \Bitrix\Main\Engine\CurrentUser::get()->getId();
 		if (!$userId)
 		{
@@ -286,7 +316,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 
 		foreach ($sortedDashboards as $dashboard)
 		{
-			$url = (new UrlParameter\Service($dashboard))->getEmbeddedUrl([], ['openFrom' => 'menu']);
+			$url = (new UrlParameter\Service($dashboard))->getEmbeddedUrl([], ['openFrom' => 'top_menu']);
 			$result[] = [
 				'ID' => "DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),

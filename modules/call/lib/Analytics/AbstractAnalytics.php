@@ -2,9 +2,12 @@
 
 namespace Bitrix\Call\Analytics;
 
-use Bitrix\Im\Call\Call;
+use Bitrix\Call\Call;
 use Bitrix\Main\Application;
 
+/**
+ * @internal
+ */
 abstract class AbstractAnalytics
 {
 	protected Call $call;

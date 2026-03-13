@@ -2,13 +2,18 @@
 
 use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
 use Bitrix\Intranet\Internal\Factory\Message\CollabJoinMessageFactory;
+use Bitrix\Intranet\Internal\Repository\IntranetUserRepository;
 use Bitrix\Intranet\Repository\UserRepository;
+use Bitrix\Intranet\Public\Command;
+use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Intranet\Service;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Event;
 use Bitrix\Intranet\Internals\InvitationTable;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Intranet\Internal\Integration;
+use Bitrix\Main\Repository\Exception\PersistenceException;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -1004,66 +1009,26 @@ class CIntranetEventHandlers
 			$departmentRepository->unsetHead($department->getId());
 		}
 
+		try {
+			ServiceLocator::getInstance()->get(IntranetUserRepository::class)?->deleteByUserId($USER_ID);
+		}
+		catch (PersistenceException)
+		{
+			return;
+		}
 	}
 
 	public static function OnAfterUserInitialize($userId)
 	{
-		if (!IsModuleInstalled('bitrix24'))
+		$initializeCommand = new Command\User\InitializeUserCommand($userId);
+
+		try
 		{
-			$dbUser = CUser::GetByID($userId);
-			if ($arUser = $dbUser->Fetch())
-			{
-				CIntranetEventHandlers::OnAfterUserAdd($arUser);
-			}
+			$initializeCommand->run();
 		}
-
-		$res = InvitationTable::query()
-			->setFilter([
-				'USER_ID' => $userId,
-				'INITIALIZED' => 'N'
-			])
-			->setSelect(['ID', 'INVITATION_TYPE', 'IS_MASS', 'IS_DEPARTMENT', 'IS_INTEGRATOR', 'IS_REGISTER'])
-			->setLimit(1)
-			->setOrder(['DATE_CREATE' => 'DESC']);
-
-		$invitationFields = $res->fetch();
-
-		if ($invitationFields)
-		{
-			InvitationTable::update($invitationFields['ID'], [
-				'INITIALIZED' => 'Y'
-			]);
-		}
-
-		$user = (new UserRepository())->getUserById($userId);
-
-		if (!$user)
+		catch (CommandValidationException)
 		{
 			return;
-		}
-
-		if ($user->isCollaber())
-		{
-			static::sendCollabMail($user);
-		}
-
-		(new \Bitrix\Main\Event('intranet', 'onUserFirstInitialization', [
-			'invitationFields' => $invitationFields,
-			'userId' => $userId
-		]))->send();
-	}
-
-	private static function sendCollabMail(Bitrix\Intranet\Entity\User $user): void
-	{
-		$userCollab = (new CollabProviderData())->getUserCollabCollection($user);
-		foreach ($userCollab as $collab)
-		{
-			(new CollabJoinMessageFactory(
-				$user,
-				$collab
-			))
-				->createEmailEvent()
-				->sendImmediately();
 		}
 	}
 

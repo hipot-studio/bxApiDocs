@@ -10,7 +10,8 @@ class DtoExample
 		public readonly array $addable,
 		public readonly array $editable,
 		public readonly array $sortable,
-		public readonly array $methodRequiredFields,
+		public readonly array $fieldsRequiredByMethods,
+		public readonly array $allMethodsRequiredFields,
 	) {
 	}
 }

@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Import;
 
+use Bitrix\BIConnector\Access\Service\SystemGroupLocalizationService;
 use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
@@ -13,17 +14,33 @@ use CUser;
 final class DashboardReimportService extends Stepper
 {
 	private const BATCH_SIZE = 2;
+	private const MAX_ATTEMPTS = 3;
+
 	protected static $moduleId = 'biconnector';
 
 	public static function runForAllInstalled(): void
 	{
 		$appCodes = self::collectInstalledAppCodes();
+
+		self::updateSystemGroupNames();
+		self::updateSystemDashboardsNames();
+
 		if (empty($appCodes))
 		{
 			return;
 		}
 
 		self::bind(1);
+	}
+
+	private static function updateSystemGroupNames(): void
+	{
+		SystemGroupLocalizationService::update(CultureFormatter::getLanguageCode());
+	}
+
+	private static function updateSystemDashboardsNames(): void
+	{
+		SystemDashboardManager::updateNotInstalledTitles();
 	}
 
 	private static function collectInstalledAppCodes(): array
@@ -73,20 +90,44 @@ final class DashboardReimportService extends Stepper
 			$option['steps'] = 0;
 			$option['count'] = count($appCodes);
 			$option['appCodes'] = $appCodes;
+			$option['attempts'] = [];
 		}
 
 		$currentSteps = 0;
+		$processedInRun = 0;
+		$marketDashboardManagerInstance = MarketDashboardManager::getInstance();
+		$queueLimitPerRun = count($option['appCodes']);
 
-		while (!empty($option['appCodes']) && $currentSteps < self::BATCH_SIZE)
+		while (!empty($option['appCodes']) && $currentSteps < self::BATCH_SIZE && $processedInRun < $queueLimitPerRun)
 		{
 			$appCode = array_shift($option['appCodes']);
-			MarketDashboardManager::getInstance()->installApplication($appCode);
+			$currentAttempts = $option['attempts'][$appCode] ?? 0;
+			$installResult = $marketDashboardManagerInstance->installApplication($appCode);
 
-			$currentSteps++;
+			if ($installResult->isSuccess())
+			{
+				$currentSteps++;
+				unset($option['attempts'][$appCode]);
+			}
+			else
+			{
+				$currentAttempts++;
+				if ($currentAttempts < self::MAX_ATTEMPTS)
+				{
+					$option['attempts'][$appCode] = $currentAttempts;
+					$option['appCodes'][] = $appCode;
+				}
+				else
+				{
+					unset($option['attempts'][$appCode]);
+				}
+			}
+
+			$processedInRun++;
 		}
 
 		$option['steps'] += $currentSteps;
 
-		return $option["steps"] >= $option["count"] ? self::FINISH_EXECUTION : self::CONTINUE_EXECUTION;
+		return empty($option['appCodes']) ? self::FINISH_EXECUTION : self::CONTINUE_EXECUTION;
 	}
 }

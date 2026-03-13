@@ -13,6 +13,7 @@ class Prompt
 	private string $code;
 	private array $markers;
 	private ?Schema $schema = null;
+	private ?int $cost = null;
 	private float $temperature;
 
 	public function __construct(string $code)
@@ -77,5 +78,17 @@ class Prompt
 	public function getTemperature(): float
 	{
 		return $this->temperature;
+	}
+
+	public function setCost(int $cost): self
+	{
+		$this->cost = $cost;
+
+		return $this;
+	}
+
+	public function getCost(): ?int
+	{
+		return $this->cost;
 	}
 }

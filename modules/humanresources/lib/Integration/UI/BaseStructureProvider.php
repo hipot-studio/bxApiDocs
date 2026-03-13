@@ -9,6 +9,7 @@ use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
 use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
 use Bitrix\HumanResources\Builder\Structure\Sort\NodeSort;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
+use Bitrix\HumanResources\Enum\ConditionMode;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
@@ -175,12 +176,30 @@ abstract class BaseStructureProvider extends BaseProvider
 
 		$childNodeByIds
 			= NodeDataBuilder::createWithFilter(
-			new NodeFilter(
-				idFilter: idFilter::fromIds($bottomNodesIds),
-				direction: Direction::CHILD,
-				depthLevel: DepthLevel::FIRST,
+				new NodeFilter(
+					idFilter: idFilter::fromIds($bottomNodesIds),
+					direction: Direction::CHILD,
+					depthLevel: DepthLevel::FIRST,
+				)
 			)
-		)
+			->get()
+		;
+
+		return !is_null($childNodeByIds);
+	}
+
+	protected function areOtherNodesExists(NodeCollection $fetchedNodes): bool
+	{
+		$fetchedNodesIds = $fetchedNodes->getIds();
+		if (empty($fetchedNodesIds))
+		{
+			return false;
+		}
+
+		$childNodeByIds
+			= NodeDataBuilder::createWithFilter(
+				new NodeFilter(idFilter::fromIds($fetchedNodesIds, ConditionMode::Exclusion))
+			)
 			->get()
 		;
 

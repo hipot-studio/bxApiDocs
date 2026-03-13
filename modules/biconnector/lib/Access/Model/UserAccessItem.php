@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Access\Model;
 use Bitrix\BIConnector\Access\Permission\PermissionTable;
 use Bitrix\BIConnector\Access\Role\RoleRelationTable;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
+use Bitrix\BIConnector\Access\Role\RoleUtil;
 use Bitrix\Main;
 
 final class UserAccessItem extends Main\Access\User\UserModel
@@ -146,5 +147,61 @@ final class UserAccessItem extends Main\Access\User\UserModel
 		$currentUser = Main\Engine\CurrentUser::get();
 
 		return $this->isAdmin() || $currentUser->canDoOperation('bitrix24_config');
+	}
+
+	/**
+	 * Fills default group access permissions for roles that have edit rights.
+	 *
+	 * @param int $groupId
+	 *
+	 * @return bool
+	 *
+	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 */
+	public function fillDefaultGroupAccess(int $groupId): bool
+	{
+		$roles = $this->getRoles();
+
+		if (empty($roles))
+		{
+			return false;
+		}
+
+		$query = PermissionTable::query();
+
+		$roleEditableRights = $query
+			->addSelect('ROLE_ID')
+			->addSelect('VALUE')
+			->whereIn('ROLE_ID', $roles)
+			->where('PERMISSION_ID', PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS)
+			->where('VALUE', 1)
+			->exec()
+		;
+
+		$accessibleRoles = array_column($roleEditableRights->fetchAll(), 'ROLE_ID');
+		if (empty($accessibleRoles))
+		{
+			return false;
+		}
+
+		$permissionGroupId = PermissionDictionary::getDashboardGroupPermissionId($groupId);
+		$defaultPermissionValues = PermissionDictionary::getDefaultPermissionGroupValues();
+
+		$dashboardPermissions = [];
+		foreach ($accessibleRoles as $roleId)
+		{
+			foreach ($defaultPermissionValues as $defaultValue)
+			{
+				$dashboardPermissions[] = [
+					'ROLE_ID' => $roleId,
+					'PERMISSION_ID' => $permissionGroupId,
+					'VALUE' => $defaultValue,
+				];
+			}
+		}
+
+		RoleUtil::insertPermissions($dashboardPermissions);
+
+		return true;
 	}
 }

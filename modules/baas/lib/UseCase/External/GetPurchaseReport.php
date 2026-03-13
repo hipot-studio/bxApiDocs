@@ -9,8 +9,7 @@ use \Bitrix\Baas;
 
 class GetPurchaseReport extends BaseClientAction
 {
-	protected string $packageCode;
-	protected string $purchaseCode;
+	protected string $purchasedPackageCode;
 	protected ?string $serviceCode;
 
 	public function __construct(
@@ -18,8 +17,7 @@ class GetPurchaseReport extends BaseClientAction
 	)
 	{
 		parent::__construct($request);
-		$this->packageCode = $request->packageCode;
-		$this->purchaseCode = $request->purchaseCode;
+		$this->purchasedPackageCode = $request->purchasedPackageCode;
 		$this->serviceCode = $request->serviceCode;
 	}
 
@@ -32,8 +30,7 @@ class GetPurchaseReport extends BaseClientAction
 	protected function run(): Response\GetPurchaseReportResult
 	{
 		$request = [
-			'packageCode' => $this->packageCode,
-			'purchaseCode' => $this->purchaseCode,
+			'purchasedPackageCode' => $this->purchasedPackageCode,
 			'serviceCode' => $this->serviceCode,
 		];
 

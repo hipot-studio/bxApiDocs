@@ -9,6 +9,7 @@ use Bitrix\Im\Model\StickerTable;
 use Bitrix\Im\V2\Analytics\StickerAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Integration\UI\Sticker\PendingFileCollection;
 use Bitrix\Im\V2\Message\Sticker\CustomPacks\UserPack;
 use Bitrix\Im\V2\Message\Sticker\Recent\RecentCollection;
 use Bitrix\Im\V2\Message\Sticker\CustomPacks\PackNameManager;
@@ -111,7 +112,7 @@ class CustomPacks implements StickerPacks
 		return UserPack::getInstance()->isPackAdded($packId);
 	}
 
-	public function addPack(array $fileUuidMap, ?string $packName): Result
+	public function addPack(PendingFileCollection $pendingFileCollection, ?string $packName): Result
 	{
 		$result = $this->checkUserPackLimit();
 		if (!$result->isSuccess())
@@ -146,15 +147,15 @@ class CustomPacks implements StickerPacks
 			$dateCreate
 		);
 
-		if (!empty($fileUuidMap))
+		if (!empty($pendingFileCollection->getFileMap()))
 		{
-			$result = $this->addStickers($fileUuidMap, $packId, false);
+			$result = $this->addStickers($pendingFileCollection, $packId, false);
 		}
 
 		$pack = $this->getPackById($packId);
 		if ($pack !== null)
 		{
-			(new StickerPackAdd($pack, $fileUuidMap))->send();
+			(new StickerPackAdd($pack, $pendingFileCollection->getFileMap()))->send();
 			$this->analytics->addAddPack($this->getType());
 		}
 
@@ -194,7 +195,7 @@ class CustomPacks implements StickerPacks
 		return $result->setResult($pack);
 	}
 
-	public function addStickers(array $fileUuidMap, int $packId, bool $sendPush = true): Result
+	public function addStickers(PendingFileCollection $pendingFileCollection, int $packId, bool $sendPush = true): Result
 	{
 		$result = new Result();
 
@@ -214,7 +215,7 @@ class CustomPacks implements StickerPacks
 
 		$newStickers = [];
 
-		foreach (array_keys($fileUuidMap) as $fileId)
+		foreach (array_keys($pendingFileCollection->getFileMap()) as $fileId)
 		{
 			$newStickers[] = [
 				'PACK_ID' => $packId,
@@ -230,6 +231,7 @@ class CustomPacks implements StickerPacks
 		}
 
 		StickerTable::multiplyInsertWithoutDuplicate($newStickers);
+		$pendingFileCollection->makePersistent($newStickers);
 		$this->cleanCache($packId);
 
 		if ($sendPush)

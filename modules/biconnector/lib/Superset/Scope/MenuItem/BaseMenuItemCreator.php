@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset\Scope\MenuItem;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Service;
@@ -93,15 +94,32 @@ abstract class BaseMenuItemCreator
 		return true;
 	}
 
+	protected function isAvailableByTariff(): bool
+	{
+		return Feature::isBuilderEnabled();
+	}
+
+	abstract protected function getOpenFormCode(): string;
+
+	protected function getOpenFrom(): string
+	{
+		return 'menu_' . $this->getOpenFormCode();
+	}
+
 	protected function createDashboardOpenEventFromMenu(
 		SupersetDashboard $dashboard,
 		array $params = [],
 	): string
 	{
+		if (!$this->isAvailableByTariff())
+		{
+			return 'top.BX.UI.InfoHelper.show("limit_crm_BI_constructor")';
+		}
+
 		$url = $this->getDetailUrl(
 			$dashboard,
 			$params,
-			['openFrom' => 'menu'],
+			['openFrom' => $this->getOpenFrom()],
 		);
 
 		return "window.open(`{$url}`, '_blank');";

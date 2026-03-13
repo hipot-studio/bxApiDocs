@@ -3,21 +3,26 @@
 namespace Bitrix\Call\Track\Downloader;
 
 use Bitrix\Call\Analytics\FollowUpAnalytics;
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Main\IO;
 use Bitrix\Main\Loader;
 use Bitrix\Call;
 use Bitrix\Call\Track;
+use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 
 /**
  * Unified agent for track file downloading
+ *
+ * @internal
  */
 class DownloadAgent
 {
-	private const MAX_RETRY_COUNT = 3;
+	private const MAX_RETRY_COUNT = 10;
 	private const SYNC_MAX_RETRIES = 5;
+	private const NETWORK_ERROR_DELAY = 300;
+	private const NETWORK_ERROR_DELAY_EXTENDED = 600;
 
 	/**
 	 * Schedule download agent for track
@@ -73,16 +78,18 @@ class DownloadAgent
 	 * Unified agent entry point
 	 *
 	 * @param int $trackId Track ID
-	 * @param int $retryCount Retry counter (0-3)
+	 * @param int $retryCount Retry counter (0-10)
 	 * @param int $expectedBytes Expected file size (>0 means resume mode)
 	 * @param int $syncRetry Sync wait counter (0-5)
+	 * @param int $pauseUntil Unix timestamp until which the agent should not execute (0 = no pause)
 	 * @return string Agent name for reschedule or '' to stop
 	 */
 	public static function run(
 		int $trackId,
 		int $retryCount = 0,
 		int $expectedBytes = 0,
-		int $syncRetry = 0
+		int $syncRetry = 0,
+		int $pauseUntil = 0
 	): string
 	{
 		if (!Loader::includeModule('call'))
@@ -92,6 +99,12 @@ class DownloadAgent
 
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
+
+		if ($pauseUntil > 0 && \time() < $pauseUntil)
+		{
+			$log && $logger->info("DownloadAgent::run: Paused until " . date('c', $pauseUntil) . ". TrackId: {$trackId}");
+			return self::buildAgentName($trackId, $retryCount, $expectedBytes, $syncRetry, $pauseUntil);
+		}
 
 		$log && $logger->info(
 			"DownloadAgent::run: Started. TrackId: {$trackId}, "
@@ -167,7 +180,7 @@ class DownloadAgent
 					event: 'download_agent_in_progress_' . $trackId
 				);
 
-			return self::buildAgentName($trackId, 0, $downloadedBytes, 0);
+			return self::buildAgentName($trackId, 0, $downloadedBytes, 0, 0);
 		}
 
 		if ($result->isSuccess())
@@ -190,20 +203,49 @@ class DownloadAgent
 			. "Errors: " . implode('; ', $result->getErrorMessages())
 		);
 
-		if ($retryCount < self::MAX_RETRY_COUNT)
+		if ($retryCount <= self::MAX_RETRY_COUNT)
 		{
 			$nextRetry = $retryCount + 1;
-			$log && $logger->info("DownloadAgent::run: Retry #{$nextRetry}. TrackId: {$trackId}");
 
-			(new FollowUpAnalytics($call))
-				->sendTelemetry(
-					source: null,
-					status: 'error',
-					event: 'download_agent_retried_on_error_' . $trackId,
-					error: $result->getError()
-				);
+			$isNetworkError = false;
+			foreach ($result->getErrors() as $error)
+			{
+				if ($error->getCode() === TrackError::NETWORK_ERROR)
+				{
+					$isNetworkError = true;
+					break;
+				}
+			}
 
-			return self::buildAgentName($trackId, $nextRetry, 0, 0);
+			if ($isNetworkError)
+			{
+				$delay = $nextRetry > 2 ? self::NETWORK_ERROR_DELAY_EXTENDED : self::NETWORK_ERROR_DELAY;
+				$pauseUntil = time() + $delay;
+
+				$log && $logger->info("DownloadAgent::run: Network error, pausing for {$delay}s until " . date('c', $pauseUntil) . ". TrackId: {$trackId}");
+				(new FollowUpAnalytics($call))
+					->sendTelemetry(
+						source: null,
+						status: 'error',
+						event: 'download_agent_retried_on_network_error_' . $trackId,
+						error: $result->getError()
+					);
+			}
+			else
+			{
+				$pauseUntil = 0;
+
+				$log && $logger->info("DownloadAgent::run: Retry #{$nextRetry}. TrackId: {$trackId}");
+				(new FollowUpAnalytics($call))
+					->sendTelemetry(
+						source: null,
+						status: 'error',
+						event: 'download_agent_retried_on_error_' . $trackId,
+						error: $result->getError()
+					);
+			}
+
+			return self::buildAgentName($trackId, $nextRetry, 0, 0, $pauseUntil);
 		}
 
 		(new FollowUpAnalytics($call))
@@ -256,7 +298,7 @@ class DownloadAgent
 				. "Retry {$nextSyncRetry}/" . self::SYNC_MAX_RETRIES . ". TrackId: {$trackId}"
 			);
 
-			return self::buildAgentName($trackId, 0, $expectedBytes, $nextSyncRetry);
+			return self::buildAgentName($trackId, 0, $expectedBytes, $nextSyncRetry, 0);
 		}
 
 		// Max sync retries — delete and restart
@@ -277,10 +319,11 @@ class DownloadAgent
 		int $trackId,
 		int $retryCount,
 		int $expectedBytes,
-		int $syncRetry
+		int $syncRetry,
+		int $pauseUntil = 0
 	): string
 	{
-		return self::class . "::run({$trackId}, {$retryCount}, {$expectedBytes}, {$syncRetry});";
+		return self::class . "::run({$trackId}, {$retryCount}, {$expectedBytes}, {$syncRetry}, {$pauseUntil});";
 	}
 
 	/**

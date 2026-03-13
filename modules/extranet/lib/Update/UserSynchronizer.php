@@ -50,7 +50,7 @@ class UserSynchronizer extends Stepper
 	{
 		return UserTable::query()
 			->setSelect(['ID'])
-			->addFilter('=IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->addFilter('UF_DEPARTMENT', false)
 			->addFilter('GROUPS.GROUP_ID', \CExtranet::GetExtranetUserGroupID())
 			->addFilter('>ID', $lastId)

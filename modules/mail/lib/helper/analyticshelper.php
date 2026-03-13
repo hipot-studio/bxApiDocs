@@ -18,6 +18,8 @@ class AnalyticsHelper
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
 	public const ENTITY_TYPE_TASKS_TASK = MessageAccessTable::ENTITY_TYPE_TASKS_TASK;
 	public const ENTITY_TYPE_BLOG_POST = MessageAccessTable::ENTITY_TYPE_BLOG_POST;
+	public const ENTITY_TYPE_CHAT_MESSAGE = MessageAccessTable::ENTITY_TYPE_CHAT_MESSAGE;
+	public const ENTITY_TYPE_USER_MESSAGE = MessageAccessTable::ENTITY_TYPE_USER_MESSAGE;
 	public const ENTITY_TYPE_NOTIFICATION = 'notification';
 	public const ENTITY_TYPE_MAIL = 'mail';
 
@@ -47,7 +49,7 @@ class AnalyticsHelper
 		{
 			self::ENTITY_TYPE_TASKS_TASK => self::SOURCE_TYPE_TASKS,
 			self::ENTITY_TYPE_BLOG_POST => self::SOURCE_TYPE_POST,
-			self::ENTITY_TYPE_IM_CHAT => self::SOURCE_TYPE_CHAT,
+			self::ENTITY_TYPE_IM_CHAT, self::ENTITY_TYPE_CHAT_MESSAGE, self::ENTITY_TYPE_USER_MESSAGE => self::SOURCE_TYPE_CHAT,
 			self::ENTITY_TYPE_CALENDAR_EVENT => self::SOURCE_TYPE_EVENT,
 			self::ENTITY_TYPE_NOTIFICATION => self::SOURCE_TYPE_NOTIFICATION,
 			self::ENTITY_TYPE_MAIL => self::SOURCE_TYPE_MAIL,

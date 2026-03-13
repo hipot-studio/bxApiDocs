@@ -6,10 +6,16 @@ use Bitrix\AI\Enum\CopilotName;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\Main\Application;
 
+/**
+ * @deprecated Use \Bitrix\Ui\Public\Services\Copilot\CopilotNameService instead
+ */
 class CopilotNameService
 {
 	private static ?string $cachedZone = null;
 
+	/**
+	 * @deprecated Use \Bitrix\Ui\Public\Services\Copilot\CopilotNameService::getCopilotName() instead
+	 */
 	public function getCopilotName(): string
 	{
 		return $this->isWestZone() ? CopilotName::COPILOT->value : CopilotName::BITRIX_GPT->value;

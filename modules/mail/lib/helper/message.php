@@ -20,6 +20,8 @@ use Bitrix\Main\Web\Uri;
 class Message
 {
 	// entity types with special access rules (group tokens)
+	public const ENTITY_TYPE_USER_MESSAGE = MessageAccessTable::ENTITY_TYPE_USER_MESSAGE;
+	public const ENTITY_TYPE_CHAT_MESSAGE = MessageAccessTable::ENTITY_TYPE_CHAT_MESSAGE;
 	public const ENTITY_TYPE_IM_CHAT = MessageAccessTable::ENTITY_TYPE_IM_CHAT;
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
 	private const MAX_FILE_SIZE_MAIL_ATTACHMENT = 20000000;
@@ -795,6 +797,7 @@ class Message
 		switch ($entityType)
 		{
 			case Message::ENTITY_TYPE_IM_CHAT:
+			case Message::ENTITY_TYPE_CHAT_MESSAGE:
 				return sprintf('chat%u', $entityId);
 			case Message::ENTITY_TYPE_CALENDAR_EVENT:
 				return sprintf('event'.'%u', $entityId);
@@ -826,6 +829,7 @@ class Message
 		switch ($entityType)
 		{
 			case Message::ENTITY_TYPE_IM_CHAT:
+			case Message::ENTITY_TYPE_CHAT_MESSAGE:
 				return AccessHelper::checkAccessForChat($entityId, $userId);
 			case Message::ENTITY_TYPE_CALENDAR_EVENT:
 				return AccessHelper::checkAccessForCalendarEvent($entityId, $userId);

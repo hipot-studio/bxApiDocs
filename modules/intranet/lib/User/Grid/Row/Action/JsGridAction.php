@@ -53,7 +53,10 @@ abstract class JsGridAction extends \Bitrix\Main\Grid\Row\Action\BaseAction
 			$method = $this->extensionMethod;
 			$gridId = $this->gridId;
 			$params = Json::encode($this->getActionParams($rawFields));
-			$this->onclick = "BX.$extension.GridManager.getInstance('$gridId').$method($params)";
+			$isCloud = $this->settings->isCloud() ? 'true' : 'false';
+			$isFirstAdminConfirmationEnabled = $this->settings->isFirstAdminConfirmationEnabled() ? 'true' : 'false';
+
+			$this->onclick = "BX.$extension.GridManager.getInstance('$gridId', $isCloud, $isFirstAdminConfirmationEnabled).$method($params)";
 
 			return parent::getControl($rawFields);
 		}

@@ -256,20 +256,13 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 	private function fillCounters(): void
 	{
 		$userId = $this->getCurrentUserId();
-		// time to verify
-		\Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable::verifyUserUnread($userId);
-
-		$task = (int)(CBPTaskService::getCounters($userId)['*'] ?? 0);
-		$comment = \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable::getCountUserUnread($userId);
+		$userCounters = new \Bitrix\Bizproc\Workflow\WorkflowUserCounters($userId);
+		$userCounters->sync();
 
 		$this->arResult['counters'] = [
-			'task' => $task,
-			'comment' => $comment,
+			'task' => $userCounters->getTask(),
+			'comment' => $userCounters->getComment(),
 		];
-
-		$userCounters = new \Bitrix\Bizproc\Workflow\WorkflowUserCounters($userId);
-		$userCounters->setTask($task);
-		$userCounters->setComment($comment);
 	}
 
 	private function getGridColumns(): array

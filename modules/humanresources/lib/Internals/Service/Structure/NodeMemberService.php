@@ -3,7 +3,10 @@
 namespace Bitrix\HumanResources\Internals\Service\Structure;
 
 use Bitrix\HumanResources\Exception\UpdateFailedException;
+use Bitrix\HumanResources\Exception\WrongStructureItemException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item;
+use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Service\Container;
@@ -16,6 +19,7 @@ use Bitrix\Main\SystemException;
 
 class NodeMemberService
 {
+	private const NODE_MEMBER_HEADS_CACHE_KEY = 'node_member_heads_%s_%s_%d';
 	private NodeMemberRepository $nodeMemberRepository;
 
 	public function __construct()
@@ -80,6 +84,104 @@ class NodeMemberService
 		);
 
 		return $nodeMemberCollection->count() > 1;
+	}
+
+	/**
+	 * Returns the nearest heads from the branch where the given entity belongs
+	 *
+	 * @param int $entityId
+	 * @param MemberEntityType $memberEntityType
+	 * @param NodeEntityType $nodeEntityType
+	 *
+	 * @return NodeMemberCollection
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws WrongStructureItemException
+	 */
+	public function getNodeMemberHeads(
+		int $entityId,
+		MemberEntityType $memberEntityType = MemberEntityType::USER,
+		NodeEntityType $nodeEntityType = NodeEntityType::DEPARTMENT,
+	): NodeMemberCollection
+	{
+		$cacheKey = sprintf(
+			self::NODE_MEMBER_HEADS_CACHE_KEY,
+			$nodeEntityType->value,
+			$memberEntityType->value,
+			$entityId
+		);
+		$cacheDir = NodeMemberRepository::NODE_MEMBER_CACHE_DIR;
+		$cacheData = Container::getCacheManager()->getData($cacheKey, $cacheDir);
+
+		if (isset($cacheData['heads']))
+		{
+			return NodeMemberCollection::wakeUp($cacheData['heads']);
+		}
+
+		$headsCollection = new NodeMemberCollection();
+
+		$headRole = InternalContainer::getRoleService()->getHeadRoleByNodeType($nodeEntityType);
+		if (!$headRole)
+		{
+			return $headsCollection;
+		}
+
+		$nodeMemberCollection = InternalContainer::getNodeMemberRepository()->findAllByEntityIds(
+			entityIds: [$entityId],
+			memberEntityType: $memberEntityType,
+			nodeTypes: [$nodeEntityType],
+		);
+
+		if ($nodeMemberCollection->empty())
+		{
+			return $headsCollection;
+		}
+
+		foreach ($nodeMemberCollection as $nodeMember)
+		{
+			$node = $nodeMember->node;
+			if (!$node)
+			{
+				continue;
+			}
+
+			if ((int)$nodeMember->roles[0] === $headRole->id)
+			{
+				$node = Container::getNodeRepository()->getById($node->parentId);
+				if (!$node || $node->type !== $nodeEntityType)
+				{
+					continue;
+				}
+			}
+
+			$nodeHeadsCollection = new NodeMemberCollection();
+			while ($nodeHeadsCollection->empty() && $node)
+			{
+				$nodeHeadsCollection = InternalContainer::getNodeMemberRepository()
+					->findAllByRoleIdAndNodeId($headRole->id, $node->id)
+				;
+
+				if (!$nodeHeadsCollection->empty() || !$node->parentId)
+				{
+					foreach ($nodeHeadsCollection as $headMember)
+					{
+						if ($headMember->entityId !== $entityId)
+						{
+							$headsCollection->add($headMember);
+						}
+					}
+
+					break;
+				}
+
+				$node = Container::getNodeRepository()->getById($node->parentId);
+			}
+		}
+
+		Container::getCacheManager()->setData($cacheKey, ['heads' => $headsCollection->getValues()], $cacheDir);
+
+		return $headsCollection;
 	}
 
 	private function isRoleCorrectForNode(Item\Node $node, Item\Role $role): bool

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\Helper;
 
+use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Mail\Helper\Dto\MailMessageChain;
@@ -15,6 +16,7 @@ use Bitrix\Mail\Message;
 use Bitrix\Mail\Helper;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main;
 
 class MailMessageChainProvider extends AbstractMailMessageChainProvider
 {
@@ -29,6 +31,16 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		'BODY_HTML',
 		'HEADER',
 		'OPTIONS',
+	];
+
+	const SELECT_MESSAGE_ACCESS_FIELDS = [
+		'BIND_ENTITY_TYPE' => 'MESSAGE_ACCESS.ENTITY_TYPE',
+		'BIND_ENTITY_ID' => 'MESSAGE_ACCESS.ENTITY_ID',
+	];
+
+	const SELECT_MESSAGE_CRM_ACCESS_FIELDS = [
+		'CRM_ACTIVITY_OWNER_TYPE_ID' => 'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_TYPE_ID',
+		'CRM_ACTIVITY_OWNER_ID' => 'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_ID',
 	];
 
 	const SELECT_MESSAGE_FIELDS_FOR_TAKE_ATTACHMENTS = [
@@ -217,6 +229,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			$message->subject = $messageData['SUBJECT'];
 			$message->date = $messageData['FIELD_DATE']->getTimestamp();
 			$message->replyFromEmail = $messageData['MAILBOX_EMAIL'];
+			$message->mailboxId = $messageData['MAILBOX_ID'];
 		}
 
 		if ($takeFiles)
@@ -279,8 +292,17 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 
 		$selectChainNodes = array_merge(
 			self::SELECT_MESSAGE_FIELDS,
-			self::SELECT_RECIPIENTS_FIELDS
+			self::SELECT_RECIPIENTS_FIELDS,
+			self::SELECT_MESSAGE_ACCESS_FIELDS,
 		);
+
+		if (Main\Loader::includeModule('crm'))
+		{
+			$selectChainNodes = array_merge(
+				$selectChainNodes,
+				self::SELECT_MESSAGE_CRM_ACCESS_FIELDS,
+			);
+		}
 		unset($selectChainNodes['BODY_HTML']);
 
 		return $messageQuery
@@ -311,6 +333,16 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 						'=this.ID' => 'ref.MESSAGE_ID',
 					],
 					['join_type' => 'INNER']
+				)
+			)
+			->registerRuntimeField(
+				new Reference(
+					'MESSAGE_ACCESS',
+					MessageAccessTable::class,
+					[
+						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+						'=this.ID' => 'ref.MESSAGE_ID',
+					]
 				)
 			)
 			->setSelect($selectChainNodes)
@@ -347,6 +379,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 
 		$lastIncomingId = null;
 		$lastIncomingKey = null;
+		$mailboxId = (int)$threadMessageRow['MAILBOX_ID'];
 		$index = 0;
 
 		$uniqueMessages = [];
@@ -382,6 +415,8 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 
 			$mailMessage->date = $row['FIELD_DATE']->getTimestamp();
 			$mailMessage->replyFromEmail = $row['MAILBOX_EMAIL'];
+			$mailMessage->mailboxId = $row['MAILBOX_ID'];
+			MessageLoader::addBinding($mailMessage, $row);
 
 			if (isset($row['BODY_HTML']))
 			{
@@ -419,8 +454,15 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			$mailMessageChain->list[$lastIncomingKey]->attachments = $full->attachments;
 		}
 
+		$mailboxHelper = Mailbox::findBy($mailboxId);
+		$dirs = $mailboxHelper
+			? $mailboxHelper->getDirsHelper()->buildDirectoryTreeForContextMenu($mailboxId, $mailboxHelper)
+			: []
+		;
+
 		$mailMessageChain->properties = [
 			'lastIncomingId' => $lastIncomingId,
+			'dirs' => $dirs,
 		];
 
 		return $mailMessageChain;

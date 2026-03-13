@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Common\FormatConverter;
 use Bitrix\Im\V2\Logger;
+use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Main\SystemException;
 
 class TypeRegistry
@@ -21,19 +22,29 @@ class TypeRegistry
 	 * @var array<string, array<string, Type>>
 	 */
 	private array $byLiteralAndEntity = [];
+	private array $byRecentSection = [];
 
 	/**
 	 * @var array<string, Type>
 	 */
 	private array $fallbackByLiteral = [];
-	private ExternalTypeRegistry $externalTypeRegistry;
-	private Logger $logger;
 
-	public function __construct(ExternalTypeRegistry $externalTypeRegistry, Logger $logger)
+	public function __construct(
+		private readonly ExternalTypeRegistry $externalTypeRegistry,
+		private readonly Logger $logger,
+		private readonly RecentConfigManager $recentConfigManager,
+	)
 	{
-		$this->logger = $logger;
-		$this->externalTypeRegistry = $externalTypeRegistry;
 		$this->load();
+	}
+
+	/**
+	 * @param string $recentSection
+	 * @return Type[]
+	 */
+	public function getByRecentSection(string $recentSection): array
+	{
+		return $this->byRecentSection[$recentSection] ?? [];
 	}
 
 	public function getByExtendedType(string $type): Type
@@ -175,5 +186,16 @@ class TypeRegistry
 	{
 		$this->registry[$type->extendedType] = $type;
 		$this->byLiteralAndEntity[$type->literal][$type->entityType ?? ''] = $type;
+		$this->fillByRecentSection($type);
+	}
+
+	private function fillByRecentSection(Type $type): void
+	{
+		$extendedType = $type->getExtendedType(camelCase: false);
+		$recentSections = $this->recentConfigManager->getRecentSectionsByChatExtendedType($extendedType);
+		foreach ($recentSections as $recentSection)
+		{
+			$this->byRecentSection[$recentSection][$extendedType] = $type;
+		}
 	}
 }

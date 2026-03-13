@@ -12,6 +12,8 @@ use Bitrix\ImOpenLines;
 /**
  * Agent for sending notifications about the need to reconnect the VK connector.
  * Should be executed only once, after the update is installed.
+ *
+ * @internal
  */
 final class Update234000
 {

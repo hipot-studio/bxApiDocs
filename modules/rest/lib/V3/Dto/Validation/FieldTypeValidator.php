@@ -67,6 +67,7 @@ class FieldTypeValidator extends DtoFieldValidator
 			'null' => is_null($value),
 			$dateTimeClass => $value instanceof DateTime,
 			$dateClass => $value instanceof Date,
+			'mixed' => true,
 			default => false,
 		};
 	}
@@ -127,7 +128,7 @@ class FieldTypeValidator extends DtoFieldValidator
 			}
 
 			$message = new LocalizableMessage(
-				code: 'REST_V3_EXCEPTIONS_VALIDATION_INVALIDREQUESTFIELDTYPEEXCEPTION',
+				code: 'REST_V3_EXCEPTION_VALIDATION_INVALIDREQUESTFIELDTYPEEXCEPTION',
 				replace: [
 					'#FIELD#' => $value->getPropertyName(),
 					'#TYPE#' => $propertyType . ($value->isMultiple() ? '[]' : ''),

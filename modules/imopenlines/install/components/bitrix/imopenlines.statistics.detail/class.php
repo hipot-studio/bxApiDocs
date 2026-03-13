@@ -1,6 +1,7 @@
 <?php
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
+use Bitrix\ImBot\Bot\Network;
 use \Bitrix\Main\Loader,
 	\Bitrix\Main\Grid\Panel,
 	\Bitrix\Main\Localization\Loc,
@@ -697,6 +698,20 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 					'default' => false,
 					'type' => 'number'
 				);
+				if (Loader::includeModule('imbot'))
+				{
+					$this->filterFields['EXTRA_DEVICE_TYPE'] = [
+						'id' => 'EXTRA_DEVICE_TYPE',
+						'name' => Loc::getMessage('OL_STATS_HEADER_EXTRA_DEVICE_TYPE'),
+						'default' => false,
+						'type' => 'list',
+						'items' => [
+							'' => Loc::getMessage('OL_STATS_FILTER_UNSET'),
+							Network::DEVICE_TYPE_WEB => Loc::getMessage('OL_COMPONENT_TABLE_DEVICE_TYPE_WEB'),
+							Network::DEVICE_TYPE_MOBILE => Loc::getMessage('OL_COMPONENT_TABLE_DEVICE_TYPE_MOBILE'),
+						],
+					];
+				}
 			}
 			if (Loader::includeModule('crm'))
 			{
@@ -1447,6 +1462,13 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 				'editable' => false,
 				'sort' => 'EXTRA_PORTAL_TYPE'
 			];
+			$result[] = [
+				'id' => 'EXTRA_DEVICE_TYPE',
+				'name' => Loc::getMessage('OL_STATS_HEADER_EXTRA_DEVICE_TYPE'),
+				'default' => true,
+				'editable' => false,
+				'sort' => 'EXTRA_DEVICE_TYPE'
+			];
 		}
 
 		$result = array_merge($result, [
@@ -1983,6 +2005,26 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 			$newRow["EXTRA_TARIFF"] = $row["data"]["EXTRA_TARIFF"]? $row["data"]["EXTRA_TARIFF"]: ($this->excelMode? '': '-');
 			$newRow["EXTRA_USER_LEVEL"] = $row["data"]["EXTRA_USER_LEVEL"]? $row["data"]["EXTRA_USER_LEVEL"]: ($this->excelMode? '': '-');
 			$newRow["EXTRA_PORTAL_TYPE"] = $row["data"]["EXTRA_PORTAL_TYPE"]? $row["data"]["EXTRA_PORTAL_TYPE"]: ($this->excelMode? '': '-');
+
+			if ($row["data"]["EXTRA_DEVICE_TYPE"])
+			{
+				if ($row["data"]["EXTRA_DEVICE_TYPE"] == Network::DEVICE_TYPE_WEB)
+				{
+					$newRow["EXTRA_DEVICE_TYPE"] = Loc::getMessage('OL_COMPONENT_TABLE_DEVICE_TYPE_WEB');
+				}
+				elseif ($row["data"]["EXTRA_DEVICE_TYPE"] == Network::DEVICE_TYPE_MOBILE)
+				{
+					$newRow["EXTRA_DEVICE_TYPE"] = Loc::getMessage('OL_COMPONENT_TABLE_DEVICE_TYPE_MOBILE');
+				}
+				else
+				{
+					$newRow["EXTRA_DEVICE_TYPE"] = $row["data"]["EXTRA_DEVICE_TYPE"];
+				}
+			}
+			else
+			{
+				$newRow["EXTRA_DEVICE_TYPE"] = $this->excelMode? '': '-';
+			}
 
 			if (
 				$row["data"]["DATE_OPERATOR_CLOSE"] instanceof \Bitrix\Main\Type\DateTime

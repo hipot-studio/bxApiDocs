@@ -3,12 +3,17 @@
 namespace Bitrix\Intranet\Controller;
 
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Intranet;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Response;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\UserTable;
 
 class InvitationWidget extends Engine\Controller
 {
@@ -38,10 +43,17 @@ class InvitationWidget extends Engine\Controller
 			}
 
 			$currentExtranetUserCount = \CBitrix24::getActiveExtranetUserCount();
-			$currentExtranetUserCountMessage = Loc::getMessage('INTRANET_INVITATION_WIDGET_USER_COUNT_EXTRANET', [
-				'#COUNT#' => $currentExtranetUserCount
-			]);
 		}
+		else
+		{
+			$currentUserCount = $this->getActiveUsersCount();
+			$currentExtranetUserCount = $this->getExtranetUsersCount();
+			$maxUserCount = Application::getInstance()->getLicense()->getMaxUsers();
+		}
+
+		$currentExtranetUserCountMessage = Loc::getMessage('INTRANET_INVITATION_WIDGET_USER_COUNT_EXTRANET', [
+			'#COUNT#' => $currentExtranetUserCount
+		]);
 
 		$leftCountMessage = "";
 
@@ -72,9 +84,9 @@ class InvitationWidget extends Engine\Controller
 
 		return [
 			'isCurrentUserAdmin' => $intranetUser->isAdmin(),
-			'isInvitationAvailable' => \CBitrix24::isInvitingUsersAllowed(),
+			'isInvitationAvailable' => Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()->canInvite(),
 			'structureLink' => '/company/vis_structure.php',
-			'invitationLink' => Intranet\CurrentUser::get()->isAdmin() || \CBitrix24::isInvitingUsersAllowed()
+			'invitationLink' => Intranet\CurrentUser::get()->isAdmin() || Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()->canInvite()
 				? Engine\UrlManager::getInstance()->create('getSliderContent', [
 					'c' => 'bitrix:intranet.invitation',
 					'mode' => Engine\Router::COMPONENT_MODE_AJAX,
@@ -97,6 +109,29 @@ class InvitationWidget extends Engine\Controller
 				'isLimit' => $maxUserCount > 0 && $currentUserCount > $maxUserCount,
 			],
 		];
+	}
+
+	private function getActiveUsersCount(): int
+	{
+		return Application::getInstance()->getLicense()->getActiveUsersCount();
+	}
+
+	private function getExtranetUsersCount(): int
+	{
+		if ($extranetUsers = UserTable::query()
+			->addSelect(Query::expr()->count('ID'), 'CNT')
+			->addFilter('=ACTIVE', 'Y')
+			->addFilter('=CONFIRM_CODE', false)
+			->addFilter('!=EXTERNAL_AUTH_ID', UserTable::getExternalUserTypes())
+			->addFilter('UF_DEPARTMENT', false)
+			->exec()
+			->fetch()
+		)
+		{
+			return (int) $extranetUsers['CNT'];
+		}
+
+		return 0;
 	}
 
 	public function analyticsLabelAction(): void

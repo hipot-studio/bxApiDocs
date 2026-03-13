@@ -2,7 +2,7 @@
 
 namespace Bitrix\Im\V2\Application;
 
-use Bitrix\Call\Call;
+use Bitrix\Call\Recent;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Application\Config\PreloadedEntities;
 use Bitrix\Im\V2\Common\ContextCustomer;
@@ -123,7 +123,7 @@ class Config implements \JsonSerializable
 			return [];
 		}
 
-		return Call::getActiveCalls();
+		return Recent::getActiveCalls();
 	}
 
 	protected function getPermissions(): array

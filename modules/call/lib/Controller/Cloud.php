@@ -18,12 +18,15 @@ use Bitrix\Call\DTO\CloudRecordingErrorRequest;
 use Bitrix\Call\DTO\FileInfo;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\CallChatMessage;
-use Bitrix\Im\Call\Registry;
+use Bitrix\Call\Call\Registry;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Chat;
 
 
+/**
+ * @internal
+ */
 class Cloud extends BaseReceiver
 {
 	public function getAutoWiredParameters(): array
@@ -80,6 +83,11 @@ class Cloud extends BaseReceiver
 		{
 			$this->addError(new Error('Chat not found', 'chat_not_found'));
 			return null;
+		}
+
+		if (NotifyService::getInstance()->findMessage($chat->getId(), $call->getId(), NotifyService::MESSAGE_TYPE_CLOUD_RECORD_PREPARE) !== null)
+		{
+			return ['result' => true];
 		}
 
 		$message = CallChatMessage::makeCloudRecordPrepareMessage($call, $chat);
@@ -237,11 +245,11 @@ class Cloud extends BaseReceiver
 	/**
 	 * Create track record in database from file info
 	 *
-	 * @param \Bitrix\Im\Call\Call $call Call instance
+	 * @param \Bitrix\Call\Call $call Call instance
 	 * @param FileInfo $fileInfo File information (url, name, mime, size, type)
 	 * @return Track|null Track instance on success, null on failure
 	 */
-	private function makeTrack(\Bitrix\Im\Call\Call $call, FileInfo $fileInfo): ?Track
+	private function makeTrack(\Bitrix\Call\Call $call, FileInfo $fileInfo): ?Track
 	{
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();

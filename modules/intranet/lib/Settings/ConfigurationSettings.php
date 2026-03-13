@@ -97,7 +97,6 @@ class ConfigurationSettings extends AbstractSettings
 			$this->setDefaultEmailFrom();
 		}
 
-		$this->setAllowMeasureStressLevel();
 		$this->setCollectGeoData();
 		$this->setShowSettingsAllUsers();
 
@@ -227,18 +226,6 @@ class ConfigurationSettings extends AbstractSettings
 				'main',
 				'collect_geo_data',
 				$this->data["collectGeoData"]
-			);
-		}
-	}
-
-	private function setAllowMeasureStressLevel(): void
-	{
-		if (isset($this->data["allowMeasureStressLevel"]))
-		{
-			Option::set(
-				'intranet',
-				'stresslevel_available',
-				$this->data["allowMeasureStressLevel"]
 			);
 		}
 	}
@@ -413,15 +400,6 @@ class ConfigurationSettings extends AbstractSettings
 				isEnable: $this->getAllCanBuyTariff()['isEnable'],
 			);
 		}
-
-		$data["allowMeasureStressLevel"] = new Switcher(
-			'settings-configuration-field-allowMeasureStressLevel',
-			'allowMeasureStressLevel',
-			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_MEASURE_STRESS_LEVEL'),
-			$this->getAllowMeasureStressLevel(),
-			['on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_MEASURE_STRESS_LEVEL_CLICK_ON_MSGVER_1')],
-			helpDesk: 'redirect=detail&code=17697808',
-		);
 
 		//TODO: commented on issue task#488392
 		/*$data["collectGeoData"] = new Switcher(
@@ -599,15 +577,6 @@ class ConfigurationSettings extends AbstractSettings
 			'main',
 			'collect_geo_data',
 			'N'
-		);
-	}
-
-	private function getAllowMeasureStressLevel(): string
-	{
-		return Option::get(
-			'intranet',
-			'stresslevel_available',
-			'Y'
 		);
 	}
 
@@ -874,7 +843,6 @@ class ConfigurationSettings extends AbstractSettings
 					? Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_ALL_USER_INSTALL_APPLICATION_MSGVER_1')
 					: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_ALL_USER_INSTALL_APPLICATION'),
 				'allCanBuyTariff' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALL_CAN_BUY_TARIFF'),
-				'allowMeasureStressLevel' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_MEASURE_STRESS_LEVEL'),
 				//TODO: commented on issue task#488392
 				//'collectGeoData' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLECT_GEO_DATA'),
 			]);

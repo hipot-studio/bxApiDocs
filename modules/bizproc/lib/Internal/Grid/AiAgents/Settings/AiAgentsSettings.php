@@ -16,7 +16,6 @@ class AiAgentsSettings extends \Bitrix\Main\Grid\Settings
 		$this->extensionLoadName = $params['extensionLoadName'] ?? 'bizproc.grid.ai-agents';
 	}
 
-
 	public function getExtensionName(): string
 	{
 		return $this->extensionName;

@@ -12,11 +12,12 @@ use Bitrix\HumanResources\Result\Service\HcmLink\GetMappingEntityCollectionResul
 use Bitrix\HumanResources\Result\Service\HcmLink\GetMatchesForMappingResult;
 use Bitrix\HumanResources\Result\Service\HcmLink\GetMultipleVacancyEmployeesResult;
 use Bitrix\HumanResources\Service\Container;
-use Bitrix\HumanResources\Type\HcmLink\EmployeeDataType;
 use Bitrix\HumanResources\Util\PersonUtil;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
+use Bitrix\Main\UserTable;
 
 class MapperService implements Contract\Service\HcmLink\MapperService
 {
@@ -115,7 +116,15 @@ class MapperService implements Contract\Service\HcmLink\MapperService
 	{
 		foreach ($people as &$person)
 		{
-			$user = Container::getHcmLinkUserRepository()->getUsersIdBySearch($person->name, $excludeIds, 1)->getFirst();
+			$query = InternalContainer::getNodeMemberRepository()
+				->injectUserNodeSubquery(UserTable::query()->setSelect(['ID']))
+			;
+
+			$user = Container::getHcmLinkUserRepository()
+				->getUsersIdBySearch($query, $person->name, $excludeIds, 1)
+				->getFirst()
+			;
+
 			if ($user !== null)
 			{
 				$person->suggestId = (int)$user->id;

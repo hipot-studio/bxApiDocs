@@ -71,4 +71,37 @@ class NodeMember implements Item
 			throw new \InvalidArgumentException("Invalid property: $fieldName");
 		}
 	}
+
+	public static function wakeUp(array $data): static
+	{
+		$reflection = new \ReflectionClass(static::class);
+		/** @var static $member */
+		$member = $reflection->newInstanceWithoutConstructor();
+
+		foreach ($data as $key => $value)
+		{
+			if ($reflection->hasProperty($key))
+			{
+				$property = $reflection->getProperty($key);
+				$propertyType = $property->getType();
+
+				if ($propertyType instanceof \ReflectionNamedType)
+				{
+					$typeName = $propertyType->getName();
+					if ($typeName === DateTime::class)
+					{
+						$value = is_string($value) ? new DateTime($value) : null;
+					}
+					elseif (is_subclass_of($typeName, \UnitEnum::class) && is_string($value))
+					{
+						$value = $typeName::from($value);
+					}
+				}
+
+				$property->setValue($member, $value);
+			}
+		}
+
+		return $member;
+	}
 }

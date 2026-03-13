@@ -13,9 +13,9 @@ class Exception extends SystemException implements ExceptionInterface
 	public function __construct(
 		string $message = '',
 		int $code = 0,
-		\Throwable $previous = null,
+		?\Throwable $previous = null,
 		string $file = '',
-		int $line = 0
+		int $line = 0,
 	)
 	{
 		parent::__construct($message, $code, $file, $line, $previous);

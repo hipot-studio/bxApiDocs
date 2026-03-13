@@ -8,10 +8,12 @@ use Bitrix\Main\Grid\Pagination\LazyLoadTotalCount;
 use Bitrix\Main\Grid\Pagination\PaginationFactory;
 use Bitrix\Main\Grid\Row\Rows;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Main\Filter\Filter;
 
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Column\Provider\AiAgentsDataProvider;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Row\Assembler\AiAgentsRowAssembler;
-
+use Bitrix\Bizproc\Internal\Grid\AiAgents\Filter\AiAgentsFilterSettings;
+use Bitrix\Bizproc\Internal\Grid\AiAgents\Filter\Presets;
 
 final class AiAgentsGrid extends Grid
 {
@@ -91,6 +93,31 @@ final class AiAgentsGrid extends Grid
 	{
 		return new \Bitrix\Main\Grid\Panel\Panel(
 			new Panel\Action\AiAgentsDataProvider($this->getSettings()),
+		);
+	}
+
+	protected function createFilter(): ?Filter
+	{
+		$params = [
+			'ID' => $this->getId(),
+			'WHITE_LIST' => $this->getVisibleColumnsIds(),
+		];
+		$filterSettings = new AiAgentsFilterSettings($params);
+
+		$extraProviders = [];
+
+		$additionalPresets = [
+			new Presets\StartedByMe(),
+		];
+
+		return new \Bitrix\Bizproc\Internal\Grid\AiAgents\Filter\AiAgentsFilter(
+			$this->getId(),
+			new \Bitrix\Bizproc\Internal\Grid\AiAgents\Filter\Provider\AiAgentsDataProvider($filterSettings),
+			$extraProviders,
+			[
+				'FILTER_SETTINGS' => $filterSettings,
+			],
+			$additionalPresets,
 		);
 	}
 }

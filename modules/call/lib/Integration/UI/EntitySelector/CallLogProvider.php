@@ -7,6 +7,9 @@ use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\SearchQuery;
 
+/**
+ * @internal
+ */
 class CallLogProvider extends BaseProvider
 {
 	protected const ENTITY_ID = 'call-log';

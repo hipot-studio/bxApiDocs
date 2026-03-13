@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Access\Filter\Factory;
 
 use Bitrix\BIConnector\Access\Filter\DashboardViewFilter;
+use Bitrix\BIConnector\Access\Filter\DashboardEditFilter;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\Main\Access\AccessibleController;
 use Bitrix\Main\Access\Filter\AccessFilter;
@@ -27,6 +28,7 @@ final class BIConstructorFilterFactory implements FilterFactory
 		}
 
 		return new $filterClassName($controller);
+
 	}
 
 	/**
@@ -37,6 +39,9 @@ final class BIConstructorFilterFactory implements FilterFactory
 		return [
 			DashboardViewFilter::class => [
 				ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
+			],
+			DashboardEditFilter::class => [
+				ActionDictionary::ACTION_BIC_DASHBOARD_EDIT,
 			],
 		];
 	}

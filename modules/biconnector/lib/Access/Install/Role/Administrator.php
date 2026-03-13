@@ -14,7 +14,6 @@ class Administrator extends Base
 			PermissionDictionary::BIC_ACCESS,
 			PermissionDictionary::BIC_SETTINGS_ACCESS,
 			PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
-			PermissionDictionary::BIC_GROUP_MODIFY,
 		];
 	}
 

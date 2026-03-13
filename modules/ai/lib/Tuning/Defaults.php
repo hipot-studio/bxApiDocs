@@ -219,6 +219,8 @@ class Defaults
 			}
 		}
 
+		$options = static::sortEngineOptions($options, $recommended);
+
 		return [
 			'type' => Type::LIST,
 			'options' => $options,
@@ -228,6 +230,36 @@ class Defaults
 				'isProviderSelector' => true,
 			],
 		];
+	}
+
+	private static function sortEngineOptions(array $options, array $recommended): array
+	{
+		if (empty($recommended))
+		{
+			asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+
+			return $options;
+		}
+
+		$recommendedOptions = [];
+		$regularOptions = [];
+
+		foreach ($options as $code => $name)
+		{
+			if (in_array($code, $recommended, true))
+			{
+				$recommendedOptions[$code] = $name;
+			}
+			else
+			{
+				$regularOptions[$code] = $name;
+			}
+		}
+
+		asort($recommendedOptions, SORT_NATURAL | SORT_FLAG_CASE);
+		asort($regularOptions, SORT_NATURAL | SORT_FLAG_CASE);
+
+		return $recommendedOptions + $regularOptions;
 	}
 
 	private static function getDefaultEngine(array $engines): ?string

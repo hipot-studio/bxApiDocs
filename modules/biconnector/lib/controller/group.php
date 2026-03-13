@@ -73,7 +73,7 @@ class Group extends Controller
 		);
 
 		if (
-			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY)
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS)
 			|| !str_starts_with($groupIdCode, 'new_') && !isset($allowedGroups[PermissionDictionary::getDashboardGroupIdFromPermission($groupIdCode)])
 		)
 		{
@@ -109,7 +109,6 @@ class Group extends Controller
 					'name' => $dashboard->getTitle(),
 					'type' => $dashboard->getType(),
 					'createdById' => $dashboard->getCreatedById(),
-					'ownerId' => $dashboard->getOwnerId(),
 					'scopes' => [],
 				];
 				foreach ($dashboard->getScope() as $scope)
@@ -156,7 +155,7 @@ class Group extends Controller
 		);
 
 		if (
-			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY)
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS)
 			|| !isset($allowedGroups[$group->getId()])
 		)
 		{
@@ -187,7 +186,7 @@ class Group extends Controller
 	{
 		$accessController = AccessController::getCurrent();
 
-		if (!$accessController->check(ActionDictionary::ACTION_BIC_GROUP_MODIFY))
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
 
@@ -226,6 +225,14 @@ class Group extends Controller
 			$this->addErrors($saveResult->getErrors());
 
 			return null;
+		}
+
+		if (!empty($saveResult->getData()['id']))
+		{
+			$accessController
+				->getUser()
+				->fillDefaultGroupAccess((int)$saveResult->getData()['id'])
+			;
 		}
 
 		return true;

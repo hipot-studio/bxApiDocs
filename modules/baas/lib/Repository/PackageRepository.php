@@ -75,7 +75,7 @@ class PackageRepository implements PackageRepositoryInterface
 			->where(
 				(new ConditionTree())
 					->logic(ConditionTree::LOGIC_OR)
-					->where('DISTRIBUTION_STRATEGY', Entity\Enum\PackageDistributionStrategy::BY_BAAS->value)
+					->where('DISTRIBUTION_STRATEGY', Entity\Package\PackageDistributionStrategy::BY_BAAS->value)
 					->whereNull('DISTRIBUTION_STRATEGY')
 			)
 			->exec()
@@ -93,13 +93,48 @@ class PackageRepository implements PackageRepositoryInterface
 			->where(
 				(new ConditionTree())
 					->logic(ConditionTree::LOGIC_OR)
-					->where('DISTRIBUTION_STRATEGY', Entity\Enum\PackageDistributionStrategy::BY_BAAS->value)
+					->where('DISTRIBUTION_STRATEGY', Entity\Package\PackageDistributionStrategy::BY_BAAS->value)
 					->whereNull('DISTRIBUTION_STRATEGY')
 			)
 			->setOrder(['SORT' => 'ASC'])
 			->setCacheTtl(86400)
 			->exec()
 			->fetchCollection()
+		;
+	}
+
+	public function hasMarketDistributedPackagesForService(string $serviceCode): bool
+	{
+		return (bool)Baas\Model\PackageTable::query()
+			->setSelect(['ID'])
+			->where('DISTRIBUTION_STRATEGY', Baas\Internal\Entity\Package\PackageDistributionStrategy::BY_MARKET->value)
+			->registerRuntimeField(
+				'SIP',
+				[
+					'data_type' => Baas\Model\ServiceInPackageTable::class,
+					'reference' => [
+						'=this.CODE' => 'ref.PACKAGE_CODE',
+					],
+					'join_type' => 'INNER',
+				],
+			)
+			->where('SIP.SERVICE_CODE', $serviceCode)
+			->setLimit(1)
+			->setCacheTtl(86400)
+			->exec()
+			->fetch()
+		;
+	}
+
+	public function hasBaasDistributedPackages(): bool
+	{
+		return (bool)Baas\Model\PackageTable::query()
+			->setSelect(['ID'])
+			->where('DISTRIBUTION_STRATEGY', Baas\Internal\Entity\Package\PackageDistributionStrategy::BY_BAAS->value)
+			->setLimit(1)
+			->setCacheTtl(86400)
+			->exec()
+			->fetch()
 		;
 	}
 }

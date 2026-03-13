@@ -1,6 +1,5 @@
 <?php
 
-use Bitrix\Im\Call\VideoStrategyType;
 use Bitrix\Im\Common;
 use Bitrix\Im\Configuration\General;
 use Bitrix\Im\Configuration\Manager;
@@ -416,7 +415,8 @@ class CIMSettings
 				}
 				else if ($key === 'callAcceptIncomingVideo')
 				{
-					$checkedValues[$key] = in_array($value[$key], VideoStrategyType::getList())? $value[$key]: $default;
+					\Bitrix\Main\Loader::includeModule('call');
+					$checkedValues[$key] = in_array($value[$key], \Bitrix\Call\VideoStrategyType::getList())? $value[$key]: $default;
 				}
 				else if (array_key_exists($key, $value))
 				{

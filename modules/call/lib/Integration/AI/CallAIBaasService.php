@@ -11,6 +11,9 @@ use Bitrix\AI\Limiter\LimitControlService;
 use Bitrix\AI\Limiter\LimitControlBoxService;
 use Bitrix\AI\Integration\Baas\BaasTokenService;
 
+/**
+ * @internal
+ */
 
 class CallAIBaasService
 {

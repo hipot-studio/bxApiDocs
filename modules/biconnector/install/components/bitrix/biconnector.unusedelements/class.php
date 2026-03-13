@@ -159,8 +159,7 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 		$count = $data['count'];
 		$this->grid->getPagination()?->setRecordCount($count);
 
-		$elements = $data['unusedElements'];
-		$elements = $this->mapClientIdsToOwners($elements);
+		$elements = $data['unusedElements'] ?? [];
 
 		$rows = [];
 		foreach ($elements as $element)
@@ -169,7 +168,6 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 				'TITLE' => $element['name'],
 				'TYPE' => $element['type'],
 				'EXTERNAL_ID' => $element['external_id'],
-				'OWNERS' => $element['owners'] ?? [],
 				'DESCRIPTION' => $element['description'],
 				'DATE_CREATE' => $element['created_on'] ? $this->parseDateFromIntegratorResponse($element['created_on']) : null,
 				'DATE_UPDATE' => $element['changed_on'] ? $this->parseDateFromIntegratorResponse($element['changed_on']) : null,
@@ -214,46 +212,6 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 		}
 
 		return $normalizedFilter;
-	}
-
-	/**
-	 * Replace client ids from the proxy response with portal users' ids
-	 *
-	 * @param array $elements
-	 * @return array
-	 */
-	private function mapClientIdsToOwners(array $elements): array
-	{
-		$result = $elements;
-		$clientIds = [];
-
-		foreach ($elements as $element)
-		{
-			foreach ($element['owners'] as $owner)
-			{
-				if (!in_array($owner, $clientIds, true))
-				{
-					$clientIds[] = $owner;
-				}
-			}
-		}
-
-		$userIds = SupersetUserTable::getList([
-			'select' => ['USER_ID', 'CLIENT_ID'],
-			'filter' => ['=CLIENT_ID' => $clientIds],
-		])->fetchAll();
-
-		$userIds = array_column($userIds, 'USER_ID', 'CLIENT_ID');
-
-		foreach ($result as $elementKey => $element)
-		{
-			foreach ($element['owners'] as $ownerKey => $owner)
-			{
-				$result[$elementKey]['owners'][$ownerKey] = (int)$userIds[$owner];
-			}
-		}
-
-		return $result;
 	}
 
 	private function initStub(): void
@@ -310,63 +268,16 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 		$deleteAllElementsPermission = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DELETE_ALL_UNUSED_ELEMENTS);
 		if (!$deleteAllElementsPermission)
 		{
-			$currentUserId = (int)Main\Engine\CurrentUser::get()->getId();
+			$errorCode =
+				count($elements) > 1
+					? 'BI_UNUSED_ELEMENTS_NO_RIGHTS_MULTIPLE'
+					: 'BI_UNUSED_ELEMENTS_NO_RIGHTS_SINGLE'
+			;
+			$this->errorCollection[] = new Main\Error(
+				Loc::getMessage($errorCode),
+			);
 
-			if (!empty($datasetExternalIds))
-			{
-				$supersetDatasetsResult = Integrator::getInstance()->getDatasetList($datasetExternalIds);
-				if ($supersetDatasetsResult->hasErrors())
-				{
-					$this->errorCollection->add($supersetDatasetsResult->getErrors());
-				}
-
-				$supersetDatasets = $supersetDatasetsResult->getData();
-				$supersetDatasets = $this->mapClientIdsToOwners($supersetDatasets);
-
-				foreach ($supersetDatasets as $dataset)
-				{
-					if (!in_array($currentUserId, $dataset['owners'], true))
-					{
-						$this->errorCollection[] = new Main\Error(Loc::getMessage('BI_UNUSED_ELEMENTS_NO_RIGHTS_SINGLE'));
-					}
-				}
-			}
-
-			$chartElements = array_filter($elements, static fn($item) => $item['elementType'] === self::ELEMENT_TYPE_CHART);
-			$chartExternalIds = array_column($chartElements, 'elementId');
-
-			if (!empty($chartExternalIds))
-			{
-				$supersetChartsResult = Integrator::getInstance()->getChartList($chartExternalIds);
-				if ($supersetChartsResult->hasErrors())
-				{
-					$this->errorCollection->add($supersetChartsResult->getErrors());
-				}
-
-				$supersetCharts = $supersetChartsResult->getData();
-				$supersetCharts = $this->mapClientIdsToOwners($supersetCharts);
-
-				foreach ($supersetCharts as $chart)
-				{
-					if (!in_array($currentUserId, $chart['owners'], true))
-					{
-						$this->errorCollection[] = new Main\Error(Loc::getMessage('BI_UNUSED_ELEMENTS_NO_RIGHTS_SINGLE'));
-					}
-				}
-			}
-
-			if ($this->hasErrors())
-			{
-				if (count($elements) > 1)
-				{
-					$this->errorCollection->clear();
-					$this->errorCollection[] = new Main\Error(
-						Loc::getMessage('BI_UNUSED_ELEMENTS_NO_RIGHTS_MULTIPLE'),
-					);
-				}
-
-				return null;
-			}
+			return null;
 		}
 
 		$workspaceDatasets = \Bitrix\BIConnector\ExternalSource\DatasetManager::getList(['=EXTERNAL_ID' => $datasetExternalIds]);

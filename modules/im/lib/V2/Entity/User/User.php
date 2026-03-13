@@ -6,6 +6,7 @@ use Bitrix\Im\Common;
 use Bitrix\Im\Integration\Socialnetwork\Extranet;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Model\StatusTable;
+use Bitrix\Im\V2\Cache\CacheableEntity;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Chat\PrivateChat;
@@ -23,7 +24,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserTable;
 
-class User implements RestEntity
+class User implements RestEntity, CacheableEntity
 {
 	use ContextCustomer;
 
@@ -43,6 +44,8 @@ class User implements RestEntity
 		'LAST_ACTIVITY_DATE'
 	];
 
+	protected const NON_CACHEABLE_FIELDS = ['ABSENT'];
+
 	/**
 	 * @var ModuleManager
 	 */
@@ -51,11 +54,6 @@ class User implements RestEntity
 	 * @var Loader
 	 */
 	protected static string $loader = Loader::class;
-
-	/**
-	 * @var static[]
-	 */
-	protected static array $userStaticCache = [];
 
 	protected array $accessCache = [];
 	protected array $userData = [];
@@ -76,14 +74,7 @@ class User implements RestEntity
 			return new NullUser();
 		}
 
-		if (isset(self::$userStaticCache[$id]))
-		{
-			return self::$userStaticCache[$id];
-		}
-
-		self::$userStaticCache[$id] = UserFactory::getInstance()->getUserById($id);
-
-		return self::$userStaticCache[$id];
+		return UserFactory::getInstance()->getUserById($id);
 	}
 
 	public static function getCurrent(): self
@@ -99,9 +90,33 @@ class User implements RestEntity
 		}
 
 		$user = new static();
-		$user->userData = $userData;
+		$user->userData = self::prepareNonCachedUserData($userData);
 
 		return $user;
+	}
+
+	protected static function prepareNonCachedUserData(array $userData): array
+	{
+		$preparedUserData = $userData;
+		$preparedUserData['ABSENT'] = \CIMContactList::formatAbsentResult((int)$userData['ID']) ?: null;
+
+		return $preparedUserData;
+	}
+
+	public function toCacheRepresentation(): array
+	{
+		$cacheArray = $this->userData;
+		foreach (self::NON_CACHEABLE_FIELDS as $nonCacheableField)
+		{
+			unset($cacheArray[$nonCacheableField]);
+		}
+
+		return $cacheArray;
+	}
+
+	public function getCacheEntityId(): ?int
+	{
+		return $this->getId();
 	}
 
 	/**
@@ -750,10 +765,5 @@ class User implements RestEntity
 		}
 
 		return !empty($resultAdminIds) ? (int)min($resultAdminIds) : 0;
-	}
-
-	public static function clearStaticCache(int $id): void
-	{
-		unset(self::$userStaticCache[$id]);
 	}
 }

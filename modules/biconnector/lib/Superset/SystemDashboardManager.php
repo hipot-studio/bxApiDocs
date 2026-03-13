@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset;
 
 use Bitrix\BIConnector\Access\Role\RoleTable;
 use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
@@ -90,6 +91,10 @@ final class SystemDashboardManager
 	}
 
 	/**
+	 * @deprecated
+	 *
+	 * Exists for compatibility
+	 *
 	 * Adds agent to set admin as dashboard's owner if the previous owner was fired.
 	 * @param $fields array User fields ACTIVE (Y/N) and ID.
 	 *
@@ -97,32 +102,6 @@ final class SystemDashboardManager
 	 */
 	public static function onAfterUserUpdateHandler(array $fields): void
 	{
-		if (!SupersetInitializer::isSupersetReady())
-		{
-			return;
-		}
-
-		if (!isset($fields['ACTIVE']))
-		{
-			return;
-		}
-
-		if ($fields['ACTIVE'] === 'N')
-		{
-			$userId = (int)($fields['ID'] ?? 0);
-			if ($userId)
-			{
-				\CAgent::addAgent(
-					"\\Bitrix\\BIConnector\\Integration\\Superset\\Agent::setDefaultOwnerForDashboards({$userId});",
-					'biconnector',
-					'N',
-					300,
-					'',
-					'Y',
-					convertTimeStamp(time() + \CTimeZone::getOffset() + 300, 'FULL')
-				);
-			}
-		}
 	}
 
 	public static function getSystemApps(): array
@@ -375,21 +354,41 @@ final class SystemDashboardManager
 
 	private static function getDashboardNameFromMarket(array $name): string
 	{
-		static $portalRegion = null;
-		static $portalRegionIsCis = null;
+		$dashboardLanguage = CultureFormatter::getLanguageCode();
 
-		if (is_null($portalRegion) && is_null($portalRegionIsCis))
+		if (isset($name[$dashboardLanguage]))
 		{
-			$licence = Application::getInstance()->getLicense();
-			$portalRegion = $licence->getRegion();
-			$portalRegionIsCis = $licence->isCis();
+			return $name[$dashboardLanguage];
 		}
 
-		if (isset($name[$portalRegion]))
-		{
-			return $name[$portalRegion];
-		}
+		return $name['en'];
+	}
 
-		return $portalRegionIsCis ? $name['ru'] : $name['en'];
+	public static function updateNotInstalledTitles(): void
+	{
+		$apps = self::getSystemApps();
+		$dashboards = SupersetDashboardTable::getList([
+			'filter' => [
+				'=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM,
+				'=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED,
+			],
+		])->fetchCollection();
+
+		foreach ($dashboards as $dashboard)
+		{
+			$appCode = $dashboard->getAppId();
+			$appData = $apps[$appCode] ?? null;
+			if (!$appData || empty($appData['name']) || !is_array($appData['name']))
+			{
+				continue;
+			}
+
+			$newTitle = self::getDashboardNameFromMarket($appData['name']);
+			if ($newTitle && $newTitle !== $dashboard->getTitle())
+			{
+				$dashboard->setTitle($newTitle);
+				$dashboard->save();
+			}
+		}
 	}
 }

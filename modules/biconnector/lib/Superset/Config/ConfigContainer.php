@@ -95,6 +95,12 @@ class ConfigContainer
 			'isVerified' => $this->isPortalIdVerified(),
 		];
 
+		$maxReasons = 100;
+		if (count($reasons) > $maxReasons)
+		{
+			$reasons = array_slice($reasons, -$maxReasons);
+		}
+
 		\Bitrix\Main\Config\Option::set(
 			'biconnector',
 			self::CLEAR_CONFIG_REASON,

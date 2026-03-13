@@ -29,6 +29,11 @@ final class Analytics
 		return self::menuOpen('files', 'files_operations');
 	}
 
+	public static function mail(): array
+	{
+		return self::menuOpen('mail', 'mail_general_ops', 'mail_inbox_open', 'menu_item');
+	}
+
 	public static function stream(): array
 	{
 		return self::menuOpen('feed', 'posts_operations');

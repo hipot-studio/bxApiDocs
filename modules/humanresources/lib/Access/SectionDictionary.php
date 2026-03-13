@@ -95,7 +95,10 @@ class SectionDictionary
 			PermissionDictionary::HUMAN_RESOURCES_EMPLOYEE_REMOVE_FROM_DEPARTMENT,
 		];
 
-		if (Config\Feature::instance()->isDepartmentSettingsAvailable())
+		if (Config\Feature::instance()->isDepartmentBPSettingsAvailable()
+			|| Config\Feature::instance()->areDepartmentReportsSettingsAvailable()
+			|| Config\Feature::instance()->areMultipleUsersSettingsAvailable()
+		)
 		{
 			$companyStructure[] = PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT;
 		}

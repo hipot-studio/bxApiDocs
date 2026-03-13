@@ -18,6 +18,7 @@ use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Type;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\MemberSubordinateRelationType;
@@ -472,7 +473,13 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 			{
 				continue;
 			}
-			$userIds = array_filter(array_map('intval', $userIds));
+
+			$userIds = PublicContainer::getUserDepartmentService()->filterEmployeeIds($userIds);
+			if (empty($userIds))
+			{
+				continue;
+			}
+
 			$newUserIdList = array_merge($newUserIdList, $userIds);
 
 			foreach ($userIds as $userId)
@@ -600,7 +607,11 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 				continue;
 			}
 
-			$userIds = array_filter(array_map('intval', $userIds));
+			$userIds = PublicContainer::getUserDepartmentService()->filterEmployeeIds($userIds);
+			if (empty($userIds))
+			{
+				continue;
+			}
 
 			$userCollection = $this->nodeMemberRepository->findAllByEntityIdsAndEntityTypeAndNodeType(
 				entityIds: $userIds,

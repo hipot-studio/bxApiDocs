@@ -2,16 +2,14 @@
 
 namespace Bitrix\Call\Call;
 
-use Bitrix\Im\Call\Call;
-use Bitrix\Im\Call\Util;
+use Bitrix\Call\Util;
 use Bitrix\Main\Error;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\JWT;
 use Bitrix\Call\ControllerClient;
 
-\Bitrix\Main\Loader::includeModule('im');
 
-class BitrixCall extends Call
+class BitrixCall extends \Bitrix\Call\Call
 {
 	public const
 		ROOM_TYPE_SMALL = 1,

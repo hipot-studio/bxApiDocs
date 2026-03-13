@@ -3,17 +3,17 @@
 namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\V2\Application\Features;
-use Bitrix\Im\V2\Controller\Sticker\StickerUploader;
+use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
+use Bitrix\Im\V2\Controller\Filter\ExternalUserTypeFilter;
+use Bitrix\Im\V2\Integration\UI\Sticker\PendingFileCollection;
 use Bitrix\Im\V2\Message\Sticker\CustomPacks\StickerUuid;
 use Bitrix\Im\V2\Message\Sticker\PackItem;
 use Bitrix\Im\V2\Message\Sticker\PackType;
 use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
+use Bitrix\Im\V2\Permission\GlobalAction;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
-use Bitrix\Main\Loader;
-use Bitrix\UI\FileUploader\PendingFileCollection;
-use Bitrix\UI\FileUploader\Uploader;
 
 class Sticker extends BaseController
 {
@@ -22,39 +22,48 @@ class Sticker extends BaseController
 		return array_merge([
 			new ExactParameter(
 				PendingFileCollection::class,
-				'pendingFiles',
+				'pendingFileCollection',
 				function ($className, $uuids) {
-					Loader::requireModule('ui');
-					$pendingFileCollection = (new Uploader(new StickerUploader()))->getPendingFiles($uuids);
-					$pendingFileCollection->makePersistent();
-
-					return $pendingFileCollection;
+					return (new PendingFileCollection($uuids));
 				}
 			),
 		], parent::getAutoWiredParameters());
 	}
 
+	protected function getDefaultPreFilters()
+	{
+		return array_merge(
+			parent::getDefaultPreFilters(),
+			[
+				new ExternalUserTypeFilter(),
+			]
+		);
+	}
+
+	public function configureActions()
+	{
+		return [
+			'add' => [
+				'+prefilters' => [
+					new CheckActionAccess(GlobalAction::ChangeStickerPack),
+				],
+			],
+		];
+	}
+
 	/**
 	 * @restMethod im.v2.Sticker.add
 	 */
-	public function addAction(PendingFileCollection $pendingFiles, int $packId, PackType $packType): ?array
+	public function addAction(PendingFileCollection $pendingFileCollection, int $packId, PackType $packType): ?array
 	{
-		if (!Features::isStickersAvailable())
-		{
-			$this->addError(new StickerError(StickerError::STICKERS_NOT_AVAILABLE));
-
-			return null;
-		}
-
-		$fileUuidMap = StickerUuid::getFileMap($pendingFiles);
-		if (empty($fileUuidMap))
+		if (empty($pendingFileCollection->getFileMap()))
 		{
 			$this->addError(new StickerError(StickerError::EMPTY_STICKERS));
 
 			return null;
 		}
 
-		$result = (new StickerService())->addStickers($fileUuidMap, $packId, $packType);
+		$result = (new StickerService())->addStickers($pendingFileCollection, $packId, $packType);
 		$pack = $result->getResult();
 
 		if (!$result->isSuccess() || !$pack instanceof PackItem)
@@ -64,7 +73,7 @@ class Sticker extends BaseController
 			return null;
 		}
 
-		$stickerUuid = new StickerUuid($fileUuidMap, $pack->stickers);
+		$stickerUuid = new StickerUuid($pendingFileCollection->getFileMap(), $pack->stickers);
 
 		return (new RestAdapter($pack, $stickerUuid))->toRestFormat();
 	}
@@ -74,13 +83,6 @@ class Sticker extends BaseController
 	 */
 	public function deleteAction(array $ids, int $packId, PackType $packType): ?array
 	{
-		if (!Features::isStickersAvailable())
-		{
-			$this->addError(new StickerError(StickerError::STICKERS_NOT_AVAILABLE));
-
-			return null;
-		}
-
 		$result = (new StickerService())->deleteStickers($ids, $packId, $packType);
 		if (!$result->isSuccess())
 		{
