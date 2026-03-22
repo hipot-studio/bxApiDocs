@@ -7,6 +7,7 @@ use Bitrix\Crm\RepeatSale\DataCollector\Activity\ActivityType;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 final class DataCollectorManager
 {
@@ -28,7 +29,7 @@ final class DataCollectorManager
 	{
 		$isClientPermitted = $this->userPermissions->item()->canRead(
 			$this->clientIdentifier->getEntityTypeId(),
-			$this->clientIdentifier->getEntityId()
+			$this->clientIdentifier->getEntityId(),
 		);
 		if (!$isClientPermitted)
 		{
@@ -44,8 +45,9 @@ final class DataCollectorManager
 
 		$isEntityPermitted = $this->userPermissions->item()->canRead(
 			$this->entityIdentifier->getEntityTypeId(),
-			$this->entityIdentifier->getEntityId()
+			$this->entityIdentifier->getEntityId(),
 		);
+
 		if (!$isEntityPermitted)
 		{
 			$this->logger->error(
@@ -62,7 +64,7 @@ final class DataCollectorManager
 		try
 		{
 			$clientInfo = $this->getClientCollector()->getMarkers([
-				'entityId' => $this->clientIdentifier->getEntityId()
+				'entityId' => $this->clientIdentifier->getEntityId(),
 			]);
 
 			if (empty($clientInfo))
@@ -72,8 +74,9 @@ final class DataCollectorManager
 
 			[$dealsList, $ordersSummary] = $this->getDealCollector()->getMarkers([
 				'entityId' => $this->entityIdentifier->getEntityId(),
-				'clientEntityTypeId' => $this->clientIdentifier->getEntityTypeId(),
-				'clientEntityId' => $this->clientIdentifier->getEntityId(),
+				'clientIdentifiers' => [
+					$this->clientIdentifier->jsonSerialize(),
+				],
 			]);
 
 			return [
@@ -83,13 +86,13 @@ final class DataCollectorManager
 				'preferred_communication_channel' => $this->getPreferredCommunicationChannel($dealsList),
 			];
 		}
-		catch (\Throwable $exception)
+		catch (Throwable $exception)
 		{
 			$this->logger->error(
 				'{date}: Failed to collect copilot data for client {target}: {exception}' . PHP_EOL,
 				[
 					'target' => $this->clientIdentifier,
-					'exception' => $exception
+					'exception' => $exception,
 				],
 			);
 
@@ -121,8 +124,7 @@ final class DataCollectorManager
 	{
 		$counts = array_reduce(
 			array_filter(array_column($dealsList, 'communication_data')),
-			static function($counts, $arr)
-			{
+			static function($counts, $arr) {
 				foreach ($arr as $type => $items)
 				{
 					if (ActivityType::isCommunicationChannel($type))
@@ -133,7 +135,7 @@ final class DataCollectorManager
 
 				return $counts;
 			},
-			[]
+			[],
 		);
 
 		$channel = empty($counts)

@@ -2,11 +2,7 @@
 
 namespace Bitrix\Crm\RepeatSale\Segment\Collector;
 
-use Bitrix\Crm\RepeatSale\Segment\Data\LastSegmentData;
-use Bitrix\Crm\RepeatSale\Segment\Data\SegmentData;
 use Bitrix\Crm\RepeatSale\Segment\Data\SegmentDataInterface;
-use Bitrix\Crm\RepeatSale\Segment\Data\WrongSegmentData;
-use Bitrix\Crm\Service\Communication\Utils\Common;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Traits\Singleton;
 
@@ -24,7 +20,7 @@ abstract class BaseCollector
 		return $this;
 	}
 
-	public function setIsOnlyCalc(bool $isOnlyCalc): BaseCollector
+	public function setIsOnlyCalc(bool $isOnlyCalc): self
 	{
 		$this->isOnlyCalc = $isOnlyCalc;
 
@@ -42,53 +38,9 @@ abstract class BaseCollector
 		return $this->createSegmentData($entityTypeId, $filter);
 	}
 
-	protected function createSegmentData(int $entityTypeId, array $filter): SegmentDataInterface
-	{
-		if (!Common::isClientEntityTypeId($entityTypeId))
-		{
-			return new WrongSegmentData();
-		}
+	abstract protected function createSegmentData(int $entityTypeId, array $filter): SegmentDataInterface;
 
-		if ($entityTypeId === \CCrmOwnerType::Contact)
-		{
-			$ids = $this->getContactIds($filter);
-		}
-		else
-		{
-			$ids = $this->getCompanyIds($filter);
-		}
-
-		$items = $this->getItemsByIds($ids, $entityTypeId);
-		if (empty($items))
-		{
-			$nextItemId = $this->getNextItemsMinId($entityTypeId, $filter);
-
-			if ($nextItemId)
-			{
-				return new SegmentData(
-					[],
-					$entityTypeId,
-					$nextItemId,
-				);
-			}
-
-			$lastItemId = $filter['>ID'] ?? 0;
-
-			return new LastSegmentData($entityTypeId, $lastItemId);
-		}
-
-		return new SegmentData(
-			$items,
-			$entityTypeId,
-			array_pop($ids),
-		);
-	}
-
-	abstract protected function getContactIds(array $filter): array;
-
-	abstract protected function getCompanyIds(array $filter): array;
-
-	private function getItemsByIds(array $ids, int $entityTypeId): array
+	final protected function getItemsByIds(array $ids, int $entityTypeId): array
 	{
 		if (empty($ids))
 		{
@@ -98,12 +50,15 @@ abstract class BaseCollector
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 
 		return $factory?->getItems([
-			'select' => ['ID'],
+			'select' => $this->getItemFields(),
 			'filter' => [
 				'@ID' => $ids,
 			],
 		]) ?? [];
 	}
 
-	abstract protected function getNextItemsMinId(int $entityTypeId, array $filter): ?int;
+	protected function getItemFields(): array
+	{
+		return ['ID'];
+	}
 }

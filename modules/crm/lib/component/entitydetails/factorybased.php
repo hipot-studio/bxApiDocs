@@ -481,6 +481,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			),
 			'editorGuid' => $this->getEditorGuid(),
 			'isStageFlowActive' => !$this->isReadOnly(),
+			'analytics' => $this->getExtras()['ANALYTICS'] ?? [],
 		];
 
 		if ($this->factory->isCategoriesEnabled())

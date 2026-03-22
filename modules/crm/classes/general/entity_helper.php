@@ -349,6 +349,10 @@ class CCrmEntityHelper
 		{
 			$context->setEventId($options['eventId']);
 		}
+		if (isset($options['ANALYTICS']))
+		{
+			$context->setAnalytics($options['ANALYTICS']);
+		}
 		$operation->setContext($context);
 
 		if (!$checkPermissions)

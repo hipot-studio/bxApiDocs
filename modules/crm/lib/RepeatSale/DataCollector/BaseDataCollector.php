@@ -10,12 +10,14 @@ use CCrmOwnerType;
 
 abstract class BaseDataCollector implements CopilotMarkerProviderInterface
 {
-	protected readonly Factory $factory;
-
-	private const DEFAULT_LIMIT = 10;
+	protected const DEFAULT_LIMIT = 10;
 	private const DEFAULT_OFFSET = 0;
 
 	protected const SUPPORTED_ENTITY_TYPES = [];
+
+	protected readonly Factory $factory;
+	private ?int $limit = null;
+
 	public function __construct(protected readonly int $entityTypeId)
 	{
 		if (!$this->isSupportedEntityType())
@@ -51,7 +53,7 @@ abstract class BaseDataCollector implements CopilotMarkerProviderInterface
 			Item::FIELD_NAME_ID => 'DESC',
 		];
 		$offset = $parameters['offset'] ?? self::DEFAULT_OFFSET;
-		$limit = $parameters['limit'] ?? self::DEFAULT_LIMIT;
+		$limit = $parameters['limit'] ?? $this->getLimit();
 
 		return $this->factory->getItems([
 			'select' => $select,
@@ -65,5 +67,17 @@ abstract class BaseDataCollector implements CopilotMarkerProviderInterface
 	final protected function isSupportedEntityType(): bool
 	{
 		return in_array($this->entityTypeId, static::SUPPORTED_ENTITY_TYPES, true);
+	}
+
+	public function setLimit(int $limit): self
+	{
+		$this->limit = $limit;
+
+		return $this;
+	}
+
+	protected function getLimit(): int
+	{
+		return $this->limit ?? static::DEFAULT_LIMIT;
 	}
 }

@@ -232,6 +232,11 @@ class BookingComponent extends CBitrixComponent
 						'URL' => $url,
 						'ON_CLICK' => 'event.preventDefault();BX.SidePanel.Instance.open("' . CUtil::JSescape($url) . '", {cacheable: false, customLeftBoundary: 0,})',
 					],
+					[
+						'ID' => 'service_providers',
+						'TEXT' => Loc::getMessage('BOOKING_TOP_MENU_SERVICES_SERVICE_PROVIDERS_SERVICES'),
+						'ON_CLICK' => 'BX.Event.EventEmitter.emit("booking:booking:open-skus-settings")',
+					],
 				],
 			];
 		}

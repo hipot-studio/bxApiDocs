@@ -59,11 +59,20 @@ class CopilotInCall extends Base
 		return [
 			[
 				'id' => 'copilot-button-in-call',
-				'title' => Loc::getMessage('CRM_TOUR_COPILOT_IN_CALL_TITLE_MSGVER_1'),
+				'title' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_IN_CALL_TITLE_MSGVER_1',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				'text' => sprintf(
 					'%s %s',
-					Loc::getMessage("CRM_TOUR_COPILOT_IN_CALL_BODY_{$entityName}_MSGVER_1"),
-					Loc::getMessage('CRM_TOUR_COPILOT_IN_CALL_BODY_MAIN_MSGVER_1'),
+					Loc::getMessage(
+						"CRM_TOUR_COPILOT_IN_CALL_BODY_{$entityName}_MSGVER_1",
+						['#COPILOT_NAME#' => AIManager::getCopilotName()]
+					),
+					Loc::getMessage(
+						'CRM_TOUR_COPILOT_IN_CALL_BODY_MAIN_MSGVER_1',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()]
+					),
 				),
 				'position' => 'top',
 				'useDynamicTarget' => true,

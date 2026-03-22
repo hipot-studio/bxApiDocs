@@ -26,6 +26,8 @@ use Bitrix\Main\Type\DateTime;
  */
 abstract class StoreDocument extends ProductsDataProvider implements Nameable
 {
+	abstract protected function getDocumentType(): string;
+
 	/**
 	 * @inheritDoc
 	 */
@@ -77,12 +79,20 @@ abstract class StoreDocument extends ProductsDataProvider implements Nameable
 	 */
 	public function hasAccess($userId)
 	{
-		if ($this->isLoaded())
+		if (!$this->isLoaded() || !Loader::includeModule('catalog'))
 		{
-			return Loader::includeModule('catalog') && AccessController::getCurrent()->check(ActionDictionary::ACTION_CATALOG_READ);
+			return false;
 		}
 
-		return false;
+		$accessController = AccessController::getInstance($userId);
+
+		return
+			$accessController->check(ActionDictionary::ACTION_CATALOG_READ)
+			&& $accessController->checkByValue(
+				ActionDictionary::ACTION_STORE_DOCUMENT_VIEW,
+				$this->getDocumentType(),
+			)
+		;
 	}
 
 	/**

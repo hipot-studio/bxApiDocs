@@ -2,8 +2,6 @@
 
 namespace Bitrix\Crm\Integration\Rest\Marketplace;
 
-use Bitrix\Crm\Integration;
-use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\Marketplace;
@@ -38,6 +36,16 @@ final class Client
 		}
 
 		return (int)ceil(($finalDate->getTimestamp() - $currentDate) / 60 / 60 / 24);
+	}
+
+	public function isMarketOverdue(): bool
+	{
+		if (Marketplace\Client::isSubscriptionDemo())
+		{
+			return false;
+		}
+
+		return $this->getSubscriptionFinalDate()?->getTimestamp() < (new DateTime())->getTimestamp();
 	}
 
 	public function getSubscriptionFinalDate(): ?\Bitrix\Main\Type\Date

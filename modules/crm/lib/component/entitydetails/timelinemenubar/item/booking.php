@@ -69,6 +69,10 @@ class Booking extends Item
 			'code' => \CCrmOwnerType::resolveName($this->getEntityTypeId()),
 			'module' => 'crm',
 		];
+		$feature = [
+			'id' => $this->getFeatureId(),
+			'isEnabled' => $this->isFeatureEnabled(),
+		];
 
 		$ahaMoments = [];
 		if ($this->shouldShowAha())
@@ -93,13 +97,14 @@ class Booking extends Item
 					'entities' => [
 						[
 							'id' => $contacts[0],
-							'code' => 'CONTACT',
+							'code' => \CCrmOwnerType::ContactName,
 							'module' => 'crm'
 						],
 						$entity,
 					],
 					'ahaMoments' => $ahaMoments,
 					'shouldShowBanner' => $shouldShowBanner,
+					'feature' => $feature,
 				];
 			}
 		}
@@ -110,10 +115,7 @@ class Booking extends Item
 			],
 			'ahaMoments' => $ahaMoments,
 			'shouldShowBanner' => $shouldShowBanner,
-			'feature' => [
-				'id' => $this->getFeatureId(),
-				'isEnabled' => $this->isFeatureEnabled(),
-			],
+			'feature' => $feature,
 		];
 	}
 

@@ -78,21 +78,30 @@ final class FillPreliminarySegments
 			'callAssessmentId' => null,
 			'isAiEnabled' => true,
 			'assignmentUserIds' => [],
+			'isSystem' => false,
 		];
 
-		return [
+		$segments = [
 			//$this->getSleepingClients($params),
 			//$this->getLostClients($params),
 			$this->getEveryYearDeals($params),
 			$this->getEveryHalfYearDeals($params),
 			$this->getEveryMonthDeals($params),
 		];
+
+		if (Feature::enabled(Feature\RepeatSaleAiSegment::class))
+		{
+			$segments[] = $this->getAiScreeningDeals($params);
+			$segments[] = $this->getAiApproveDeals($params);
+		}
+
+		return $segments;
 	}
 
 	private function getLostClients(array $params): array
 	{
 		$data = [
-			'code' => SystemSegmentCode::LOST_CLIENT->value,
+			'code' => SegmentCode::LOST_CLIENT->value,
 			'title' => Loc::getMessage('CRM_FPS_LESS_12MONTH_TITLE'),
 			'prompt' => Loc::getMessage('CRM_FPS_LESS_12MONTH_PROMPT'),
 			'entityTitlePattern' => Loc::getMessage('CRM_FPS_LESS_12MONTH_ENTITY_TITLE_PATTERN'),
@@ -105,7 +114,7 @@ final class FillPreliminarySegments
 	private function getSleepingClients(array $params): array
 	{
 		$data = [
-			'code' => SystemSegmentCode::SLEEPING_CLIENT->value,
+			'code' => SegmentCode::SLEEPING_CLIENT->value,
 			'title' => Loc::getMessage('CRM_FPS_12MONTH_TITLE'),
 			'prompt' => Loc::getMessage('CRM_FPS_12MONTH_PROMPT'),
 			'entityTitlePattern' => Loc::getMessage('CRM_FPS_12MONTH_ENTITY_TITLE_PATTERN'),
@@ -118,7 +127,7 @@ final class FillPreliminarySegments
 	private function getEveryYearDeals(array $params): array
 	{
 		$data = [
-			'code' => SystemSegmentCode::DEAL_EVERY_YEAR->value,
+			'code' => SegmentCode::DEAL_EVERY_YEAR->value,
 			'title' => Loc::getMessage('CRM_FPS_EVERY_YEAR_TITLE'),
 			'prompt' => Loc::getMessage('CRM_FPS_EVERY_YEAR_PROMPT'),
 			'entityTitlePattern' => Loc::getMessage('CRM_FPS_EVERY_YEAR_ENTITY_TITLE_PATTERN'),
@@ -130,7 +139,7 @@ final class FillPreliminarySegments
 	private function getEveryHalfYearDeals(array $params): array
 	{
 		$data = [
-			'code' => SystemSegmentCode::DEAL_EVERY_HALF_YEAR->value,
+			'code' => SegmentCode::DEAL_EVERY_HALF_YEAR->value,
 			'title' => Loc::getMessage('CRM_FPS_EVERY_HALF_YEAR_TITLE'),
 			'prompt' => Loc::getMessage('CRM_FPS_EVERY_HALF_YEAR_PROMPT'),
 			'entityTitlePattern' => Loc::getMessage('CRM_FPS_EVERY_HALF_YEAR_ENTITY_TITLE_PATTERN'),
@@ -142,12 +151,45 @@ final class FillPreliminarySegments
 	private function getEveryMonthDeals(array $params): array
 	{
 		$data = [
-			'code' => SystemSegmentCode::DEAL_EVERY_MONTH->value,
+			'code' => SegmentCode::DEAL_EVERY_MONTH->value,
 			'title' => Loc::getMessage('CRM_FPS_EVERY_MONTH_TITLE'),
 			'prompt' => Loc::getMessage('CRM_FPS_EVERY_MONTH_PROMPT'),
 			'entityTitlePattern' => Loc::getMessage('CRM_FPS_EVERY_MONTH_ENTITY_TITLE_PATTERN'),
 		];
 
 		return array_merge($params, $data);
+	}
+
+	private function getAiScreeningDeals(array $params): array
+	{
+		$data = [
+			'isEnabled' => $this->isAiSegmentsAvailable(),
+			'code' => SegmentCode::AI_SCREENING->value,
+			'title' => Loc::getMessage('CRM_FPS_AI_SCREENING_TITLE'),
+			'prompt' => Loc::getMessage('CRM_FPS_AI_SCREENING_PROMPT'),
+			'entityTitlePattern' => Loc::getMessage('CRM_FPS_AI_SCREENING_ENTITY_TITLE_PATTERN'),
+		];
+
+		return array_merge($params, $data);
+	}
+
+	private function getAiApproveDeals(array $params): array
+	{
+		$data = [
+			'isEnabled' => $this->isAiSegmentsAvailable(),
+			'code' => SegmentCode::AI_APPROVE->value,
+			'title' => Loc::getMessage('CRM_FPS_AI_APPROVE_TITLE'),
+			'prompt' => Loc::getMessage('CRM_FPS_AI_APPROVE_PROMPT'),
+			'entityTitlePattern' => Loc::getMessage('CRM_FPS_AI_APPROVE_ENTITY_TITLE_PATTERN'),
+			'isSystem' => true,
+			'baseSegmentCode' => SegmentCode::AI_SCREENING->value,
+		];
+
+		return array_merge($params, $data);
+	}
+
+	private function isAiSegmentsAvailable(): bool
+	{
+		return Container::getInstance()->getRepeatSaleAvailabilityChecker()->isAiSegmentsAvailable();
 	}
 }

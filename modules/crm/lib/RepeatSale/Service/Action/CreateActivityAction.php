@@ -97,8 +97,8 @@ final class CreateActivityAction implements ActionInterface
 					'PROVIDER_PARAMS' => [
 						'JOB_ID' => $context?->getJobId(),
 						'SEGMENT_ID' => $segmentId,
-						'CLIENT_ENTITY_TYPE_ID' => $clientItem->getEntityTypeId(),
-						'CLIENT_ENTITY_ID' => $clientItem->getId(),
+						'BASE_ENTITY_TYPE_ID' => $clientItem->getEntityTypeId(),
+						'BASE_ENTITY_ID' => $clientItem->getId(),
 						'IS_AI_AUTO_START_ENABLED' => $isAiAutoStartEnabled,
 					],
 					'IS_INCOMING_CHANNEL' => 'Y',

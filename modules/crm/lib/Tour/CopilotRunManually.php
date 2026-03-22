@@ -22,8 +22,14 @@ final class CopilotRunManually extends CopilotInCall
 		return [
 			[
 				'id' => self::OPTION_NAME,
-				'title' => Loc::getMessage('CRM_TOUR_COPILOT_RUN_MANUALLY_TITLE'),
-				'text' => Loc::getMessage('CRM_TOUR_COPILOT_RUN_MANUALLY_TEXT'),
+				'title' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_RUN_MANUALLY_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
+				'text' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_RUN_MANUALLY_TEXT',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				'position' => 'top',
 				'useDynamicTarget' => true,
 				'eventName' => 'BX.Crm.Timeline.Call:onShowTourWhenCopilotManuallyStart',

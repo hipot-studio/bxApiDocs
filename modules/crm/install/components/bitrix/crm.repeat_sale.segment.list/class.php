@@ -111,6 +111,9 @@ class CrmRepeatSaleSegmentListComponent extends Base
 	{
 		$repeatSaleSegmentController = RepeatSaleSegmentController::getInstance();
 		$segmentCollection = $repeatSaleSegmentController->getList([
+			'filter' => [
+				'=BASE_SEGMENT_CODE' => null,
+			],
 			'order' => $this->getOrder(),
 			'offset' => $this->getPageNavigation()->getOffset(),
 			'limit' => $this->getPageNavigation()->getLimit(),
@@ -401,7 +404,7 @@ HTML;
 		$textCode = (
 			$this->isReadOnly()
 				? 'CRM_COMMON_ACTION_SHOW'
-				: 'CRM_COMMON_ACTION_EDIT'
+				: 'CRM_COMMON_ACTION_CONFIG'
 		);
 
 		$buttonBuilder = new Button([

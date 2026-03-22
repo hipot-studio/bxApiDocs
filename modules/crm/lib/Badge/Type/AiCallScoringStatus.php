@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Badge\Type;
 use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\Badge\ValueItem;
 use Bitrix\Crm\Badge\ValueItemOptions;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Main\Localization\Loc;
 
 final class AiCallScoringStatus extends Badge
@@ -15,7 +16,7 @@ final class AiCallScoringStatus extends Badge
 
 	public function getFieldName(): string
 	{
-		return Loc::getMessage('CRM_COMMON_COPILOT');
+		return AIManager::getCopilotName();
 	}
 
 	public function getValuesMap(): array

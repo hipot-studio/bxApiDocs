@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Controller;
 use Bitrix\Crm\Component\EntityDetails\FactoryBased;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\Field;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Kanban\Entity\Deadlines;
 use Bitrix\Crm\Kanban\ViewMode;
 use Bitrix\Crm\Multifield\Assembler;
@@ -244,7 +245,17 @@ class Item extends Base
 
 		$categoryId = $item->getCategoryId();
 
-		$operation = $factory->getDeleteOperation($item);
+		$context = clone \Bitrix\Crm\Service\Container::getInstance()->getContext();
+		if ($this->isRest())
+		{
+			$context->setAnalytics(['c_section' => Dictionary::SECTION_REST]);
+		}
+		elseif ($this->request->get('analytics'))
+		{
+			$context->setAnalytics($this->request->get('analytics'));
+		}
+
+		$operation = $factory->getDeleteOperation($item, $context);
 		$result = $operation->launch();
 		if (!$result->isSuccess())
 		{

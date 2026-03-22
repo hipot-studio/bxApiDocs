@@ -92,7 +92,7 @@ class AutomaticDuplicateIndexBuilder extends DuplicateIndexBuilder
 					$progressData['OFFSET'] = 0;
 				}
 
-				// The PROCESS_UPDATED_ITEMS step uses a different cache table, so the current one must be deleted
+				// The PROCESS_UPDATED_ITEMS step uses are different datasets, so the current one must be deleted
 				$this->dropDataSourceCache();
 				return true;
 			}
@@ -431,6 +431,6 @@ class AutomaticDuplicateIndexBuilder extends DuplicateIndexBuilder
 
 	protected function isUsingDedupeCache(): bool
 	{
-		return ($this->params->getContextId() !== '' && MatchHashDedupeCache::isEnabled());
+		return ($this->params->getContextId() !== '' && MatchHashDedupeCacheSingleStorage::isEnabled());
 	}
 }

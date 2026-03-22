@@ -5,7 +5,6 @@ namespace Bitrix\Crm\Activity\Provider\Tasks;
 use Bitrix\Crm\Activity\Provider\Base;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\ActivityTable;
-use Bitrix\Crm\Automation\Trigger\TaskStatusTrigger;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\EO_Activity;
 use Bitrix\Crm\Integration\Tasks\Task2ActivityPriority;
@@ -32,11 +31,8 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Integration\CRM\Timeline\Bindings;
 use CCrmActivity;
 use CCrmDateTimeHelper;
-use CCrmLiveFeed;
-use CCrmLiveFeedEvent;
 use CCrmOwnerType;
 use CCrmOwnerTypeAbbr;
-use CSocNetLog;
 
 final class Task extends Base
 {
@@ -46,7 +42,7 @@ final class Task extends Base
 	private const PROVIDER_TYPE_ID = 'TASKS_TASK';
 	private const SUBJECT = 'TASK';
 	private const TASK_CRM_FIELD = 'UF_CRM_TASK';
-	private const UPDATE_OPTIONS = ['SKIP_ASSOCIATED_ENTITY' => true, 'REGISTER_SONET_EVENT' => true];
+	private const UPDATE_OPTIONS = ['SKIP_ASSOCIATED_ENTITY' => true, 'REGISTER_SONET_EVENT' => false];
 
 	public static array $cache = [];
 
@@ -123,6 +119,7 @@ final class Task extends Base
 			[
 				'END_TIME' => $desiredDeadline,
 				'PROVIDER_ID' => $activity->getProviderId(),
+				'ASSOCIATED_ENTITY_ID' => $taskId,
 			]
 		);
 	}
@@ -609,110 +606,6 @@ final class Task extends Base
 		}
 	}
 
-	public static function canUseLiveFeedEvents($providerTypeId = null): bool
-	{
-		return true;
-	}
-
-	public static function createLiveFeedLog($entityId, array $activity, array &$logFields)
-	{
-		// return \Bitrix\Crm\Activity\Provider\Task::createLiveFeedLog($entityId, $activity, $logFields);
-		$taskId = (int)$entityId;
-		$activityId = (int)($activity['ID'] ?? null);
-		if (
-			$taskId <= 0
-			|| !Loader::includeModule('tasks')
-			|| !Loader::includeModule('socialnetwork')
-		)
-		{
-			return false;
-		}
-
-		$eventId = 0;
-		$task = \CTasks::GetByID($taskId)->Fetch();
-		if ($task === false)
-		{
-			return false;
-		}
-
-		if (!empty($task['UF_TASK_WEBDAV_FILES']))
-		{
-			$logFields['UF_SONET_LOG_DOC'] = $task['UF_TASK_WEBDAV_FILES'];
-		}
-
-		$log = CSocNetLog::getList([], [
-				'EVENT_ID' => 'tasks',
-				'SOURCE_ID' => $task['ID'],
-			],
-			['ID']
-		)->Fetch();
-
-		if ($log !== false)
-		{
-			$eventId = (int)CCrmLiveFeed::convertTasksLogEvent([
-				'LOG_ID' => $log['ID'],
-				'ACTIVITY_ID' => $activityId,
-				'PARENTS' => (!empty($logFields['PARENTS']) ? $logFields['PARENTS'] : []),
-			]);
-		}
-
-		elseif (!empty($task['GROUP_ID']))
-		{
-			$sites = [];
-			$result = \CSocNetGroup::getSite($task['GROUP_ID']);
-			if ($result !== false)
-			{
-				while ($site = $result->fetch())
-				{
-					$sites[] = $site['LID'];
-				}
-			}
-			if (!empty($sites))
-			{
-				$logFields['SITE_ID'] = $sites;
-			}
-		}
-
-		if ($eventId === 0)
-		{
-			$logFields['USER_ID'] = $task['CREATED_BY'];
-			$eventId = CCrmLiveFeed::createLogEvent(
-				$logFields,
-				CCrmLiveFeedEvent::Add,
-				['ACTIVITY_PROVIDER_ID' => 'TASKS']
-			);
-		}
-
-		if ($eventId > 0)
-		{
-			$taskParticipant = array_unique(
-				array_merge(
-					[$task['CREATED_BY'], $task['RESPONSIBLE_ID']],
-					$task['ACCOMPLICES'] ?? [],
-					$task['AUDITORS'] ?? []
-				)
-			);
-
-			$socnetRights = array_map(
-				static fn(int $userId): string => 'U' . $userId,
-				$taskParticipant
-			);
-
-			if (!empty($task['GROUP_ID']))
-			{
-				$socnetRights = array_merge(
-					$socnetRights,
-					['SG' . $task['GROUP_ID']]
-				);
-			}
-
-			\CSocNetLogRights::DeleteByLogID($eventId);
-			\CSocNetLogRights::Add($eventId, $socnetRights);
-		}
-
-		return $eventId;
-	}
-
 	public function updateBindings(Bindings $newBindings, Bindings $previousBindings, array $timelineParams): void
 	{
 		$taskId = $timelineParams['TASK_ID'];
@@ -875,7 +768,6 @@ final class Task extends Base
 		return $result;
 	}
 
-
 	public static function processRestorationFromRecycleBin(array $activityFields, array $params = null): Result
 	{
 		$result = new Result();
@@ -1035,127 +927,6 @@ final class Task extends Base
 		}
 
 		return TaskAccessController::canEdit($taskId, $userId);
-	}
-
-	public static function onTriggered(int $taskId, ?array $currentTaskFields, ?array $previousTaskFields): bool
-	{
-		if ($taskId <= 0 || !Loader::includeModule('tasks'))
-		{
-			return false;
-		}
-
-		$itemIterator = \CTasks::getByID($taskId, false);
-		$task = $itemIterator->fetch();
-		if (!$task)
-		{
-			return false;
-		}
-
-		$isStatusChanged = (isset($currentTaskFields['STATUS'])
-			&& (string)$currentTaskFields['STATUS']
-			!== (string)$previousTaskFields['STATUS']);
-		$listIterator = \CCrmActivity::getList(
-			[],
-			[
-				'=TYPE_ID' => \CCrmActivityType::Provider,
-				'=PROVIDER_ID' => self::getId(),
-				// '=PROVIDER_TYPE_ID' => self::getProviderTypeId(),
-				'=ASSOCIATED_ENTITY_ID' => $taskId,
-				'CHECK_PERMISSIONS' => 'N',
-			]
-		);
-
-		$isFound = false;
-		$taskBindings = [];
-
-		while ($activity = $listIterator->fetch())
-		{
-			$isFound = true;
-			self::legacySetBindings($task, $activity);
-			if (isset($activity['BINDINGS']) && count($activity['BINDINGS']) > 0)
-			{
-				\CCrmActivity::update($activity['ID'], $activity, false, true, self::UPDATE_OPTIONS);
-				\CCrmLiveFeed::syncTaskEvent($activity, $task);
-				$taskBindings = $activity['BINDINGS'];
-			}
-		}
-
-		if (!$isFound)
-		{
-			return true;
-		}
-
-		if ($isStatusChanged && $taskBindings)
-		{
-			TaskStatusTrigger::execute($taskBindings, ['TASK' => $task]);
-		}
-
-		return true;
-	}
-
-	private static function legacySetBindings(array &$taskFields, array &$activity): void
-	{
-		$taskOwners = $taskFields['UF_CRM_TASK'] ?? [];
-		$ownerData = [];
-		if (!is_array($taskOwners))
-		{
-			$taskOwners = [$taskOwners];
-		}
-		$activity['BINDINGS'] = [];
-		if (\CCrmActivity::tryResolveUserFieldOwners($taskOwners, $ownerData, \CCrmUserType::getTaskBindingField()))
-		{
-			$bindingMap = [];
-			foreach ($ownerData as $ownerInfo)
-			{
-				$ownerTypeId = \CCrmOwnerType::resolveID($ownerInfo['OWNER_TYPE_NAME']);
-				$ownerId = (int)$ownerInfo['OWNER_ID'];
-
-				$bindingMap["{$ownerTypeId}_{$ownerId}"] = [
-					'OWNER_TYPE_ID' => $ownerTypeId,
-					'OWNER_ID' => $ownerId,
-				];
-			}
-			$bindings = array_values($bindingMap);
-			if (count($bindings) > 1)
-			{
-				//Lead and Deals will be at beginning of list for take activity ownership
-				usort(
-					$bindings,
-					function ($a, $b) {
-						if ($a['OWNER_TYPE_ID'] == $b['OWNER_TYPE_ID'])
-						{
-							return 0;
-						}
-						return $a['OWNER_TYPE_ID'] > $b['OWNER_TYPE_ID'] ? 1 : -1;
-					}
-				);
-			}
-			$activity['BINDINGS'] = $bindings;
-		}
-
-		if (!empty($activity['BINDINGS']))
-		{
-			//Check for owner change
-			$ownerTypeId = isset($activity['OWNER_TYPE_ID']) ? (int)$activity['OWNER_TYPE_ID']
-				: \CCrmOwnerType::Undefined;
-			$ownerId = isset($activity['OWNER_ID']) ? (int)$activity['OWNER_ID'] : 0;
-			$ownerIsFound = false;
-			foreach ($activity['BINDINGS'] as $binding)
-			{
-				if ($binding['OWNER_TYPE_ID'] === $ownerTypeId && $binding['OWNER_ID'] === $ownerId)
-				{
-					$ownerIsFound = true;
-					break;
-				}
-			}
-
-			if (!$ownerIsFound)
-			{
-				$binding = $activity['BINDINGS'][0];
-				$activity['OWNER_TYPE_ID'] = $binding['OWNER_TYPE_ID'];
-				$activity['OWNER_ID'] = $binding['OWNER_ID'];
-			}
-		}
 	}
 
 	public static function checkCompletePermission($entityId, array $activity, $userId): ?bool

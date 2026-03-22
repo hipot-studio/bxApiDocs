@@ -2,10 +2,18 @@
 
 namespace Bitrix\Crm\RepeatSale\Schedule;
 
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\RepeatSale\AvailabilityChecker;
 use Bitrix\Crm\RepeatSale\Job\Controller\RepeatSaleJobController;
 use Bitrix\Crm\RepeatSale\Queue\Controller\RepeatSaleQueueController;
 use Bitrix\Crm\RepeatSale\Queue\QueueItem;
+use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
+use Bitrix\Crm\RepeatSale\Segment\Entity\RepeatSaleSegment;
+use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
+use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
+use Bitrix\Crm\RepeatSale\Service\Handler\AiApproveHandler;
+use Bitrix\Crm\RepeatSale\Service\Handler\AiScreeningHandler;
 use Bitrix\Crm\RepeatSale\Service\Handler\ConfigurableHandler;
 use Bitrix\Crm\RepeatSale\Service\Handler\SystemHandler;
 use Bitrix\Crm\Service\Container;
@@ -44,15 +52,31 @@ final class Scheduler
 				'segmentId' => $job->getSegmentId(),
 			];
 
+			$handlerTypeId = $this->getHandlerTypeId($segmentCode);
+
+			if ($this->isOnlyCalc && $handlerTypeId !== SystemHandler::getTypeValue())
+			{
+				continue;
+			}
+
+			if (
+				$handlerTypeId === AiScreeningHandler::getTypeValue()
+				|| $handlerTypeId === AiApproveHandler::getTypeValue()
+			)
+			{
+				$isDisableSegment = $this->tryDisableSegment($availabilityChecker, $job->getSegment());
+
+				if ($isDisableSegment)
+				{
+					continue;
+				}
+			}
+
 			$queueItem = QueueItem::createFromArray([
 				'jobId' => $job->getId(),
 				'params' => array_merge($params, $itemParams),
 				'isOnlyCalc' => $this->isOnlyCalc,
-				'handlerTypeId' => (
-					$segmentCode === null
-						? ConfigurableHandler::getType()->value
-						: SystemHandler::getType()->value
-				),
+				'handlerTypeId' => $handlerTypeId,
 			]);
 
 			$queueController->add($queueItem);
@@ -78,7 +102,11 @@ final class Scheduler
 	 */
 	private function getSuitableJobs(): Collection
 	{
-		$params = [];
+		$params = [
+			'filter' => [
+				'=SEGMENT.BASE_SEGMENT_CODE' => null,
+			],
+		];
 		if (!$this->isOnlyCalc)
 		{
 			$params['filter'][] = [
@@ -104,5 +132,89 @@ final class Scheduler
 		{
 
 		}
+	}
+
+	public function addChildrenJobsToQueueIfNotExists(int $parentSegmentId): void
+	{
+		$segmentController = RepeatSaleSegmentController::getInstance();
+		$parentSegment = $segmentController->getById($parentSegmentId);
+
+		if (!$parentSegment)
+		{
+			return;
+		}
+
+		$systemSegments = $segmentController->getList([
+			'select' => ['ID', 'CODE', 'JOB.ID'],
+			'filter' => [
+				'IS_SYSTEM' => 'Y',
+				'BASE_SEGMENT_CODE' => $parentSegment->getCode(),
+			],
+		]);
+
+		$params = [
+			'date' => (new Date())->getTimestamp(),
+		];
+
+		$queueController = RepeatSaleQueueController::getInstance();
+
+		foreach ($systemSegments as $systemSegment)
+		{
+			$segmentCode = $systemSegment->getCode();
+			$itemParams = [
+				'segmentCode' => $segmentCode,
+				'segmentId' => $systemSegment->getId(),
+			];
+
+			$queueItem = QueueItem::createFromArray([
+				'jobId' => $systemSegment->getJob()->getId(),
+				'params' => array_merge($params, $itemParams),
+				'isOnlyCalc' => $this->isOnlyCalc,
+				'handlerTypeId' => $this->getHandlerTypeId($segmentCode),
+			]);
+
+			$queueController->add($queueItem);
+		}
+	}
+
+	private function getHandlerTypeId(?string $segmentCode): string
+	{
+		if ($segmentCode === SegmentCode::AI_SCREENING->value)
+		{
+			return AiScreeningHandler::getTypeValue();
+		}
+
+		if ($segmentCode === SegmentCode::AI_APPROVE->value)
+		{
+			return AiApproveHandler::getTypeValue();
+		}
+
+		if ($segmentCode === null)
+		{
+			return ConfigurableHandler::getTypeValue();
+		}
+
+		return SystemHandler::getTypeValue();
+	}
+
+	private function tryDisableSegment(
+		AvailabilityChecker $availabilityChecker,
+		RepeatSaleSegment $segmentEntity,
+	): bool
+	{
+		if (
+			Feature::enabled(Feature\RepeatSaleAiSegment::class)
+			&& $availabilityChecker->isAiSegmentsAvailable()
+		)
+		{
+			return false;
+		}
+
+		$segment = SegmentItem::createFromEntity($segmentEntity);
+		$segment->setIsEnabled(false);
+
+		$result = RepeatSaleSegmentController::getInstance()->update($segment->getId(), $segment);
+
+		return $result->isSuccess();
 	}
 }

@@ -135,6 +135,8 @@ abstract class Operation
 		$checkResult = $this->preSaveChecks();
 		if ($checkResult)
 		{
+			$this->sendAnalytics($checkResult);
+
 			return $checkResult;
 		}
 
@@ -226,6 +228,8 @@ abstract class Operation
 
 		if (!$result->isSuccess())
 		{
+			$this->sendAnalytics($result);
+
 			return $result;
 		}
 
@@ -234,6 +238,8 @@ abstract class Operation
 
 		if ($isRecurringItem)
 		{
+			$this->sendAnalytics($result);
+
 			return $result;
 		}
 
@@ -261,6 +267,8 @@ abstract class Operation
 			// }
 			EventManager::getInstance()->removeEventHandler('crm', $eventType, $eventId);
 		}
+
+		$this->sendAnalytics($result);
 
 		return $result;
 	}
@@ -1532,5 +1540,9 @@ abstract class Operation
 		}
 
 		return null;
+	}
+
+	protected function sendAnalytics(Result $result): void
+	{
 	}
 }

@@ -3006,6 +3006,25 @@ class CAllCrmInvoice
 		$errMsg = [];
 		$bError = false;
 
+		$cleanWrongFilterStateAgent = '~CRM_CLEAN_WRONG_FILTER_STATE_AGENT';
+		if ((string)COption::GetOptionString('crm', $cleanWrongFilterStateAgent, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $cleanWrongFilterStateAgent, 'Y');
+
+			/**
+			 * @see \Bitrix\Crm\Agent\Filter\CleanWrongFilterStateAgent
+			 */
+			\CAgent::AddAgent(
+				'Bitrix\Crm\Agent\Filter\CleanWrongFilterStateAgent::run();',
+				'crm',
+				'N',
+				60,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+			);
+		}
+
 		$repeatSaleAiSegmentCalcAgent = '~CRM_REPEAT_SALE_AI_SEGMENT_CALC_AGENT';
 		if ((string)COption::GetOptionString('crm', $repeatSaleAiSegmentCalcAgent, 'N') === 'N')
 		{

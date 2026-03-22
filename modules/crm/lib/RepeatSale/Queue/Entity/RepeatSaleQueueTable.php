@@ -64,7 +64,7 @@ class RepeatSaleQueueTable extends DataManager
 			(new IntegerField('STATUS'))
 				->configureRequired()
 				->configureDefaultValue(Status::Waiting->value)
-				->addValidator(new RangeValidator(Status::Waiting->value, Status::Progress->value))
+				->addValidator(static fn($value) => (bool)Status::tryFrom((int)$value))
 			,
 			(new IntegerField('LAST_ENTITY_TYPE_ID'))
 				->configureNullable()
@@ -82,8 +82,8 @@ class RepeatSaleQueueTable extends DataManager
 			,
 			(new IntegerField('HANDLER_TYPE_ID'))
 				->configureRequired()
-				->addValidator(new RangeValidator(HandlerType::SystemHandler->value, HandlerType::ConfigurableHandler->value))
 				->configureDefaultValue(HandlerType::SystemHandler->value)
+				->addValidator(static fn($value) => (bool)HandlerType::tryFrom((int)$value))
 			,
 			(new IntegerField('RETRY_COUNT'))
 				->configureRequired()

@@ -17,6 +17,7 @@ use Bitrix\Crm\Search\SearchEnvironment;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\ActivityController;
 use Bitrix\Crm\Timeline\FactoryBasedController;
+use Bitrix\Crm\Integration\Tasks\Service\TriggerService;
 use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Crm\Timeline\TimelineEntry\Facade;
 use Bitrix\Crm\Timeline\TimelineType;
@@ -29,6 +30,7 @@ final class Controller extends FactoryBasedController
 	private ActivityController $activityController;
 	private Task $taskActivityProvider;
 	private Comment $commentActivityProvider;
+	private TriggerService $triggerService;
 
 	protected function getTrackedFieldNames(): array
 	{
@@ -41,6 +43,7 @@ final class Controller extends FactoryBasedController
 		$this->activityController = ActivityController::getInstance();
 		$this->taskActivityProvider = new Task();
 		$this->commentActivityProvider = new Comment();
+		$this->triggerService = new TriggerService();
 	}
 
 	public function prepareSearchContent(array $params): string
@@ -207,6 +210,12 @@ final class Controller extends FactoryBasedController
 
 	public function onTaskStatusChanged(Bindings $bindings, array $timelineParams): void
 	{
+		$taskId = (int)($timelineParams['TASK_ID'] ?? 0);
+		if ($taskId <= 0)
+		{
+			return;
+		}
+
 		[$bindings, $timelineParams] = $this->prepareParams($bindings, $timelineParams);
 		if ($bindings->isEmpty())
 		{
@@ -214,6 +223,12 @@ final class Controller extends FactoryBasedController
 		}
 
 		$this->handleTaskEvent(CategoryType::STATUS_CHANGED, $bindings, $timelineParams);
+
+		$status = (int)($timelineParams['TASK_CURRENT_STATUS'] ?? 0);
+		if ($status > 0)
+		{
+			$this->triggerService->executeTriggers($bindings, $taskId, $status);
+		}
 	}
 
 	public function onTaskChecklistAdded(Bindings $bindings, array $timelineParams): void
@@ -718,10 +733,10 @@ final class Controller extends FactoryBasedController
 
 		$data = $factory->getDataClass()::getList([
 			'select' => [
-				$assignedByFieldName
+				$assignedByFieldName,
 			],
 			'filter' => [
-				Item::FIELD_NAME_ID => $identifier->getEntityId()
+				Item::FIELD_NAME_ID => $identifier->getEntityId(),
 			],
 			'limit' => 1,
 		])->fetch() ?? [];
@@ -874,8 +889,6 @@ final class Controller extends FactoryBasedController
 			->where('TYPE_ID', \CCrmActivityType::Task)
 		;
 
-		$activity = $query->exec()->fetchObject();
-
-		return $activity;
+		return $query->exec()->fetchObject();
 	}
 }

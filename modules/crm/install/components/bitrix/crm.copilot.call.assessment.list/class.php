@@ -832,7 +832,7 @@ HTML;
 //		@todo prepare for narrow screens
 //		$logoPath = '/bitrix/components/bitrix/crm.copilot.call.assessment.list/templates/.default/images/crm-copilot-call-assessment-list-toolbar-person.png';
 //		$parameters['guide'] = new \Bitrix\Crm\UI\Toolbar\ToolbarGuide(
-//				Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_TOOLBAR_GUIDE_TITLE'),
+//				Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_TOOLBAR_GUIDE_TITLE', ['#COPILOT_NAME#' => AIManager::getCopilotName()]),
 //				$logoPath,
 //				'flows' // @todo temporary, replace to actual
 //			);

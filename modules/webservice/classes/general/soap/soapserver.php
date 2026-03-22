@@ -336,7 +336,7 @@ class CSOAPServer
 			$this->ShowSOAPFault("Error: this web page does only understand POST methods. BitrixXMLParser. ");
 		}
 
-		for ($i = 0; $i < count($this->OnRequestEvent); $i++)
+		for ($i = 0, $count = count($this->OnRequestEvent); $i < $count; $i++)
 		{
 			$this->OnRequestEvent[$i]->OnBeforeRequest($this);
 		}

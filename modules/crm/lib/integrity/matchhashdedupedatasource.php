@@ -164,7 +164,7 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 		return $result;
 	}
 
-	protected function getDedupeCache(): MatchHashDedupeCache
+	protected function getDedupeCache(): MatchHashDedupeCacheSingleStorage
 	{
 		$contextId = $this->getContextId();
 		$typeId = (int)$this->getTypeID();
@@ -173,7 +173,7 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 		$userId = (int)$this->getUserID();
 		$indexDateFilterValue = $this->params->getIndexDateFilterValue();
 
-		return new MatchHashDedupeCache(
+		return new MatchHashDedupeCacheSingleStorage(
 			new MatchHashDedupeQueryParams(
 				$contextId,
 				$typeId,
@@ -189,7 +189,7 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 	protected function getDuplicateHashesBaseQuery(array $filter = []): Result
 	{
 		$isUsingDedupeCache = (
-			MatchHashDedupeCache::isEnabled()
+			MatchHashDedupeCacheSingleStorage::isEnabled()
 			&& $this->getContextId() !== ''
 			&& ($filter === [] || (isset($filter['=MATCH_HASH']) && count($filter) === 1))
 		);
@@ -220,7 +220,7 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 				$resultData = $result->getData();
 				if (is_array($resultData))
 				{
-					$resultData['identifyingColumn'] = 'ID';
+					$resultData['identifyingColumn'] = 'RN';
 					$result->setData($resultData);
 				}
 

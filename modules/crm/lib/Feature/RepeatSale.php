@@ -5,7 +5,7 @@ namespace Bitrix\Crm\Feature;
 use Bitrix\Crm\Feature\Category\BaseCategory;
 use Bitrix\Crm\Feature\Category\Common;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
-use Bitrix\Crm\RepeatSale\Segment\SystemSegmentCode;
+use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
@@ -177,8 +177,8 @@ class RepeatSale extends BaseFeature
 			'select' => ['ID'],
 			'filter' => [
 				'@CODE' => [
-					SystemSegmentCode::SLEEPING_CLIENT->value,
-					SystemSegmentCode::LOST_CLIENT->value
+					SegmentCode::SLEEPING_CLIENT->value,
+					SegmentCode::LOST_CLIENT->value,
 				],
 			],
 		]);

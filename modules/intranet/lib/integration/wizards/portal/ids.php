@@ -56,9 +56,9 @@ class Ids
 	{
 		$siteId = $siteId ?: SITE_ID;
 
-		if (empty(self::$diskIds))
+		if (!isset(self::$diskIds[$code]))
 		{
-			$cacheId = 'diskIds';
+			$cacheId = 'diskIds_' . $code . '_' . $siteId;
 			$val = self::getFormCache($cacheId);
 
 			if (!is_array($val) && Main\Loader::IncludeModule('disk'))
@@ -70,13 +70,13 @@ class Ids
 						'filter' => ['ENTITY_ID' => "directors_files_" . $siteId, 'SITE_ID' => $siteId],
 					])->fetch();
 
-					$val['MANAGE_STORAGE_ID'] = $storage['ID'] ?? '0';
+					$val[$code] = $storage['ID'] ?? '0';
 				}
 				elseif ($code === 'SHARED_STORAGE_ID')
 				{
 					$commonStorage = \Bitrix\Disk\Driver::getInstance()->getStorageByCommonId('shared_files_'
 							. $siteId);
-					$val['SHARED_STORAGE_ID'] = $commonStorage ? $commonStorage->getId() : '0';
+					$val[$code] = $commonStorage ? $commonStorage->getId() : '0';
 				}
 				elseif ($code === 'SALE_STORAGE_ID')
 				{
@@ -85,12 +85,16 @@ class Ids
 						'filter' => ['ENTITY_ID' => "sales_files_" . $siteId, 'SITE_ID' => $siteId],
 					])->fetch();
 
-					$val['SALE_STORAGE_ID'] = $storage['ID'] ?? '0';
+					$val[$code] = $storage['ID'] ?? '0';
 				}
 
 				self::putIntoCache($cacheId, $val);
 			}
-			self::$diskIds = $val;
+
+			if (is_array($val))
+			{
+				self::$diskIds = array_merge(self::$diskIds ?? [], $val);
+			}
 		}
 		return isset(self::$diskIds[$code]) ? (string)self::$diskIds[$code] : null;
 	}

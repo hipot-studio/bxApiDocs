@@ -5,9 +5,11 @@ namespace Bitrix\Crm\Feature;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Feature\Category\BaseCategory;
 use Bitrix\Crm\Feature\Category\Common;
+use Bitrix\Crm\Integration\Rest\Marketplace\Client;
 use Bitrix\Crm\RepeatSale\FlowController;
 use Bitrix\Crm\RepeatSale\Logger;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
+use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
 use Bitrix\Crm\RepeatSale\Segment\SegmentManager;
 use Bitrix\Main\Localization\Loc;
@@ -64,7 +66,12 @@ class RepeatSaleForceMode extends BaseFeature
 			'limit' => 0, // for all segments
 		]);
 
-		$defaultEnableSegments = SegmentManager::getDefaultEnableSegmentCodes();
+		$enableSegments = SegmentManager::getDefaultEnableSegmentCodes();
+		if (!(new Client())->isMarketOverdue())
+		{
+			$enableSegments[] = SegmentCode::AI_SCREENING->value;
+			$enableSegments[] = SegmentCode::AI_APPROVE->value;
+		}
 
 		$userId = FlowController::getInstance()->getExpectedUserId();
 		if ($userId <= 0)
@@ -76,7 +83,7 @@ class RepeatSaleForceMode extends BaseFeature
 		{
 			$segmentItem = SegmentItem::createFromEntity($segment)->setClientCoverage(null);
 
-			if (in_array($segmentItem->getCode(), $defaultEnableSegments, true))
+			if (in_array($segmentItem->getCode(), $enableSegments, true))
 			{
 				$segmentItem->setIsEnabled(true);
 				$segmentItem->setAssignmentUserIds([$userId]);

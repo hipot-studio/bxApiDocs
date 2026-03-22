@@ -451,10 +451,8 @@ abstract class AbstractOperation
 
 			return $result;
 		}
-		else
-		{
-			self::logOperationProgress('operationLaunched', $this->target, (string)$hash, $this->parentJobId);
-		}
+
+		self::logOperationProgress('operationLaunched', $this->target, (string)$hash, $this->parentJobId);
 
 		if ($previousJob instanceof EO_Queue)
 		{

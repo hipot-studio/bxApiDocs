@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage\AI;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Main\Localization\Loc;
 
 final class RecordTranscriptStarted extends Base
@@ -13,6 +14,9 @@ final class RecordTranscriptStarted extends Base
 
 	public function getTitle(): ?string
 	{
-		return Loc::getMessage('CRM_TIMELINE_LOG_TRANSCRIPT_STARTED');
+		return Loc::getMessage(
+			'CRM_TIMELINE_LOG_TRANSCRIPT_STARTED',
+			['#COPILOT_NAME#' => AIManager::getCopilotName()]
+		);
 	}
 }

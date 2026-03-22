@@ -153,6 +153,8 @@ class ResourceProvider extends BaseProvider
 					'entityId' => EntityId::Resource->value,
 					'title' => $resource->getName(),
 					'subtitle' => $resource->getType()->getName(),
+					'avatar' => $resource->getAvatar()?->getUrl()
+						?? '/bitrix/js/booking/images/sku-resources-editor/resource-icon.svg',
 				]);
 			},
 			$resources->getCollectionItems(),

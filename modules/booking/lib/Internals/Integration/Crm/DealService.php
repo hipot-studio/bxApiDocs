@@ -158,7 +158,7 @@ class DealService
 			};
 		}
 
-		$addResult = $factory->getAddOperation($item)->disableCheckAccess()->launch();
+		$addResult = $factory->getAddOperation($item)->disableAllChecks()->launch();
 
 		return $addResult->isSuccess() ? $item->getId() : null;
 	}

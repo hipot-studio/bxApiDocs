@@ -235,7 +235,10 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			'isIframe' => $this->isIframe(),
 			'isEmbedded' => $this->isEmbedded(),
 			'settingsButtonExtenderParams' => $settingsButtonExtenderParams,
-
+			'analytics' => [
+				'c_section' => Dictionary::getSectionByEntityType($this->entityTypeId),
+				'c_sub_section' => Dictionary::SUB_SECTION_LIST,
+			],
 		];
 		$this->arResult['entityTypeName'] = $entityTypeName;
 		$this->arResult['categoryId'] = $this->getCategoryId();

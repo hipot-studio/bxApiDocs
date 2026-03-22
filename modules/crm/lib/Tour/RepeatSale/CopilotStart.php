@@ -51,7 +51,10 @@ final class CopilotStart extends Base
 			[
 				'id' => 'copilot-repeat-sale-start',
 				'title' => Loc::getMessage('CRM_TOUR_COPILOT_REPEAT_SALE_TITLE'),
-				'text' => Loc::getMessage($textCode),
+				'text' => Loc::getMessage(
+					$textCode,
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				'position' => 'top',
 				'target' => sprintf('#%s', CopilotButtonRepeatSale::BUTTON_TARGET_ID),
 				'article' => 25376986,

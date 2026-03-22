@@ -543,7 +543,6 @@ class CCrmDedupeGridComponent extends CBitrixComponent
 					if (in_array($item->getRootEntityID(), $invalidEntityIds))
 					{
 						$criterion = $item->getCriterion();
-
 						$items[$itemIndex] = $this
 							->getDuplicateIndexBuilder($criterion->getIndexTypeID())
 							->buildDuplicateByMatchHash($criterion->getMatchHash());

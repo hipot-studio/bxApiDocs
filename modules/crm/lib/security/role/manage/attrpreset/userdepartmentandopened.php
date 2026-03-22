@@ -169,7 +169,7 @@ class UserDepartmentAndOpened
 		{
 			$variants->add(
 				self::INHERIT,
-				(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_INHERIT'),
+				(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_INHERIT_MSGVER_1'),
 				[
 					'hideInSection' => true,
 					'useAsEmptyInSubsection' => true,
@@ -182,6 +182,7 @@ class UserDepartmentAndOpened
 						self::DEPARTMENT,
 						self::ALL,
 					]),
+					'isUseGroupHeadValuesInHint' => true,
 				]
 			);
 		}

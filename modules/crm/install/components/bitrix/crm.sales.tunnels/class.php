@@ -707,6 +707,11 @@ HTML;
 		}
 
 		$stage = $this->getStageById($id);
+		if ($stage === null)
+		{
+			return null;
+		}
+
 		$this->sendStagePullEvent('STAGE_ADDED', $stage);
 
 		return [

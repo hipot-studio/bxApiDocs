@@ -17,9 +17,9 @@ final class SegmentManager
 	public static function getDefaultEnableSegmentCodes(): array
 	{
 		return [
-			SystemSegmentCode::DEAL_EVERY_MONTH->value,
-			SystemSegmentCode::DEAL_EVERY_HALF_YEAR->value,
-			SystemSegmentCode::DEAL_EVERY_YEAR->value,
+			SegmentCode::DEAL_EVERY_MONTH->value,
+			SegmentCode::DEAL_EVERY_HALF_YEAR->value,
+			SegmentCode::DEAL_EVERY_YEAR->value,
 		];
 	}
 

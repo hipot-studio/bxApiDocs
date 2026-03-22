@@ -86,7 +86,7 @@ class PortalSettings
 
 	public function getDefaultLogo(): Intranet\Entity\Type\Logo
 	{
-		if (LANGUAGE_ID === 'ru')
+		if (in_array(LANGUAGE_ID, ['ru', 'kz']))
 		{
 			$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
 

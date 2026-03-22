@@ -30,7 +30,6 @@ use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
-use Bitrix\Main\Localization\Loc;
 use CCrmOwnerType;
 
 class FillItemFieldsFromCallTranscription extends AbstractOperation
@@ -420,7 +419,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 	{
 		Container::getInstance()->getLocalization()->loadMessages();
 
-		$copilotSuffix = Loc::getMessage('CRM_COMMON_COPILOT') . PHP_EOL . $unallocatedData;
+		$copilotSuffix = AIManager::getCopilotName() . PHP_EOL . $unallocatedData;
 
 		if (empty($oldComment))
 		{

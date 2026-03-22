@@ -90,11 +90,11 @@ class Comment extends Base
 			$commentData = $this->load($commentId);
 			$result = CommentController::convertToHtml(
 				[
-					'ID' => $commentData->getId(),
-					'CREATED' => $commentData->getCreated(),
-					'AUTHOR_ID' => $commentData->getAuthorId(),
-					'COMMENT' => $commentData->getComment(),
-					'SETTINGS' => $commentData->getSettings(),
+					'ID' => $commentData?->getId(),
+					'CREATED' => $commentData?->getCreated(),
+					'AUTHOR_ID' => $commentData?->getAuthorId(),
+					'COMMENT' => $commentData?->getComment(),
+					'SETTINGS' => $commentData?->getSettings(),
 				],
 				['INCLUDE_FILES' => 'Y']
 			);
@@ -386,10 +386,10 @@ class Comment extends Base
 		$commentData = $this->load($commentId);
 
 		$newCommentId = CommentEntry::create([
-			'CREATED' => $commentData->getCreated(),
-			'AUTHOR_ID' => $commentData->getAuthorId(),
-			'SETTINGS' => $commentData->getSettings(),
-			'TEXT' => $commentData->getComment(),
+			'CREATED' => $commentData?->getCreated(),
+			'AUTHOR_ID' => $commentData?->getAuthorId(),
+			'SETTINGS' => $commentData?->getSettings(),
+			'TEXT' => $commentData?->getComment(),
 			'FILES' => $filesList,
 			'BINDINGS' => [
 				[
@@ -423,7 +423,7 @@ class Comment extends Base
 
 	protected function update(int $commentId, int $ownerTypeId, int $ownerId, string $content, array $filesList, array $bindings): ?int
 	{
-		$oldContent = $this->load($commentId)->getComment();
+		$oldContent = $this->load($commentId)?->getComment();
 
 		if (count($bindings) > 1)
 		{
@@ -599,13 +599,7 @@ class Comment extends Base
 		}
 
 		$content = trim((string)($fields['COMMENT'] ?? ''));
-
-		$authorId = (int)($fields['AUTHOR_ID']?? 0);
-		if ($authorId <= 0)
-		{
-			$authorId = Container::getInstance()->getContext()->getUserId();
-		}
-
+		$authorId = Container::getInstance()->getContext()->getUserId();
 		$loadedFiles = isset($fields['FILES']) && is_array($fields['FILES'])
 			? $fields['FILES']
 			: [];
@@ -745,7 +739,8 @@ class Comment extends Base
 	private function isCurrentUserAuthor(int $commentId): bool
 	{
 		$comment = CommentEntry::getByID($commentId);
-		return (int)$comment['AUTHOR_ID'] === (int)$this->getCurrentUser()->getId();
+
+		return (int)$comment['AUTHOR_ID'] === Container::getInstance()->getContext()->getUserId();
 	}
 
 	protected function hasUpdateCommentPermission(int $commentId, int $entityTypeId, int $entityId): bool
@@ -760,7 +755,7 @@ class Comment extends Base
 			return false;
 		}
 
-		$currentUserId = $this->getCurrentUser()->getId();
+		$currentUserId = Container::getInstance()->getContext()->getUserId();
 		$categoryId = Container::getInstance()->getFactory($entityTypeId)?->getItem($entityId)?->getCategoryId();
 
 		if (Container::getInstance()->getUserPermissions($currentUserId)->isAdminForEntity($entityTypeId, $categoryId))

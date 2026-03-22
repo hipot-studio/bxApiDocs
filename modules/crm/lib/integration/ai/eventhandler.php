@@ -21,6 +21,7 @@ use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
+use Bitrix\Crm\Integration\AI\Operation\ScreeningRepeatSaleItem;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
@@ -46,6 +47,8 @@ final class EventHandler
 	public const SETTINGS_CALL_ASSESSMENT_ENGINE_CODE = 'crm_copilot_call_assessment_engine_code';
 	public const SETTINGS_REPEAT_SALE_ENABLED_CODE = 'crm_copilot_repeat_sale_enabled';
 	public const SETTINGS_REPEAT_SALE_ENGINE_CODE = 'crm_copilot_repeat_sale_engine_code';
+	public const SETTINGS_REPEAT_SALE_SCREENING_ITEM_ENABLED_CODE = 'crm_copilot_repeat_sale_screening_item_enabled';
+	public const SETTINGS_REPEAT_SALE_SCREENING_ITEM_ENGINE_CODE = 'crm_copilot_repeat_sale_screening_item_code';
 
 	public const ENGINE_CATEGORY = 'text';
 
@@ -63,7 +66,10 @@ final class EventHandler
 		{
 			$items[self::SETTINGS_FILL_CRM_TEXT_ENABLED_CODE] = [
 				'group' => Tuning\Defaults::GROUP_TEXT,
-				'header' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_TODO_TEXT_HEADER'),
+				'header' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_TODO_TEXT_HEADER',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
 				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_TODO_TEXT_TITLE'),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
@@ -74,7 +80,10 @@ final class EventHandler
 			{
 				$items[self::SETTINGS_MESSAGESENDER_EDITOR_ENABLED_CODE] = [
 					'group' => Tuning\Defaults::GROUP_TEXT,
-					'header' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_HEADER'),
+					'header' => Loc::getMessage(
+						'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_HEADER',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()],
+					),
 					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_TITLE'),
 					'type' => Tuning\Type::BOOLEAN,
 					'default' => true,
@@ -86,15 +95,27 @@ final class EventHandler
 		if (AIManager::isAiCallProcessingEnabled())
 		{
 			$groups[self::SETTINGS_GROUP_CODE] = [
-				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_GROUP_TITLE'),
-				'description' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_GROUP_DESCRIPTION'),
+				'title' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_GROUP_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'description' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_GROUP_DESCRIPTION',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
 				'helpdesk' => 18799442,
 			];
 
 			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE] = [
 				'group' => self::SETTINGS_GROUP_CODE,
-				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_ITEM_FROM_CALL_TITLE'),
-				'header' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_ITEM_FROM_CALL_HEADER'),
+				'title' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_ITEM_FROM_CALL_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'header' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_FILL_ITEM_FROM_CALL_HEADER',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
 				'sort' => 10,
@@ -127,8 +148,14 @@ final class EventHandler
 
 			$items[self::SETTINGS_CALL_ASSESSMENT_ENABLED_CODE] = [
 				'group' => self::SETTINGS_GROUP_CODE,
-				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_CALL_ASSESSMENT_TITLE'),
-				'header' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_CALL_ASSESSMENT_HEADER'),
+				'title' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_CALL_ASSESSMENT_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'header' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_CALL_ASSESSMENT_HEADER',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
 				'sort' => 15,
@@ -150,8 +177,14 @@ final class EventHandler
 			{
 				$items[self::SETTINGS_REPEAT_SALE_ENABLED_CODE] = [
 					'group' => self::SETTINGS_GROUP_CODE,
-					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_REPEAT_SALE_TITLE'),
-					'header' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_REPEAT_SALE_HEADER'),
+					'title' => Loc::getMessage(
+						'CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_REPEAT_SALE_TITLE',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()],
+					),
+					'header' => Loc::getMessage(
+						'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_REPEAT_SALE_HEADER',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()],
+					),
 					'type' => Tuning\Type::BOOLEAN,
 					'default' => true,
 					'sort' => 16,
@@ -325,6 +358,10 @@ final class EventHandler
 		{
 			FillRepeatSaleTips::onQueueJobFail($event, $job);
 		}
+		elseif ((int)$job->requireTypeId() === ScreeningRepeatSaleItem::TYPE_ID)
+		{
+			ScreeningRepeatSaleItem::onQueueJobFail($event, $job);
+		}
 	}
 	//endregion
 
@@ -476,6 +513,11 @@ final class EventHandler
 		if ((int)$job->requireTypeId() === FillRepeatSaleTips::TYPE_ID)
 		{
 			return FillRepeatSaleTips::onQueueJobExecute($event, $job);
+		}
+
+		if ((int)$job->requireTypeId() === ScreeningRepeatSaleItem::TYPE_ID)
+		{
+			return ScreeningRepeatSaleItem::onQueueJobExecute($event, $job);
 		}
 
 		return null;

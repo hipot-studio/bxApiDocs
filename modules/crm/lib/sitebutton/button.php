@@ -166,15 +166,7 @@ class Button
 		$result['PATH_EDIT'] = '';
 		$result['EXTERNAL_NAME'] = null;
 
-		$resultItemType = null;
-		$itemTypeList = Manager::getWidgetList();
-		foreach ($itemTypeList as $itemType)
-		{
-			if ($itemType['TYPE'] == $type)
-			{
-				$resultItemType = $itemType;
-			}
-		}
+		$resultItemType = ChannelManager::getChannelArray($type);
 
 		if ($resultItemType)
 		{

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Service\Timeline\Item\AI;
 
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentTable;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
@@ -73,7 +74,10 @@ final class CallScoringResult extends Base
 
 	public function getTitle(): ?string
 	{
-		return Loc::getMessage('CRM_TIMELINE_ACTIVITY_AI_CALL_SCORING_RESULT_TITLE');
+		return Loc::getMessage(
+			'CRM_TIMELINE_ACTIVITY_AI_CALL_SCORING_RESULT_TITLE',
+			['#COPILOT_NAME#' => AIManager::getCopilotName()]
+		);
 	}
 
 	public function getContentBlocks(): ?array

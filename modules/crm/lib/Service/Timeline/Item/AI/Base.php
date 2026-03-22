@@ -186,6 +186,7 @@ abstract class Base extends Configurable
 		;
 
 		$replacement = [
+			'#COPILOT_NAME#' => (new Text())->setValue(AIManager::getCopilotName()),
 			'#LANGUAGE_TITLE#' => (new Text())->setValue(mb_strtolower($languageTitle)),
 			'#DETAILS_LINK#' => $moreDetailLink,
 		];

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage\AI;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Main\Localization\Loc;
 
 final class FillingEntityFieldsStarted extends Base
@@ -15,12 +16,18 @@ final class FillingEntityFieldsStarted extends Base
 	{
 		if ($this->isCallAssociated())
 		{
-			return Loc::getMessage('CRM_TIMELINE_LOG_FILLING_FIELDS_STARTED');
+			return Loc::getMessage(
+				'CRM_TIMELINE_LOG_FILLING_FIELDS_STARTED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			);
 		}
 
 		if ($this->isOpenLineAssociated())
 		{
-			return Loc::getMessage('CRM_TIMELINE_LOG_FILLING_FIELDS_CHAT_STARTED');
+			return Loc::getMessage(
+				'CRM_TIMELINE_LOG_FILLING_FIELDS_CHAT_STARTED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			);
 		}
 
 		return null;

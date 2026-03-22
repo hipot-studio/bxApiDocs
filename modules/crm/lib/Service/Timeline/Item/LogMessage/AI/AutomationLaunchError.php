@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage\AI;
 
 use Bitrix\Crm\Badge\Type\AiCallFieldsFillingResult;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
 use Bitrix\Main\Localization\Loc;
@@ -16,7 +17,10 @@ final class AutomationLaunchError extends Base
 
 	public function getTitle(): ?string
 	{
-		return Loc::getMessage('CRM_LOG_MESSAGE_AI_AUTOMATION_LAUNCH_ERROR');
+		return Loc::getMessage(
+			'CRM_LOG_MESSAGE_AI_AUTOMATION_LAUNCH_ERROR',
+			['#COPILOT_NAME#' => AIManager::getCopilotName()]
+		);
 	}
 
 	public function getTags(): ?array

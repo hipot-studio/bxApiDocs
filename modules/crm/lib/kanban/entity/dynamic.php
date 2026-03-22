@@ -369,12 +369,14 @@ class Dynamic extends Kanban\Entity
 			],
 		]);
 
-		$hasEventId = !empty($params['eventId']) && is_string($params['eventId']);
-
-		if ($hasEventId)
+		$context = clone Container::getInstance()->getContext();
+		if (!empty($params['eventId']) && is_string($params['eventId']))
 		{
-			$context = clone Container::getInstance()->getContext();
 			$context->setEventId($params['eventId']);
+		}
+		if (!empty($params['ANALYTICS']) && is_array($params['ANALYTICS']))
+		{
+			$context->setAnalytics($params['ANALYTICS']);
 		}
 
 		$result = new Result();
@@ -388,10 +390,7 @@ class Dynamic extends Kanban\Entity
 			}
 
 			$operation = $this->factory->getDeleteOperation($item);
-			if ($hasEventId)
-			{
-				$operation->setContext($context);
-			}
+			$operation->setContext($context);
 
 			$operationResult = $operation->launch();
 			if ($operationResult->isSuccess())

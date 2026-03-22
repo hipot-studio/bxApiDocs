@@ -628,6 +628,9 @@ class Message
 		$closingTag = $matches['closingTag'];
 		$styles = $matches['styles'];
 
+		// neutralize viewport-dependent units to prevent infinite iframe resize loop
+		$styles = preg_replace('/(\d+(?:\.\d+)?)\s*(vh|vw|vmin|vmax|svh|svw|lvh|lvw|dvh|dvw)\b/i', '0px', $styles);
+
 		// remove all rules that do not start with a class selector
 		$styles = preg_replace('/(?:^|})\s*(?!(\.|@|\s*#mail-message-wrapper\s*\.))\s*[^@}{]+\s*\{[^}]*}/is', '', $styles);
 
@@ -647,6 +650,9 @@ class Message
 
 		//remove position:fixed
 		$styles = preg_replace('/position\s*:\s*fixed\s*;?/i', '', $styles);
+
+		// neutralize viewport-dependent units to prevent infinite iframe resize loop
+		$styles = preg_replace('/(\d+(?:\.\d+)?)\s*(vh|vw|vmin|vmax|svh|svw|lvh|lvw|dvh|dvw)\b/i', '0px', $styles);
 
 		$styles = preg_replace_callback(
 			'/z-index\s*:\s*(?<value>\d+)\s*;?/i',

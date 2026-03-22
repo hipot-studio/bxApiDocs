@@ -41,8 +41,15 @@ class Observer extends Notification
 		$receivers = [];
 
 		$observerIds = $this->difference->getCurrentValue(Item::FIELD_NAME_OBSERVERS) ?? [];
+		$observerIds = is_array($observerIds) ? $observerIds : [$observerIds];
+
 		foreach ($observerIds as $observerId)
 		{
+			if (!is_numeric($observerId) || (int)$observerId <= 0)
+			{
+				continue;
+			}
+
 			$receivers[] = new Receiver($observerId, ProcessEntityObserver::BECOME_OBSERVER);
 		}
 
@@ -52,7 +59,10 @@ class Observer extends Notification
 	protected function getReceiversWhenUpdating(): array
 	{
 		$beforeSaveObserverIds = $this->difference->getPreviousValue(Item::FIELD_NAME_OBSERVERS) ?? [];
+		$beforeSaveObserverIds = is_array($beforeSaveObserverIds) ? $beforeSaveObserverIds : [$beforeSaveObserverIds];
+
 		$currentObserverIds = $this->difference->getCurrentValue(Item::FIELD_NAME_OBSERVERS) ?? [];
+		$currentObserverIds = is_array($currentObserverIds) ? $currentObserverIds : [$currentObserverIds];
 
 		$receivers = [];
 

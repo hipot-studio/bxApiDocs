@@ -7,6 +7,7 @@ use Bitrix\Crm\Entity\EntityEditorConfig;
 use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\UserField\Dto\CreateUserFieldParameters;
 use Bitrix\Crm\Integration\AI\Function\UserField\Enum\UserFieldType;
+use Bitrix\Crm\Integration\Analytics\Builder\Userfield\Context\CreateContext;
 use Bitrix\Crm\Integration\UI\EntityEditor\Configuration\Element;
 use Bitrix\Crm\Integration\UI\EntityEditor\Enum\MarkTarget;
 use Bitrix\Crm\Integration\UI\EntityEditor\MartaAIMarksRepository;
@@ -91,6 +92,9 @@ abstract class AbstractCreateUserField implements AIFunction
 			'MULTIPLE' => $this->isMultiple() ? 'Y' : 'N',
 			'USER_TYPE_ID' => $this->getType()->id(),
 			'SETTINGS' => $this->settings(),
+			'ANALYTICS' => new CreateContext(
+				createFrom: CreateContext::MCP_TOOL,
+			),
 			...$this->getLabelFields($parameters->label),
 		];
 

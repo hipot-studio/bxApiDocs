@@ -16,22 +16,21 @@ class UserProfile extends Controller
 
 	/**
 	 * @restMethod intranetmobile.userprofile.isNeedToShowMiniProfile
-	 * @return bool
 	 */
 	public function isNeedToShowMiniProfileAction(): bool
 	{
-		$isNeedToShow = (
-				\CUserOptions::GetOption('intranetmobile', 'isNeedToShowMiniProfile', false) ?? false)
-			&& !(\CUserOptions::GetOption('intranetmobile', 'isMiniProfileShowed', false) ?? false)
-		;
+		return
+				\CUserOptions::GetOption('intranetmobile', 'isNeedToShowMiniProfile', false)
+			&& !\CUserOptions::GetOption('intranetmobile', 'isMiniProfileShowed', false);
+	}
 
-		if ($isNeedToShow)
-		{
-			\CUserOptions::SetOption('intranetmobile', 'isMiniProfileShowed', true);
-			\CUserOptions::DeleteOption('intranetmobile', 'isNeedToShowMiniProfile');
-		}
-
-		return $isNeedToShow;
+	/**
+	 * @restMethod intranetmobile.userprofile.markMiniProfileAsShown
+	 */
+	public function markMiniProfileAsShownAction(): bool
+	{
+		return \CUserOptions::SetOption('intranetmobile', 'isMiniProfileShowed', true)
+			&& \CUserOptions::DeleteOption('intranetmobile', 'isNeedToShowMiniProfile');
 	}
 
 	/**
@@ -94,7 +93,7 @@ class UserProfile extends Controller
 			return AjaxJson::createError($this->errorCollection);
 		}
 
-		$user = new \CUser;
+		$user = new \CUser();
 
 		if (!$user->update($userId, $fields))
 		{
@@ -113,7 +112,7 @@ class UserProfile extends Controller
 			$currentUserPerms = \CSocNetUserPerms::initUserPerms(
 				\Bitrix\Main\Engine\CurrentUser::get()->getId(),
 				$userId,
-				\CSocNetUser::isCurrentUserModuleAdmin(SITE_ID, false)
+				\CSocNetUser::isCurrentUserModuleAdmin(SITE_ID, false),
 			);
 
 			return $currentUserPerms['IsCurrentUser']

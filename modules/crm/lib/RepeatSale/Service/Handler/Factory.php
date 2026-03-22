@@ -12,19 +12,25 @@ final class Factory
 	public function getHandler(
 		HandlerType $handlerType,
 		?string $segmentCode = null,
-		?Context $context = null
+		?Context $context = null,
 	): ?BaseHandler
 	{
-		if ($handlerType === HandlerType::SystemHandler && $segmentCode)
+		if ($segmentCode)
 		{
-			return new SystemHandler($segmentCode, $context);
+			return match ($handlerType)
+			{
+				HandlerType::SystemHandler => new SystemHandler($segmentCode, $context),
+				HandlerType::AiScreeningHandler => new AiScreeningHandler($segmentCode, $context),
+				HandlerType::AiApproveHandler => new AiApproveHandler($segmentCode, $context),
+				HandlerType::ConfigurableHandler => new ConfigurableHandler($context),
+				default => null,
+			};
 		}
 
-		if ($handlerType === HandlerType::ConfigurableHandler)
+		return match ($handlerType)
 		{
-			return new ConfigurableHandler($context);
-		}
-
-		return null;
+			HandlerType::ConfigurableHandler => new ConfigurableHandler($context),
+			default => null,
+		};
 	}
 }

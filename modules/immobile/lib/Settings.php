@@ -93,6 +93,11 @@ class Settings
 		return \Bitrix\Main\Config\Option::get('immobile', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 
+	public static function isOpenlinesInMessengerV2Available(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'openlines_in_messenger_v2_available', 'N') === 'Y';
+	}
+
 	public static function isAutoTaskEnabled(): bool
 	{
 		if (!Loader::includeModule('im'))

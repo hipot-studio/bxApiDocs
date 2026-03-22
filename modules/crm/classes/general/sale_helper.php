@@ -374,23 +374,14 @@ class CCrmSaleHelper
 
 	public static function getShopGroupIdByType($type): ?int
 	{
-		$group = GroupTable::getRow([
-			'select' => [
-				'ID'
-			],
-			'filter' => [
-				'=STRING_ID' => 'CRM_SHOP_' . mb_strtoupper($type),
-			],
-			'cache' => [
-				'ttl' => 86400,
-			],
-		]);
+		$group = CGroup::GetIDByCode('CRM_SHOP_' . strtoupper($type));
+
 		if (!$group)
 		{
 			return null;
 		}
 
-		return (int)$group['ID'];
+		return (int)$group;
 	}
 
 	/**
@@ -424,7 +415,7 @@ class CCrmSaleHelper
 
 		if ($role !== 'admin' && $role !== 'manager')
 		{
-			return self::isShopAccess('manager') || self::isShopAccess('admin');
+			return self::isShopAccess('admin') || self::isShopAccess('manager');
 		}
 
 		if (self::isCacheAccess($userId, $role))

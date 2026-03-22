@@ -12,11 +12,14 @@ final class SegmentItem
 	private string $title;
 	private string $prompt;
 	private bool $isEnabled = true;
+	private bool $isSystem = false;
 	private ?string $code = null;
+	private ?string $baseSegmentCode = null;
 	private int $entityTypeId = CCrmOwnerType::Deal;
 	private int $entityCategoryId = 0;
 	private string $entityStageId = '';
 	private ?string $entityTitlePattern = null;
+	private ?int $assignmentTypeId = 1;
 	private ?int $callAssessmentId = null;
 	private bool $isAiEnabled = true;
 	private ?int $clientFound = null;
@@ -31,11 +34,14 @@ final class SegmentItem
 		$instance->title = $segmentItem->getTitle();
 		$instance->prompt = $segmentItem->getPrompt();
 		$instance->isEnabled = $segmentItem->getIsEnabled();
+		$instance->isSystem = $segmentItem->getIsSystem();
 		$instance->code = $segmentItem->getCode();
+		$instance->baseSegmentCode = $segmentItem->getBaseSegmentCode();
 		$instance->entityTypeId = $segmentItem->getEntityTypeId();
 		$instance->entityCategoryId = $segmentItem->getEntityCategoryId();
 		$instance->entityStageId = $segmentItem->getEntityStageId();
 		$instance->entityTitlePattern = $segmentItem->getEntityTitlePattern();
+		$instance->assignmentTypeId = $segmentItem->getAssignmentTypeId();
 		$instance->callAssessmentId = $segmentItem->getCallAssessmentId();
 		$instance->isAiEnabled = $segmentItem->getIsAiEnabled();
 		$instance->clientFound = $segmentItem->getClientFound();
@@ -57,11 +63,14 @@ final class SegmentItem
 		$instance->title = $data['title'] ?? '';
 		$instance->prompt = $data['prompt'] ?? '';
 		$instance->isEnabled = $data['isEnabled'] ?? true;
+		$instance->isSystem = $data['isSystem'] ?? false;
 		$instance->code = $data['code'] ?? null;
+		$instance->baseSegmentCode = $data['baseSegmentCode'] ?? null;
 		$instance->entityTypeId = $data['entityTypeId'] ?? 0;
 		$instance->entityCategoryId = $data['entityCategoryId'] ?? 0;
 		$instance->entityStageId = $data['entityStageId'] ?? '';
 		$instance->entityTitlePattern = $data['entityTitlePattern'] ?? null;
+		$instance->assignmentTypeId = $data['assignmentTypeId'] ?? AssignmentType::byUser->value;
 		$instance->callAssessmentId = $data['callAssessmentId'] ?? null;
 		$instance->isAiEnabled = $data['isAiEnabled'] ?? true;
 		$instance->clientFound = $data['clientFound'] ?? null;
@@ -84,6 +93,7 @@ final class SegmentItem
 			'entityCategoryId' => $this->entityCategoryId,
 			'entityStageId' => $this->entityStageId,
 			'entityTitlePattern' => $this->entityTitlePattern,
+			'assignmentTypeId' => $this->assignmentTypeId,
 			'callAssessmentId' => $this->callAssessmentId,
 			'isAiEnabled' => $this->isAiEnabled,
 			'clientFound' => $this->clientFound,
@@ -194,6 +204,11 @@ final class SegmentItem
 		return $this->entityTitlePattern;
 	}
 
+	public function getAssignmentTypeId(): ?int
+	{
+		return $this->assignmentTypeId;
+	}
+
 	public function getCallAssessmentId(): ?int
 	{
 		return $this->callAssessmentId;
@@ -211,15 +226,41 @@ final class SegmentItem
 		return $this;
 	}
 
+	public function isSystem(): bool
+	{
+		return $this->isSystem;
+	}
+
+	public function setIsSystem(bool $isSystem): self
+	{
+		$this->isSystem = $isSystem;
+
+		return $this;
+	}
+
+	public function getBaseSegmentCode(): ?string
+	{
+		return $this->baseSegmentCode;
+	}
+
+	public function setBaseSegmentCode(?string $baseSegmentCode): self
+	{
+		$this->baseSegmentCode = $baseSegmentCode;
+
+		return $this;
+	}
+
 	public function getDescription(): ?string
 	{
 		return match ($this->code)
 		{
-			SystemSegmentCode::DEAL_EVERY_MONTH->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_EVERY_MONTH'),
-			SystemSegmentCode::DEAL_EVERY_HALF_YEAR->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_EVERY_HALF_YEAR'),
-			SystemSegmentCode::DEAL_EVERY_YEAR->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_EVERY_YEAR'),
-			SystemSegmentCode::LOST_CLIENT->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_LOST_MORE_12_MONTH'),
-			SystemSegmentCode::SLEEPING_CLIENT->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_LAST_ACTIVITY_LESS_12_MONTH'),
+			SegmentCode::DEAL_EVERY_MONTH->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_EVERY_MONTH'),
+			SegmentCode::DEAL_EVERY_HALF_YEAR->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_EVERY_HALF_YEAR'),
+			SegmentCode::DEAL_EVERY_YEAR->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_EVERY_YEAR'),
+			SegmentCode::LOST_CLIENT->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_DEAL_LOST_MORE_12_MONTH'),
+			SegmentCode::SLEEPING_CLIENT->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_LAST_ACTIVITY_LESS_12_MONTH'),
+			SegmentCode::AI_SCREENING->value => Loc::getMessage('CRM_SEGMENT_ITEM_AI_SCREENING'),
+			SegmentCode::AI_APPROVE->value => Loc::getMessage('CRM_SEGMENT_ITEM_AI_APPROVE'),
 			default => null,
 		};
 	}

@@ -6,6 +6,8 @@ use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Category\Dto\Stage\CreateParameters;
 use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\CreateEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\PullManager;
+use Bitrix\Crm\Kanban\Entity;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
@@ -62,6 +64,22 @@ final class Create implements AIFunction
 			}
 
 			return Result::failFromApplication();
+		}
+
+		$entityTypeName = Container::getInstance()->getFactory($parameters->entityTypeId)?->getEntityName();
+		if ($entityTypeName !== null)
+		{
+			$item = Entity::getInstance($entityTypeName)?->createPullStage($fields);
+			if ($item !== null)
+			{
+				PullManager::getInstance()->sendStageAddedEvent(
+					$item,
+					[
+						'TYPE' => $entityTypeName,
+						'CATEGORY_ID' => $parameters->categoryId,
+					],
+				);
+			}
 		}
 
 		return Result::success(id: $id);

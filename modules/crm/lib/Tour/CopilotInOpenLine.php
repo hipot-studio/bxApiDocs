@@ -32,8 +32,14 @@ final class CopilotInOpenLine extends Base
 		return [
 			[
 				'id' => self::OPTION_NAME,
-				'title' => Loc::getMessage('CRM_TOUR_COPILOT_IN_OPENLINE_TITLE'),
-				'text' => Loc::getMessage('CRM_TOUR_COPILOT_IN_OPENLINE_TEXT'),
+				'title' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_IN_OPENLINE_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
+				'text' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_IN_OPENLINE_TEXT',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				'position' => 'top',
 				'useDynamicTarget' => true,
 				'eventName' => 'BX.Crm.Timeline.Openline:onShowCopilotTour',

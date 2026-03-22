@@ -66,7 +66,10 @@ trait CopilotHelper
 		)
 		{
 			$result['copilotDone'] = (new Tag(
-				Loc::getMessage('CRM_TIMELINE_TAG_COPILOT_DONE'),
+				Loc::getMessage(
+					'CRM_TIMELINE_TAG_COPILOT_DONE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				Tag::TYPE_LAVENDER
 			))->setScopeWeb();
 

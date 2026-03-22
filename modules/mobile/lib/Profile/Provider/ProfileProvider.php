@@ -2,7 +2,6 @@
 
 namespace Bitrix\Mobile\Profile\Provider;
 
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Mobile\Profile\Enum\TabType;
@@ -90,14 +89,6 @@ class ProfileProvider
 	private function getTabInstances(): array
 	{
 		return ProfileTabFactory::createTabs($this->viewerId, $this->ownerId);
-	}
-
-	/**
-	 * @return bool
-	 */
-	public static function isNewProfileFeatureEnabled(): bool
-	{
-		return Option::get('mobile', 'profile_feature_enabled', 'Y') === 'Y';
 	}
 
 	/**

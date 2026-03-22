@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Badge\Type;
 use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\Badge\ValueItem;
 use Bitrix\Crm\Badge\ValueItemOptions;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Main\Localization\Loc;
 
 class CopilotCallAssessmentStatus extends Badge
@@ -26,7 +27,10 @@ class CopilotCallAssessmentStatus extends Badge
 				Loc::getMessage('CRM_BADGE_COPILOT_CALL_ASSESSMENT_STATUS_ERROR_VALUE'),
 				ValueItemOptions::TEXT_COLOR_FAILURE,
 				ValueItemOptions::BG_COLOR_FAILURE,
-				Loc::getMessage('CRM_BADGE_COPILOT_CALL_ASSESSMENT_STATUS_ERROR_HINT'),
+				Loc::getMessage(
+					'CRM_BADGE_COPILOT_CALL_ASSESSMENT_STATUS_ERROR_HINT',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 			),
 		];
 	}

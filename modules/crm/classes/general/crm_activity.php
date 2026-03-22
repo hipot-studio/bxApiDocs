@@ -4918,28 +4918,6 @@ class CAllCrmActivity
 			}
 		}
 	}
-	// Event handlers -->
-	public static function OnTaskAdd($taskID, &$arTaskFields)
-	{
-	}
-
-	/**
-	 * @param array $arTaskFields Task fields.
-	 */
-	public static function OnBeforeTaskAdd(&$arTaskFields)
-	{
-		\Bitrix\Crm\Activity\Provider\Task::onBeforeTaskAdd($arTaskFields);
-	}
-
-	/**
-	 * @param int $taskID Task id.
-	 * @param array $arTaskFields Task fields.
-	 */
-	public static function OnTaskUpdate($taskID, &$arCurrentTaskFields, &$arPreviousTaskFields)
-	{
-		\Bitrix\Crm\Activity\Provider\Tasks\Task::onTriggered($taskID, $arCurrentTaskFields, $arPreviousTaskFields);
-		\Bitrix\Crm\Activity\Provider\Task::onTaskUpdate($taskID, $arCurrentTaskFields, $arPreviousTaskFields);
-	}
 
 	/**
 	 * @deprecated

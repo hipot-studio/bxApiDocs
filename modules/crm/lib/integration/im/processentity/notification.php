@@ -214,6 +214,11 @@ abstract class Notification
 	{
 		foreach ($fillingIds as $fillingId)
 		{
+			if (!is_numeric($fillingId) || (int)$fillingId <= 0)
+			{
+				continue;
+			}
+
 			$receivers[] = new Receiver($fillingId, $fillingMessageType);
 		}
 	}

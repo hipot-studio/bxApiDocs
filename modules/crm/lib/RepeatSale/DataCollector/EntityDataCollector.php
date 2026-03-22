@@ -13,25 +13,18 @@ use CCrmOwnerType;
 final class EntityDataCollector extends BaseDataCollector
 {
 	protected const DEFAULT_LIMIT = 5;
+
 	protected const SUPPORTED_ENTITY_TYPES = [
 		CCrmOwnerType::Deal,
 	];
 
 	public function getMarkers(array $parameters = []): array
 	{
-		$entityId = (int)($parameters['entityId'] ?? 0);
-		if ($entityId <= 0)
-		{
-			return [];
-		}
-
-		$clientEntityTypeId = (int)($parameters['clientEntityTypeId'] ?? 0);
-		$clientEntityId = (int)($parameters['clientEntityId'] ?? 0);
 		$filter = $this->prepareCopilotMarkersFilter(
-			$entityId,
-			$clientEntityTypeId,
-			$clientEntityId
+			entityId: (int)($parameters['entityId'] ?? 0),
+			clientIdentifiers: $parameters['clientIdentifiers'] ?? [],
 		);
+
 		if (empty($filter))
 		{
 			return [];
@@ -42,11 +35,11 @@ final class EntityDataCollector extends BaseDataCollector
 			'order' => [
 				Item::FIELD_NAME_CREATED_TIME => 'DESC',
 			],
-			'limit' => self::DEFAULT_LIMIT,
+			'limit' => $this->getLimit(),
 		]);
 		$items = array_map(
 			static fn (Item $item) => array_filter($item->getCompatibleData()),
-			$items
+			$items,
 		);
 		if (empty($items))
 		{
@@ -136,30 +129,44 @@ final class EntityDataCollector extends BaseDataCollector
 		];
 	}
 
-	private function prepareCopilotMarkersFilter(int $entityId, int $clientEntityTypeId, int $clientEntityId): array
+	private function prepareCopilotMarkersFilter(int $entityId, array $clientIdentifiers): array
 	{
 		$filter = [];
 
-		if ($clientEntityTypeId === CCrmOwnerType::Contact)
+		foreach ($clientIdentifiers as $clientIdentifier)
 		{
-			$filter = [
-				'=' . Item::FIELD_NAME_CONTACT_BINDINGS . '.CONTACT_ID' => $clientEntityId,
-			];
+			$clientEntityTypeId = $clientIdentifier['entityTypeId'] ?? 0;
+			$clientEntityId = $clientIdentifier['entityId'] ?? 0;
+
+			if ($clientEntityId <= 0)
+			{
+				continue;
+			}
+
+			if ($clientEntityTypeId === CCrmOwnerType::Contact)
+			{
+				$filter['@' . Item::FIELD_NAME_CONTACT_BINDINGS . '.CONTACT_ID'][] = $clientEntityId;
+			}
+			elseif ($clientEntityTypeId === CCrmOwnerType::Company)
+			{
+				$filter['@' . Item::FIELD_NAME_COMPANY_ID][] = $clientEntityId;
+			}
 		}
 
-		if ($clientEntityTypeId === CCrmOwnerType::Company)
+		if (empty($filter))
 		{
-			$filter = [
-				'=' . Item::FIELD_NAME_COMPANY_ID => $clientEntityId,
-			];
+			return [];
 		}
 
-		return empty($filter)
-			? []
-			: array_merge($filter, [
-				'=' . Item::FIELD_NAME_IS_RECURRING => 'N',
-				'!=' .Item::FIELD_NAME_ID => $entityId,
-			])
-		;
+		$entityFilter = [
+			'=' . Item::FIELD_NAME_IS_RECURRING => 'N',
+		];
+
+		if ($entityId > 0)
+		{
+			$entityFilter['!=' . Item::FIELD_NAME_ID] = $entityId;
+		}
+
+		return array_merge($filter, $entityFilter);
 	}
 }

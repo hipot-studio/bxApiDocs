@@ -9,7 +9,6 @@ use Bitrix\Crm\Restriction\AutomatedSolutionImportedLimit;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Type\DateTime;
 use CCrmOwnerType;
 
 final class CapabilityAccessChecker
@@ -126,6 +125,6 @@ final class CapabilityAccessChecker
 
 	private function isMarketOverdue(): bool
 	{
-		return (new Client())->getSubscriptionFinalDate()?->getTimestamp() < (new DateTime())->getTimestamp();
+		return (new Client())->isMarketOverdue();
 	}
 }

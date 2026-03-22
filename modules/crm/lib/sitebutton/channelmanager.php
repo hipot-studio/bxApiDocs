@@ -127,21 +127,30 @@ class ChannelManager
 	 */
 	public static function getChannelArray($type)
 	{
-		$channel = self::getByType($type);
-		if (!$channel)
+		static $cache = [];
+		if (!array_key_exists($type, $cache))
 		{
-			return null;
+			$channel = self::getByType($type);
+
+			if (!$channel)
+			{
+				$cache[$type] = null;
+			}
+			else
+			{
+				$cache[$type] = [
+					'TYPE' => $channel::getType(),
+					'NAME' => $channel::getName(),
+					'PATH_LIST' => $channel::getPathList(),
+					'PATH_ADD' => $channel::getPathAdd(),
+					'PATH_EDIT' => $channel::getPathEdit(),
+					'RESOURCES' => $channel::getResources(),
+					'LIST' => $channel::getList(),
+				];
+			}
 		}
 
-		return array(
-			'TYPE' => $channel::getType(),
-			'NAME' => $channel::getName(),
-			'PATH_LIST' => $channel::getPathList(),
-			'PATH_ADD' => $channel::getPathAdd(),
-			'PATH_EDIT' => $channel::getPathEdit(),
-			'RESOURCES' => $channel::getResources(),
-			'LIST' => $channel::getList()
-		);
+		return $cache[$type];
 	}
 
 	/**

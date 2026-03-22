@@ -10,7 +10,7 @@ use Bitrix\Crm\Service\Communication\Utils\Common;
 use Bitrix\Main\Type\Date;
 use CCrmOwnerType;
 
-final class SleepingClientCollector extends BaseCollector
+final class SleepingClientCollector extends BaseSqlCollector
 {
 	protected function getCompanyIds(array $filter): array
 	{

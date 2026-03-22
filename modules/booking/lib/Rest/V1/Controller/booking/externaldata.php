@@ -89,6 +89,7 @@ class ExternalData extends Controller
 		$command = new UpdateBookingCommand(
 			updatedBy: $this->getUserId(),
 			booking: $booking,
+			allowOverbooking: true,
 		);
 
 		/** @var BookingResult $result */
@@ -138,6 +139,7 @@ class ExternalData extends Controller
 		$command = new UpdateBookingCommand(
 			updatedBy: $this->getUserId(),
 			booking: $booking,
+			allowOverbooking: true,
 		);
 
 		/** @var BookingResult $result */

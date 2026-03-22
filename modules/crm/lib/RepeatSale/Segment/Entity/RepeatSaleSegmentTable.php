@@ -4,6 +4,8 @@ namespace Bitrix\Crm\RepeatSale\Segment\Entity;
 
 use Bitrix\Crm\Category\Entity\DealCategoryTable;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentTable;
+use Bitrix\Crm\RepeatSale\Segment\AssignmentType;
+use Bitrix\Crm\RepeatSale\Job\Entity\RepeatSaleJobTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Data\DataManager;
@@ -66,7 +68,16 @@ class RepeatSaleSegmentTable extends DataManager
 				->configureDefaultValue('Y')
 				->configureRequired()
 			,
+			(new BooleanField('IS_SYSTEM'))
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue('N')
+				->configureRequired()
+			,
 			(new StringField('CODE'))
+				->configureSize(30)
+				->configureNullable()
+			,
+			(new StringField('BASE_SEGMENT_CODE'))
 				->configureSize(30)
 				->configureNullable()
 			,
@@ -89,6 +100,10 @@ class RepeatSaleSegmentTable extends DataManager
 			,
 			(new IntegerField('CALL_ASSESSMENT_ID'))
 				->configureNullable()
+			,
+			(new IntegerField('ASSIGNMENT_TYPE_ID'))
+				->configureDefaultValue(AssignmentType::byUser->value)
+				->addValidator(static fn($value) => in_array($value, AssignmentType::values(), true))
 			,
 			(new BooleanField('IS_AI_ENABLED'))
 				->configureStorageValues('N', 'Y')
@@ -122,6 +137,11 @@ class RepeatSaleSegmentTable extends DataManager
 				'CALL_ASSESSMENT',
 				CopilotCallAssessmentTable::class,
 				Join::on('this.CALL_ASSESSMENT_ID', 'ref.ID'),
+			),
+			new Reference(
+				'JOB',
+				RepeatSaleJobTable::class,
+				Join::on('this.ID', 'ref.SEGMENT_ID'),
 			),
 			(new OneToMany(
 				'ASSIGNMENT_USERS',

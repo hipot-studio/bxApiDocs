@@ -2,40 +2,25 @@
 
 namespace Bitrix\Crm\RepeatSale\Segment\Collector;
 
-use Bitrix\Crm\RepeatSale\Segment\SystemSegmentCode;
+use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
 use Bitrix\Crm\Traits\Singleton;
 
 final class Factory
 {
 	use Singleton;
 
-	public function getCollector(?SystemSegmentCode $segmentCode): ?BaseCollector
+	public function getCollector(?SegmentCode $segmentCode): ?BaseCollector
 	{
-		if ($segmentCode === SystemSegmentCode::LOST_CLIENT)
+		return match ($segmentCode)
 		{
-			return LostClientCollector::getInstance();
-		}
-
-		if ($segmentCode === SystemSegmentCode::SLEEPING_CLIENT)
-		{
-			return SleepingClientCollector::getInstance();
-		}
-
-		if ($segmentCode === SystemSegmentCode::DEAL_EVERY_YEAR)
-		{
-			return DealEveryYearCollector::getInstance();
-		}
-
-		if ($segmentCode === SystemSegmentCode::DEAL_EVERY_HALF_YEAR)
-		{
-			return DealEveryHalfYearCollector::getInstance();
-		}
-
-		if ($segmentCode === SystemSegmentCode::DEAL_EVERY_MONTH)
-		{
-			return DealEveryMonthCollector::getInstance();
-		}
-
-		return null;
+			SegmentCode::LOST_CLIENT => LostClientCollector::getInstance(),
+			SegmentCode::SLEEPING_CLIENT => SleepingClientCollector::getInstance(),
+			SegmentCode::DEAL_EVERY_YEAR => DealEveryYearCollector::getInstance(),
+			SegmentCode::DEAL_EVERY_HALF_YEAR => DealEveryHalfYearCollector::getInstance(),
+			SegmentCode::DEAL_EVERY_MONTH => DealEveryMonthCollector::getInstance(),
+			SegmentCode::AI_SCREENING => AiScreeningCollector::getInstance(),
+			SegmentCode::AI_APPROVE => AiApproveCollector::getInstance(),
+			default => null,
+		};
 	}
 }

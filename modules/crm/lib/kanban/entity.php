@@ -14,6 +14,7 @@ use Bitrix\Crm\Component\EntityList\GridId;
 use Bitrix\Crm\Counter\EntityCounter;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\Exclusion;
+use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\Filter;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
@@ -2182,6 +2183,17 @@ abstract class Entity
 			'name' => ($fields['NAME'] ?? ''),
 			'name_init' => ($fields['NAME_INIT'] ?? ''),
 			'color' => ($fields['COLOR'] ?? ''),
+		];
+	}
+
+	public function createPullStageByObj(EO_Status $stage): array
+	{
+		return [
+			'id' => $stage->getStatusId() ?? '',
+			'sort' => $stage->getSort() ?? '',
+			'name' => $stage->getName() ?? '',
+			'name_init' => $stage->getNameInit(),
+			'color' => $stage->getColor() ?? '',
 		];
 	}
 

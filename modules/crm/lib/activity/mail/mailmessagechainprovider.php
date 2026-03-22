@@ -266,6 +266,11 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			$realToDiskMap[$realId] = $diskId;
 		}
 
+		if (empty($realFileIds))
+		{
+			return $filesInfo;
+		}
+
 		if ($forMobile)
 		{
 			if (!\Bitrix\Main\Loader::includeModule('mobile'))

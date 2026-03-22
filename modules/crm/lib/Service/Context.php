@@ -16,6 +16,7 @@ class Context
 	protected $userId;
 	protected $scope;
 	protected array $itemOptions = [];
+	protected array $analytics = [];
 
 	public function __construct(array $params = [])
 	{
@@ -108,6 +109,17 @@ class Context
 	public function setItemOptions(array $itemOptions): Context
 	{
 		$this->itemOptions = $itemOptions;
+		return $this;
+	}
+
+	public function getAnalytics(): array
+	{
+		return $this->analytics;
+	}
+
+	public function setAnalytics(array $analytics): Context
+	{
+		$this->analytics = $analytics;
 		return $this;
 	}
 }

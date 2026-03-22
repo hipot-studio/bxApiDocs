@@ -10,6 +10,7 @@ use Bitrix\Booking\Internals\Exception\InvalidSkuException;
 use Bitrix\Booking\Internals\Integration\Catalog\SkuDataLoader;
 use Bitrix\Booking\Internals\Repository\ORM\ResourceSkuRepository;
 use Bitrix\Booking\Internals\Repository\ORM\ResourceSkuYandexRepository;
+use Bitrix\Booking\Entity\Resource\ResourceCollection;
 
 class ResourceSkuService
 {
@@ -57,5 +58,25 @@ class ResourceSkuService
 	public function loadForCollection(ResourceSkuCollection ...$collection): void
 	{
 		$this->skuDataLoader->loadForCollection(...$collection);
+	}
+
+	public function handleAllSkuRelations(
+		ResourceCollection $currentResources,
+		ResourceCollection $newResources,
+	): void
+	{
+		foreach ($currentResources as $currentResource)
+		{
+			/** @var Resource $newResource */
+			$newResource = $newResources->getByEntityId($currentResource->getId());
+
+			$this->handleSkuRelations(
+				$currentResource,
+				$newResource === null
+					? new ResourceSkuCollection()
+					: $newResource->getSkuCollection()
+				,
+			);
+		}
 	}
 }

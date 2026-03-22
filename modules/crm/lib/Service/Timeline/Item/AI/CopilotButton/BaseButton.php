@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\AssociatedEntityModel;
@@ -9,7 +10,6 @@ use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
-use Bitrix\Main\Localization\Loc;
 
 Container::getInstance()->getLocalization()->loadMessages();
 
@@ -26,7 +26,7 @@ abstract class BaseButton extends Button
 	)
 	{
 		parent::__construct(
-			Loc::getMessage('CRM_COMMON_COPILOT'),
+			AIManager::getCopilotName(),
 			Button::TYPE_AI,
 			Button::TYPE_AI
 		);

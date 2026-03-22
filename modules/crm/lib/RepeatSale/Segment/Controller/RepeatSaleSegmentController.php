@@ -40,7 +40,7 @@ final class RepeatSaleSegmentController
 
 		$jobItem = JobItem::createFromArray([
 			'segmentId' => $result->getId(),
-			'scheduleType' => SystemHandler::getType()->value,
+			'scheduleType' => SystemHandler::getTypeValue(),
 		]);
 
 		$jobAddResult = RepeatSaleJobController::getInstance()->add($jobItem);
@@ -90,11 +90,14 @@ final class RepeatSaleSegmentController
 			'TITLE' => $segmentItem->getTitle(),
 			'PROMPT' => $segmentItem->getPrompt(),
 			'IS_ENABLED' => $segmentItem->isEnabled(),
+			'IS_SYSTEM' => $segmentItem->isSystem(),
 			'CODE' => $segmentItem->getCode(),
+			'BASE_SEGMENT_CODE' => $segmentItem->getBaseSegmentCode(),
 			'ENTITY_TYPE_ID' => CCrmOwnerType::Deal, // @todo temporary only deal support
 			'ENTITY_CATEGORY_ID' => $segmentItem->getEntityCategoryId(),
 			'ENTITY_STAGE_ID' => $segmentItem->getEntityStageId(),
 			'ENTITY_TITLE_PATTERN' => $segmentItem->getEntityTitlePattern(),
+			'ASSIGNMENT_TYPE_ID' => $segmentItem->getAssignmentTypeId(),
 			'CALL_ASSESSMENT_ID' => $segmentItem->getCallAssessmentId(),
 			'IS_AI_ENABLED' => $segmentItem->isAiEnabled(),
 			'UPDATED_AT' => new DateTime(),
@@ -135,6 +138,7 @@ final class RepeatSaleSegmentController
 		];
 		$offset = $params['offset'] ?? 0;
 		$limit = $params['limit'] ?? 10;
+		$cacheTtl = $params['cacheTtl'] ?? 0;
 
 		$query = RepeatSaleSegmentTable::query()
 			->setSelect($select)
@@ -142,6 +146,7 @@ final class RepeatSaleSegmentController
 			->setOrder($order)
 			->setOffset($offset)
 			->setLimit($limit)
+			->setCacheTtl($cacheTtl)
 		;
 
 		return QueryHelper::decompose($query);

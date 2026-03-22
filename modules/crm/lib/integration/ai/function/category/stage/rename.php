@@ -6,6 +6,7 @@ use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Category\Dto\Stage\RenameParameters;
 use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\RenameEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
@@ -56,6 +57,21 @@ final class Rename implements AIFunction
 		}
 
 		$result = $stageCollection->save();
+
+		if ($result->isSuccess())
+		{
+			$entityTypeName = Container::getInstance()->getFactory($parameters->entityTypeId)?->getEntityName();
+			if ($entityTypeName !== null)
+			{
+				PullManager::getInstance()->sendStageUpdatedEvent(
+					[],
+					[
+						'TYPE' => $entityTypeName,
+						'CATEGORY_ID' => $parameters->categoryId,
+					],
+				);
+			}
+		}
 
 		(new RenameEvent(section: Dictionary::SECTION_AI, count: $renamedStagesCount))
 			->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)

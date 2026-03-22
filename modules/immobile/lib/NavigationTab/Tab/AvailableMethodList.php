@@ -20,6 +20,7 @@ enum AvailableMethodList: string
 	case COPILOT_LIST = 'copilotList';
 	case CHANNEL_LIST = 'channelList';
 	case COLLAB_LIST = 'collabList';
+	case OPEN_LINES_LIST = 'openlinesList';
 
 	case TASK_LIST = 'taskList';
 }

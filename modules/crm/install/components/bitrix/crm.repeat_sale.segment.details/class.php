@@ -53,7 +53,7 @@ class CCrmRepeatSaleSegmentDetailsComponent extends Base
 		if ($id)
 		{
 			$segment = RepeatSaleSegmentController::getInstance()->getById($id, true);
-			if (!$segment)
+			if (!$segment || $segment->isChildren())
 			{
 				$this->showError('CRM_REPEAT_SALE_SEGMENT_DETAILS_NOT_FOUND');
 

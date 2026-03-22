@@ -11,6 +11,7 @@ use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\CreateEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\DeleteEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\RenameEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
@@ -87,6 +88,15 @@ final class UpdateStageList implements AIFunction
 		}
 
 		$this->connection->commitTransaction();
+
+		PullManager::getInstance()->sendStageUpdatedEvent(
+			[],
+			[
+				'TYPE' => $this->factory->getEntityName(),
+				'CATEGORY_ID' => $parameters->categoryId,
+			],
+		);
+
 		$this->sendAnalyticsEvents(Dictionary::STATUS_SUCCESS);
 
 		return Result::success();

@@ -10,6 +10,7 @@ use Bitrix\Crm\Copilot\CallAssessment\EntitySelector\PullManager as ScriptSelect
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Copilot\PullManager;
 use Bitrix\Crm\Feature;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -157,7 +158,12 @@ final class CopilotCallAssessmentController
 		if ($this->hasAssessmentCalls($id))
 		{
 			return (new Result())->addError(
-				new Error(Loc::getMessage('COPILOT_CALL_ASSESSMENT_CONTROLLER_HAS_ASSESSMENTED_CALLS'))
+				new Error(
+					Loc::getMessage(
+						'COPILOT_CALL_ASSESSMENT_CONTROLLER_HAS_ASSESSMENTED_CALLS',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()]
+					)
+				)
 			);
 		}
 

@@ -10,6 +10,7 @@ class Calculator
 	private array $product;
 
 	private const PRICE_PRECISION = 8;
+	private const COMMON_PRECISION = 2;
 
 	public function __construct(array $product)
 	{
@@ -28,19 +29,30 @@ class Calculator
 
 	private function setField(string $field, mixed $value): void
 	{
-		$roundFields = [
-			'TAX_RATE',
+		$priceFields = [
 			'PRICE_NETTO',
 			'PRICE_BRUTTO',
 			'PRICE',
 			'PRICE_EXCLUSIVE',
+		];
+		$commonFields = [
+			'TAX_RATE',
 			'DISCOUNT_SUM',
 			'DISCOUNT_RATE',
 		];
-		$this->product[$field] = in_array($field, $roundFields, true)
-			? round($value, self::PRICE_PRECISION)
-			: $value
-		;
+
+		if (in_array($field, $priceFields, true))
+		{
+			$this->product[$field] = round($value, self::PRICE_PRECISION);
+		}
+		elseif (in_array($field, $commonFields, true))
+		{
+			$this->product[$field] = round($value, self::COMMON_PRECISION);
+		}
+		else
+		{
+			$this->product[$field] = $value;
+		}
 	}
 
 	public function getProduct(): array
@@ -60,6 +72,18 @@ class Calculator
 		}
 
 		$this->updatePrice();
+	}
+
+	public function calculateDiscountSum(float $newDiscountSum): void
+	{
+		if ($this->product['DISCOUNT_SUM'] === $newDiscountSum)
+		{
+			return;
+		}
+
+		$this->setField('DISCOUNT_SUM', $newDiscountSum);
+		$this->updateResultPrices();
+		$this->updateDiscount();
 	}
 
 	public function calculateDiscount(float $newDiscountRate): void

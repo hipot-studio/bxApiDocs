@@ -29,7 +29,18 @@ final class Operation
 			$entity = RepeatSaleSegmentController::getInstance()->getById($segmentId, true);
 			if ($entity)
 			{
-				$this->segmentItem = SegmentItem::createFromEntity($entity);
+				if ($entity->isChildren())
+				{
+					$segmentController = RepeatSaleSegmentController::getInstance();
+					$parentEntity = $segmentController->getList([
+						'filter' => [
+							'=CODE' => $entity->getBaseSegmentCode(),
+						],
+						'limit' => 1,
+					])->current();
+				}
+
+				$this->segmentItem = SegmentItem::createFromEntity($parentEntity ?? $entity);
 			}
 		}
 	}

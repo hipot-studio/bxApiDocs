@@ -14,6 +14,7 @@ final class Scenario
 	public const CALL_SCORING_SCENARIO = 'call_scoring';
 	public const EXTRACT_SCORING_CRITERIA_SCENARIO = 'extract_scoring_criteria';
 	public const REPEAT_SALE_TIPS_SCENARIO = 'repeat_sale_tips';
+	public const REPEAT_SALE_SCREENING_SCENARIO = 'repeat_sale_screening';
 
 	public const FULL_OFF_SLIDER_CODE = 'limit_copilot_off';
 	public const FILL_FIELDS_SCENARIO_OFF_SLIDER_CODE = 'limit_v2_crm_copilot_fill_item_from_call_off';
@@ -35,6 +36,7 @@ final class Scenario
 			self::CALL_SCORING_SCENARIO,
 			self::EXTRACT_SCORING_CRITERIA_SCENARIO,
 			self::REPEAT_SALE_TIPS_SCENARIO,
+			self::REPEAT_SALE_SCREENING_SCENARIO,
 		];
 
 		return in_array($scenario, $scenarioList, true);
@@ -54,13 +56,14 @@ final class Scenario
 
 		$isFillFieldsEnabled = AIManager::isEnabledInGlobalSettings();
 		$isScoreCallEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment);
+		$isRepeatSaleEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::RepeatSale);
 
 		return match ($scenario)
 		{
 			self::FILL_FIELDS_SCENARIO => $isFillFieldsEnabled,
 			self::CALL_SCORING_SCENARIO, self::EXTRACT_SCORING_CRITERIA_SCENARIO => $isScoreCallEnabled,
 			self::FULL_SCENARIO => $isFillFieldsEnabled || $isScoreCallEnabled,
-			self::REPEAT_SALE_TIPS_SCENARIO => AIManager::isEnabledInGlobalSettings(GlobalSetting::RepeatSale),
+			self::REPEAT_SALE_TIPS_SCENARIO, self::REPEAT_SALE_SCREENING_SCENARIO => $isRepeatSaleEnabled,
 			default => false,
 		};
 	}

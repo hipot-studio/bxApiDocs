@@ -93,6 +93,9 @@ abstract class Tab extends BaseController
 				case (AvailableMethodList::COLLAB_LIST->value):
 					$data[$method] = $this->getCollabList();
 					break;
+				case (AvailableMethodList::OPEN_LINES_LIST->value):
+					$data[$method] = $this->getOpenlinesList();
+					break;
 				case (AvailableMethodList::TASK_LIST->value):
 					$data[$method] = $this->getTaskList();
 					break;
@@ -212,10 +215,10 @@ abstract class Tab extends BaseController
 				'LIMIT' => self::LIMIT,
 			]
 		);
-		
+
 		return $recentList ?: [];
 	}
-	
+
 	protected function getCopilotList(): array
 	{
 		$recentList = \Bitrix\Im\Recent::getList(
@@ -229,7 +232,7 @@ abstract class Tab extends BaseController
 				'ONLY_COPILOT' => 'Y',
 			]
 		);
-		
+
 		return $recentList ?: [];
 	}
 
@@ -268,6 +271,29 @@ abstract class Tab extends BaseController
 		}
 
 		$recentList = \Bitrix\Im\V2\Recent\RecentExternalChat::getExternalChats('tasksTask', self::LIMIT);
+
+		return $this->toRestFormatWithPaginationData(
+			[$recentList],
+			self::LIMIT,
+			$recentList->count()
+		);
+	}
+
+	protected function getOpenlinesList(): array
+	{
+		if (!Loader::includeModule('imopenlines'))
+		{
+			return $this->toRestFormatWithPaginationData(
+				[],
+				self::LIMIT,
+				0
+			);
+		}
+		$recentList = \Bitrix\ImOpenLines\V2\Recent\Recent::getOpenLines(
+			$this->currentUser,
+			new \Bitrix\ImOpenLines\V2\Recent\Cursor(),
+			self::LIMIT
+		);
 
 		return $this->toRestFormatWithPaginationData(
 			[$recentList],

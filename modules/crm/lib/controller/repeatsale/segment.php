@@ -9,6 +9,7 @@ use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentAssignmentUserCont
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
 use Bitrix\Crm\RepeatSale\Segment\SegmentAssignmentUserItem;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
+use Bitrix\Crm\RepeatSale\Segment\SegmentItemChecker;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\DI\ServiceLocator;
@@ -51,7 +52,7 @@ final class Segment extends JsonController
 		if ($id)
 		{
 			$entity = $controller->getById($id, true);
-			if ($entity === null)
+			if ($entity === null || $entity->isChildren())
 			{
 				$this->addError(ErrorCode::getNotFoundError());
 
@@ -120,7 +121,7 @@ final class Segment extends JsonController
 		}
 
 		$entity = RepeatSaleSegmentController::getInstance()->getById($id, true);
-		if ($entity === null)
+		if ($entity === null || $entity->isChildren())
 		{
 			$this->addError(ErrorCode::getNotFoundError());
 
@@ -129,9 +130,20 @@ final class Segment extends JsonController
 
 		$isEnabledValue = ($isEnabled === 'Y');
 
-		$segmentItem = SegmentItem::createFromEntity($entity)
-			->setIsEnabled($isEnabledValue)
-		;
+		$segmentItem = SegmentItem::createFromEntity($entity);
+		if ($isEnabledValue)
+		{
+			$segmentItemCheckResult = SegmentItemChecker::getInstance()->setItem($segmentItem)->run();
+			if (!$segmentItemCheckResult->isSuccess())
+			{
+				// @todo need more specific error code
+				$this->addError(ErrorCode::getAccessDeniedError());
+
+				return new Result();
+			}
+		}
+
+		$segmentItem->setIsEnabled($isEnabledValue);
 
 		$result = RepeatSaleSegmentController::getInstance()->update($id, $segmentItem);
 		if (!$result->isSuccess())

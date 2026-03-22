@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Format\TextHelper;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
@@ -235,7 +236,8 @@ final class RepeatSale extends Activity implements HasCopilot
 				[
 					'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp(self::HELPDESK_CODE_COPILOT_WARNING) . '" target="blank">',
 					'[/helpdesklink]' => '</a>',
-				]
+					'#COPILOT_NAME#' => AIManager::getCopilotName(),
+				],
 			);
 
 			return ContentBlockFactory::createFromHtmlString(
@@ -312,7 +314,8 @@ final class RepeatSale extends Activity implements HasCopilot
 			[
 				'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp(self::HELPDESK_CODE_REPEAT_SALE) . '" target="blank">',
 				'[/helpdesklink]' => '</a>',
-			]
+				'#COPILOT_NAME#' => AIManager::getCopilotName(),
+			],
 		);
 	}
 }

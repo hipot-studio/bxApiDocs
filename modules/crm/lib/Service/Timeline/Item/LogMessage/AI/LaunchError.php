@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage\AI;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
@@ -26,7 +27,10 @@ final class LaunchError extends Base
 		$settings = $this->getModel()->getSettings();
 		if (empty($settings))
 		{
-			return Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE');
+			return Loc::getMessage(
+				'CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			);
 		}
 
 		$operationTypeId = $settings['OPERATION_TYPE_ID'] ?? 0;
@@ -38,7 +42,10 @@ final class LaunchError extends Base
 			FillItemFieldsFromCallTranscription::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_FILL_FIELDS'),
 			ScoreCall::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_SCORE_CALl'),
 			FillRepeatSaleTips::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_REPEAT_SALE'),
-			default => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE'),
+			default => Loc::getMessage(
+				'CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 		};
 	}
 

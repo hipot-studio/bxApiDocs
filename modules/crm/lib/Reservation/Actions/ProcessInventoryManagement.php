@@ -107,6 +107,15 @@ abstract class ProcessInventoryManagement extends Base
 					}
 				}
 			}
+			elseif (!empty($product['XML_ID']))
+			{
+				if (preg_match('/^sale_basket_(\d+)$/', $product['XML_ID'], $matches))
+				{
+					$basketItemId = (int)$matches[1];
+					$basketItem = Sale\Repository\BasketItemRepository::getInstance()->getById($basketItemId);
+					$xmlId = $basketItem?->getField('XML_ID');
+				}
+			}
 
 			$entityBuilder->addProduct(
 				new Crm\Reservation\Product($product['ID'], $product['QUANTITY'], $storeId, $xmlId)

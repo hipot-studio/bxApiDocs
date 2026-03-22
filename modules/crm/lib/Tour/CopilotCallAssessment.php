@@ -52,7 +52,10 @@ class CopilotCallAssessment extends Base
 			[
 				'id' => 'copilot-call-assessment',
 				'title' => Loc::getMessage('CRM_TOUR_COPILOT_CALL_ASSESSMENT_MESSAGE_TITLE'),
-				'text' => Loc::getMessage('CRM_TOUR_COPILOT_CALL_ASSESSMENT_MESSAGE_TEXT'),
+				'text' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_CALL_ASSESSMENT_MESSAGE_TEXT',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				'position' => 'top',
 				'target' => '#crm_control_panel_menu_crm_sales',
 				'reserveTargets' => ['#crm_control_panel_menu_more_button'],

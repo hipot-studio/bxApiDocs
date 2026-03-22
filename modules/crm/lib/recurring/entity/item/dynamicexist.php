@@ -105,7 +105,7 @@ class DynamicExist extends DynamicEntity
 		$this->templateItem->setIsRecurring(false);
 
 		$this->templateItem->setBegindate($this->calculateBeginDate() ?? new Date());
-		$this->templateItem->setClosedate($this->calculateCloseDate());
+		$this->templateItem->setClosedate($this->calculateCloseDate()?? new Date());
 
 		$this->prepareTemplateItemCategoryAndStage($factory);
 	}

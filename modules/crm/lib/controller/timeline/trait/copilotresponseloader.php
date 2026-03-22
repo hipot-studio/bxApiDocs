@@ -14,7 +14,7 @@ trait CopilotResponseLoader
 		$transcriptResult = $this->jobRepository->getTranscribeCallRecordingResultByActivity($activityId);
 		if (is_null($transcriptResult))
 		{
-			$this->addError(new Error('CoPilot call transcription not found'));
+			$this->addError(new Error('Call transcription not found'));
 
 			return null;
 		}
@@ -42,7 +42,7 @@ trait CopilotResponseLoader
 		$summaryResult = $this->jobRepository->getSummarizeCallTranscriptionResultByActivity($activityId, $jobId);
 		if (is_null($summaryResult))
 		{
-			$this->addError(new Error('CoPilot summary result is not found'));
+			$this->addError(new Error('Summary result is not found'));
 
 			return null;
 		}

@@ -9,7 +9,7 @@ use Bitrix\Crm\Service\Communication\Utils\Common;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\Date;
 
-abstract class BasePeriodCollector extends BaseCollector
+abstract class BasePeriodCollector extends BaseSqlCollector
 {
 	abstract protected function getIntervals(): array;
 

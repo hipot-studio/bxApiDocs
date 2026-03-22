@@ -6,6 +6,7 @@ use Bitrix\AI\Context;
 use Bitrix\AI\Context\Language;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Integration\Baas\BaasTokenService;
+use Bitrix\AI\Services\CopilotNameService;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
@@ -14,6 +15,7 @@ use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
+use Bitrix\Crm\Integration\AI\Operation\ScreeningRepeatSaleItem;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\Bitrix24Manager;
@@ -389,6 +391,33 @@ class AIManager
 		;
 	}
 
+	public static function launchScreeningRepeatSaleItem(
+		ItemIdentifier $targetItemIdentifier,
+		int $segmentId = 0,
+		array $clientIdentifiers = [],
+	): Result
+	{
+		$result = new Result(ScreeningRepeatSaleItem::TYPE_ID);
+
+		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
+		{
+			return $result->addError(ErrorCode::getAINotAvailableError());
+		}
+
+		$availabilityChecker = Container::getInstance()->getRepeatSaleAvailabilityChecker();
+		if (!$availabilityChecker->isAvailable() || !$availabilityChecker->isAiSegmentsAvailable())
+		{
+			return $result->addError(new Error('Repeat Sale feature is not available'));
+		}
+
+		return (new ScreeningRepeatSaleItem($targetItemIdentifier))
+			->setSegmentId($segmentId)
+			->setClientIdentifiers($clientIdentifiers)
+			->setScenario(Scenario::REPEAT_SALE_SCREENING_SCENARIO)
+			->launch()
+		;
+	}
+
 	public static function launchSummarizeData(int $activityId, ?int $userId = null, bool $isManualLaunch = true): Result
 	{
 		$result = new Result(SummarizeCallTranscription::TYPE_ID);
@@ -436,6 +465,7 @@ class AIManager
 			ScoreCall::TYPE_ID,
 			ExtractScoringCriteria::TYPE_ID,
 			FillRepeatSaleTips::TYPE_ID,
+			ScreeningRepeatSaleItem::TYPE_ID,
 		];
 	}
 
@@ -511,5 +541,15 @@ class AIManager
 		}
 
 		return [];
+	}
+
+	public static function getCopilotName(): string
+	{
+		if (static::isAvailable())
+		{
+			return (new CopilotNameService())->getCopilotName();
+		}
+
+		return '';
 	}
 }

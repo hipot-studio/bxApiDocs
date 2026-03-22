@@ -366,7 +366,7 @@ class DuplicateIndexTable extends Entity\DataManager
 			$conditions[] = "MATCH_HASH = '{$matchHash}'";
 		}
 
-		if (isset($data['QUANTITY']))
+		if (isset($filter['QUANTITY']))
 		{
 			$quantity = intval($filter['QUANTITY']);
 			$conditions[] = "QUANTITY = {$quantity}";

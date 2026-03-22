@@ -62,7 +62,10 @@ final class ErrorCode
 	public static function getFileNotFoundError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_FILE_NOT_FOUND'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_FILE_NOT_FOUND',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::FILE_NOT_FOUND
 		);
 	}
@@ -70,7 +73,10 @@ final class ErrorCode
 	public static function getAIEngineNotFoundError(array $customData = null): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::AI_ENGINE_NOT_FOUND,
 			$customData
 		);
@@ -79,7 +85,10 @@ final class ErrorCode
 	public static function getAIResultFoundError(array $customData = null): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::AI_RESULT_NOT_FOUND,
 			$customData
 		);
@@ -99,7 +108,10 @@ final class ErrorCode
 	public static function getJobAlreadyExistsError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_JOB_ALREADY_EXISTS'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_JOB_ALREADY_EXISTS',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::JOB_ALREADY_EXISTS
 		);
 	}
@@ -107,7 +119,10 @@ final class ErrorCode
 	public static function getJobMaxRetriesExceededError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::JOB_MAX_RETRIES_EXCEEDED
 		);
 	}
@@ -115,7 +130,10 @@ final class ErrorCode
 	public static function getJobExecutionFailedError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::JOB_EXECUTION_FAILED
 		);
 	}
@@ -123,7 +141,10 @@ final class ErrorCode
 	public static function getNotSuitableTargetError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::NOT_SUITABLE_TARGET
 		);
 	}
@@ -131,7 +152,10 @@ final class ErrorCode
 	public static function getPayloadNotFoundError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::PAYLOAD_NOT_FOUND
 		);
 	}
@@ -139,7 +163,10 @@ final class ErrorCode
 	public static function getOperationIsCompleteError(): Error
 	{
 		return new Error(
-			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_JOB_ALREADY_EXISTS'),
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_JOB_ALREADY_EXISTS',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
 			self::OPERATION_IS_COMPLETE
 		);
 	}

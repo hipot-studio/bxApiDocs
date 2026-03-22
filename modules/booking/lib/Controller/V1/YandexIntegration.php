@@ -110,9 +110,6 @@ class YandexIntegration extends BaseController
 				],
 				isResourceSkuRelationsSaved: $this->resourceSkuRelationsService->isSaved(),
 				resources: $this->resourceSkuRelationsService->get(),
-				// TODO: remove after frontend start using MainPage.get.catalogSkuEntityOptions
-				catalogSkuEntityOptions: (new ServiceSkuCreator())
-					->getEntitySelectorEntityOptions($userId),
 				settings: $this->integrationService->getSettings(),
 				cabinetLink: $company?->getCabinetLink(),
 				timezone: $company?->getTimezone(),

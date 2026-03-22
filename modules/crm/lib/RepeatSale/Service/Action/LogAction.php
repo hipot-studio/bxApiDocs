@@ -36,9 +36,11 @@ final class LogAction implements ActionInterface
 			return $this->getErrorResult();
 		}
 
+		$segmentId = $segmentItem?->getId() ?? $context?->getSegmentId();
+
 		$logItem = LogItem::createFromArray([
 			'jobId' => $context?->getJobId() ?? self::UNKNOWN_JOB_ID,
-			'segmentId'	=> $context?->getSegmentId() ?? self::UNKNOWN_SEGMENT_ID,
+			'segmentId'	=> $segmentId ?? self::UNKNOWN_SEGMENT_ID,
 			'entityTypeId' => $item->getEntityTypeId(),
 			'entityId' => $item->getId(),
 			'phaseSemanticId' => PhaseSemantics::PROCESS,

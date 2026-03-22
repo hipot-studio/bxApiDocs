@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
 
+use Bitrix\Catalog\StoreDocumentTable;
 use Bitrix\Main\Localization\Loc;
 
 /**
@@ -11,6 +12,11 @@ use Bitrix\Main\Localization\Loc;
  */
 class StoreDocumentStoreAdjustment extends StoreDocument
 {
+	protected function getDocumentType(): string
+	{
+		return StoreDocumentTable::TYPE_STORE_ADJUSTMENT;
+	}
+
 	/**
 	 * @inheritDoc
 	 */

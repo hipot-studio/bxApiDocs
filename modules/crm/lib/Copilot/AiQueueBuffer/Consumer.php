@@ -14,15 +14,16 @@ use Bitrix\Crm\Result;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Error;
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 use COption;
 
 final class Consumer
 {
 	use Singleton;
 
-	private const LIMIT = 5;
+	private const LIMIT = 20;
 	private const MAX_RETRY_COUNT = 5;
-	private const MAX_PENDING_RECORDS = 20;
+	private const MAX_PENDING_RECORDS = 40;
 
 	private ?array $executionData = null;
 	private ?AiQueueBufferController $controller = null;
@@ -79,6 +80,7 @@ final class Consumer
 	{
 		$count = (int)QueueTable::query()
 			->where('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_PENDING)
+			->where('CREATED_TIME', '>=', (new DateTime())->add('-1 day'))
 			->queryCountTotal()
 		;
 
@@ -150,6 +152,7 @@ final class Consumer
 			!in_array(
 				$error?->getCode(),
 				[
+					ErrorCode::INVALID_ARG_VALUE,
 					ErrorCode::JOB_ALREADY_EXISTS,
 					ErrorCode::NOT_SUITABLE_TARGET,
 				],

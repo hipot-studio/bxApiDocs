@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\Type;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
@@ -76,10 +77,16 @@ final class CopilotButtonRepeatSale extends BaseButton
 
 		if ($this->operationState?->isSuccess())
 		{
-			return Loc::getMessage('CRM_TIMELINE_ACTIVITY_REPEAT_SALE_COPILOT_TOOLTIP_SUCCESS');
+			return Loc::getMessage(
+				'CRM_TIMELINE_ACTIVITY_REPEAT_SALE_COPILOT_TOOLTIP_SUCCESS',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			);
 		}
 
-		return Loc::getMessage('CRM_TIMELINE_ACTIVITY_REPEAT_SALE_COPILOT_TOOLTIP');
+		return Loc::getMessage(
+			'CRM_TIMELINE_ACTIVITY_REPEAT_SALE_COPILOT_TOOLTIP',
+			['#COPILOT_NAME#' => AIManager::getCopilotName()]
+		);
 	}
 
 	protected function buildProps(): array

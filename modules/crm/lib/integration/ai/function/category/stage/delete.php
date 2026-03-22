@@ -6,6 +6,8 @@ use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Category\Dto\Stage\DeleteParameters;
 use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Stage\DeleteEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\PullManager;
+use Bitrix\Crm\Kanban\Entity;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -62,6 +64,25 @@ final class Delete implements AIFunction
 		}
 
 		$result = $stageToDelete->delete();
+
+		if ($result->isSuccess())
+		{
+			$entityTypeName = Container::getInstance()->getFactory($parameters->entityTypeId)?->getEntityName();
+			if ($entityTypeName !== null)
+			{
+				$item = Entity::getInstance($entityTypeName)?->createPullStageByObj($stageToDelete);
+				if ($item !== null)
+				{
+					PullManager::getInstance()->sendStageDeletedEvent(
+						$item,
+						[
+							'TYPE' => $entityTypeName,
+							'CATEGORY_ID' => $parameters->categoryId,
+						],
+					);
+				}
+			}
+		}
 
 		(new DeleteEvent(section: Dictionary::SECTION_AI))
 			->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)

@@ -4,14 +4,16 @@ namespace Bitrix\Crm\RepeatSale\Service\Action;
 
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
-use Bitrix\Crm\RepeatSale\Segment\SystemSegmentCode;
 use Bitrix\Crm\RepeatSale\Service\Context;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use CCrmOwnerType;
 
 final class CreateDealAction implements ActionInterface
 {
@@ -25,13 +27,30 @@ final class CreateDealAction implements ActionInterface
 	{
 		$deal = $this->createDeal($assignmentUserId, $segmentItem);
 
-		if ($clientItem->getEntityTypeId() === \CCrmOwnerType::Company)
+		$entityTypeId = $clientItem->getEntityTypeId();
+		if ($entityTypeId === CCrmOwnerType::Company)
 		{
 			$deal->setCompanyId($clientItem->getId());
 		}
-		else
+		elseif ($entityTypeId === CCrmOwnerType::Contact)
 		{
 			$deal->setContactId($clientItem->getId());
+		}
+		elseif ($entityTypeId === CCrmOwnerType::Deal)
+		{
+			$baseDeal = Container::getInstance()
+				->getFactory(CCrmOwnerType::Deal)
+				?->getItem($clientItem->getId())
+			;
+			if ($baseDeal)
+			{
+				$deal->setCompanyId($baseDeal->getCompanyId());
+				$deal->setContactIds($baseDeal->getContactIds());
+			}
+			else
+			{
+				return (new Result())->addError(new Error('Base deal not found: ' . $clientItem->getId()));
+			}
 		}
 
 		$result = $this->getFactory()->getAddOperation($deal)->disableAllChecks()->launch();
@@ -62,7 +81,7 @@ final class CreateDealAction implements ActionInterface
 
 	private function getFactory(): Factory
 	{
-		return Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+		return Container::getInstance()->getFactory(CCrmOwnerType::Deal);
 	}
 
 	private function sendAnalyticsEvent(?string $segmentCode, bool $isSuccess): void
@@ -87,11 +106,13 @@ final class CreateDealAction implements ActionInterface
 	{
 		return match ($segmentCode)
 		{
-			SystemSegmentCode::SLEEPING_CLIENT->value => 'deal-activity-less-12m',
-			SystemSegmentCode::LOST_CLIENT->value => 'deal-lost-more-12m',
-			SystemSegmentCode::DEAL_EVERY_YEAR->value => 'deal-annual',
-			SystemSegmentCode::DEAL_EVERY_HALF_YEAR->value => 'deal-semiannual',
-			SystemSegmentCode::DEAL_EVERY_MONTH->value => 'deal-month-yr',
+			SegmentCode::SLEEPING_CLIENT->value => 'deal-activity-less-12m',
+			SegmentCode::LOST_CLIENT->value => 'deal-lost-more-12m',
+			SegmentCode::DEAL_EVERY_YEAR->value => 'deal-annual',
+			SegmentCode::DEAL_EVERY_HALF_YEAR->value => 'deal-semiannual',
+			SegmentCode::DEAL_EVERY_MONTH->value => 'deal-month-yr',
+			SegmentCode::AI_SCREENING->value => 'deal-ai-screening',
+			SegmentCode::AI_APPROVE->value => 'deal-ai-approve',
 			default => '',
 		};
 	}

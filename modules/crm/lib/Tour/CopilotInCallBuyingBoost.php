@@ -22,7 +22,10 @@ final class CopilotInCallBuyingBoost extends CopilotInCall
 			[
 				'id' => 'copilot-in-call-buying-boost',
 				'title' => Loc::getMessage('CRM_TOUR_COPILOT_IN_CALL_BUY_BOOST_TITLE_MSGVER_1'),
-				'text' => Loc::getMessage('CRM_TOUR_COPILOT_IN_CALL_BUY_BOOST_BODY_MSGVER_1'),
+				'text' => Loc::getMessage(
+					'CRM_TOUR_COPILOT_IN_CALL_BUY_BOOST_BODY_MSGVER_1',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				),
 				'position' => 'top',
 				'useDynamicTarget' => true,
 				'eventName' => 'BX.Crm.Timeline.Call:onShowTourWhenNeedBuyBoost',

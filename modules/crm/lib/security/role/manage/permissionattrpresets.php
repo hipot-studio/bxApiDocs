@@ -84,12 +84,13 @@ class PermissionAttrPresets
 		$variants = new Variants();
 		$variants->add(
 			Transition::TRANSITION_INHERIT,
-			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_INHERITED'),
+			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_INHERITED_MSGVER_1'),
 			[
 				'conflictsWith' => array_merge($stageIds, [Transition::TRANSITION_ANY, Transition::TRANSITION_BLOCKED]),
 				'hideInSection' => true,
 				'useAsEmptyInSubsection' => true,
 				'secondary' => true,
+				'isUseGroupHeadValuesInHint' => true,
 			]
 		);
 		$variants->add(
@@ -219,10 +220,11 @@ class PermissionAttrPresets
 
 		$variants->add(
 			HideSum::INHERIT,
-			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_HIDE_SUM_INHERIT'),
+			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_HIDE_SUM_INHERIT_MSGVER_1'),
 			[
 				'hideInSection' => true,
 				'useAsEmptyInSubsection' => true,
+				'isUseGroupHeadValuesInHint' => true,
 			]
 		);
 

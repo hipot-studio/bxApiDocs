@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\Provider\ProviderManager;
 use Bitrix\Crm\Badge\Model\BadgeTable;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\OpenLineManager;
@@ -342,9 +343,12 @@ final class OpenLine extends Activity implements HasCopilot
 
 		$block = new LineOfTextBlocks();
 
-		$blockTitle = ContentBlockFactory::createTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_VIEW_COPILOT_SUMMARY'))
-			->setColor(Text::COLOR_BASE_60)
-		;
+		$blockTitle = ContentBlockFactory::createTitle(
+			Loc::getMessage(
+				'CRM_TIMELINE_BLOCK_TITLE_VIEW_COPILOT_SUMMARY',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			)
+		)->setColor(Text::COLOR_BASE_60);
 		$block->addContentBlock('copilotSummaryBlockTitle', $blockTitle);
 
 		$viewLink = (new Link())

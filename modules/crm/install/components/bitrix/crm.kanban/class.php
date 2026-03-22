@@ -1118,6 +1118,9 @@ class CrmKanbanComponent extends CBitrixComponent
 
 		$params = [
 			'eventId' => $this->request->getPost('eventId'),
+			'ANALYTICS' => $this->request->getPost('extra') && $this->request->getPost('extra')['ANALYTICS']
+				? $this->request->getPost('extra')['ANALYTICS']
+				: [],
 		];
 
 		try

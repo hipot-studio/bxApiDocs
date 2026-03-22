@@ -279,7 +279,7 @@ final class ScoreCall extends AbstractOperation
 		if (!$payload || !$result->isSuccess())
 		{
 			AIManager::logger()->error(
-				'{date}: {class}: Error while trying to save CoPilot marks because of job error: {target}' . PHP_EOL,
+				'{date}: {class}: Error while trying to save scores because of job error: {target}' . PHP_EOL,
 				[
 					'class' => self::class,
 					'target' => $result->getTarget(),
@@ -377,7 +377,7 @@ final class ScoreCall extends AbstractOperation
 		else
 		{
 			AIManager::logger()->critical(
-				'{date}: {class}: Error while trying to save CoPilot marks because of error: {errors}',
+				'{date}: {class}: Error while trying to save scores because of error: {errors}',
 				[
 					'class' => self::class,
 					'errors' => $saveResult->getErrors(),

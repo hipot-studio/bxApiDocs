@@ -24,7 +24,7 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 	public function setMarkers(array $markers): PayloadInterface
 	{
 		$this->markers = array_merge($markers, $this->calcMarkers());
-		
+
 		return $this;
 	}
 
@@ -56,8 +56,9 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 
 	private function getCrmData(array $activity): array
 	{
-		$clientEntityTypeId = (int)($activity['PROVIDER_PARAMS']['CLIENT_ENTITY_TYPE_ID'] ?? 0);
-		$clientEntityId = (int)($activity['PROVIDER_PARAMS']['CLIENT_ENTITY_ID'] ?? 0);
+		$providerParams = $activity['PROVIDER_PARAMS'] ?? [];
+		$clientEntityTypeId = (int)($providerParams['BASE_ENTITY_TYPE_ID'] ?? $providerParams['CLIENT_ENTITY_TYPE_ID'] ?? 0);
+		$clientEntityId = (int)($providerParams['BASE_ENTITY_ID'] ?? $providerParams['CLIENT_ENTITY_ID'] ?? 0);
 		if ($clientEntityTypeId <= 0 || $clientEntityId <= 0)
 		{
 			return []; // no client

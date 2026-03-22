@@ -2,7 +2,7 @@
 
 namespace Bitrix\Crm\RepeatSale\Segment\Collector;
 
-class DealEveryHalfYearCollector extends BasePeriodCollector
+final class DealEveryHalfYearCollector extends BasePeriodCollector
 {
 	protected function getIntervals(): array
 	{

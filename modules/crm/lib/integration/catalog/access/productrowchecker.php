@@ -6,6 +6,7 @@ use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Crm\Discount;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Order\BasketItem;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
@@ -252,33 +253,14 @@ class ProductRowChecker
 
 	private function convertCurrency(array $productRow, ?string $oldCurrency, ?string $newCurrency): array
 	{
-		$productRow['PRICE_NETTO'] = \CCrmCurrency::ConvertMoney(
-			$productRow['PRICE_NETTO'],
-			$oldCurrency,
-			$newCurrency,
-		);
-		$productRow['PRICE_BRUTTO'] = \CCrmCurrency::ConvertMoney(
-			$productRow['PRICE_BRUTTO'],
-			$oldCurrency,
-			$newCurrency,
-		);
-		$productRow['PRICE'] = \CCrmCurrency::ConvertMoney(
-			$productRow['PRICE'],
-			$oldCurrency,
-			$newCurrency,
-		);
-		$productRow['PRICE_EXCLUSIVE'] = \CCrmCurrency::ConvertMoney(
-			$productRow['PRICE_EXCLUSIVE'],
-			$oldCurrency,
-			$newCurrency,
-		);
-		$productRow['DISCOUNT_SUM'] = \CCrmCurrency::ConvertMoney(
-			$productRow['DISCOUNT_SUM'],
-			$oldCurrency,
-			$newCurrency,
-		);
+		$basePrice = $productRow['TAX_INCLUDED'] === 'Y' ? $productRow['PRICE_BRUTTO'] : $productRow['PRICE_NETTO'];
+		$convertedBasePrice = \CCrmCurrency::ConvertMoney($basePrice, $oldCurrency, $newCurrency);
+		$convertedDiscountSum = \CCrmCurrency::ConvertMoney($productRow['DISCOUNT_SUM'], $oldCurrency, $newCurrency);
+		$calculator = new Calculator($productRow);
+		$calculator->calculateBasePrice($convertedBasePrice);
+		$calculator->calculateDiscountSum($convertedDiscountSum);
 
-		return $productRow;
+		return $calculator->getProduct();
 	}
 
 	private function checkPrice(array $productRow, ?string $currencyId, ?array $originalProductRow): bool
@@ -315,7 +297,6 @@ class ProductRowChecker
 				$currencyId
 				&& $originalCurrencyId
 				&& $originalCurrencyId !== $currencyId
-				&& (int)$productRow['DISCOUNT_TYPE_ID'] !== (int)$originalProductRow['DISCOUNT_TYPE_ID']
 				&& $productRow['DISCOUNT_TYPE_ID'] === Discount::MONETARY
 			)
 			{
@@ -435,9 +416,31 @@ class ProductRowChecker
 		}
 		$calculatedOriginalProductRow = $calculator->getProduct();
 
+		$calculateAccountingResult = Accounting::calculateProductPrices(
+			[
+				'PRICE' => $calculatedOriginalProductRow['PRICE'],
+				'TAX_RATE' => $calculatedOriginalProductRow['TAX_RATE'],
+				'TAX_INCLUDED' => $calculatedOriginalProductRow['TAX_INCLUDED'],
+				'DISCOUNT_TYPE_ID' => $calculatedOriginalProductRow['DISCOUNT_TYPE_ID'],
+				'DISCOUNT_RATE' => $calculatedOriginalProductRow['DISCOUNT_RATE'],
+				'DISCOUNT_SUM' => $calculatedOriginalProductRow['DISCOUNT_SUM'],
+			],
+		);
+		if ($calculateAccountingResult->isSuccess())
+		{
+			$calculateAccountingResultData = $calculateAccountingResult->getData();
+			$calculatedOriginalProductRow['PRICE'] = $calculateAccountingResultData['PRICE'];
+			$calculatedOriginalProductRow['PRICE_EXCLUSIVE'] = $calculateAccountingResultData['PRICE_EXCLUSIVE'];
+			$calculatedOriginalProductRow['DISCOUNT_TYPE_ID'] = $calculateAccountingResultData['DISCOUNT_TYPE_ID'];
+			$calculatedOriginalProductRow['DISCOUNT_RATE'] = $calculateAccountingResultData['DISCOUNT_RATE'];
+			$calculatedOriginalProductRow['DISCOUNT_SUM'] = $calculateAccountingResultData['DISCOUNT_SUM'];
+			$calculatedOriginalProductRow['PRICE_NETTO'] = $calculateAccountingResultData['PRICE_NETTO'];
+			$calculatedOriginalProductRow['PRICE_BRUTTO'] = $calculateAccountingResultData['PRICE_BRUTTO'];
+		}
+
 		foreach ($calculatedOriginalProductRow as $key => $value)
 		{
-			if (!isset($productRow[$key]))
+			if (!isset($productRow[$key]) || is_array($value))
 			{
 				continue;
 			}
@@ -455,7 +458,7 @@ class ProductRowChecker
 					return false;
 				}
 			}
-			elseif ((float)$productRow[$key] !== $value)
+			elseif ((float)$productRow[$key] !== (float)$value)
 			{
 				return false;
 			}

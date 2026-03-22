@@ -8,7 +8,6 @@ use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\LoaderException;
 use Bitrix\Mobile\Profile\ActionFilter\Attribute\CanUpdate;
 use Bitrix\Mobile\Profile\ActionFilter\Attribute\CanView;
-use Bitrix\Mobile\Profile\ActionFilter\Attribute\NewProfileEnabled;
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
 use Bitrix\Mobile\Profile\Enum\TabType;
 use Bitrix\Main\UI\PageNavigation;
@@ -41,7 +40,6 @@ final class Profile extends JsonController
 	 * @return array
 	 */
 	#[CloseSession]
-	#[NewProfileEnabled]
 	public function getTabsAction(int $ownerId, string $selectedTabId): array
 	{
 		$provider = new \Bitrix\Mobile\Profile\Provider\ProfileProvider(
@@ -60,7 +58,6 @@ final class Profile extends JsonController
 	 * @throws LoaderException
 	 */
 	#[CloseSession]
-	#[NewProfileEnabled]
 	#[CanView]
 	public function getGratitudeListAction(
 		int $ownerId,
@@ -78,22 +75,11 @@ final class Profile extends JsonController
 	}
 
 	/**
-	 * @restMethod mobile.Profile.isNewProfileFeatureEnabled
-	 * @return bool
-	 */
-	#[CloseSession]
-	public function isNewProfileFeatureEnabledAction(): bool
-	{
-		return \Bitrix\Mobile\Profile\Provider\ProfileProvider::isNewProfileFeatureEnabled();
-	}
-
-	/**
 	 * @restMethod mobile.Profile.save
 	 * @param int $ownerId
 	 * @param array{tags: string[]} $fieldsToSave
 	 * @return array
 	 */
-	#[NewProfileEnabled]
 	#[CanUpdate]
 	public function saveAction(int $ownerId, array $fieldsToSave): array
 	{
@@ -120,7 +106,6 @@ final class Profile extends JsonController
 	 * @return array
 	 */
 	#[CloseSession]
-	#[NewProfileEnabled]
 	#[CanUpdate]
 	public function searchTagsAction(int $ownerId, int $limit = 20, string $searchString = ''): array
 	{
@@ -133,7 +118,6 @@ final class Profile extends JsonController
 	 * @param string $tag
 	 * @return array
 	 */
-	#[NewProfileEnabled]
 	#[CanUpdate]
 	public function addTagAction(int $ownerId, string $tag): array
 	{

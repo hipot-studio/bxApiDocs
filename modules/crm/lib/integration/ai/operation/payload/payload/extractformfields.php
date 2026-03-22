@@ -60,7 +60,7 @@ final class ExtractFormFields extends AbstractPayload implements CalcMarkersInte
 			&& $data['TYPE'] === DateType::USER_TYPE_ID
 		)
 		{
-			$inputFormat = 'd.m.Y'; // CoPilot return value format DD.MM.YYYY (see 'extract_form_fields' prompt)
+			$inputFormat = 'd.m.Y'; // AI return value format DD.MM.YYYY (see 'extract_form_fields' prompt)
 			if ($data['MULTIPLE'] && is_array($value))
 			{
 				return array_map(

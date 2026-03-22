@@ -97,6 +97,7 @@ class Note extends Base
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
+			return null;
 		}
 
 		if (!$this->checkBindings($itemId, $itemType, $ownerTypeId, $ownerId))

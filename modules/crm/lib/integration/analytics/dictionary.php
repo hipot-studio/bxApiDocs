@@ -50,6 +50,7 @@ final class Dictionary
 	public const EVENT_CALL_SCORING = 'call_scoring';
 	public const EVENT_EXTRACT_SCORING_CRITERIA = 'extract_scoring_criteria';
 	public const EVENT_FILL_REPEAT_SALE_TIPS = 'fill_repeat_sale_tips';
+	public const EVENT_SCREENING_REPEAT_SALE_ITEM = 'screening_repeat_sale_item';
 
 	public const EVENT_AUTOMATION_CREATE = 'automation_create';
 	public const EVENT_AUTOMATION_EDIT = 'automation_edit';
@@ -81,6 +82,7 @@ final class Dictionary
 	public const TYPE_WA_CONNECT = 'wa_connect';
 	public const TYPE_WA_ACTIVITY_CREATE = 'wa_activity_create';
 	public const TYPE_WA_ACTIVITY_DELETE = 'wa_activity_delete';
+	public const TYPE_USERFIELD = 'field';
 
 	// endregion
 
@@ -138,6 +140,9 @@ final class Dictionary
 	public const SUB_SECTION_GRID_ROW_MENU = 'grid_row_menu';
 	public const SUB_SECTION_REPEAT_SALE_SYSTEM = 'repeat_sale_sys';
 	public const SUB_SECTION_FUNNEL = 'funnel';
+
+	public const SUB_SECTION_USERFIELD_DEFAULT = 'unknown';
+	public const SUB_SECTION_USERFIELD_MCP_TOOL = 'ai';
 	// endregion
 
 	// region Element const

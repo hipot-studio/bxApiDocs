@@ -171,7 +171,6 @@ abstract class IndexRebuild extends Base
 			{
 				$buildData['LIMIT'] = static::ITEM_LIMIT;
 			}
-
 			$isInProgress = $builder->build($buildData);
 			if(isset($buildData['PROCESSED_ITEM_COUNT']))
 			{

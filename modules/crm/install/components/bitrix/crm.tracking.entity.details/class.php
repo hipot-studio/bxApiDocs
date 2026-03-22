@@ -75,6 +75,39 @@ class CCrmTrackingEntityDetailsComponent extends CBitrixComponent
 		}
 
 		///// TRACES //////////////////////////
+		$traces = $this->getTraces($entityTypeId, $entityId, $actualSources);
+
+		$this->arResult['TRACES'] = $traces;
+		$this->arResult['SOURCES'] = $actualSources;
+		$trace = current($traces);
+		$traceSource = $trace['SOURCE'] ?? null;
+		$this->componentResult['SELECTED_SOURCE_ID'] = $this->arResult['SELECTED_SOURCE_ID'] = (
+			(is_array($traceSource) && array_key_exists('ID', $traceSource))
+				? $trace['SOURCE']['ID']
+				: (($this->arParams['IS_REQUIRED'] ?? null) === true ? null : 0)
+		);
+		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * @param int $entityTypeId
+	 * @param int $entityId
+	 * @param array $actualSources
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	protected function getTraces(int $entityTypeId, int $entityId, array $actualSources): array
+	{
+		static $tracesCache = [];
+		$cacheKey = "{$entityTypeId}_$entityId";
+
+		if (!empty($tracesCache[$cacheKey]))
+		{
+			return $tracesCache[$cacheKey];
+		}
+
 		$traces = Tracking\Internals\TraceTable::getList([
 			'select' => ['ID', 'SOURCE_ID', 'PAGES_RAW', 'IS_MOBILE'],
 			'filter' => [
@@ -90,7 +123,7 @@ class CCrmTrackingEntityDetailsComponent extends CBitrixComponent
 			function ($trace, $index) use ($actualSources)
 			{
 				// old: skip traces without source, except first
-				if (/*$index > 0 && */!$trace['SOURCE_ID'])
+				if (/*$index > 0 && */ !$trace['SOURCE_ID'])
 				{
 					return true;
 				}
@@ -127,7 +160,8 @@ class CCrmTrackingEntityDetailsComponent extends CBitrixComponent
 			///// SOURCE
 			$source = ($trace['SOURCE_ID'] && isset($actualSources[$trace['SOURCE_ID']]))
 				? $actualSources[$trace['SOURCE_ID']]
-				: null;
+				: null
+			;
 
 			if (empty($site) && !$source)
 			{
@@ -148,11 +182,9 @@ class CCrmTrackingEntityDetailsComponent extends CBitrixComponent
 				'SITE' => $site,
 				'IS_MOBILE' => $trace['IS_MOBILE'] === 'Y',
 				'PAGES' => array_map(
-					function ($page)
-					{
+					function ($page) {
 						$ts = $page['DATE_INSERT'];
-						if ($ts)
-						{
+						if ($ts) {
 							$ts = DateTime::createFromTimestamp($ts)
 								->toUserTime()
 								->getTimestamp();
@@ -165,15 +197,8 @@ class CCrmTrackingEntityDetailsComponent extends CBitrixComponent
 			];
 		}
 
-		$this->arResult['TRACES'] = $traces;
-		$this->arResult['SOURCES'] = $actualSources;
-		$trace = current($traces);
-		$traceSource = $trace['SOURCE'] ?? null;
-		$this->componentResult['SELECTED_SOURCE_ID'] = $this->arResult['SELECTED_SOURCE_ID'] = (
-			(is_array($traceSource) && array_key_exists('ID', $traceSource))
-				? $trace['SOURCE']['ID']
-				: (($this->arParams['IS_REQUIRED'] ?? null) === true ? null : 0)
-		);
-		$this->includeComponentTemplate();
+		$tracesCache[$cacheKey] = $traces;
+
+		return $traces;
 	}
 }

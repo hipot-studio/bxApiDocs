@@ -74,7 +74,7 @@ class Manager
 		$itemsData = [];
 		foreach ($items as $item)
 		{
-			if ($item->getId() === 'openlines')
+			if (!Settings::isOpenlinesInMessengerV2Available() && $item->getId() === 'openlines')
 			{
 				$openLinesParams = $this->getMessengerParams($items);
 				$item->mergeParams($openLinesParams['SHARED_PARAMS']);
@@ -335,6 +335,7 @@ class Manager
 			'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
 			'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
 			'IS_AI_ASSISTANT_MCP_SELECTOR_AVAILABLE' => Settings::isAiAssistantMcpSelectorAvailable(),
+			'IS_OPENLINES_IN_MESSENGER_V2_AVAILABLE' => Settings::isOpenlinesInMessengerV2Available(),
 			'IS_TASKS_RECENT_LIST_AVAILABLE' => Settings::isTasksRecentListAvailable(),
 			'IS_AUTO_TASKS_ENABLED' => Settings::isAutoTaskEnabled(),
 			'IS_AUTO_TASKS_UI_AVAILABLE' => Settings::isAutoTaskUIAvailable(),

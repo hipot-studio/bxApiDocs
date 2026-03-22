@@ -28,7 +28,7 @@ final class DocumentFieldComparator
 				&& (!array_key_exists($key, $this->previous) || $this->previous[$key] != $field)
 			)
 			{
-				if (!$this->isDefaultValue($key, $field) || !$this->isEmptyValue($previous[$key] ?? null))
+				if (!$this->isDefaultValue($key, $field) || !$this->isEmptyValue($this->previous[$key] ?? null))
 				{
 					$diff[] = $key;
 				}

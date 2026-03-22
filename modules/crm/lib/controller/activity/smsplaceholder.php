@@ -8,7 +8,9 @@ use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Format\PlaceholderFormatter;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -133,7 +135,8 @@ class SmsPlaceholder extends Base
 			return null;
 		}
 
-		if (!$this->checkPermissions($entityTypeId, $entityCategoryId))
+		$itemIdentifier = new ItemIdentifier($entityTypeId, $entityId, $entityCategoryId);
+		if (!$this->getCurrentUserPermissions()->item()->canReadItemIdentifier($itemIdentifier))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
@@ -159,9 +162,16 @@ class SmsPlaceholder extends Base
 		];
 	}
 
+	private function getCurrentUserPermissions(): UserPermissions
+	{
+		$currentUserId = $this->getCurrentUser()?->getId();
+
+		return Container::getInstance()->getUserPermissions($currentUserId);
+	}
+
 	private function checkPermissions(int $entityTypeId, ?int $entityCategoryId = null): bool
 	{
-		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()?->getId());
+		$userPermissions = $this->getCurrentUserPermissions();
 		if (
 			is_null($entityCategoryId)
 			? $userPermissions->entityType()->canUpdateItems($entityTypeId)

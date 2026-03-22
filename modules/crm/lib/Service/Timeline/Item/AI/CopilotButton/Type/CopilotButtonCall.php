@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\Type;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\OperationState;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\SuitableAudiosChecker;
@@ -108,7 +109,10 @@ final class CopilotButtonCall extends BaseButton
 	{
 		if (!$this->isAudiosValid())
 		{
-			return Loc::getMessage('CRM_TIMELINE_ITEM_COPILOT_ERROR_TOOLTIP');
+			return Loc::getMessage(
+				'CRM_TIMELINE_ITEM_COPILOT_ERROR_TOOLTIP',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			);
 		}
 
 		if (
@@ -116,7 +120,10 @@ final class CopilotButtonCall extends BaseButton
 			|| $this->operationState->isCallScoringScenarioSuccess()
 		)
 		{
-			return Loc::getMessage('CRM_TIMELINE_BUTTON_TIP_COPILOT');
+			return Loc::getMessage(
+				'CRM_TIMELINE_BUTTON_TIP_COPILOT',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			);
 		}
 
 		return null;

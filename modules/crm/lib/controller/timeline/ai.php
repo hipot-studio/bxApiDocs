@@ -108,7 +108,7 @@ class AI extends Activity
 		];
 	}
 
-	// region CoPilot and related sliders scenarios
+	// region AI and related sliders scenarios
 	/** @noinspection PhpUnused */
 	public function launchCopilotAction(int $activityId, int $ownerTypeId, int $ownerId, ?string $scenario = null): ?array
 	{

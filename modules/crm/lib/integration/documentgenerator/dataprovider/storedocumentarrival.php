@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
 
 use Bitrix\Catalog\ContractorTable;
+use Bitrix\Catalog\StoreDocumentTable;
 use Bitrix\Catalog\v2\Contractor\Provider\Manager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -15,6 +16,11 @@ use Bitrix\Main\Result;
  */
 class StoreDocumentArrival extends StoreDocument
 {
+	protected function getDocumentType(): string
+	{
+		return StoreDocumentTable::TYPE_ARRIVAL;
+	}
+
 	/**
 	 * @inheritDoc
 	 */

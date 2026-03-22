@@ -13,8 +13,10 @@ use Bitrix\Booking\Internals\Service\Integration\IntegrationStatusEnum;
 use Bitrix\Booking\Internals\Service\Yandex\Dto\CompanyDataDto;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Validation\ValidationException;
 use Bitrix\Main\Validation\ValidationService;
+use Bitrix\Booking\Internals\Service\Yandex\Dto\Api\Validator\Company;
 
 class IntegrationService implements IntegrationServiceInterface
 {
@@ -145,6 +147,17 @@ class IntegrationService implements IntegrationServiceInterface
 		);
 		if (!$registerResult->isSuccess())
 		{
+			$errors = $registerResult->getErrors();
+			foreach ($errors as $error)
+			{
+				if ($error->getCode() === Company::ERROR_CODE_EMPTY_SERVICES)
+				{
+					throw (new YandexIntegrationAccountRegistrationException(
+						Loc::getMessage('BOOKING_YANDEX_INTEGRATION_SERVICE_EMPTY_SKUS_ERROR')
+					))->setIsPublic(true);
+				}
+			}
+
 			throw new YandexIntegrationAccountRegistrationException();
 		}
 	}

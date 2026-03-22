@@ -16,7 +16,6 @@ class YandexIntegrationConfiguration implements JsonSerializable, Arrayable
 		public readonly array $catalogPermissions,
 		public readonly bool $isResourceSkuRelationsSaved,
 		public readonly ResourceCollection $resources,
-		public readonly array $catalogSkuEntityOptions,
 		public readonly array $settings,
 		public readonly string|null $cabinetLink = null,
 		public readonly string|null $timezone = null,
@@ -33,7 +32,6 @@ class YandexIntegrationConfiguration implements JsonSerializable, Arrayable
 			'cabinetLink' => $this->cabinetLink,
 			'timezone' => $this->timezone,
 			'resources' => $this->resources->toArray(),
-			'catalogSkuEntityOptions' => $this->catalogSkuEntityOptions,
 			'settings' => $this->settings,
 		];
 	}

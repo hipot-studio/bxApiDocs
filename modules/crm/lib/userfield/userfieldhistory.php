@@ -3,6 +3,8 @@
 namespace Bitrix\Crm\UserField;
 
 use Bitrix\Crm\Entity\FieldDataProvider;
+use Bitrix\Crm\Integration\Analytics\Builder\Userfield\Context\CreateContext;
+use Bitrix\Crm\Integration\Analytics\Builder\Userfield\CreateEvent;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Type\DateTime;
@@ -60,7 +62,7 @@ class UserFieldHistory
 		{
 			$factory->clearFieldsCollectionCache();
 		}
-		
+
 		(new FieldDataProvider($entityTypeID))->invalidateFieldDataCache();
 	}
 	protected static function load()
@@ -101,6 +103,30 @@ class UserFieldHistory
 		Main\Config\Option::set('crm', 'crm_uf_history', serialize($ary), '');
 	}
 
+	protected static function registerCreateAnalytics(array $fields): void
+	{
+		$entityTypeId = CCrmOwnerType::ResolveIDByUFEntityID($fields['ENTITY_ID'] ?? null);
+		if (!CCrmOwnerType::IsDefined($entityTypeId))
+		{
+			return;
+		}
+
+		$event = (new CreateEvent());
+		if (isset($fields['ANALYTICS']) && $fields['ANALYTICS'] instanceof CreateContext)
+		{
+			$event->fillByContext($fields['ANALYTICS']);
+		}
+
+		if (!$event->validate()->isSuccess())
+		{
+			return;
+		}
+
+		$event
+			->buildEvent()
+			->send();
+	}
+
 	//region CUserTypeEntity events handlers
 	public static function onAdd(array $fields)
 	{
@@ -108,6 +134,8 @@ class UserFieldHistory
 			CCrmOwnerType::ResolveIDByUFEntityID($fields['ENTITY_ID']),
 			$fields['ID']
 		);
+
+		self::registerCreateAnalytics($fields);
 	}
 
 	public static function onUpdate(array $fields, $ID)

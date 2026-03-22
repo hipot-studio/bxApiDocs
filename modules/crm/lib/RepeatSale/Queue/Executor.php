@@ -79,7 +79,7 @@ final class Executor
 			return;
 		}
 
-		if ($this->isQueueItemCompleted($result))
+		if ($this->isQueueItemCompleted($result, $item))
 		{
 			$this->onQueueItemCompleted($item, $result);
 			$this->deleteFromQueue($item);
@@ -149,7 +149,7 @@ final class Executor
 		$handler = Factory::getInstance()->getHandler(
 			$item->getHandlerType(),
 			$item->getParams()['segmentCode'] ?? null,
-			$context
+			$context,
 		);
 
 		if ($handler === null)
@@ -162,7 +162,7 @@ final class Executor
 		{
 			$limit = $this->getLimit($item->isOnlyCalc());
 			$result = $handler
-				->setEntityTypeId($item->getLastEntityTypeId() ?? \CCrmOwnerType::Contact)
+				->setEntityTypeId($item->getLastEntityTypeId() ?? current($handler->getAvailableEntityTypeIds()))
 				->setLastEntityId($item->getLastItemId())
 				->setLastAssignmentId($item->getLastAssignmentId())
 				->setLimit($limit)
@@ -243,9 +243,7 @@ final class Executor
 			return false;
 		}
 
-		$segment = RepeatSaleSegmentController::getInstance()->getById($segmentId);
-
-		return $segment?->getIsEnabled();
+		return RepeatSaleSegmentController::getInstance()->getById($segmentId)?->getIsEnabled();
 	}
 
 	private function markQueueItemAsProgress(QueueItem $item): void
@@ -255,19 +253,21 @@ final class Executor
 		$this->getController()->update($item->getId(), $item);
 	}
 
-	private function isQueueItemCompleted(Result $result): bool
+	private function isQueueItemCompleted(Result $result, QueueItem $item): bool
 	{
 		$segmentData = $result->getSegmentData();
 
-		if ($segmentData === null)
+		if ($segmentData === null || !$segmentData->isLastDataForEntityTypeId())
 		{
 			return false;
 		}
 
-		return (
-			$segmentData->isLastDataForEntityTypeId()
-			&& $segmentData->getEntityTypeId() === \CCrmOwnerType::Company
+		$handler = Factory::getInstance()->getHandler(
+			$item->getHandlerType(),
+			$item->getParams()['segmentCode'] ?? null,
 		);
+
+		return $handler?->isCheckedAllAvailableEntityTypes($segmentData);
 	}
 
 	private function onQueueItemCompleted(QueueItem $queueItem, Result $result): void

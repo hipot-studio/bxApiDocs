@@ -14,6 +14,8 @@ use Bitrix\Crm\Timeline\TimelineManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\DeleteEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 class Delete extends Operation
 {
@@ -260,5 +262,19 @@ class Delete extends Operation
 	protected function isClearItemStageCacheNeeded(): bool
 	{
 		return true;
+	}
+
+	protected function sendAnalytics(Result $result): void
+	{
+		$item = $this->getItem();
+		$analytics = $this->getContext()->getAnalytics();
+		$status = $result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR;
+
+		DeleteEvent::createDefault($item->getEntityTypeId())
+			->setSection($analytics['c_section'])
+			->setSubsection($analytics['c_sub_section'])
+			->setStatus($status)
+			->buildEvent()
+			->send();
 	}
 }

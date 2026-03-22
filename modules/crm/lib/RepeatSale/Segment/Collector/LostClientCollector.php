@@ -9,7 +9,7 @@ use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\Date;
 
-class LostClientCollector extends BaseCollector
+final class LostClientCollector extends BaseSqlCollector
 {
 	protected function getCompanyIds(array $filter): array
 	{

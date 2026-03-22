@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\Timeline\Item\AI;
 
 use Bitrix\Crm\Activity\Provider\Call;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\ItemIdentifier;
@@ -95,9 +96,8 @@ final class EntityFieldsFillingResult extends Base
 		}
 
 		return Loc::getMessage(
-			$this->isFieldsFillingWrong()
-				? 'CRM_TIMELINE_ACTIVITY_AI_FILLING_WARNING_RESULT'
-				: $titleCode
+			$this->isFieldsFillingWrong() ? 'CRM_TIMELINE_ACTIVITY_AI_FILLING_WARNING_RESULT' : $titleCode,
+			['#COPILOT_NAME#' => AIManager::getCopilotName()]
 		);
 	}
 
