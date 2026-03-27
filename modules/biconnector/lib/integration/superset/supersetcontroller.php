@@ -120,9 +120,4 @@ final class SupersetController
 		$data = $response->getData();
 		return $data['url'];
 	}
-
-	public function isExternalServiceAvailable(): bool
-	{
-		return $this->integrator->ping();
-	}
 }

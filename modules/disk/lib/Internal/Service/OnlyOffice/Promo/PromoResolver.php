@@ -7,23 +7,19 @@ use Bitrix\Disk\Document\DocumentEditorUser;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Main\Application;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Security\Random;
-use CBitrix24;
-use Bitrix\Main\Config\Configuration;
 
 class PromoResolver
 {
 	private const LIMIT_SLIDER_STARTER_TARIFFS = 'limit_office_no_document';
 	private const LIMIT_SLIDER_EXTENDABLE_TARIFFS = 'limit_v2_disk_onlyoffice_edit';
 	private const LIMIT_SLIDER_EXTENDABLE_TARIFFS_WITH_BOOSTS = 'limit_v2_disk_onlyoffice_edit_boost';
-	private Configuration $diskConfig;
 
 	public function __construct(
 		private readonly BaasSessionBoostService $sessionBoostService,
+		private readonly TariffGroupResolver $tariffGroupResolver,
 	)
 	{
-		$this->diskConfig = Configuration::getInstance('disk');
 	}
 
 	public function resolve(): ?PromoDto
@@ -38,7 +34,7 @@ class PromoResolver
 			return null;
 		}
 
-		$tariffGroup = $this->getTariffGroup();
+		$tariffGroup = $this->tariffGroupResolver->resolve();
 
 		return match ($tariffGroup) {
 			TariffGroup::Starter => $this->getPromoForStarter(),
@@ -46,50 +42,6 @@ class PromoResolver
 			TariffGroup::LargeEnterprise => $this->getPromoForLargeEnterprise(),
 			default => null,
 		};
-	}
-
-	/**
-	 * It's only for cloud editions.
-	 *
-	 * @return TariffGroup|null
-	 */
-	private function getTariffGroup(): ?TariffGroup
-	{
-		if (!ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			return null;
-		}
-
-		$licenseType = CBitrix24::getLicenseType();
-
-		if ($licenseType === 'basic' || CBitrix24::isFreeLicense())
-		{
-			return TariffGroup::Starter;
-		}
-
-		$promo = $this->diskConfig->get('promo');
-
-		if (!is_array($promo))
-		{
-			return null;
-		}
-
-		$cloudTariffGroups = $promo['cloud_tariff_groups'] ?? [];
-
-		$extendableTariffs = $cloudTariffGroups['extendable'] ?? [];
-
-		if (in_array($licenseType, $extendableTariffs, true))
-		{
-			return TariffGroup::Extendable;
-		}
-
-		$largeEnterpriseTariffs = $cloudTariffGroups['large_enterprise'] ?? [];
-		if (in_array($licenseType, $largeEnterpriseTariffs, true))
-		{
-			return TariffGroup::LargeEnterprise;
-		}
-
-		return null;
 	}
 
 	private function getPromoForStarter(): PromoDto

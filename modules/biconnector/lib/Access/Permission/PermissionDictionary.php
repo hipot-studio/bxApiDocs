@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Access\Permission;
 
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Access\Rule\VariableRule;
 use Bitrix\Main\Access\Permission;
 use Bitrix\Main\Localization\Loc;
 
@@ -160,6 +161,8 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public static function clearDashboardGroupPermissions(): void
 	{
 		self::$groupPermissions = null;
+
+		VariableRule::clearCache();
 	}
 
 	public static function getDashboardGroupPermissions(): array

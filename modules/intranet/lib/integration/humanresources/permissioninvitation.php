@@ -74,6 +74,7 @@ class PermissionInvitation
 			isGlobalActive: $node->globalActive,
 			depth: $node->depth,
 			accessCode: $node->accessCode,
+			isIblockSource: false,
 		);
 	}
 }

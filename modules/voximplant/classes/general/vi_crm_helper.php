@@ -1,6 +1,7 @@
 <?
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Main\Event;
 use Bitrix\Main\PhoneNumber\Parser;
 use Bitrix\Voximplant as VI;
@@ -1088,8 +1089,30 @@ class CVoxImplantCrmHelper
 
 	public static function StartLeadWorkflow($leadId)
 	{
-		if (!CModule::IncludeModule('crm'))
+		if (!\Bitrix\Main\Loader::includeModule('crm'))
+		{
 			return;
+		}
+
+		if (
+			class_exists(CrmStarter::class)
+			&& defined('\Bitrix\Crm\Integration\BizProc\Starter\CrmStarter::MOVE_TO_BACKGROUND_DELAY')
+		)
+		{
+			$starter = new CrmStarter(
+				new \Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto(\CCrmOwnerType::Lead, (int)$leadId)
+			);
+			$starter
+				->setContextModuleId('voximplant')
+				->runOnDocumentAdd(
+					new \Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY
+					)
+				)
+			;
+
+			return;
+		}
 
 		\CCrmBizProcHelper::AutoStartWorkflows(
 			CCrmOwnerType::Lead,

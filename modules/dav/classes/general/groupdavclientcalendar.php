@@ -638,9 +638,9 @@ class CDavGroupdavClientCalendar extends CDavGroupdavClient
 		$result = $this->Put($path, $this->Decode($data));
 		if ($result)
 		{
-			$result = $result->GetStatus();
+			$result = (int)$result->GetStatus();
 
-			if ($result == 201 || $result == 204)
+			if ($result === 201 || $result === 204)
 			{
 				$result = $this->GetCalendarItemsList($path);
 				if (is_array($result) && count($result) > 0)
@@ -661,7 +661,7 @@ class CDavGroupdavClientCalendar extends CDavGroupdavClient
 		$result = $this->Delete($path);
 		if ($result)
 		{
-			$code = $result->GetStatus();
+			$code = (int)$result->GetStatus();
 
 			if ($code === 200 || $code === 201 || $code === 204)
 			{
@@ -682,9 +682,9 @@ class CDavGroupdavClientCalendar extends CDavGroupdavClient
 
 		$iCalEvent = [
 			'TYPE' => 'VEVENT',
-			'CREATED' => date('Ymd\\THis\\Z', MakeTimeStamp($event['DATE_CREATE'])),
-			'LAST-MODIFIED' => date('Ymd\\THis\\Z', MakeTimeStamp($event['TIMESTAMP_X'])),
-			'DTSTAMP' => date('Ymd\\THis\\Z', MakeTimeStamp($event['TIMESTAMP_X'])),
+			'CREATED' => gmdate('Ymd\\THis\\Z', MakeTimeStamp($event['DATE_CREATE'])),
+			'LAST-MODIFIED' => gmdate('Ymd\\THis\\Z', MakeTimeStamp($event['TIMESTAMP_X'])),
+			'DTSTAMP' => gmdate('Ymd\\THis\\Z', MakeTimeStamp($event['TIMESTAMP_X'])),
 			'UID' => $event['DAV_XML_ID'],
 			'SUMMARY' => $event['NAME']
 		];
@@ -728,11 +728,7 @@ class CDavGroupdavClientCalendar extends CDavGroupdavClient
 			$iCalEvent['TRANSP'] = 'OPAQUE';
 		}
 
-		if (
-			isset($event['LOCATION'], $event['LOCATION']['NEW'])
-			&& is_array($event['LOCATION'])
-			&& $event['LOCATION']['NEW']
-		)
+		if (isset($event['LOCATION']['NEW']) && is_array($event['LOCATION']) && $event['LOCATION']['NEW'])
 		{
 			$iCalEvent['LOCATION'] = $event['LOCATION']['NEW'];
 		}
@@ -797,16 +793,16 @@ class CDavGroupdavClientCalendar extends CDavGroupdavClient
 			{
 				if ($event['RRULE']['UNTIL'] != '' && (int)$event['RRULE']['UNTIL'] == $event['RRULE']['UNTIL'])
 				{
-					$val .= ';UNTIL=' . date('Ymd\\THis\\Z', $event['RRULE']['UNTIL']);
+					$val .= ';UNTIL=' . gmdate('Ymd\\THis\\Z', $event['RRULE']['UNTIL']);
 				}
 				else if($event['RRULE']['UNTIL'] != '')
 				{
-					$val .= ';UNTIL=' . date('Ymd', MakeTimeStamp($event['RRULE']['UNTIL'])) . 'T235959Z';
+					$val .= ';UNTIL=' . gmdate('Ymd', MakeTimeStamp($event['RRULE']['UNTIL'])) . 'T235959Z';
 				}
 			}
 			else
 			{
-				$val .= ';UNTIL=' . date('Ymd\\THis\\Z', $event['DATE_TO_TS_UTC'] + (int)date('Z'));
+				$val .= ';UNTIL=' . gmdate('Ymd\\THis\\Z', $event['DATE_TO_TS_UTC']);
 			}
 
 			$iCalEvent['RRULE'] = $val;

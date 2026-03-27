@@ -10,6 +10,7 @@ use Bitrix\Intranet\User\ActionRule\ActionRuleFactory;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
 class UserService
@@ -214,7 +215,7 @@ class UserService
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
-			return $userId === (int)\CBitrix24::getPortalCreatorId();
+			return $userId === ServiceLocator::getInstance()->get('bitrix24.portal.settings.creator')?->getCreatorId();
 		}
 
 		return false;

@@ -687,7 +687,7 @@ class Dashboard extends Controller
 		}
 
 		$supersetController = new SupersetController(Integrator::getInstance());
-		if (!$supersetController->isSupersetEnabled() || !$supersetController->isExternalServiceAvailable())
+		if (!$supersetController->isSupersetEnabled() || SupersetInitializer::isSupersetUnavailable())
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_RENAME_ERROR_UNAVAILABLE')));
 

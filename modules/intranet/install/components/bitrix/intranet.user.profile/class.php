@@ -63,7 +63,7 @@ class CIntranetUserProfileComponent extends UserProfile
 		$ownerUserId = (int) ($this->arParams["ID"] ?? 0);
 
 		$this->arResult["isCloud"] = Loader::includeModule("bitrix24");
-		$this->arResult['isFirstAdminConfirmationEnabled'] = Option::get('bitrix24', 'first_admin_confirmation', 'N') === 'Y';
+		$this->arResult['isFirstAdminConfirmationEnabled'] = Option::get('bitrix24', 'first_admin_confirmation', 'Y') === 'Y';
 
 		if ($this->arResult["isCloud"])
 		{
@@ -227,6 +227,12 @@ class CIntranetUserProfileComponent extends UserProfile
 		}
 
 		$personalSettings = $otpSettings?->getPersonalSettingsByUserId($userEntity->getId());
+
+		if (!$personalSettings)
+		{
+			return;
+		}
+
 		$otpUser = $personalSettings->getOtpInfo();
 		$otpSigner = new Integration\Main\OtpSigner();
 		$deactivateStatus = null;

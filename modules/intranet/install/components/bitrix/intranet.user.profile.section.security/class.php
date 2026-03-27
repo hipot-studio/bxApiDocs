@@ -44,7 +44,11 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 		}
 
 		$arParams['CAN_EDIT'] = (int)CurrentUser::get()->getId() === (int)$arParams["USER_ID"];
-		$arParams['PERSONAL_OTP'] = new PersonalOtp($arParams['USER']);
+
+		if (Loader::includeModule('security'))
+		{
+			$arParams['PERSONAL_OTP'] = new PersonalOtp($arParams['USER']);
+		}
 
 		return $arParams;
 	}
@@ -67,41 +71,48 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 		$user = $this->arParams['USER'];
 		$isAdmin = (new \Bitrix\Intranet\User())->isAdmin();
 
-		if (!Loader::includeModule('security') || (!$user->isCurrent() && !$isAdmin))
+		if (!$user->isCurrent() && !$isAdmin)
 		{
 			return;
 		}
 
 		$this->arResult['IS_CURRENT_USER'] = $user->isCurrent();
-		$otpSettings = new OtpSettings();
-		$mobilePush = MobilePush::createByDefault();
-		$personalOtp = $this->arParams['PERSONAL_OTP'];
-		$this->arResult["OTP"]["IS_ENABLED"] = $otpSettings->isEnabled() ? 'Y' : 'N';
-		$this->arResult["OTP"]["IS_ACTIVE"] = $personalOtp->isActivated() ? 'Y' : 'N';
-		$this->arResult["OTP"]["CAN_EDIT_OTP"] = (new UserPermission($user))->canEdit() ? 'Y' : 'N';
 		$this->arResult["CAN_VIEW_RESTORE_PASSWORD"] = false;
 
-		if (
-			($mobilePush->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low))
-			|| (
-				$mobilePush->getPromoteMode() === PromoteMode::Personal
-				&& $mobilePush->canUsePersonalModeByUserId((int)$user->getId())
+		if (Loader::includeModule('security') && isset($this->arParams['PERSONAL_OTP']))
+		{
+			$otpSettings = new OtpSettings();
+			$mobilePush = MobilePush::createByDefault();
+			$personalOtp = $this->arParams['PERSONAL_OTP'];
+			$this->arResult["OTP"]["IS_ENABLED"] = $otpSettings->isEnabled() ? 'Y' : 'N';
+			$this->arResult["OTP"]["IS_ACTIVE"] = $personalOtp->isActivated() ? 'Y' : 'N';
+			$this->arResult["OTP"]["CAN_EDIT_OTP"] = (new UserPermission($user))->canEdit() ? 'Y' : 'N';
+			$this->arResult["OTP"]["2FA_SECTION_SHOW"] = 'Y';
+			$this->arResult["OTP"]["IS_INITIALIZED"] = $personalOtp->isInitialized() ? 'Y' : 'N';
+
+			if (
+				($mobilePush->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low))
+				|| (
+					$mobilePush->getPromoteMode() === PromoteMode::Personal
+					&& $mobilePush->canUsePersonalModeByUserId((int)$user->getId())
+				)
 			)
-		)
-		{
-			$personalPushOtp = new PersonalMobilePush($personalOtp);
-			$this->arResult["OTP"]["IS_PUSH_OTP_AVAILABLE"] = $user->isCurrent() && !$personalPushOtp->isActivated()  ? 'Y' : 'N';
-			$this->arResult["OTP"]["IS_PHONE_CONFIRMATION_REQUIRED"] = $personalPushOtp->isPhoneConfirmationRequired() ? 'Y' : 'N';
-			$this->arResult["OTP"]["IS_PUSH_OTP_NEW"] = $this->arResult["OTP"]["IS_PUSH_OTP_AVAILABLE"] && !$personalOtp->isPushType() ? 'Y' : 'N';
+			{
+				$personalPushOtp = new PersonalMobilePush($personalOtp);
+				$this->arResult["OTP"]["IS_PHONE_CONFIRMATION_REQUIRED"] = $personalPushOtp->isPhoneConfirmationRequired() ? 'Y' : 'N';
+				$this->arResult["OTP"]["IS_PUSH_OTP_NEW"] = $user->isCurrent() && !$personalPushOtp->isActivated() && !$personalOtp->isPushType() ? 'Y' : 'N';
+				$this->arResult["OTP"]["2FA_SECTION_SHOW"] = $this->arResult["OTP"]["IS_PUSH_OTP_NEW"] !== 'Y' || !$user->isCurrent() || !$personalPushOtp->isActivated() ? 'Y' : 'N';
+			}
+			else
+			{
+				$this->arResult["OTP"]["IS_PUSH_OTP_AVAILABLE"] = 'N';
+			}
+
+			$this->arResult['OTP_PARAMS'] = $this->getOtpParameters();
 		}
-		else
-		{
-			$this->arResult["OTP"]["IS_PUSH_OTP_AVAILABLE"] = 'N';
-		}
+
 		$this->arResult["PASSWORD"]["CAN_VIEW"] = $user->isCurrent() || $isAdmin ? 'Y' : 'N';
 		$this->arResult["USER"]["CAN_LOGOUT"] = $user->isCurrent() ? 'Y' : 'N';
-
-		$this->arResult['OTP_PARAMS'] = $this->getOtpParameters();
 		$this->arResult['IS_CLOUD'] = Loader::includeModule('bitrix24');
 
 		if (
@@ -161,7 +172,7 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 			'canShowBannerPushOtp' => $canShowBannerPushOtp,
 			'isOtpActive' => $this->arParams['PERSONAL_OTP']->isActivated(),
 			'canDeactivate' => (new UserPermission($this->arParams['USER']))->canDeactivate(),
-			'isNotPushOtp' => $this->arParams['PERSONAL_OTP']->getType() !== OtpType::Push,
+			'isNotPushOtp' => ($this->arParams['PERSONAL_OTP']->getType() !== OtpType::Push && $this->arParams['PERSONAL_OTP']->isInitialized()) || !MobilePush::createByDefault()->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low),
 			'days' => $this->createDays(),
 		];
 	}

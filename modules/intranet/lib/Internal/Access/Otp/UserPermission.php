@@ -21,9 +21,16 @@ class UserPermission
 
 	public function canDeactivate(): bool
 	{
-		$ifMandatory = !(new OtpSettings())->isMandatoryUsing() && $this->user->isCurrent();
+		$otpSettings = new OtpSettings();
+		$isMandatoryForUser = false;
 
-		return $ifMandatory || $this->canCurrentUserEdit();
+		if ($otpSettings->isMandatoryUsing())
+		{
+			$personalSettings = $otpSettings->getPersonalSettingsByUserId($this->user->getId());
+			$isMandatoryForUser = $personalSettings?->isRequired() ?? false;
+		}
+
+		return (!$isMandatoryForUser && $this->user->isCurrent()) || $this->canCurrentUserEdit();
 	}
 
 	public function canCurrentUserEdit(): bool

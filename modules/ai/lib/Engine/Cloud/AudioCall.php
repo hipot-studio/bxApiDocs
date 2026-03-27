@@ -6,7 +6,7 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IQueueOptional;
 use Bitrix\AI\Facade\AiUrlManager;
 use Bitrix\AI\Result;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Web\Json;
 
@@ -30,7 +30,9 @@ final class AudioCall extends CloudEngine implements IQueueOptional
 
 	public function isAvailable(): bool
 	{
-		return Option::get('ai', 'audio_call_enabled', 'N') === 'Y';
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		return !in_array($region, ['ru', 'by', 'cn']);
 	}
 
 	public function getResultFromRaw(mixed $rawResult, bool $cached = false): Result

@@ -168,6 +168,7 @@ class UserRepository implements UserRepositoryContract
 				'EMAIL',
 				'UF_DEPARTMENT',
 				'EXTERNAL_AUTH_ID',
+				'PERSONAL_MOBILE',
 			])
 			->fetchAll()
 		;
@@ -195,6 +196,7 @@ class UserRepository implements UserRepositoryContract
 				'EXTERNAL_AUTH_ID',
 				'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
 				'UF_DEPARTMENT',
+				'PERSONAL_MOBILE',
 			])
 			->fetchAll()
 		;
@@ -222,6 +224,7 @@ class UserRepository implements UserRepositoryContract
 				'EXTERNAL_AUTH_ID',
 				'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
 				'UF_DEPARTMENT',
+				'PERSONAL_MOBILE',
 				'PERSONAL_PHOTO',
 			])
 			->fetchAll()
@@ -243,8 +246,10 @@ class UserRepository implements UserRepositoryContract
 				'LOGIN',
 				'EMAIL',
 				'EXTERNAL_AUTH_ID',
+				'XML_ID',
 				'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
 				'UF_DEPARTMENT',
+				'PERSONAL_MOBILE',
 			])
 			->fetch()
 		;
@@ -276,6 +281,7 @@ class UserRepository implements UserRepositoryContract
 			'EMAIL',
 			'UF_DEPARTMENT',
 			'LANGUAGE_ID',
+			'PERSONAL_MOBILE',
 		];
 		$userList = UserTable::query()
 			->whereIn('LOGIN', $emails)
@@ -309,6 +315,7 @@ class UserRepository implements UserRepositoryContract
 			'LOGIN',
 			'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
 			'UF_DEPARTMENT',
+			'PERSONAL_MOBILE',
 		];
 		$userList = UserTable::query()
 			->whereIn('LOGIN', $phoneNumbers)

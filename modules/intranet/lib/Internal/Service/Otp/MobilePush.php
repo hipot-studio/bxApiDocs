@@ -10,24 +10,21 @@ use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
 use Bitrix\Security\Mfa\OtpType;
 
 class MobilePush
 {
+	private bool $isAvailable;
+
 	/**
 	 * @throws LoaderException
-	 * @throws SystemException
 	 */
 	public function __construct(
 		private readonly OtpSettings $otpSettings,
 	) {
-		if (!Loader::includeModule('security'))
-		{
-			throw new SystemException('Module security is not installed');
-		}
+		$this->isAvailable = Loader::includeModule('security');
 	}
 
 	public static function createByDefault(): self
@@ -40,11 +37,21 @@ class MobilePush
 	 */
 	public function setByDefault(): void
 	{
+		if (!$this->isAvailable)
+		{
+			return;
+		}
+
 		$this->otpSettings->setDefaultType(OtpType::Push);
 	}
 
 	public function isDefault(): bool
 	{
+		if (!$this->isAvailable)
+		{
+			return false;
+		}
+
 		return $this->otpSettings->getDefaultType() === OtpType::Push;
 	}
 
@@ -102,6 +109,11 @@ class MobilePush
 
 	public function makeMandatory(): void
 	{
+		if (!$this->isAvailable)
+		{
+			return;
+		}
+
 		$this->otpSettings->setDefaultType(OtpType::Push);
 		$this->otpSettings->setMandatoryUsing(true);
 

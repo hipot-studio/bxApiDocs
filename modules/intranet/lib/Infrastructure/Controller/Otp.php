@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Infrastructure\Controller;
 
 use Bitrix\Intranet\ActionFilter\AdminUser;
+use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Internal\Access\Otp\UserPermission;
@@ -14,20 +15,26 @@ use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Integration\Messageservice\TwoFaNetworkSender;
+use Bitrix\Intranet\Internal\Integration\Security\RecoveryCodes;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
+use Bitrix\Intranet\Public\Command\Otp\Notification\SendRequestRecoverAccessCommand;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Command\Exception\CommandException;
+use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
+use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Web\HttpHeaders;
 use Bitrix\Security\Controller\PushOtp;
 use Bitrix\Security\Mfa\OtpException;
 use Bitrix\Intranet\Entity\User;
@@ -53,6 +60,21 @@ class Otp extends Controller
 					'\Bitrix\Main\Engine\ActionFilter\Authentication',
 				],
 			],
+			'sendRequestRecoverAccess' => [
+				'-prefilters' => [
+					'\Bitrix\Main\Engine\ActionFilter\Authentication',
+				],
+			],
+			'resetOtpSession' => [
+				'-prefilters' => [
+					'\Bitrix\Main\Engine\ActionFilter\Authentication',
+				],
+			],
+			'generateRecoveryCodesFile' => [
+				'-prefilters' => [
+					'\Bitrix\Main\Engine\ActionFilter\Csrf',
+				],
+			]
 		];
 	}
 
@@ -95,13 +117,25 @@ class Otp extends Controller
 
 	public function activePushOtpAction(): Result
 	{
+		if (!Loader::includeModule('security'))
+		{
+			return (new Result())->addError(new Error('Module Security is not installed'));
+		}
+
 		MobilePush::createByDefault()->makeMandatory();
 
 		return new Result();
 	}
-	
+
 	public function setupPushOtpAction(User $user, string $secret, string $sync1, array $initParams = []): bool
 	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return false;
+		}
+
 		try
 		{
 			if (!(new UserPermission($user))->canEdit())
@@ -110,7 +144,7 @@ class Otp extends Controller
 
 				return false;
 			}
-			
+
 			$otp = PersonalMobilePush::createByUser($user);
 			$otp->setup($secret, $sync1, $initParams);
 
@@ -126,6 +160,13 @@ class Otp extends Controller
 
 	public function resumeOtpAction(User $user): bool
 	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return false;
+		}
+
 		try
 		{
 			if (!(new UserPermission($user))->canEdit())
@@ -149,6 +190,13 @@ class Otp extends Controller
 
 	public function pauseOtpAction(User $user, int $days): bool
 	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return false;
+		}
+
 		try
 		{
 			if (!(new UserPermission($user))->canEdit() || !(new UserPermission($user))->canDeactivate())
@@ -171,10 +219,33 @@ class Otp extends Controller
 	}
 
 	/**
+	 * @throws CommandValidationException
+	 * @throws CommandException
+	 */
+	public function sendRequestRecoverAccessAction(User $user): void
+	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return;
+		}
+
+		(new SendRequestRecoverAccessCommand($user))->run();
+	}
+
+	/**
 	 * @throws ArgumentException
 	 */
 	public function changeAuthPhoneAction(User $user, Phone $phoneNumber): bool
 	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return false;
+		}
+
 		try
 		{
 			if (!(new UserPermission($user))->canEdit())
@@ -230,6 +301,13 @@ class Otp extends Controller
 	 */
 	public function confirmationPhoneNumberAction(User $user, string $code): ?bool
 	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return false;
+		}
+
 		try
 		{
 			$confirmed = (new VerifyPhoneService($user))->confirmPhoneNumber($code);
@@ -272,7 +350,7 @@ class Otp extends Controller
 	/**
 	 * @throws SystemException|LoaderException
 	 */
-	public function sendMobilePushAction(string $channelTag): ?array
+	public function sendMobilePushAction(string $channelTag): mixed
 	{
 		if (!Loader::includeModule('security'))
 		{
@@ -292,6 +370,13 @@ class Otp extends Controller
 	 */
 	public function getConfigAction(User $user): array
 	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return [];
+		}
+
 		if (!(new UserPermission($user))->canEdit())
 		{
 			$this->addError(new Error("No rights"));
@@ -312,5 +397,52 @@ class Otp extends Controller
 		}
 
 		(new LogoutService($user))->logoutAll();
+	}
+
+	public function resetOtpSessionAction(): void
+	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return;
+		}
+
+		\Bitrix\Security\Mfa\Otp::setDeferredParams(null);
+	}
+
+	public function generateRecoveryCodesFileAction(): ?HttpResponse
+	{
+		if (!Loader::includeModule('security'))
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return null;
+		}
+
+		$user = new User((int)CurrentUser::get()->getId());
+		$recoveryCodes = new RecoveryCodes($user);
+		$codes = $recoveryCodes->getList(true, true);
+
+		if (empty($codes))
+		{
+			$this->addError(new Error('No recovery codes available'));
+
+			return null;
+		}
+
+		$response = $recoveryCodes->prepareFileContent($codes);
+
+		$httpResponse = new HttpResponse();
+		$httpResponse->setContent($response);
+		$headers = new HttpHeaders([
+			'Content-Type' => 'text/plain',
+			'Content-Disposition' => 'attachment; filename="recovery_codes.txt"',
+			'Content-Transfer-Encoding' => 'binary',
+			'Content-Length' => (string)strlen($response),
+		]);
+		$httpResponse->setHeaders($headers);
+
+		return $httpResponse;
 	}
 }

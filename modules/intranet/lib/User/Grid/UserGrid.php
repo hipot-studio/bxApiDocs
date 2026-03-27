@@ -2,12 +2,12 @@
 
 namespace Bitrix\Intranet\User\Grid;
 
-use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\User\Filter\Provider\PhoneUserDataProvider;
 use Bitrix\Intranet\User\Filter\UserFilter;
+use Bitrix\Intranet\User\Grid\Column\Provider\DataProviderFactory;
 use Bitrix\Intranet\User\Grid\Row\Assembler\UserRowAssembler;
 use Bitrix\Intranet\User\Grid\Settings\UserSettings;
 use Bitrix\Intranet\UserTable;
@@ -33,7 +33,7 @@ final class UserGrid extends Grid
 	protected function createColumns(): Columns
 	{
 		return new Columns(
-			new \Bitrix\Intranet\User\Grid\Column\Provider\UserDataProvider($this->getSettings()),
+			(new DataProviderFactory($this->getSettings()))->create()
 		);
 	}
 

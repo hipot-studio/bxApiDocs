@@ -7,6 +7,7 @@ use Bitrix\Bitrix24\Service\PortalSettings;
 use Bitrix\Intranet\Invitation;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
+use Bitrix\Intranet\Integration\HumanResources\PermissionInvitation;
 
 class InviteProvider
 {
@@ -18,6 +19,7 @@ class InviteProvider
 		$isInviteWithLocalEmailAppEnabled = (
 			Option::get('intranetmobile', 'invite_with_local_email_app_enabled', 'Y') === 'Y'
 		);
+		$availableRootDepartment = $canCurrentUserInvite ? $this->getAvailableRootDepartment() : null;
 
 		return [
 			'adminConfirm' => $canCurrentUserInvite ? Invitation::getRegisterAdminConfirm() : null,
@@ -29,6 +31,26 @@ class InviteProvider
 			'isBitrix24Included' => $isBitrix24Included,
 			'adminInBoxRedirectLink' => '/company/',
 			'isInviteWithLocalEmailAppEnabled' => $isInviteWithLocalEmailAppEnabled,
+			'availableRootDepartment' => $availableRootDepartment,
+		];
+	}
+
+	public function getAvailableRootDepartment(): ?array
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return null;
+		}
+
+		$department = PermissionInvitation::createByCurrentUser()->findFirstPossibleAvailableDepartment();
+		if ($department === null)
+		{
+			return null;
+		}
+
+		return [
+			'id' => $department->getId(),
+			'title' => $department->getName(),
 		];
 	}
 

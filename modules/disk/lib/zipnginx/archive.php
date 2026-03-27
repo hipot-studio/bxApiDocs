@@ -4,8 +4,10 @@ namespace Bitrix\Disk\ZipNginx;
 
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Type\ObjectCollection;
+use Bitrix\Disk\Driver;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\ModuleManager;
@@ -180,16 +182,30 @@ class Archive extends Response\Zip\Archive
 	 */
 	private static function countFilesInFolder(Folder $folder, SecurityContext $securityContext): int
 	{
-		$fileCount = 0;
-		$maxFilesInArchive = self::getMaxFilesInArchive();
-
-		foreach ($folder->getDescendants($securityContext) as $child)
+		$realFolder = $folder->getRealObject();
+		if (!$realFolder)
 		{
-			if ($child instanceof File)
-			{
-				$fileCount++;
-			}
+			return 0;
+		}
 
+		$maxFilesInArchive = self::getMaxFilesInArchive();
+		$parameters = [
+			'select' => ['ID'],
+			'filter' => [
+				'TYPE' => ObjectTable::TYPE_FILE,
+				'DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
+			],
+			'limit' => $maxFilesInArchive + 1,
+		];
+		$parameters = Driver::getInstance()
+			->getRightsManager()
+			->addRightsCheck($securityContext, $parameters, ['ID', 'CREATED_BY']);
+
+		$fileCount = 0;
+		$query = ObjectTable::getDescendants($realFolder->getId(), $parameters);
+		while ($query->fetch())
+		{
+			$fileCount++;
 			if ($fileCount > $maxFilesInArchive)
 			{
 				break;

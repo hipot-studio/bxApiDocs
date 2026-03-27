@@ -26,6 +26,7 @@ class FilterPresetManager
 			new ExtranetPreset(),
 			new FiredPreset(),
 			new CollaberPreset(),
+			new IntegratorPreset(),
 		];
 		$this->filterSettings = $filterSettings;
 

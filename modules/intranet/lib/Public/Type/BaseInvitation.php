@@ -21,6 +21,8 @@ abstract class BaseInvitation
 
 	abstract public function getType(): InvitationType;
 
+	abstract public function isValid(): bool;
+
 	public function getName(): ?string
 	{
 		return $this->name;

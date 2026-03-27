@@ -395,6 +395,15 @@ class Invite extends Main\Engine\Controller
 
 	public function reinviteWithChangeContactAction(int $userId, ?string $newEmail = null, ?string $newPhone = null): ?array
 	{
+		if (!Main\Loader::includeModule('bitrix24'))
+		{
+			$this->addError(
+				new Error('Bitrix24 module is not included')
+			);
+
+			return null;
+		}
+
 		$result = ProfileService::getInstance()->reInviteUserWithChangeContact($userId, $newEmail, $newPhone);
 
 		if (!$result->isSuccess())

@@ -7,18 +7,20 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\UserOtp;
+use Bitrix\Intranet\Internal\Enum\Otp\OtpBannerType;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Factory\Otp\BannerTypeFactory;
-use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
-use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Portal;
-use Bitrix\Intranet\Internal\Integration\Security\Otp;
+use Bitrix\Main\Application;
 use Bitrix\Security\Mfa\OtpType;
 
 class CIntranetOtpInfoComponent extends CBitrixComponent
 {
+	private const CACHE_TTL = 900;
+	private const CACHE_ID_PREFIX = 'otp_banner_type_';
+
 	private CurrentUser $currentUser;
 	private OtpSettings $otpSettings;
 
@@ -31,6 +33,11 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 
 	public function executeComponent(): void
 	{
+		if (!$this->currentUser->isAuthorized() || !$this->otpSettings->isAvailable())
+		{
+			return;
+		}
+
 		$this->arResult['DEFAULT_OTP_TYPE'] = $this->otpSettings->getDefaultType();
 		$mobilePush = MobilePush::createByDefault();
 		$this->arResult['OLD_OTP_POPUP'] = true;
@@ -40,36 +47,36 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 			|| (
 				$mobilePush->getPromoteMode()->isGreaterOrEqual(PromoteMode::Medium)
 			)
-		)
-		{
-			$type = (new BannerTypeFactory())->create();
+		) {
+			$type = $this->getBannerType();
 
-			if (!$this->currentUser->isAuthorized() || !$type || !$this->checkPopupShowEvents())
+			if (!$type || !$this->checkPopupShowEvents())
 			{
 				return;
 			}
 
 			$this->arResult['OLD_OTP_POPUP'] = false;
-			$mobilePush = MobilePush::createByDefault();
+			$this->arResult['TRUST_DEVICE_CONFIRMATION'] = $type === OtpBannerType::TRUST_DEVICE_CONFIRMATION;
+			$this->arResult['TRUST_PHONE_NUMBER_CONFIRMATION'] = $type === OtpBannerType::TRUST_PHONE_NUMBER_CONFIRMATION;
 
-			$this->arResult['pushOtpConfig'] = [
-				'type' => $type->value,
-				'gracePeriod' => $this->otpSettings
-					->getPersonalSettingsByUserId($this->currentUser->getId())
-					?->getGracePeriod()
-					?->getTimestamp(),
-				'signedUserId' => (new OtpSigner())->signUserId((int)CurrentUser::get()->getId()),
-				'settingsUrl' => Portal::getInstance()->getSettings()->getSettingsUrl(),
-				'promoteMode' => $mobilePush->getPromoteMode()->value,
-			];
+			if (!$this->arResult['TRUST_DEVICE_CONFIRMATION'])
+			{
+				$mobilePush = MobilePush::createByDefault();
+
+				$this->arResult['pushOtpConfig'] = [
+					'type' => $type->value,
+					'gracePeriod' => $this->otpSettings
+						->getPersonalSettingsByUserId($this->currentUser->getId())
+						?->getGracePeriod()
+						?->getTimestamp(),
+					'settingsUrl' => Portal::getInstance()->getSettings()->getSettingsUrl(),
+					'promoteMode' => $mobilePush->getPromoteMode()->value,
+					...($this->otpSettings->getPersonalSettingsByUserId((int)$this->currentUser->getId())?->getOtpConfig() ?? []),
+				];
+			}
 		}
 		else
 		{
-			if (!$this->currentUser->isAuthorized())
-			{
-				return;
-			}
-
 			if (
 				!$this->otpSettings->isMandatoryUsing()
 				|| $this->isSavedLocalStorageInfo()
@@ -81,19 +88,42 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 			$otpPersonal = $this->otpSettings->getPersonalSettingsByUserId((int)$this->currentUser->getId());
 
 			if (
-				$otpPersonal->isActivated()
-				|| !$otpPersonal->isRequired()
+				$otpPersonal?->isActivated()
+				|| !$otpPersonal?->isRequired()
 			) {
 				return;
 			}
 
 			$this->arResult['PATH_TO_PROFILE_SECURITY'] = $this->getPathToProfileSecurity();
 			$this->arResult['POPUP_NAME'] = 'otp_mandatory_info';
-			$this->arResult['USER']['OTP_DAYS_LEFT'] = $this->getFormattedOtpDaysLeft($otpPersonal->getOtpInfo());
+			$this->arResult['USER']['OTP_DAYS_LEFT'] = $otpPersonal ? $this->getFormattedOtpDaysLeft($otpPersonal->getOtpInfo()) : null;
 			$this->saveLocalStorageInfo();
 		}
 
 		$this->includeComponentTemplate();
+	}
+
+	private function getBannerType(): ?OtpBannerType
+	{
+		$userId = (int)$this->currentUser->getId();
+		$cacheId = self::CACHE_ID_PREFIX . $userId;
+		$cacheDir = '/otp/user_id/' . substr(md5((string)$userId), -2) . '/' . $userId . '/';
+		$cache = Application::getInstance()->getCache();
+
+		if ($cache->initCache(self::CACHE_TTL, $cacheId, $cacheDir))
+		{
+			return null;
+		}
+
+		$type = (new BannerTypeFactory())->create();
+
+		if ($type === null)
+		{
+			$cache->startDataCache();
+			$cache->endDataCache(true);
+		}
+
+		return $type;
 	}
 
 	private function checkPopupShowEvents(): bool

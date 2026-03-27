@@ -359,7 +359,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return null;
 		}
 
-		if (!Loader::includeModule('im') || !Loader::includeModule('call'))
+		if (!Loader::includeModule('im'))
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_IM_ERROR'), 'create_chat_error'));
 			return null;

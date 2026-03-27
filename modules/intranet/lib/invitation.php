@@ -733,8 +733,44 @@ class Invitation
 	 */
 	public static function onAfterSetUserGroupHandler($userId, array $params): void
 	{
-		$user = new User((int)$userId);
-		static::addResyncAllCountersTask($user);
+		$agentName = '\Bitrix\Intranet\Invitation::fullSyncCounterByUser(new \Bitrix\Intranet\User(' . (int)$userId . '));';
+		\CAgent::RemoveAgent($agentName, 'intranet');
+		// This is needed to work around the error caused by duplicate agent names
+		$agentNameFrom = '\Bitrix\Intranet\Invitation::fullSyncCounterByUser(new \Bitrix\Intranet\User((int)' . (int)$userId . '));';
+		\CAgent::RemoveAgent($agentNameFrom, 'intranet');
+		if (isset($params[1]) && !empty($params[1]['DATE_ACTIVE_TO']))
+		{
+
+			\CAgent::AddAgent(
+				$agentName,
+				"intranet",
+				"N",
+				1,
+				$params[1]['DATE_ACTIVE_TO'],
+				"Y",
+				$params[1]['DATE_ACTIVE_TO'],
+			);
+		}
+
+
+		if (isset($params[1]) && !empty($params[1]['DATE_ACTIVE_FROM']))
+		{
+			\CAgent::AddAgent(
+				$agentNameFrom,
+				"intranet",
+				"N",
+				1,
+				$params[1]['DATE_ACTIVE_FROM'],
+				"Y",
+				$params[1]['DATE_ACTIVE_FROM'],
+			);
+
+		}
+		else
+		{
+			$user = new User((int)$userId);
+			static::addResyncAllCountersTask($user);
+		}
 	}
 
 	public static function inviteUsers(array $fields): Main\Result

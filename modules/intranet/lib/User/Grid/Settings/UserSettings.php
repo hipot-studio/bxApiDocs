@@ -24,6 +24,7 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 	private int $userId;
 	private ?UserCollection $userCollection = null;
 	private User $currentUser;
+	private string $view;
 
 	public function __construct(array $params)
 	{
@@ -38,6 +39,12 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 
 		$this->extensionName = $params['extensionName'] ?? 'Intranet.UserList';
 		$this->extensionLoadName = $params['extensionLoadName'] ?? 'intranet.grid.user-grid';
+		$this->view = $params['view'] ?? 'default';
+	}
+
+	public function getView(): string
+	{
+		return $this->view;
 	}
 
 	public function getUserFields(): array
@@ -104,7 +111,7 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 	{
 		if ($this->isCloud() && Loader::includeModule('bitrix24'))
 		{
-			return Option::get('bitrix24', 'first_admin_confirmation', 'N') === 'Y';
+			return Option::get('bitrix24', 'first_admin_confirmation', 'Y') === 'Y';
 		}
 
 		return false;

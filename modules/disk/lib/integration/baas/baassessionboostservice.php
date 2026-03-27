@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Integration\Baas;
 
 use Bitrix\Baas\Entity\Service;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\TariffGroup;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\TariffGroupResolver;
 
 class BaasSessionBoostService
 {
 	public const SERVICE_CODE = 'disk_oo_edit';
 	private ?Service $service = null;
+	private ?TariffGroup $tariffGroup;
 
 	public function __construct()
 	{
@@ -19,6 +22,8 @@ class BaasSessionBoostService
 		{
 			$this->service = $availableServices[self::SERVICE_CODE];
 		}
+
+		$this->tariffGroup = (new TariffGroupResolver())->resolve();
 	}
 
 	public function isActual(): bool
@@ -28,7 +33,8 @@ class BaasSessionBoostService
 
 	public function isAvailable(): bool
 	{
-		return (bool)$this->service?->isAvailable();
+		return (bool)$this->service?->isAvailable()
+			&& (bool)$this->tariffGroup?->canBuyBoost();
 	}
 
 	public function getQuota(): int

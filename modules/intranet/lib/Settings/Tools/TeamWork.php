@@ -57,10 +57,10 @@ class TeamWork extends Tool
 	{
 		return match ($id)
 		{
-			'collab' =>  Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_COLLAB'),
 			'instant_messenger' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_MESSENGER'),
 			'news' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_NEWS_FEED'),
 			'disk' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_DISK_MSGVER_1'),
+			'docs' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_DOCS_MSGVER_1'),
 			default => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_' . strtoupper($id)),
 		};
 	}

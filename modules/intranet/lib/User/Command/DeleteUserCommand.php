@@ -50,7 +50,7 @@ class DeleteUserCommand extends AbstractCommand
 		}
 		catch (DeleteFailedException $e)
 		{
-			return $result->addError($e->getErrors());
+			return $result->addErrors($e->getErrors()->toArray());
 		}
 		catch (WrongIdException)
 		{

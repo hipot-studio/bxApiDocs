@@ -28,13 +28,12 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 
 		if ($this->arResult['canCurrentUserInvite'])
 		{
-
 			$this->arResult["MENU_ITEMS"]["self"] = [
-					"NAME" => $this->arResult['USE_INVITE_LOCAL_EMAIL_PROGRAM']
-						? Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_SELF_MSGVER_1")
-						: Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_SELF"),
+				"NAME" => Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_SELF_MSGVER_2"),
+				'TOOLBAR_TITLE' => Loc::getMessage('INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_SELF'),
 				"ATTRIBUTES" => [
 					"data-role" => "menu-self",
+					'data-test-id' => 'invite-left-menu-self',
 					"data-action" => "self"
 				],
 				"ACTIVE" => true
@@ -43,36 +42,54 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 			if ($this->arResult['USE_INVITE_LOCAL_EMAIL_PROGRAM'])
 			{
 				$this->arResult['MENU_ITEMS']['invite-email'] = [
-					'NAME' => Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_EMAIL_MSGVER_1'),
+					'NAME' => Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_EMAIL_MSGVER_2'),
+					'TOOLBAR_TITLE' => Loc::getMessage('INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_INVITE_EMAIL'),
 					'ATTRIBUTES' => [
 						'data-role' => 'menu-invite-email',
+						'data-test-id' => 'invite-left-menu-email-or-sms',
 						'data-action' => 'invite-email'
 					],
 					'ACTIVE' => $this->arResult['IS_CLOUD'] ? false : true
 				];
 			}
 
-			$this->arResult['MENU_ITEMS']['invite'] = [
-				'NAME' => Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_'.($this->arResult['IS_SMS_INVITATION_AVAILABLE'] ? ($this->arResult['USE_INVITE_LOCAL_EMAIL_PROGRAM'] ? 'PHONE' : 'EMAIL_AND_PHONE') : "EMAIL")),
-				'ATTRIBUTES' => [
-					'data-role' => "menu-invite",
-					'data-action' => "invite"
-				],
-				'ACTIVE' => $this->arResult['IS_CLOUD'] ? false : true
-			];
+			$inviteTabTitle = Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_EMAIL_MSGVER_2');
+			$inviteTabToolbarTitle = Loc::getMessage('INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_INVITE_EMAIL');
 
-			$this->arResult["SUB_MENU_ITEMS"]["invite_with_group_dp"] = [
-				"NAME" => Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_INVITE_WITH_GROUP"),
-				"ATTRIBUTES" => [
-					"data-role" => "menu-invite_with_group_dp",
-					"data-action" => "invite-with-group-dp"
-				]
-			];
+			if ($this->arResult['IS_SMS_INVITATION_AVAILABLE'])
+			{
+				if ($this->arResult['USE_INVITE_LOCAL_EMAIL_PROGRAM'])
+				{
+					$inviteTabTitle = Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_PHONE_MSGVER_1');
+					$inviteTabToolbarTitle = Loc::getMessage('INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_INVITE_PHONE');
+				}
+				else
+				{
+					$inviteTabTitle = Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_EMAIL_AND_PHONE_MSGVER_1');
+					$inviteTabToolbarTitle = Loc::getMessage('INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_INVITE');
+				}
+			}
+
+			if ($this->arResult['IS_SMS_INVITATION_AVAILABLE'] || !$this->arResult['USE_INVITE_LOCAL_EMAIL_PROGRAM'])
+			{
+				$this->arResult['MENU_ITEMS']['invite'] = [
+					'NAME' => $inviteTabTitle,
+					'TOOLBAR_TITLE' => $inviteTabToolbarTitle,
+					'ATTRIBUTES' => [
+						'data-role' => "menu-invite",
+						'data-test-id' => 'invite-left-menu-invite',
+						'data-action' => "invite"
+					],
+					'ACTIVE' => $this->arResult['IS_CLOUD'] ? false : true
+				];
+			}
 
 			$this->arResult["MENU_ITEMS"]["add"] = [
 				"NAME" => Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_ADD"),
+				'TOOLBAR_TITLE' => Loc::getMessage('INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_ADD'),
 				"ATTRIBUTES" => [
 					"data-role" => "menu-add",
+					'data-test-id' => 'invite-left-menu-add',
 					"data-action" => "add"
 				]
 			];
@@ -100,7 +117,21 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 				"NAME" => Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_EXTRANET"),
 				"ATTRIBUTES" => [
 					"data-role" => "menu-extranet",
+					'data-test-id' => 'invite-left-menu-extranet',
 					"data-action" => "extranet"
+				]
+			];
+		}
+
+		if ($this->arResult['USE_INVITE_LOCAL_EMAIL_PROGRAM'])
+		{
+			$this->arResult['SUB_MENU_ITEMS']['invite-with-group-dp'] = [
+				'NAME' => Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_WITH_GROUP'),
+				'TOOLBAR_TITLE' => Loc::getMessage('INTRANET_INVITE_DIALOG_MENU_INVITE_WITH_GROUP'),
+				'ATTRIBUTES' => [
+					'data-role' => 'menu-invite_with_group_dp',
+					'data-test-id' => 'invite-left-menu-with-group',
+					'data-action' => 'invite-with-group-dp',
 				]
 			];
 		}
@@ -110,9 +141,11 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 			if ($this->arResult["IS_CLOUD"])
 			{
 				$this->arResult["SUB_MENU_ITEMS"]["integrator"] = [
-					"NAME" => Loc::getMessage(($this->arResult['IS_RENAMED_INTEGRATOR'] ?? false) ? 'INTRANET_INVITE_DIALOG_MENU_INTEGRATOR_RENAMED' : 'INTRANET_INVITE_DIALOG_MENU_INTEGRATOR'),
+					"NAME" => Loc::getMessage($this->arResult['IS_INTEGRATOR_RENAMED'] ? 'INTRANET_INVITE_DIALOG_MENU_INTEGRATOR_RENAMED' : 'INTRANET_INVITE_DIALOG_MENU_INTEGRATOR'),
+					'TOOLBAR_TITLE' => Loc::getMessage($this->arResult['IS_INTEGRATOR_RENAMED'] ? 'INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_INTEGRATOR_RENAMED' : 'INTRANET_INVITE_DIALOG_TITLE_TOOLBAR_INTEGRATOR'),
 					"ATTRIBUTES" => [
 						"data-role" => "menu-integrator",
+						'data-test-id' => 'invite-left-menu-integrator',
 						"data-action" => "integrator"
 					]
 				];
@@ -132,6 +165,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 					'SHOW_LOCKED' => !$isAllowSso,
 					"ATTRIBUTES" => [
 						'onclick' => $isAllowSso ? $sliderCode : $infoHelperCode,
+						'data-test-id' => 'invite-left-menu-sso',
 					]
 				];
 			}
@@ -143,6 +177,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 					"NAME_HTML" => Loc::getMessage("INTRANET_INVITE_DIALOG_MENU_ACTIVE_DIRECTORY"),
 					"ATTRIBUTES" => [
 						"data-role" => "menu-active-directory",
+						'data-test-id' => 'invite-left-menu-active-directory',
 						"data-action" => "active-directory",
 					]
 				];
@@ -199,7 +234,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 	public function executeComponent()
 	{
 		$this->arResult["IS_CLOUD"] = Loader::includeModule("bitrix24");
-		$this->arResult['IS_RENAMED_INTEGRATOR'] = Intranet\Public\Service\IntegratorService::createByDefault()->isRenamedIntegrator();
+		$this->arResult['IS_INTEGRATOR_RENAMED'] = Intranet\Public\Service\IntegratorService::createByDefault()->isRenamedIntegrator();
 		if ($this->arResult["IS_CLOUD"])
 		{
 			$this->arResult["LICENSE_ZONE"] = CBitrix24::getLicensePrefix();
@@ -249,6 +284,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 
 		$this->arParams['USER_OPTIONS']['departmentList'] = $departmentsData['DEPARTMENT_LIST'] ?? [];
 		$this->arParams['USER_OPTIONS']['rootDepartment'] = $departmentsData['ROOT_DEPARTMENT'] ?? null;
+		$this->arParams['USER_OPTIONS']['companyRootDepartment'] = $departmentsData['COMPANY_ROOT_DEPARTMENT'] ?? null;
 
 		$this->prepareLinkRegisterData();
 
@@ -275,8 +311,7 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 			&& in_array($_GET['firstInvitationBlock'], [
 				'self',
 				'invite',
-				'mass-invite',
-				'invite-with-group-dp',
+				'invite-email',
 				'add',
 				'extranet',
 				'integrator',
@@ -305,12 +340,11 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 
 		$rootDepartment = Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()
 			->findFirstPossibleAvailableDepartment();
+		$companyRootDepartment = $departmentRepository->getRootDepartment();
 
 		if (empty($departmentIds) || !is_array($departmentIds))
 		{
-			$departmentsCollection = $rootDepartment
-				? new Intranet\Entity\Collection\DepartmentCollection($rootDepartment)
-				: new Intranet\Entity\Collection\DepartmentCollection();
+			$departmentsCollection = new Intranet\Entity\Collection\DepartmentCollection();
 			$result['STATE'] = 'NOT_SELECTED';
 		}
 		else
@@ -334,6 +368,10 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 
 		$result['ROOT_DEPARTMENT'] = $rootDepartment
 			? $this->prepareDepartmentStructure($rootDepartment)
+			: null
+		;
+		$result['COMPANY_ROOT_DEPARTMENT'] = $companyRootDepartment
+			? $this->prepareDepartmentStructure($companyRootDepartment)
 			: null
 		;
 

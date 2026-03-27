@@ -11,13 +11,16 @@ use Bitrix\Intranet\Internal\Enum\Otp\OtpBannerType;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
+use Bitrix\Intranet\Internal\Service\Otp\TrustPhoneNumberConfirmation;
 use Bitrix\Main\Type\Date;
 
 class BannerTypeFactory
 {
 	private bool $isAdmin;
 	private User $user;
-	private PersonalOtp $personalOtp;
+	private ?PersonalOtp $personalOtp = null;
 	private OtpSettings $settingsOtp;
 	private MobilePush $pushOtp;
 
@@ -25,9 +28,18 @@ class BannerTypeFactory
 	{
 		$this->user = new User((int)CurrentUser::get()->getId());
 		$this->isAdmin = CurrentUser::get()->isAdmin() ?? false;
-		$this->personalOtp = new PersonalOtp($this->user);
 		$this->settingsOtp = new OtpSettings();
 		$this->pushOtp = MobilePush::createByDefault();
+	}
+
+	private function getPersonalOtp(): ?PersonalOtp
+	{
+		if ($this->personalOtp === null)
+		{
+			$this->personalOtp = $this->settingsOtp->getPersonalSettingsByUserId($this->user->getId());
+		}
+
+		return $this->personalOtp;
 	}
 
 	public function create(): ?OtpBannerType
@@ -44,17 +56,33 @@ class BannerTypeFactory
 			return $type;
 		}
 
+		if ($this->getPersonalOtp()?->isPushType())
+		{
+			$type = (new TrustDeviceConfirmation($this->getPersonalOtp()))->shouldShowConfirmation() ? OtpBannerType::TRUST_DEVICE_CONFIRMATION : null;
+
+			if (!$type)
+			{
+				$personalMobilePush = new PersonalMobilePush($this->getPersonalOtp());
+				$trustPhoneNumberConfirmation = new TrustPhoneNumberConfirmation($personalMobilePush);
+
+				return $trustPhoneNumberConfirmation->shouldShowConfirmation()
+					? OtpBannerType::TRUST_PHONE_NUMBER_CONFIRMATION
+					: null;
+			}
+
+			return $type;
+		}
+
 		return null;
 	}
 
 	private function getType(): ?OtpBannerType
 	{
 		if (
-			!$this->personalOtp->isActivated()
+			!$this->getPersonalOtp()?->isActivated()
 			&& $this->settingsOtp->isMandatoryUsing()
-			&& !$this->personalOtp->canSkipMandatoryByRights()
-		)
-		{
+			&& !$this->getPersonalOtp()?->canSkipMandatoryByRights()
+		) {
 			return OtpBannerType::MANDATORY_2FA;
 		}
 
@@ -68,16 +96,16 @@ class BannerTypeFactory
 		if ($this->pushOtp->getPromoteMode() !== PromoteMode::High)
 		{
 			if (
-				!$this->personalOtp->isActivated()
+				!$this->getPersonalOtp()?->isActivated()
 				&& $this->user->isIntranet()
-			)
-			{
+			) {
 				return OtpBannerType::DISABLED_ALL_2FA;
 			}
 
 			if (
 				$this->isAdmin
 				&& $this->isActivatedPushTypeOtp()
+				&& !$this->pushOtp->isDefault()
 				&& !$this->pushOtp->gracePeriodEnabled()
 			) {
 				return OtpBannerType::ONLY_ADMIN_ENABLED_NEW_2FA;
@@ -96,19 +124,19 @@ class BannerTypeFactory
 
 	private function isActivatedOldTypeOtp(): bool
 	{
-		return $this->personalOtp->isActivated() && !$this->personalOtp->isPushType();
+		return $this->getPersonalOtp()?->isActivated() && !$this->getPersonalOtp()?->isPushType();
 	}
 
 	private function isActivatedPushTypeOtp(): bool
 	{
-		return $this->personalOtp->isActivated() && $this->personalOtp->isPushType();
+		return $this->getPersonalOtp()?->isActivated() && $this->getPersonalOtp()?->isPushType();
 	}
 
 	private function canShow(OtpBannerType $type): bool
 	{
 		$lastShow = \CUserOptions::GetOption('intranet', 'push_otp_popup_last_show', null);
 
-		if (empty($lastShow))
+		if (empty($lastShow) || !is_string($lastShow))
 		{
 			return true;
 		}
@@ -124,8 +152,7 @@ class BannerTypeFactory
 				OtpBannerType::ENABLED_OLD_2FA,
 				OtpBannerType::DISABLED_ALL_2FA,
 			], true)
-		)
-		{
+		) {
 			return false;
 		}
 
@@ -134,7 +161,7 @@ class BannerTypeFactory
 		$interval = $today->getDiff($lastShowDate);
 		$daysSinceLastShow = $interval->days;
 
-		if ($this->pushOtp->isGracePeriodEnded() && !$this->personalOtp->canSkipMandatory())
+		if ($this->pushOtp->isGracePeriodEnded() && !$this->getPersonalOtp()?->canSkipMandatory())
 		{
 			return true;
 		}

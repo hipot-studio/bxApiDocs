@@ -5,6 +5,7 @@ namespace Bitrix\Intranet\User\Grid\Column\Provider;
 use Bitrix\Intranet\User\Grid\Settings\UserSettings;
 use Bitrix\Main\Grid\Column\DataProvider;
 use Bitrix\Main\Grid\Column\Type;
+use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Localization\Loc;
 
 /**

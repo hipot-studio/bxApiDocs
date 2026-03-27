@@ -4,11 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Public\Type;
 
-use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
-use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Enum\InvitationType;
-use Bitrix\Intranet\Public\Type\BaseInvitation;
-use Bitrix\Socialnetwork\Collab\Collab;
 
 class EmailInvitation extends BaseInvitation
 {
@@ -47,5 +43,10 @@ class EmailInvitation extends BaseInvitation
 	public function getLogin(): string
 	{
 		return $this->email;
+	}
+
+	public function isValid(): bool
+	{
+		return check_email($this->email);
 	}
 }

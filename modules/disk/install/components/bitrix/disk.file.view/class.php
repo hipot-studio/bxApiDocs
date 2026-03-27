@@ -137,7 +137,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 
 		$breadcrumbs = $this->getBreadcrumbs();
 		$externalLinkData = array(
-			'ENABLED' => Configuration::isEnabledExternalLink()
+			'ENABLED' => Configuration::isEnabledExternalLink(),
 		);
 		$externalLink = $this->getExternalLink();
 		if($externalLink)
@@ -286,7 +286,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 				[
 					'FILE_ID' => $this->file->getId(),
 				]
-			)
+			),
 			//'BREADCRUMBS' => $breadcrumbs,
 		);
 
@@ -383,7 +383,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		{
 			$viewPath = [
 				$urlManager->getUrlForShowView($this->file),
-				$urlManager->getUrlForShowFile($this->file)
+				$urlManager->getUrlForShowFile($this->file),
 			];
 			if ($this->file->getPreviewId())
 			{
@@ -452,21 +452,19 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			'FILE_PATH' => $this->arParams['RELATIVE_PATH'],
 		));
 
-		$urlStartBizproc = \CComponentEngine::makePathFromTemplate($this->arParams['PATH_TO_DISK_START_BIZPROC'],array("ELEMENT_ID" => $this->file->getId()));
-		$urlStartBizproc .= "?back_url=".urlencode($this->application->getCurPage());
-		$urlStartBizproc .= (mb_strpos($urlStartBizproc, "?") === false ? "?" : "&").'workflow_template_id=0&'.bitrix_sessid_get();
+		$isBpStarterExists = Loader::includeModule('bizproc') && class_exists(\Bitrix\Bizproc\Starter\Starter::class);
 
-		$this->arResult = array(
+		$this->arResult = [
 			'STORAGE' => $this->storage,
-			'FILE' => array(
+			'FILE' => [
 				'ID' => $this->file->getId(),
 				'NAME' => $this->file->getName(),
-			),
-			'BP_ITEMS_FOR_START' => $this->getTemplateBizProcItemsForStart(),
+			],
+			'BP_ITEMS_FOR_START' => $isBpStarterExists ? [] : $this->getTemplateBizProcItemsForStart(),
+			'BP_DOCUMENTS' => $isBpStarterExists ? $this->getBizprocDocuments() : [],
 			'PATH_TO_FILE_VIEW' => $viewFile,
-			'PATH_TO_START_BIZPROC' => $urlStartBizproc,
-			'STORAGE_ID' => 'STORAGE_'.$this->storage->getId(),
-		);
+			'STORAGE_ID' => 'STORAGE_' . $this->storage->getId(),
+		];
 
 		$this->arParams['STATUS_BIZPROC'] = $this->storage->isEnabledBizProc() && Loader::includeModule("bizproc");
 
@@ -670,7 +668,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 					$documentData['DISK']['DOCUMENT_ID'],
 					array(
 						"DocumentStates" => $bizProcArray,
-						"WorkflowId" => $bizProcArray["ID"] > 0 ? $bizProcArray["ID"] : $bizProcArray["TEMPLATE_ID"]
+						"WorkflowId" => $bizProcArray["ID"] > 0 ? $bizProcArray["ID"] : $bizProcArray["TEMPLATE_ID"],
 					)))
 				{
 					continue;
@@ -687,7 +685,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 						CBPTrackingType::Report,
 						CBPTrackingType::Custom,
 						CBPTrackingType::FaultActivity,
-						CBPTrackingType::Error
+						CBPTrackingType::Error,
 					)),
 					false,
 					array("nTopCount" => 5),
@@ -857,7 +855,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 					"DOCUMENT_TYPE" => $data["DOCUMENT_TYPE"],
 					"AUTO_EXECUTE" => CBPDocumentEventType::Edit,
 					"ACTIVE" => "Y",
-					"!PARAMETERS" => null
+					"!PARAMETERS" => null,
 				),
 				false,
 				false,
@@ -879,7 +877,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 	private function getTemplateBizProcItemsForStart()
 	{
 		$documentData = [
-			'DISK'   => [
+			'DISK' => [
 				'DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($this->storage->getId()),
 				'DOCUMENT_ID'   => \Bitrix\Disk\BizProcDocument::getDocumentComplexId($this->file->getId()),
 			],
@@ -941,6 +939,39 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		}
 
 		return $listBpTemplates;
+	}
+
+	private function getBizprocDocuments(): array
+	{
+		$storageId = $this->storage->getId();
+		$fileId = $this->file->getId();
+
+		$documents = [
+			'DISK' => [
+				'SIGNED_DOCUMENT_TYPE' => CBPDocument::signDocumentType(
+					\Bitrix\Disk\BizProcDocument::generateDocumentComplexType($storageId)
+				),
+				'SIGNED_DOCUMENT_ID' => CBPDocument::signDocumentType(
+					\Bitrix\Disk\BizProcDocument::getDocumentComplexId($fileId)
+				),
+			],
+		];
+
+		$webdavDocumentType = \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($storageId);
+		$filter = ['DOCUMENT_TYPE' => $webdavDocumentType];
+		$hasWebDavTemplates = CBPWorkflowTemplateLoader::getList([], $filter, [], false, ['ID']) > 0;
+
+		if ($hasWebDavTemplates)
+		{
+			$documents['WEBDAV'] = [
+				'SIGNED_DOCUMENT_TYPE' => CBPDocument::signDocumentType($webdavDocumentType),
+				'SIGNED_DOCUMENT_ID' => CBPDocument::signDocumentType(
+					\Bitrix\Disk\BizProcDocumentCompatible::getDocumentComplexId($fileId)
+				),
+			];
+		}
+
+		return $documents;
 	}
 
 

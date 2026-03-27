@@ -103,6 +103,12 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 	public function getRootDepartment(): ?Department
 	{
 		$companyStructureId = $this->getCompanyStructure()->id;
+
+		if ($companyStructureId === null)
+		{
+			return null;
+		}
+
 		$node = Container::getNodeRepository()
 			->getRootNodeByStructureId($companyStructureId);
 		if (!$node)

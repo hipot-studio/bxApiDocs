@@ -42,6 +42,8 @@ class UserRowAssembler extends RowAssembler
 				'PERSONAL_STREET', 'PERSONAL_ZIP', 'PERSONAL_MAILBOX', 'PERSONAL_COUNTRY', 'WORK_CITY', 'WORK_STREET',
 				'WORK_ZIP', 'WORK_MAILBOX', 'WORK_COUNTRY', 'WORK_POSITION', 'WORK_COMPANY', 'WORK_DEPARTMENT'
 				]),
+			new Field\JsFields\ConnectFieldAssembler(['CONNECT'], $this->settings),
+			new Field\IntegratorFieldAssembler(['INTEGRATOR'], $this->settings),
 		];
 	}
 }

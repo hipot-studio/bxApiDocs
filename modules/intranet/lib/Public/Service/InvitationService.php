@@ -174,6 +174,7 @@ class InvitationService
 			$isFirstInvitation = true;
 			$user = (new Intranet\Internal\Repository\Mapper\UserMapper())->convertFromArray($invitation->toArray());
 			$user = $this->registrationService->register($user);
+			$user->setInvitedVia($invitation->getType());
 		}
 		else
 		{

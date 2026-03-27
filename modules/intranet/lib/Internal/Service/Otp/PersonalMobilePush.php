@@ -11,6 +11,7 @@ use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Pull\Event;
 use Bitrix\Security\Mfa\OtpException;
 use Bitrix\Security\Mfa\OtpType;
@@ -66,7 +67,8 @@ class PersonalMobilePush
 		if ($this->isActivated())
 		{
 			$userId = $this->personalOtp->getOtpInfo()->userId;
-			\CUserOptions::SetOption('intranet', 'require_phone_confirmation', 'Y', false, $userId);
+			\CUserOptions::SetOption('intranet', 'require_phone_confirmation', time(), false, $userId);
+			(new TrustPhoneNumberConfirmation($this, $userId))->resetLastTrustPhoneNumberConfirmationDate();
 		}
 	}
 
@@ -103,11 +105,24 @@ class PersonalMobilePush
 
 		$userId = $this->personalOtp->getOtpInfo()->userId;
 
-		return \CUserOptions::GetOption('intranet', 'require_phone_confirmation', 'N', $userId) === 'Y';
+		return \CUserOptions::GetOption('intranet', 'require_phone_confirmation', 'N', $userId) !== 'N';
+	}
+
+	public function getPhoneConfirmationRequiredStartDate(): ?Date
+	{
+		$userId = $this->personalOtp->getOtpInfo()->userId;
+		$requirementDate = (int)\CUserOptions::GetOption('intranet', 'require_phone_confirmation', 'N', $userId);
+
+		if ($requirementDate > 0)
+		{
+			return Date::createFromTimestamp($requirementDate);
+		}
+
+		return null;
 	}
 
 	public static function isPhoneConfirmationRequiredByUser(User $user): bool
 	{
-		return \CUserOptions::GetOption('intranet', 'require_phone_confirmation', 'N', $user->getId()) === 'Y';
+		return \CUserOptions::GetOption('intranet', 'require_phone_confirmation', 'N', $user->getId()) !== 'N';
 	}
 }

@@ -58,7 +58,7 @@ class SecuritySettings extends AbstractSettings
 		$this->mobileAppService = ServiceLocator::getInstance()->get('intranet.option.mobile_app');
 		$this->otpSettings = new OtpSettings();
 		$this->user = (new UserRepository())->getUserById((int)CurrentUser::get()->getId());
-		$this->personalOtp = $this->user ? new PersonalOtp($this->user) : null;
+		$this->personalOtp = ($this->user && $this->otpSettings->isAvailable()) ? new PersonalOtp($this->user) : null;
 	}
 
 	public function validate(): ErrorCollection
@@ -473,7 +473,7 @@ class SecuritySettings extends AbstractSettings
 
 			if ($numDays > 0)
 			{
-				Security\Mfa\Otp::setSkipMandatoryDays($numDays);
+				$this->otpSettings->setSkipMandatoryDays($numDays);
 			}
 		}
 

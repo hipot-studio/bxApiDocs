@@ -23,7 +23,7 @@ class OtpSettingsService
 
 	public function isEnabledForUser(int $userId): bool
 	{
-		return $this->otp->getPersonalSettingsByUserId($userId)?->isActivated();
+		return $this->otp->getPersonalSettingsByUserId($userId)?->isActivated() ?? false;
 	}
 
 	public function isMandatory(): bool

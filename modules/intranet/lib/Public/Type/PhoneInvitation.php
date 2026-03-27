@@ -54,4 +54,9 @@ class PhoneInvitation extends BaseInvitation
 	{
 		return $this->phone->defaultFormat();
 	}
+
+	public function isValid(): bool
+	{
+		return $this->phone->isValid();
+	}
 }

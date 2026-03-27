@@ -9,6 +9,7 @@ use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
+use Bitrix\Intranet\Internal\Integration\Bitrix24\Admin\RestrictionService;
 use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
 use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Intranet\Service\UserService;
@@ -931,24 +932,11 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 
 			if ($this->arResult["User"]["STATUS"] !== "admin")
 			{
-				$this->arResult["adminLimitsEnabled"] = \COption::GetOptionString("bitrix24", "admin_limits_enabled", "N") == "Y"
-					? true : false;
+				$this->arResult["adminLimitsEnabled"] = RestrictionService::isAdminLimitEnabled();
 
 				if ($this->arResult["adminLimitsEnabled"])
 				{
-					$numAdmins = 1;
-					$curAdmins = \CBitrix24::getAllAdminId();
-					if (is_array($curAdmins))
-					{
-						$numAdmins = count($curAdmins);
-					}
-
-					$maxAdmins = \CBitrix24::getMaxAdminCount();
-
-					if ($maxAdmins > 0 && $numAdmins >= $maxAdmins)
-					{
-						$this->arResult["adminRightsRestricted"] = true;
-					}
+					$this->arResult["adminRightsRestricted"] = RestrictionService::isLimitExceeded();
 
 					if ($this->arResult["adminRightsRestricted"])
 					{

@@ -77,12 +77,13 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 		$this->init();
 		$this->grid->processRequest();
-		if (SupersetInitializer::isSupersetExist())
-		{
-			$this->grid->setSupersetAvailability($this->getSupersetController()->isExternalServiceAvailable());
-		}
 
 		$this->loadRows();
+
+		if (SupersetInitializer::isSupersetExist())
+		{
+			$this->grid->setSupersetAvailability(!SupersetInitializer::isSupersetUnavailable());
+		}
 
 		$this->arResult['GRID'] = $this->grid;
 
@@ -303,10 +304,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		if (!isset($this->supersetController))
 		{
 			$this->supersetController = new SupersetController(Integrator::getInstance());
-			if (SupersetInitializer::isSupersetExist())
-			{
-				$this->supersetController->isExternalServiceAvailable();
-			}
 		}
 
 		return $this->supersetController;

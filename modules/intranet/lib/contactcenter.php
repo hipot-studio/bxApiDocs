@@ -215,7 +215,7 @@ class ContactCenter
 							"NAME" => Loc::getMessage("CONTACT_CENTER_RENT_5_NUMBERS"),
 							"ONCLICK" => $canManageTelephony ?
 								"BX.Voximplant.NumberRent.create({packetSize: 5}).show();"
-								: "BX.Voximplant.openLimitSlider('limit_contact_center_telephony_number_rent');",
+								: "BX.Voximplant.openLimitPopup('limit_contact_center_telephony_number_rent', event);",
 							"SELECTED" => \CVoxImplantPhone::hasRentedNumberPacket(5),
 							"LOGO_CLASS" => "ui-icon ui-icon-package-numbers-five"
 
@@ -224,7 +224,7 @@ class ContactCenter
 							"NAME" => Loc::getMessage("CONTACT_CENTER_RENT_10_NUMBERS"),
 							"ONCLICK" => $canManageTelephony ?
 								"BX.Voximplant.NumberRent.create({packetSize: 10}).show();"
-								: "BX.Voximplant.openLimitSlider('limit_contact_center_telephony_number_rent');",
+								: "BX.Voximplant.openLimitPopup('limit_contact_center_telephony_number_rent', event);",
 							"SELECTED" => \CVoxImplantPhone::hasRentedNumberPacket(10),
 							"LOGO_CLASS" => "ui-icon ui-icon-package-numbers-ten"
 						];

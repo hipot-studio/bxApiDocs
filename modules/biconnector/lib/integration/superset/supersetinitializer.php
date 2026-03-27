@@ -53,6 +53,8 @@ final class SupersetInitializer
 	private const SUPERSET_CREATED_BY_OPTION = 'superset_created_by_user';
 	private const SUPERSET_INITIAL_DASHBOARD_OPTION = 'superset_initial_dashboard';
 
+	private const REFRESH_DOMAIN_RETRY_OPTION = '~superset_refresh_domain_retry_scheduled';
+
 	/**
 	 * Container for superset status. Used for tests mocking
 	 *
@@ -332,40 +334,49 @@ final class SupersetInitializer
 		}
 	}
 
+	/**
+	 * Refreshes superset domain connection.
+	 * Makes up to 2 attempts: immediate and via agent after 30 minutes.
+	 *
+	 * Allowed statuses: READY, LOAD, ERROR — superset instance exists and may become reachable.
+	 * After second failure — stops. User can retry manually via "refresh encryption key".
+	 *
+	 * @return string|null Agent name for retry, or null to stop.
+	 */
 	public static function refreshSupersetDomainConnection(): ?string
 	{
-		if (!self::isSupersetExist())
+		$allowedStatuses = [
+			self::SUPERSET_STATUS_READY,
+			self::SUPERSET_STATUS_LOAD,
+			self::SUPERSET_STATUS_ERROR,
+		];
+
+		if (!in_array(self::getSupersetStatus(), $allowedStatuses, true))
 		{
+			self::clearRefreshDomainRetryFlag();
+
 			return null;
 		}
 
-		if (
-			Integrator::getInstance()->ping()
-			&& self::getSupersetStatus() === self::SUPERSET_STATUS_READY
-		)
-		{
-			$response = Integrator::getInstance()->refreshDomainConnection();
+		$isRetry = Option::get('biconnector', self::REFRESH_DOMAIN_RETRY_OPTION, 'N') === 'Y';
 
-			if (!$response->hasErrors() && $response->getStatus() === IntegratorResponse::STATUS_OK)
-			{
-				return null;
-			}
+		$response = Integrator::getInstance()->refreshDomainConnection();
+
+		if (!$response->hasErrors() && $response->getStatus() === IntegratorResponse::STATUS_OK)
+		{
+			self::clearRefreshDomainRetryFlag();
+
+			return null;
 		}
 
-		$className = __CLASS__;
-		$agentName = "\\$className::refreshSupersetDomainConnection();";
-		$agent = \CAgent::GetList(
-			['ID' => 'DESC'],
-			[
-				'MODULE_ID' => 'biconnector',
-				'NAME' => $agentName,
-			]
-		)
-			->Fetch()
-		;
-
-		if (!$agent)
+		// First attempt failed — schedule retry via agent
+		if (!$isRetry)
 		{
+			Option::set('biconnector', self::REFRESH_DOMAIN_RETRY_OPTION, 'Y');
+
+			$className = __CLASS__;
+			$agentName = "\\$className::refreshSupersetDomainConnection();";
+
 			\CAgent::AddAgent(
 				$agentName,
 				'biconnector',
@@ -375,9 +386,19 @@ final class SupersetInitializer
 				'Y',
 				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 1800, 'FULL')
 			);
+
+			return null;
 		}
 
-		return $agentName;
+		// Second attempt also failed — give up
+		self::clearRefreshDomainRetryFlag();
+
+		return null;
+	}
+
+	private static function clearRefreshDomainRetryFlag(): void
+	{
+		Option::delete('biconnector', ['name' => self::REFRESH_DOMAIN_RETRY_OPTION]);
 	}
 
 	/**

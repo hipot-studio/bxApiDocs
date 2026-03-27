@@ -727,7 +727,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					];
 				}
 
-				if ($isFile && $object->canUpdate($securityContext) && DocumentHandler::isEditable($object->getExtension()))
+				if ($isFile
+					&& !$isBoard
+					&& $object->canUpdate($securityContext)
+					&& DocumentHandler::isEditable($object->getExtension())
+				)
 				{
 					$isSetLocalDocumentService = UserConfiguration::isSetLocalDocumentService();
 					$actions[] = [
@@ -1015,7 +1019,15 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			];
 			if ($isItTimeToShowBizProc && !$isFolder)
 			{
-				[$actions, $columnsBizProc, $bizprocIcon] = $this->getBizProcData($object, $securityContext, $actions, $columnsBizProc, $bizprocIcon, $exportData);
+				[$actions, $columnsBizProc, $bizprocIcon] = $this->getBizProcData(
+					$object,
+					$securityContext,
+					$actions,
+					$columnsBizProc,
+					$bizprocIcon,
+					$exportData,
+					(string)$row['ID']
+				);
 			}
 
 			if ($object->canMarkDeleted($securityContext))
@@ -1846,55 +1858,77 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return $temporary;
 	}
 
-	private function getBizProcData(File $object, SecurityContext $securityContext, array $actions, array $columnsBizProc, array $bizprocIcon, array $exportData)
+	private function getBizProcData(
+		File $object,
+		SecurityContext $securityContext,
+		array $actions,
+		array $columnsBizProc,
+		array $bizprocIcon,
+		array $exportData,
+		string $rowId
+	)
 	{
+		$storageId = $this->storage->getId();
+		$fileId = $object->getId();
+
+		$webDavDocumentType = \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($storageId);
+
 		$documentData = [
-			'DISK'   => [
-				'DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($this->storage->getId()),
-				'DOCUMENT_ID'   => \Bitrix\Disk\BizProcDocument::getDocumentComplexId($object->getId()),
+			'DISK' => [
+				'DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($storageId),
+				'DOCUMENT_ID' => \Bitrix\Disk\BizProcDocument::getDocumentComplexId($fileId),
 			],
 			'WEBDAV' => [
-				'DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($this->storage->getId()),
-				'DOCUMENT_ID'   => \Bitrix\Disk\BizProcDocumentCompatible::getDocumentComplexId($object->getId()),
+				'DOCUMENT_TYPE' => $webDavDocumentType,
+				'DOCUMENT_ID' => \Bitrix\Disk\BizProcDocumentCompatible::getDocumentComplexId($fileId),
 			],
 		];
 
-		if ($this->templateBizProc === null)
+		$isBpStarterExists = Loader::includeModule('bizproc') && class_exists(\Bitrix\Bizproc\Starter\Starter::class);
+		if ($isBpStarterExists)
 		{
-			$this->templateBizProc = $this->getTemplateBizProc($documentData);
+			if ($object->canStartBizProc($securityContext))
+			{
+				$actions[] = $this->getStartBPActionForMenu($documentData, $rowId);
+			}
 		}
-
-		$listBpTemplates = [];
-		foreach ($this->templateBizProc as $idTemplate => $valueTemplate)
+		else
 		{
-			$params = \Bitrix\Main\Web\Json::encode(
-				[
-					'moduleId' => $valueTemplate['DOCUMENT_TYPE'][0],
-					'entity' => $valueTemplate['DOCUMENT_TYPE'][1],
-					'documentType' => $valueTemplate['DOCUMENT_TYPE'][2],
-					'documentId' => $object->getId(),
-					'templateId' => $idTemplate,
-					'templateName' => $valueTemplate['NAME'],
-					'hasParameters' => !empty($valueTemplate['PARAMETERS']),
-				],
-			);
+			if ($this->templateBizProc === null)
+			{
+				$this->templateBizProc = $this->getTemplateBizProc($documentData);
+			}
 
-			$listBpTemplates[] = [
-				"text" => $valueTemplate['NAME'],
-				"onclick" => "BX.Bizproc.Starter.singleStart({$params}, function(){ BX.Disk.showModalWithStatusAction({status: 'success'}); });",
-			];
-		}
+			$listBpTemplates = [];
+			foreach ($this->templateBizProc as $idTemplate => $valueTemplate)
+			{
+				$params = \Bitrix\Main\Web\Json::encode(
+					[
+						'moduleId' => $valueTemplate['DOCUMENT_TYPE'][0],
+						'entity' => $valueTemplate['DOCUMENT_TYPE'][1],
+						'documentType' => $valueTemplate['DOCUMENT_TYPE'][2],
+						'documentId' => $object->getId(),
+						'templateId' => $idTemplate,
+						'templateName' => $valueTemplate['NAME'],
+						'hasParameters' => !empty($valueTemplate['PARAMETERS']),
+					],
+				);
 
-		if ($object->canStartBizProc($securityContext) && !empty($listBpTemplates))
-		{
-			$actions[] = [
-				"className" => 'disk-folder-list-context-menu-item',
-				"text" => Loc::getMessage("DISK_FOLDER_LIST_ACT_START_BIZPROC"),
-				'dataset' => [
-					'preventCloseContextMenu' => true,
-				],
-				"items" => $listBpTemplates,
-			];
+				$listBpTemplates[] = [
+					'text' => $valueTemplate['NAME'],
+					'onclick' => "BX.Bizproc.Starter.singleStart({$params}, function(){ BX.Disk.showModalWithStatusAction({status: 'success'}); });",
+				];
+			}
+
+			if (!empty($listBpTemplates) && $object->canStartBizProc($securityContext))
+			{
+				$actions[] = [
+					'className' => 'disk-folder-list-context-menu-item',
+					'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_START_BIZPROC'),
+					'dataset' => ['preventCloseContextMenu' => true],
+					'items' => $listBpTemplates,
+				];
+			}
 		}
 
 		$webdavFileId = $object->getXmlId();
@@ -2025,6 +2059,56 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return [$actions, $columnsBizProc, $bizprocIcon];
 	}
 
+	private function getStartBPActionForMenu(array $documentData, string $rowId): array
+	{
+		$diskParams = \Bitrix\Main\Web\Json::encode([
+			'documentType' => CBPDocument::signDocumentType($documentData['DISK']['DOCUMENT_TYPE']),
+			'documentId' => CBPDocument::signDocumentType($documentData['DISK']['DOCUMENT_ID']),
+			'gridId' => $this->gridOptions->getGridId(),
+			'rowId' => $rowId,
+		]);
+
+		$filter = ['DOCUMENT_TYPE' => $documentData['WEBDAV']['DOCUMENT_TYPE']];
+		static $hasWebDavTemplates = null;
+		if ($hasWebDavTemplates === null)
+		{
+			$hasWebDavTemplates = CBPWorkflowTemplateLoader::getList([], $filter, [], false, ['ID']) > 0;
+		}
+
+		if ($hasWebDavTemplates)
+		{
+			$webdavParams = \Bitrix\Main\Web\Json::encode([
+				'documentType' => CBPDocument::signDocumentType($documentData['WEBDAV']['DOCUMENT_TYPE']),
+				'documentId' => CBPDocument::signDocumentType($documentData['WEBDAV']['DOCUMENT_ID']),
+				'gridId' => $this->gridOptions->getGridId(),
+				'rowId' => $rowId,
+			]);
+
+			$items = [
+				[
+					'text' => Loc::getMessage('DISK_FOLDER_LIST_BIZPROC_START_NEW_TEMPLATES'),
+					'onclick' => "BX.Disk.Folder.List.Bizproc.showTemplates($diskParams)",
+				],
+				[
+					'text' => Loc::getMessage('DISK_FOLDER_LIST_BIZPROC_START_OLD_TEMPLATES'),
+					'onclick' => "BX.Disk.Folder.List.Bizproc.showTemplates($webdavParams)",
+				],
+			];
+
+			return [
+				'className' => 'disk-folder-list-context-menu-item',
+				'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_START_BIZPROC'),
+				'items' => $items,
+			];
+		}
+
+		return [
+			'className' => 'disk-folder-list-context-menu-item',
+			'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_START_BIZPROC'),
+			'onclick' => "BX.Disk.Folder.List.Bizproc.showTemplates($diskParams)",
+		];
+	}
+
 	private function getDocumentHandlersForEditingFile()
 	{
 		$handlers = [];
@@ -2104,7 +2188,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				$path,
 				[
 					'ACTION' => '',
-					'user_id' => CurrentUser::get()->getId()
+					'user_id' => CurrentUser::get()->getId(),
 				]
 			);
 		}

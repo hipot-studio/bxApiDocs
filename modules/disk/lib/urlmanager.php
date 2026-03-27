@@ -1163,8 +1163,10 @@ class UrlManager implements IErrorable
 
 			$patternDelimiter = $uri[0];
 			$uri = trim(mb_substr($uri, 1, mb_strrpos($uri, $patternDelimiter) - 1), '^$');
+			$uri = strtr($uri, ['\?' => '?']);
+			$queryParamSeparator = !str_contains($uri, '?') ? '?' : '&';
 
-			return strtr($uri, array('\?' => '?')) . '&' . http_build_query($paramsUri);
+			return $uri . $queryParamSeparator . http_build_query($paramsUri);
 		}
 
 		return '/';

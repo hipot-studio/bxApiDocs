@@ -21,7 +21,7 @@ class LoggerFactory
 		string $id = 'default',
 		array $params = [],
 		array $context = [],
-		string $feature = null,
+		?string $feature = null,
 		bool $shouldAddDateTime = true,
 	): LoggerInterface
 	{
@@ -35,7 +35,9 @@ class LoggerFactory
 				id: "disk.$id",
 				params: $params,
 			);
-		} else {
+		}
+		else
+		{
 			$logger = null;
 		}
 

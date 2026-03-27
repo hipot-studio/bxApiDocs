@@ -17,7 +17,7 @@ trait DepartmentParameterTrait
 				if (!$departmentIds)
 				{
 					$departmentCollection = new DepartmentCollection();
-					$departmentCollection->add((new Integration\HumanResources\Department())->getRootDepartment());
+					$departmentCollection->add(Integration\HumanResources\PermissionInvitation::createByCurrentUser()->findFirstPossibleAvailableDepartment());
 
 					return $departmentCollection;
 				}

@@ -11,13 +11,7 @@ use Bitrix\Intranet\Component\UserList;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Filter;
-use Bitrix\Main\Filter\UserDataProvider;
-use Bitrix\Socialnetwork\UserToGroupTable;
-use Bitrix\Main\PhoneNumber;
 use Bitrix\Main\Grid\Export\ExcelExporter;
-use Bitrix\Intranet\User\Filter\Presets\FilterPresetManager;
-use Bitrix\Intranet\User\Filter\Provider\IntranetUserDataProvider;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 
 Loc::loadMessages(__FILE__);
@@ -26,9 +20,10 @@ Loader::includeModule('intranet');
 
 class CIntranetUserListComponent extends UserList
 {
-	protected $gridId = 'INTRANET_USER_GRID_'.SITE_ID;
-	protected $filterId = 'INTRANET_USER_LIST_'.SITE_ID;
+	protected $gridId = 'INTRANET_USER_GRID_' . SITE_ID;
+	protected $filterId = 'INTRANET_USER_LIST_' . SITE_ID;
 	private UserGrid $grid;
+	private string $view;
 
 	private function extranetSite()
 	{
@@ -51,11 +46,11 @@ class CIntranetUserListComponent extends UserList
 
 		if (empty($params['PATH_TO_DEPARTMENT']))
 		{
-			$params['PATH_TO_DEPARTMENT'] = SITE_DIR.'company/structure.php?set_filter_structure=Y&structure_UF_DEPARTMENT=#ID#';
+			$params['PATH_TO_DEPARTMENT'] = SITE_DIR . 'company/structure.php?set_filter_structure=Y&structure_UF_DEPARTMENT=#ID#';
 		}
 		if (empty($params['PATH_TO_USER']))
 		{
-			$params['PATH_TO_USER'] = Option::get('intranet', 'search_user_url', SITE_DIR.'company/personal/user/#ID#/');
+			$params['PATH_TO_USER'] = Option::get('intranet', 'search_user_url', SITE_DIR . 'company/personal/user/#ID#/');
 		}
 
 		if (!empty($params['LIST_URL']))
@@ -100,14 +95,34 @@ class CIntranetUserListComponent extends UserList
 		return $params;
 	}
 
+	private function getView(): string
+	{
+		if (!isset($this->view))
+		{
+			$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
+			$view = $request->get('view');
+			$this->view = is_string($view) ? $view : 'default';
+		}
+
+		return $this->view;
+	}
+
 	private function getGrid(): UserGrid
 	{
 		if (!isset($this->grid))
 		{
+			$id = 'INTRANET_USER_LIST_' . SITE_ID;
+
+			if ($this->getView() !== 'default')
+			{
+				$id .= '_' . $this->getView();
+			}
+
 			$settings = new UserSettings([
-				'ID' => 'INTRANET_USER_LIST_'.SITE_ID,
+				'ID' => $id,
 				'SHOW_ROW_CHECKBOXES' => false,
-				'MODE' => $this->arParams['EXPORT_TYPE'] ?? 'html'
+				'MODE' => $this->arParams['EXPORT_TYPE'] ?? 'html',
+				'view' => $this->getView(),
 			]);
 
 			$this->grid = new UserGrid($settings);
@@ -145,7 +160,7 @@ class CIntranetUserListComponent extends UserList
 			unset($params['limit'], $params['offset']);
 
 			$grid->setRawRows(
-				$grid->getList($params)
+				$grid->getList($params),
 			);
 		}
 		else
@@ -157,7 +172,7 @@ class CIntranetUserListComponent extends UserList
 
 		$result['IS_DEFAULT_SORT'] = $grid->getOrmOrder() === [
 			'STRUCTURE_SORT' => 'DESC',
-			];
+		];
 		$result['GET_TOTAL_COUNTER_ID'] = 'intranet-user-list-total-counter';
 
 		$result['GRID_PARAMS'] = \Bitrix\Main\Grid\Component\ComponentParams::get(
@@ -168,15 +183,16 @@ class CIntranetUserListComponent extends UserList
 				'NAV_PARAMS' => [
 					'BASE_LINK' => $this->arParams['LIST_URL'] ?? '/company/',
 				],
-			]
+			],
 		);
 
 		$result['GRID_FILTER'] = $grid->getFilter();
 		$result['FILTER_PRESETS'] = $grid->getFilter()?->getFilterPresets();
 
 		$filterSettings = $grid->getFilter()?->getFilterSettings();
-		$result['WAITING_FILTER_AVAILABLE'] = $filterSettings?->isFilterAvailable(IntranetUserSettings::WAIT_CONFIRMATION_FIELD) ?? false;
-		$result['INVITE_FILTER_AVAILABLE'] = $filterSettings?->isFilterAvailable(IntranetUserSettings::INVITED_FIELD) ?? false;
+		$result['WAITING_FILTER_AVAILABLE'] = $this->getView() === 'default' && $filterSettings?->isFilterAvailable(IntranetUserSettings::WAIT_CONFIRMATION_FIELD) ?? false;
+		$result['INVITE_FILTER_AVAILABLE'] = $this->getView() === 'default' && $filterSettings?->isFilterAvailable(IntranetUserSettings::INVITED_FIELD) ?? false;
+		$result['VIEW'] = $this->getView();
 
 		return $result;
 	}

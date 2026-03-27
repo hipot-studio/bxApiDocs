@@ -7,6 +7,7 @@ use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Public\Command;
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Intranet\Service;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Event;

@@ -11,6 +11,7 @@ use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
@@ -29,7 +30,7 @@ class PersonalOtp
 {
 	private Otp $securityOtp;
 	private const BASE_CACHE_DIR = '/otp/user_id/';
-	private const CACHE_ID_PREFIX = 'user_otp_v3_';
+	private const CACHE_ID_PREFIX = 'user_otp_v5_';
 	private UserOtp $otpInfo;
 
 	/**
@@ -90,12 +91,12 @@ class PersonalOtp
 			$days === 0
 			&& $this->isPushType()
 			&& MobilePush::createByDefault()->getPromoteMode() === PromoteMode::High
-		)
-		{
-			return;
+		) {
+			throw new OtpException('Permanent deactivation is not available');
 		}
 
 		$this->getOtpByUser()->deactivate($days);
+		(new TrustDeviceConfirmation($this))->onDeactivateOtp();
 		(new Analytics\AnalyticsEvent(event: 'turnoff_2fa_employee_temp', tool: 'settings', category: 'security'))->send();
 	}
 
@@ -111,12 +112,25 @@ class PersonalOtp
 
 	public function canSkipMandatory(): bool
 	{
-		return $this->otpInfo->canSkipMandatory;
+		// delete it after adding the cache to security
+		$result = $this->getOtpInfo()->isMandatorySkipped;
+
+		if (!$result)
+		{
+			$result = $this->canSkipMandatoryByRights();
+		}
+
+		return $result;
 	}
 
 	public function canSkipMandatoryByRights(): bool
 	{
-		return $this->otpInfo->canSkipMandatoryByRights;
+		// delete it after adding the cache to security
+		$targetRights = Otp::getMandatoryRights();
+		$userRights = \CAccess::getUserCodesArray($this->otpInfo->userId);
+		$existedRights = array_intersect($targetRights, $userRights);
+
+		return empty($existedRights);
 	}
 
 	public function isPushType(): bool
@@ -150,14 +164,25 @@ class PersonalOtp
 	{
 		$config = PushOtp::getPullConfig();
 		$intent = 'pushOtpInit/' . $config['channelTag'];
-		$verifyPhone = new VerifyPhoneService($this->user);
-		$phoneConfirmed = $verifyPhone->isConfirmed(new Phone($this->user->getAuthPhoneNumber() ?? ''));
+		$phoneConfirmed = false;
+
+		if ($this->user->getAuthPhoneNumber())
+		{
+			$phoneAuthNumber = $this->user->getAuthPhoneNumber();
+			$verifyPhone = new VerifyPhoneService($this->user);
+			$phoneConfirmed = $verifyPhone->isConfirmed(new Phone($phoneAuthNumber));
+		}
+		else
+		{
+			$personalMobile = $this->user->getPersonalMobile();
+			$phoneAuthNumber = $personalMobile ? (new Phone($this->user->getPersonalMobile()))->defaultFormat() : null;
+		}
 
 		return [
 			'pullConfig' =>  $config['pullConfig'] ?? [],
 			'ttl' => 600,
 			'intent' => $intent,
-			'phoneNumber' => $this->user->getAuthPhoneNumber(),
+			'phoneNumber' => $phoneAuthNumber,
 			'isPhoneNumberConfirmed' => $phoneConfirmed,
 			'signedUserId' => (new OtpSigner())->signUserId($this->user->getId()),
 		];
@@ -183,6 +208,11 @@ class PersonalOtp
 		return $this->otpInfo->isInitialized;
 	}
 
+	public function getInitialDate(): ?DateTime
+	{
+		return $this->otpInfo->initialDate;
+	}
+
 	public function isRequired(): bool
 	{
 		return !$this->canSkipMandatoryByRights();
@@ -193,19 +223,36 @@ class PersonalOtp
 		return $this->otpInfo;
 	}
 
+	public static function clearCache(int $userId): void
+	{
+		$cacheDir = self::BASE_CACHE_DIR . substr(md5((string)$userId), -2) . '/' . $userId . '/';
+		Application::getInstance()->getCache()->cleanDir($cacheDir);
+	}
+
+	public function canSendRequestRecoverAccess(): bool
+	{
+		return !isset(Otp::getDeferredParams()['RECOVER_ACCESS_REQUEST_SENT']);
+	}
+
+	public function markRequestRecoverAccessSent(): void
+	{
+		$params = Otp::getDeferredParams();
+		$params['RECOVER_ACCESS_REQUEST_SENT'] = true;
+		Otp::setDeferredParams($params);
+	}
+
 	/**
 	 * @throws ArgumentTypeException
 	 */
 	private function initOtpInfo(): void
 	{
-		$ttl = defined('BX_COMP_MANAGED_CACHE') ? 2592000 : 600;
 		$cacheId = self::CACHE_ID_PREFIX . $this->user->getId();
 		$cacheDir = self::BASE_CACHE_DIR . substr(md5((string)$this->user->getId()), -2) . '/' . $this->user->getId() . '/';
 		$cache = Application::getInstance()->getCache();
 
-		if ($cache->InitCache($ttl, $cacheId, $cacheDir))
+		if ($cache->initCache(86400 * 7, $cacheId, $cacheDir))
 		{
-			$otpData = $cache->GetVars();
+			$otpData = $cache->getVars();
 			$this->otpInfo = UserOtp::initByArray($otpData);
 		}
 		else
@@ -215,15 +262,15 @@ class PersonalOtp
 				isActive: $this->getOtpByUser()->isActivated(),
 				dateDeactivate: $this->getOtpByUser()->getDeactivateUntil(),
 				isInitialized: $this->getOtpByUser()->isInitialized(),
+				initialDate: $this->getOtpByUser()->getInitialDate(),
 				type: $this->getOtpByUser()->getType(),
-				canSkipMandatory: $this->getOtpByUser()->canSkipMandatory(),
-				canSkipMandatoryByRights: $this->getOtpByUser()->canSkipMandatoryByRights(),
+				isMandatorySkipped: $this->getOtpByUser()->isMandatorySkipped(),
 				initParams: $this->getOtpByUser()->getInitParams(),
 			);
 
-			if ($cache->StartDataCache())
+			if ($cache->startDataCache())
 			{
-				$cache->EndDataCache($this->otpInfo->toArray());
+				$cache->endDataCache($this->otpInfo->toArray());
 			}
 		}
 	}

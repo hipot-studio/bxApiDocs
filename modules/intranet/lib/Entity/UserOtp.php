@@ -14,9 +14,9 @@ class UserOtp
 		public bool $isActive,
 		public ?DateTime $dateDeactivate = null,
 		public bool $isInitialized = false,
+		public ?DateTime $initialDate = null,
 		public ?OtpType $type = null,
-		public bool $canSkipMandatory = false,
-		public bool $canSkipMandatoryByRights = false,
+		public ?bool $isMandatorySkipped = false,
 		public array $initParams = [],
 	) {}
 
@@ -27,9 +27,9 @@ class UserOtp
 			isActive: $userOtpData['isActive'],
 			dateDeactivate: $userOtpData['dateDeactivate'] ?? null,
 			isInitialized: $userOtpData['isInitialized'] ?? false,
+			initialDate: $userOtpData['initialDate'] ?? null,
 			type: $userOtpData['type'] ?? null,
-			canSkipMandatory: $userOtpData['canSkipMandatory'] ?? false,
-			canSkipMandatoryByRights: $userOtpData['canSkipMandatoryByRights'] ?? false,
+			isMandatorySkipped: $userOtpData['isMandatorySkipped'] ?? false,
 			initParams: $userOtpData['initParams'] ?? [],
 		);
 	}
@@ -71,9 +71,9 @@ class UserOtp
 			'isActive' => $this->isActive,
 			'dateDeactivate' => $this->dateDeactivate,
 			'isInitialized' => $this->isInitialized,
+			'initialDate' => $this->initialDate,
 			'type' => $this->type,
-			'canSkipMandatory' => $this->canSkipMandatory,
-			'canSkipMandatoryByRights' => $this->canSkipMandatoryByRights,
+			'isMandatorySkipped' => $this->isMandatorySkipped,
 			'initParams' => $this->initParams,
 		];
 	}

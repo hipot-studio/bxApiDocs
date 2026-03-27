@@ -7,10 +7,7 @@ namespace Bitrix\Disk\QuickAccess\FileInfo;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
-use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
 use Bitrix\Disk\TypeFile;
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Web\Uri;
 
 class DiskProvider extends BaseProvider
 {
@@ -65,7 +62,7 @@ class DiskProvider extends BaseProvider
 	public function getFileInfo(): ?FileInfoDto
 	{
 		$fileObject = File::loadById($this->id);
-		$fileData = $fileObject->getFile();
+		$fileData = $fileObject?->getFile();
 		if (
 			!is_array($fileData)
 			|| empty($fileData)

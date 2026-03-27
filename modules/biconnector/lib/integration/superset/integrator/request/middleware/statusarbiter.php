@@ -67,7 +67,7 @@ final class StatusArbiter extends Base
 		}
 		else
 		{
-			if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_ERROR)
+			if (SupersetInitializer::isSupersetUnavailable())
 			{
 				SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_READY);
 			}

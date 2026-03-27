@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Service\User;
 
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
-use Bitrix\Intranet\Internal\Integration\Humanresources\DepartmentRepository;
 use Bitrix\Intranet\Internal\Integration\Humanresources\TeamRepository;
 use Bitrix\Intranet\Service;
 use Bitrix\Intranet\Integration;
@@ -14,6 +13,7 @@ use Bitrix\Intranet\Dto\User\MiniProfile;
 use Bitrix\Intranet\Result\Service\User\MiniProfileDataResult;
 
 use Bitrix\Intranet\Service\ServiceContainer;
+use Bitrix\Intranet\User;
 use Bitrix\Main;
 use Bitrix\Main\EO_User;
 
@@ -22,6 +22,7 @@ class MiniProfileService
 	private const AVATAR_SIZE = 100;
 	private const HEAD_AVATAR_SIZE = 45;
 	private const DEPARTMENT_BRANCH_SIZE = 3;
+	private const FIRST_ADMIN_ROLE_KEY = 'firstAdmin';
 
 	private Service\UserService $userService;
 	private Integration\Im\ChatFacade $chatFacade;
@@ -187,12 +188,12 @@ class MiniProfileService
 		$userId = $userModel->getId();
 
 		return new MiniProfile\BaseInfoDto(
-			id: $userModel->getId(),
+			id: $userId,
 			name: $this->formatName($userModel),
 			workPosition: $userModel->getWorkPosition(),
-			utcOffset: $this->userService->getUtcOffset($userModel->getId()),
+			utcOffset: $this->userService->getUtcOffset($userId),
 			status: $this->getStatus($userModel),
-			role: (new \Bitrix\Intranet\User($userId))->getUserRole()?->value,
+			role: $this->getUserRole($userId),
 			url: $this->userService->getDetailUrl($userId),
 			avatar: $this->getAvatarUrl($userModel->getPersonalPhoto(), self::AVATAR_SIZE),
 			personalGender: $userModel->getPersonalGender(),
@@ -236,13 +237,13 @@ class MiniProfileService
 			return true;
 		}
 
-		$isUserIntranet = (new \Bitrix\Intranet\User($userId))->isIntranet();
+		$isUserIntranet = (new User($userId))->isIntranet();
 		if (!$isUserIntranet)
 		{
 			return true;
 		}
 
-		$targetUserRole = (new \Bitrix\Intranet\User($targetUserModel->getId()))->getUserRole();
+		$targetUserRole = (new User($targetUserModel->getId()))->getUserRole();
 		return !in_array($targetUserRole, [UserRole::ADMIN, UserRole::INTRANET], true);
 	}
 
@@ -406,5 +407,17 @@ class MiniProfileService
 		}
 
 		return $userHeadIds;
+	}
+
+	private function getUserRole(int $userId): string
+	{
+		$isFirstAdmin = $this->userService->isFirstAdmin($userId);
+
+		if ($isFirstAdmin)
+		{
+			return self::FIRST_ADMIN_ROLE_KEY;
+		}
+
+		return (new User($userId))->getUserRole()?->value;
 	}
 }

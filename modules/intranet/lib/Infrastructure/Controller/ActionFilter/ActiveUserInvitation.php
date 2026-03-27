@@ -46,9 +46,14 @@ class ActiveUserInvitation extends Engine\ActionFilter\Base
 
 		if (!$emailUserCollection->empty())
 		{
-			$this->addError(new Error(Loc::getMessage("INTRANET_INVITATION_USER_EXIST_ERROR", [
-				"#EMAIL_LIST#" => implode(', ', $emailUserCollection->map(fn($user) => $user->getLogin())),
-			])));
+			$emailList = $emailUserCollection->map(fn($user) => $user->getLogin());
+			$this->addError(new Error(
+				Loc::getMessage("INTRANET_INVITATION_USER_EXIST_ERROR", [
+					"#EMAIL_LIST#" => implode(', ', $emailList),
+				]),
+				'EMAIL_EXIST_ERROR',
+				['emailList' => $emailList],
+			));
 		}
 
 		$phoneUserCollection = $this->userRepository->findActivatedUsersByLogins(
@@ -58,9 +63,14 @@ class ActiveUserInvitation extends Engine\ActionFilter\Base
 
 		if (!$phoneUserCollection->empty())
 		{
-			$this->addError(new Error(Loc::getMessage("INTRANET_INVITATION_USER_PHONE_EXIST_ERROR", [
-				"#PHONE_LIST#" => implode(', ', $phoneUserCollection->map(fn($user) => $user->getLogin())),
-			])));
+			$phoneList = $phoneUserCollection->map(fn($user) => $user->getLogin());
+			$this->addError(new Error(
+				Loc::getMessage("INTRANET_INVITATION_USER_PHONE_EXIST_ERROR", [
+					"#PHONE_LIST#" => implode(', ', $phoneList),
+				]),
+				'PHONE_EXIST_ERROR',
+				['phoneList' => $phoneList],
+			));
 		}
 
 		if ($this->errorCollection->isEmpty())

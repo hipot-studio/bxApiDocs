@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Superset\Grid;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\DashboardRowAssembler;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\Main\Engine\Response\Converter;
@@ -81,7 +82,7 @@ final class DashboardGrid extends Grid
 
 		$settings = new DashboardSettings([
 			'ID' => self::SUPERSET_DASHBOARD_GRID_ID,
-			'IS_SUPERSET_AVAILABLE' => $supersetController->isExternalServiceAvailable(),
+			'IS_SUPERSET_AVAILABLE' => !SupersetInitializer::isSupersetUnavailable(),
 		]);
 
 		$grid = new self($settings);

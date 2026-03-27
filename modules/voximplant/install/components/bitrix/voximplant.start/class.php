@@ -260,7 +260,7 @@ class VoximplantStartComponent extends \CBitrixComponent
 				'title' => Loc::getMessage("VOX_START_NUMBER_RENT"),
 				'className' => 'voximplant-start-logo-number-rental',
 				'selected' => (CVoxImplantPhone::hasRentedNumber() ? ' voximplant-tile-item-selected' : ''),
-				'onclick' => 'BX.Voximplant.Start.onRentButtonClick();'
+				'onclick' => 'BX.Voximplant.Start.onRentButtonClick(event);'
 			];
 		}
 
@@ -271,7 +271,7 @@ class VoximplantStartComponent extends \CBitrixComponent
 				'title' => Loc::getMessage("VOX_START_5_NUMBER_RENT"),
 				'className' => 'voximplant-start-logo-package-of-numbers-5',
 				'selected' => (CVoxImplantPhone::hasRentedNumberPacket(5) ? ' voximplant-tile-item-selected' : ''),
-				'onclick' => 'BX.Voximplant.Start.onRentButtonClick(5);'
+				'onclick' => 'BX.Voximplant.Start.onRentButtonClick(event, 5);'
 			];
 
 			$result[] = [
@@ -279,7 +279,7 @@ class VoximplantStartComponent extends \CBitrixComponent
 				'title' => Loc::getMessage("VOX_START_10_NUMBER_RENT"),
 				'className' => 'voximplant-start-logo-package-of-numbers-10',
 				'selected' => (CVoxImplantPhone::hasRentedNumberPacket(10) ? ' voximplant-tile-item-selected' : ''),
-				'onclick' => 'BX.Voximplant.Start.onRentButtonClick(10);'
+				'onclick' => 'BX.Voximplant.Start.onRentButtonClick(event, 10);'
 			];
 		}
 

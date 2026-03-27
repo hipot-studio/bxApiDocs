@@ -481,6 +481,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 			'vote',
 			'url_preview',
 			'snils',
+			'mail_message',
 		);
 
 		$types = $USER_FIELD_MANAGER->getUserType();
@@ -1114,20 +1115,29 @@ class BizProcDocument implements \IBPWorkflowDocument
 			throw new CBPArgumentNullException('documentType');
 		}
 
-		static $documentFieldTypes = array();
+		static $documentFieldTypes = [];
 		if (!array_key_exists($documentType, $documentFieldTypes))
+		{
 			$documentFieldTypes[$documentType] = self::getDocumentFieldTypes($documentType);
+		}
 
 		$fieldType["BaseType"] = "string";
 		$fieldType["Complex"] = false;
 		if (array_key_exists($fieldType["Type"], $documentFieldTypes[$documentType]))
 		{
 			$fieldType["BaseType"] = $documentFieldTypes[$documentType][$fieldType["Type"]]["BaseType"];
-			$fieldType["Complex"] = $documentFieldTypes[$documentType][$fieldType["Type"]]["Complex"];
+			$fieldType["Complex"] = $documentFieldTypes[$documentType][$fieldType["Type"]]["Complex"] ?? null;
 		}
 
-		if (!is_array($fieldValue) || is_array($fieldValue) && CBPHelper::isAssociativeArray($fieldValue))
-			$fieldValue = array($fieldValue);
+		if (!is_array($fieldValue) || (is_array($fieldValue) && CBPHelper::isAssociativeArray($fieldValue)))
+		{
+			$fieldValue = [$fieldValue];
+		}
+
+		if (!$fieldValue)
+		{
+			$fieldValue = [null];
+		}
 
 		$customMethodName = "";
 		$customMethodNameMulty = "";
@@ -1135,9 +1145,13 @@ class BizProcDocument implements \IBPWorkflowDocument
 		{
 			$ar = \CIBlockProperty::getUserType(mb_substr($fieldType["Type"], 2));
 			if (array_key_exists("GetPublicEditHTML", $ar))
+			{
 				$customMethodName = $ar["GetPublicEditHTML"];
+			}
 			if (array_key_exists("GetPublicEditHTMLMulty", $ar))
+			{
 				$customMethodNameMulty = $ar["GetPublicEditHTMLMulty"];
+			}
 		}
 
 		ob_start();
@@ -1146,19 +1160,23 @@ class BizProcDocument implements \IBPWorkflowDocument
 			$fieldValueTmp = $fieldValue;
 			?>
 			<select id="id_<?= htmlspecialcharsbx($fieldName["Field"]) ?>" style="width:280px" name="<?= htmlspecialcharsbx($fieldName["Field"]).($fieldType["Multiple"] ? "[]" : "") ?>"<?= ($fieldType["Multiple"] ? ' size="5" multiple' : '') ?>>
-				<?
+				<?php
 				if (!$fieldType['Required'])
-					echo '<option value="">['.Loc::getMessage('DISK_FILED_NOT_SET').']</option>';
+				{
+					echo '<option value="">[' . Loc::getMessage('DISK_FILED_NOT_SET') . ']</option>';
+				}
 				foreach ($fieldType['Options'] as $k => $v)
 				{
 					$ind = array_search($k, $fieldValueTmp);
 					echo '<option value="'.htmlspecialcharsbx($k).'"'.($ind !== false ? ' selected' : '').'>'.htmlspecialcharsbx($v).'</option>';
 					if ($ind !== false)
+					{
 						unset($fieldValueTmp[$ind]);
+					}
 				}
 				?>
 			</select>
-			<?
+			<?php
 			if ($allowSelection)
 			{
 				?>
@@ -1170,7 +1188,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 				}
 				?>">
 				<input type="button" value="..." onclick="BPAShowSelector('id_<?= htmlspecialcharsbx($fieldName['Field']) ?>_text', 'select');">
-				<?
+				<?php
 			}
 		}
 		elseif ($fieldType['Type'] == 'user' || $fieldType['Type'] == static::getPrefixForCustomType() . 'employee')
@@ -1188,12 +1206,14 @@ class BizProcDocument implements \IBPWorkflowDocument
 		)
 		{
 			if (!is_array($fieldValue))
-				$fieldValue = array();
+			{
+				$fieldValue = [];
+			}
 
 			if ($allowSelection)
 			{
-				$fieldValueTmp1 = array();
-				$fieldValueTmp2 = array();
+				$fieldValueTmp1 = [];
+				$fieldValueTmp2 = [];
 				foreach ($fieldValue as $v)
 				{
 					$vTrim = trim($v);
@@ -1209,7 +1229,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 			}
 			else
 			{
-				$fieldValueTmp1 = array();
+				$fieldValueTmp1 = [];
 				$fieldValueTmp2 = $fieldValue;
 			}
 
@@ -1217,19 +1237,27 @@ class BizProcDocument implements \IBPWorkflowDocument
 			{
 				static $fl = true;
 				if ($fl)
+				{
 					$GLOBALS["APPLICATION"]->addHeadScript('/bitrix/js/iblock/iblock_edit.js');
+				}
 				$fl = false;
 			}
 
-			$fieldValueTmp21 = array();
+			$fieldValueTmp21 = [];
 			foreach ($fieldValueTmp2 as $k => $fld)
 			{
 				if ($fld === null || $fld === "")
+				{
 					continue;
+				}
 				if (is_array($fld) && isset($fld["VALUE"]))
+				{
 					$fieldValueTmp21[$k] = $fld;
+				}
 				else
-					$fieldValueTmp21[$k] = array("VALUE" => $fld);
+				{
+					$fieldValueTmp21[$k] = ["VALUE" => $fld];
+				}
 			}
 			$fieldValueTmp2 = $fieldValueTmp21;
 
@@ -1257,7 +1285,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 			}
 			?>">
 				<input type="button" value="..." onclick="BPAShowSelector('id_<?= htmlspecialcharsbx($fieldName["Field"]) ?>_text', 'user');">
-			<?
+			<?php
 			}
 		}
 		else
@@ -1427,7 +1455,9 @@ class BizProcDocument implements \IBPWorkflowDocument
 			}
 
 			if ($fieldType['Multiple'])
-				echo '<table width="100%" border="0" cellpadding="2" cellspacing="2" id="CBPVirtualDocument_'.htmlspecialcharsbx($fieldName["Field"]).'_Table">';
+			{
+				echo '<table width="100%" border="0" cellpadding="2" cellspacing="2" id="CBPVirtualDocument_' . htmlspecialcharsbx($fieldName["Field"]) . '_Table">';
+			}
 
 			$fieldValueTmp = $fieldValue;
 
@@ -1439,7 +1469,9 @@ class BizProcDocument implements \IBPWorkflowDocument
 				$fieldNameName = htmlspecialcharsbx($fieldName['Field']).($fieldType['Multiple'] ? '[n'.$ind.']' : '');
 
 				if ($fieldType['Multiple'])
+				{
 					echo '<tr><td>';
+				}
 
 				if (mb_strpos($fieldType['Type'], static::getPrefixForCustomType()) === 0)
 				{
@@ -1469,7 +1501,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 						'EDIT_FORM_LABEL' => $userFieldType['DESCRIPTION'],
 						'VALUE' => $value1, //
 						'USER_TYPE' => $userFieldType,
-						'SETTINGS' => array()
+						'SETTINGS' => []
 					);
 
 					if (
@@ -1665,13 +1697,23 @@ class BizProcDocument implements \IBPWorkflowDocument
 				}
 
 				if ($fieldType['Multiple'])
+				{
 					echo '</td></tr>';
+				}
 			}
 
 			if ($fieldType['Multiple'])
+			{
 				echo '</table>';
+			}
 
-			if ($fieldType["Multiple"] && $fieldType['Type'] != static::getPrefixForCustomType() . 'HTML' && (($fieldType["Type"] != "file") || $publicMode))
+			if (
+				$fieldType['Multiple']
+				&& $fieldType['Type'] !== (static::getPrefixForCustomType() . 'HTML')
+				&& $fieldType['Type'] !== (static::getPrefixForCustomType() . 'address')
+				&& $fieldType['Type'] !== (static::getPrefixForCustomType() . 'money')
+				&& $fieldType['Type'] !== (static::getPrefixForCustomType() . 'url')
+				&& (($fieldType['Type'] !== 'file') || $publicMode))
 			{
 				echo '<input type="button" value="'.Loc::getMessage("DISK_ADD").'" onclick="CBPVirtualDocumentCloneRow(\'CBPVirtualDocument_'.$fieldName["Field"].'_Table\');"/><br />';
 			}
@@ -1679,7 +1721,9 @@ class BizProcDocument implements \IBPWorkflowDocument
 			{
 				$functionOnclick = 'CBPVirtualDocumentCloneRowHtml(\'CBPVirtualDocument_'.\CUtil::JSEscape($fieldName["Field"]).'_Table\');';
 				if(!$publicMode)
-					$functionOnclick = 'CBPVirtualDocumentCloneRow(\'CBPVirtualDocument_'.\CUtil::JSEscape($fieldName["Field"]).'_Table\');createAdditionalHtmlEditor(\'CBPVirtualDocument_'.\CUtil::JSEscape($fieldName["Field"]).'_Table\');';
+				{
+					$functionOnclick = 'CBPVirtualDocumentCloneRow(\'CBPVirtualDocument_' . \CUtil::JSEscape($fieldName["Field"]) . '_Table\');createAdditionalHtmlEditor(\'CBPVirtualDocument_' . \CUtil::JSEscape($fieldName["Field"]) . '_Table\');';
+				}
 
 				echo '<input type="button" value="'.Loc::getMessage("DISK_ADD").'" onclick="'.$functionOnclick.'"/><br />';
 			}
@@ -1697,7 +1741,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 					}
 					?>">
 					<input type="button" value="..." onclick="BPAShowSelector('id_<?= htmlspecialcharsbx($fieldName["Field"]) ?>_text', '<?= htmlspecialcharsbx($fieldType["BaseType"]) ?>');">
-					<?
+					<?php
 				}
 			}
 		}

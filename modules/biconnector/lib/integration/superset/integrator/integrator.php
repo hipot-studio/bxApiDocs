@@ -26,7 +26,6 @@ final class Integrator
 {
 	private const PROXY_ACTION_REGISTER_PORTAL = '/portal/register';
 	private const PROXY_ACTION_VERIFY_PORTAL = '/portal/verify';
-	private const PROXY_ACTION_PING_SUPERSET = '/instance/ping';
 	private const PROXY_ACTION_START_SUPERSET = '/instance/start';
 	private const PROXY_ACTION_FREEZE_SUPERSET = '/instance/freeze';
 	private const PROXY_ACTION_UNFREEZE_SUPERSET = '/instance/unfreeze';
@@ -677,7 +676,11 @@ final class Integrator
 
 	public function refreshDomainConnection(): IntegratorResponse
 	{
-		return $this->createDefaultRequest(self::PROXY_ACTION_REFRESH_DOMAIN_CONNECTION)->perform();
+		return $this
+			->createDefaultRequest(self::PROXY_ACTION_REFRESH_DOMAIN_CONNECTION)
+			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->perform()
+		;
 	}
 
 	/**
@@ -743,30 +746,6 @@ final class Integrator
 				->setMultipart(true)
 				->perform()
 		;
-	}
-
-	/**
-	 * Returns status of superset service availability.
-	 * If service available - returns true, false otherwise
-	 *
-	 * @return bool
-	 */
-	public function ping(): bool
-	{
-		static $isChecked = false;
-		if (!$isChecked)
-		{
-			$this
-				->createDefaultRequest(self::PROXY_ACTION_PING_SUPERSET)
-				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
-				->removeBefore(Middleware\UserAccess::getMiddlewareId())
-				->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
-				->perform()
-			;
-			$isChecked = true;
-		}
-
-		return SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_ERROR;
 	}
 
 	/**

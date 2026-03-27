@@ -5,10 +5,10 @@ declare(strict_types = 1);
 namespace Bitrix\Intranet\Infrastructure\Update\Otp;
 
 use Bitrix\Intranet\Internal\Enum\StepperStatus;
+use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Service\Otp\HighPromotePushOtp;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Update\Stepper;
 use Bitrix\Security\Mfa\OtpType;
 use Bitrix\Security\Mfa\UserTable;
@@ -16,7 +16,7 @@ use Bitrix\Security\Mfa\UserTable;
 class HighPromotePushOtpSwitcher extends Stepper
 {
 	protected static $moduleId = 'intranet';
-	protected int $limit = 50;
+	protected int $limit = 20;
 
 	public function execute(array &$option): bool
 	{
@@ -51,6 +51,11 @@ class HighPromotePushOtpSwitcher extends Stepper
 			'ACTIVE' => 'N',
 		]);
 
+		if ($result->isSuccess())
+		{
+			$this->clearCacheForUsers($userIds);
+		}
+
 		if (count($userIds) < $this->limit || !$result->isSuccess())
 		{
 			$this->getHighPromoteService()->setStepperStatus(StepperStatus::Success);
@@ -74,6 +79,14 @@ class HighPromotePushOtpSwitcher extends Stepper
 			->fetchAll();
 
 		return array_map(static fn($item) => (int)$item['USER_ID'], $result);
+	}
+
+	private function clearCacheForUsers(array $userIds): void
+	{
+		foreach ($userIds as $userId)
+		{
+			PersonalOtp::clearCache($userId);
+		}
 	}
 
 	private function getHighPromoteService(): HighPromotePushOtp

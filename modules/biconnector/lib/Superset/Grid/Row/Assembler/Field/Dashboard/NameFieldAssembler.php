@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DetailLinkFieldAssembler;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
@@ -197,7 +198,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		$supersetController = new SupersetController(Integrator::getInstance());
 		if (
 			!$supersetController->isSupersetEnabled()
-			|| !$supersetController->isExternalServiceAvailable()
+			|| SupersetInitializer::isSupersetUnavailable()
 			|| !($dashboardData['IS_AVAILABLE_DASHBOARD'] ?? true)
 		)
 		{

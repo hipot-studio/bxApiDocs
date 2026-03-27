@@ -3,19 +3,17 @@
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die;
 
-use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Internal\Access\Otp\UserPermission;
+use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
-use Bitrix\Intranet\Internal\Integration\Socialservices\NetworkClient;
+use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
 use Bitrix\Intranet\Public\Provider\Otp\DayListProvider;
 use Bitrix\Intranet\Repository\UserRepository;
-use Bitrix\Main\Application;
 use Bitrix\Main\PhoneNumber\Format;
-use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Security\Mfa\OtpType;
@@ -66,15 +64,16 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 			return;
 		}
 
-		$verifyPhone = new VerifyPhoneService($user);
-		$personalOtp = new PersonalOtp($user);
-		$mobilePush = PersonalMobilePush::createByUser($user);
 		$otpSettings = new OtpSettings();
-		
-		if (!Loader::includeModule("security") || !$otpSettings->isEnabled())
+
+		if (!$otpSettings->isAvailable() || !$otpSettings->isEnabled())
 		{
 			return;
 		}
+
+		$verifyPhone = new VerifyPhoneService($user);
+		$personalOtp = new PersonalOtp($user);
+		$mobilePush = PersonalMobilePush::createByUser($user);
 
 		$this->arResult["OTP"]["IS_ENABLED"] = "Y";
 		$this->arResult["OTP"]["IS_MANDATORY"] = !$personalOtp->canSkipMandatory();
@@ -113,8 +112,14 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		{
 			$this->IncludeComponentTemplate('push');
 		}
-		elseif (!$personalOtp->isActivated() && ($otpSettings->getDefaultType() === OtpType::Push || $personalOtp->isPushType()))
-		{
+		elseif (
+			!$personalOtp->isActivated()
+			&& (
+				$otpSettings->getDefaultType() === OtpType::Push
+				|| $personalOtp->isPushType()
+				|| MobilePush::createByDefault()->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low)
+			)
+		) {
 			$this->IncludeComponentTemplate('disabled');
 		}
 		else

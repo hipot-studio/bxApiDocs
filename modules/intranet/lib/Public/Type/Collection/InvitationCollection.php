@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Public\Type\Collection;
 
 use Bitrix\Intranet\Entity\Collection\BaseCollection;
-use Bitrix\Intranet\Entity\Type;
+use Bitrix\Intranet\Public\Type\BaseInvitation;
 use Bitrix\Intranet\Public\Type\EmailInvitation;
 use Bitrix\Main\ArgumentException;
 
@@ -36,5 +36,10 @@ class InvitationCollection extends BaseCollection
 	public function countPhoneInvitation(): int
 	{
 		return $this->filter(fn ($invitation) => $invitation instanceof \Bitrix\Intranet\Public\Type\PhoneInvitation)->count();
+	}
+
+	public function getInvalidInvitations(): self
+	{
+		return $this->filter(fn (BaseInvitation $invitation) => !$invitation->isValid());
 	}
 }

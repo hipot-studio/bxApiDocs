@@ -36,17 +36,14 @@ final class Version1 extends BaseVersion
 			return $result;
 		}
 
-		$user = Main\UserGroupTable::getList([
-			'select' => ['USER_ID'],
-			'filter' => [
-				'=GROUP_ID' => 1,
-				'=DATE_ACTIVE_TO' => null,
-				'=USER.ACTIVE' => 'Y',
-				'=USER.IS_REAL_USER' => 'Y',
-			],
-			'order' => ['USER_ID' => 'ASC'],
-			'limit' => 1,
-		])
+		$user = Main\UserGroupTable::query()
+			->setSelect(['USER_ID'])
+			->where('GROUP_ID', 1)
+			->whereNull('DATE_ACTIVE_TO')
+			->where('USER.ACTIVE', 'Y')
+			->where('USER.REAL_USER', 'expr', true)
+			->setOrder(['USER_ID' => 'ASC'])
+			->setLimit(1)
 			->fetch()
 		;
 

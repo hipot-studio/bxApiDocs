@@ -4387,7 +4387,7 @@ class CAllCrmQuote
 		}
 
 		$actionFilePath = isset($paySysActionFields['ACTION_FILE']) ? $paySysActionFields['ACTION_FILE'] : '';
-		if (!is_string($actionFilePath) || $actionFilePath === '')
+		if (!is_string($actionFilePath) || $actionFilePath === '' || \Bitrix\Sale\PaySystem\Manager::isRestHandler($arPaySysAction["ACTION_FILE"]))
 		{
 			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
 			return false;
